@@ -1,0 +1,475 @@
+"""Сервис для работы со сменами."""
+
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+from core.logging.logger import logger
+from core.geolocation.location_validator import LocationValidator
+from core.scheduler.shift_scheduler import ShiftScheduler
+from core.database.session import get_async_session
+from core.utils.timezone_helper import timezone_helper
+from domain.entities.shift import Shift
+from domain.entities.object import Object
+from domain.entities.user import User
+from sqlalchemy import select, and_
+
+
+class ShiftService:
+    """Сервис для работы со сменами."""
+    
+    def __init__(self):
+        """Инициализация сервиса."""
+        self.location_validator = LocationValidator()
+        self.scheduler = ShiftScheduler()
+        
+        logger.info("ShiftService initialized with geolocation support")
+    
+    async def open_shift(
+        self, 
+        user_id: int, 
+        object_id: int, 
+        coordinates: str
+    ) -> Dict[str, Any]:
+        """
+        Открытие смены с проверкой геолокации.
+        
+        Args:
+            user_id: ID пользователя
+            object_id: ID объекта
+            coordinates: Координаты пользователя в формате 'lat,lon'
+            
+        Returns:
+            Словарь с результатом операции
+        """
+        try:
+            logger.info(
+                f"Opening shift requested: user_id={user_id}, object_id={object_id}, coordinates={coordinates}"
+            )
+            
+            async with get_async_session() as session:
+                # Проверяем существование пользователя
+                # ОТКЛЮЧЕНО для тестирования с JSON файлом
+                # user = await self._get_user(session, user_id)
+                # if not user:
+                #     return {
+                #         'success': False,
+                #         'error': 'Пользователь не найден'
+                #     }
+                
+                # Проверяем существование объекта
+                obj = await self._get_object(session, object_id)
+                if not obj:
+                    return {
+                        'success': False,
+                        'error': 'Объект не найден'
+                    }
+                
+                # Находим пользователя по telegram_id для получения его id в БД
+                from domain.entities.user import User
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = await session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    return {
+                        'success': False,
+                        'error': 'Пользователь не найден в базе данных. Обратитесь к администратору.'
+                    }
+                
+                # Проверяем, нет ли уже активной смены у пользователя
+                active_shift = await self._get_active_shift(session, db_user.id)
+                if active_shift:
+                    return {
+                        'success': False,
+                        'error': 'У вас уже есть активная смена'
+                    }
+                
+                # Валидируем геолокацию с использованием max_distance_meters из объекта
+                location_validation = self.location_validator.validate_shift_location(
+                    coordinates, obj.coordinates, obj.max_distance_meters
+                )
+                
+                if not location_validation['valid']:
+                    return {
+                        'success': False,
+                        'error': location_validation['error'],
+                        'distance_meters': location_validation.get('distance_meters'),
+                        'max_distance_meters': location_validation.get('max_distance_meters')
+                    }
+                
+                # Создаем смену
+                new_shift = Shift(
+                    user_id=db_user.id,  # Используем id из БД, а не telegram_id
+                    object_id=object_id,
+                    start_time=datetime.now(),
+                    status='active',
+                    start_coordinates=coordinates,
+                    hourly_rate=obj.hourly_rate
+                )
+                
+                session.add(new_shift)
+                await session.commit()
+                await session.refresh(new_shift)
+                
+                logger.info(
+                    f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}"
+                )
+                
+                # Форматируем время в локальной временной зоне пользователя
+                user_timezone = timezone_helper.get_user_timezone(user_id)
+                local_start_time = timezone_helper.format_local_time(new_shift.start_time, user_timezone)
+                
+                return {
+                    'success': True,
+                    'shift_id': new_shift.id,
+                    'message': f'Смена успешно открыта! {location_validation["message"]}',
+                    'start_time': local_start_time,
+                    'object_name': obj.name,
+                    'hourly_rate': float(obj.hourly_rate)
+                }
+                
+        except Exception as e:
+            logger.error(
+                f"Error opening shift: user_id={user_id}, object_id={object_id}, coordinates={coordinates}, error={str(e)}"
+            )
+            return {
+                'success': False,
+                'error': f'Ошибка при открытии смены: {str(e)}'
+            }
+    
+    async def close_shift(
+        self, 
+        user_id: int, 
+        shift_id: int, 
+        coordinates: str
+    ) -> Dict[str, Any]:
+        """
+        Закрытие смены с проверкой геолокации.
+        
+        Args:
+            user_id: ID пользователя
+            shift_id: ID смены
+            coordinates: Координаты пользователя в формате 'lat,lon'
+            
+        Returns:
+            Словарь с результатом операции
+        """
+        try:
+            logger.info(
+                f"Closing shift requested: user_id={user_id}, shift_id={shift_id}, coordinates={coordinates}"
+            )
+            
+            async with get_async_session() as session:
+                # Находим пользователя по telegram_id для получения его id в БД
+                from domain.entities.user import User
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = await session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    return {
+                        'success': False,
+                        'error': 'Пользователь не найден в базе данных. Обратитесь к администратору.'
+                    }
+                
+                # Получаем смену
+                shift = await self._get_shift(session, shift_id)
+                if not shift:
+                    return {
+                        'success': False,
+                        'error': 'Смена не найдена'
+                    }
+                
+                # Проверяем, принадлежит ли смена пользователю
+                if shift.user_id != db_user.id:
+                    return {
+                        'success': False,
+                        'error': 'Смена не принадлежит вам'
+                    }
+                
+                # Проверяем, активна ли смена
+                if shift.status != 'active':
+                    return {
+                        'success': False,
+                        'error': f'Смена уже {shift.status}'
+                    }
+                
+                # Получаем объект для проверки геолокации
+                obj = await self._get_object(session, shift.object_id)
+                if not obj:
+                    return {
+                        'success': False,
+                        'error': 'Объект смены не найден'
+                    }
+                
+                # Валидируем геолокацию при закрытии с использованием max_distance_meters из объекта
+                location_validation = self.location_validator.validate_shift_location(
+                    coordinates, obj.coordinates, obj.max_distance_meters
+                )
+                
+                if not location_validation['valid']:
+                    return {
+                        'success': False,
+                        'error': location_validation['error'],
+                        'distance_meters': location_validation.get('distance_meters'),
+                        'max_distance_meters': location_validation.get('max_distance_meters')
+                    }
+                
+                # Закрываем смену
+                success = await self.scheduler.close_shift_manually(
+                    shift_id=shift_id,
+                    end_coordinates=coordinates,
+                    notes=f"Закрыта пользователем в {datetime.now().strftime('%H:%M:%S')}"
+                )
+                
+                if not success:
+                    return {
+                        'success': False,
+                        'error': 'Ошибка при закрытии смены'
+                    }
+                
+                # Получаем обновленную информацию о смене в новой сессии (после коммита close_shift_manually)
+                async with get_async_session() as fresh_session:
+                    updated_shift = await self._get_shift(fresh_session, shift_id)
+                    
+                    if not updated_shift:
+                        logger.error(f"Could not retrieve updated shift {shift_id} after closing")
+                        return {
+                            'success': True,  # Смена закрыта, но не можем получить детали
+                            'message': f'Смена успешно закрыта! {location_validation["message"]}',
+                            'shift_id': shift_id,
+                            'total_hours': 0,
+                            'total_payment': 0,
+                            'end_time': None
+                        }
+                    
+                    logger.info(
+                        f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={updated_shift.total_hours}, total_payment={updated_shift.total_payment}"
+                    )
+                    
+                    # Форматируем время в локальной временной зоне пользователя
+                    user_timezone = timezone_helper.get_user_timezone(user_id)
+                    local_end_time = timezone_helper.format_local_time(updated_shift.end_time, user_timezone) if updated_shift.end_time else None
+                    
+                    return {
+                        'success': True,
+                        'message': f'Смена успешно закрыта! {location_validation["message"]}',
+                        'shift_id': shift_id,
+                        'total_hours': float(updated_shift.total_hours) if updated_shift.total_hours else 0,
+                        'total_payment': float(updated_shift.total_payment) if updated_shift.total_payment else 0,
+                        'end_time': local_end_time
+                    }
+                
+        except Exception as e:
+            logger.error(
+                f"Error closing shift: user_id={user_id}, shift_id={shift_id}, coordinates={coordinates}, error={str(e)}"
+            )
+            return {
+                'success': False,
+                'error': f'Ошибка при закрытии смены: {str(e)}'
+            }
+    
+    async def get_user_shifts(
+        self, 
+        user_id: int, 
+        status: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Получение смен пользователя.
+        
+        Args:
+            user_id: ID пользователя
+            status: Фильтр по статусу (опционально)
+            
+        Returns:
+            Список смен
+        """
+        try:
+            async with get_async_session() as session:
+                # Находим пользователя по telegram_id для получения его id в БД
+                from domain.entities.user import User
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = await session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    return []  # Пользователь не найден, возвращаем пустой список
+                
+                query = select(Shift).where(Shift.user_id == db_user.id)
+                
+                if status:
+                    query = query.where(Shift.status == status)
+                
+                query = query.order_by(Shift.start_time.desc())
+                
+                result = await session.execute(query)
+                shifts = result.scalars().all()
+                
+                # Преобразуем в словари
+                shifts_data = []
+                for shift in shifts:
+                    shift_data = {
+                        'id': shift.id,
+                        'object_id': shift.object_id,
+                        'status': shift.status,
+                        'start_time': shift.start_time.strftime('%Y-%m-%d %H:%M:%S'),
+                        'end_time': shift.end_time.strftime('%Y-%m-%d %H:%M:%S') if shift.end_time else None,
+                        'total_hours': float(shift.total_hours) if shift.total_hours else None,
+                        'total_payment': float(shift.total_payment) if shift.total_payment else None
+                    }
+                    shifts_data.append(shift_data)
+                
+                logger.info(
+                    f"User shifts retrieved: user_id={user_id}, status={status}, count={len(shifts_data)}"
+                )
+                
+                return shifts_data
+                
+        except Exception as e:
+            logger.error(
+                f"Error getting user shifts: user_id={user_id}, status={status}, error={str(e)}"
+            )
+        return []
+    
+    async def get_shift_by_id(self, shift_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Получение смены по ID.
+        
+        Args:
+            shift_id: ID смены
+            
+        Returns:
+            Словарь с информацией о смене или None
+        """
+        try:
+            async with get_async_session() as session:
+                shift = await self._get_shift(session, shift_id)
+                
+                if not shift:
+                    return None
+                
+                shift_data = {
+                    'id': shift.id,
+                    'user_id': shift.user_id,
+                    'object_id': shift.object_id,
+                    'status': shift.status,
+                    'start_time': shift.start_time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'end_time': shift.end_time.strftime('%Y-%m-%d %H:%M:%S') if shift.end_time else None,
+                    'total_hours': float(shift.total_hours) if shift.total_hours else None,
+                    'total_payment': float(shift.total_payment) if shift.total_payment else None,
+                    'start_coordinates': shift.start_coordinates,
+                    'end_coordinates': shift.end_coordinates,
+                    'notes': shift.notes
+                }
+                
+                logger.info(
+                    f"Shift retrieved: shift_id={shift_id}, user_id={shift.user_id}"
+                )
+                
+                return shift_data
+                
+        except Exception as e:
+            logger.error(
+                f"Error getting shift: shift_id={shift_id}, error={str(e)}"
+            )
+            return None
+    
+    def get_location_requirements(self) -> Dict[str, Any]:
+        """
+        Получает требования к геолокации.
+        
+        Returns:
+            Словарь с требованиями
+        """
+        return self.location_validator.get_location_requirements()
+    
+    # Вспомогательные методы
+    
+    async def _get_user(self, session, user_id: int) -> Optional[User]:
+        """Получает пользователя по ID."""
+        try:
+            query = select(User).where(User.id == user_id)
+            result = await session.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting user {user_id}: {e}")
+            return None
+    
+    async def _get_object(self, session, object_id: int) -> Optional[Object]:
+        """Получает объект по ID."""
+        try:
+            query = select(Object).where(Object.id == object_id)
+            result = await session.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting object {object_id}: {e}")
+            return None
+    
+    async def _get_shift(self, session, shift_id: int) -> Optional[Shift]:
+        """Получает смену по ID."""
+        try:
+            query = select(Shift).where(Shift.id == shift_id)
+            result = await session.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting shift {shift_id}: {e}")
+            return None
+    
+    async def _get_active_shift(self, session, user_id: int) -> Optional[Shift]:
+        """Получает активную смену пользователя."""
+        try:
+            query = select(Shift).where(
+                and_(
+                    Shift.user_id == user_id,
+                    Shift.status == 'active',
+                    Shift.end_time.is_(None)
+                )
+            )
+            result = await session.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting active shift for user {user_id}: {e}")
+        return None
+    
+    def get_shift_by_id(self, shift_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Получает смену по ID.
+        
+        Args:
+            shift_id: ID смены
+            
+        Returns:
+            Данные смены или None
+        """
+        try:
+            with get_sync_session() as session:
+                query = select(Shift).where(Shift.id == shift_id)
+                result = session.execute(query)
+                shift = result.scalar_one_or_none()
+                
+                if not shift:
+                    return None
+                
+                return {
+                    'id': shift.id,
+                    'user_id': shift.user_id,
+                    'object_id': shift.object_id,
+                    'status': shift.status,
+                    'start_time': shift.start_time,
+                    'end_time': shift.end_time,
+                    'total_hours': float(shift.total_hours) if shift.total_hours else None,
+                    'total_payment': float(shift.total_payment) if shift.total_payment else None,
+                    'start_coordinates': shift.start_coordinates,
+                    'end_coordinates': shift.end_coordinates,
+                    'notes': shift.notes
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting shift {shift_id}: {e}")
+        return None
+
+
+
+
+
+
+

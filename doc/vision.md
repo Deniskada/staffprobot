@@ -1,0 +1,1389 @@
+# Техническое видение проекта StaffProBot
+
+## 2.1. Технологии
+
+### Backend Framework
+- **FastAPI** - современный, быстрый веб-фреймворк для Python с автоматической генерацией API документации
+- **Python 3.11+** - для лучшей производительности и поддержки современных возможностей
+- **Pydantic** - валидация данных и сериализация
+- **SQLAlchemy 2.0** - современный ORM с поддержкой async/await
+
+### База данных
+- **PostgreSQL 15+** - основная реляционная БД
+- **PostGIS** - расширение для работы с геоданными
+- **Redis** - кэширование, сессии, очереди задач
+- **Alembic** - миграции базы данных
+
+### LLM и AI
+- **OpenAI GPT-4** - основная модель для обработки естественного языка
+- **LangChain** - фреймворк для работы с LLM
+- **Embeddings** - OpenAI text-embedding-ada-002 для семантического поиска
+- **Fallback модели** - локальные модели (Llama 2, Mistral) для резервирования
+
+### Telegram Bot
+- **python-telegram-bot** - официальная библиотека для Telegram Bot API
+- **Webhook режим** - для production окружения
+- **Long Polling** - для разработки и тестирования
+- **Location API** - встроенная геолокация Telegram для точных координат
+- **Callback Queries** - интерактивные кнопки для выбора объектов
+- **State Management** - UserStateManager для сохранения состояния диалога пользователя
+- **Retry Logic** - кнопки повторной отправки геолокации при ошибках
+- **Timezone Support** - отображение времени в локальном часовом поясе
+
+### Микросервисы и коммуникация
+- **Celery** - асинхронные задачи и планировщик
+- **RabbitMQ** - брокер сообщений для межсервисного взаимодействия
+- **gRPC** - высокопроизводительная коммуникация между сервисами
+- **REST API** - для внешних интеграций
+
+### Мониторинг и логирование
+- **Prometheus** - метрики и мониторинг
+- **Grafana** - визуализация метрик
+- **ELK Stack** - Elasticsearch, Logstash, Kibana для логирования
+- **Sentry** - отслеживание ошибок
+
+### Деплой и инфраструктура
+- **Docker** - контейнеризация приложений
+- **Docker Compose** - оркестрация для разработки
+- **Kubernetes** - оркестрация для production
+- **Nginx** - reverse proxy и балансировщик нагрузки
+- **Traefik** - современный reverse proxy для контейнеров
+
+## 2.2. Принцип разработки
+
+### Архитектурные принципы
+- **Микросервисная архитектура** - разделение на независимые сервисы
+- **Event-Driven Architecture** - асинхронная обработка событий
+- **CQRS** - разделение команд и запросов для оптимизации
+- **Domain-Driven Design** - проектирование на основе бизнес-доменов
+
+### Принципы разработки
+- **SOLID принципы** - чистая архитектура и дизайн
+- **DRY** - избежание дублирования кода
+- **KISS** - простота и читаемость
+- **Fail Fast** - быстрое выявление и исправление ошибок
+
+### Качество кода
+- **Type Hints** - статическая типизация Python
+- **Black** - автоматическое форматирование кода
+- **Flake8** - проверка стиля и качества
+- **MyPy** - статический анализ типов
+- **Pytest** - модульное и интеграционное тестирование
+- **Coverage** - покрытие кода тестами (цель: 90%+)
+
+### CI/CD
+- **GitHub Actions** - автоматизация сборки и тестирования
+- **Pre-commit hooks** - проверка кода перед коммитом
+- **Automated testing** - автоматические тесты на каждый PR
+- **Code review** - обязательный ревью кода
+
+## 2.3. Структура проекта
+
+```
+staffprobot/
+├── apps/                          # Основные приложения
+│   ├── bot/                       # Telegram Bot сервис
+│   ├── api/                       # REST API сервис
+│   ├── scheduler/                 # Сервис планировщика
+│   ├── analytics/                 # Аналитический сервис
+│   └── notification/              # Сервис уведомлений
+├── core/                          # Общая логика
+│   ├── config/                    # Конфигурация
+│   ├── database/                  # Настройки БД
+│   ├── geolocation/               # Геолокационные сервисы
+│   ├── scheduler/                 # Планировщик смен
+│   ├── state/                     # Управление состоянием пользователей
+│   ├── auth/                      # Аутентификация и управление пользователями
+│   ├── logging/                   # Структурированное логирование
+│   ├── exceptions/                # Кастомные исключения
+│   └── utils/                     # Утилиты (timezone, helpers)
+├── domain/                        # Бизнес-логика
+│   ├── entities/                  # Сущности домена
+│   ├── repositories/              # Интерфейсы репозиториев
+│   ├── services/                  # Бизнес-сервисы
+│   └── value_objects/             # Объекты-значения
+├── infrastructure/                 # Инфраструктурный слой
+│   ├── database/                  # Реализация репозиториев
+│   ├── external/                  # Внешние API интеграции
+│   ├── messaging/                 # Система сообщений
+│   └── storage/                   # Файловое хранилище
+├── shared/                        # Общие компоненты
+│   ├── schemas/                   # Pydantic схемы
+│   ├── constants/                 # Константы
+│   └── types/                     # Общие типы
+├── tests/                         # Тесты
+│   ├── unit/                      # Модульные тесты
+│   ├── integration/               # Интеграционные тесты
+│   └── e2e/                       # End-to-end тесты
+├── docker/                        # Docker конфигурация
+├── k8s/                          # Kubernetes манифесты
+├── scripts/                       # Скрипты развертывания
+├── docs/                          # Документация
+├── requirements.txt               # Python зависимости
+├── pyproject.toml                # Конфигурация проекта
+├── docker-compose.yml            # Docker Compose
+└── README.md                     # Документация проекта
+```
+
+## 2.4. Модель данных
+
+### Основные сущности
+
+#### User (Пользователь)
+```sql
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    telegram_id BIGINT UNIQUE NOT NULL,
+    username VARCHAR(255),
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255),
+    phone VARCHAR(20),
+    role VARCHAR(50) NOT NULL DEFAULT 'employee',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### Object (Объект)
+```sql
+CREATE TABLE objects (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    owner_id BIGINT REFERENCES users(id),
+    address TEXT,
+    coordinates POINT NOT NULL,
+    opening_time TIME NOT NULL,
+    closing_time TIME NOT NULL,
+    hourly_rate DECIMAL(10,2) NOT NULL,
+    max_distance_meters INTEGER DEFAULT 500,
+    required_employees JSONB,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### Shift (Смена)
+```sql
+CREATE TABLE shifts (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id),
+    object_id BIGINT REFERENCES objects(id),
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP,
+    status VARCHAR(50) DEFAULT 'active',
+    start_coordinates POINT,
+    end_coordinates POINT,
+    total_hours DECIMAL(5,2),
+    hourly_rate DECIMAL(10,2),
+    total_payment DECIMAL(10,2),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### ShiftSchedule (Расписание смен)
+```sql
+CREATE TABLE shift_schedules (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id),
+    object_id BIGINT REFERENCES objects(id),
+    planned_start TIMESTAMP NOT NULL,
+    planned_end TIMESTAMP NOT NULL,
+    status VARCHAR(50) DEFAULT 'planned',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### UserState (Состояние диалога пользователя)
+```sql
+CREATE TABLE user_states (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) UNIQUE,
+    action VARCHAR(50) NOT NULL, -- 'open_shift', 'close_shift', 'create_object'
+    selected_object_id BIGINT REFERENCES objects(id),
+    selected_shift_id BIGINT REFERENCES shifts(id),
+    step VARCHAR(50) NOT NULL, -- 'object_selection', 'location_request', 'processing'
+    data JSONB, -- Дополнительные данные состояния
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### Геолокационные возможности
+
+#### PostGIS расширения
+```sql
+-- Включение PostGIS
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- Индекс для быстрого поиска по координатам
+CREATE INDEX idx_objects_coordinates ON objects USING GIST (coordinates);
+CREATE INDEX idx_shifts_start_coordinates ON shifts USING GIST (start_coordinates);
+CREATE INDEX idx_shifts_end_coordinates ON shifts USING GIST (end_coordinates);
+```
+
+#### Функции расчета расстояний
+- **Формула Гаверсина**: точный расчет расстояния между координатами
+- **Валидация координат**: проверка формата и точности GPS данных
+- **Проверка местоположения**: контроль нахождения в радиусе объекта
+- **Настраиваемые радиусы**: `max_distance_meters` для каждого объекта
+
+### Индексы и оптимизация
+```sql
+-- Индексы для быстрого поиска
+CREATE INDEX idx_shifts_user_id ON shifts(user_id);
+CREATE INDEX idx_shifts_object_id ON shifts(object_id);
+CREATE INDEX idx_shifts_start_time ON shifts(start_time);
+CREATE INDEX idx_shifts_status ON shifts(status);
+
+-- Геопространственные индексы
+CREATE INDEX idx_objects_coordinates ON objects USING GIST(coordinates);
+CREATE INDEX idx_shifts_start_coordinates ON shifts USING GIST(start_coordinates);
+
+-- Составные индексы
+CREATE INDEX idx_shifts_user_date ON shifts(user_id, DATE(start_time));
+CREATE INDEX idx_schedules_user_planned ON shift_schedules(user_id, planned_start);
+
+-- Индексы для состояний пользователей
+CREATE INDEX idx_user_states_user_id ON user_states(user_id);
+CREATE INDEX idx_user_states_expires_at ON user_states(expires_at);
+CREATE INDEX idx_user_states_action ON user_states(action);
+```
+
+## 2.5. Работа с LLM
+
+### Управление состоянием пользователей
+
+#### UserStateManager
+```python
+class UserAction(Enum):
+    NONE = "none"
+    OPEN_SHIFT = "open_shift"
+    CLOSE_SHIFT = "close_shift"
+    CREATE_OBJECT = "create_object"
+    EDIT_OBJECT = "edit_object"
+
+class UserStep(Enum):
+    NONE = "none"
+    OBJECT_SELECTION = "object_selection"
+    LOCATION_REQUEST = "location_request"
+    INPUT_FIELD_VALUE = "input_field_value"
+    PROCESSING = "processing"
+
+class UserState(BaseModel):
+    user_id: int
+    action: UserAction
+    step: UserStep
+    selected_object_id: Optional[int] = None
+    selected_shift_id: Optional[int] = None
+    field_name: Optional[str] = None
+    created_at: datetime
+```
+
+#### Диалоговые потоки
+- **Открытие смены**: выбор объекта → запрос геопозиции → открытие
+- **Закрытие смены**: выбор смены → запрос геопозиции → закрытие
+- **Создание объекта**: пошаговый ввод всех параметров
+- **Редактирование объекта**: выбор поля → ввод значения → сохранение
+
+### UX улучшения
+
+#### Обработка ошибок геолокации
+- **Кнопки повтора**: "📍 Отправить геопозицию повторно"
+- **Отмена операции**: "❌ Отмена" с возвратом в главное меню
+- **Информативные сообщения**: точное расстояние и лимит
+
+#### Команды бота
+- **/start** - главное меню с интерактивными кнопками
+- **/help** - подробная справка по всем функциям
+- **/status** - текущие активные смены с локальным временем
+
+### Архитектура LLM-модуля
+
+#### Компоненты
+- **Prompt Manager** - управление промптами и шаблонами
+- **Context Manager** - управление контекстом диалога
+- **Response Processor** - обработка и валидация ответов LLM
+- **Fallback Handler** - резервные модели при сбоях
+- **Rate Limiter** - ограничение запросов к API
+
+#### Промпт-инженерия
+```python
+class PromptTemplate:
+    SYSTEM_PROMPT = """
+    Ты - ассистент для управления рабочими сменами. 
+    Твоя задача - помогать пользователям планировать смены, 
+    открывать/закрывать смены и получать отчеты.
+    
+    Правила:
+    1. Всегда уточняй детали, если информации недостаточно
+    2. Предлагай альтернативы при конфликтах в расписании
+    3. Используй дружелюбный, но профессиональный тон
+    4. При ошибках предлагай решения
+    """
+    
+    SHIFT_OPENING_PROMPT = """
+    Пользователь хочет открыть смену.
+    Контекст: {context}
+    
+    Запрос: {user_message}
+    
+    Действия:
+    1. Проверь доступность пользователя
+    2. Предложи выбор объекта
+    3. Запроси подтверждение геолокации
+    """
+```
+
+#### Обработка контекста
+```python
+class ConversationContext:
+    def __init__(self, user_id: int, max_turns: int = 10):
+        self.user_id = user_id
+        self.conversation_history = []
+        self.max_turns = max_turns
+        self.current_intent = None
+        self.entities = {}
+    
+    def add_message(self, message: str, is_user: bool = True):
+        self.conversation_history.append({
+            'message': message,
+            'is_user': is_user,
+            'timestamp': datetime.now(),
+            'intent': self.current_intent
+        })
+        
+        if len(self.conversation_history) > self.max_turns:
+            self.conversation_history.pop(0)
+    
+    def get_context_summary(self) -> str:
+        # Создание краткого контекста для LLM
+        recent_messages = self.conversation_history[-5:]
+        return "\n".join([f"{'User' if msg['is_user'] else 'Bot'}: {msg['message']}" 
+                         for msg in recent_messages])
+```
+
+### Интеграция с OpenAI
+```python
+class OpenAIService:
+    def __init__(self, api_key: str, model: str = "gpt-4"):
+        self.client = OpenAI(api_key=api_key)
+        self.model = model
+        self.rate_limiter = RateLimiter(max_requests=100, time_window=60)
+    
+    async def generate_response(self, prompt: str, context: str = None) -> str:
+        try:
+            messages = [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": context or ""}
+            ]
+            
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=500,
+                temperature=0.7
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            logger.error(f"OpenAI API error: {e}")
+            return await self.fallback_response(prompt, context)
+```
+
+## 2.6. Мониторинг LLM
+
+### Метрики производительности
+- **Response Time** - время ответа LLM
+- **Token Usage** - количество использованных токенов
+- **Success Rate** - процент успешных запросов
+- **Error Rate** - процент ошибок по типам
+- **Cost per Request** - стоимость запроса
+
+### Мониторинг качества
+```python
+class LLMMonitor:
+    def __init__(self):
+        self.metrics = {
+            'total_requests': 0,
+            'successful_requests': 0,
+            'failed_requests': 0,
+            'average_response_time': 0,
+            'total_tokens_used': 0,
+            'total_cost': 0
+        }
+    
+    def record_request(self, start_time: float, end_time: float, 
+                      success: bool, tokens: int, cost: float):
+        response_time = end_time - start_time
+        
+        self.metrics['total_requests'] += 1
+        if success:
+            self.metrics['successful_requests'] += 1
+        else:
+            self.metrics['failed_requests'] += 1
+        
+        # Обновление среднего времени ответа
+        current_avg = self.metrics['average_response_time']
+        total_requests = self.metrics['total_requests']
+        self.metrics['average_response_time'] = (
+            (current_avg * (total_requests - 1) + response_time) / total_requests
+        )
+        
+        self.metrics['total_tokens_used'] += tokens
+        self.metrics['total_cost'] += cost
+    
+    def get_success_rate(self) -> float:
+        if self.metrics['total_requests'] == 0:
+            return 0.0
+        return self.metrics['successful_requests'] / self.metrics['total_requests']
+    
+    def export_metrics(self) -> dict:
+        return {
+            **self.metrics,
+            'success_rate': self.get_success_rate(),
+            'average_cost_per_request': (
+                self.metrics['total_cost'] / self.metrics['total_requests']
+                if self.metrics['total_requests'] > 0 else 0
+            )
+        }
+```
+
+### Алерты и уведомления
+```python
+class LLMAlertManager:
+    def __init__(self, alert_thresholds: dict):
+        self.thresholds = alert_thresholds
+        self.alert_history = []
+    
+    def check_alerts(self, metrics: dict):
+        alerts = []
+        
+        # Проверка успешности запросов
+        if metrics['success_rate'] < self.thresholds['min_success_rate']:
+            alerts.append({
+                'type': 'LOW_SUCCESS_RATE',
+                'message': f"Success rate {metrics['success_rate']:.2%} below threshold",
+                'severity': 'HIGH',
+                'timestamp': datetime.now()
+            })
+        
+        # Проверка времени ответа
+        if metrics['average_response_time'] > self.thresholds['max_response_time']:
+            alerts.append({
+                'type': 'HIGH_RESPONSE_TIME',
+                'message': f"Average response time {metrics['average_response_time']:.2f}s above threshold",
+                'severity': 'MEDIUM',
+                'timestamp': datetime.now()
+            })
+        
+        # Проверка стоимости
+        if metrics['average_cost_per_request'] > self.thresholds['max_cost_per_request']:
+            alerts.append({
+                'type': 'HIGH_COST',
+                'message': f"Average cost per request ${metrics['average_cost_per_request']:.4f} above threshold",
+                'severity': 'MEDIUM',
+                'timestamp': datetime.now()
+            })
+        
+        return alerts
+```
+
+## 2.7. UX улучшения и ограничения
+
+### Бизнес-правила
+1. **Одна активная смена на пользователя** - исключает конфликты и ошибки учета
+2. **Обязательная геопозиция** - повышает точность и исключает мошенничество  
+3. **Упрощенный флоу** - выбор объекта → геопозиция → действие (без лишних шагов)
+
+### Технические ограничения
+```python
+# Проверка активных смен
+async def check_active_shifts(user_id: int) -> bool:
+    """Проверяет, есть ли у пользователя активные смены"""
+    active_shifts = await shift_service.get_user_shifts(
+        user_id=user_id, 
+        status='active'
+    )
+    return len(active_shifts) > 0
+
+# Состояние диалога пользователя
+user_states = {
+    user_id: {
+        'action': 'open_shift' | 'close_shift',
+        'selected_object_id': int,
+        'selected_shift_id': int,
+        'step': 'object_selection' | 'location_request' | 'processing'
+    }
+}
+```
+
+### Обработка геопозиции
+```python
+# Обработчик location сообщений
+async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка геопозиции от пользователя"""
+    location = update.message.location
+    user_id = update.effective_user.id
+    
+    # Получаем состояние пользователя
+    user_state = user_states.get(user_id)
+    if not user_state:
+        await update.message.reply_text("❌ Сначала выберите действие")
+        return
+    
+    coordinates = f"{location.latitude},{location.longitude}"
+    
+    if user_state['action'] == 'open_shift':
+        result = await shift_service.open_shift(
+            user_id=user_id,
+            object_id=user_state['selected_object_id'],
+            coordinates=coordinates
+        )
+    elif user_state['action'] == 'close_shift':
+        result = await shift_service.close_shift(
+            user_id=user_id,
+            shift_id=user_state['selected_shift_id'],
+            coordinates=coordinates
+        )
+    
+    # Очищаем состояние после обработки
+    del user_states[user_id]
+```
+
+## 2.8. Сценарии работы
+
+### Сценарий 1: Открытие смены (обновленный UX)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant B as Bot
+    participant DB as Database
+    participant Geo as Geolocation Service
+    
+    U->>B: Нажимает "🔄 Открыть смену"
+    B->>DB: Проверка активных смен пользователя
+    alt У пользователя есть активная смена
+        B->>U: ❌ У вас уже есть активная смена
+    else Активных смен нет
+        B->>DB: Получение доступных объектов
+        B->>U: Список объектов для выбора
+        U->>B: Выбор объекта (callback)
+        B->>U: Запрос геопозиции (кнопка "📍 Отправить геопозицию")
+        U->>B: Отправка location (встроенная функция Telegram)
+        B->>Geo: Проверка расстояния до выбранного объекта
+        Geo->>B: Результат проверки
+        alt Геопозиция корректна
+            B->>DB: Создание записи смены
+            DB->>B: Подтверждение создания
+            B->>U: ✅ Смена успешно открыта
+        else Геопозиция некорректна
+            B->>U: ❌ Вы находитесь слишком далеко от объекта
+        end
+    end
+```
+
+### Сценарий 1.1: Закрытие смены (обновленный UX)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant B as Bot
+    participant DB as Database
+    participant Geo as Geolocation Service
+    
+    U->>B: Нажимает "🔚 Закрыть смену"
+    B->>DB: Получение активных смен пользователя
+    alt Нет активных смен
+        B->>U: ❌ У вас нет активных смен
+    else Есть активные смены
+        alt Одна активная смена
+            B->>U: Подтверждение закрытия смены + запрос геопозиции
+            U->>B: Отправка location (встроенная функция Telegram)
+            B->>Geo: Проверка расстояния до объекта смены
+            Geo->>B: Результат проверки
+            alt Геопозиция корректна
+                B->>DB: Закрытие смены + расчет оплаты
+                DB->>B: Подтверждение закрытия
+                B->>U: ✅ Смена закрыта. Отработано: X часов, заработано: Y₽
+            else Геопозиция некорректна
+                B->>U: ❌ Вы находитесь слишком далеко от объекта
+            end
+        else Несколько активных смен (устаревший случай)
+            B->>U: Список активных смен для выбора
+            U->>B: Выбор смены (callback)
+            B->>U: Запрос геопозиции для выбранной смены
+        end
+    end
+```
+
+### Сценарий 2: Планирование смены
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant B as Bot
+    participant LLM as LLM Service
+    participant Scheduler as Scheduler Service
+    participant DB as Database
+    
+    U->>B: "Запланируй смену на завтра с 9 до 17"
+    B->>LLM: Извлечение параметров из запроса
+    LLM->>B: {"date": "tomorrow", "start": "09:00", "end": "17:00"}
+    B->>Scheduler: Проверка доступности
+    Scheduler->>DB: Поиск конфликтов в расписании
+    DB->>Scheduler: Результат поиска
+    Scheduler->>B: Доступность времени
+    alt Время доступно
+        B->>DB: Создание запланированной смены
+        DB->>B: Подтверждение создания
+        B->>U: Смена запланирована успешно
+    else Время занято
+        B->>Scheduler: Поиск альтернатив
+        Scheduler->>B: Список свободных слотов
+        B->>U: Предложение альтернатив
+    end
+```
+
+### Сценарий 3: Формирование отчета
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant B as Bot
+    participant LLM as LLM Service
+    participant Analytics as Analytics Service
+    participant DB as Database
+    
+    U->>B: "Покажи отчет по объекту А за последний месяц"
+    B->>LLM: Извлечение параметров отчета
+    LLM->>B: {"object": "A", "period": "last_month", "type": "summary"}
+    B->>Analytics: Формирование отчета
+    Analytics->>DB: Запрос данных
+    DB->>Analytics: Данные для отчета
+    Analytics->>Analytics: Обработка и агрегация
+    Analytics->>B: Готовый отчет
+    B->>U: Отправка отчета
+    B->>U: Предложение экспорта в PDF/Excel
+```
+
+## 2.8. Деплой
+
+### Docker Compose для разработки
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_DB: staffprobot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  bot:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/staffprobot
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  postgres_data:
+  redis_data:
+  grafana_data:
+```
+
+### Kubernetes для production
+```yaml
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staffprobot-bot
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: staffprobot-bot
+  template:
+    metadata:
+      labels:
+        app: staffprobot-bot
+    spec:
+      containers:
+      - name: bot
+        image: staffprobot/bot:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: url
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-secret
+              key: api-key
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staffprobot-bot-service
+spec:
+  selector:
+    app: staffprobot-bot
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: LoadBalancer
+```
+
+### CI/CD Pipeline
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+    - name: Run tests
+      run: |
+        pytest tests/ --cov=apps --cov-report=xml
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Docker image
+      run: |
+        docker build -t staffprobot/bot:${{ github.sha }} .
+        docker push staffprobot/bot:${{ github.sha }}
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl set image deployment/staffprobot-bot bot=staffprobot/bot:${{ github.sha }}
+        kubectl rollout status deployment/staffprobot-bot
+```
+
+## 2.9. Подход к конфигурированию
+
+### Иерархия конфигурации
+```python
+# core/config/settings.py
+from pydantic_settings import BaseSettings
+from typing import Optional
+import os
+
+class Settings(BaseSettings):
+    # Основные настройки
+    app_name: str = "StaffProBot"
+    debug: bool = False
+    environment: str = "development"
+    
+    # База данных
+    database_url: str
+    database_pool_size: int = 20
+    database_max_overflow: int = 30
+    
+    # Redis
+    redis_url: str = "redis://localhost:6379"
+    redis_db: int = 0
+    
+    # RabbitMQ
+    rabbitmq_url: str = "amqp://localhost:5672"
+    
+    # OpenAI
+    openai_api_key: str
+    openai_model: str = "gpt-4"
+    openai_max_tokens: int = 500
+    openai_temperature: float = 0.7
+    
+    # Telegram
+    telegram_bot_token: str
+    telegram_webhook_url: Optional[str] = None
+    
+    # Геолокация
+    max_distance_meters: int = 100
+    location_accuracy_meters: int = 50
+    
+    # UX ограничения
+    max_active_shifts_per_user: int = 1
+    require_location_for_shifts: bool = True
+    location_timeout_seconds: int = 300  # 5 минут на отправку геопозиции
+    
+    # Мониторинг
+    prometheus_port: int = 9090
+    grafana_port: int = 3000
+    
+    # Безопасность
+    secret_key: str
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 1440  # 24 часа
+    
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = False
+
+# Создание экземпляра настроек
+settings = Settings()
+
+# Проверка обязательных переменных
+def validate_settings():
+    required_vars = [
+        'database_url',
+        'openai_api_key',
+        'telegram_bot_token',
+        'secret_key'
+    ]
+    
+    missing_vars = []
+    for var in required_vars:
+        if not getattr(settings, var, None):
+            missing_vars.append(var)
+    
+    if missing_vars:
+        raise ValueError(f"Missing required environment variables: {missing_vars}")
+
+# Валидация при импорте
+validate_settings()
+```
+
+### Переменные окружения
+```bash
+# .env.example
+# Основные настройки
+APP_NAME=StaffProBot
+DEBUG=false
+ENVIRONMENT=production
+
+# База данных
+DATABASE_URL=postgresql://user:password@localhost:5432/staffprobot
+DATABASE_POOL_SIZE=20
+DATABASE_MAX_OVERFLOW=30
+
+# Redis
+REDIS_URL=redis://localhost:6379
+REDIS_DB=0
+
+# RabbitMQ
+RABBITMQ_URL=amqp://user:password@localhost:5672
+
+# OpenAI
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4
+OPENAI_MAX_TOKENS=500
+OPENAI_TEMPERATURE=0.7
+
+# Telegram
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_WEBHOOK_URL=https://yourdomain.com/webhook
+
+# Геолокация
+MAX_DISTANCE_METERS=100
+LOCATION_ACCURACY_METERS=50
+
+# UX ограничения
+MAX_ACTIVE_SHIFTS_PER_USER=1
+REQUIRE_LOCATION_FOR_SHIFTS=true
+LOCATION_TIMEOUT_SECONDS=300
+
+# Мониторинг
+PROMETHEUS_PORT=9090
+GRAFANA_PORT=3000
+
+# Безопасность
+SECRET_KEY=your_secret_key_here
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=1440
+```
+
+### Конфигурация для разных окружений
+```python
+# core/config/environments.py
+from enum import Enum
+from core.config.settings import Settings
+
+class Environment(str, Enum):
+    DEVELOPMENT = "development"
+    STAGING = "staging"
+    PRODUCTION = "production"
+
+def get_environment_config(env: Environment) -> dict:
+    """Возвращает конфигурацию для конкретного окружения"""
+    
+    base_config = {
+        "debug": False,
+        "database_pool_size": 20,
+        "database_max_overflow": 30,
+        "max_distance_meters": 100,
+        "location_accuracy_meters": 50
+    }
+    
+    if env == Environment.DEVELOPMENT:
+        base_config.update({
+            "debug": True,
+            "database_pool_size": 5,
+            "database_max_overflow": 10,
+            "max_distance_meters": 1000,  # Более мягкие требования для разработки
+            "location_accuracy_meters": 100
+        })
+    elif env == Environment.STAGING:
+        base_config.update({
+            "debug": False,
+            "database_pool_size": 10,
+            "database_max_overflow": 15
+        })
+    elif env == Environment.PRODUCTION:
+        base_config.update({
+            "debug": False,
+            "database_pool_size": 50,
+            "database_max_overflow": 100
+        })
+    
+    return base_config
+
+def apply_environment_config(settings: Settings):
+    """Применяет конфигурацию окружения к настройкам"""
+    env_config = get_environment_config(Environment(settings.environment))
+    
+    for key, value in env_config.items():
+        if hasattr(settings, key):
+            setattr(settings, key, value)
+```
+
+## 2.10. Подход к логированию
+
+### Структурированное логирование
+```python
+# core/logging/logger.py
+import logging
+import json
+import sys
+from datetime import datetime
+from typing import Any, Dict, Optional
+from pathlib import Path
+
+class JSONFormatter(logging.Formatter):
+    """Форматтер для структурированного JSON логирования"""
+    
+    def format(self, record: logging.LogRecord) -> str:
+        log_entry = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "module": record.module,
+            "function": record.funcName,
+            "line": record.lineno
+        }
+        
+        # Добавление дополнительных полей
+        if hasattr(record, 'user_id'):
+            log_entry['user_id'] = record.user_id
+        
+        if hasattr(record, 'request_id'):
+            log_entry['request_id'] = record.request_id
+        
+        if hasattr(record, 'execution_time'):
+            log_entry['execution_time_ms'] = record.execution_time
+        
+        # Добавление исключений
+        if record.exc_info:
+            log_entry['exception'] = {
+                'type': record.exc_info[0].__name__,
+                'message': str(record.exc_info[1]),
+                'traceback': self.formatException(record.exc_info)
+            }
+        
+        # Добавление extra полей
+        for key, value in record.__dict__.items():
+            if key not in ['name', 'msg', 'args', 'levelname', 'levelno', 
+                          'pathname', 'filename', 'module', 'lineno', 'funcName',
+                          'created', 'msecs', 'relativeCreated', 'thread',
+                          'threadName', 'processName', 'process', 'getMessage',
+                          'exc_info', 'exc_text', 'stack_info']:
+                log_entry[key] = value
+        
+        return json.dumps(log_entry, ensure_ascii=False)
+
+class StructuredLogger:
+    """Структурированный логгер с контекстом"""
+    
+    def __init__(self, name: str, level: str = "INFO"):
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(getattr(logging, level.upper()))
+        
+        # Настройка форматтера
+        formatter = JSONFormatter()
+        
+        # Консольный хендлер
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        self.logger.addHandler(console_handler)
+        
+        # Файловый хендлер для production
+        if level.upper() != "DEBUG":
+            log_dir = Path("logs")
+            log_dir.mkdir(exist_ok=True)
+            
+            file_handler = logging.FileHandler(log_dir / f"{name}.log")
+            file_handler.setFormatter(formatter)
+            self.logger.addHandler(file_handler)
+    
+    def _log_with_context(self, level: str, message: str, **kwargs):
+        """Логирование с дополнительным контекстом"""
+        extra = {}
+        
+        # Добавление контекста пользователя
+        if 'user_id' in kwargs:
+            extra['user_id'] = kwargs['user_id']
+        
+        # Добавление ID запроса
+        if 'request_id' in kwargs:
+            extra['request_id'] = kwargs['request_id']
+        
+        # Добавление времени выполнения
+        if 'execution_time' in kwargs:
+            extra['execution_time'] = kwargs['execution_time']
+        
+        # Добавление других полей
+        for key, value in kwargs.items():
+            if key not in ['user_id', 'request_id', 'execution_time']:
+                extra[key] = value
+        
+        log_method = getattr(self.logger, level.lower())
+        log_method(message, extra=extra)
+    
+    def info(self, message: str, **kwargs):
+        self._log_with_context('INFO', message, **kwargs)
+    
+    def warning(self, message: str, **kwargs):
+        self._log_with_context('WARNING', message, **kwargs)
+    
+    def error(self, message: str, **kwargs):
+        self._log_with_context('ERROR', message, **kwargs)
+    
+    def debug(self, message: str, **kwargs):
+        self._log_with_context('DEBUG', message, **kwargs)
+    
+    def critical(self, message: str, **kwargs):
+        self._log_with_context('CRITICAL', message, **kwargs)
+
+# Создание основного логгера
+logger = StructuredLogger("staffprobot")
+```
+
+### Логирование в разных компонентах
+```python
+# apps/bot/handlers.py
+from core.logging.logger import logger
+import time
+from functools import wraps
+
+def log_execution_time(func):
+    """Декоратор для логирования времени выполнения функций"""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        start_time = time.time()
+        
+        try:
+            result = await func(*args, **kwargs)
+            execution_time = (time.time() - start_time) * 1000  # в миллисекундах
+            
+            logger.info(
+                f"Function {func.__name__} executed successfully",
+                execution_time=execution_time,
+                **kwargs
+            )
+            
+            return result
+            
+        except Exception as e:
+            execution_time = (time.time() - start_time) * 1000
+            
+            logger.error(
+                f"Function {func.__name__} failed: {str(e)}",
+                execution_time=execution_time,
+                error=str(e),
+                **kwargs
+            )
+            raise
+    
+    return wrapper
+
+class BotHandler:
+    def __init__(self, user_id: int, request_id: str):
+        self.user_id = user_id
+        self.request_id = request_id
+        self.logger = logger
+    
+    @log_execution_time
+    async def handle_open_shift(self, object_id: int, coordinates: tuple):
+        """Обработка открытия смены"""
+        self.logger.info(
+            "Opening shift",
+            user_id=self.user_id,
+            request_id=self.request_id,
+            object_id=object_id,
+            coordinates=coordinates
+        )
+        
+        # Логика открытия смены
+        try:
+            # ... код открытия смены ...
+            self.logger.info(
+                "Shift opened successfully",
+                user_id=self.user_id,
+                request_id=self.request_id,
+                shift_id=shift_id
+            )
+            
+        except Exception as e:
+            self.logger.error(
+                "Failed to open shift",
+                user_id=self.user_id,
+                request_id=self.request_id,
+                error=str(e),
+                object_id=object_id
+            )
+            raise
+```
+
+### Интеграция с ELK Stack
+```python
+# core/logging/elk_handler.py
+import logging
+from elasticsearch import Elasticsearch
+from datetime import datetime
+import json
+
+class ElasticsearchHandler(logging.Handler):
+    """Хендлер для отправки логов в Elasticsearch"""
+    
+    def __init__(self, es_host: str, es_port: int = 9200, index_prefix: str = "staffprobot"):
+        super().__init__()
+        self.es = Elasticsearch([{'host': es_host, 'port': es_port}])
+        self.index_prefix = index_prefix
+    
+    def emit(self, record: logging.LogRecord):
+        try:
+            # Создание индекса с датой
+            today = datetime.now().strftime('%Y.%m.%d')
+            index_name = f"{self.index_prefix}-{today}"
+            
+            # Подготовка документа для Elasticsearch
+            doc = {
+                '@timestamp': datetime.utcnow().isoformat(),
+                'level': record.levelname,
+                'logger': record.name,
+                'message': record.getMessage(),
+                'module': record.module,
+                'function': record.funcName,
+                'line': record.lineno
+            }
+            
+            # Добавление extra полей
+            for key, value in record.__dict__.items():
+                if key not in ['name', 'msg', 'args', 'levelname', 'levelno', 
+                              'pathname', 'filename', 'module', 'lineno', 'funcName',
+                              'created', 'msecs', 'relativeCreated', 'thread',
+                              'threadName', 'processName', 'process', 'getMessage',
+                              'exc_info', 'exc_text', 'stack_info']:
+                    doc[key] = value
+            
+            # Отправка в Elasticsearch
+            self.es.index(
+                index=index_name,
+                body=doc
+            )
+            
+        except Exception as e:
+            # Логирование ошибки отправки в ES
+            print(f"Failed to send log to Elasticsearch: {e}")
+
+# Добавление ES хендлера к основному логгеру
+def setup_elk_logging(es_host: str, es_port: int = 9200):
+    """Настройка логирования в Elasticsearch"""
+    es_handler = ElasticsearchHandler(es_host, es_port)
+    es_handler.setLevel(logging.INFO)
+    
+    # Добавление к корневому логгеру
+    root_logger = logging.getLogger()
+    root_logger.addHandler(es_handler)
+```
+
+### Мониторинг и алерты по логам
+```python
+# core/logging/monitoring.py
+from core.logging.logger import logger
+import time
+from collections import defaultdict
+from typing import Dict, List
+
+class LogMonitor:
+    """Мониторинг логов для выявления проблем"""
+    
+    def __init__(self):
+        self.error_counts = defaultdict(int)
+        self.slow_operations = defaultdict(list)
+        self.last_reset = time.time()
+        self.reset_interval = 3600  # 1 час
+    
+    def record_error(self, error_type: str, context: str = None):
+        """Запись ошибки для мониторинга"""
+        key = f"{error_type}:{context}" if context else error_type
+        self.error_counts[key] += 1
+        
+        # Проверка порога ошибок
+        if self.error_counts[key] > 10:  # Порог: 10 ошибок
+            logger.warning(
+                f"High error rate detected: {key} - {self.error_counts[key]} errors",
+                error_type=error_type,
+                context=context,
+                error_count=self.error_counts[key]
+            )
+    
+    def record_slow_operation(self, operation: str, execution_time: float):
+        """Запись медленных операций"""
+        if execution_time > 1000:  # Порог: 1 секунда
+            self.slow_operations[operation].append(execution_time)
+            
+            # Ограничение истории
+            if len(self.slow_operations[operation]) > 100:
+                self.slow_operations[operation].pop(0)
+            
+            # Алерт при частых медленных операциях
+            if len(self.slow_operations[operation]) > 10:
+                avg_time = sum(self.slow_operations[operation]) / len(self.slow_operations[operation])
+                logger.warning(
+                    f"Frequent slow operations detected: {operation}",
+                    operation=operation,
+                    average_time_ms=avg_time,
+                    slow_operation_count=len(self.slow_operations[operation])
+                )
+    
+    def get_metrics(self) -> Dict:
+        """Получение метрик мониторинга"""
+        current_time = time.time()
+        
+        # Сброс счетчиков каждый час
+        if current_time - self.last_reset > self.reset_interval:
+            self.error_counts.clear()
+            self.slow_operations.clear()
+            self.last_reset = current_time
+        
+        return {
+            'error_counts': dict(self.error_counts),
+            'slow_operations': {
+                op: {
+                    'count': len(times),
+                    'average_time_ms': sum(times) / len(times) if times else 0
+                }
+                for op, times in self.slow_operations.items()
+            },
+            'last_reset': self.last_reset
+        }
+
+# Глобальный экземпляр монитора
+log_monitor = LogMonitor()
+```
+
+Это техническое видение проекта StaffProBot охватывает все аспекты разработки, от выбора технологий до деталей реализации. Документ служит руководством для команды разработки и обеспечивает единообразие в архитектуре и подходах к реализации.
+
+---
+
+*Последнее обновление: 21 августа 2025*
+*Версия документа: 2.1*
+
+### История изменений
+- **v2.1** (21.08.2025): Добавлены UserStateManager, UX улучшения, геолокационные возможности
+- **v2.0** (ранее): Базовая архитектура и техническое видение
+- **v1.0** (ранее): Первоначальная версия

@@ -1,0 +1,28 @@
+{
+  "1220971779": {
+    "id": 1220971779,
+    "first_name": "Den",
+    "username": "Deniskada00",
+    "last_name": "Novikov",
+    "language_code": "ru",
+    "registered_at": "2025-08-19T16:52:06.615959",
+    "last_activity": "2025-08-21T23:38:47.227157",
+    "is_active": true,
+    "total_shifts": 0,
+    "total_hours": 0,
+    "total_earnings": 0.0
+  },
+  "1170536174": {
+    "id": 1170536174,
+    "first_name": "Цветут",
+    "username": "cvetutcvetyme",
+    "last_name": "Цветы",
+    "language_code": "ru",
+    "registered_at": "2025-08-21T12:11:52.283790",
+    "last_activity": "2025-08-21T12:12:20.761913",
+    "is_active": true,
+    "total_shifts": 0,
+    "total_hours": 0,
+    "total_earnings": 0.0
+  }
+}
