@@ -424,3 +424,4 @@ async def _handle_object_hourly_rate_input(update: Update, context: ContextTypes
         parse_mode='HTML',
         reply_markup=reply_markup
     )
+

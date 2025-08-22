@@ -140,8 +140,8 @@ class TestLocationValidator:
         coords = "55.7,37.6"
         result = self.validator.validate_coordinates(coords)
         
-        assert result['valid'] is False
-        assert 'error' in result
+        # Теперь низкая точность дает предупреждение, но не блокирует валидацию
+        assert result['valid'] is True
     
     def test_validate_shift_location_valid(self):
         """Тест валидации местоположения смены - валидное."""
@@ -268,3 +268,4 @@ class TestGeolocationIntegration:
         date_line = "0.0,180.0"
         result = DistanceCalculator.parse_coordinates(date_line)
         assert result == (0.0, 180.0)
+

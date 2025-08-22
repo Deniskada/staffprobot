@@ -6,18 +6,25 @@ from core.logging.logger import logger
 from core.auth.user_manager import user_manager
 from apps.bot.services.shift_service import ShiftService
 from apps.bot.services.object_service import ObjectService
-from core.database.session import get_async_session, get_sync_session
+from core.database.session import get_async_session
 from core.utils.timezone_helper import timezone_helper
 from domain.entities.object import Object
 from sqlalchemy import select
 import asyncio
 from apps.bot.object_creation_handlers import handle_create_object_start, handle_create_object_input, user_object_creation_state
 from core.state import user_state_manager, UserAction, UserStep
+from apps.bot.schedule_handlers import (
+    handle_schedule_shift, handle_schedule_object_selection, handle_schedule_date_selection,
+    handle_schedule_confirmation, handle_view_schedule, handle_cancel_schedule,
+    handle_schedule_time_input, handle_custom_date_input
+)
+from apps.bot.analytics_handlers import AnalyticsHandlers
 
 
 # Создаем экземпляры сервисов
 shift_service = ShiftService()
 object_service = ObjectService()
+analytics_handlers = AnalyticsHandlers()
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -46,6 +53,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 💡 Что я умею:
 • Открывать и закрывать смены с геолокацией
+• Планировать смены заранее с уведомлениями
 • Создавать объекты
 • Вести учет времени
 • Формировать отчеты
@@ -74,6 +82,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 💡 Что я умею:
 • Открывать и закрывать смены с геолокацией
+• Планировать смены заранее с уведомлениями
 • Создавать объекты
 • Вести учет времени
 • Формировать отчеты
@@ -94,6 +103,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         [
             InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift"),
             InlineKeyboardButton("🔚 Закрыть смену", callback_data="close_shift")
+        ],
+        [
+            InlineKeyboardButton("📅 Запланировать смену", callback_data="schedule_shift"),
+            InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
         ],
         [
             InlineKeyboardButton("🏢 Создать объект", callback_data="create_object"),
@@ -244,6 +257,18 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик нажатий на inline-кнопки."""
     query = update.callback_query
+    
+    # Пропускаем callback'и аналитики - их обрабатывает ConversationHandler
+    analytics_callbacks = [
+        "get_report", "report_object", "report_personal", "report_dashboard", "cancel_report",
+        "period_today", "period_week", "period_month", "period_3months",
+        "format_text", "format_pdf", "format_excel", "refresh_dashboard"
+    ]
+    
+    if (query.data.startswith("object_") and "report" in context.user_data) or \
+       query.data in analytics_callbacks:
+        return  # Пусть ConversationHandler обработает
+    
     await query.answer()  # Убираем "часики" у кнопки
     
     user = query.from_user
@@ -299,6 +324,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         shift_id = int(query.data.split(":", 1)[1])
         await _handle_retry_location_close(update, context, shift_id)
         return
+    # Планирование смен
+    elif query.data == "schedule_shift":
+        await handle_schedule_shift(update, context)
+        return
+    elif query.data == "view_schedule":
+        await handle_view_schedule(update, context)
+        return
+    elif query.data.startswith("schedule_select_object_"):
+        await handle_schedule_object_selection(update, context)
+        return
+    elif query.data in ["schedule_date_today", "schedule_date_tomorrow", "schedule_date_custom"]:
+        await handle_schedule_date_selection(update, context)
+        return
+    elif query.data == "schedule_confirm":
+        await handle_schedule_confirmation(update, context)
+        return
+    elif query.data.startswith("cancel_schedule_"):
+        await handle_cancel_schedule(update, context)
+        return
+    elif query.data == "help":
+        await help_command(update, context)
+        return
+    elif query.data == "status":
+        await status_command(update, context)
+        return
     elif query.data == "main_menu":
         response = f"""
 🏠 <b>Главное меню</b>
@@ -322,12 +372,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             InlineKeyboardButton("🔚 Закрыть смену", callback_data="close_shift")
         ],
         [
+            InlineKeyboardButton("📅 Запланировать смену", callback_data="schedule_shift"),
+            InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
+        ],
+        [
             InlineKeyboardButton("🏢 Создать объект", callback_data="create_object"),
             InlineKeyboardButton("⚙️ Управление объектами", callback_data="manage_objects")
         ],
         [
             InlineKeyboardButton("📊 Отчет", callback_data="get_report"),
             InlineKeyboardButton("❓ Помощь", callback_data="help")
+        ],
+        [
+            InlineKeyboardButton("📈 Статус", callback_data="status")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -815,6 +872,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await _handle_edit_object_input(update, context, user_state)
         return
     
+    # Проверяем состояние пользователя для планирования смен
+    if user_state and user_state.action == UserAction.SCHEDULE_SHIFT:
+        if user_state.step in [UserStep.INPUT_START_TIME, UserStep.INPUT_END_TIME]:
+            await handle_schedule_time_input(update, context)
+            return
+        elif user_state.step == UserStep.INPUT_DATE:
+            await handle_custom_date_input(update, context)
+            return
+    
     # Если нет активного состояния, отправляем в главное меню
     await update.message.reply_text(
         "🤖 Используйте команды или кнопки для взаимодействия с ботом.\n"
@@ -1011,3 +1077,4 @@ async def _handle_retry_location_close(update: Update, context: ContextTypes.DEF
         parse_mode='HTML',
         reply_markup=get_location_keyboard()
     )
+

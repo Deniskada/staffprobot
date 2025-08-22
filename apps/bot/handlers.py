@@ -918,7 +918,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     # Проверяем состояние пользователя для обработки диалогов создания объекта
     if user_id in user_object_creation_state:
-        await handle_create_object_input(update, context)
+        await handle_create_object_input(update, context, text)
         return
     
     # Проверяем состояние пользователя для редактирования объектов

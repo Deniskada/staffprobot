@@ -58,6 +58,40 @@ class TimezoneHelper:
             logger.error(f"Error converting timezone: {e}")
             return utc_datetime
     
+    def local_to_utc(self, local_datetime: datetime, timezone_str: Optional[str] = None) -> datetime:
+        """
+        Конвертирует локальное время в UTC.
+        
+        Args:
+            local_datetime: Локальное время
+            timezone_str: Временная зона (если не указана, используется по умолчанию)
+            
+        Returns:
+            UTC время
+        """
+        if local_datetime is None:
+            return None
+            
+        try:
+            # Определяем исходную временную зону
+            if timezone_str:
+                source_tz = pytz.timezone(timezone_str)
+            else:
+                source_tz = self.default_timezone
+            
+            # Если время уже с временной зоной
+            if local_datetime.tzinfo is not None:
+                # Конвертируем в UTC
+                return local_datetime.astimezone(pytz.UTC)
+            else:
+                # Локализуем время в исходной зоне и конвертируем в UTC
+                localized_datetime = source_tz.localize(local_datetime)
+                return localized_datetime.astimezone(pytz.UTC)
+                
+        except (pytz.UnknownTimeZoneError, AttributeError) as e:
+            logger.error(f"Error converting timezone: {e}")
+            return local_datetime
+    
     def format_local_time(self, utc_datetime: datetime, timezone_str: Optional[str] = None, format_str: str = "%H:%M:%S") -> str:
         """
         Форматирует UTC время как локальное время.
@@ -97,3 +131,4 @@ class TimezoneHelper:
 
 # Глобальный экземпляр
 timezone_helper = TimezoneHelper()
+

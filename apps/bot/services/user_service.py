@@ -3,7 +3,7 @@
 from typing import Optional, Dict, Any
 from datetime import datetime
 from core.logging.logger import logger
-from core.database.connection import get_async_session
+from core.database.connection import get_async_session, get_sync_session
 from domain.entities.user import User
 
 
@@ -111,6 +111,36 @@ class UserService:
         """Расчет общего заработка пользователя."""
         # Заглушка для MVP
         return 0.0
+    
+    def get_user_by_telegram_id(self, telegram_id: int) -> Optional[Dict[str, Any]]:
+        """Синхронное получение пользователя по Telegram ID."""
+        try:
+            logger.info(f"Searching for user with telegram_id: {telegram_id}")
+            db = get_sync_session()
+            try:
+                user = db.query(User).filter(User.telegram_id == telegram_id).first()
+                
+                if not user:
+                    logger.warning(f"User not found for telegram_id: {telegram_id}")
+                    return None
+                
+                logger.info(f"Found user: ID={user.id}, telegram_id={user.telegram_id}")
+                
+                return {
+                    'id': user.id,
+                    'telegram_id': user.telegram_id,
+                    'username': user.username,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'role': user.role,
+                    'is_active': user.is_active
+                }
+            finally:
+                db.close()
+                
+        except Exception as e:
+            logger.error(f"Failed to get user by telegram_id: {e}")
+            return None
 
 
 

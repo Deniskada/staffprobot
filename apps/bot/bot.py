@@ -14,14 +14,18 @@ from telegram.ext import (
 from typing import Optional
 from core.config.settings import settings
 from core.logging.logger import logger
-from .handlers import (
+from apps.scheduler.reminder_scheduler import ReminderScheduler
+from .handlers_new import (
     start_command,
-    help_command,
-    status_command,
     handle_message,
     button_callback,
     handle_location
 )
+from .handlers import (
+    help_command,
+    status_command
+)
+from .analytics_handlers import AnalyticsHandlers
 
 
 class StaffProBot:
@@ -30,6 +34,8 @@ class StaffProBot:
     def __init__(self):
         self.application: Optional[Application] = None
         self._bot_token = None  # Ленивая инициализация
+        self.reminder_scheduler: Optional[ReminderScheduler] = None
+        self.analytics_handlers = AnalyticsHandlers()
     
     @property
     def bot_token(self) -> str:
@@ -49,6 +55,9 @@ class StaffProBot:
             # Добавление обработчиков команд
             self._setup_handlers()
             
+            # Инициализация планировщика напоминаний
+            self.reminder_scheduler = ReminderScheduler(self.bot_token)
+            
             logger.info("Telegram bot initialized successfully")
             
         except Exception as e:
@@ -64,6 +73,9 @@ class StaffProBot:
         self.application.add_handler(CommandHandler("start", start_command))
         self.application.add_handler(CommandHandler("help", help_command))
         self.application.add_handler(CommandHandler("status", status_command))
+        
+        # Добавляем ConversationHandler для отчетов
+        self.application.add_handler(self.analytics_handlers.get_conversation_handler())
         
         # Обработка геопозиции
         self.application.add_handler(
@@ -103,6 +115,11 @@ class StaffProBot:
         
         try:
             logger.info("Starting bot in polling mode")
+            
+            # Запускаем планировщик напоминаний
+            if self.reminder_scheduler:
+                await self.reminder_scheduler.start()
+            
             await self.application.run_polling(
                 allowed_updates=Update.ALL_TYPES,
                 drop_pending_updates=True
@@ -124,6 +141,10 @@ class StaffProBot:
             
             logger.info(f"Starting bot in webhook mode: {webhook_url}")
             
+            # Запускаем планировщик напоминаний
+            if self.reminder_scheduler:
+                await self.reminder_scheduler.start()
+            
             await self.application.bot.set_webhook(url=webhook_url)
             await self.application.run_webhook(
                 listen="0.0.0.0",
@@ -137,6 +158,10 @@ class StaffProBot:
     
     async def stop(self) -> None:
         """Остановка бота."""
+        # Останавливаем планировщик напоминаний
+        if self.reminder_scheduler:
+            await self.reminder_scheduler.stop()
+        
         if self.application:
             await self.application.stop()
             await self.application.shutdown()

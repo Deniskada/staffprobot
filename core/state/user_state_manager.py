@@ -13,6 +13,9 @@ class UserAction(str, Enum):
     CLOSE_SHIFT = "close_shift"
     CREATE_OBJECT = "create_object"
     EDIT_OBJECT = "edit_object"
+    SCHEDULE_SHIFT = "schedule_shift"
+    VIEW_SCHEDULE = "view_schedule"
+    CANCEL_SCHEDULE = "cancel_schedule"
 
 
 class UserStep(str, Enum):
@@ -23,6 +26,11 @@ class UserStep(str, Enum):
     PROCESSING = "processing"
     INPUT_MAX_DISTANCE = "input_max_distance"
     INPUT_FIELD_VALUE = "input_field_value"
+    INPUT_START_TIME = "input_start_time"
+    INPUT_END_TIME = "input_end_time"
+    INPUT_DATE = "input_date"
+    CONFIRM_SCHEDULE = "confirm_schedule"
+    SCHEDULE_SELECTION = "schedule_selection"
 
 
 class UserState:

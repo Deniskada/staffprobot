@@ -69,7 +69,7 @@ class TestShiftScheduler:
         
         assert result == []
     
-    def test_should_close_shift_24_hours_passed(self):
+    async def test_should_close_shift_24_hours_passed(self):
         """Тест определения необходимости закрытия смены - прошло 24 часа."""
         # Создаем смену, которая началась более 24 часов назад
         shift = MagicMock()
@@ -81,7 +81,7 @@ class TestShiftScheduler:
         
         assert result is True
     
-    def test_should_close_shift_object_closed(self):
+    async def test_should_close_shift_object_closed(self):
         """Тест определения необходимости закрытия смены - объект закрыт."""
         # Создаем смену, которая началась недавно
         shift = MagicMock()
@@ -102,7 +102,7 @@ class TestShiftScheduler:
             
             assert result is True
     
-    def test_should_close_shift_not_ready(self):
+    async def test_should_close_shift_not_ready(self):
         """Тест определения необходимости закрытия смены - смена не готова к закрытию."""
         # Создаем смену, которая началась недавно
         shift = MagicMock()
@@ -306,3 +306,4 @@ class TestShiftScheduler:
         hours = duration.total_seconds() / 3600
         
         assert hours == 1.0
+
