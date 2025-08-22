@@ -1376,6 +1376,424 @@ class LogMonitor:
 log_monitor = LogMonitor()
 ```
 
+## 2.11. Технические задачи Итерации 7
+
+### 2.11.1. Исправление критических ошибок
+
+#### Проблема с созданием пользователей
+```python
+# core/auth/user_manager.py - исправление
+class UserManager:
+    async def create_user(self, telegram_id: int, user_data: dict) -> User:
+        """Создание пользователя только в базе данных"""
+        # Убрать зависимость от файла /data/users.json
+        # Использовать только PostgreSQL
+        user = User(
+            telegram_id=telegram_id,
+            username=user_data.get('username'),
+            first_name=user_data['first_name'],
+            last_name=user_data.get('last_name'),
+            role='employee'
+        )
+        
+        async with self.session() as session:
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+        
+        return user
+```
+
+#### Исправление команд /help и /status
+```python
+# apps/bot/handlers.py - исправление
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /help с подробной справкой"""
+    help_text = """
+🤖 **StaffProBot - Помощь**
+
+**Основные команды:**
+/start - Главное меню
+/help - Эта справка
+/status - Статус активных смен
+
+**Управление сменами:**
+🔄 Открыть смену - начать работу на объекте
+🔚 Закрыть смену - завершить работу
+📅 Запланировать смену - запланировать будущую смену
+📋 Мои планы - просмотр запланированных смен
+
+**Отчеты:**
+📊 Отчеты - создание отчетов по работе
+📈 Дашборд - ключевые метрики
+
+**Настройки:**
+⚙️ Настройки - управление объектами и параметрами
+    """
+    
+    await update.message.reply_text(help_text, parse_mode='Markdown')
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /status - статус активных смен"""
+    user_id = update.effective_user.id
+    
+    # Получение активных смен из базы данных
+    active_shifts = await shift_service.get_user_active_shifts(user_id)
+    
+    if not active_shifts:
+        await update.message.reply_text("✅ У вас нет активных смен")
+        return
+    
+    status_text = "📊 **Ваши активные смены:**\n\n"
+    
+    for shift in active_shifts:
+        object_name = await object_service.get_object_name(shift.object_id)
+        start_time = shift.start_time.strftime("%H:%M")
+        status_text += f"🏢 **{object_name}**\n"
+        status_text += f"⏰ Начало: {start_time}\n"
+        status_text += f"📍 Статус: {shift.status}\n\n"
+    
+    await update.message.reply_text(status_text, parse_mode='Markdown')
+```
+
+#### Исправление логики дашборда
+```python
+# apps/analytics/analytics_service.py - исправление
+class AnalyticsService:
+    async def get_owner_dashboard(self, owner_id: int) -> dict:
+        """Дашборд владельца объектов (исправленная логика)"""
+        # Владельцы платят сотрудникам, а не зарабатывают
+        total_payments = await self._calculate_total_payments(owner_id)
+        total_shifts = await self._count_total_shifts(owner_id)
+        active_shifts = await self._count_active_shifts(owner_id)
+        
+        return {
+            'total_payments': total_payments,  # Сумма к выплате
+            'total_shifts': total_shifts,
+            'active_shifts': active_shifts,
+            'top_objects': await self._get_top_objects_by_cost(owner_id)
+        }
+    
+    async def _calculate_total_payments(self, owner_id: int) -> Decimal:
+        """Расчет общей суммы к выплате сотрудникам"""
+        # Логика расчета выплат (не заработка)
+        return await self._sum_shift_payments(owner_id)
+```
+
+### 2.11.2. Расширенное планирование смен
+
+#### Календарный интерфейс
+```python
+# apps/bot/handlers/schedule_handlers.py - новый функционал
+class CalendarHandler:
+    def __init__(self):
+        self.months = [
+            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+        ]
+    
+    async def show_calendar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показать календарь для выбора дат"""
+        current_date = datetime.now()
+        
+        keyboard = [
+            [InlineKeyboardButton(f"📅 {current_date.year}", callback_data="year_select")],
+            [InlineKeyboardButton(f"📅 {self.months[current_date.month-1]}", callback_data="month_select")],
+            self._generate_days_keyboard(current_date.year, current_date.month),
+            [InlineKeyboardButton("✅ Подтвердить выбор", callback_data="confirm_dates")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.callback_query.edit_message_text(
+            "🗓️ Выберите даты для планирования смен:",
+            reply_markup=reply_markup
+        )
+    
+    def _generate_days_keyboard(self, year: int, month: int) -> List[List[InlineKeyboardButton]]:
+        """Генерация клавиатуры с днями месяца"""
+        # Логика генерации кнопок с днями
+        pass
+```
+
+#### Множественное планирование
+```python
+# apps/scheduler/schedule_service.py - расширение
+class ScheduleService:
+    async def plan_multiple_shifts(self, user_id: int, object_id: int, 
+                                 dates: List[date], time_slot: TimeSlot) -> List[ShiftSchedule]:
+        """Планирование множественных смен по выбранным датам"""
+        planned_shifts = []
+        
+        for selected_date in dates:
+            # Проверка доступности для каждой даты
+            if await self._is_time_available(object_id, selected_date, time_slot):
+                shift = await self._create_planned_shift(
+                    user_id, object_id, selected_date, time_slot
+                )
+                planned_shifts.append(shift)
+            else:
+                # Уведомление о недоступности даты
+                await self._notify_date_unavailable(user_id, selected_date, object_id)
+        
+        return planned_shifts
+```
+
+### 2.11.3. Управление занятостью и персоналом
+
+#### Проверка конфликтов
+```python
+# domain/entities/shift_schedule.py - расширение модели
+class ShiftSchedule(Base):
+    __tablename__ = "shift_schedules"
+    
+    # Новые поля для управления занятостью
+    max_employees: Optional[int] = Column(Integer, default=1)
+    allow_overlap: Optional[bool] = Column(Boolean, default=False)
+    approval_required: Optional[bool] = Column(Boolean, default=True)
+
+# apps/scheduler/schedule_service.py - проверка конфликтов
+class ScheduleService:
+    async def check_employee_conflicts(self, object_id: int, date: date, 
+                                     time_slot: TimeSlot) -> List[Conflict]:
+        """Проверка конфликтов занятости сотрудников"""
+        existing_shifts = await self._get_shifts_at_time(object_id, date, time_slot)
+        object_settings = await self._get_object_settings(object_id)
+        
+        conflicts = []
+        
+        if len(existing_shifts) >= object_settings.max_employees:
+            conflicts.append(Conflict(
+                type="MAX_EMPLOYEES_EXCEEDED",
+                message=f"Максимум сотрудников: {object_settings.max_employees}",
+                existing_employees=len(existing_shifts)
+            ))
+        
+        if not object_settings.allow_overlap:
+            # Проверка пересечений по времени
+            for shift in existing_shifts:
+                if self._time_overlaps(time_slot, shift.planned_time):
+                    conflicts.append(Conflict(
+                        type="TIME_OVERLAP",
+                        message=f"Время пересекается с сменой {shift.id}",
+                        conflicting_shift=shift
+                    ))
+        
+        return conflicts
+```
+
+### 2.11.4. Система одобрения заявок
+
+#### Модель заявок
+```python
+# domain/entities/shift_request.py - новая сущность
+class ShiftRequest(Base):
+    __tablename__ = "shift_requests"
+    
+    id = Column(BigInteger, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    object_id = Column(BigInteger, ForeignKey("objects.id"), nullable=False)
+    requested_dates = Column(JSONB, nullable=False)  # Список запрошенных дат
+    time_slot = Column(JSONB, nullable=False)  # Временной интервал
+    status = Column(String(50), default="pending")  # pending, approved, rejected
+    owner_notes = Column(Text)  # Комментарии владельца
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+# apps/bot/handlers/request_handlers.py - обработка заявок
+class RequestHandler:
+    async def submit_shift_request(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Подача заявки на смены"""
+        user_id = update.effective_user.id
+        
+        # Создание заявки вместо прямого планирования
+        request = await self._create_request(user_id, context.user_data)
+        
+        # Уведомление владельца объекта
+        await self._notify_owner(request)
+        
+        await update.callback_query.edit_message_text(
+            "📝 Заявка подана! Ожидайте одобрения владельца объекта."
+        )
+    
+    async def _notify_owner(self, request: ShiftRequest):
+        """Уведомление владельца о новой заявке"""
+        owner_id = await self._get_object_owner(request.object_id)
+        
+        notification_text = f"""
+🔔 **Новая заявка на смены**
+
+👤 Сотрудник: {await self._get_user_name(request.user_id)}
+🏢 Объект: {await self._get_object_name(request.object_id)}
+📅 Даты: {len(request.requested_dates)} смен
+⏰ Время: {request.time_slot['start']} - {request.time_slot['end']}
+
+[✅ Одобрить](callback_data="approve_request_{request.id}")
+[❌ Отклонить](callback_data="reject_request_{request.id}")
+        """
+        
+        await self._send_owner_notification(owner_id, notification_text)
+```
+
+### 2.11.5. Улучшение геолокации и карт
+
+#### Интеграция с Telegram Maps
+```python
+# apps/bot/handlers/map_handlers.py - новый функционал
+class MapHandler:
+    async def show_object_map(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показать карту с объектами"""
+        user_id = update.effective_user.id
+        
+        # Получение объектов пользователя
+        user_objects = await self._get_user_objects(user_id)
+        
+        # Создание интерактивной карты
+        map_keyboard = [
+            [InlineKeyboardButton("🗺️ Показать на карте", callback_data="show_map")],
+            [InlineKeyboardButton("🔍 Найти новые объекты", callback_data="find_new_objects")],
+            [InlineKeyboardButton("📋 Мои объекты", callback_data="my_objects")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(map_keyboard)
+        await update.callback_query.edit_message_text(
+            "🗺️ Выберите способ поиска объектов:",
+            reply_markup=reply_markup
+        )
+    
+    async def send_location_map(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Отправка карты с отметками объектов"""
+        # Использование Telegram Location API для отображения карты
+        # с отметками объектов в чате
+        pass
+```
+
+### 2.11.6. Расширенная отчетность
+
+#### Календарный выбор периода
+```python
+# apps/analytics/analytics_handlers.py - расширение
+class AnalyticsHandler:
+    async def show_report_calendar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показать календарь для выбора периода отчетности"""
+        current_date = datetime.now()
+        
+        # Генерация календарной клавиатуры
+        calendar_keyboard = self._generate_report_calendar(current_date)
+        
+        reply_markup = InlineKeyboardMarkup(calendar_keyboard)
+        await update.callback_query.edit_message_text(
+            "📊 Выберите период для отчета:",
+            reply_markup=reply_markup
+        )
+    
+    async def generate_owner_report(self, owner_id: int, start_date: date, 
+                                   end_date: date) -> dict:
+        """Отчет по всем объектам владельца в разрезе сотрудников"""
+        objects = await self._get_owner_objects(owner_id)
+        
+        report_data = {
+            'period': {'start': start_date, 'end': end_date},
+            'total_objects': len(objects),
+            'objects_summary': []
+        }
+        
+        for obj in objects:
+            object_summary = await self._get_object_summary(
+                obj.id, start_date, end_date
+            )
+            report_data['objects_summary'].append(object_summary)
+        
+        return report_data
+```
+
+### 2.11.7. Автоматизация развертывания
+
+#### CI/CD Pipeline
+```yaml
+# .github/workflows/deploy.yml - расширенный pipeline
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+    - name: Run tests
+      run: |
+        pytest tests/ --cov=apps --cov-report=xml
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+
+  security-scan:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run security scan
+      run: |
+        pip install safety
+        safety check
+
+  build-and-deploy:
+    needs: [test, security-scan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Docker image
+      run: |
+        docker build -t staffprobot/bot:${{ github.sha }} .
+        docker push staffprobot/bot:${{ github.sha }}
+    - name: Deploy to production
+      run: |
+        ./scripts/deploy.sh production ${{ github.sha }}
+```
+
+#### Скрипты развертывания
+```bash
+# scripts/deploy.sh - скрипт развертывания
+#!/bin/bash
+
+ENVIRONMENT=$1
+IMAGE_TAG=$2
+
+if [ -z "$ENVIRONMENT" ] || [ -z "$IMAGE_TAG" ]; then
+    echo "Usage: $0 <environment> <image_tag>"
+    exit 1
+fi
+
+echo "🚀 Deploying to $ENVIRONMENT with image $IMAGE_TAG"
+
+# Обновление docker-compose
+sed -i "s|image: staffprobot/bot:.*|image: staffprobot/bot:$IMAGE_TAG|g" \
+    docker-compose.$ENVIRONMENT.yml
+
+# Перезапуск сервисов
+docker-compose -f docker-compose.$ENVIRONMENT.yml down
+docker-compose -f docker-compose.$ENVIRONMENT.yml up -d
+
+# Проверка health
+./scripts/health_check.sh $ENVIRONMENT
+
+echo "✅ Deployment completed successfully!"
+```
+
+---
+
 Это техническое видение проекта StaffProBot охватывает все аспекты разработки, от выбора технологий до деталей реализации. Документ служит руководством для команды разработки и обеспечивает единообразие в архитектуре и подходах к реализации.
 
 ---
