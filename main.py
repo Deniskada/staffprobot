@@ -41,27 +41,68 @@ def main():
         # Инициализируем бота
         import asyncio
         
-        # Создаем новый event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
         try:
-            # Инициализируем бота
-            loop.run_until_complete(bot.initialize())
-            print("✅ Бот инициализирован")
+            # Основная функция запуска
+            async def run_app():
+                try:
+                    # Проверяем доступность критических сервисов
+                    from core.health.health_check import health_checker
+                    print("🔍 Проверка доступности сервисов...")
+                    
+                    services_ready = await health_checker.wait_for_services(
+                        ['postgresql', 'redis'], max_attempts=10, delay=3
+                    )
+                    
+                    if not services_ready:
+                        print("❌ Критические сервисы недоступны!")
+                        print("💡 Убедитесь что запущены Docker контейнеры:")
+                        print("   docker-compose up -d postgres redis")
+                        return
+                    
+                    print("✅ Все сервисы доступны")
+                    
+                    # Инициализируем кэш
+                    from core.cache.redis_cache import init_cache
+                    await init_cache()
+                    print("✅ Redis кэш инициализирован")
+                    
+                    # Инициализируем бота
+                    await bot.initialize()
+                    print("✅ Бот инициализирован")
+                    
+                    # Запускаем в polling режиме
+                    print("🔄 Запуск в polling режиме...")
+                    print("📱 Бот запущен! Отправьте /start в Telegram")
+                    print("⏹️ Для остановки нажмите Ctrl+C")
+                    
+                    # Запускаем polling через start_polling
+                    await bot.application.initialize()
+                    await bot.application.start()
+                    await bot.application.updater.start_polling(
+                        allowed_updates=["message", "callback_query"],
+                        drop_pending_updates=True
+                    )
+                    
+                    # Ждем в бесконечном цикле
+                    while True:
+                        await asyncio.sleep(1)
+                    
+                except KeyboardInterrupt:
+                    print("\n⏹️ Получен сигнал остановки")
+                except Exception as e:
+                    print(f"❌ Ошибка в run_app: {e}")
+                    raise
+                finally:
+                    # Закрываем кэш при завершении
+                    try:
+                        from core.cache.redis_cache import close_cache
+                        await close_cache()
+                        print("✅ Redis кэш закрыт")
+                    except Exception as e:
+                        print(f"⚠️ Ошибка при закрытии кэша: {e}")
             
-            # Запускаем в polling режиме
-            print("🔄 Запуск в polling режиме...")
-            print("📱 Бот запущен! Отправьте /start в Telegram")
-            print("⏹️ Для остановки нажмите Ctrl+C")
-            
-            # Запускаем polling напрямую через application
-            loop.run_until_complete(
-                bot.application.run_polling(
-                    allowed_updates=["message", "callback_query"],
-                    drop_pending_updates=True
-                )
-            )
+            # Запускаем приложение
+            asyncio.run(run_app())
             
         except KeyboardInterrupt:
             print("\n⏹️ Получен сигнал остановки")
@@ -70,25 +111,8 @@ def main():
             import traceback
             traceback.print_exc()
         finally:
-            # Останавливаем бота
-            try:
-                if hasattr(bot, 'application') and bot.application:
-                    if not loop.is_closed():
-                        # Пытаемся остановить приложение
-                        if bot.application.running:
-                            loop.run_until_complete(bot.application.stop())
-                        print("✅ Бот остановлен")
-                    else:
-                        print("⚠️ Event loop уже закрыт")
-            except Exception as e:
-                print(f"⚠️ Ошибка при остановке бота: {e}")
-            
-            # Закрываем loop если он еще открыт
-            try:
-                if not loop.is_closed():
-                    loop.close()
-            except Exception as e:
-                print(f"⚠️ Ошибка при закрытии event loop: {e}")
+            # asyncio.run() сам управляет event loop и закрывает все ресурсы
+            print("🔄 Завершение работы...")
         
     except Exception as e:
         print(f"💥 Критическая ошибка: {e}")

@@ -83,7 +83,7 @@ services:
       - "8000:8000"
     networks:
       - staffprobot_network
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["sh", "-c", "python scripts/start_monitoring.py & python main.py"]
 
   prometheus:
     image: prom/prometheus:latest
@@ -120,6 +120,59 @@ services:
     networks:
       - staffprobot_network
 
+  celery_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: staffprobot_celery_worker
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/staffprobot
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
+      - ENVIRONMENT=development
+      - DEBUG=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+    networks:
+      - staffprobot_network
+    command: ["python", "scripts/start_celery_worker.py"]
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: staffprobot_celery_beat
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/staffprobot
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
+      - ENVIRONMENT=development
+      - DEBUG=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+      - celery_beat_data:/tmp
+    networks:
+      - staffprobot_network
+    command: ["python", "scripts/start_celery_beat.py"]
+
 volumes:
   postgres_data:
     driver: local
@@ -130,6 +183,8 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+  celery_beat_data:
     driver: local
 
 networks:

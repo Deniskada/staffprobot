@@ -165,3 +165,4 @@ class TestAnalyticsService:
         
         # Проверка
         assert result == []
+

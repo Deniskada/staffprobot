@@ -12,8 +12,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from domain.entities.shift import Shift
 from domain.entities.user import User
 from domain.entities.object import Object
-
-logger = logging.getLogger(__name__)
+from core.cache.cache_service import CacheService
+from core.logging.logger import logger
 
 
 class ShiftServiceDB:

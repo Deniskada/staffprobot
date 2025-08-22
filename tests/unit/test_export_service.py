@@ -232,3 +232,4 @@ class TestExportService:
         assert isinstance(excel_data, bytes)
         assert len(excel_data) > 0
         assert excel_data.startswith(b'PK')
+

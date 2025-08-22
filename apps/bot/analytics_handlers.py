@@ -109,8 +109,17 @@ class AnalyticsHandlers:
             objects = self.object_service.get_user_objects(user_id)
             
             if not objects:
+                # Создаем кнопки для возврата в главное меню
+                keyboard = [
+                    [InlineKeyboardButton("🏢 Создать объект", callback_data="create_object")],
+                    [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
                 await update.callback_query.edit_message_text(
-                    "❌ У вас нет объектов для создания отчета"
+                    "❌ У вас нет объектов для создания отчета\n\n"
+                    "💡 Сначала создайте объект, чтобы получать отчеты по нему.",
+                    reply_markup=reply_markup
                 )
                 return ConversationHandler.END
             

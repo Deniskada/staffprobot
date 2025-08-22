@@ -202,6 +202,7 @@ class ObjectService:
             Список объектов пользователя
         """
         try:
+            # Попытка работы с базой данных
             with get_sync_session() as session:
                 
                 # Получаем пользователя по telegram_id
@@ -242,7 +243,7 @@ class ObjectService:
                 
         except Exception as e:
             logger.error(f"Error retrieving user objects for {owner_id}: {e}")
-        return []
+            return []
     
     def update_object_field(self, object_id: int, field_name: str, field_value, owner_id: int) -> Dict[str, Any]:
         """
@@ -350,6 +351,7 @@ class ObjectService:
                 'success': False,
                 'error': f'Ошибка при обновлении объекта: {str(e)}'
             }
+
 
 
 

@@ -430,3 +430,4 @@ class ExportService:
         except Exception as e:
             logger.error(f"Error generating personal Excel report: {e}")
             raise
+

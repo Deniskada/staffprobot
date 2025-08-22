@@ -1,0 +1,123 @@
+# Правила алертов для StaffProBot
+groups:
+  - name: staffprobot_alerts
+    rules:
+      # Высокая нагрузка на HTTP
+      - alert: HighHTTPRequestRate
+        expr: rate(staffprobot_http_requests_total[5m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая частота HTTP запросов"
+          description: "Частота HTTP запросов превышает 100 req/s в течение 2 минут"
+      
+      # Медленные HTTP запросы
+      - alert: SlowHTTPRequests
+        expr: histogram_quantile(0.95, rate(staffprobot_http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Медленные HTTP запросы"
+          description: "95-й процентиль времени ответа превышает 1 секунду"
+      
+      # Ошибки HTTP 5xx
+      - alert: HighHTTPErrorRate
+        expr: rate(staffprobot_http_requests_total{status_code=~"5.."}[5m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Высокая частота HTTP ошибок 5xx"
+          description: "Частота HTTP ошибок 5xx превышает 10 req/s"
+      
+      # Медленные запросы к БД
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, rate(staffprobot_db_query_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Медленные запросы к БД"
+          description: "95-й процентиль времени выполнения запросов к БД превышает 0.5 секунды"
+      
+      # Много активных соединений с БД
+      - alert: HighDatabaseConnections
+        expr: staffprobot_db_connections_active > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Много активных соединений с БД"
+          description: "Количество активных соединений с БД превышает 50"
+      
+      # Низкий hit rate кэша
+      - alert: LowCacheHitRate
+        expr: staffprobot_cache_hit_ratio < 70
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Низкий коэффициент попаданий в кэш"
+          description: "Коэффициент попаданий в кэш менее 70%"
+      
+      # Ошибки Celery задач
+      - alert: HighCeleryTaskFailureRate
+        expr: rate(staffprobot_celery_tasks_total{status="failure"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Высокая частота ошибок Celery задач"
+          description: "Частота ошибок Celery задач превышает 5 errors/s"
+      
+      # Медленные Celery задачи
+      - alert: SlowCeleryTasks
+        expr: histogram_quantile(0.95, rate(staffprobot_celery_task_duration_seconds_bucket[5m])) > 60
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Медленные Celery задачи"
+          description: "95-й процентиль времени выполнения Celery задач превышает 60 секунд"
+      
+      # Приложение недоступно
+      - alert: ApplicationDown
+        expr: up{job="staffprobot-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Приложение StaffProBot недоступно"
+          description: "Основное приложение StaffProBot не отвечает"
+      
+      # PostgreSQL недоступен
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL недоступен"
+          description: "База данных PostgreSQL не отвечает"
+      
+      # Redis недоступен
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis недоступен"
+          description: "Сервер Redis не отвечает"
+      
+      # RabbitMQ недоступен
+      - alert: RabbitMQDown
+        expr: up{job="rabbitmq"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ недоступен"
+          description: "Брокер сообщений RabbitMQ не отвечает"

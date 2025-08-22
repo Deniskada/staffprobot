@@ -1,0 +1,1 @@
+"""Celery конфигурация для StaffProBot."""

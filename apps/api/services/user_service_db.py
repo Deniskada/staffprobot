@@ -9,8 +9,8 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from domain.entities.user import User
-
-logger = logging.getLogger(__name__)
+from core.cache.cache_service import CacheService
+from core.logging.logger import logger
 
 
 class UserServiceDB:
@@ -47,11 +47,35 @@ class UserServiceDB:
             return None
     
     async def get_user(self, user_id: int) -> Optional[User]:
-        """Получает пользователя по ID."""
+        """Получает пользователя по ID с кэшированием."""
+        # Попытка получить из кэша
+        cached_user = await CacheService.get_user(user_id)
+        if cached_user:
+            logger.debug(f"User found in cache: {user_id}")
+            # Создаем объект User из кэшированных данных
+            return User(**cached_user)
+        
         try:
             query = select(User).where(User.id == user_id)
             result = await self.db.execute(query)
-            return result.scalar_one_or_none()
+            user = result.scalar_one_or_none()
+            
+            if user:
+                logger.debug(f"User found in database: {user.id}")
+                # Сохраняем в кэш
+                user_dict = {
+                    'id': user.id,
+                    'telegram_id': user.telegram_id,
+                    'username': user.username,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'phone': user.phone,
+                    'role': user.role,
+                    'is_active': user.is_active
+                }
+                await CacheService.set_user(user_id, user_dict)
+            
+            return user
         except SQLAlchemyError as e:
             logger.error(f"Database error while getting user {user_id}: {e}")
             return None

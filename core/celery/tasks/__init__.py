@@ -1,0 +1,1 @@
+"""Celery задачи для StaffProBot."""

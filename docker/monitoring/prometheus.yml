@@ -1,0 +1,57 @@
+# Prometheus конфигурация для StaffProBot
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Основное приложение
+  - job_name: 'staffprobot-app'
+    static_configs:
+      - targets: ['bot:9090']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    
+  # Celery worker
+  - job_name: 'staffprobot-celery'
+    static_configs:
+      - targets: ['celery_worker:9091']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    
+  # PostgreSQL
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s
+    
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    
+  # RabbitMQ
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+    scrape_interval: 30s
+    
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  - "alert_rules.yml"

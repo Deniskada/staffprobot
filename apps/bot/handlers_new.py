@@ -18,13 +18,11 @@ from apps.bot.schedule_handlers import (
     handle_schedule_confirmation, handle_view_schedule, handle_cancel_schedule,
     handle_schedule_time_input, handle_custom_date_input
 )
-from apps.bot.analytics_handlers import AnalyticsHandlers
 
 
 # Создаем экземпляры сервисов
 shift_service = ShiftService()
 object_service = ObjectService()
-analytics_handlers = AnalyticsHandlers()
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -257,18 +255,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик нажатий на inline-кнопки."""
     query = update.callback_query
-    
-    # Пропускаем callback'и аналитики - их обрабатывает ConversationHandler
-    analytics_callbacks = [
-        "get_report", "report_object", "report_personal", "report_dashboard", "cancel_report",
-        "period_today", "period_week", "period_month", "period_3months",
-        "format_text", "format_pdf", "format_excel", "refresh_dashboard"
-    ]
-    
-    if (query.data.startswith("object_") and "report" in context.user_data) or \
-       query.data in analytics_callbacks:
-        return  # Пусть ConversationHandler обработает
-    
     await query.answer()  # Убираем "часики" у кнопки
     
     user = query.from_user
