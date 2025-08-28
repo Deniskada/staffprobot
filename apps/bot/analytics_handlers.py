@@ -506,19 +506,19 @@ class AnalyticsHandlers:
         text += f"📅 *Сегодня:*\n"
         text += f"• Смены: {today['shifts']}\n"
         text += f"• Часы: {today['hours']} ч\n"
-        text += f"• Доход: {today['earnings']} ₽\n\n"
+        text += f"• Расход: {today['payments']} ₽\n\n"
         
         week = metrics['week_stats']
         text += f"📊 *За неделю:*\n"
         text += f"• Смены: {week['shifts']}\n"
         text += f"• Часы: {week['hours']} ч\n"
-        text += f"• Доход: {week['earnings']} ₽\n\n"
+        text += f"• Расход: {week['payments']} ₽\n\n"
         
         month = metrics['month_stats']
         text += f"📈 *За месяц:*\n"
         text += f"• Смены: {month['shifts']}\n"
         text += f"• Часы: {month['hours']} ч\n"
-        text += f"• Доход: {month['earnings']} ₽\n\n"
+        text += f"• Расход: {month['payments']} ₽\n\n"
         
         if metrics.get('top_objects'):
             text += f"🏆 *Топ объекты:*\n"

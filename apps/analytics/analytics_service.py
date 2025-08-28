@@ -233,9 +233,9 @@ class AnalyticsService:
                     return {
                         "objects_count": 0,
                         "active_shifts": 0,
-                        "today_stats": {"shifts": 0, "hours": 0, "earnings": 0},
-                        "week_stats": {"shifts": 0, "hours": 0, "earnings": 0},
-                        "month_stats": {"shifts": 0, "hours": 0, "earnings": 0}
+                        "today_stats": {"shifts": 0, "hours": 0, "payments": 0},
+                        "week_stats": {"shifts": 0, "hours": 0, "payments": 0},
+                        "month_stats": {"shifts": 0, "hours": 0, "payments": 0}
                     }
                 
                 # Текущие активные смены
@@ -371,12 +371,13 @@ class AnalyticsService:
         ).all()
         
         total_hours = sum([s.total_hours or 0 for s in shifts])
-        total_earnings = sum([s.total_payment or 0 for s in shifts])
+        # Для владельца это расходы (payments), а не доход
+        total_payments = sum([s.total_payment or 0 for s in shifts])
         
         return {
             "shifts": len(shifts),
             "hours": round(float(total_hours), 2),
-            "earnings": round(float(total_earnings), 2)
+            "payments": round(float(total_payments), 2)
         }
     
     def _get_top_objects(self, db: Session, object_ids: List[int], start_date: date, end_date: date) -> List[Dict[str, Any]]:
@@ -400,7 +401,7 @@ class AnalyticsService:
                 "name": row.name,
                 "shifts": row.shift_count,
                 "hours": round(float(row.total_hours or 0), 2),
-                "earnings": round(float(row.total_payment or 0), 2)
+                "payments": round(float(row.total_payment or 0), 2)
             }
             for row in result
         ]
