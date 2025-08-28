@@ -75,6 +75,4 @@ celery_app.conf.update(
 celery_app.autodiscover_tasks()
 
 # Логирование запуска Celery
-logger.info("Celery application configured", 
-           broker=settings.rabbitmq_url,
-           backend=settings.redis_url)
+logger.info(f"Celery application configured - broker: {settings.rabbitmq_url}, backend: {settings.redis_url}")

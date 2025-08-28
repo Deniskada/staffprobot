@@ -1,0 +1,43 @@
+# Dockerfile для разработки
+FROM python:3.11-slim
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    libgeos-dev \
+    libproj-dev \
+    proj-bin \
+    curl \
+    vim \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Создание пользователя для разработки
+RUN useradd --create-home --shell /bin/bash dev
+
+# Установка Python зависимостей
+COPY requirements.txt /tmp/
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r /tmp/requirements.txt \
+    && pip install --no-cache-dir pytest pytest-asyncio pytest-cov \
+    && rm /tmp/requirements.txt
+
+# Копирование кода приложения
+COPY . /app
+WORKDIR /app
+
+# Установка прав доступа
+RUN chown -R dev:dev /app
+USER dev
+
+# Переменные окружения для разработки
+ENV PYTHONPATH=/app
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Команда по умолчанию для разработки
+CMD ["python", "main.py"]
+
+

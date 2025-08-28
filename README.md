@@ -96,9 +96,10 @@ staffprobot/
 
 ### Предварительные требования
 
-1. **Python 3.11+**
-2. **Docker и Docker Compose**
+1. **Docker Desktop** (Windows/macOS) или **Docker Engine** (Linux)
+2. **Docker Compose** (обычно включен в Docker Desktop)
 3. **Telegram Bot Token** (получить у @BotFather)
+4. **OpenAI API Key** (для AI функций)
 
 ### Установка и запуск
 

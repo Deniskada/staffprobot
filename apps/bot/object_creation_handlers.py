@@ -58,11 +58,16 @@ async def handle_create_object_input(update: Update, context: ContextTypes.DEFAU
     """Обработка ввода данных для создания объекта."""
     user_id = update.effective_user.id
     
+    logger.info(f"Processing object creation input: user_id={user_id}, step={user_object_creation_state.get(user_id, {}).get('step', 'unknown')}, input='{user_input}'")
+    
     if user_id not in user_object_creation_state:
+        logger.warning(f"User {user_id} not in object creation state")
         return  # Состояние потеряно
     
     state = user_object_creation_state[user_id]
     step = state['step']
+    
+    logger.info(f"User {user_id} at step '{step}', processing input")
     
     if step == 'name':
         await _handle_object_name_input(update, context, user_input)
@@ -74,6 +79,8 @@ async def handle_create_object_input(update: Update, context: ContextTypes.DEFAU
         await _handle_object_schedule_input(update, context, user_input)
     elif step == 'hourly_rate':
         await _handle_object_hourly_rate_input(update, context, user_input)
+    else:
+        logger.error(f"Unknown step '{step}' for user {user_id}")
 
 
 async def _handle_object_name_input(update: Update, context: ContextTypes.DEFAULT_TYPE, name: str) -> None:
@@ -81,8 +88,11 @@ async def _handle_object_name_input(update: Update, context: ContextTypes.DEFAUL
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     
+    logger.info(f"Processing object name input: user_id={user_id}, name='{name}'")
+    
     # Валидация названия
     if len(name.strip()) < 3:
+        logger.info(f"Name too short for user {user_id}: '{name}'")
         await context.bot.send_message(
             chat_id=chat_id,
             text="❌ Название слишком короткое. Минимум 3 символа. Попробуйте еще раз:",
@@ -101,6 +111,8 @@ async def _handle_object_name_input(update: Update, context: ContextTypes.DEFAUL
     # Сохраняем название и переходим к следующему шагу
     user_object_creation_state[user_id]['data']['name'] = name.strip()
     user_object_creation_state[user_id]['step'] = 'address'
+    
+    logger.info(f"Object name saved for user {user_id}: '{name.strip()}', moving to address step")
     
     response = f"""
 🏢 <b>Создание объекта: {name.strip()}</b>
@@ -122,12 +134,16 @@ async def _handle_object_name_input(update: Update, context: ContextTypes.DEFAUL
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    logger.info(f"Sending address request to user {user_id}")
+    
     await context.bot.send_message(
         chat_id=chat_id,
         text=response,
         parse_mode='HTML',
         reply_markup=reply_markup
     )
+    
+    logger.info(f"Address request sent successfully to user {user_id}")
 
 
 async def _handle_object_address_input(update: Update, context: ContextTypes.DEFAULT_TYPE, address: str) -> None:

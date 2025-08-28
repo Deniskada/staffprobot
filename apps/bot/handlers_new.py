@@ -842,6 +842,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     text = update.message.text
     user_id = update.effective_user.id
     
+    logger.info(f"Received text message: user_id={user_id}, text='{text}'")
+    
     # Обработка отмены
     if text == "❌ Отмена":
         await handle_cancel(update, context)
@@ -849,7 +851,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     # Проверяем состояние пользователя для обработки диалогов создания объекта
     if user_id in user_object_creation_state:
-        await handle_create_object_input(update, context)
+        logger.info(f"User {user_id} is in object creation state, processing input")
+        await handle_create_object_input(update, context, text)
         return
     
     # Проверяем состояние пользователя для редактирования объектов

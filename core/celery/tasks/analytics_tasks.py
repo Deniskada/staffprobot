@@ -203,11 +203,19 @@ def update_analytics_cache(self, cache_keys: List[str] = None):
 def cleanup_cache(self):
     """Очистка устаревших кэшей."""
     try:
-        # Очищаем устаревшие аналитические кэши
-        await CacheService.clear_analytics_cache()
+        import asyncio
         
-        # Получаем статистику кэша
-        cache_stats = await CacheService.get_cache_stats()
+        async def _cleanup_cache():
+            # Очищаем устаревшие аналитические кэши
+            await CacheService.clear_analytics_cache()
+            
+            # Получаем статистику кэша
+            cache_stats = await CacheService.get_cache_stats()
+            
+            return cache_stats
+        
+        # Запускаем async функцию
+        cache_stats = asyncio.run(_cleanup_cache())
         
         logger.info(
             "Cache cleanup completed",
