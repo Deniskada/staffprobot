@@ -330,10 +330,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await handle_cancel_schedule(update, context)
         return
     elif query.data == "help":
-        await help_command(update, context)
+        await _handle_help_callback(update, context)
         return
     elif query.data == "status":
-        await status_command(update, context)
+        await _handle_status_callback(update, context)
         return
     elif query.data == "main_menu":
         response = f"""
@@ -835,6 +835,86 @@ async def _handle_edit_field(update: Update, context: ContextTypes.DEFAULT_TYPE,
             InlineKeyboardButton("❌ Отмена", callback_data=f"edit_object:{object_id}")
         ]])
     )
+
+
+async def _handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ответ на нажатие кнопки 'Помощь' через callback."""
+    query = update.callback_query
+    help_text = """
+❓ <b>Справка по StaffProBot</b>
+
+<b>Основные команды:</b>
+/start - Запуск бота и главное меню
+/help - Эта справка
+/status - Статус ваших смен
+
+<b>Основные функции:</b>
+🔄 <b>Открыть смену</b>
+🔚 <b>Закрыть смену</b>
+📅 <b>Запланировать смену</b>
+🏢 <b>Создать объект</b>
+⚙️ <b>Управление объектами</b>
+📊 <b>Отчет</b>
+
+<b>Геолокация:</b>
+📍 Для открытия/закрытия смен требуется отправка геопозиции
+📏 Проверяется расстояние до объекта (по умолчанию 500м)
+🎯 Используйте кнопку "📍 Отправить геопозицию"
+"""
+    keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
+    await query.edit_message_text(text=help_text, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def _handle_status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ответ на нажатие кнопки 'Статус' через callback."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    try:
+        active_shifts = await shift_service.get_user_shifts(user_id, status='active')
+        if not active_shifts:
+            status_text = """
+📈 <b>Статус смен</b>
+
+✅ <b>Активных смен нет</b>
+
+Вы можете открыть новую смену через главное меню.
+"""
+        else:
+            shift = active_shifts[0]
+            obj_data = object_service.get_object_by_id(shift['object_id'])
+            user_timezone = timezone_helper.get_user_timezone(user_id)
+            from datetime import datetime
+            try:
+                start_time_utc = datetime.strptime(shift['start_time'], '%Y-%m-%d %H:%M:%S')
+                local_start_time = timezone_helper.format_local_time(start_time_utc, user_timezone)
+            except Exception:
+                local_start_time = shift.get('start_time', '')
+            obj_name = obj_data['name'] if obj_data else 'Неизвестный'
+            hourly_rate = obj_data['hourly_rate'] if obj_data else 0
+            status_text = f"""
+📈 <b>Статус смен</b>
+
+🟢 <b>Активная смена:</b>
+🏢 Объект: {obj_name}
+🕐 Начало: {local_start_time}
+💰 Ставка: {hourly_rate}₽/час
+
+Для завершения смены используйте кнопку "🔚 Закрыть смену".
+"""
+    except Exception as e:
+        logger.error(f"Error getting user status for {user_id}: {e}")
+        status_text = """
+📈 <b>Статус смен</b>
+
+❌ <b>Ошибка получения статуса</b>
+
+Попробуйте позже или обратитесь к администратору.
+"""
+    keyboard = [
+        [InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift"), InlineKeyboardButton("🔚 Закрыть смену", callback_data="close_shift")],
+        [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+    ]
+    await query.edit_message_text(text=status_text, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
