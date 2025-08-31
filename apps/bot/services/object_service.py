@@ -233,6 +233,7 @@ class ObjectService:
                         'hourly_rate': float(obj.hourly_rate) if obj.hourly_rate else 0.0,
                         'opening_time': obj.opening_time.strftime('%H:%M') if obj.opening_time else None,
                         'closing_time': obj.closing_time.strftime('%H:%M') if obj.closing_time else None,
+                        'working_hours': f"{obj.opening_time.strftime('%H:%M')} - {obj.closing_time.strftime('%H:%M')}" if obj.opening_time and obj.closing_time else "Не указано",
                         'is_active': obj.is_active,
                         'created_at': obj.created_at.isoformat() if obj.created_at else None,
                         'max_distance_meters': obj.max_distance_meters or 500
@@ -326,6 +327,20 @@ class ObjectService:
                         return {
                             'success': False,
                             'error': 'Неверное значение часовой ставки. Введите число.'
+                        }
+                elif field_name == 'auto_close_minutes':
+                    try:
+                        minutes = int(field_value)
+                        if minutes < 15 or minutes > 480:
+                            return {
+                                'success': False,
+                                'error': 'Время автоматического закрытия должно быть от 15 до 480 минут (8 часов)'
+                            }
+                        obj.auto_close_minutes = minutes
+                    except ValueError:
+                        return {
+                            'success': False,
+                            'error': 'Неверное значение времени. Введите число в минутах.'
                         }
                 else:
                     return {

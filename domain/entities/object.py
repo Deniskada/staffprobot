@@ -24,6 +24,7 @@ class Object(Base):
     hourly_rate = Column(Numeric(10, 2), nullable=False)
     required_employees = Column(Text, nullable=True)  # JSON строка для MVP
     max_distance_meters = Column(Integer, nullable=False, default=500)  # Максимальное расстояние для геолокации
+    auto_close_minutes = Column(Integer, nullable=False, default=60)  # Автоматическое закрытие смен через N минут
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

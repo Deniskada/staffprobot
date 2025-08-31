@@ -8,5 +8,6 @@ from .user import User
 from .object import Object
 from .shift import Shift
 from .shift_schedule import ShiftSchedule
+from .time_slot import TimeSlot
 
-__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule"]
+__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot"]

@@ -27,6 +27,7 @@ from domain.entities.base import Base
 from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
+from domain.entities.time_slot import TimeSlot
 
 target_metadata = Base.metadata
 
@@ -67,6 +68,14 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # Для Docker используем правильный URL базы данных
+    url = config.get_main_option("sqlalchemy.url")
+    
+    # Если URL не указан или использует localhost, заменяем на Docker URL
+    if not url or "localhost" in url:
+        url = "postgresql://postgres:password@postgres:5432/staffprobot_dev"
+        config.set_main_option("sqlalchemy.url", url)
+    
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

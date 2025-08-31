@@ -22,6 +22,7 @@ class ShiftSchedule(Base):
     hourly_rate = Column(Numeric(10, 2), nullable=True)  # Ставка на момент планирования
     notes = Column(Text, nullable=True)
     notification_sent = Column(Boolean, default=False)  # Отправлено ли уведомление
+    auto_closed = Column(Boolean, default=False)  # Автоматически ли закрыта смена
     actual_shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True)  # Связь с фактической сменой
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

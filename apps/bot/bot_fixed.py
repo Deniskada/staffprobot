@@ -26,7 +26,7 @@ from .handlers import (
 )
 from .analytics_handlers import AnalyticsHandlers
 from .time_slot_handlers import TimeSlotHandlers
-
+from .handlers.timeslot_management_handlers import TimeslotManagementHandlers
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class StaffProBot:
         self.reminder_scheduler: Optional[ReminderScheduler] = None
         self.analytics_handlers = AnalyticsHandlers()
         self.time_slot_handlers = TimeSlotHandlers()
-
+        self.timeslot_management_handlers = TimeslotManagementHandlers()
     
     @property
     def bot_token(self) -> str:
@@ -85,7 +85,8 @@ class StaffProBot:
         # Добавляем ConversationHandler для тайм-слотов
         self.application.add_handler(self.time_slot_handlers.get_conversation_handler())
         
-
+        # Добавляем ConversationHandler для управления тайм-слотами объектов
+        self.application.add_handler(self.timeslot_management_handlers.get_conversation_handler())
         
         # Обработка геопозиции
         self.application.add_handler(

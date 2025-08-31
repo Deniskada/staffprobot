@@ -1,7 +1,7 @@
-"""Сервис для планирования смен."""
+"""Сервис для планирования смен с интеграцией тайм-слотов."""
 
 from typing import Optional, Dict, Any, List, Tuple
-from datetime import datetime, timedelta, time, timezone
+from datetime import datetime, timedelta, time, timezone, date
 from core.logging.logger import logger
 from core.database.session import get_async_session
 from core.utils.timezone_helper import timezone_helper
@@ -9,16 +9,333 @@ from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.shift import Shift
 from domain.entities.object import Object
 from domain.entities.user import User
-from sqlalchemy import select, and_, or_
+from domain.entities.time_slot import TimeSlot
+from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import joinedload
 
 
 class ScheduleService:
-    """Сервис для планирования смен."""
+    """Сервис для планирования смен с интеграцией тайм-слотов."""
     
     def __init__(self):
         """Инициализация сервиса."""
         logger.info("ScheduleService initialized")
+    
+    async def get_available_time_slots_for_date(
+        self, 
+        object_id: int, 
+        target_date: date
+    ) -> Dict[str, Any]:
+        """
+        Получает доступные тайм-слоты для объекта на дату.
+        
+        Args:
+            object_id: ID объекта
+            target_date: Целевая дата
+            
+        Returns:
+            Словарь с доступными тайм-слотами
+        """
+        try:
+            async with get_async_session() as session:
+                # Получаем все тайм-слоты на дату
+                time_slots_query = select(TimeSlot).where(
+                    and_(
+                        TimeSlot.object_id == object_id,
+                        TimeSlot.slot_date == target_date,
+                        TimeSlot.is_active == True
+                    )
+                )
+                time_slots_result = await session.execute(time_slots_query)
+                time_slots = time_slots_result.scalars().all()
+                
+                if not time_slots:
+                    return {
+                        'success': False,
+                        'error': 'На эту дату нет доступных тайм-слотов'
+                    }
+                
+                # Получаем забронированные смены на эту дату
+                booked_schedules_query = select(ShiftSchedule).where(
+                    and_(
+                        ShiftSchedule.object_id == object_id,
+                        func.date(ShiftSchedule.planned_start) == target_date,
+                        ShiftSchedule.status.in_(["planned", "confirmed"])
+                    )
+                )
+                booked_result = await session.execute(booked_schedules_query)
+                booked_schedules = booked_result.scalars().all()
+                
+                available_slots = []
+                
+                from datetime import datetime, time as time_type
+                
+                for slot in time_slots:
+                    # Проверяем, не прошло ли время для сегодняшней даты
+                    if target_date == date.today():
+                        current_time = datetime.now().time()
+                        # Если текущее время больше времени окончания слота + 1 минута, пропускаем
+                        if current_time > slot.end_time:
+                            from datetime import timedelta
+                            end_time_plus_minute = (datetime.combine(date.today(), slot.end_time) + timedelta(minutes=1)).time()
+                            if current_time > end_time_plus_minute:
+                                continue
+                    
+                    # Получаем доступные интервалы в слоте
+                    available_intervals = slot.get_available_intervals(booked_schedules)
+                    
+                    if available_intervals:
+                        available_slots.append({
+                            "id": slot.id,
+                            "start_time": slot.start_time.strftime('%H:%M'),
+                            "end_time": slot.end_time.strftime('%H:%M'),
+                            "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else None,
+                            "max_employees": slot.max_employees,
+                            "is_additional": slot.is_additional,
+                            "notes": slot.notes,
+                            "available_intervals": [
+                                {
+                                    "start": interval[0].strftime('%H:%M'),
+                                    "end": interval[1].strftime('%H:%M'),
+                                    "duration_hours": round(
+                                        (interval[1].hour * 3600 + interval[1].minute * 60 - 
+                                         interval[0].hour * 3600 - interval[0].minute * 60) / 3600, 2
+                                    )
+                                }
+                                for interval in available_intervals
+                            ],
+                            "total_duration": slot.duration_hours
+                        })
+                
+                return {
+                    'success': True,
+                    'available_slots': available_slots,
+                    'date': target_date.strftime('%d.%m.%Y')
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting available time slots: {e}")
+            return {
+                'success': False,
+                'error': f'Ошибка получения тайм-слотов: {str(e)}'
+            }
+    
+    async def create_scheduled_shift_from_timeslot(
+        self,
+        user_id: int,  # telegram_id
+        time_slot_id: int,
+        start_time: time,
+        end_time: time,
+        notes: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Создает запланированную смену на основе тайм-слота.
+        
+        Args:
+            user_id: telegram_id пользователя
+            time_slot_id: ID тайм-слота
+            start_time: Время начала работы
+            end_time: Время окончания работы
+            notes: Заметки к смене
+            
+        Returns:
+            Результат создания запланированной смены
+        """
+        try:
+            logger.info(
+                f"Creating scheduled shift from timeslot: user_id={user_id}, "
+                f"timeslot_id={time_slot_id}, time={start_time}-{end_time}"
+            )
+            
+            async with get_async_session() as session:
+                # Находим пользователя по telegram_id
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = await session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    return {
+                        'success': False,
+                        'error': 'Пользователь не найден'
+                    }
+                
+                # Получаем тайм-слот
+                timeslot_query = select(TimeSlot).where(TimeSlot.id == time_slot_id)
+                timeslot_result = await session.execute(timeslot_query)
+                timeslot = timeslot_result.scalar_one_or_none()
+                
+                if not timeslot:
+                    return {
+                        'success': False,
+                        'error': 'Тайм-слот не найден'
+                    }
+                
+                # Проверяем, что время находится в пределах тайм-слота
+                if start_time < timeslot.start_time or end_time > timeslot.end_time:
+                    return {
+                        'success': False,
+                        'error': f'Время работы должно быть в пределах тайм-слота: {timeslot.formatted_time_range}'
+                    }
+                
+                # Проверяем, что выбранное время соответствует доступному интервалу
+                # Получаем забронированные смены для проверки доступных интервалов
+                booked_schedules_query = select(ShiftSchedule).where(
+                    and_(
+                        ShiftSchedule.object_id == timeslot.object_id,
+                        func.date(ShiftSchedule.planned_start) == timeslot.slot_date,
+                        ShiftSchedule.status.in_(["planned", "confirmed"])
+                    )
+                )
+                booked_result = await session.execute(booked_schedules_query)
+                booked_schedules = booked_result.scalars().all()
+                
+                # Получаем доступные интервалы в тайм-слоте
+                available_intervals = timeslot.get_available_intervals(booked_schedules)
+                
+                # Проверяем, что выбранное время соответствует одному из доступных интервалов
+                time_fits_interval = False
+                for interval in available_intervals:
+                    interval_start, interval_end = interval
+                    if start_time >= interval_start and end_time <= interval_end:
+                        time_fits_interval = True
+                        break
+                
+                if not time_fits_interval:
+                    return {
+                        'success': False,
+                        'error': 'Выбранное время не соответствует доступным интервалам в тайм-слоте. Доступные интервалы: ' + ", ".join([f"{interval[0].strftime('%H:%M')}-{interval[1].strftime('%H:%M')}" for interval in available_intervals])
+                    }
+                
+                # Проверяем доступность времени
+                availability_check = await self._check_time_availability_in_timeslot(
+                    session, db_user.id, timeslot, start_time, end_time
+                )
+                
+                if not availability_check['available']:
+                    return {
+                        'success': False,
+                        'error': availability_check['error']
+                    }
+                
+                # Создаем запланированную смену
+                scheduled_shift = ShiftSchedule(
+                    user_id=db_user.id,
+                    object_id=timeslot.object_id,
+                    planned_start=datetime.combine(timeslot.slot_date, start_time),
+                    planned_end=datetime.combine(timeslot.slot_date, end_time),
+                    hourly_rate=timeslot.hourly_rate,
+                    notes=notes
+                )
+                
+                session.add(scheduled_shift)
+                await session.commit()
+                
+                logger.info(
+                    f"Successfully created scheduled shift from timeslot: "
+                    f"user_id={db_user.id}, timeslot_id={time_slot_id}"
+                )
+                
+                return {
+                    'success': True,
+                    'scheduled_shift_id': scheduled_shift.id,
+                    'message': f'Смена запланирована на {timeslot.slot_date.strftime("%d.%m.%Y")} с {start_time.strftime("%H:%M")} до {end_time.strftime("%H:%M")}'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error creating scheduled shift from timeslot: {e}")
+            return {
+                'success': False,
+                'error': f'Ошибка планирования смены: {str(e)}'
+            }
+    
+    async def _check_time_availability_in_timeslot(
+        self, 
+        session, 
+        user_id: int, 
+        timeslot: TimeSlot, 
+        start_time: time, 
+        end_time: time
+    ) -> Dict[str, Any]:
+        """
+        Проверяет доступность времени в тайм-слоте.
+        
+        Args:
+            session: Сессия БД
+            user_id: ID пользователя в БД
+            timeslot: Тайм-слот
+            start_time: Время начала
+            end_time: Время окончания
+            
+        Returns:
+            Словарь с результатом проверки
+        """
+        try:
+            # Проверяем, есть ли уже запланированные смены у пользователя в это время
+            existing_shifts_query = select(ShiftSchedule).where(
+                and_(
+                    ShiftSchedule.user_id == user_id,
+                    ShiftSchedule.status.in_(["planned", "confirmed"]),
+                    or_(
+                        and_(
+                            ShiftSchedule.planned_start < datetime.combine(timeslot.slot_date, end_time),
+                            ShiftSchedule.planned_end > datetime.combine(timeslot.slot_date, start_time)
+                        )
+                    )
+                )
+            )
+            
+            existing_result = await session.execute(existing_shifts_query)
+            existing_shifts = existing_result.scalars().all()
+            
+            if existing_shifts:
+                conflicts = []
+                for shift in existing_shifts:
+                    conflicts.append({
+                        'object_name': shift.object.name if shift.object else 'Неизвестный объект',
+                        'start_time': shift.planned_start.strftime('%d.%m.%Y %H:%M'),
+                        'end_time': shift.planned_end.strftime('%H:%M')
+                    })
+                
+                return {
+                    'available': False,
+                    'error': 'У вас уже есть запланированные смены в это время',
+                    'conflicts': conflicts
+                }
+            
+            # Проверяем, не превышает ли количество сотрудников лимит тайм-слота
+            if timeslot.max_employees > 1:
+                # Получаем количество уже забронированных смен в этом тайм-слоте
+                booked_count_query = select(func.count(ShiftSchedule.id)).where(
+                    and_(
+                        ShiftSchedule.object_id == timeslot.object_id,
+                        func.date(ShiftSchedule.planned_start) == timeslot.slot_date,
+                        ShiftSchedule.status.in_(["planned", "confirmed"]),
+                        or_(
+                            and_(
+                                ShiftSchedule.planned_start < datetime.combine(timeslot.slot_date, end_time),
+                                ShiftSchedule.planned_end > datetime.combine(timeslot.slot_date, start_time)
+                            )
+                        )
+                    )
+                )
+                
+                booked_count_result = await session.execute(booked_count_query)
+                booked_count = booked_count_result.scalar()
+                
+                if booked_count >= timeslot.max_employees:
+                    return {
+                        'available': False,
+                        'error': f'Тайм-слот уже полностью занят (максимум {timeslot.max_employees} сотрудников)'
+                    }
+            
+            return {'available': True}
+            
+        except Exception as e:
+            logger.error(f"Error checking time availability in timeslot: {e}")
+            return {
+                'available': False,
+                'error': f'Ошибка проверки доступности: {str(e)}'
+            }
     
     async def create_scheduled_shift(
         self,
@@ -29,7 +346,7 @@ class ScheduleService:
         notes: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Создает запланированную смену.
+        Создает запланированную смену (устаревший метод, используйте create_scheduled_shift_from_timeslot).
         
         Args:
             user_id: telegram_id пользователя
@@ -43,7 +360,7 @@ class ScheduleService:
         """
         try:
             logger.info(
-                f"Creating scheduled shift: user_id={user_id}, object_id={object_id}, "
+                f"Creating scheduled shift (legacy method): user_id={user_id}, object_id={object_id}, "
                 f"start={planned_start}, end={planned_end}"
             )
             
@@ -97,30 +414,27 @@ class ScheduleService:
                     planned_start=planned_start,
                     planned_end=planned_end,
                     hourly_rate=obj.hourly_rate,
-                    notes=notes,
-                    status='planned'
+                    notes=notes
                 )
                 
                 session.add(scheduled_shift)
                 await session.commit()
-                await session.refresh(scheduled_shift)
                 
-                logger.info(f"Scheduled shift created successfully: id={scheduled_shift.id}")
+                logger.info(
+                    f"Successfully created scheduled shift: user_id={db_user.id}, object_id={object_id}"
+                )
                 
                 return {
                     'success': True,
-                    'schedule_id': scheduled_shift.id,
-                    'message': f'Смена запланирована на {scheduled_shift.formatted_time_range}',
-                    'planned_duration': scheduled_shift.planned_duration_hours,
-                    'planned_payment': scheduled_shift.planned_payment,
-                    'object_name': obj.name
+                    'scheduled_shift_id': scheduled_shift.id,
+                    'message': 'Смена успешно запланирована'
                 }
                 
         except Exception as e:
             logger.error(f"Error creating scheduled shift: {e}")
             return {
                 'success': False,
-                'error': f'Ошибка при создании запланированной смены: {str(e)}'
+                'error': f'Ошибка планирования смены: {str(e)}'
             }
     
     async def _check_time_availability(

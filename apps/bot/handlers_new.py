@@ -18,6 +18,7 @@ from apps.bot.schedule_handlers import (
     handle_schedule_confirmation, handle_view_schedule, handle_cancel_schedule,
     handle_schedule_time_input, handle_custom_date_input
 )
+from datetime import date, timedelta
 
 
 # Создаем экземпляры сервисов
@@ -105,6 +106,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         [
             InlineKeyboardButton("📅 Запланировать смену", callback_data="schedule_shift"),
             InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
+        ],
+        [
+            InlineKeyboardButton("🕐 Планирование через тайм-слоты", callback_data="plan_timeslot")
         ],
         [
             InlineKeyboardButton("🏢 Создать объект", callback_data="create_object"),
@@ -335,7 +339,111 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif query.data == "status":
         await _handle_status_callback(update, context)
         return
-    elif query.data == "main_menu":
+    # Управление тайм-слотами
+    elif query.data.startswith("manage_timeslots:"):
+        object_id = int(query.data.split(":", 1)[1])
+        await _handle_manage_timeslots(update, context, object_id)
+        return
+    elif query.data.startswith("create_timeslot:"):
+        object_id = int(query.data.split(":", 1)[1])
+        await _handle_create_timeslot(update, context, object_id)
+        return
+    elif query.data.startswith("view_timeslots:"):
+        object_id = int(query.data.split(":", 1)[1])
+        await _handle_view_timeslots(update, context, object_id)
+        return
+    elif query.data.startswith("edit_timeslots:"):
+        object_id = int(query.data.split(":", 1)[1])
+        await _handle_edit_timeslots(update, context, object_id)
+        return
+    elif query.data.startswith("delete_timeslots:"):
+        object_id = int(query.data.split(":", 1)[1])
+        await _handle_delete_timeslots(update, context, object_id)
+        return
+    elif query.data.startswith("create_regular_slot:"):
+        object_id = int(query.data.split(":", 1)[1])
+        await _handle_create_regular_slot(update, context, object_id)
+        return
+    elif query.data.startswith("create_additional_slot:"):
+        object_id = int(query.data.split(":", 1)[1])
+        await _handle_create_additional_slot(update, context, object_id)
+        return
+    elif query.data.startswith("create_slot_date:"):
+        # Формат: create_slot_date:object_id:type:date
+        parts = query.data.split(":", 3)
+        if len(parts) == 4:
+            object_id = int(parts[1])
+            slot_type = parts[2]
+            slot_date = parts[3]
+            await _handle_create_slot_date(update, context, object_id, slot_type, slot_date)
+        return
+    elif query.data.startswith("create_slot_custom_date:"):
+        # Формат: create_slot_custom_date:object_id:type
+        parts = query.data.split(":", 2)
+        if len(parts) == 3:
+            object_id = int(parts[1])
+            slot_type = parts[2]
+            await _handle_create_slot_custom_date(update, context, object_id, slot_type)
+        return
+    elif query.data.startswith("create_slot_week:"):
+        # Формат: create_slot_week:object_id:type
+        parts = query.data.split(":", 2)
+        if len(parts) == 3:
+            object_id = int(parts[1])
+            slot_type = parts[2]
+            await _handle_create_slot_week(update, context, object_id, slot_type)
+        return
+    elif query.data.startswith("edit_slot_date:"):
+        # Формат: edit_slot_date:object_id:type:date
+        parts = query.data.split(":", 3)
+        if len(parts) == 4:
+            object_id = int(parts[1])
+            slot_type = parts[2]
+            slot_date = parts[3]
+            await _handle_edit_slot_date(update, context, object_id, slot_type, slot_date)
+        return
+    elif query.data.startswith("edit_slot_custom_date:"):
+        # Формат: edit_slot_custom_date:object_id:type
+        parts = query.data.split(":", 2)
+        if len(parts) == 3:
+            object_id = int(parts[1])
+            slot_type = parts[2]
+            await _handle_edit_slot_custom_date(update, context, object_id, slot_type)
+        return
+    elif query.data.startswith("edit_slot_week:"):
+        # Формат: edit_slot_week:object_id:type
+        parts = query.data.split(":", 2)
+        if len(parts) == 3:
+            object_id = int(parts[1])
+            slot_type = parts[2]
+            await _handle_edit_slot_week(update, context, object_id, slot_type)
+        return
+    elif query.data.startswith("delete_slot_date:"):
+        # Формат: delete_slot_date:object_id:type:date
+        parts = query.data.split(":", 3)
+        if len(parts) == 4:
+            object_id = int(parts[1])
+            slot_type = parts[2]
+            slot_date = parts[3]
+            await _handle_delete_slot_date(update, context, object_id, slot_type, slot_date)
+        return
+    elif query.data.startswith("delete_slot_custom_date:"):
+        # Формат: delete_slot_custom_date:object_id:type
+        parts = query.data.split(":", 2)
+        if len(parts) == 3:
+            object_id = int(parts[1])
+            slot_type = parts[2]
+            await _handle_delete_slot_custom_date(update, context, object_id, slot_type)
+        return
+    elif query.data.startswith("delete_slot_week:"):
+        # Формат: delete_slot_week:object_id:type
+        parts = query.data.split(":", 2)
+        if len(parts) == 3:
+            object_id = int(parts[1])
+            slot_type = parts[2]
+            await _handle_delete_slot_week(update, context, object_id, slot_type)
+        return    
+    elif query.data == "main_menu" or query.data == "back_to_menu":
         response = f"""
 🏠 <b>Главное меню</b>
 
@@ -360,6 +468,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         [
             InlineKeyboardButton("📅 Запланировать смену", callback_data="schedule_shift"),
             InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
+        ],
+        [
+            InlineKeyboardButton("🕐 Планирование через тайм-слоты", callback_data="plan_timeslot")
         ],
         [
             InlineKeyboardButton("🏢 Создать объект", callback_data="create_object"),
@@ -733,10 +844,11 @@ async def _handle_manage_objects(update: Update, context: ContextTypes.DEFAULT_T
     for obj in user_objects:
         # Теперь max_distance_meters уже есть в данных объекта
         max_distance = obj.get('max_distance_meters', 500)
+        auto_close_minutes = obj.get('auto_close_minutes', 60)
             
         keyboard.append([
             InlineKeyboardButton(
-                f"⚙️ {obj['name']} ({max_distance}м)", 
+                f"⚙️ {obj['name']} ({max_distance}м, {auto_close_minutes} мин.)", 
                 callback_data=f"edit_object:{obj['id']}"
             )
         ])
@@ -748,7 +860,7 @@ async def _handle_manage_objects(update: Update, context: ContextTypes.DEFAULT_T
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
-        text="📋 <b>Управление объектами</b>\n\nВыберите объект для редактирования:\n\n💡 В скобках указано максимальное расстояние для геолокации",
+        text="📋 <b>Управление объектами</b>\n\nВыберите объект для редактирования:\n\n💡 В скобках указано максимальное расстояние для геолокации и время автоматического закрытия смен",
         parse_mode='HTML',
         reply_markup=reply_markup
     )
@@ -773,6 +885,7 @@ async def _handle_edit_object(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # Теперь max_distance_meters уже есть в obj_data
     max_distance = obj_data.get('max_distance_meters', 500)
+    auto_close_minutes = obj_data.get('auto_close_minutes', 60)
     
     keyboard = [
         [
@@ -782,6 +895,12 @@ async def _handle_edit_object(update: Update, context: ContextTypes.DEFAULT_TYPE
         [
             InlineKeyboardButton("💰 Часовая ставка", callback_data=f"edit_field:{object_id}:hourly_rate"),
             InlineKeyboardButton("📏 Макс. расстояние", callback_data=f"edit_field:{object_id}:max_distance_meters")
+        ],
+        [
+            InlineKeyboardButton("⏰ Авто-закрытие смен", callback_data=f"edit_field:{object_id}:auto_close_minutes")
+        ],
+        [
+            InlineKeyboardButton("🕐 Управление тайм-слотами", callback_data=f"manage_timeslots:{object_id}")
         ],
         [
             InlineKeyboardButton("🔙 Назад", callback_data="manage_objects"),
@@ -796,7 +915,8 @@ async def _handle_edit_object(update: Update, context: ContextTypes.DEFAULT_TYPE
              f"🏢 <b>Название:</b> {obj_data['name']}\n"
              f"📍 <b>Адрес:</b> {obj_data['address'] or 'не указан'}\n"
              f"💰 <b>Часовая ставка:</b> {obj_data['hourly_rate']}₽\n"
-             f"📏 <b>Максимальное расстояние:</b> {max_distance}м\n\n"
+             f"📏 <b>Максимальное расстояние:</b> {max_distance}м\n"
+             f"⏰ <b>Время автоматического закрытия:</b> {auto_close_minutes} мин.\n\n"
              f"Выберите поле для редактирования:",
         parse_mode='HTML',
         reply_markup=reply_markup
@@ -813,7 +933,8 @@ async def _handle_edit_field(update: Update, context: ContextTypes.DEFAULT_TYPE,
         'name': 'название объекта',
         'address': 'адрес объекта',
         'hourly_rate': 'часовую ставку (в рублях)',
-        'max_distance_meters': 'максимальное расстояние (в метрах, от 10 до 5000)'
+        'max_distance_meters': 'максимальное расстояние (в метрах, от 10 до 5000)',
+        'auto_close_minutes': 'время автоматического закрытия смен (в минутах, от 15 до 480)'
     }
     
     field_display = field_names.get(field_name, field_name)
@@ -1025,6 +1146,7 @@ async def _show_updated_object_info(update: Update, context: ContextTypes.DEFAUL
     
     # Теперь max_distance_meters уже есть в obj_data
     max_distance = obj_data.get('max_distance_meters', 500)
+    auto_close_minutes = obj_data.get('auto_close_minutes', 60)
     
     keyboard = [
         [
@@ -1034,6 +1156,12 @@ async def _show_updated_object_info(update: Update, context: ContextTypes.DEFAUL
         [
             InlineKeyboardButton("💰 Часовая ставка", callback_data=f"edit_field:{object_id}:hourly_rate"),
             InlineKeyboardButton("📏 Макс. расстояние", callback_data=f"edit_field:{object_id}:max_distance_meters")
+        ],
+        [
+            InlineKeyboardButton("⏰ Авто-закрытие смен", callback_data=f"edit_field:{object_id}:auto_close_minutes")
+        ],
+        [
+            InlineKeyboardButton("🕐 Управление тайм-слотами", callback_data=f"manage_timeslots:{object_id}")
         ],
         [
             InlineKeyboardButton("🔙 Назад", callback_data="manage_objects"),
@@ -1048,7 +1176,8 @@ async def _show_updated_object_info(update: Update, context: ContextTypes.DEFAUL
              f"🏢 <b>Название:</b> {obj_data['name']}\n"
              f"📍 <b>Адрес:</b> {obj_data['address'] or 'не указан'}\n"
              f"💰 <b>Часовая ставка:</b> {obj_data['hourly_rate']}₽\n"
-             f"📏 <b>Максимальное расстояние:</b> {max_distance}м\n\n"
+             f"📏 <b>Максимальное расстояние:</b> {max_distance}м\n"
+             f"⏰ <b>Время автоматического закрытия:</b> {auto_close_minutes} мин.\n\n"
              f"Выберите поле для редактирования:",
         parse_mode='HTML',
         reply_markup=reply_markup
@@ -1147,3 +1276,358 @@ async def _handle_retry_location_close(update: Update, context: ContextTypes.DEF
         reply_markup=get_location_keyboard()
     )
 
+# ============================================================================
+# УПРАВЛЕНИЕ ТАЙМ-СЛОТАМИ ОБЪЕКТОВ
+# ============================================================================
+
+async def _handle_manage_timeslots(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: int):
+    """Обработчик управления тайм-слотами объекта."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    # Получаем информацию об объекте
+    obj_data = object_service.get_object_by_id(object_id)
+    if not obj_data:
+        await query.edit_message_text(
+            text="❌ Объект не найден.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+            ]])
+        )
+        return
+    
+    # Получаем существующие тайм-слоты
+    from apps.bot.services.time_slot_service import TimeSlotService
+    time_slot_service = TimeSlotService()
+    timeslots = await time_slot_service.get_object_timeslots(object_id)
+    
+    # Формируем сообщение
+    message = f"�� <b>Управление тайм-слотами</b>\n\n"
+    message += f"🏢 <b>Объект:</b> {obj_data['name']}\n"
+    message += f"⏰ <b>Рабочее время:</b> {obj_data.get('working_hours', 'Не указано')}\n"
+    message += f"💰 <b>Базовая ставка:</b> {obj_data['hourly_rate']}₽/час\n\n"
+    
+    if timeslots:
+        message += f"�� <b>Существующие тайм-слоты:</b> {len(timeslots)}\n"
+        # Показываем ближайшие 3 тайм-слота
+        from datetime import date
+        upcoming_timeslots = [ts for ts in timeslots if ts['slot_date'] >= date.today()][:3]
+        for ts in upcoming_timeslots:
+            status = "🟢" if ts['is_active'] else "🔴"
+            additional = " (доп.)" if ts['is_additional'] else ""
+            message += f"{status} {ts['slot_date'].strftime('%d.%m.%Y')} {ts['start_time']}-{ts['end_time']}{additional}\n"
+    else:
+        message += "📅 <b>Тайм-слоты не созданы</b>\n"
+    
+    # Создаем кнопки
+    keyboard = [
+        [
+            InlineKeyboardButton("➕ Создать тайм-слот", callback_data=f"create_timeslot:{object_id}"),
+            InlineKeyboardButton("📋 Просмотреть все", callback_data=f"view_timeslots:{object_id}")
+        ],
+        [
+            InlineKeyboardButton("✏️ Редактировать", callback_data=f"edit_timeslots:{object_id}"),
+            InlineKeyboardButton("🗑️ Удалить", callback_data=f"delete_timeslots:{object_id}")
+        ],
+        [
+            InlineKeyboardButton("🔙 Назад к объекту", callback_data=f"edit_object:{object_id}"),
+            InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        text=message,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+
+async def _handle_create_timeslot(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: int):
+    """Обработчик создания тайм-слота."""
+    query = update.callback_query
+    await query.answer()
+    
+    obj_data = object_service.get_object_by_id(object_id)
+    
+    message = f"➕ <b>Создание тайм-слота</b>\n\n"
+    message += f"🏢 <b>Объект:</b> {obj_data['name']}\n"
+    message += f"⏰ <b>Рабочее время:</b> {obj_data.get('working_hours', 'Не указано')}\n\n"
+    message += "Выберите тип тайм-слота:"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("🕐 Обычный слот", callback_data=f"create_regular_slot:{object_id}"),
+            InlineKeyboardButton("➕ Дополнительный слот", callback_data=f"create_additional_slot:{object_id}")
+        ],
+        [
+            InlineKeyboardButton("🔙 Назад", callback_data=f"manage_timeslots:{object_id}"),
+            InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        text=message,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+
+async def _handle_view_timeslots(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: int):
+    """Обработчик просмотра всех тайм-слотов объекта."""
+    query = update.callback_query
+    await query.answer()
+    
+    from apps.bot.services.time_slot_service import TimeSlotService
+    time_slot_service = TimeSlotService()
+    timeslots = await time_slot_service.get_object_timeslots(object_id)
+    
+    if not timeslots:
+        keyboard = [
+            [InlineKeyboardButton("➕ Создать первый тайм-слот", callback_data=f"create_timeslot:{object_id}")],
+            [InlineKeyboardButton("🔙 Назад", callback_data=f"manage_timeslots:{object_id}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "📋 <b>Тайм-слоты объекта</b>\n\n"
+            "У объекта пока нет созданных тайм-слотов.\n\n"
+            "Хотите создать первый тайм-слот?",
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+        return
+    
+    # Группируем тайм-слоты по датам
+    timeslots_by_date = {}
+    for ts in timeslots:
+        date_key = ts['slot_date']
+        if date_key not in timeslots_by_date:
+            timeslots_by_date[date_key] = []
+        timeslots_by_date[date_key].append(ts)
+    
+    # Сортируем даты
+    sorted_dates = sorted(timeslots_by_date.keys())
+    
+    message = f"📋 <b>Тайм-слоты объекта</b>\n\n"
+    
+    for slot_date in sorted_dates:
+        date_timeslots = timeslots_by_date[slot_date]
+        message += f"📅 <b>{slot_date.strftime('%d.%m.%Y')}</b>\n"
+        
+        for ts in date_timeslots:
+            status = "🟢" if ts['is_active'] else "🔴"
+            additional = " (доп.)" if ts['is_additional'] else ""
+            rate = f" {ts['hourly_rate']}₽/час" if ts['hourly_rate'] else ""
+            message += f"  {status} {ts['start_time']}-{ts['end_time']}{additional}{rate}\n"
+        
+        message += "\n"
+    
+    # Создаем кнопки навигации
+    keyboard = [
+        [InlineKeyboardButton("➕ Создать новый", callback_data=f"create_timeslot:{object_id}")],
+        [InlineKeyboardButton("🔙 Назад", callback_data=f"manage_timeslots:{object_id}")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        text=message,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+async def _handle_edit_timeslots(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: int):
+    """Обработчик редактирования тайм-слотов."""
+    query = update.callback_query
+    await query.answer()
+    
+    from apps.bot.services.time_slot_service import TimeSlotService
+    time_slot_service = TimeSlotService()
+    timeslots = await time_slot_service.get_object_timeslots(object_id)
+    
+    if not timeslots:
+        keyboard = [
+            [InlineKeyboardButton("➕ Создать первый тайм-слот", callback_data=f"create_timeslot:{object_id}")],
+            [InlineKeyboardButton("🔙 Назад", callback_data=f"manage_timeslots:{object_id}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "✏️ <b>Редактирование тайм-слотов</b>\n\n"
+            "У объекта пока нет созданных тайм-слотов.\n\n"
+            "Хотите создать первый тайм-слот?",
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+        return
+    
+    # Показываем список тайм-слотов для редактирования
+    message = "✏️ <b>Редактирование тайм-слотов</b>\n\n"
+    message += "Выберите тайм-слот для редактирования:\n\n"
+    
+    keyboard = []
+    for ts in timeslots[:10]:  # Показываем первые 10
+        status = "🟢" if ts['is_active'] else "🔴"
+        additional = " (доп.)" if ts['is_additional'] else ""
+        date_str = ts['slot_date'].strftime('%d.%m.%Y')
+        time_str = f"{ts['start_time']}-{ts['end_time']}"
+        
+        keyboard.append([
+            InlineKeyboardButton(
+                f"{status} {date_str} {time_str}{additional}",
+                callback_data=f"edit_timeslot:{ts['id']}"
+            )
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton("🔙 Назад", callback_data=f"manage_timeslots:{object_id}")
+    ])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        text=message,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+
+async def _handle_delete_timeslots(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: int):
+    """Обработчик удаления тайм-слотов."""
+    query = update.callback_query
+    await query.answer()
+    
+    from apps.bot.services.time_slot_service import TimeSlotService
+    time_slot_service = TimeSlotService()
+    timeslots = await time_slot_service.get_object_timeslots(object_id)
+    
+    if not timeslots:
+        keyboard = [
+            [InlineKeyboardButton("➕ Создать первый тайм-слот", callback_data=f"create_timeslot:{object_id}")],
+            [InlineKeyboardButton("🔙 Назад", callback_data=f"manage_timeslots:{object_id}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "��️ <b>Удаление тайм-слотов</b>\n\n"
+            "У объекта пока нет созданных тайм-слотов.\n\n"
+            "Хотите создать первый тайм-слот?",
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+        return
+    
+    # Показываем список тайм-слотов для удаления
+    message = "��️ <b>Удаление тайм-слотов</b>\n\n"
+    message += "⚠️ <b>Внимание!</b> Удаление тайм-слота невозможно, если на него запланированы смены.\n\n"
+    message += "Выберите тайм-слот для удаления:\n\n"
+    
+    keyboard = []
+    for ts in timeslots[:10]:  # Показываем первые 10
+        status = "🟢" if ts['is_active'] else "🔴"
+        additional = " (доп.)" if ts['is_additional'] else ""
+        date_str = ts['slot_date'].strftime('%d.%m.%Y')
+        time_str = f"{ts['start_time']}-{ts['end_time']}"
+        
+        keyboard.append([
+            InlineKeyboardButton(
+                f"{status} {date_str} {time_str}{additional}",
+                callback_data=f"delete_timeslot:{ts['id']}"
+            )
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton("🔙 Назад", callback_data=f"manage_timeslots:{object_id}")
+    ])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        text=message,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+
+async def _handle_create_regular_slot(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: int):
+    """Обработчик создания обычного тайм-слота."""
+    query = update.callback_query
+    await query.answer()
+    
+    obj_data = object_service.get_object_by_id(object_id)
+    
+    message = f"🕐 <b>Создание обычного тайм-слота</b>\n\n"
+    message += f"🏢 <b>Объект:</b> {obj_data['name']}\n"
+    message += f"⏰ <b>Рабочее время:</b> {obj_data.get('working_hours', 'Не указано')}\n\n"
+    message += "Обычный тайм-слот создается в рабочее время объекта.\n"
+    message += "Выберите дату для создания слота:"
+    
+    from datetime import date, timedelta
+    today = date.today()
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("�� Сегодня", callback_data=f"create_slot_date:{object_id}:regular:{today.strftime('%Y-%m-%d')}"),
+            InlineKeyboardButton("📅 Завтра", callback_data=f"create_slot_date:{object_id}:regular:{(today + timedelta(days=1)).strftime('%Y-%m-%d')}")
+        ],
+        [
+            InlineKeyboardButton("📅 Выбрать дату", callback_data=f"create_slot_custom_date:{object_id}:regular"),
+            InlineKeyboardButton("📅 Создать на неделю", callback_data=f"create_slot_week:{object_id}:regular")
+        ],
+        [
+            InlineKeyboardButton("🔙 Назад", callback_data=f"create_timeslot:{object_id}"),
+            InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        text=message,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+
+async def _handle_create_additional_slot(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: int):
+    """Обработчик создания дополнительного тайм-слота."""
+    query = update.callback_query
+    await query.answer()
+    
+    obj_data = object_service.get_object_by_id(object_id)
+    
+    message = f"➕ <b>Создание дополнительного тайм-слота</b>\n\n"
+    message += f"🏢 <b>Объект:</b> {obj_data['name']}\n"
+    message += f"⏰ <b>Рабочее время:</b> {obj_data.get('working_hours', 'Не указано')}\n\n"
+    message += "Дополнительный тайм-слот можно создать в любое время, даже вне рабочего времени.\n"
+    message += "Выберите дату для создания слота:"
+    
+    from datetime import date, timedelta
+    today = date.today()
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("�� Сегодня", callback_data=f"create_slot_date:{object_id}:additional:{today.strftime('%Y-%m-%d')}"),
+            InlineKeyboardButton("📅 Завтра", callback_data=f"create_slot_date:{object_id}:additional:{(today + timedelta(days=1)).strftime('%Y-%m-%d')}")
+        ],
+        [
+            InlineKeyboardButton("📅 Выбрать дату", callback_data=f"create_slot_custom_date:{object_id}:additional"),
+            InlineKeyboardButton("📅 Создать на неделю", callback_data=f"create_slot_week:{object_id}:additional")
+        ],
+        [
+            InlineKeyboardButton("🔙 Назад", callback_data=f"create_timeslot:{object_id}"),
+            InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        text=message,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )

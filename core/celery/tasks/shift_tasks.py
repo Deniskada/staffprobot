@@ -33,76 +33,48 @@ class ShiftTask(Task):
 
 @celery_app.task(base=ShiftTask, bind=True)
 def auto_close_shifts(self):
-    """Автоматическое закрытие смен в полночь."""
+    """Автоматическое закрытие просроченных смен."""
     try:
         from core.database.session import DatabaseManager
-        from apps.api.services.shift_service_db import ShiftServiceDB
-        from apps.bot.services.shift_service import ShiftService
+        from apps.bot.services.time_slot_service import TimeSlotService
         
         db_manager = DatabaseManager()
         
         async def _auto_close_shifts():
             async with db_manager.get_session() as session:
-                shift_service_db = ShiftServiceDB(session)
-                shift_service = ShiftService(session)
+                time_slot_service = TimeSlotService()
                 
-                # Получаем все активные смены
-                active_shifts = await shift_service_db.get_active_shifts()
+                # Автоматически закрываем просроченные смены
+                result = await time_slot_service.auto_close_expired_shifts()
                 
-                closed_count = 0
-                for shift in active_shifts:
-                    try:
-                        # Проверяем, нужно ли закрыть смену
-                        should_close = await shift_service.should_auto_close_shift(shift)
-                        
-                        if should_close:
-                            # Закрываем смену автоматически
-                            result = await shift_service.auto_close_shift(shift.id)
-                            
-                            if result.get('success'):
-                                closed_count += 1
-                                
-                                # Инвалидируем кэш
-                                await CacheService.invalidate_shift_cache(
-                                    shift.id, 
-                                    shift.user_id
-                                )
-                                
-                                # Отправляем уведомление пользователю
-                                from core.celery.tasks.notification_tasks import send_shift_notification
-                                send_shift_notification.delay(
-                                    user_id=shift.user_id,
-                                    notification_type="shift_auto_closed",
-                                    data={
-                                        'shift_id': shift.id,
-                                        'object_name': shift.object.name if shift.object else 'Unknown',
-                                        'total_hours': result.get('total_hours', 0),
-                                        'total_payment': result.get('total_payment', 0)
-                                    }
-                                )
-                                
-                                logger.info(
-                                    "Shift auto-closed",
-                                    shift_id=shift.id,
-                                    user_id=shift.user_id
-                                )
-                        
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to auto-close shift {shift.id}: {e}"
-                        )
-                
-                return closed_count
+                if result.get('success'):
+                    closed_count = result.get('closed_count', 0)
+                    errors = result.get('errors', [])
+                    
+                    logger.info(
+                        "Auto-close shifts completed",
+                        closed_count=closed_count,
+                        errors_count=len(errors)
+                    )
+                    
+                    if errors:
+                        for error in errors:
+                            logger.error(f"Auto-close error: {error}")
+                    
+                    return closed_count
+                else:
+                    logger.error(f"Auto-close shifts failed: {result.get('error')}")
+                    return 0
         
         import asyncio
         closed_count = asyncio.run(_auto_close_shifts())
         
         logger.info(f"Auto-closed {closed_count} shifts")
-        return {"closed_count": closed_count}
+        return closed_count
         
     except Exception as e:
-        logger.error(f"Failed to auto-close shifts: {e}")
-        raise
+        logger.error(f"Error in auto_close_shifts task: {e}")
+        return 0
 
 
 @celery_app.task(base=ShiftTask, bind=True)
