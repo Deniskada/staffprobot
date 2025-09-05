@@ -18,18 +18,20 @@ class TestShiftScheduler:
         assert self.scheduler.is_running is False
         assert self.scheduler.check_interval == 300  # 5 минут
     
-    def test_start_already_running(self):
+    @pytest.mark.asyncio
+    async def test_start_already_running(self):
         """Тест запуска уже работающего планировщика."""
         self.scheduler.is_running = True
         
         with patch.object(self.scheduler, '_check_and_close_shifts') as mock_check:
-            self.scheduler.start()
+            await self.scheduler.start()
             mock_check.assert_not_called()
     
-    def test_stop(self):
+    @pytest.mark.asyncio
+    async def test_stop(self):
         """Тест остановки планировщика."""
         self.scheduler.is_running = True
-        self.scheduler.stop()
+        await self.scheduler.stop()
         
         assert self.scheduler.is_running is False
     
@@ -280,9 +282,9 @@ class TestShiftScheduler:
         expected_hours = duration.total_seconds() / 3600
         expected_payment = expected_hours * shift.hourly_rate
         
-        # Проверяем, что расчет корректен
-        assert expected_hours == 8.0
-        assert expected_payment == 800.0
+        # Проверяем, что расчет корректен (с учетом погрешности float)
+        assert abs(expected_hours - 8.0) < 0.001
+        assert abs(expected_payment - 800.0) < 0.001
     
     def test_edge_cases_time_calculation(self):
         """Тест граничных случаев расчета времени."""
@@ -295,7 +297,7 @@ class TestShiftScheduler:
         duration = end_time - short_shift.start_time
         hours = duration.total_seconds() / 3600
         
-        assert hours == 0.5
+        assert abs(hours - 0.5) < 0.001
         
         # Смена длительностью ровно час
         hour_shift = MagicMock()
@@ -305,5 +307,5 @@ class TestShiftScheduler:
         duration = end_time - hour_shift.start_time
         hours = duration.total_seconds() / 3600
         
-        assert hours == 1.0
+        assert abs(hours - 1.0) < 0.001
 

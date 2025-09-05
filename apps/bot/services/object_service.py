@@ -26,7 +26,9 @@ class ObjectService:
         opening_time: str,
         closing_time: str,
         hourly_rate: float,
-        owner_id: int
+        max_distance_meters: int = 500,
+        auto_close_minutes: int = 60,
+        owner_id: int = None
     ) -> Dict[str, Any]:
         """
         Создает новый объект.
@@ -38,6 +40,8 @@ class ObjectService:
             opening_time: Время открытия в формате 'HH:MM'
             closing_time: Время закрытия в формате 'HH:MM'
             hourly_rate: Часовая ставка
+            max_distance_meters: Максимальное расстояние для геолокации (по умолчанию 500)
+            auto_close_minutes: Время автоматического закрытия смен в минутах (по умолчанию 60)
             owner_id: ID владельца объекта (telegram_id)
             
         Returns:
@@ -90,6 +94,8 @@ class ObjectService:
                     opening_time=opening_time_obj,
                     closing_time=closing_time_obj,
                     hourly_rate=hourly_rate,
+                    max_distance_meters=max_distance_meters,
+                    auto_close_minutes=auto_close_minutes,
                     owner_id=db_user.id,  # Используем id из БД, а не telegram_id
                     is_active=True
                 )

@@ -16,6 +16,7 @@ class UserAction(str, Enum):
     SCHEDULE_SHIFT = "schedule_shift"
     VIEW_SCHEDULE = "view_schedule"
     CANCEL_SCHEDULE = "cancel_schedule"
+    CREATE_TIMESLOT = "create_timeslot"
 
 
 class UserStep(str, Enum):
@@ -97,6 +98,17 @@ class UserStateManager:
         state = UserState(user_id, action, step, **kwargs)
         self._states[user_id] = state
         return state
+    
+    # Совместимость со старым API
+    def set_state(
+        self,
+        user_id: int,
+        action: UserAction,
+        step: UserStep,
+        **kwargs
+    ) -> UserState:
+        """Alias для create_state для совместимости."""
+        return self.create_state(user_id=user_id, action=action, step=step, **kwargs)
     
     def get_state(self, user_id: int) -> Optional[UserState]:
         """Получает состояние пользователя."""

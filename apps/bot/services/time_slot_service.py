@@ -583,3 +583,135 @@ class TimeSlotService:
         except Exception as e:
             logger.error(f"Error getting object time slots: {e}")
             return []
+    
+    async def create_timeslot_for_date(self, object_id: int, slot_date: str, is_additional: bool = False) -> Dict[str, Any]:
+        """
+        Создает тайм-слот на конкретную дату.
+        
+        Args:
+            object_id: ID объекта
+            slot_date: Дата в формате YYYY-MM-DD
+            is_additional: Дополнительный слот
+            
+        Returns:
+            Результат создания
+        """
+        try:
+            # Парсим дату
+            parsed_date = datetime.strptime(slot_date, '%Y-%m-%d').date()
+            
+            with get_sync_session() as db:
+                # Получаем объект
+                obj = db.query(Object).filter(Object.id == object_id).first()
+                if not obj:
+                    return {'success': False, 'error': 'Объект не найден'}
+                
+                # Определяем время для слота
+                if is_additional:
+                    # Дополнительный слот - можно в любое время
+                    start_time = time(20, 0)  # 20:00
+                    end_time = time(23, 0)    # 23:00
+                    hourly_rate = float(obj.hourly_rate) * 1.2 if obj.hourly_rate else 0  # +20% к ставке
+                else:
+                    # Обычный слот - в рабочее время
+                    start_time = obj.opening_time or time(9, 0)
+                    end_time = obj.closing_time or time(18, 0)
+                    hourly_rate = float(obj.hourly_rate) if obj.hourly_rate else 0
+                
+                # Создаем тайм-слот
+                timeslot = TimeSlot(
+                    object_id=object_id,
+                    slot_date=parsed_date,
+                    start_time=start_time,
+                    end_time=end_time,
+                    hourly_rate=hourly_rate,
+                    max_employees=1,
+                    is_additional=is_additional,
+                    is_active=True
+                )
+                
+                db.add(timeslot)
+                db.commit()
+                
+                logger.info(f"Created timeslot {timeslot.id} for object {object_id} on {slot_date}")
+                return {
+                    'success': True,
+                    'timeslot_id': timeslot.id,
+                    'start_time': start_time.strftime('%H:%M'),
+                    'end_time': end_time.strftime('%H:%M'),
+                    'hourly_rate': hourly_rate,
+                    'message': 'Тайм-слот успешно создан'
+                }
+                
+        except ValueError as e:
+            logger.error(f"Invalid date format: {slot_date}")
+            return {'success': False, 'error': 'Неверный формат даты'}
+        except Exception as e:
+            logger.error(f"Error creating timeslot for date: {e}")
+            return {'success': False, 'error': f'Ошибка создания тайм-слота: {str(e)}'}
+    
+    async def create_timeslots_for_week(self, object_id: int, is_additional: bool = False) -> Dict[str, Any]:
+        """
+        Создает тайм-слоты на неделю.
+        
+        Args:
+            object_id: ID объекта
+            is_additional: Дополнительные слоты
+            
+        Returns:
+            Результат создания
+        """
+        try:
+            with get_sync_session() as db:
+                # Получаем объект
+                obj = db.query(Object).filter(Object.id == object_id).first()
+                if not obj:
+                    return {'success': False, 'error': 'Объект не найден'}
+                
+                created_count = 0
+                today = date.today()
+                
+                # Создаем слоты на следующие 7 дней
+                for i in range(7):
+                    slot_date = today + timedelta(days=i)
+                    
+                    # Определяем время для слота
+                    if is_additional:
+                        # Дополнительный слот - можно в любое время
+                        start_time = time(20, 0)  # 20:00
+                        end_time = time(23, 0)    # 23:00
+                        hourly_rate = float(obj.hourly_rate) * 1.2 if obj.hourly_rate else 0  # +20% к ставке
+                    else:
+                        # Обычный слот - в рабочее время
+                        start_time = obj.opening_time or time(9, 0)
+                        end_time = obj.closing_time or time(18, 0)
+                        hourly_rate = float(obj.hourly_rate) if obj.hourly_rate else 0
+                    
+                    # Создаем тайм-слот
+                    timeslot = TimeSlot(
+                        object_id=object_id,
+                        slot_date=slot_date,
+                        start_time=start_time,
+                        end_time=end_time,
+                        hourly_rate=hourly_rate,
+                        max_employees=1,
+                        is_additional=is_additional,
+                        is_active=True
+                    )
+                    
+                    db.add(timeslot)
+                    created_count += 1
+                
+                db.commit()
+                
+                logger.info(f"Created {created_count} timeslots for object {object_id}")
+                return {
+                    'success': True,
+                    'created_count': created_count,
+                    'hourly_rate': hourly_rate,
+                    'message': f'Создано {created_count} тайм-слотов'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error creating timeslots for week: {e}")
+            return {'success': False, 'error': f'Ошибка создания тайм-слотов: {str(e)}'}

@@ -83,6 +83,14 @@
 staffprobot/
 ├── apps/                          # Основные приложения
 │   ├── bot/                       # Telegram Bot сервис
+│   │   ├── handlers_div/          # Модульные обработчики
+│   │   │   ├── core_handlers.py   # Основные команды и роутинг
+│   │   │   ├── shift_handlers.py  # Управление сменами
+│   │   │   ├── object_handlers.py # Управление объектами
+│   │   │   ├── timeslot_handlers.py # Управление тайм-слотами
+│   │   │   ├── utility_handlers.py # Служебные функции
+│   │   │   └── utils.py           # Общие утилиты
+│   │   └── services/              # Сервисы бота
 │   ├── api/                       # REST API сервис
 │   ├── scheduler/                 # Сервис планировщика
 │   ├── analytics/                 # Аналитический сервис
@@ -204,6 +212,24 @@ CREATE TABLE shift_schedules (
     planned_start TIMESTAMP NOT NULL,
     planned_end TIMESTAMP NOT NULL,
     status VARCHAR(50) DEFAULT 'planned',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### TimeSlot (Тайм-слоты объектов)
+```sql
+CREATE TABLE time_slots (
+    id BIGSERIAL PRIMARY KEY,
+    object_id BIGINT REFERENCES objects(id),
+    slot_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    hourly_rate DECIMAL(10,2),
+    max_employees INTEGER DEFAULT 1,
+    is_additional BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    notes TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -2390,10 +2416,11 @@ echo "✅ Deployment completed successfully!"
 
 ---
 
-*Последнее обновление: 28 августа 2025*
-*Версия документа: 2.2*
+*Последнее обновление: 2 сентября 2025*
+*Версия документа: 2.3*
 
 ### История изменений
+- **v2.3** (02.09.2025): Добавлена система тайм-слотов, рефакторинг handlers в модульную структуру, очистка проекта
 - **v2.2** (28.08.2025): Добавлена полная Docker-интеграция, кросс-платформенность, health checks
 - **v2.1** (21.08.2025): Добавлены UserStateManager, UX улучшения, геолокационные возможности
 - **v2.0** (ранее): Базовая архитектура и техническое видение

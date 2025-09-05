@@ -430,7 +430,54 @@ class ShiftService:
             logger.error(f"Error getting active shift for user {user_id}: {e}")
         return None
     
-    def get_shift_by_id(self, shift_id: int) -> Optional[Dict[str, Any]]:
+    async def get_user_active_shifts(self, user_id: int) -> List[Dict[str, Any]]:
+        """
+        Получает активные смены пользователя.
+        
+        Args:
+            user_id: Telegram ID пользователя
+            
+        Returns:
+            Список активных смен
+        """
+        try:
+            async with get_async_session() as session:
+                # Находим пользователя по telegram_id
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = await session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    return []
+                
+                # Получаем активные смены
+                active_shifts_query = select(Shift).where(
+                    and_(
+                        Shift.user_id == db_user.id,
+                        Shift.status == "active"
+                    )
+                )
+                active_shifts_result = await session.execute(active_shifts_query)
+                active_shifts = active_shifts_result.scalars().all()
+                
+                # Формируем список смен
+                shifts_list = []
+                for shift in active_shifts:
+                    shifts_list.append({
+                        'id': shift.id,
+                        'object_id': shift.object_id,
+                        'start_time': shift.start_time,
+                        'hourly_rate': shift.hourly_rate,
+                        'status': shift.status
+                    })
+                
+                return shifts_list
+                
+        except Exception as e:
+            logger.error(f"Error getting user active shifts: {e}")
+            return []
+
+    async def get_shift_by_id(self, shift_id: int) -> Optional[Dict[str, Any]]:
         """
         Получает смену по ID.
         
@@ -441,9 +488,9 @@ class ShiftService:
             Данные смены или None
         """
         try:
-            with get_sync_session() as session:
+            async with get_async_session() as session:
                 query = select(Shift).where(Shift.id == shift_id)
-                result = session.execute(query)
+                result = await session.execute(query)
                 shift = result.scalar_one_or_none()
                 
                 if not shift:

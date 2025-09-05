@@ -3,6 +3,7 @@
 import logging
 from typing import Optional
 
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -14,7 +15,7 @@ from telegram.ext import (
 
 from core.config.settings import settings
 from apps.scheduler.reminder_scheduler import ReminderScheduler
-from .handlers_new import (
+from .handlers_div import (
     start_command,
     handle_message,
     button_callback,
@@ -24,8 +25,9 @@ from .handlers import (
     help_command,
     status_command
 )
-from .analytics_handlers import AnalyticsHandlers
-from .time_slot_handlers import TimeSlotHandlers
+# Импорты удаленных файлов убраны
+# from .analytics_handlers import AnalyticsHandlers
+# from .time_slot_handlers import TimeSlotHandlers
 
 
 logger = logging.getLogger(__name__)
@@ -38,8 +40,8 @@ class StaffProBot:
         self.application: Optional[Application] = None
         self._bot_token = None  # Ленивая инициализация
         self.reminder_scheduler: Optional[ReminderScheduler] = None
+        from .handlers_div.analytics_handlers import AnalyticsHandlers
         self.analytics_handlers = AnalyticsHandlers()
-        self.time_slot_handlers = TimeSlotHandlers()
 
     
     @property
@@ -79,18 +81,17 @@ class StaffProBot:
         self.application.add_handler(CommandHandler("help", help_command))
         self.application.add_handler(CommandHandler("status", status_command))
         
-        # Добавляем ConversationHandler для отчетов
-        self.application.add_handler(self.analytics_handlers.get_conversation_handler())
-        
-        # Добавляем ConversationHandler для тайм-слотов
-        self.application.add_handler(self.time_slot_handlers.get_conversation_handler())
-        
-
-        
-        # Обработка геопозиции
+        # Обработка геопозиции (ВАЖНО: до ConversationHandler!)
         self.application.add_handler(
             MessageHandler(filters.LOCATION, handle_location)
         )
+        
+        # Добавляем ConversationHandler для отчетов
+        # Временно отключаем для исправления проблемы с геолокацией
+        # self.application.add_handler(self.analytics_handlers.get_conversation_handler())
+        
+        # Добавляем ConversationHandler для тайм-слотов
+        # self.application.add_handler(self.time_slot_handlers.get_conversation_handler())
         
         # Обработка текстовых сообщений
         self.application.add_handler(

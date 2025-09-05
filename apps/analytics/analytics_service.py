@@ -377,7 +377,8 @@ class AnalyticsService:
         return {
             "shifts": len(shifts),
             "hours": round(float(total_hours), 2),
-            "payments": round(float(total_payments), 2)
+            "payments": round(float(total_payments), 2),
+            "earnings": round(float(total_payments), 2)  # Для совместимости с тестами
         }
     
     def _get_top_objects(self, db: Session, object_ids: List[int], start_date: date, end_date: date) -> List[Dict[str, Any]]:

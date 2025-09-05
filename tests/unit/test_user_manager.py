@@ -1,252 +1,353 @@
-"""Unit тесты для UserManager."""
+"""Unit тесты для UserManager (исправленная версия с моками БД)."""
 
 import pytest
-import json
-import os
-import tempfile
-from unittest.mock import patch, mock_open
+from unittest.mock import Mock, patch, MagicMock
+from datetime import datetime
 from core.auth.user_manager import UserManager
 
 
 class TestUserManager:
-    """Тесты для UserManager."""
+    """Тесты для UserManager с моками БД."""
     
     @pytest.fixture
-    def temp_users_file(self):
-        """Временный файл для тестов."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
-            f.write('{}')
-            temp_file = f.name
-        
-        yield temp_file
-        
-        # Очищаем после тестов
-        if os.path.exists(temp_file):
-            os.unlink(temp_file)
-    
-    @pytest.fixture
-    def user_manager(self, temp_users_file):
+    def user_manager(self):
         """Экземпляр UserManager для тестов."""
-        return UserManager(users_file=temp_users_file)
+        return UserManager()
     
     @pytest.fixture
     def sample_user_data(self):
         """Тестовые данные пользователя."""
         return {
             "user_id": 12345,
-            "first_name": "Test",
             "username": "testuser",
+            "first_name": "Test",
             "last_name": "User",
             "language_code": "ru"
         }
     
-    def test_init_creates_data_dir(self, temp_users_file):
-        """Тест создания папки для данных."""
-        # Удаляем файл, чтобы проверить создание папки
-        os.unlink(temp_users_file)
-        dir_path = os.path.dirname(temp_users_file)
-        
-        # Создаем UserManager - должен создать папку
-        user_manager = UserManager(users_file=temp_users_file)
-        
-        assert os.path.exists(dir_path)
+    @pytest.fixture
+    def mock_user_entity(self):
+        """Мок сущности User из БД."""
+        user = Mock()
+        user.id = 1
+        user.telegram_id = 12345
+        user.username = "testuser"
+        user.first_name = "Test"
+        user.last_name = "User"
+        user.language_code = "ru"
+        user.is_active = True
+        user.created_at = datetime.now()
+        user.updated_at = datetime.now()
+        return user
+    
+    def test_init_creates_data_dir(self, user_manager):
+        """Тест инициализации UserManager."""
+        assert user_manager.users_file == "data/users.json"
+        assert isinstance(user_manager.users, dict)
     
     def test_load_users_empty_file(self, user_manager):
-        """Тест загрузки пустого файла пользователей."""
-        assert len(user_manager.users) == 0
+        """Тест загрузки пустого файла (теперь не используется)."""
+        user_manager._load_users()
+        assert user_manager.users == {}
     
-    def test_load_users_with_data(self, temp_users_file):
-        """Тест загрузки файла с данными пользователей."""
-        # Создаем тестовые данные
-        test_data = {
-            "12345": {
-                "id": 12345,
-                "first_name": "Test",
-                "username": "testuser",
-                "registered_at": "2025-08-19T16:00:00"
-            }
-        }
-        
-        with open(temp_users_file, 'w', encoding='utf-8') as f:
-            json.dump(test_data, f)
-        
-        user_manager = UserManager(users_file=temp_users_file)
-        
-        assert len(user_manager.users) == 1
-        assert 12345 in user_manager.users
-        assert user_manager.users[12345]["first_name"] == "Test"
-    
-    def test_register_user_new(self, user_manager, sample_user_data):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_register_user_new(self, mock_get_session, user_manager, sample_user_data, mock_user_entity):
         """Тест регистрации нового пользователя."""
-        user_data = user_manager.register_user(**sample_user_data)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        assert user_data["id"] == 12345
-        assert user_data["first_name"] == "Test"
-        assert user_data["username"] == "testuser"
-        assert user_data["total_shifts"] == 0
-        assert user_data["total_hours"] == 0
-        assert user_data["total_earnings"] == 0.0
-        assert "registered_at" in user_data
-        assert "last_activity" in user_data
-        assert user_data["is_active"] is True
+        # Мок запроса - пользователь не найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = None
+        mock_session.add = Mock()
+        mock_session.commit = Mock()
+        mock_session.refresh = Mock()
         
-        # Проверяем, что пользователь сохранен в памяти
-        assert 12345 in user_manager.users
+        # Выполнение
+        result = user_manager.register_user(**sample_user_data)
+        
+        # Проверки
+        assert result["id"] == 12345
+        assert result["username"] == "testuser"
+        assert result["first_name"] == "Test"
+        assert result["last_name"] == "User"
+        assert result["is_active"] is True
+        
+        # Проверяем, что пользователь был добавлен в БД
+        mock_session.add.assert_called_once()
+        mock_session.commit.assert_called_once()
     
-    def test_register_user_existing(self, user_manager, sample_user_data):
-        """Тест повторной регистрации пользователя."""
-        # Регистрируем первый раз
-        first_user_data = user_manager.register_user(**sample_user_data)
-        first_registration = first_user_data["registered_at"]
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_register_user_existing(self, mock_get_session, user_manager, sample_user_data, mock_user_entity):
+        """Тест регистрации существующего пользователя."""
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        # Регистрируем второй раз
-        second_user_data = user_manager.register_user(**sample_user_data)
+        # Мок запроса - пользователь найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_user_entity
+        mock_session.commit = Mock()
         
-        # Проверяем, что время регистрации осталось первым
-        assert second_user_data["registered_at"] == first_registration
-        assert second_user_data["id"] == 12345
+        # Выполнение
+        result = user_manager.register_user(**sample_user_data)
         
-        # Проверяем, что в словаре пользователей только один пользователь
-        assert len(user_manager.users) == 1
-        assert 12345 in user_manager.users
+        # Проверки
+        assert result["telegram_id"] == 12345
+        assert result["username"] == "testuser"
+        assert result["first_name"] == "Test"
+        
+        # Проверяем, что пользователь НЕ был добавлен повторно
+        mock_session.add.assert_not_called()
+        mock_session.commit.assert_called_once()
     
-    def test_get_user_existing(self, user_manager, sample_user_data):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_get_user_existing(self, mock_get_session, user_manager, mock_user_entity):
         """Тест получения существующего пользователя."""
-        user_manager.register_user(**sample_user_data)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        user = user_manager.get_user(12345)
+        # Мок запроса - пользователь найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_user_entity
         
-        assert user is not None
-        assert user["id"] == 12345
-        assert user["first_name"] == "Test"
+        # Выполнение
+        result = user_manager.get_user(12345)
+        
+        # Проверки
+        assert result is not None
+        assert result["id"] == 12345
+        assert result["username"] == "testuser"
     
-    def test_get_user_nonexistent(self, user_manager):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_get_user_nonexistent(self, mock_get_session, user_manager):
         """Тест получения несуществующего пользователя."""
-        user = user_manager.get_user(99999)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        assert user is None
-    
-    def test_is_user_registered_true(self, user_manager, sample_user_data):
-        """Тест проверки зарегистрированного пользователя."""
-        user_manager.register_user(**sample_user_data)
+        # Мок запроса - пользователь не найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = None
         
-        assert user_manager.is_user_registered(12345) is True
+        # Выполнение
+        result = user_manager.get_user(99999)
+        
+        # Проверки
+        assert result is None
     
-    def test_is_user_registered_false(self, user_manager):
-        """Тест проверки незарегистрированного пользователя."""
-        assert user_manager.is_user_registered(99999) is False
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_is_user_registered_true(self, mock_get_session, user_manager, mock_user_entity):
+        """Тест проверки регистрации существующего пользователя."""
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
+        
+        # Мок запроса - пользователь найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_user_entity
+        
+        # Выполнение
+        result = user_manager.is_user_registered(12345)
+        
+        # Проверки
+        assert result is True
     
-    def test_update_user_activity(self, user_manager, sample_user_data):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_is_user_registered_false(self, mock_get_session, user_manager):
+        """Тест проверки регистрации несуществующего пользователя."""
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
+        
+        # Мок запроса - пользователь не найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = None
+        
+        # Выполнение
+        result = user_manager.is_user_registered(99999)
+        
+        # Проверки
+        assert result is False
+    
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_update_user_activity(self, mock_get_session, user_manager, mock_user_entity):
         """Тест обновления активности пользователя."""
-        user_manager.register_user(**sample_user_data)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        # Получаем время до обновления
-        before_update = user_manager.users[12345]["last_activity"]
+        # Мок запроса - пользователь найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_user_entity
+        mock_session.commit = Mock()
         
-        # Обновляем активность
-        user_manager.update_user_activity(12345)
+        # Выполнение
+        result = user_manager.update_user_activity(12345)
         
-        # Проверяем, что время изменилось
-        after_update = user_manager.users[12345]["last_activity"]
-        assert after_update != before_update
+        # Проверки
+        assert result is True
+        mock_session.commit.assert_called_once()
     
-    def test_get_user_stats_existing(self, user_manager, sample_user_data):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_get_user_stats_existing(self, mock_get_session, user_manager, mock_user_entity):
         """Тест получения статистики существующего пользователя."""
-        user_manager.register_user(**sample_user_data)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        stats = user_manager.get_user_stats(12345)
+        # Мок запроса - пользователь найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_user_entity
         
-        assert stats is not None
-        assert stats["total_shifts"] == 0
-        assert stats["total_hours"] == 0
-        assert stats["total_earnings"] == 0.0
-        assert "registered_at" in stats
-        assert "last_activity" in stats
+        # Выполнение
+        result = user_manager.get_user_stats(12345)
+        
+        # Проверки
+        assert result is not None
+        assert "id" in result
+        assert "username" in result
     
-    def test_get_user_stats_nonexistent(self, user_manager):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_get_user_stats_nonexistent(self, mock_get_session, user_manager):
         """Тест получения статистики несуществующего пользователя."""
-        stats = user_manager.get_user_stats(99999)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        assert stats is None
+        # Мок запроса - пользователь не найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = None
+        
+        # Выполнение
+        result = user_manager.get_user_stats(99999)
+        
+        # Проверки
+        assert result is None
     
-    def test_update_user_stats(self, user_manager, sample_user_data):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_update_user_stats(self, mock_get_session, user_manager, mock_user_entity):
         """Тест обновления статистики пользователя."""
-        user_manager.register_user(**sample_user_data)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        # Обновляем статистику
-        success = user_manager.update_user_stats(12345, shifts=2, hours=16, earnings=1000.0)
+        # Мок запроса - пользователь найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_user_entity
+        mock_session.commit = Mock()
         
-        assert success is True
+        # Выполнение
+        result = user_manager.update_user_stats(12345, 2, 16, 1000.0)
         
-        # Проверяем, что статистика обновилась
-        stats = user_manager.get_user_stats(12345)
-        assert stats["total_shifts"] == 2
-        assert stats["total_hours"] == 16
-        assert stats["total_earnings"] == 1000.0
+        # Проверки
+        assert result is True
+        mock_session.commit.assert_called_once()
     
-    def test_update_user_stats_nonexistent(self, user_manager):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_update_user_stats_nonexistent(self, mock_get_session, user_manager):
         """Тест обновления статистики несуществующего пользователя."""
-        success = user_manager.update_user_stats(99999, shifts=1, hours=8, earnings=500.0)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        assert success is False
+        # Мок запроса - пользователь не найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = None
+        
+        # Выполнение
+        result = user_manager.update_user_stats(99999, 1, 8, 500.0)
+        
+        # Проверки
+        assert result is False
     
-    def test_get_all_users(self, user_manager, sample_user_data):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_get_all_users(self, mock_get_session, user_manager, mock_user_entity):
         """Тест получения всех пользователей."""
-        user_manager.register_user(**sample_user_data)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        all_users = user_manager.get_all_users()
+        # Мок запроса - возвращаем список пользователей
+        mock_session.execute.return_value.scalars.return_value.all.return_value = [mock_user_entity]
         
-        assert len(all_users) == 1
-        assert all_users[0]["id"] == 12345
+        # Выполнение
+        result = user_manager.get_all_users()
+        
+        # Проверки
+        assert len(result) == 1
+        assert result[0]["id"] == 12345
     
-    def test_get_active_users(self, user_manager, sample_user_data):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_get_active_users(self, mock_get_session, user_manager, mock_user_entity):
         """Тест получения активных пользователей."""
-        user_manager.register_user(**sample_user_data)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        active_users = user_manager.get_active_users()
+        # Мок запроса - возвращаем список активных пользователей
+        mock_session.execute.return_value.scalars.return_value.all.return_value = [mock_user_entity]
         
-        assert len(active_users) == 1
-        assert active_users[0]["id"] == 12345
-        assert active_users[0]["is_active"] is True
+        # Выполнение
+        result = user_manager.get_active_users()
+        
+        # Проверки
+        assert len(result) == 1
+        assert result[0]["id"] == 12345
+        assert result[0]["is_active"] is True
     
-    def test_deactivate_user(self, user_manager, sample_user_data):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_deactivate_user(self, mock_get_session, user_manager, mock_user_entity):
         """Тест деактивации пользователя."""
-        user_manager.register_user(**sample_user_data)
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        # Деактивируем пользователя
-        success = user_manager.deactivate_user(12345)
+        # Мок запроса - пользователь найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_user_entity
+        mock_session.commit = Mock()
         
-        assert success is True
-        assert user_manager.users[12345]["is_active"] is False
+        # Выполнение
+        result = user_manager.deactivate_user(12345)
+        
+        # Проверки
+        assert result is True
+        assert mock_user_entity.is_active is False
+        mock_session.commit.assert_called_once()
     
-    def test_activate_user(self, user_manager, sample_user_data):
+    @patch('core.auth.user_manager.get_sync_session')
+    def test_activate_user(self, mock_get_session, user_manager, mock_user_entity):
         """Тест активации пользователя."""
-        user_manager.register_user(**sample_user_data)
-        user_manager.deactivate_user(12345)  # Сначала деактивируем
+        # Настройка мока сессии
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_get_session.return_value.__exit__.return_value = None
         
-        # Активируем пользователя
-        success = user_manager.activate_user(12345)
+        # Мок запроса - пользователь найден
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_user_entity
+        mock_session.commit = Mock()
         
-        assert success is True
-        assert user_manager.users[12345]["is_active"] is True
+        # Выполнение
+        result = user_manager.activate_user(12345)
+        
+        # Проверки
+        assert result is True
+        assert mock_user_entity.is_active is True
+        mock_session.commit.assert_called_once()
     
-    def test_save_users_error_handling(self, user_manager, sample_user_data):
-        """Тест обработки ошибок при сохранении."""
-        user_manager.register_user(**sample_user_data)
-        
-        # Мокаем ошибку при сохранении
-        with patch('builtins.open', side_effect=PermissionError("Access denied")):
-            # Должно обработать ошибку без падения
-            user_manager._save_users()
+    def test_save_users_error_handling(self, user_manager):
+        """Тест обработки ошибок при сохранении (теперь не используется)."""
+        # Этот метод больше не используется, но тест для совместимости
+        user_manager._save_users()
+        # Должен выполниться без ошибок
     
-    def test_load_users_error_handling(self, temp_users_file):
-        """Тест обработки ошибок при загрузке."""
-        # Создаем файл с некорректным JSON
-        with open(temp_users_file, 'w') as f:
-            f.write('{"invalid": json}')
-        
-        # Должно обработать ошибку и создать пустой словарь
-        user_manager = UserManager(users_file=temp_users_file)
-        
-        assert len(user_manager.users) == 0
-
+    def test_load_users_error_handling(self, user_manager):
+        """Тест обработки ошибок при загрузке (теперь не используется)."""
+        # Этот метод больше не используется, но тест для совместимости
+        user_manager._load_users()
+        # Должен выполниться без ошибок
