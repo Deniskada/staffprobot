@@ -3,11 +3,12 @@
 """
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from apps.web.services.auth_service import AuthService
+from apps.web.middleware.auth_middleware import auth_middleware
 
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
@@ -17,16 +18,10 @@ auth_service = AuthService()
 
 async def get_current_user(request: Request) -> Dict[str, Any]:
     """Получение текущего пользователя из токена"""
-    # TODO: Реализация получения пользователя из JWT токена
-    # Пока возвращаем тестовые данные
-    return {
-        "id": 1,
-        "telegram_id": 123456789,
-        "username": "test_user",
-        "first_name": "Тест",
-        "last_name": "Пользователь",
-        "role": "owner"
-    }
+    user = await auth_middleware.get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Требуется авторизация")
+    return user
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -64,7 +59,8 @@ async def dashboard(request: Request, current_user: Dict[str, Any] = Depends(get
     return templates.TemplateResponse("dashboard/index.html", {
         "request": request,
         "title": "Дашборд",
-        "data": dashboard_data
+        "data": dashboard_data,
+        "current_user": current_user
     })
 
 
