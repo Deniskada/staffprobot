@@ -110,7 +110,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             InlineKeyboardButton("❓ Помощь", callback_data="help")
         ],
         [
-            InlineKeyboardButton("📈 Статус", callback_data="status")
+            InlineKeyboardButton("📈 Статус", callback_data="status"),
+            InlineKeyboardButton("🆔 Мой Telegram ID", callback_data="get_telegram_id")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -143,7 +144,7 @@ from .timeslot_handlers import (
     _handle_delete_slot_week
 )
 from .utility_handlers import (
-    _handle_help_callback, _handle_status_callback
+    _handle_help_callback, _handle_status_callback, _handle_get_telegram_id
 )
 
 
@@ -414,6 +415,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif query.data == "status":
         await _handle_status_callback(update, context)
         return
+    elif query.data == "get_telegram_id":
+        await _handle_get_telegram_id(update, context)
+        return
     # Управление тайм-слотами
     elif query.data.startswith("manage_timeslots:"):
         object_id = int(query.data.split(":", 1)[1])
@@ -593,7 +597,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             InlineKeyboardButton("❓ Помощь", callback_data="help")
         ],
         [
-            InlineKeyboardButton("📈 Статус", callback_data="status")
+            InlineKeyboardButton("📈 Статус", callback_data="status"),
+            InlineKeyboardButton("🆔 Мой Telegram ID", callback_data="get_telegram_id")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)

@@ -8,12 +8,15 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from core.config.settings import settings
 from core.cache.cache_service import CacheService
+from core.logging.logger import logger
+from apps.web.services.bot_integration import BotIntegrationService
 
 class AuthService:
     """Сервис авторизации с JWT токенами и PIN-кодами"""
     
     def __init__(self):
         self.cache = CacheService()
+        self.bot_integration = BotIntegrationService()
         self.secret_key = settings.secret_key
         self.algorithm = "HS256"
         self.token_expire_minutes = settings.jwt_expire_minutes
@@ -61,9 +64,12 @@ class AuthService:
         # Сохранение PIN-кода в кэше (действителен 5 минут)
         await self.store_pin(telegram_id, pin_code, ttl=300)
         
-        # TODO: Интеграция с Telegram Bot API для отправки PIN-кода
-        # Пока просто логируем
-        print(f"🔐 PIN-код для пользователя {telegram_id}: {pin_code}")
+        # Отправка PIN-кода через бота
+        success = await self.bot_integration.send_pin_code(telegram_id, pin_code)
+        
+        if not success:
+            # Если не удалось отправить через бота, логируем для отладки
+            logger.warning(f"Failed to send PIN code to user {telegram_id}, code: {pin_code}")
         
         return pin_code
     

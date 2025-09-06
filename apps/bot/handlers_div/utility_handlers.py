@@ -47,6 +47,41 @@ async def _handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await query.edit_message_text(text=help_text, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+async def _handle_get_telegram_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ответ на нажатие кнопки 'Мой Telegram ID' через callback."""
+    query = update.callback_query
+    user = query.from_user
+    
+    telegram_id_text = f"""
+🆔 <b>Ваш Telegram ID</b>
+
+<b>ID:</b> <code>{user.id}</code>
+
+<b>Имя:</b> {user.first_name or 'Не указано'}
+<b>Фамилия:</b> {user.last_name or 'Не указано'}
+<b>Username:</b> @{user.username or 'Не указано'}
+
+💡 <b>Как использовать:</b>
+• Скопируйте ID выше
+• Перейдите на сайт StaffProBot
+• Введите этот ID для входа
+• Получите PIN-код в этом боте
+
+🌐 <b>Сайт:</b> http://localhost:8001
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🌐 Перейти на сайт", url="http://localhost:8001")],
+        [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text=telegram_id_text,
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
 async def _handle_status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Ответ на нажатие кнопки 'Статус' через callback."""
     query = update.callback_query
