@@ -6,8 +6,11 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from apps.web.services.object_service import ObjectService, TimeSlotService
+from core.database.session import get_async_session
 from core.logging.logger import logger
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
@@ -47,15 +50,31 @@ objects_storage = {
 @router.get("/", response_class=HTMLResponse)
 async def objects_list(
     request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_async_session)
 ):
     """Список объектов владельца"""
     try:
-        # Получение объектов владельца из временного хранилища
-        objects_data = [
-            obj for obj in objects_storage.values() 
-            if obj["owner_id"] == current_user["id"]
-        ]
+        # Получение объектов владельца из базы данных
+        object_service = ObjectService(db)
+        objects = await object_service.get_objects_by_owner(current_user["id"])
+        
+        # Преобразуем в формат для шаблона
+        objects_data = []
+        for obj in objects:
+            objects_data.append({
+                "id": obj.id,
+                "name": obj.name,
+                "address": obj.address or "",
+                "hourly_rate": float(obj.hourly_rate),
+                "opening_time": obj.opening_time.strftime("%H:%M"),
+                "closing_time": obj.closing_time.strftime("%H:%M"),
+                "max_distance": obj.max_distance_meters,
+                "is_active": obj.is_active,
+                "available_for_applicants": obj.available_for_applicants,
+                "created_at": obj.created_at.strftime("%Y-%m-%d"),
+                "owner_id": obj.owner_id
+            })
         
         return templates.TemplateResponse("objects/list.html", {
             "request": request,
@@ -91,7 +110,8 @@ async def create_object(
     opening_time: str = Form(...),
     closing_time: str = Form(...),
     max_distance: int = Form(500),
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_async_session)
 ):
     """Создание нового объекта"""
     try:
@@ -110,25 +130,23 @@ async def create_object(
         # Обработка чекбокса (он не отправляется, если не отмечен)
         available_for_applicants = "available_for_applicants" in form_data
         
-        # Генерация нового ID
-        new_id = max(objects_storage.keys()) + 1 if objects_storage else 1
-        
-        # Создание объекта в временном хранилище
-        objects_storage[new_id] = {
-            "id": new_id,
+        # Создание объекта в базе данных
+        object_service = ObjectService(db)
+        object_data = {
             "name": name,
             "address": address,
             "hourly_rate": hourly_rate,
             "opening_time": opening_time,
             "closing_time": closing_time,
             "max_distance": max_distance,
-            "is_active": True,
             "available_for_applicants": available_for_applicants,
-            "created_at": "2024-01-15",  # TODO: Использовать реальную дату
-            "owner_id": current_user["id"]
+            "is_active": True,
+            "coordinates": "0.0,0.0"  # TODO: Добавить геолокацию
         }
         
-        logger.info(f"Object {new_id} created successfully: {objects_storage[new_id]}")
+        new_object = await object_service.create_object(object_data, current_user["id"])
+        
+        logger.info(f"Object {new_object.id} created successfully")
         
         return RedirectResponse(url="/objects", status_code=status.HTTP_302_FOUND)
         
@@ -143,26 +161,46 @@ async def create_object(
 async def object_detail(
     request: Request, 
     object_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_async_session)
 ):
     """Детальная информация об объекте"""
     try:
-        # Получение данных объекта из временного хранилища с проверкой владельца
-        if object_id not in objects_storage:
+        # Получение данных объекта из базы данных с проверкой владельца
+        object_service = ObjectService(db)
+        timeslot_service = TimeSlotService(db)
+        
+        obj = await object_service.get_object_by_id(object_id, current_user["id"])
+        if not obj:
             raise HTTPException(status_code=404, detail="Объект не найден")
         
-        object_data = objects_storage[object_id].copy()
+        # Получаем тайм-слоты
+        timeslots = await timeslot_service.get_timeslots_by_object(object_id, current_user["id"])
         
-        # Проверка владельца
-        if object_data["owner_id"] != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Нет доступа к этому объекту")
-        
-        # Получаем тайм-слоты из хранилища тайм-слотов
-        from apps.web.routes.timeslots import timeslots_storage
-        object_data["timeslots"] = [
-            slot for slot in timeslots_storage.values() 
-            if slot["object_id"] == object_id
-        ]
+        # Преобразуем в формат для шаблона
+        object_data = {
+            "id": obj.id,
+            "name": obj.name,
+            "address": obj.address or "",
+            "hourly_rate": float(obj.hourly_rate),
+            "opening_time": obj.opening_time.strftime("%H:%M"),
+            "closing_time": obj.closing_time.strftime("%H:%M"),
+            "max_distance": obj.max_distance_meters,
+            "is_active": obj.is_active,
+            "available_for_applicants": obj.available_for_applicants,
+            "created_at": obj.created_at.strftime("%Y-%m-%d"),
+            "owner_id": obj.owner_id,
+            "timeslots": [
+                {
+                    "id": slot.id,
+                    "start_time": slot.start_time.strftime("%H:%M"),
+                    "end_time": slot.end_time.strftime("%H:%M"),
+                    "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                    "is_active": slot.is_active
+                }
+                for slot in timeslots
+            ]
+        }
         
         return templates.TemplateResponse("objects/detail.html", {
             "request": request,
@@ -171,6 +209,8 @@ async def object_detail(
             "current_user": current_user
         })
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error loading object detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки информации об объекте")
