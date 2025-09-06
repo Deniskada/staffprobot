@@ -71,7 +71,6 @@ async def _handle_get_telegram_id(update: Update, context: ContextTypes.DEFAULT_
 """
     
     keyboard = [
-        [InlineKeyboardButton("🌐 Перейти на сайт", url="http://localhost:8001")],
         [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
     ]
     

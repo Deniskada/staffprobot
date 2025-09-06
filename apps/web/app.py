@@ -24,8 +24,24 @@ async def lifespan(app: FastAPI):
     """Управление жизненным циклом приложения"""
     # Инициализация при запуске
     print("🚀 Запуск веб-приложения StaffProBot")
+    
+    # Инициализация Redis
+    from core.cache.redis_cache import cache
+    try:
+        await cache.connect()
+        print("✅ Redis подключен")
+    except Exception as e:
+        print(f"❌ Ошибка подключения к Redis: {e}")
+    
     yield
+    
     # Очистка при завершении
+    try:
+        await cache.disconnect()
+        print("✅ Redis отключен")
+    except Exception as e:
+        print(f"❌ Ошибка отключения от Redis: {e}")
+    
     print("🛑 Остановка веб-приложения StaffProBot")
 
 
