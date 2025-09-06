@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">
+                        <i class="bi bi-plus-circle text-primary"></i>
+                        {{ title }}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/objects/create">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Название объекта *</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="name" 
+                                           name="name" 
+                                           placeholder="Например: Магазин №1"
+                                           required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="address" class="form-label">Адрес *</label>
+                                    <textarea class="form-control" 
+                                              id="address" 
+                                              name="address" 
+                                              rows="3"
+                                              placeholder="Полный адрес объекта"
+                                              required></textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="hourly_rate" 
+                                           name="hourly_rate" 
+                                           min="1"
+                                           placeholder="500"
+                                           required>
+                                    <div class="form-text">Минимальная ставка: 1 ₽/час</div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="opening_time" class="form-label">Время открытия *</label>
+                                    <input type="time" 
+                                           class="form-control" 
+                                           id="opening_time" 
+                                           name="opening_time" 
+                                           value="09:00"
+                                           required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="closing_time" class="form-label">Время закрытия *</label>
+                                    <input type="time" 
+                                           class="form-control" 
+                                           id="closing_time" 
+                                           name="closing_time" 
+                                           value="21:00"
+                                           required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="max_distance" class="form-label">Максимальное расстояние (м)</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="max_distance" 
+                                           name="max_distance" 
+                                           min="1"
+                                           value="500"
+                                           placeholder="500">
+                                    <div class="form-text">Максимальное расстояние для открытия смены</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" 
+                                               type="checkbox" 
+                                               id="available_for_applicants" 
+                                               name="available_for_applicants" 
+                                               value="true">
+                                        <label class="form-check-label" for="available_for_applicants">
+                                            <strong>Доступен для соискателей</strong>
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        Если включено, соискатели смогут записываться на пробные смены к этому объекту
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Информация:</strong> После создания объекта вы сможете настроить тайм-слоты 
+                            и управлять доступом сотрудников к нему.
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Создать объект
+                            </button>
+                            <a href="/objects" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Назад к списку
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const openingTime = document.getElementById('opening_time');
+    const closingTime = document.getElementById('closing_time');
+    
+    // Валидация времени
+    form.addEventListener('submit', function(e) {
+        if (openingTime.value >= closingTime.value) {
+            e.preventDefault();
+            alert('Время открытия должно быть раньше времени закрытия');
+            return;
+        }
+        
+        const hourlyRate = parseInt(document.getElementById('hourly_rate').value);
+        if (hourlyRate <= 0) {
+            e.preventDefault();
+            alert('Почасовая ставка должна быть больше 0');
+            return;
+        }
+    });
+    
+    // Автоматическое обновление времени закрытия при изменении времени открытия
+    openingTime.addEventListener('change', function() {
+        if (this.value && closingTime.value && this.value >= closingTime.value) {
+            const opening = new Date('2000-01-01T' + this.value);
+            opening.setHours(opening.getHours() + 1);
+            closingTime.value = opening.toTimeString().slice(0, 5);
+        }
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}
