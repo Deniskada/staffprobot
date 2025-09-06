@@ -20,15 +20,30 @@ class AuthMiddleware:
         """Получение текущего пользователя из JWT токена."""
         token = request.cookies.get("access_token")
         if not token:
+            logger.debug("No access token found in cookies")
             return None
         
         try:
+            logger.debug(f"Verifying token: {token[:20]}...")
             payload = await self.auth_service.verify_token(token)
             if not payload:
+                logger.warning("Token verification failed - no payload")
+                return None
+            
+            logger.debug(f"Token payload: {payload}")
+            telegram_id = payload.get("telegram_id")
+            if not telegram_id:
+                logger.warning("No telegram_id in token payload")
                 return None
             
             # Получаем пользователя из базы данных
-            user = await self.user_manager.get_user_by_telegram_id(payload.get("telegram_id"))
+            logger.debug(f"Getting user by telegram_id: {telegram_id}")
+            user = await self.user_manager.get_user_by_telegram_id(telegram_id)
+            if not user:
+                logger.warning(f"User not found for telegram_id: {telegram_id}")
+                return None
+            
+            logger.debug(f"User found: {user}")
             return user
         except Exception as e:
             logger.error(f"Error getting current user: {e}")

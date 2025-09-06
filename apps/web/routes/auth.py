@@ -79,7 +79,7 @@ async def login(
         
         # Перенаправление на дашборд с токеном
         response = RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-        response.set_cookie(key="access_token", value=token, httponly=True, secure=True)
+        response.set_cookie(key="access_token", value=token, httponly=True, secure=False)
         
         return response
         
