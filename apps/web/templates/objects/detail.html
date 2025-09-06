@@ -119,7 +119,7 @@
                                                 {{ slot.start_time }} - {{ slot.end_time }}
                                             </td>
                                             <td>
-                                                <strong class="text-success">{{ slot.rate }} ₽/час</strong>
+                                                <strong class="text-success">{{ slot.hourly_rate }} ₽/час</strong>
                                             </td>
                                             <td>
                                                 {% if slot.is_active %}
@@ -130,10 +130,10 @@
                                             </td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <button class="btn btn-outline-secondary" title="Редактировать">
+                                                    <a href="/timeslots/{{ slot.id }}/edit" class="btn btn-outline-secondary" title="Редактировать">
                                                         <i class="bi bi-pencil"></i>
-                                                    </button>
-                                                    <button class="btn btn-outline-danger" title="Удалить">
+                                                    </a>
+                                                    <button class="btn btn-outline-danger" title="Удалить" onclick="confirmDeleteTimeslot({{ slot.id }}, '{{ slot.start_time }}-{{ slot.end_time }}')">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
                                                 </div>
@@ -231,4 +231,17 @@
         </div>
     </div>
 </div>
+
+<script>
+function confirmDeleteTimeslot(timeslotId, timeslotName) {
+    if (confirm(`Вы уверены, что хотите удалить тайм-слот ${timeslotName}?`)) {
+        // Создаем форму для отправки POST запроса
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/timeslots/${timeslotId}/delete`;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
 {% endblock %}

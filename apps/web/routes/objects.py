@@ -157,12 +157,11 @@ async def object_detail(
         if object_data["owner_id"] != current_user["id"]:
             raise HTTPException(status_code=403, detail="Нет доступа к этому объекту")
         
-        # Добавляем тайм-слоты
+        # Получаем тайм-слоты из хранилища тайм-слотов
+        from apps.web.routes.timeslots import timeslots_storage
         object_data["timeslots"] = [
-            {"id": 1, "start_time": "09:00", "end_time": "12:00", "rate": object_data["hourly_rate"], "is_active": True},
-            {"id": 2, "start_time": "12:00", "end_time": "15:00", "rate": object_data["hourly_rate"], "is_active": True},
-            {"id": 3, "start_time": "15:00", "end_time": "18:00", "rate": object_data["hourly_rate"], "is_active": True},
-            {"id": 4, "start_time": "18:00", "end_time": "21:00", "rate": object_data["hourly_rate"], "is_active": True}
+            slot for slot in timeslots_storage.values() 
+            if slot["object_id"] == object_id
         ]
         
         return templates.TemplateResponse("objects/detail.html", {
