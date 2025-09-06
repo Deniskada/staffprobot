@@ -111,3 +111,54 @@ class AuthMiddleware:
 
 # Глобальный экземпляр middleware
 auth_middleware = AuthMiddleware()
+
+# Функции-зависимости для FastAPI
+async def get_current_user(request: Request) -> Optional[dict]:
+    """Получение текущего пользователя."""
+    return await auth_middleware.get_current_user(request)
+
+async def require_auth(request: Request) -> dict:
+    """Требует авторизации."""
+    user = await auth_middleware.get_current_user(request)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется авторизация"
+        )
+    return user
+
+async def require_owner_or_superadmin(request: Request) -> dict:
+    """Требует роль владельца или суперадмина."""
+    user = await auth_middleware.get_current_user(request)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется авторизация"
+        )
+    
+    user_roles = user.get("roles", [user.get("role", "employee")])
+    if not any(role in ["owner", "superadmin"] for role in user_roles):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав доступа"
+        )
+    
+    return user
+
+async def require_superadmin(request: Request) -> dict:
+    """Требует роль суперадмина."""
+    user = await auth_middleware.get_current_user(request)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется авторизация"
+        )
+    
+    user_roles = user.get("roles", [user.get("role", "employee")])
+    if "superadmin" not in user_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав доступа"
+        )
+    
+    return user
