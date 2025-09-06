@@ -85,13 +85,21 @@ class AuthService:
         key = f"pin:{telegram_id}"
         stored_pin = await self.cache.get(key)
         
+        logger.info(f"Verifying PIN for user {telegram_id}: stored={stored_pin}, provided={pin_code}")
+        
         if not stored_pin:
+            logger.warning(f"No PIN found in cache for user {telegram_id}")
             return False
         
-        # Удаляем PIN-код после использования (одноразовый)
-        await self.cache.delete(key)
+        # Проверяем PIN-код
+        if stored_pin == pin_code:
+            # Удаляем PIN-код после успешного использования (одноразовый)
+            await self.cache.delete(key)
+            logger.info(f"PIN verified successfully for user {telegram_id}")
+            return True
         
-        return stored_pin == pin_code
+        logger.warning(f"PIN mismatch for user {telegram_id}: stored={stored_pin}, provided={pin_code}")
+        return False
     
     async def refresh_token(self, token: str) -> Optional[str]:
         """Обновление JWT токена"""
