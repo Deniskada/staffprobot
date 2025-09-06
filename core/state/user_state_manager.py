@@ -17,6 +17,10 @@ class UserAction(str, Enum):
     VIEW_SCHEDULE = "view_schedule"
     CANCEL_SCHEDULE = "cancel_schedule"
     CREATE_TIMESLOT = "create_timeslot"
+    EDIT_TIMESLOT_TIME = "edit_timeslot_time"
+    EDIT_TIMESLOT_RATE = "edit_timeslot_rate"
+    EDIT_TIMESLOT_EMPLOYEES = "edit_timeslot_employees"
+    EDIT_TIMESLOT_NOTES = "edit_timeslot_notes"
 
 
 class UserStep(str, Enum):
@@ -32,6 +36,7 @@ class UserStep(str, Enum):
     INPUT_DATE = "input_date"
     CONFIRM_SCHEDULE = "confirm_schedule"
     SCHEDULE_SELECTION = "schedule_selection"
+    WAITING_INPUT = "waiting_input"
 
 
 class UserState:

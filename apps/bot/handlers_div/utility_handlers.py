@@ -138,6 +138,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await _handle_timeslot_date_input(update, context, user_state)
             return
     
+    # Проверяем состояние пользователя для редактирования тайм-слотов
+    if user_state and user_state.action in [UserAction.EDIT_TIMESLOT_TIME, UserAction.EDIT_TIMESLOT_RATE, 
+                                           UserAction.EDIT_TIMESLOT_EMPLOYEES, UserAction.EDIT_TIMESLOT_NOTES]:
+        await _handle_timeslot_edit_input(update, context, user_state)
+        return
+    
     # Если нет активного состояния, отправляем в главное меню
     await update.message.reply_text(
         "🤖 Используйте команды или кнопки для взаимодействия с ботом.\n"
@@ -202,6 +208,113 @@ async def _handle_timeslot_date_input(update: Update, context: ContextTypes.DEFA
     keyboard = [
         [InlineKeyboardButton("➕ Создать еще", callback_data=f"create_timeslot:{object_id}")],
         [InlineKeyboardButton("🔙 Назад", callback_data=f"manage_timeslots:{object_id}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        text=message,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+
+async def _handle_timeslot_edit_input(update: Update, context: ContextTypes.DEFAULT_TYPE, user_state) -> None:
+    """Обработчик ввода данных для редактирования тайм-слотов."""
+    user_id = update.effective_user.id
+    text = update.message.text.strip()
+    
+    # Получаем данные из состояния
+    timeslot_id = user_state.data.get('timeslot_id')
+    action = user_state.action
+    
+    # Импортируем сервис
+    from apps.bot.services.time_slot_service import TimeSlotService
+    time_slot_service = TimeSlotService()
+    
+    # Обрабатываем в зависимости от действия
+    if action == UserAction.EDIT_TIMESLOT_TIME:
+        # Парсим время в формате HH:MM-HH:MM
+        try:
+            if '-' not in text:
+                await update.message.reply_text("❌ Неверный формат времени. Используйте HH:MM-HH:MM")
+                return
+            
+            start_time_str, end_time_str = text.split('-', 1)
+            from datetime import time
+            start_time = time.fromisoformat(start_time_str.strip())
+            end_time = time.fromisoformat(end_time_str.strip())
+            
+            # Обновляем время
+            result1 = time_slot_service.update_timeslot_field(timeslot_id, 'start_time', start_time_str.strip())
+            result2 = time_slot_service.update_timeslot_field(timeslot_id, 'end_time', end_time_str.strip())
+            
+            if result1['success'] and result2['success']:
+                message = f"✅ <b>Время тайм-слота обновлено!</b>\n\n"
+                message += f"🕐 <b>Новое время:</b> {start_time_str.strip()}-{end_time_str.strip()}"
+            else:
+                message = f"❌ <b>Ошибка обновления времени:</b>\n{result1.get('error', result2.get('error'))}"
+                
+        except ValueError:
+            await update.message.reply_text("❌ Неверный формат времени. Используйте HH:MM-HH:MM (например: 09:00-18:00)")
+            return
+    
+    elif action == UserAction.EDIT_TIMESLOT_RATE:
+        try:
+            rate = float(text)
+            result = time_slot_service.update_timeslot_field(timeslot_id, 'hourly_rate', rate)
+            
+            if result['success']:
+                message = f"✅ <b>Ставка тайм-слота обновлена!</b>\n\n"
+                message += f"💰 <b>Новая ставка:</b> {rate}₽/час"
+            else:
+                message = f"❌ <b>Ошибка обновления ставки:</b>\n{result['error']}"
+                
+        except ValueError:
+            await update.message.reply_text("❌ Неверный формат ставки. Введите число (например: 500)")
+            return
+    
+    elif action == UserAction.EDIT_TIMESLOT_EMPLOYEES:
+        try:
+            employees = int(text)
+            if not 1 <= employees <= 10:
+                await update.message.reply_text("❌ Количество сотрудников должно быть от 1 до 10")
+                return
+                
+            result = time_slot_service.update_timeslot_field(timeslot_id, 'max_employees', employees)
+            
+            if result['success']:
+                message = f"✅ <b>Количество сотрудников обновлено!</b>\n\n"
+                message += f"👥 <b>Новое количество:</b> {employees}"
+            else:
+                message = f"❌ <b>Ошибка обновления:</b>\n{result['error']}"
+                
+        except ValueError:
+            await update.message.reply_text("❌ Неверный формат. Введите число от 1 до 10")
+            return
+    
+    elif action == UserAction.EDIT_TIMESLOT_NOTES:
+        notes = text if text.lower() != 'удалить' else None
+        result = time_slot_service.update_timeslot_field(timeslot_id, 'notes', notes)
+        
+        if result['success']:
+            message = f"✅ <b>Заметки тайм-слота обновлены!</b>\n\n"
+            if notes:
+                message += f"📝 <b>Новые заметки:</b> {notes}"
+            else:
+                message += f"📝 <b>Заметки удалены</b>"
+        else:
+            message = f"❌ <b>Ошибка обновления заметок:</b>\n{result['error']}"
+    
+    # Очищаем состояние пользователя
+    user_state_manager.clear_state(user_id)
+    
+    # Получаем информацию о тайм-слоте для кнопки "Назад"
+    timeslot = time_slot_service.get_timeslot_by_id(timeslot_id)
+    object_id = timeslot['object_id'] if timeslot else None
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Назад к тайм-слоту", callback_data=f"edit_timeslot:{timeslot_id}")],
+        [InlineKeyboardButton("🔙 Назад к объекту", callback_data=f"manage_timeslots:{object_id}")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     

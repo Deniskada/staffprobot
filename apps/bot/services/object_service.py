@@ -348,6 +348,24 @@ class ObjectService:
                             'success': False,
                             'error': 'Неверное значение времени. Введите число в минутах.'
                         }
+                elif field_name == 'opening_time':
+                    try:
+                        time_obj = time.fromisoformat(field_value)
+                        obj.opening_time = time_obj
+                    except ValueError:
+                        return {
+                            'success': False,
+                            'error': 'Неверный формат времени. Используйте HH:MM (например: 09:00)'
+                        }
+                elif field_name == 'closing_time':
+                    try:
+                        time_obj = time.fromisoformat(field_value)
+                        obj.closing_time = time_obj
+                    except ValueError:
+                        return {
+                            'success': False,
+                            'error': 'Неверный формат времени. Используйте HH:MM (например: 18:00)'
+                        }
                 else:
                     return {
                         'success': False,
@@ -371,6 +389,105 @@ class ObjectService:
             return {
                 'success': False,
                 'error': f'Ошибка при обновлении объекта: {str(e)}'
+            }
+
+    def delete_object(self, object_id: int, owner_id: int) -> Dict[str, Any]:
+        """
+        Удаляет объект и все связанные с ним данные.
+        
+        Args:
+            object_id: ID объекта для удаления
+            owner_id: ID владельца (для проверки прав)
+            
+        Returns:
+            Результат удаления
+        """
+        try:
+            with get_sync_session() as session:
+                # Получаем пользователя по telegram_id
+                user_query = select(User).where(User.telegram_id == owner_id)
+                user_result = session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    return {
+                        'success': False,
+                        'error': 'Пользователь не найден в базе данных'
+                    }
+                
+                # Получаем объект
+                query = select(Object).where(Object.id == object_id)
+                result = session.execute(query)
+                obj = result.scalar_one_or_none()
+                
+                if not obj:
+                    return {
+                        'success': False,
+                        'error': 'Объект не найден'
+                    }
+                
+                # Проверяем права доступа
+                if obj.owner_id != db_user.id:
+                    return {
+                        'success': False,
+                        'error': 'У вас нет прав для удаления этого объекта'
+                    }
+                
+                object_name = obj.name
+                
+                # Удаляем все связанные данные
+                # 1. Удаляем тайм-слоты
+                from domain.entities.time_slot import TimeSlot
+                timeslots_query = select(TimeSlot).where(TimeSlot.object_id == object_id)
+                timeslots_result = session.execute(timeslots_query)
+                timeslots = timeslots_result.scalars().all()
+                timeslots_count = len(timeslots)
+                
+                for timeslot in timeslots:
+                    session.delete(timeslot)
+                
+                # 2. Удаляем запланированные смены
+                from domain.entities.shift_schedule import ShiftSchedule
+                shifts_query = select(ShiftSchedule).where(ShiftSchedule.object_id == object_id)
+                shifts_result = session.execute(shifts_query)
+                shifts = shifts_result.scalars().all()
+                shifts_count = len(shifts)
+                
+                for shift in shifts:
+                    session.delete(shift)
+                
+                # 3. Удаляем фактические смены
+                from domain.entities.shift import Shift
+                actual_shifts_query = select(Shift).where(Shift.object_id == object_id)
+                actual_shifts_result = session.execute(actual_shifts_query)
+                actual_shifts = actual_shifts_result.scalars().all()
+                actual_shifts_count = len(actual_shifts)
+                
+                for shift in actual_shifts:
+                    session.delete(shift)
+                
+                # 4. Удаляем сам объект
+                session.delete(obj)
+                
+                session.commit()
+                
+                logger.info(f"Object {object_id} '{object_name}' deleted by user {owner_id}. "
+                           f"Deleted {timeslots_count} timeslots, {shifts_count} scheduled shifts, "
+                           f"and {actual_shifts_count} actual shifts.")
+                
+                return {
+                    'success': True,
+                    'message': f'Объект "{object_name}" успешно удален',
+                    'object_name': object_name,
+                    'timeslots_deleted': timeslots_count,
+                    'shifts_deleted': shifts_count + actual_shifts_count
+                }
+                
+        except Exception as e:
+            logger.error(f"Error deleting object {object_id}: {e}")
+            return {
+                'success': False,
+                'error': f'Ошибка при удалении объекта: {str(e)}'
             }
 
 

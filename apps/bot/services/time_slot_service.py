@@ -715,3 +715,125 @@ class TimeSlotService:
         except Exception as e:
             logger.error(f"Error creating timeslots for week: {e}")
             return {'success': False, 'error': f'Ошибка создания тайм-слотов: {str(e)}'}
+
+    def get_timeslot_by_id(self, timeslot_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Получает тайм-слот по ID.
+        
+        Args:
+            timeslot_id: ID тайм-слота
+            
+        Returns:
+            Данные тайм-слота или None
+        """
+        try:
+            with get_sync_session() as db:
+                timeslot = db.query(TimeSlot).filter(TimeSlot.id == timeslot_id).first()
+                if not timeslot:
+                    return None
+                
+                return {
+                    'id': timeslot.id,
+                    'object_id': timeslot.object_id,
+                    'slot_date': timeslot.slot_date,
+                    'start_time': timeslot.start_time.strftime('%H:%M') if timeslot.start_time else None,
+                    'end_time': timeslot.end_time.strftime('%H:%M') if timeslot.end_time else None,
+                    'hourly_rate': float(timeslot.hourly_rate) if timeslot.hourly_rate else 0.0,
+                    'max_employees': timeslot.max_employees or 1,
+                    'notes': timeslot.notes,
+                    'is_active': timeslot.is_active,
+                    'is_additional': timeslot.is_additional,
+                    'created_at': timeslot.created_at.isoformat() if timeslot.created_at else None
+                }
+                
+        except Exception as e:
+            logger.error(f"Error retrieving timeslot {timeslot_id}: {e}")
+            return None
+
+    def update_timeslot_field(self, timeslot_id: int, field_name: str, field_value: Any) -> Dict[str, Any]:
+        """
+        Обновляет поле тайм-слота.
+        
+        Args:
+            timeslot_id: ID тайм-слота
+            field_name: Название поля
+            field_value: Новое значение
+            
+        Returns:
+            Результат обновления
+        """
+        try:
+            with get_sync_session() as db:
+                timeslot = db.query(TimeSlot).filter(TimeSlot.id == timeslot_id).first()
+                if not timeslot:
+                    return {'success': False, 'error': 'Тайм-слот не найден'}
+                
+                # Обновляем поле
+                if field_name == 'is_active':
+                    timeslot.is_active = bool(field_value)
+                elif field_name == 'hourly_rate':
+                    timeslot.hourly_rate = float(field_value)
+                elif field_name == 'max_employees':
+                    timeslot.max_employees = int(field_value)
+                elif field_name == 'notes':
+                    timeslot.notes = str(field_value) if field_value != 'удалить' else None
+                elif field_name == 'start_time':
+                    from datetime import time
+                    timeslot.start_time = time.fromisoformat(field_value)
+                elif field_name == 'end_time':
+                    from datetime import time
+                    timeslot.end_time = time.fromisoformat(field_value)
+                else:
+                    return {'success': False, 'error': f'Неизвестное поле: {field_name}'}
+                
+                db.commit()
+                logger.info(f"Updated timeslot {timeslot_id} field {field_name} to {field_value}")
+                
+                return {
+                    'success': True,
+                    'message': f'Поле {field_name} успешно обновлено'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error updating timeslot {timeslot_id} field {field_name}: {e}")
+            return {'success': False, 'error': f'Ошибка обновления: {str(e)}'}
+
+    def delete_timeslot(self, timeslot_id: int) -> Dict[str, Any]:
+        """
+        Удаляет тайм-слот.
+        
+        Args:
+            timeslot_id: ID тайм-слота
+            
+        Returns:
+            Результат удаления
+        """
+        try:
+            with get_sync_session() as db:
+                timeslot = db.query(TimeSlot).filter(TimeSlot.id == timeslot_id).first()
+                if not timeslot:
+                    return {'success': False, 'error': 'Тайм-слот не найден'}
+                
+                # Получаем информацию о тайм-слоте для логирования
+                slot_date = timeslot.slot_date
+                start_time = timeslot.start_time.strftime('%H:%M') if timeslot.start_time else None
+                end_time = timeslot.end_time.strftime('%H:%M') if timeslot.end_time else None
+                object_id = timeslot.object_id
+                
+                # Удаляем тайм-слот
+                db.delete(timeslot)
+                db.commit()
+                
+                logger.info(f"Deleted timeslot {timeslot_id} for object {object_id} on {slot_date}")
+                
+                return {
+                    'success': True,
+                    'message': 'Тайм-слот успешно удален',
+                    'slot_date': slot_date,
+                    'start_time': start_time,
+                    'end_time': end_time
+                }
+                
+        except Exception as e:
+            logger.error(f"Error deleting timeslot {timeslot_id}: {e}")
+            return {'success': False, 'error': f'Ошибка удаления: {str(e)}'}

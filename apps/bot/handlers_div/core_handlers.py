@@ -313,6 +313,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif query.data == "manage_objects":
         await _handle_manage_objects(update, context)
         return
+    elif query.data.startswith("delete_object:"):
+        object_id = int(query.data.split(":", 1)[1])
+        from .object_handlers import _handle_delete_object
+        await _handle_delete_object(update, context, object_id)
+        return
+    elif query.data.startswith("confirm_delete_object:"):
+        object_id = int(query.data.split(":", 1)[1])
+        from .object_handlers import _handle_confirm_delete_object
+        await _handle_confirm_delete_object(update, context, object_id)
+        return
     elif query.data.startswith("retry_location:"):
         # Формат: retry_location:object_id
         object_id = int(query.data.split(":", 1)[1])
@@ -384,6 +394,46 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif query.data.startswith("edit_timeslots:"):
         object_id = int(query.data.split(":", 1)[1])
         await _handle_edit_timeslots(update, context, object_id)
+        return
+    elif query.data.startswith("edit_timeslot:"):
+        timeslot_id = int(query.data.split(":", 1)[1])
+        from .timeslot_handlers import _handle_edit_single_timeslot
+        await _handle_edit_single_timeslot(update, context, timeslot_id)
+        return
+    elif query.data.startswith("edit_timeslot_time:"):
+        timeslot_id = int(query.data.split(":", 1)[1])
+        from .timeslot_handlers import _handle_edit_timeslot_time
+        await _handle_edit_timeslot_time(update, context, timeslot_id)
+        return
+    elif query.data.startswith("edit_timeslot_rate:"):
+        timeslot_id = int(query.data.split(":", 1)[1])
+        from .timeslot_handlers import _handle_edit_timeslot_rate
+        await _handle_edit_timeslot_rate(update, context, timeslot_id)
+        return
+    elif query.data.startswith("edit_timeslot_employees:"):
+        timeslot_id = int(query.data.split(":", 1)[1])
+        from .timeslot_handlers import _handle_edit_timeslot_employees
+        await _handle_edit_timeslot_employees(update, context, timeslot_id)
+        return
+    elif query.data.startswith("edit_timeslot_notes:"):
+        timeslot_id = int(query.data.split(":", 1)[1])
+        from .timeslot_handlers import _handle_edit_timeslot_notes
+        await _handle_edit_timeslot_notes(update, context, timeslot_id)
+        return
+    elif query.data.startswith("toggle_timeslot_status:"):
+        timeslot_id = int(query.data.split(":", 1)[1])
+        from .timeslot_handlers import _handle_toggle_timeslot_status
+        await _handle_toggle_timeslot_status(update, context, timeslot_id)
+        return
+    elif query.data.startswith("delete_timeslot:"):
+        timeslot_id = int(query.data.split(":", 1)[1])
+        from .timeslot_handlers import _handle_delete_timeslot
+        await _handle_delete_timeslot(update, context, timeslot_id)
+        return
+    elif query.data.startswith("confirm_delete_timeslot:"):
+        timeslot_id = int(query.data.split(":", 1)[1])
+        from .timeslot_handlers import _handle_confirm_delete_timeslot
+        await _handle_confirm_delete_timeslot(update, context, timeslot_id)
         return
     elif query.data.startswith("delete_timeslots:"):
         object_id = int(query.data.split(":", 1)[1])
