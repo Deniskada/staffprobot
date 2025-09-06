@@ -12,6 +12,37 @@ from typing import Optional
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
 
+# Временное хранение объектов в памяти (для демонстрации)
+# TODO: Заменить на работу с базой данных
+objects_storage = {
+    1: {
+        "id": 1,
+        "name": "Магазин №1",
+        "address": "ул. Ленина, 10",
+        "hourly_rate": 500,
+        "opening_time": "09:00",
+        "closing_time": "21:00",
+        "max_distance": 500,
+        "is_active": True,
+        "available_for_applicants": True,
+        "created_at": "2024-01-15",
+        "owner_id": 1220971779
+    },
+    2: {
+        "id": 2,
+        "name": "Офис №2",
+        "address": "пр. Мира, 25",
+        "hourly_rate": 400,
+        "opening_time": "08:00",
+        "closing_time": "18:00",
+        "max_distance": 300,
+        "is_active": True,
+        "available_for_applicants": False,
+        "created_at": "2024-01-20",
+        "owner_id": 1220971779
+    }
+}
+
 
 @router.get("/", response_class=HTMLResponse)
 async def objects_list(
@@ -20,35 +51,10 @@ async def objects_list(
 ):
     """Список объектов владельца"""
     try:
-        # TODO: Получение реальных данных из базы по владельцу
-        # Пока используем тестовые данные
+        # Получение объектов владельца из временного хранилища
         objects_data = [
-            {
-                "id": 1,
-                "name": "Магазин №1",
-                "address": "ул. Ленина, 10",
-                "hourly_rate": 500,
-                "opening_time": "09:00",
-                "closing_time": "21:00",
-                "max_distance": 500,
-                "is_active": True,
-                "available_for_applicants": True,
-                "created_at": "2024-01-15",
-                "owner_id": current_user["id"]
-            },
-            {
-                "id": 2,
-                "name": "Офис №2", 
-                "address": "пр. Мира, 25",
-                "hourly_rate": 400,
-                "opening_time": "08:00",
-                "closing_time": "18:00",
-                "max_distance": 300,
-                "is_active": True,
-                "available_for_applicants": False,
-                "created_at": "2024-01-20",
-                "owner_id": current_user["id"]
-            }
+            obj for obj in objects_storage.values() 
+            if obj["owner_id"] == current_user["id"]
         ]
         
         return templates.TemplateResponse("objects/list.html", {
@@ -85,12 +91,10 @@ async def create_object(
     opening_time: str = Form(...),
     closing_time: str = Form(...),
     max_distance: int = Form(500),
-    available_for_applicants: bool = Form(False),
     current_user: dict = Depends(require_owner_or_superadmin)
 ):
     """Создание нового объекта"""
     try:
-        # TODO: Сохранение объекта в базу данных
         logger.info(f"Creating object '{name}' for user {current_user['id']}")
         
         # Валидация данных
@@ -100,17 +104,31 @@ async def create_object(
         if max_distance <= 0:
             raise HTTPException(status_code=400, detail="Максимальное расстояние должно быть больше 0")
         
-        # TODO: Здесь будет сохранение в базу данных
-        # object_id = await object_service.create_object({
-        #     "name": name,
-        #     "address": address,
-        #     "hourly_rate": hourly_rate,
-        #     "opening_time": opening_time,
-        #     "closing_time": closing_time,
-        #     "max_distance": max_distance,
-        #     "available_for_applicants": available_for_applicants,
-        #     "owner_id": current_user["id"]
-        # })
+        # Получение данных формы
+        form_data = await request.form()
+        
+        # Обработка чекбокса (он не отправляется, если не отмечен)
+        available_for_applicants = "available_for_applicants" in form_data
+        
+        # Генерация нового ID
+        new_id = max(objects_storage.keys()) + 1 if objects_storage else 1
+        
+        # Создание объекта в временном хранилище
+        objects_storage[new_id] = {
+            "id": new_id,
+            "name": name,
+            "address": address,
+            "hourly_rate": hourly_rate,
+            "opening_time": opening_time,
+            "closing_time": closing_time,
+            "max_distance": max_distance,
+            "is_active": True,
+            "available_for_applicants": available_for_applicants,
+            "created_at": "2024-01-15",  # TODO: Использовать реальную дату
+            "owner_id": current_user["id"]
+        }
+        
+        logger.info(f"Object {new_id} created successfully: {objects_storage[new_id]}")
         
         return RedirectResponse(url="/objects", status_code=status.HTTP_302_FOUND)
         
@@ -129,26 +147,23 @@ async def object_detail(
 ):
     """Детальная информация об объекте"""
     try:
-        # TODO: Получение данных объекта из базы с проверкой владельца
-        object_data = {
-            "id": object_id,
-            "name": "Магазин №1",
-            "address": "ул. Ленина, 10",
-            "hourly_rate": 500,
-            "opening_time": "09:00",
-            "closing_time": "21:00",
-            "max_distance": 500,
-            "is_active": True,
-            "available_for_applicants": True,
-            "created_at": "2024-01-15",
-            "owner_id": current_user["id"],
-            "timeslots": [
-                {"id": 1, "start_time": "09:00", "end_time": "12:00", "rate": 500, "is_active": True},
-                {"id": 2, "start_time": "12:00", "end_time": "15:00", "rate": 500, "is_active": True},
-                {"id": 3, "start_time": "15:00", "end_time": "18:00", "rate": 500, "is_active": True},
-                {"id": 4, "start_time": "18:00", "end_time": "21:00", "rate": 500, "is_active": True}
-            ]
-        }
+        # Получение данных объекта из временного хранилища с проверкой владельца
+        if object_id not in objects_storage:
+            raise HTTPException(status_code=404, detail="Объект не найден")
+        
+        object_data = objects_storage[object_id].copy()
+        
+        # Проверка владельца
+        if object_data["owner_id"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Нет доступа к этому объекту")
+        
+        # Добавляем тайм-слоты
+        object_data["timeslots"] = [
+            {"id": 1, "start_time": "09:00", "end_time": "12:00", "rate": object_data["hourly_rate"], "is_active": True},
+            {"id": 2, "start_time": "12:00", "end_time": "15:00", "rate": object_data["hourly_rate"], "is_active": True},
+            {"id": 3, "start_time": "15:00", "end_time": "18:00", "rate": object_data["hourly_rate"], "is_active": True},
+            {"id": 4, "start_time": "18:00", "end_time": "21:00", "rate": object_data["hourly_rate"], "is_active": True}
+        ]
         
         return templates.TemplateResponse("objects/detail.html", {
             "request": request,
@@ -170,19 +185,15 @@ async def edit_object_form(
 ):
     """Форма редактирования объекта"""
     try:
-        # TODO: Получение данных объекта для редактирования с проверкой владельца
-        object_data = {
-            "id": object_id,
-            "name": "Магазин №1",
-            "address": "ул. Ленина, 10",
-            "hourly_rate": 500,
-            "opening_time": "09:00",
-            "closing_time": "21:00",
-            "max_distance": 500,
-            "is_active": True,
-            "available_for_applicants": True,
-            "owner_id": current_user["id"]
-        }
+        # Получение данных объекта для редактирования с проверкой владельца
+        if object_id not in objects_storage:
+            raise HTTPException(status_code=404, detail="Объект не найден")
+        
+        object_data = objects_storage[object_id].copy()
+        
+        # Проверка владельца
+        if object_data["owner_id"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Нет доступа к этому объекту")
         
         return templates.TemplateResponse("objects/edit.html", {
             "request": request,
@@ -206,13 +217,18 @@ async def update_object(
     opening_time: str = Form(...),
     closing_time: str = Form(...),
     max_distance: int = Form(500),
-    available_for_applicants: bool = Form(False),
-    is_active: bool = Form(True),
     current_user: dict = Depends(require_owner_or_superadmin)
 ):
     """Обновление объекта"""
     try:
-        # TODO: Обновление объекта в базе данных с проверкой владельца
+        # Проверка существования объекта
+        if object_id not in objects_storage:
+            raise HTTPException(status_code=404, detail="Объект не найден")
+        
+        # Проверка владельца
+        if objects_storage[object_id]["owner_id"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Нет доступа к этому объекту")
+        
         logger.info(f"Updating object {object_id} for user {current_user['id']}")
         
         # Валидация данных
@@ -222,17 +238,26 @@ async def update_object(
         if max_distance <= 0:
             raise HTTPException(status_code=400, detail="Максимальное расстояние должно быть больше 0")
         
-        # TODO: Здесь будет обновление в базе данных
-        # await object_service.update_object(object_id, {
-        #     "name": name,
-        #     "address": address,
-        #     "hourly_rate": hourly_rate,
-        #     "opening_time": opening_time,
-        #     "closing_time": closing_time,
-        #     "max_distance": max_distance,
-        #     "available_for_applicants": available_for_applicants,
-        #     "is_active": is_active
-        # })
+        # Получение данных формы
+        form_data = await request.form()
+        
+        # Обработка чекбоксов (они не отправляются, если не отмечены)
+        available_for_applicants = "available_for_applicants" in form_data
+        is_active = "is_active" in form_data
+        
+        # Обновление объекта в временном хранилище
+        objects_storage[object_id].update({
+            "name": name,
+            "address": address,
+            "hourly_rate": hourly_rate,
+            "opening_time": opening_time,
+            "closing_time": closing_time,
+            "max_distance": max_distance,
+            "available_for_applicants": available_for_applicants,
+            "is_active": is_active
+        })
+        
+        logger.info(f"Object {object_id} updated successfully: {objects_storage[object_id]}")
         
         return RedirectResponse(url=f"/objects/{object_id}", status_code=status.HTTP_302_FOUND)
         
