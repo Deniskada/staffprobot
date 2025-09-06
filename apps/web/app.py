@@ -15,7 +15,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, calendar, shifts, reports, contracts
+from apps.web.routes import auth, dashboard, objects, calendar, shifts, reports, contracts, users
 from apps.web.services.auth_service import AuthService
 
 
@@ -116,6 +116,7 @@ app.include_router(calendar.router, prefix="/calendar", tags=["Календар�
 app.include_router(shifts.router, prefix="/shifts", tags=["Смены"])
 app.include_router(reports.router, prefix="/reports", tags=["Отчеты"])
 app.include_router(contracts.router, prefix="/contracts", tags=["Договоры"])
+app.include_router(users.router, prefix="/users", tags=["Пользователи"])
 
 
 # API для интеграции с ботом

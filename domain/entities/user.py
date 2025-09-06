@@ -5,6 +5,15 @@ from sqlalchemy.sql import func
 from .base import Base
 from datetime import datetime
 from typing import Optional
+from enum import Enum
+
+
+class UserRole(str, Enum):
+    """Роли пользователей."""
+    OWNER = "owner"
+    EMPLOYEE = "employee" 
+    APPLICANT = "applicant"
+    SUPERADMIN = "superadmin"
 
 
 class User(Base):
@@ -18,7 +27,7 @@ class User(Base):
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)
-    role = Column(String(50), nullable=False, default="employee")
+    role = Column(String(50), nullable=False, default=UserRole.EMPLOYEE)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -35,15 +44,35 @@ class User(Base):
     
     def is_owner(self) -> bool:
         """Проверка, является ли пользователь владельцем."""
-        return self.role == "owner"
-    
-    def is_manager(self) -> bool:
-        """Проверка, является ли пользователь менеджером."""
-        return self.role in ["owner", "manager"]
+        return self.role == UserRole.OWNER
     
     def is_employee(self) -> bool:
         """Проверка, является ли пользователь сотрудником."""
-        return self.role == "employee"
+        return self.role == UserRole.EMPLOYEE
+    
+    def is_applicant(self) -> bool:
+        """Проверка, является ли пользователь соискателем."""
+        return self.role == UserRole.APPLICANT
+    
+    def is_superadmin(self) -> bool:
+        """Проверка, является ли пользователь суперадмином."""
+        return self.role == UserRole.SUPERADMIN
+    
+    def has_role(self, role: UserRole) -> bool:
+        """Проверка, имеет ли пользователь указанную роль."""
+        return self.role == role
+    
+    def can_manage_objects(self) -> bool:
+        """Проверка, может ли пользователь управлять объектами."""
+        return self.role in [UserRole.OWNER, UserRole.SUPERADMIN]
+    
+    def can_manage_users(self) -> bool:
+        """Проверка, может ли пользователь управлять пользователями."""
+        return self.role in [UserRole.OWNER, UserRole.SUPERADMIN]
+    
+    def can_work_shifts(self) -> bool:
+        """Проверка, может ли пользователь работать сменами."""
+        return self.role in [UserRole.EMPLOYEE, UserRole.OWNER]
 
 
 

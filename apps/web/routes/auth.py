@@ -67,14 +67,14 @@ async def login(
                 "error": "Пользователь не найден"
             })
         
-        # Создание JWT токена
+        # Создание JWT токена с ролью из базы данных
         token = await auth_service.create_token({
             "id": user["id"],
             "telegram_id": user["id"],  # В UserManager id = telegram_id
             "username": user["username"],
             "first_name": user["first_name"],
             "last_name": user["last_name"],
-            "role": "user"  # По умолчанию роль user
+            "role": user.get("role", "employee")  # Роль из базы данных
         })
         
         # Перенаправление на дашборд с токеном

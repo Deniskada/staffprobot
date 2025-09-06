@@ -89,6 +89,98 @@ class UserManager:
         """Получение пользователя по Telegram ID (алиас для get_user)."""
         return self.get_user(telegram_id)
     
+    async def get_all_users(self) -> List[dict]:
+        """Получение всех пользователей."""
+        try:
+            with get_sync_session() as session:
+                query = select(User).order_by(User.created_at.desc())
+                result = session.execute(query)
+                users = result.scalars().all()
+                
+                return [
+                    {
+                        "id": user.telegram_id,
+                        "telegram_id": user.telegram_id,
+                        "username": user.username,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
+                        "role": user.role,
+                        "is_active": user.is_active,
+                        "created_at": user.created_at,
+                        "updated_at": user.updated_at
+                    }
+                    for user in users
+                ]
+        except Exception as e:
+            logger.error(f"Failed to get all users: {e}")
+            return []
+    
+    async def get_user_by_id(self, user_id: int) -> Optional[dict]:
+        """Получение пользователя по ID."""
+        try:
+            with get_sync_session() as session:
+                query = select(User).where(User.telegram_id == user_id)
+                result = session.execute(query)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    return None
+                
+                return {
+                    "id": user.telegram_id,
+                    "telegram_id": user.telegram_id,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "role": user.role,
+                    "is_active": user.is_active,
+                    "created_at": user.created_at,
+                    "updated_at": user.updated_at
+                }
+        except Exception as e:
+            logger.error(f"Failed to get user by id {user_id}: {e}")
+            return None
+    
+    async def update_user_role(self, user_id: int, role: str) -> bool:
+        """Обновление роли пользователя."""
+        try:
+            with get_sync_session() as session:
+                query = select(User).where(User.telegram_id == user_id)
+                result = session.execute(query)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    return False
+                
+                user.role = role
+                session.commit()
+                
+                logger.info(f"Updated user {user_id} role to {role}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update user {user_id} role: {e}")
+            return False
+    
+    async def delete_user(self, user_id: int) -> bool:
+        """Удаление пользователя."""
+        try:
+            with get_sync_session() as session:
+                query = select(User).where(User.telegram_id == user_id)
+                result = session.execute(query)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    return False
+                
+                session.delete(user)
+                session.commit()
+                
+                logger.info(f"Deleted user {user_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to delete user {user_id}: {e}")
+            return False
+    
     def update_user_activity(self, user_id: int) -> None:
         """Обновляем время последней активности пользователя."""
         try:
