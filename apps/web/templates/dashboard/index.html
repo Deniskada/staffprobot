@@ -101,9 +101,15 @@
                     <a href="/contracts" class="btn btn-outline-primary">
                         <i class="bi bi-file-text"></i> Договоры
                     </a>
-                    <a href="/users" class="btn btn-outline-secondary">
-                        <i class="bi bi-people"></i> Управление пользователями
+                    {% if data.user.role == 'owner' %}
+                    <a href="/employees" class="btn btn-outline-secondary">
+                        <i class="bi bi-people"></i> Сотрудники
                     </a>
+                    {% elif data.user.role == 'superadmin' %}
+                    <a href="/users" class="btn btn-outline-secondary">
+                        <i class="bi bi-people"></i> Пользователи
+                    </a>
+                    {% endif %}
                     {% endif %}
                     <a href="/shifts" class="btn btn-outline-success">
                         <i class="bi bi-clock"></i> Мои смены
