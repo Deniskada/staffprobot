@@ -142,6 +142,40 @@ services:
       - staffprobot_dev_network
     command: ["python", "scripts/start_celery_beat.py"]
 
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    container_name: staffprobot_web_dev
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/staffprobot_dev
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - SECRET_KEY=dev-secret-key-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+    ports:
+      - "8001:8001"
+    networks:
+      - staffprobot_dev_network
+    command: ["python", "-m", "uvicorn", "apps.web.app:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    stdin_open: true
+    tty: true
+
 volumes:
   postgres_dev_data:
     driver: local

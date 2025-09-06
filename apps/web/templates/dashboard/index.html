@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Дашборд - StaffProBot{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="h3 mb-4">
+            <i class="bi bi-speedometer2 text-primary"></i>
+            Добро пожаловать, {{ data.user.first_name }}!
+        </h1>
+    </div>
+</div>
+
+<!-- Статистика -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ data.stats.total_objects }}</h4>
+                        <p class="card-text">Объектов</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-building fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ data.stats.active_shifts }}</h4>
+                        <p class="card-text">Активных смен</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-clock fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ data.stats.total_employees }}</h4>
+                        <p class="card-text">Сотрудников</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-people fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ "{:,.0f}".format(data.stats.monthly_revenue) }}₽</h4>
+                        <p class="card-text">Доход за месяц</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-currency-exchange fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Основной контент -->
+<div class="row">
+    <!-- Быстрые действия -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-lightning"></i> Быстрые действия
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    {% if data.user.role in ['owner', 'superadmin'] %}
+                    <a href="/objects" class="btn btn-outline-primary">
+                        <i class="bi bi-building"></i> Управление объектами
+                    </a>
+                    <a href="/calendar" class="btn btn-outline-primary">
+                        <i class="bi bi-calendar3"></i> Календарное планирование
+                    </a>
+                    <a href="/contracts" class="btn btn-outline-primary">
+                        <i class="bi bi-file-text"></i> Договоры
+                    </a>
+                    {% endif %}
+                    <a href="/shifts" class="btn btn-outline-success">
+                        <i class="bi bi-clock"></i> Мои смены
+                    </a>
+                    <a href="/reports" class="btn btn-outline-info">
+                        <i class="bi bi-graph-up"></i> Отчеты
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Последняя активность -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-activity"></i> Последняя активность
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for activity in data.recent_activity %}
+                <div class="d-flex align-items-start mb-3">
+                    <div class="flex-shrink-0">
+                        {% if activity.type == 'shift_opened' %}
+                        <i class="bi bi-play-circle text-success fs-4"></i>
+                        {% elif activity.type == 'contract_signed' %}
+                        <i class="bi bi-file-text text-primary fs-4"></i>
+                        {% elif activity.type == 'report_generated' %}
+                        <i class="bi bi-graph-up text-info fs-4"></i>
+                        {% else %}
+                        <i class="bi bi-circle text-muted fs-4"></i>
+                        {% endif %}
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <p class="mb-1">{{ activity.message }}</p>
+                        <small class="text-muted">{{ activity.time }}</small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Графики (если есть данные) -->
+{% if data.user.role in ['owner', 'superadmin'] %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-bar-chart"></i> Статистика за месяц
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="monthlyChart" width="400" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// График статистики за месяц
+const ctx = document.getElementById('monthlyChart');
+if (ctx) {
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Неделя 1', 'Неделя 2', 'Неделя 3', 'Неделя 4'],
+            datasets: [{
+                label: 'Доход (₽)',
+                data: [35000, 40000, 38000, 42000],
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }, {
+                label: 'Часы работы',
+                data: [80, 95, 88, 92],
+                borderColor: 'rgb(255, 99, 132)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}
