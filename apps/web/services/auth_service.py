@@ -5,11 +5,12 @@
 import jwt
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from core.config.settings import settings
 from core.cache.cache_service import CacheService
 from core.logging.logger import logger
 from apps.web.services.bot_integration import BotIntegrationService
+from domain.entities.user import UserRole
 
 class AuthService:
     """Сервис авторизации с JWT токенами и PIN-кодами"""
@@ -104,3 +105,25 @@ class AuthService:
         """Отзыв JWT токена (добавление в черный список)"""
         # TODO: Реализация черного списка токенов в Redis
         pass
+    
+    def has_role(self, user_data: Dict[str, Any], required_role: UserRole) -> bool:
+        """Проверка, имеет ли пользователь указанную роль"""
+        user_role = user_data.get("role", "employee")
+        return user_role == required_role.value
+    
+    def has_any_role(self, user_data: Dict[str, Any], required_roles: List[UserRole]) -> bool:
+        """Проверка, имеет ли пользователь любую из указанных ролей"""
+        user_role = user_data.get("role", "employee")
+        return user_role in [role.value for role in required_roles]
+    
+    def can_manage_objects(self, user_data: Dict[str, Any]) -> bool:
+        """Проверка, может ли пользователь управлять объектами"""
+        return self.has_any_role(user_data, [UserRole.OWNER, UserRole.SUPERADMIN])
+    
+    def can_manage_users(self, user_data: Dict[str, Any]) -> bool:
+        """Проверка, может ли пользователь управлять пользователями"""
+        return self.has_any_role(user_data, [UserRole.OWNER, UserRole.SUPERADMIN])
+    
+    def can_work_shifts(self, user_data: Dict[str, Any]) -> bool:
+        """Проверка, может ли пользователь работать сменами"""
+        return self.has_any_role(user_data, [UserRole.EMPLOYEE, UserRole.OWNER, UserRole.SUPERADMIN])
