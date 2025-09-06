@@ -101,11 +101,20 @@ async def require_role(required_role: str):
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Главная страница - перенаправление на дашборд или вход"""
-    return templates.TemplateResponse("base.html", {
-        "request": request,
-        "title": "StaffProBot",
-        "page": "home"
-    })
+    # Проверяем, авторизован ли пользователь
+    token = request.cookies.get("access_token")
+    if token:
+        try:
+            user_data = await auth_service.verify_token(token)
+            if user_data:
+                # Пользователь авторизован, перенаправляем на дашборд
+                return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+        except Exception:
+            # Токен невалиден, показываем страницу входа
+            pass
+    
+    # Пользователь не авторизован, показываем страницу входа
+    return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
 
 
 # Включение роутов

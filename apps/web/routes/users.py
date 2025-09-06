@@ -13,9 +13,24 @@ router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
 
 
+async def get_current_user_from_request(request: Request) -> dict:
+    """Получение текущего пользователя из запроса"""
+    user = await auth_middleware.get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Требуется авторизация")
+    return user
+
+
+async def require_owner_or_superadmin(current_user: dict = Depends(get_current_user_from_request)):
+    """Проверка роли владельца или суперадмина"""
+    user_role = current_user.get("role", "employee")
+    if user_role not in ["owner", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Недостаточно прав доступа")
+    return current_user
+
+
 @router.get("/", response_class=HTMLResponse)
-@auth_middleware.require_owner_or_superadmin()
-async def users_list(request: Request):
+async def users_list(request: Request, current_user: dict = Depends(require_owner_or_superadmin)):
     """Список пользователей"""
     try:
         # Получаем всех пользователей
@@ -39,11 +54,11 @@ async def users_list(request: Request):
 
 
 @router.post("/{user_id}/role")
-@auth_middleware.require_owner_or_superadmin()
 async def update_user_role(
     request: Request,
     user_id: int,
-    role: str = Form(...)
+    role: str = Form(...),
+    current_user: dict = Depends(require_owner_or_superadmin)
 ):
     """Обновление роли пользователя"""
     try:
@@ -70,8 +85,7 @@ async def update_user_role(
 
 
 @router.get("/{user_id}/edit", response_class=HTMLResponse)
-@auth_middleware.require_owner_or_superadmin()
-async def edit_user(request: Request, user_id: int):
+async def edit_user(request: Request, user_id: int, current_user: dict = Depends(require_owner_or_superadmin)):
     """Страница редактирования пользователя"""
     try:
         user = await user_manager.get_user_by_id(user_id)
@@ -92,9 +106,16 @@ async def edit_user(request: Request, user_id: int):
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки пользователя: {str(e)}")
 
 
+async def require_superadmin(current_user: dict = Depends(get_current_user_from_request)):
+    """Проверка роли суперадмина"""
+    user_role = current_user.get("role", "employee")
+    if user_role != "superadmin":
+        raise HTTPException(status_code=403, detail="Требуются права суперадмина")
+    return current_user
+
+
 @router.post("/{user_id}/delete")
-@auth_middleware.require_superadmin()
-async def delete_user(request: Request, user_id: int):
+async def delete_user(request: Request, user_id: int, current_user: dict = Depends(require_superadmin)):
     """Удаление пользователя (только для суперадминов)"""
     try:
         success = await user_manager.delete_user(user_id)
