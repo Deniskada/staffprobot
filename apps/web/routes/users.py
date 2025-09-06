@@ -53,23 +53,26 @@ async def users_list(request: Request, current_user: dict = Depends(require_owne
         })
 
 
-@router.post("/{user_id}/role")
-async def update_user_role(
+@router.post("/{user_id}/roles")
+async def update_user_roles(
     request: Request,
     user_id: int,
-    role: str = Form(...),
+    roles: List[str] = Form(...),
     current_user: dict = Depends(require_owner_or_superadmin)
 ):
-    """Обновление роли пользователя"""
+    """Обновление ролей пользователя"""
     try:
-        # Проверяем, что роль валидна
-        try:
-            user_role = UserRole(role)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Неверная роль")
+        # Проверяем, что все роли валидны
+        valid_roles = []
+        for role in roles:
+            try:
+                user_role = UserRole(role)
+                valid_roles.append(role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Неверная роль: {role}")
         
-        # Обновляем роль пользователя
-        success = await user_manager.update_user_role(user_id, role)
+        # Обновляем роли пользователя
+        success = await user_manager.update_user_roles(user_id, valid_roles)
         
         if not success:
             raise HTTPException(status_code=404, detail="Пользователь не найден")

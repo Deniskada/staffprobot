@@ -60,20 +60,39 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <span class="badge 
-                                            {% if user.role == 'owner' %}bg-primary
-                                            {% elif user.role == 'employee' %}bg-success
-                                            {% elif user.role == 'applicant' %}bg-warning
-                                            {% elif user.role == 'superadmin' %}bg-danger
-                                            {% else %}bg-secondary
-                                            {% endif %}">
-                                            {% if user.role == 'owner' %}Владелец
-                                            {% elif user.role == 'employee' %}Сотрудник
-                                            {% elif user.role == 'applicant' %}Соискатель
-                                            {% elif user.role == 'superadmin' %}Суперадмин
-                                            {% else %}{{ user.role }}
-                                            {% endif %}
-                                        </span>
+                                        {% if user.roles %}
+                                            {% for role in user.roles %}
+                                                <span class="badge me-1
+                                                    {% if role == 'owner' %}bg-primary
+                                                    {% elif role == 'employee' %}bg-success
+                                                    {% elif role == 'applicant' %}bg-warning
+                                                    {% elif role == 'superadmin' %}bg-danger
+                                                    {% else %}bg-secondary
+                                                    {% endif %}">
+                                                    {% if role == 'owner' %}Владелец
+                                                    {% elif role == 'employee' %}Сотрудник
+                                                    {% elif role == 'applicant' %}Соискатель
+                                                    {% elif role == 'superadmin' %}Суперадмин
+                                                    {% else %}{{ role }}
+                                                    {% endif %}
+                                                </span>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="badge 
+                                                {% if user.role == 'owner' %}bg-primary
+                                                {% elif user.role == 'employee' %}bg-success
+                                                {% elif user.role == 'applicant' %}bg-warning
+                                                {% elif user.role == 'superadmin' %}bg-danger
+                                                {% else %}bg-secondary
+                                                {% endif %}">
+                                                {% if user.role == 'owner' %}Владелец
+                                                {% elif user.role == 'employee' %}Сотрудник
+                                                {% elif user.role == 'applicant' %}Соискатель
+                                                {% elif user.role == 'superadmin' %}Суперадмин
+                                                {% else %}{{ user.role }}
+                                                {% endif %}
+                                            </span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         {% if user.is_active %}

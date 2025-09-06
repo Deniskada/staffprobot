@@ -23,7 +23,7 @@ class AuthMiddleware:
             return None
         
         try:
-            payload = await self.auth_service.decode_token(token)
+            payload = await self.auth_service.verify_token(token)
             if not payload:
                 return None
             

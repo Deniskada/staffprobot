@@ -104,7 +104,8 @@ class UserManager:
                         "username": user.username,
                         "first_name": user.first_name,
                         "last_name": user.last_name,
-                        "role": user.role,
+                        "role": user.role,  # Оставляем для обратной совместимости
+                        "roles": user.get_roles(),  # Добавляем множественные роли
                         "is_active": user.is_active,
                         "created_at": user.created_at,
                         "updated_at": user.updated_at
@@ -132,7 +133,8 @@ class UserManager:
                     "username": user.username,
                     "first_name": user.first_name,
                     "last_name": user.last_name,
-                    "role": user.role,
+                    "role": user.role,  # Оставляем для обратной совместимости
+                    "roles": user.get_roles(),  # Добавляем множественные роли
                     "is_active": user.is_active,
                     "created_at": user.created_at,
                     "updated_at": user.updated_at
@@ -142,7 +144,7 @@ class UserManager:
             return None
     
     async def update_user_role(self, user_id: int, role: str) -> bool:
-        """Обновление роли пользователя."""
+        """Обновление роли пользователя (обратная совместимость)."""
         try:
             with get_sync_session() as session:
                 query = select(User).where(User.telegram_id == user_id)
@@ -153,12 +155,41 @@ class UserManager:
                     return False
                 
                 user.role = role
+                # Обновляем также массив ролей
+                if hasattr(user, 'roles') and user.roles:
+                    user.roles = [role]
+                
                 session.commit()
                 
                 logger.info(f"Updated user {user_id} role to {role}")
                 return True
         except Exception as e:
             logger.error(f"Failed to update user {user_id} role: {e}")
+            return False
+    
+    async def update_user_roles(self, user_id: int, roles: list) -> bool:
+        """Обновление множественных ролей пользователя."""
+        try:
+            with get_sync_session() as session:
+                query = select(User).where(User.telegram_id == user_id)
+                result = session.execute(query)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    return False
+                
+                # Обновляем массив ролей
+                user.roles = roles
+                # Обновляем основную роль (первая роль в списке)
+                if roles:
+                    user.role = roles[0]
+                
+                session.commit()
+                
+                logger.info(f"Updated user {user_id} roles to {roles}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update user {user_id} roles: {e}")
             return False
     
     async def delete_user(self, user_id: int) -> bool:
