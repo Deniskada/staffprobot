@@ -8,6 +8,13 @@
 - **Pydantic** - валидация данных и сериализация
 - **SQLAlchemy 2.0** - современный ORM с поддержкой async/await
 
+### Web Frontend
+- **Jinja2** - шаблонизатор для серверного рендеринга HTML
+- **Bootstrap 5** - современный CSS фреймворк для адаптивного дизайна
+- **FullCalendar.js** - интерактивный календарь для планирования
+- **Chart.js** - библиотека для создания графиков и диаграмм
+- **HTMX** - для динамических обновлений без перезагрузки страницы
+
 ### База данных
 - **PostgreSQL 15+** - основная реляционная БД
 - **PostGIS** - расширение для работы с геоданными
@@ -95,6 +102,29 @@ staffprobot/
 │   │   │   ├── utility_handlers.py # Служебные функции
 │   │   │   └── utils.py           # Общие утилиты
 │   │   └── services/              # Сервисы бота
+│   ├── web/                       # Веб-приложение
+│   │   ├── templates/             # Jinja2 шаблоны
+│   │   │   ├── base.html          # Базовый шаблон
+│   │   │   ├── auth/              # Страницы авторизации
+│   │   │   ├── dashboard/         # Дашборды
+│   │   │   ├── objects/           # Управление объектами
+│   │   │   ├── calendar/          # Календарное планирование
+│   │   │   ├── shifts/            # Управление сменами
+│   │   │   ├── reports/           # Отчетность
+│   │   │   └── contracts/         # Система договоров
+│   │   ├── static/                # Статические файлы
+│   │   │   ├── css/               # Стили
+│   │   │   ├── js/                # JavaScript
+│   │   │   └── images/            # Изображения
+│   │   ├── routes/                # Веб-роуты
+│   │   │   ├── auth.py            # Авторизация
+│   │   │   ├── dashboard.py       # Дашборды
+│   │   │   ├── objects.py         # Объекты
+│   │   │   ├── calendar.py        # Календарь
+│   │   │   ├── shifts.py          # Смены
+│   │   │   ├── reports.py         # Отчеты
+│   │   │   └── contracts.py       # Договоры
+│   │   └── services/              # Веб-сервисы
 │   ├── api/                       # REST API сервис
 │   ├── scheduler/                 # Сервис планировщика
 │   ├── analytics/                 # Аналитический сервис
@@ -250,6 +280,68 @@ CREATE TABLE user_states (
     step VARCHAR(50) NOT NULL, -- 'object_selection', 'location_request', 'processing'
     data JSONB, -- Дополнительные данные состояния
     expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### Contract (Договоры)
+```sql
+CREATE TABLE contracts (
+    id BIGSERIAL PRIMARY KEY,
+    owner_id BIGINT REFERENCES users(id) NOT NULL,
+    employee_id BIGINT REFERENCES users(id) NOT NULL,
+    template_id BIGINT REFERENCES contract_templates(id),
+    version_id BIGINT REFERENCES contract_versions(id),
+    status VARCHAR(50) DEFAULT 'active', -- active, suspended, terminated
+    start_date DATE NOT NULL,
+    end_date DATE,
+    hourly_rate DECIMAL(10,2),
+    objects JSONB, -- Список доступных объектов
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### ContractTemplate (Шаблоны договоров)
+```sql
+CREATE TABLE contract_templates (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    template_content TEXT NOT NULL, -- Шаблон договора
+    is_default BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_by BIGINT REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### ContractVersion (Версии договоров)
+```sql
+CREATE TABLE contract_versions (
+    id BIGSERIAL PRIMARY KEY,
+    contract_id BIGINT REFERENCES contracts(id) NOT NULL,
+    version_number INTEGER NOT NULL,
+    content TEXT NOT NULL, -- Содержимое договора
+    changes_description TEXT, -- Описание изменений
+    is_active BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### TrialShift (Пробные выходы)
+```sql
+CREATE TABLE trial_shifts (
+    id BIGSERIAL PRIMARY KEY,
+    applicant_id BIGINT REFERENCES users(id) NOT NULL,
+    object_id BIGINT REFERENCES objects(id) NOT NULL,
+    requested_date DATE NOT NULL,
+    requested_time TIME NOT NULL,
+    status VARCHAR(50) DEFAULT 'pending', -- pending, approved, rejected, completed
+    owner_notes TEXT,
+    applicant_notes TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
