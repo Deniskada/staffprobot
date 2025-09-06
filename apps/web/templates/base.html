@@ -41,7 +41,7 @@
                                 <i class="bi bi-speedometer2"></i> Дашборд
                             </a>
                         </li>
-                        {% if current_user.role in ['owner', 'superadmin'] %}
+                        {% if current_user.role == 'owner' %}
                         <li class="nav-item">
                             <a class="nav-link" href="/objects">
                                 <i class="bi bi-building"></i> Объекты
@@ -55,6 +55,17 @@
                         <li class="nav-item">
                             <a class="nav-link" href="/contracts">
                                 <i class="bi bi-file-text"></i> Договоры
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/employees">
+                                <i class="bi bi-people"></i> Сотрудники
+                            </a>
+                        </li>
+                        {% elif current_user.role == 'superadmin' %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="/tariffs">
+                                <i class="bi bi-credit-card"></i> Тарифные планы
                             </a>
                         </li>
                         <li class="nav-item">
