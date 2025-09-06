@@ -2,118 +2,262 @@
 Роуты управления объектами для веб-приложения
 """
 
-from fastapi import APIRouter, Request, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from core.logging.logger import logger
+from typing import Optional
 
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
 
 
 @router.get("/", response_class=HTMLResponse)
-async def objects_list(request: Request):
+async def objects_list(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin)
+):
     """Список объектов владельца"""
-    # TODO: Получение реальных данных из базы
-    objects_data = [
-        {
-            "id": 1,
+    try:
+        # TODO: Получение реальных данных из базы по владельцу
+        # Пока используем тестовые данные
+        objects_data = [
+            {
+                "id": 1,
+                "name": "Магазин №1",
+                "address": "ул. Ленина, 10",
+                "hourly_rate": 500,
+                "opening_time": "09:00",
+                "closing_time": "21:00",
+                "max_distance": 500,
+                "is_active": True,
+                "available_for_applicants": True,
+                "created_at": "2024-01-15",
+                "owner_id": current_user["id"]
+            },
+            {
+                "id": 2,
+                "name": "Офис №2", 
+                "address": "пр. Мира, 25",
+                "hourly_rate": 400,
+                "opening_time": "08:00",
+                "closing_time": "18:00",
+                "max_distance": 300,
+                "is_active": True,
+                "available_for_applicants": False,
+                "created_at": "2024-01-20",
+                "owner_id": current_user["id"]
+            }
+        ]
+        
+        return templates.TemplateResponse("objects/list.html", {
+            "request": request,
+            "title": "Управление объектами",
+            "objects": objects_data,
+            "current_user": current_user
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading objects list: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки списка объектов")
+
+
+@router.get("/create", response_class=HTMLResponse)
+async def create_object_form(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin)
+):
+    """Форма создания объекта"""
+    return templates.TemplateResponse("objects/create.html", {
+        "request": request,
+        "title": "Создание объекта",
+        "current_user": current_user
+    })
+
+
+@router.post("/create")
+async def create_object(
+    request: Request,
+    name: str = Form(...),
+    address: str = Form(...),
+    hourly_rate: int = Form(...),
+    opening_time: str = Form(...),
+    closing_time: str = Form(...),
+    max_distance: int = Form(500),
+    available_for_applicants: bool = Form(False),
+    current_user: dict = Depends(require_owner_or_superadmin)
+):
+    """Создание нового объекта"""
+    try:
+        # TODO: Сохранение объекта в базу данных
+        logger.info(f"Creating object '{name}' for user {current_user['id']}")
+        
+        # Валидация данных
+        if hourly_rate <= 0:
+            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+        
+        if max_distance <= 0:
+            raise HTTPException(status_code=400, detail="Максимальное расстояние должно быть больше 0")
+        
+        # TODO: Здесь будет сохранение в базу данных
+        # object_id = await object_service.create_object({
+        #     "name": name,
+        #     "address": address,
+        #     "hourly_rate": hourly_rate,
+        #     "opening_time": opening_time,
+        #     "closing_time": closing_time,
+        #     "max_distance": max_distance,
+        #     "available_for_applicants": available_for_applicants,
+        #     "owner_id": current_user["id"]
+        # })
+        
+        return RedirectResponse(url="/objects", status_code=status.HTTP_302_FOUND)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating object: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка создания объекта: {str(e)}")
+
+
+@router.get("/{object_id}", response_class=HTMLResponse)
+async def object_detail(
+    request: Request, 
+    object_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin)
+):
+    """Детальная информация об объекте"""
+    try:
+        # TODO: Получение данных объекта из базы с проверкой владельца
+        object_data = {
+            "id": object_id,
             "name": "Магазин №1",
             "address": "ул. Ленина, 10",
             "hourly_rate": 500,
             "opening_time": "09:00",
             "closing_time": "21:00",
             "max_distance": 500,
-            "is_active": True
-        },
-        {
-            "id": 2,
-            "name": "Офис №2",
-            "address": "пр. Мира, 25",
-            "hourly_rate": 400,
-            "opening_time": "08:00",
-            "closing_time": "18:00",
-            "max_distance": 300,
-            "is_active": True
+            "is_active": True,
+            "available_for_applicants": True,
+            "created_at": "2024-01-15",
+            "owner_id": current_user["id"],
+            "timeslots": [
+                {"id": 1, "start_time": "09:00", "end_time": "12:00", "rate": 500, "is_active": True},
+                {"id": 2, "start_time": "12:00", "end_time": "15:00", "rate": 500, "is_active": True},
+                {"id": 3, "start_time": "15:00", "end_time": "18:00", "rate": 500, "is_active": True},
+                {"id": 4, "start_time": "18:00", "end_time": "21:00", "rate": 500, "is_active": True}
+            ]
         }
-    ]
-    
-    return templates.TemplateResponse("objects/list.html", {
-        "request": request,
-        "title": "Управление объектами",
-        "objects": objects_data
-    })
-
-
-@router.get("/create", response_class=HTMLResponse)
-async def create_object_form(request: Request):
-    """Форма создания объекта"""
-    return templates.TemplateResponse("objects/create.html", {
-        "request": request,
-        "title": "Создание объекта"
-    })
-
-
-@router.post("/create")
-async def create_object(request: Request):
-    """Создание нового объекта"""
-    # TODO: Обработка создания объекта
-    return {"status": "success", "message": "Объект создан"}
-
-
-@router.get("/{object_id}", response_class=HTMLResponse)
-async def object_detail(request: Request, object_id: int):
-    """Детальная информация об объекте"""
-    # TODO: Получение данных объекта из базы
-    object_data = {
-        "id": object_id,
-        "name": "Магазин №1",
-        "address": "ул. Ленина, 10",
-        "hourly_rate": 500,
-        "opening_time": "09:00",
-        "closing_time": "21:00",
-        "max_distance": 500,
-        "is_active": True,
-        "timeslots": []
-    }
-    
-    return templates.TemplateResponse("objects/detail.html", {
-        "request": request,
-        "title": f"Объект: {object_data['name']}",
-        "object": object_data
-    })
+        
+        return templates.TemplateResponse("objects/detail.html", {
+            "request": request,
+            "title": f"Объект: {object_data['name']}",
+            "object": object_data,
+            "current_user": current_user
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading object detail: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки информации об объекте")
 
 
 @router.get("/{object_id}/edit", response_class=HTMLResponse)
-async def edit_object_form(request: Request, object_id: int):
+async def edit_object_form(
+    request: Request, 
+    object_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin)
+):
     """Форма редактирования объекта"""
-    # TODO: Получение данных объекта для редактирования
-    object_data = {
-        "id": object_id,
-        "name": "Магазин №1",
-        "address": "ул. Ленина, 10",
-        "hourly_rate": 500,
-        "opening_time": "09:00",
-        "closing_time": "21:00",
-        "max_distance": 500,
-        "is_active": True
-    }
-    
-    return templates.TemplateResponse("objects/edit.html", {
-        "request": request,
-        "title": f"Редактирование: {object_data['name']}",
-        "object": object_data
-    })
+    try:
+        # TODO: Получение данных объекта для редактирования с проверкой владельца
+        object_data = {
+            "id": object_id,
+            "name": "Магазин №1",
+            "address": "ул. Ленина, 10",
+            "hourly_rate": 500,
+            "opening_time": "09:00",
+            "closing_time": "21:00",
+            "max_distance": 500,
+            "is_active": True,
+            "available_for_applicants": True,
+            "owner_id": current_user["id"]
+        }
+        
+        return templates.TemplateResponse("objects/edit.html", {
+            "request": request,
+            "title": f"Редактирование: {object_data['name']}",
+            "object": object_data,
+            "current_user": current_user
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading edit form: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки формы редактирования")
 
 
 @router.post("/{object_id}/edit")
-async def update_object(request: Request, object_id: int):
+async def update_object(
+    request: Request,
+    object_id: int,
+    name: str = Form(...),
+    address: str = Form(...),
+    hourly_rate: int = Form(...),
+    opening_time: str = Form(...),
+    closing_time: str = Form(...),
+    max_distance: int = Form(500),
+    available_for_applicants: bool = Form(False),
+    is_active: bool = Form(True),
+    current_user: dict = Depends(require_owner_or_superadmin)
+):
     """Обновление объекта"""
-    # TODO: Обработка обновления объекта
-    return {"status": "success", "message": "Объект обновлен"}
+    try:
+        # TODO: Обновление объекта в базе данных с проверкой владельца
+        logger.info(f"Updating object {object_id} for user {current_user['id']}")
+        
+        # Валидация данных
+        if hourly_rate <= 0:
+            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+        
+        if max_distance <= 0:
+            raise HTTPException(status_code=400, detail="Максимальное расстояние должно быть больше 0")
+        
+        # TODO: Здесь будет обновление в базе данных
+        # await object_service.update_object(object_id, {
+        #     "name": name,
+        #     "address": address,
+        #     "hourly_rate": hourly_rate,
+        #     "opening_time": opening_time,
+        #     "closing_time": closing_time,
+        #     "max_distance": max_distance,
+        #     "available_for_applicants": available_for_applicants,
+        #     "is_active": is_active
+        # })
+        
+        return RedirectResponse(url=f"/objects/{object_id}", status_code=status.HTTP_302_FOUND)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating object: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления объекта: {str(e)}")
 
 
-@router.delete("/{object_id}")
-async def delete_object(object_id: int):
+@router.post("/{object_id}/delete")
+async def delete_object(
+    object_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin)
+):
     """Удаление объекта"""
-    # TODO: Обработка удаления объекта
-    return {"status": "success", "message": "Объект удален"}
+    try:
+        # TODO: Удаление объекта из базы данных с проверкой владельца
+        logger.info(f"Deleting object {object_id} for user {current_user['id']}")
+        
+        # TODO: Здесь будет удаление из базы данных
+        # await object_service.delete_object(object_id, current_user["id"])
+        
+        return RedirectResponse(url="/objects", status_code=status.HTTP_302_FOUND)
+        
+    except Exception as e:
+        logger.error(f"Error deleting object: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления объекта: {str(e)}")
