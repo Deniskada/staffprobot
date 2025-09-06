@@ -15,7 +15,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, calendar, shifts, reports, contracts, users, employees
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees
 from apps.web.services.auth_service import AuthService
 
 
@@ -121,6 +121,7 @@ async def root(request: Request):
 app.include_router(auth.router, prefix="/auth", tags=["Авторизация"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Дашборд"])
 app.include_router(objects.router, prefix="/objects", tags=["Объекты"])
+app.include_router(timeslots.router, prefix="/timeslots", tags=["Тайм-слоты"])
 app.include_router(calendar.router, prefix="/calendar", tags=["Календарь"])
 app.include_router(shifts.router, prefix="/shifts", tags=["Смены"])
 app.include_router(reports.router, prefix="/reports", tags=["Отчеты"])

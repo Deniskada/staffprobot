@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="bi bi-pencil"></i> {{ title }}
+                    </h1>
+                    <p class="text-muted mb-0">Редактирование тайм-слота</p>
+                </div>
+                <div>
+                    <a href="/timeslots/object/{{ timeslot.object_id }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Назад к тайм-слотам
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clock"></i> Информация о тайм-слоте
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="editForm">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="name" class="form-label">
+                                    <i class="bi bi-tag"></i> Название тайм-слота *
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="name" 
+                                       name="name" 
+                                       value="{{ timeslot.name }}"
+                                       required
+                                       placeholder="Например: Утренняя смена">
+                                <div class="form-text">Краткое описание тайм-слота</div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="hourly_rate" class="form-label">
+                                    <i class="bi bi-currency-dollar"></i> Ставка за час *
+                                </label>
+                                <div class="input-group">
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="hourly_rate" 
+                                           name="hourly_rate" 
+                                           value="{{ timeslot.hourly_rate }}"
+                                           min="1"
+                                           required
+                                           placeholder="500">
+                                    <span class="input-group-text">₽/час</span>
+                                </div>
+                                <div class="form-text">Почасовая ставка для этого тайм-слота</div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="start_time" class="form-label">
+                                    <i class="bi bi-clock"></i> Время начала *
+                                </label>
+                                <input type="time" 
+                                       class="form-control" 
+                                       id="start_time" 
+                                       name="start_time" 
+                                       value="{{ timeslot.start_time }}"
+                                       required>
+                                <div class="form-text">Время начала тайм-слота</div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="end_time" class="form-label">
+                                    <i class="bi bi-clock-fill"></i> Время окончания *
+                                </label>
+                                <input type="time" 
+                                       class="form-control" 
+                                       id="end_time" 
+                                       name="end_time" 
+                                       value="{{ timeslot.end_time }}"
+                                       required>
+                                <div class="form-text">Время окончания тайм-слота</div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="is_active" 
+                                           name="is_active" 
+                                           {% if timeslot.is_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_active">
+                                        <i class="bi bi-check-circle"></i> Активный тайм-слот
+                                    </label>
+                                    <div class="form-text">Неактивные тайм-слоты не будут доступны для планирования</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <div class="d-flex justify-content-between">
+                            <a href="/timeslots/object/{{ timeslot.object_id }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Отмена
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Сохранить изменения
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle"></i> Информация об объекте
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6>{{ object.name }}</h6>
+                    <p class="text-muted small mb-2">{{ object.address }}</p>
+                    
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border rounded p-2">
+                                <div class="fw-bold text-primary">{{ object.hourly_rate }} ₽</div>
+                                <small class="text-muted">Базовая ставка</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2">
+                                <div class="fw-bold text-success">{{ object.opening_time }}</div>
+                                <small class="text-muted">Открытие</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row text-center mt-2">
+                        <div class="col-6">
+                            <div class="border rounded p-2">
+                                <div class="fw-bold text-danger">{{ object.closing_time }}</div>
+                                <small class="text-muted">Закрытие</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2">
+                                <div class="fw-bold text-info">{{ object.max_distance }}м</div>
+                                <small class="text-muted">Макс. расстояние</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clock-history"></i> Текущий тайм-слот
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>{{ timeslot.name }}</strong>
+                        {% if timeslot.is_active %}
+                        <span class="badge bg-success">Активен</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Неактивен</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border rounded p-2">
+                                <div class="fw-bold text-primary">{{ timeslot.start_time }}</div>
+                                <small class="text-muted">Начало</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2">
+                                <div class="fw-bold text-danger">{{ timeslot.end_time }}</div>
+                                <small class="text-muted">Окончание</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-2">
+                        <div class="border rounded p-2">
+                            <div class="fw-bold text-success">{{ timeslot.hourly_rate }} ₽/час</div>
+                            <small class="text-muted">Ставка</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-lightbulb"></i> Советы
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0 small">
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            Время должно быть в пределах работы объекта
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            Ставка может отличаться от базовой
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            Отключите слот, если он временно недоступен
+                        </li>
+                        <li class="mb-0">
+                            <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                            Изменения повлияют на будущие смены
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Валидация времени
+document.getElementById('editForm').addEventListener('submit', function(e) {
+    const startTime = document.getElementById('start_time').value;
+    const endTime = document.getElementById('end_time').value;
+    
+    if (startTime && endTime && startTime >= endTime) {
+        e.preventDefault();
+        alert('Время начала должно быть меньше времени окончания');
+        return false;
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="bi bi-clock-history"></i> {{ title }}
+                    </h1>
+                    <p class="text-muted mb-0">Управление тайм-слотами объекта</p>
+                </div>
+                <div>
+                    <a href="/timeslots/object/{{ object_id }}/create" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Создать тайм-слот
+                    </a>
+                    <a href="/objects/{{ object_id }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> К объекту
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if timeslots %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-list-ul"></i> Тайм-слоты ({{ timeslots|length }})
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Название</th>
+                                    <th>Время</th>
+                                    <th>Ставка</th>
+                                    <th>Статус</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for timeslot in timeslots %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-clock me-2 text-primary"></i>
+                                            <strong>{{ timeslot.name }}</strong>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">
+                                            {{ timeslot.start_time }} - {{ timeslot.end_time }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-success">
+                                            {{ timeslot.hourly_rate }} ₽/час
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if timeslot.is_active %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle"></i> Активен
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="bi bi-pause-circle"></i> Неактивен
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="/timeslots/{{ timeslot.id }}/edit" 
+                                               class="btn btn-outline-primary" 
+                                               title="Редактировать">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <button type="button" 
+                                                    class="btn btn-outline-danger" 
+                                                    title="Удалить"
+                                                    onclick="confirmDelete({{ timeslot.id }}, '{{ timeslot.name }}')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-clock-history display-1 text-muted mb-3"></i>
+                    <h4 class="text-muted">Тайм-слоты не найдены</h4>
+                    <p class="text-muted mb-4">Создайте первый тайм-слот для этого объекта</p>
+                    <a href="/timeslots/object/{{ object_id }}/create" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Создать тайм-слот
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Модальное окно подтверждения удаления -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Подтверждение удаления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить тайм-слот <strong id="deleteName"></strong>?</p>
+                <p class="text-danger small">Это действие нельзя отменить.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Удалить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmDelete(timeslotId, timeslotName) {
+    document.getElementById('deleteName').textContent = timeslotName;
+    document.getElementById('deleteForm').action = `/timeslots/${timeslotId}/delete`;
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}
