@@ -102,9 +102,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
         ],
         [
-            InlineKeyboardButton("🕐 Планирование через тайм-слоты", callback_data="plan_timeslot")
-        ],
-        [
             InlineKeyboardButton("🏢 Создать объект", callback_data="create_object"),
             InlineKeyboardButton("⚙️ Управление объектами", callback_data="manage_objects")
         ],
@@ -351,10 +348,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         from .schedule_handlers import handle_cancel_schedule
         await handle_cancel_schedule(update, context)
         return
-    elif query.data == "plan_timeslot":
-        # Планирование через тайм-слоты - перенаправляем на обычное планирование
-        from .schedule_handlers import handle_schedule_shift
-        await handle_schedule_shift(update, context)
+    elif query.data.startswith("cancel_shift_"):
+        from .schedule_handlers import handle_cancel_shift
+        await handle_cancel_shift(update, context)
+        return
+    elif query.data == "close_schedule":
+        from .schedule_handlers import handle_close_schedule
+        await handle_close_schedule(update, context)
         return
     elif query.data == "get_report":
         # Аналитика и отчеты: сразу запускаем мастер создания отчета
@@ -497,9 +497,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         [
             InlineKeyboardButton("📅 Запланировать смену", callback_data="schedule_shift"),
             InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
-        ],
-        [
-            InlineKeyboardButton("🕐 Планирование через тайм-слоты", callback_data="plan_timeslot")
         ],
         [
             InlineKeyboardButton("🏢 Создать объект", callback_data="create_object"),

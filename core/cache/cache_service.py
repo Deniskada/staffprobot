@@ -130,7 +130,7 @@ class CacheService:
         await cls.delete_user(user_id)
         await cls.delete_user_active_shifts(user_id)
         await cls.delete_user_objects(user_id)
-        logger.info("User cache invalidated", user_id=user_id)
+        logger.info(f"User cache invalidated for user {user_id}")
     
     @classmethod
     async def invalidate_object_cache(cls, object_id: int) -> None:
@@ -139,7 +139,7 @@ class CacheService:
         # Инвалидируем кэш пользователей, связанных с объектом
         pattern = f"{cls.USER_OBJECTS_PREFIX}:*"
         await cache.clear_pattern(pattern)
-        logger.info("Object cache invalidated", object_id=object_id)
+        logger.info(f"Object cache invalidated for object {object_id}")
     
     @classmethod
     async def invalidate_shift_cache(cls, shift_id: int, user_id: int = None) -> None:
@@ -147,14 +147,14 @@ class CacheService:
         await cls.delete_shift(shift_id)
         if user_id:
             await cls.delete_user_active_shifts(user_id)
-        logger.info("Shift cache invalidated", shift_id=shift_id, user_id=user_id)
+        logger.info(f"Shift cache invalidated for shift {shift_id}, user {user_id}")
     
     @classmethod
     async def clear_analytics_cache(cls) -> None:
         """Очистка кэша аналитики."""
         pattern = f"{cls.ANALYTICS_PREFIX}:*"
         cleared_count = await cache.clear_pattern(pattern)
-        logger.info("Analytics cache cleared", cleared_keys=cleared_count)
+        logger.info(f"Analytics cache cleared, {cleared_count} keys removed")
     
     @classmethod
     async def get_cache_stats(cls) -> Dict[str, Any]:

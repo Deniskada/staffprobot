@@ -6,9 +6,10 @@ from core.logging.logger import logger
 from shared.services.adapters import ScheduleServiceAdapter
 from apps.bot.services.object_service import ObjectService
 from core.state import user_state_manager, UserAction, UserStep
-from core.database.connection import get_sync_session
 from domain.entities.object import Object
 from domain.entities.shift_schedule import ShiftSchedule
+from domain.entities.shift import Shift
+from domain.entities.user import User
 from sqlalchemy import select
 from datetime import datetime, timedelta, date, time
 from typing import List, Dict, Any
@@ -24,11 +25,11 @@ async def handle_schedule_shift(update: Update, context: ContextTypes.DEFAULT_TY
     
     # Получаем доступные объекты пользователя
     try:
-        with get_sync_session() as session:
+        from core.database.session import get_async_session
+        async with get_async_session() as session:
             # Сначала находим пользователя по telegram_id
-            from domain.entities.user import User
             user_query = select(User).where(User.telegram_id == user_id)
-            user_result = session.execute(user_query)
+            user_result = await session.execute(user_query)
             user = user_result.scalar_one_or_none()
             
             if not user:
@@ -39,7 +40,7 @@ async def handle_schedule_shift(update: Update, context: ContextTypes.DEFAULT_TY
             
             # Теперь находим объекты пользователя
             objects_query = select(Object).where(Object.owner_id == user.id, Object.is_active == True)
-            objects_result = session.execute(objects_query)
+            objects_result = await session.execute(objects_query)
             objects = objects_result.scalars().all()
             
             if not objects:
@@ -212,8 +213,6 @@ async def handle_schedule_confirmation(update: Update, context: ContextTypes.DEF
         result = await schedule_service.create_scheduled_shift_from_timeslot(
             user_id=user_id,
             time_slot_id=slot_id,
-            start_time=None,  # Будет использовано время из тайм-слота
-            end_time=None,    # Будет использовано время из тайм-слота
             notes="Запланировано через бота"
         )
         
@@ -240,20 +239,32 @@ async def handle_schedule_confirmation(update: Update, context: ContextTypes.DEF
 
 async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Просмотр запланированных смен."""
-    user_id = update.effective_user.id
+    telegram_id = update.effective_user.id
     
     try:
-        with get_sync_session() as session:
-            # Получаем запланированные смены пользователя
-            schedules_query = select(ShiftSchedule).where(
-                ShiftSchedule.user_id == user_id,
-                ShiftSchedule.status == "planned"
-            ).order_by(ShiftSchedule.planned_start)
+        from core.database.session import get_async_session
+        async with get_async_session() as session:
+            # Сначала находим пользователя по telegram_id
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await session.execute(user_query)
+            user = user_result.scalar_one_or_none()
             
-            schedules_result = session.execute(schedules_query)
-            schedules = schedules_result.scalars().all()
+            if not user:
+                await update.callback_query.edit_message_text(
+                    "❌ Пользователь не найден в базе данных."
+                )
+                return
             
-            if not schedules:
+            # Получаем запланированные смены пользователя из таблицы Shift
+            shifts_query = select(Shift).where(
+                Shift.user_id == user.id,
+                Shift.status == "scheduled"
+            ).order_by(Shift.start_time)
+            
+            shifts_result = await session.execute(shifts_query)
+            shifts = shifts_result.scalars().all()
+            
+            if not shifts:
                 await update.callback_query.edit_message_text(
                     "📅 **Ваши запланированные смены**\n\n"
                     "У вас нет запланированных смен."
@@ -263,39 +274,137 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
             # Формируем список смен
             schedule_text = "📅 **Ваши запланированные смены:**\n\n"
             
-            for schedule in schedules:
+            for shift in shifts:
                 # Получаем информацию об объекте
-                object_query = select(Object).where(Object.id == schedule.object_id)
-                object_result = session.execute(object_query)
+                object_query = select(Object).where(Object.id == shift.object_id)
+                object_result = await session.execute(object_query)
                 obj = object_result.scalar_one_or_none()
                 
                 object_name = obj.name if obj else "Неизвестный объект"
                 
                 schedule_text += f"🏢 **{object_name}**\n"
-                schedule_text += f"📅 {schedule.planned_start.strftime('%d.%m.%Y %H:%M')}\n"
-                schedule_text += f"🕐 До {schedule.planned_end.strftime('%H:%M')}\n"
-                if schedule.hourly_rate:
-                    schedule_text += f"💰 {schedule.hourly_rate} ₽/час\n"
-                schedule_text += f"📊 Статус: {schedule.status}\n\n"
+                schedule_text += f"📅 {shift.start_time.strftime('%d.%m.%Y %H:%M')}\n"
+                schedule_text += f"🕐 До {shift.end_time.strftime('%H:%M')}\n"
+                if shift.hourly_rate:
+                    schedule_text += f"💰 {shift.hourly_rate} ₽/час\n"
+                schedule_text += f"📊 Статус: {shift.status}\n\n"
             
             # Добавляем кнопки управления
-            keyboard = [
+            keyboard = []
+            
+            # Кнопки отмены для каждой смены (максимум 5)
+            for shift in shifts[:5]:
+                # Формируем текст кнопки с датой и временем
+                button_text = f"❌ Отменить {shift.start_time.strftime('%d.%m %H:%M')}"
+                keyboard.append([InlineKeyboardButton(
+                    button_text,
+                    callback_data=f"cancel_shift_{shift.id}"
+                )])
+            
+            keyboard.extend([
                 [InlineKeyboardButton("🔄 Обновить", callback_data="view_schedule")],
-                [InlineKeyboardButton("❌ Отмена", callback_data="cancel_schedule")]
-            ]
+                [InlineKeyboardButton("❌ Закрыть", callback_data="close_schedule")]
+            ])
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            await update.callback_query.edit_message_text(
-                schedule_text,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
+            try:
+                await update.callback_query.edit_message_text(
+                    schedule_text,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+            except Exception as edit_error:
+                logger.error(f"Error editing message: {edit_error}")
+                # Если не удалось отредактировать, отправляем новое сообщение
+                await update.callback_query.message.reply_text(
+                    schedule_text,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
             
     except Exception as e:
         logger.error(f"Error viewing schedule: {e}")
         await update.callback_query.edit_message_text(
             "❌ Ошибка получения расписания. Попробуйте позже."
         )
+
+
+async def handle_cancel_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отмена запланированной смены."""
+    query = update.callback_query
+    telegram_id = update.effective_user.id
+    
+    # Извлекаем ID смены из callback_data
+    shift_id = int(query.data.split("_")[-1])
+    logger.info(f"Attempting to cancel shift {shift_id} for user {telegram_id}")
+    
+    try:
+        from core.database.session import get_async_session
+        async with get_async_session() as session:
+            # Сначала находим пользователя по telegram_id
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await session.execute(user_query)
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                await query.edit_message_text("❌ Пользователь не найден в базе данных.")
+                return
+            
+            # Находим смену
+            shift_query = select(Shift).where(
+                Shift.id == shift_id,
+                Shift.user_id == user.id,
+                Shift.status == "scheduled"
+            )
+            shift_result = await session.execute(shift_query)
+            shift = shift_result.scalar_one_or_none()
+            
+            logger.info(f"Found shift: {shift.id if shift else 'None'}, user_id: {user.id}, shift_id: {shift_id}")
+            
+            if not shift:
+                await query.edit_message_text("❌ Смена не найдена или уже отменена.")
+                return
+            
+            # Отменяем смену
+            shift.status = "cancelled"
+            await session.commit()
+            
+            # Получаем информацию об объекте для уведомления
+            object_query = select(Object).where(Object.id == shift.object_id)
+            object_result = await session.execute(object_query)
+            obj = object_result.scalar_one_or_none()
+            object_name = obj.name if obj else "Неизвестный объект"
+            
+            await query.edit_message_text(
+                f"✅ **Смена отменена**\n\n"
+                f"🏢 **{object_name}**\n"
+                f"📅 {shift.start_time.strftime('%d.%m.%Y %H:%M')}\n"
+                f"🕐 До {shift.end_time.strftime('%H:%M')}\n\n"
+                f"Смена успешно отменена.",
+                parse_mode='Markdown'
+            )
+            
+    except Exception as e:
+        logger.error(f"Error cancelling shift: {e}")
+        await query.edit_message_text("❌ Ошибка отмены смены. Попробуйте позже.")
+
+
+async def handle_close_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Закрытие окна просмотра смен - возврат в главное меню."""
+    query = update.callback_query
+    
+    # Удаляем сообщение с расписанием
+    await query.delete_message()
+    
+    # Отправляем главное меню
+    from .core_handlers import get_main_menu_keyboard
+    keyboard = get_main_menu_keyboard()
+    
+    await query.message.reply_text(
+        "🏠 **Главное меню**\n\nВыберите действие:",
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
 
 
 async def handle_cancel_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -319,6 +428,8 @@ async def handle_schedule_time_input(update: Update, context: ContextTypes.DEFAU
 
 async def handle_custom_date_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработка ввода пользовательской даты."""
+    from datetime import date
+    
     user_id = update.effective_user.id
     text = update.message.text
     
@@ -336,14 +447,6 @@ async def handle_custom_date_input(update: Update, context: ContextTypes.DEFAULT
         
         # Устанавливаем дату в контекст
         context.user_data['selected_date'] = selected_date
-        
-        # Создаем временный callback_query для вызова функции
-        class TempCallback:
-            def __init__(self, data):
-                self.data = data
-        
-        temp_callback = TempCallback("schedule_date_custom")
-        update.callback_query = temp_callback
         
         # Вызываем обработку выбора даты напрямую
         await _handle_schedule_date_selection_direct(update, context, selected_date)

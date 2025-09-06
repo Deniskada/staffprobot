@@ -54,8 +54,8 @@ class ScheduleService(BaseService):
                 time_slots_query = select(TimeSlot).where(
                     and_(
                         TimeSlot.object_id == object_id,
-                        TimeSlot.date == target_date,
-                        TimeSlot.is_available == True
+                        TimeSlot.slot_date == target_date,
+                        TimeSlot.is_active == True
                     )
                 ).order_by(TimeSlot.start_time)
                 
@@ -89,7 +89,7 @@ class ScheduleService(BaseService):
                             'start_time': slot.start_time.strftime('%H:%M'),
                             'end_time': slot.end_time.strftime('%H:%M'),
                             'hourly_rate': float(slot.hourly_rate),
-                            'description': slot.description or ''
+                            'description': slot.notes or ''
                         })
                 
                 return {
@@ -149,7 +149,7 @@ class ScheduleService(BaseService):
                     }
                 
                 # Проверяем доступность тайм-слота
-                if not time_slot.is_available:
+                if not time_slot.is_active:
                     return {
                         'success': False,
                         'error': 'Тайм-слот недоступен'
@@ -172,8 +172,8 @@ class ScheduleService(BaseService):
                     }
                 
                 # Создаем смену
-                start_datetime = datetime.combine(time_slot.date, time_slot.start_time)
-                end_datetime = datetime.combine(time_slot.date, time_slot.end_time)
+                start_datetime = datetime.combine(time_slot.slot_date, time_slot.start_time)
+                end_datetime = datetime.combine(time_slot.slot_date, time_slot.end_time)
                 
                 new_shift = Shift(
                     user_id=user.id,
@@ -191,17 +191,13 @@ class ScheduleService(BaseService):
                 await session.refresh(new_shift)
                 
                 logger.info(
-                    f"Scheduled shift created from timeslot",
-                    user_id=user_id,
-                    shift_id=new_shift.id,
-                    time_slot_id=time_slot_id,
-                    object_id=time_slot.object_id
+                    f"Scheduled shift created from timeslot: user_id={user_id}, shift_id={new_shift.id}, time_slot_id={time_slot_id}, object_id={time_slot.object_id}"
                 )
                 
                 return {
                     'success': True,
                     'shift_id': new_shift.id,
-                    'message': f'Смена запланирована на {time_slot.date.strftime("%d.%m.%Y")} с {time_slot.start_time.strftime("%H:%M")} до {time_slot.end_time.strftime("%H:%M")}'
+                    'message': f'Смена запланирована на {time_slot.slot_date.strftime("%d.%m.%Y")} с {time_slot.start_time.strftime("%H:%M")} до {time_slot.end_time.strftime("%H:%M")}'
                 }
                 
         except Exception as e:

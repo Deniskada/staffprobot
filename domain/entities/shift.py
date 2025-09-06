@@ -16,6 +16,7 @@ class Shift(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     object_id = Column(Integer, ForeignKey("objects.id"), nullable=False, index=True)
+    time_slot_id = Column(Integer, ForeignKey("time_slots.id"), nullable=True, index=True)
     start_time = Column(DateTime(timezone=True), nullable=False, index=True)
     end_time = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(50), default="active", index=True)  # active, completed, cancelled

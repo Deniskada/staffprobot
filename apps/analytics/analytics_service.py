@@ -104,7 +104,7 @@ class AnalyticsService:
                 }
                 
         except Exception as e:
-            logger.error(f"Error generating object report: {e}", object_id=object_id)
+            logger.error(f"Error generating object report for object {object_id}: {e}")
             return {"error": f"Ошибка формирования отчета: {str(e)}"}
     
     def get_personal_report(
@@ -205,7 +205,7 @@ class AnalyticsService:
                 }
                 
         except Exception as e:
-            logger.error(f"Error generating personal report: {e}", user_id=user_id)
+            logger.error(f"Error generating personal report for user {user_id}: {e}")
             return {"error": f"Ошибка формирования отчета: {str(e)}"}
     
     def get_dashboard_metrics(self, owner_id: int) -> Dict[str, Any]:
@@ -271,7 +271,7 @@ class AnalyticsService:
                 }
                 
         except Exception as e:
-            logger.error(f"Error generating dashboard metrics: {e}", owner_id=owner_id)
+            logger.error(f"Error generating dashboard metrics for owner {owner_id}: {e}")
             return {"error": f"Ошибка получения метрик: {str(e)}"}
     
     def _calculate_employee_stats(self, shifts: List[Shift], db: Session) -> List[Dict[str, Any]]:

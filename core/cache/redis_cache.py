@@ -65,7 +65,7 @@ class RedisCache:
             serialize: Тип сериализации ('json' или 'pickle')
         """
         if not self.is_connected:
-            logger.warning("Redis not connected, skipping cache set", key=key)
+            logger.warning(f"Redis not connected, skipping cache set for key {key}")
             return False
         
         try:
@@ -87,12 +87,12 @@ class RedisCache:
             success = await self.redis.set(key, serialized_value, ex=ttl_seconds)
             
             if success:
-                logger.debug("Cache set successful", key=key, ttl=ttl_seconds, serialize=serialize)
+                logger.debug(f"Cache set successful: key={key}, ttl={ttl_seconds}, serialize={serialize}")
             
             return bool(success)
             
         except Exception as e:
-            logger.error(f"Failed to set cache: {e}", key=key, error=str(e))
+            logger.error(f"Failed to set cache: {e}, key={key}, error={str(e)}")
             return False
     
     async def get(self, key: str, serialize: str = "json") -> Optional[Any]:
@@ -103,14 +103,14 @@ class RedisCache:
             serialize: Тип десериализации ('json' или 'pickle')
         """
         if not self.is_connected:
-            logger.warning("Redis not connected, skipping cache get", key=key)
+            logger.warning(f"Redis not connected, skipping cache get for key {key}")
             return None
         
         try:
             serialized_value = await self.redis.get(key)
             
             if serialized_value is None:
-                logger.debug("Cache miss", key=key)
+                logger.debug(f"Cache miss for key {key}")
                 return None
             
             # Десериализация значения
@@ -121,26 +121,26 @@ class RedisCache:
             else:
                 raise ValueError(f"Unsupported serialization type: {serialize}")
             
-            logger.debug("Cache hit", key=key, serialize=serialize)
+            logger.debug(f"Cache hit: key={key}, serialize={serialize}")
             return value
             
         except Exception as e:
-            logger.error(f"Failed to get cache: {e}", key=key, error=str(e))
+            logger.error(f"Failed to get cache: {e}, key={key}, error={str(e)}")
             return None
     
     async def delete(self, key: str) -> bool:
         """Удаление значения из кэша."""
         if not self.is_connected:
-            logger.warning("Redis not connected, skipping cache delete", key=key)
+            logger.warning(f"Redis not connected, skipping cache delete for key {key}")
             return False
         
         try:
             result = await self.redis.delete(key)
-            logger.debug("Cache delete", key=key, deleted=bool(result))
+            logger.debug(f"Cache delete: key={key}, deleted={bool(result)}")
             return bool(result)
             
         except Exception as e:
-            logger.error(f"Failed to delete cache: {e}", key=key, error=str(e))
+            logger.error(f"Failed to delete cache: {e}, key={key}, error={str(e)}")
             return False
     
     async def exists(self, key: str) -> bool:
@@ -152,7 +152,7 @@ class RedisCache:
             result = await self.redis.exists(key)
             return bool(result)
         except Exception as e:
-            logger.error(f"Failed to check cache existence: {e}", key=key, error=str(e))
+            logger.error(f"Failed to check cache existence: {e}, key={key}, error={str(e)}")
             return False
     
     async def expire(self, key: str, ttl: Union[int, timedelta]) -> bool:
@@ -169,7 +169,7 @@ class RedisCache:
             result = await self.redis.expire(key, ttl_seconds)
             return bool(result)
         except Exception as e:
-            logger.error(f"Failed to set cache expiration: {e}", key=key, error=str(e))
+            logger.error(f"Failed to set cache expiration: {e}, key={key}, error={str(e)}")
             return False
     
     async def keys(self, pattern: str = "*") -> List[str]:
@@ -181,7 +181,7 @@ class RedisCache:
             keys = await self.redis.keys(pattern)
             return [key.decode('utf-8') for key in keys]
         except Exception as e:
-            logger.error(f"Failed to get cache keys: {e}", pattern=pattern, error=str(e))
+            logger.error(f"Failed to get cache keys: {e}, pattern={pattern}, error={str(e)}")
             return []
     
     async def clear_pattern(self, pattern: str) -> int:
@@ -193,11 +193,11 @@ class RedisCache:
             keys = await self.keys(pattern)
             if keys:
                 result = await self.redis.delete(*keys)
-                logger.info(f"Cleared {result} cache keys", pattern=pattern)
+                logger.info(f"Cleared {result} cache keys for pattern {pattern}")
                 return result
             return 0
         except Exception as e:
-            logger.error(f"Failed to clear cache pattern: {e}", pattern=pattern, error=str(e))
+            logger.error(f"Failed to clear cache pattern: {e}, pattern={pattern}, error={str(e)}")
             return 0
     
     async def get_stats(self) -> Dict[str, Any]:
@@ -250,7 +250,7 @@ def cached(
             # Попытка получить из кэша
             cached_result = await cache.get(cache_key, serialize=serialize)
             if cached_result is not None:
-                logger.debug("Cache hit for function", function=func.__name__, key=cache_key)
+                logger.debug(f"Cache hit for function {func.__name__}, key={cache_key}")
                 return cached_result
             
             # Выполнение функции
@@ -258,7 +258,7 @@ def cached(
             
             # Сохранение в кэш
             await cache.set(cache_key, result, ttl=ttl, serialize=serialize)
-            logger.debug("Cache set for function", function=func.__name__, key=cache_key)
+            logger.debug(f"Cache set for function {func.__name__}, key={cache_key}")
             
             return result
         return wrapper

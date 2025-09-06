@@ -36,7 +36,7 @@ class MonitoringMiddleware:
                     
                 except Exception as e:
                     status_code = 500
-                    logger.error(f"HTTP request failed: {e}", endpoint=endpoint, method=method)
+                    logger.error(f"HTTP request failed: {e}, endpoint={endpoint}, method={method}")
                     raise
                     
                 finally:
@@ -58,7 +58,7 @@ class MonitoringMiddleware:
                     return result
                     
                 except Exception as e:
-                    logger.error(f"Database query failed: {e}", table=table, operation=operation)
+                    logger.error(f"Database query failed: {e}, table={table}, operation={operation}")
                     raise
                     
                 finally:
@@ -88,7 +88,7 @@ class MonitoringMiddleware:
                     
                 except Exception as e:
                     result_status = "error"
-                    logger.error(f"Cache operation failed: {e}", operation=operation)
+                    logger.error(f"Cache operation failed: {e}, operation={operation}")
                     raise
                     
                 finally:
@@ -110,7 +110,7 @@ class MonitoringMiddleware:
                     return result
                     
                 except Exception as e:
-                    logger.error(f"Bot handler failed: {e}", message_type=message_type, user_id=user_id)
+                    logger.error(f"Bot handler failed: {e}, message_type={message_type}, user_id={user_id}")
                     raise
             
             return wrapper
