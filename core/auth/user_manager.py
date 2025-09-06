@@ -86,8 +86,31 @@ class UserManager:
             return None
     
     async def get_user_by_telegram_id(self, telegram_id: int) -> Optional[dict]:
-        """Получение пользователя по Telegram ID (алиас для get_user)."""
-        return self.get_user(telegram_id)
+        """Получение пользователя по Telegram ID."""
+        try:
+            with get_sync_session() as session:
+                query = select(User).where(User.telegram_id == telegram_id)
+                result = session.execute(query)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    return None
+                
+                return {
+                    "id": user.telegram_id,
+                    "telegram_id": user.telegram_id,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "role": user.role,  # Оставляем для обратной совместимости
+                    "roles": user.get_roles(),  # Добавляем множественные роли
+                    "is_active": user.is_active,
+                    "created_at": user.created_at,
+                    "updated_at": user.updated_at
+                }
+        except Exception as e:
+            logger.error(f"Failed to get user by telegram_id {telegram_id}: {e}")
+            return None
     
     async def get_all_users(self) -> List[dict]:
         """Получение всех пользователей."""
