@@ -3,7 +3,7 @@
 import io
 import os
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, date
 import pandas as pd
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, A4
@@ -430,4 +430,92 @@ class ExportService:
         except Exception as e:
             logger.error(f"Error generating personal Excel report: {e}")
             raise
+    
+    def generate_excel_report(
+        self,
+        owner_id: int,
+        object_id: Optional[int],
+        start_date: date,
+        end_date: date
+    ) -> bytes:
+        """
+        Генерирует Excel отчет по объекту или всем объектам владельца.
+        
+        Args:
+            owner_id: ID владельца
+            object_id: ID объекта (None для всех объектов)
+            start_date: Начальная дата
+            end_date: Конечная дата
+            
+        Returns:
+            Excel файл в виде байтов
+        """
+        try:
+            from apps.analytics.analytics_service import AnalyticsService
+            analytics_service = AnalyticsService()
+            
+            # Получаем данные отчета
+            report_data = analytics_service.get_object_report(
+                owner_id=owner_id,
+                object_id=object_id,
+                start_date=start_date,
+                end_date=end_date
+            )
+            
+            if not report_data or report_data.get('error'):
+                # Создаем пустой отчет
+                df = pd.DataFrame({
+                    'Сотрудник': ['Нет данных'],
+                    'Смен': [0],
+                    'Часов': [0],
+                    'Сумма к оплате': [0]
+                })
+            else:
+                # Создаем DataFrame из данных по сотрудникам
+                employees = report_data.get('employees', [])
+                if employees:
+                    df = pd.DataFrame(employees)
+                    # Переименовываем колонки для лучшего понимания
+                    df = df.rename(columns={
+                        'name': 'Сотрудник',
+                        'shifts': 'Смен',
+                        'hours': 'Часов',
+                        'payment': 'Сумма к оплате'
+                    })
+                else:
+                    df = pd.DataFrame({
+                        'Сотрудник': ['Нет данных'],
+                        'Смен': [0],
+                        'Часов': [0],
+                        'Сумма к оплате': [0]
+                    })
+            
+            # Создаем Excel файл в памяти
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Отчет', index=False)
+                
+                # Получаем workbook и worksheet
+                workbook = writer.book
+                worksheet = writer.sheets['Отчет']
+                
+                # Настраиваем ширину колонок
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+            
+            output.seek(0)
+            return output.getvalue()
+            
+        except Exception as e:
+            logger.error(f"Error generating Excel report: {e}")
+            return None
 

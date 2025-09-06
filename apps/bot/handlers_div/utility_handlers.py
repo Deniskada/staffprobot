@@ -144,6 +144,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await _handle_timeslot_edit_input(update, context, user_state)
         return
     
+    # Проверяем, ожидается ли ввод дат для произвольного периода
+    if context.user_data.get('waiting_for_dates'):
+        await _handle_custom_period_input(update, context)
+        return
+    
     # Если нет активного состояния, отправляем в главное меню
     await update.message.reply_text(
         "🤖 Используйте команды или кнопки для взаимодействия с ботом.\n"
@@ -323,3 +328,83 @@ async def _handle_timeslot_edit_input(update: Update, context: ContextTypes.DEFA
         parse_mode='HTML',
         reply_markup=reply_markup
     )
+
+
+async def _handle_custom_period_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработка ввода произвольного периода для отчетов."""
+    from datetime import datetime
+    from .analytics_handlers import AnalyticsHandlers
+    
+    text = update.message.text.strip()
+    user_id = update.effective_user.id
+    
+    try:
+        # Парсим даты
+        if " - " in text:
+            # Формат: ДД.ММ.ГГГГ - ДД.ММ.ГГГГ
+            start_str, end_str = text.split(" - ", 1)
+            start_date = datetime.strptime(start_str.strip(), "%d.%m.%Y").date()
+            end_date = datetime.strptime(end_str.strip(), "%d.%m.%Y").date()
+        else:
+            # Проверяем, есть ли уже сохраненная дата начала
+            if 'custom_start_date' in context.user_data:
+                # Это дата конца
+                start_date = context.user_data['custom_start_date']
+                end_date = datetime.strptime(text, "%d.%m.%Y").date()
+            else:
+                # Это дата начала
+                start_date = datetime.strptime(text, "%d.%m.%Y").date()
+                context.user_data['custom_start_date'] = start_date
+                await update.message.reply_text(
+                    "📅 **Дата начала:** " + start_date.strftime("%d.%m.%Y") + "\n\n"
+                    "Теперь введите дату окончания в формате **ДД.ММ.ГГГГ**:"
+                )
+                return
+        
+        # Проверяем корректность дат
+        if start_date > end_date:
+            await update.message.reply_text(
+                "❌ **Ошибка:** Дата начала не может быть позже даты окончания.\n\n"
+                "Попробуйте еще раз:"
+            )
+            return
+        
+        # Очищаем временные данные
+        context.user_data.pop('custom_start_date', None)
+        context.user_data.pop('waiting_for_dates', None)
+        
+        # Сохраняем период
+        context.user_data['start_date'] = start_date
+        context.user_data['end_date'] = end_date
+        context.user_data['period_name'] = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
+        
+        # Создаем клавиатуру с форматами
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [
+            [InlineKeyboardButton("📄 Текстовый отчет", callback_data="format_text")],
+            [InlineKeyboardButton("📊 PDF отчет", callback_data="format_pdf")],
+            [InlineKeyboardButton("📈 Excel отчет", callback_data="format_excel")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="analytics_cancel")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            f"📊 **Период: {context.user_data['period_name']}**\n\n"
+            "Выберите формат отчета:",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
+    except ValueError as e:
+        await update.message.reply_text(
+            "❌ **Ошибка формата даты.**\n\n"
+            "Используйте формат **ДД.ММ.ГГГГ**\n\n"
+            "Например: 01.09.2025\n\n"
+            "Попробуйте еще раз:"
+        )
+    except Exception as e:
+        logger.error(f"Error processing custom period input: {e}")
+        await update.message.reply_text(
+            "❌ **Ошибка обработки дат.**\n\n"
+            "Попробуйте еще раз или используйте стандартные периоды."
+        )

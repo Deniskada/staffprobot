@@ -372,6 +372,42 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         analytics = AnalyticsHandlers()
         await analytics.start_report_creation(update, context)
         return
+    elif query.data.startswith("report_object_") or query.data == "report_all_objects":
+        # Выбор объекта для отчета
+        from .analytics_handlers import AnalyticsHandlers
+        analytics = AnalyticsHandlers()
+        await analytics.select_object(update, context)
+        return
+    elif query.data.startswith("period_"):
+        # Выбор периода для отчета
+        from .analytics_handlers import AnalyticsHandlers
+        analytics = AnalyticsHandlers()
+        await analytics.select_period(update, context)
+        return
+    elif query.data.startswith("format_"):
+        # Выбор формата отчета
+        from .analytics_handlers import AnalyticsHandlers
+        analytics = AnalyticsHandlers()
+        await analytics.select_format(update, context)
+        return
+    elif query.data == "analytics_cancel":
+        # Отмена аналитики
+        from .analytics_handlers import AnalyticsHandlers
+        analytics = AnalyticsHandlers()
+        await analytics.cancel_analytics(update, context)
+        return
+    elif query.data == "analytics_dashboard":
+        # Показ дашборда
+        from .analytics_handlers import AnalyticsHandlers
+        analytics = AnalyticsHandlers()
+        await analytics.show_dashboard(update, context)
+        return
+    elif query.data == "analytics_report":
+        # Создание отчета
+        from .analytics_handlers import AnalyticsHandlers
+        analytics = AnalyticsHandlers()
+        await analytics.start_report_creation(update, context)
+        return
     elif query.data == "help":
         await _handle_help_callback(update, context)
         return

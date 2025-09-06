@@ -102,8 +102,23 @@ class AnalyticsHandlers:
         user_id = update.effective_user.id
         
         try:
+            # Получаем внутренний user_id из базы данных
+            with get_sync_session() as session:
+                from domain.entities.user import User
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = session.execute(user_query)
+                user = user_result.scalar_one_or_none()
+                
+                if not user:
+                    await update.callback_query.edit_message_text(
+                        "❌ Пользователь не найден в базе данных."
+                    )
+                    return ConversationHandler.END
+                
+                internal_user_id = user.id
+            
             # Получаем данные дашборда
-            dashboard_data = await analytics_service.get_owner_dashboard(user_id)
+            dashboard_data = analytics_service.get_owner_dashboard(internal_user_id)
             
             # Формируем текст дашборда
             dashboard_text = "📈 **Дашборд владельца**\n\n"
@@ -223,6 +238,7 @@ class AnalyticsHandlers:
             [InlineKeyboardButton("📅 Эта неделя", callback_data="period_week")],
             [InlineKeyboardButton("📅 Этот месяц", callback_data="period_month")],
             [InlineKeyboardButton("📅 Последние 3 месяца", callback_data="period_quarter")],
+            [InlineKeyboardButton("📅 Произвольный период", callback_data="period_custom")],
             [InlineKeyboardButton("❌ Отмена", callback_data="analytics_cancel")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -261,6 +277,20 @@ class AnalyticsHandlers:
             start_date = today - timedelta(days=90)
             end_date = today
             period_name = "Последние 3 месяца"
+        elif query.data == "period_custom":
+            # Произвольный период - запрашиваем даты
+            await query.edit_message_text(
+                "📅 **Произвольный период**\n\n"
+                "Введите даты в формате:\n"
+                "**ДД.ММ.ГГГГ - ДД.ММ.ГГГГ**\n\n"
+                "Например: 01.09.2025 - 30.09.2025\n\n"
+                "Или отправьте дату начала и конца периода в отдельных сообщениях:\n"
+                "**Начало:** ДД.ММ.ГГГГ\n"
+                "**Конец:** ДД.ММ.ГГГГ"
+            )
+            # Устанавливаем состояние для ввода дат
+            context.user_data['waiting_for_dates'] = True
+            return ConversationHandler.END
         else:
             await query.edit_message_text("❌ Неверный выбор периода.")
             return ConversationHandler.END
@@ -310,46 +340,112 @@ class AnalyticsHandlers:
         format_type = context.user_data.get('format')
         
         try:
+            # Получаем внутренний user_id из базы данных
+            with get_sync_session() as session:
+                from domain.entities.user import User
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = session.execute(user_query)
+                user = user_result.scalar_one_or_none()
+                
+                if not user:
+                    await update.callback_query.edit_message_text(
+                        "❌ Пользователь не найден в базе данных."
+                    )
+                    return ConversationHandler.END
+                
+                internal_user_id = user.id
+            
             # Генерируем отчет
             if format_type == "text":
                 # Текстовый отчет
-                report_data = await analytics_service.get_object_report(
-                    owner_id=user_id,
+                report_data = analytics_service.get_object_report(
+                    owner_id=internal_user_id,
                     object_id=object_id,
                     start_date=start_date,
                     end_date=end_date
                 )
                 
-                if report_data:
+                if report_data and not report_data.get('error'):
+                    # Информация об объекте
+                    object_info = report_data.get('object', {})
                     report_text = f"📊 **Отчет за период: {period_name}**\n\n"
-                    report_text += f"📅 Период: {start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}\n"
-                    report_text += f"📊 Всего смен: {report_data.get('total_shifts', 0)}\n"
-                    report_text += f"⏰ Общее время: {report_data.get('total_hours', 0)} часов\n"
-                    report_text += f"💰 Общая сумма: {report_data.get('total_amount', 0)} ₽\n\n"
+                    report_text += f"🏢 **Объект:** {object_info.get('name', 'N/A')}\n"
+                    report_text += f"📅 **Период:** {start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}\n\n"
                     
-                    # Детали по сменам
-                    shifts = report_data.get('shifts', [])
-                    if shifts:
-                        report_text += "📋 **Детали смен:**\n"
-                        for shift in shifts[:10]:  # Показываем первые 10 смен
-                            report_text += f"• {shift.get('date', 'N/A')} - {shift.get('hours', 0)}ч - {shift.get('amount', 0)}₽\n"
+                    # Общая статистика
+                    summary = report_data.get('summary', {})
+                    report_text += f"📊 **Общая статистика:**\n"
+                    report_text += f"• Всего смен: {summary.get('total_shifts', 0)}\n"
+                    report_text += f"• Завершенных: {summary.get('completed_shifts', 0)}\n"
+                    report_text += f"• Активных: {summary.get('active_shifts', 0)}\n"
+                    report_text += f"• Общее время: {summary.get('total_hours', 0)} часов\n"
+                    report_text += f"• Общая сумма: {summary.get('total_payment', 0)} ₽\n\n"
+                    
+                    # Статистика по сотрудникам
+                    employees = report_data.get('employees', [])
+                    if employees:
+                        report_text += "👥 **Статистика по сотрудникам:**\n"
+                        for emp in employees:
+                            report_text += f"• **{emp.get('name', 'N/A')}**\n"
+                            report_text += f"  - Смен: {emp.get('shifts', 0)}\n"
+                            report_text += f"  - Часов: {emp.get('hours', 0)}\n"
+                            report_text += f"  - К оплате: {emp.get('payment', 0)} ₽\n\n"
+                    else:
+                        report_text += "👥 **Сотрудники:** Нет данных\n\n"
                     
                     await update.callback_query.edit_message_text(
                         report_text,
                         parse_mode='Markdown'
                     )
                 else:
+                    error_msg = report_data.get('error', 'Данных за выбранный период не найдено.')
                     await update.callback_query.edit_message_text(
                         f"📊 **Отчет за период: {period_name}**\n\n"
-                        "Данных за выбранный период не найдено."
+                        f"❌ {error_msg}"
                     )
             
+            elif format_type == "excel":
+                # Excel отчет
+                try:
+                    # Генерируем Excel файл
+                    excel_file = export_service.generate_excel_report(
+                        owner_id=internal_user_id,
+                        object_id=object_id,
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+                    
+                    if excel_file:
+                        # Отправляем файл
+                        await context.bot.send_document(
+                            chat_id=update.effective_chat.id,
+                            document=excel_file,
+                            filename=f"report_{period_name}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx",
+                            caption=f"📊 **Отчет за период: {period_name}**\n"
+                                   f"📅 {start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
+                        )
+                        
+                        await update.callback_query.edit_message_text(
+                            f"📊 **Отчет за период: {period_name}**\n\n"
+                            "✅ Excel файл успешно сгенерирован и отправлен!"
+                        )
+                    else:
+                        await update.callback_query.edit_message_text(
+                            f"📊 **Отчет за период: {period_name}**\n\n"
+                            "❌ Ошибка генерации Excel файла."
+                        )
+                except Exception as e:
+                    logger.error(f"Error generating Excel report: {e}")
+                    await update.callback_query.edit_message_text(
+                        f"📊 **Отчет за период: {period_name}**\n\n"
+                        "❌ Ошибка генерации Excel файла. Попробуйте позже."
+                    )
             else:
-                # PDF или Excel отчет
+                # PDF отчет
                 await update.callback_query.edit_message_text(
                     "📊 Генерация отчета...\n\n"
-                    "Функция экспорта в PDF/Excel временно недоступна.\n"
-                    "Используйте текстовый формат."
+                    "Функция экспорта в PDF временно недоступна.\n"
+                    "Используйте текстовый формат или Excel."
                 )
             
             # Кнопка возврата

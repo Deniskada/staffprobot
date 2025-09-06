@@ -21,7 +21,7 @@ class AnalyticsService:
     
     def get_object_report(
         self,
-        object_id: int,
+        object_id: Optional[int],
         start_date: date,
         end_date: date,
         owner_id: int
@@ -30,7 +30,7 @@ class AnalyticsService:
         Формирует отчет по объекту за период.
         
         Args:
-            object_id: ID объекта
+            object_id: ID объекта (None для всех объектов владельца)
             start_date: Начальная дата
             end_date: Конечная дата
             owner_id: ID владельца (для проверки прав)
@@ -40,18 +40,28 @@ class AnalyticsService:
         """
         try:
             with get_sync_session() as db:
-                # Проверяем права доступа
-                obj = db.query(Object).filter(
-                    and_(Object.id == object_id, Object.owner_id == owner_id)
-                ).first()
-                
-                if not obj:
-                    return {"error": "Объект не найден или нет прав доступа"}
+                # Получаем объекты владельца
+                if object_id is None:
+                    # Все объекты владельца
+                    objects = db.query(Object).filter(Object.owner_id == owner_id).all()
+                    if not objects:
+                        return {"error": "У вас нет объектов для анализа"}
+                    object_ids = [obj.id for obj in objects]
+                    obj = None  # Нет конкретного объекта
+                else:
+                    # Конкретный объект
+                    obj = db.query(Object).filter(
+                        and_(Object.id == object_id, Object.owner_id == owner_id)
+                    ).first()
+                    
+                    if not obj:
+                        return {"error": "Объект не найден или нет прав доступа"}
+                    object_ids = [object_id]
                 
                 # Получаем смены за период
                 shifts = db.query(Shift).join(User).filter(
                     and_(
-                        Shift.object_id == object_id,
+                        Shift.object_id.in_(object_ids),
                         func.date(Shift.start_time) >= start_date,
                         func.date(Shift.start_time) <= end_date,
                         Shift.status.in_(["completed", "active"])
@@ -77,14 +87,28 @@ class AnalyticsService:
                 avg_shift_duration = total_hours / completed_shifts if completed_shifts > 0 else 0
                 avg_daily_hours = total_hours / ((end_date - start_date).days + 1)
                 
-                return {
-                    "object": {
+                # Формируем данные об объекте(ах)
+                if obj:
+                    # Один объект
+                    object_info = {
                         "id": obj.id,
                         "name": obj.name,
                         "address": obj.address,
                         "working_hours": obj.working_hours,
                         "hourly_rate": float(obj.hourly_rate)
-                    },
+                    }
+                else:
+                    # Все объекты
+                    object_info = {
+                        "id": None,
+                        "name": "Все объекты",
+                        "address": f"Всего объектов: {len(objects)}",
+                        "working_hours": "Различные",
+                        "hourly_rate": "Различные"
+                    }
+                
+                return {
+                    "object": object_info,
                     "period": {
                         "start_date": start_date.isoformat(),
                         "end_date": end_date.isoformat(),
@@ -274,6 +298,80 @@ class AnalyticsService:
             logger.error(f"Error generating dashboard metrics for owner {owner_id}: {e}")
             return {"error": f"Ошибка получения метрик: {str(e)}"}
     
+    def get_owner_dashboard(self, owner_id: int) -> Dict[str, Any]:
+        """
+        Получает данные для дашборда владельца.
+        
+        Args:
+            owner_id: ID владельца в базе данных
+            
+        Returns:
+            Словарь с данными дашборда
+        """
+        try:
+            with get_sync_session() as db:
+                # Получаем объекты владельца
+                objects = db.query(Object).filter(Object.owner_id == owner_id).all()
+                object_ids = [obj.id for obj in objects]
+                
+                if not object_ids:
+                    return {
+                        "total_payments": 0,
+                        "total_shifts": 0,
+                        "active_shifts": 0,
+                        "top_objects": []
+                    }
+                
+                # Общая сумма к выплате
+                total_payments = db.query(func.sum(Shift.total_payment)).filter(
+                    and_(
+                        Shift.object_id.in_(object_ids),
+                        Shift.status == "completed"
+                    )
+                ).scalar() or 0
+                
+                # Общее количество смен
+                total_shifts = db.query(func.count(Shift.id)).filter(
+                    Shift.object_id.in_(object_ids)
+                ).scalar() or 0
+                
+                # Активные смены
+                active_shifts = db.query(func.count(Shift.id)).filter(
+                    and_(
+                        Shift.object_id.in_(object_ids),
+                        Shift.status == "active"
+                    )
+                ).scalar() or 0
+                
+                # Топ объекты по активности
+                top_objects = db.query(
+                    Object.name,
+                    func.count(Shift.id).label('shifts_count')
+                ).join(Shift).filter(
+                    Shift.object_id.in_(object_ids)
+                ).group_by(Object.id, Object.name).order_by(
+                    func.count(Shift.id).desc()
+                ).limit(3).all()
+                
+                top_objects_list = [
+                    {
+                        "name": obj.name,
+                        "shifts_count": obj.shifts_count
+                    }
+                    for obj in top_objects
+                ]
+                
+                return {
+                    "total_payments": float(total_payments),
+                    "total_shifts": total_shifts,
+                    "active_shifts": active_shifts,
+                    "top_objects": top_objects_list
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting owner dashboard for owner {owner_id}: {e}")
+            return {"error": f"Ошибка получения дашборда: {str(e)}"}
+    
     def _calculate_employee_stats(self, shifts: List[Shift], db: Session) -> List[Dict[str, Any]]:
         """Рассчитывает статистику по сотрудникам."""
         employee_data = {}
@@ -293,6 +391,13 @@ class AnalyticsService:
             employee_data[user_id]["hours"] += float(shift.total_hours or 0)
             employee_data[user_id]["payment"] += float(shift.total_payment or 0)
         
+        # Сортируем по количеству смен (по убыванию)
+        sorted_employees = sorted(
+            employee_data.values(),
+            key=lambda x: x["shifts"],
+            reverse=True
+        )
+        
         return [
             {
                 "name": data["name"],
@@ -300,7 +405,7 @@ class AnalyticsService:
                 "hours": round(data["hours"], 2),
                 "payment": round(data["payment"], 2)
             }
-            for data in employee_data.values()
+            for data in sorted_employees
         ]
     
     def _calculate_daily_stats(self, shifts: List[Shift], start_date: date, end_date: date) -> List[Dict[str, Any]]:
