@@ -14,6 +14,9 @@
 - **FullCalendar.js** - интерактивный календарь для планирования
 - **Chart.js** - библиотека для создания графиков и диаграмм
 - **HTMX** - для динамических обновлений без перезагрузки страницы
+- **FastAPI + Uvicorn** - веб-сервер для обработки HTTP запросов
+- **JWT токены** - для аутентификации и авторизации
+- **Redis** - для хранения PIN-кодов и сессий
 
 ### База данных
 - **PostgreSQL 15+** - основная реляционная БД
@@ -40,6 +43,8 @@
 - **Object Management** - расширенное управление объектами с настройкой времени работы и удалением
 - **Advanced Reporting** - система отчетности с разбивкой по сотрудникам, Excel экспортом и произвольными периодами
 - **Custom Date Selection** - возможность выбора произвольных дат для формирования отчетов
+- **Web Integration** - интеграция с веб-приложением для отправки PIN-кодов
+- **Telegram ID Display** - отображение Telegram ID пользователя для авторизации на сайте
 
 ### Микросервисы и коммуникация
 - **Celery** - асинхронные задачи и планировщик
@@ -528,6 +533,69 @@ class OpenAIService:
         except Exception as e:
             logger.error(f"OpenAI API error: {e}")
             return await self.fallback_response(prompt, context)
+```
+
+## 2.7. Система авторизации и аутентификации
+
+### Веб-авторизация через Telegram
+Реализована система авторизации, которая использует Telegram ID пользователя и PIN-код, отправляемый через бота.
+
+#### Компоненты системы
+- **AuthService** - основной сервис авторизации
+- **BotIntegrationService** - интеграция с Telegram Bot API
+- **JWT токены** - для управления сессиями
+- **Redis** - для хранения PIN-кодов
+
+#### Процесс авторизации
+1. Пользователь вводит Telegram ID на веб-сайте
+2. Система генерирует 6-значный PIN-код
+3. PIN-код сохраняется в Redis с TTL 5 минут
+4. Бот отправляет PIN-код пользователю в Telegram
+5. Пользователь вводит PIN-код на сайте
+6. Система проверяет PIN-код и создает JWT токен
+7. Пользователь получает доступ к веб-интерфейсу
+
+#### Реализация AuthService
+```python
+class AuthService:
+    def __init__(self):
+        self.cache = CacheService()
+        self.bot_integration = BotIntegrationService()
+        self.secret_key = settings.secret_key
+        self.algorithm = "HS256"
+        self.token_expire_minutes = settings.jwt_expire_minutes
+
+    async def generate_and_send_pin(self, telegram_id: int) -> str:
+        pin_code = f"{secrets.randbelow(1000000):06d}"
+        await self.store_pin(telegram_id, pin_code, ttl=300)
+        success = await self.bot_integration.send_pin_code(telegram_id, pin_code)
+        return pin_code
+
+    async def verify_pin(self, telegram_id: int, pin_code: str) -> bool:
+        key = f"pin:{telegram_id}"
+        stored_pin = await self.cache.get(key)
+        if stored_pin and stored_pin == pin_code:
+            await self.cache.delete(key)
+            return True
+        return False
+```
+
+#### Интеграция с ботом
+```python
+class BotIntegrationService:
+    def __init__(self):
+        self.bot_token = settings.telegram_bot_token
+        self.telegram_api_url = f"https://api.telegram.org/bot{self.bot_token}"
+        self.http_client = httpx.AsyncClient()
+
+    async def send_pin_code(self, telegram_id: int, pin_code: str) -> bool:
+        message = f"""
+🔑 <b>Ваш PIN-код для входа в StaffProBot:</b>
+<code>{pin_code}</code>
+
+Этот код действителен 5 минут.
+"""
+        return await self.send_message(telegram_id, message)
 ```
 
 ## 2.6. Мониторинг LLM
