@@ -86,21 +86,23 @@ async def logout():
 
 
 @router.post("/send-pin")
-async def send_pin(telegram_id: int):
+async def send_pin(request: Request):
     """Отправка PIN-кода через бота"""
     try:
-        # Генерация 6-значного PIN-кода
-        pin_code = f"{secrets.randbelow(1000000):06d}"
+        # Получаем данные из тела запроса
+        form_data = await request.form()
+        telegram_id = int(form_data.get("telegram_id", 0))
         
-        # Сохранение PIN-кода в Redis (действителен 5 минут)
-        await auth_service.store_pin(telegram_id, pin_code, ttl=300)
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Telegram ID не указан")
         
-        # Отправка через бота (здесь будет интеграция с ботом)
-        # TODO: Интеграция с Telegram Bot API
-        print(f"PIN для пользователя {telegram_id}: {pin_code}")
+        # Генерация и отправка PIN-кода
+        pin_code = await auth_service.generate_and_send_pin(telegram_id)
         
         return {"status": "success", "message": "PIN-код отправлен в Telegram"}
         
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Неверный формат Telegram ID")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

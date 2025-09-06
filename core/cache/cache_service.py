@@ -157,6 +157,21 @@ class CacheService:
         logger.info(f"Analytics cache cleared, {cleared_count} keys removed")
     
     @classmethod
+    async def set(cls, key: str, value: Any, ttl: timedelta = None) -> bool:
+        """Универсальный метод для сохранения данных в кэш."""
+        return await cache.set(key, value, ttl=ttl or cls.DEFAULT_TTL)
+    
+    @classmethod
+    async def get(cls, key: str) -> Optional[Any]:
+        """Универсальный метод для получения данных из кэша."""
+        return await cache.get(key)
+    
+    @classmethod
+    async def delete(cls, key: str) -> bool:
+        """Универсальный метод для удаления данных из кэша."""
+        return await cache.delete(key)
+    
+    @classmethod
     async def get_cache_stats(cls) -> Dict[str, Any]:
         """Получение статистики кэша."""
         redis_stats = await cache.get_stats()

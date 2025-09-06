@@ -157,6 +157,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - SECRET_KEY=dev-secret-key-change-in-production
+      - TELEGRAM_BOT_TOKEN=7894030467:AAE3bDi7t3FSbbhUZjv_D8IY3rQc4TpJpXU
     depends_on:
       postgres:
         condition: service_healthy
