@@ -14,7 +14,6 @@ import os
 from typing import Optional
 
 from core.config.settings import settings
-from core.database.connection import get_database
 from core.auth.user_manager import UserManager
 from apps.web.routes import auth, dashboard, objects, calendar, shifts, reports, contracts
 from apps.web.services.auth_service import AuthService

@@ -17,7 +17,7 @@
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
     
     <!-- Custom CSS -->
-    <link href="{{ url_for('static', path='/css/main.css') }}" rel="stylesheet">
+    <link href="/static/css/main.css" rel="stylesheet">
     
     {% block extra_css %}{% endblock %}
 </head>
@@ -102,16 +102,14 @@
     <!-- Main Content -->
     <main class="container-fluid mt-4">
         <!-- Flash Messages -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
 
         <!-- Page Content -->
         {% block content %}{% endblock %}
@@ -129,7 +127,7 @@
     <!-- FullCalendar JS -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
     <!-- Custom JS -->
-    <script src="{{ url_for('static', path='/js/main.js') }}"></script>
+    <script src="/static/js/main.js"></script>
     
     {% block extra_js %}{% endblock %}
 </body>
