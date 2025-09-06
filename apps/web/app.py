@@ -104,12 +104,27 @@ app.include_router(contracts.router, prefix="/contracts", tags=["Договор�
 
 # API для интеграции с ботом
 @app.post("/api/send-pin")
-async def send_pin(telegram_id: int):
+async def send_pin_api(request: Request):
     """API для отправки PIN-кода через бота"""
     try:
+        # Получаем данные из тела запроса
+        form_data = await request.form()
+        print(f"Form data: {form_data}")
+        telegram_id = int(form_data.get("telegram_id", 0))
+        print(f"Telegram ID: {telegram_id}")
+        
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Telegram ID не указан")
+        
+        # Генерация и отправка PIN-кода
         pin_code = await auth_service.generate_and_send_pin(telegram_id)
-        return {"status": "success", "pin_code": pin_code}
+        return {"status": "success", "message": "PIN-код отправлен в Telegram"}
+        
+    except ValueError as e:
+        print(f"ValueError: {e}")
+        raise HTTPException(status_code=400, detail="Неверный формат Telegram ID")
     except Exception as e:
+        print(f"Exception: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 

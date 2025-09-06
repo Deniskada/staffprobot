@@ -76,7 +76,8 @@ class AuthService:
     async def store_pin(self, telegram_id: int, pin_code: str, ttl: int = 300) -> None:
         """Сохранение PIN-кода в кэше"""
         key = f"pin:{telegram_id}"
-        await self.cache.set(key, pin_code, ttl=ttl)
+        from datetime import timedelta
+        await self.cache.set(key, pin_code, ttl=timedelta(seconds=ttl))
     
     async def verify_pin(self, telegram_id: int, pin_code: str) -> bool:
         """Проверка PIN-кода"""
