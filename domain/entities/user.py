@@ -1,6 +1,6 @@
 """Модель пользователя."""
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, JSON
 from sqlalchemy.sql import func
 from .base import Base
 from datetime import datetime
@@ -27,7 +27,8 @@ class User(Base):
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)
-    role = Column(String(50), nullable=False, default=UserRole.EMPLOYEE)
+    role = Column(String(50), nullable=False, default=UserRole.APPLICANT)  # Оставляем для обратной совместимости
+    roles = Column(JSON, nullable=False, default=lambda: [UserRole.APPLICANT.value])  # Новое поле для множественных ролей
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -44,35 +45,78 @@ class User(Base):
     
     def is_owner(self) -> bool:
         """Проверка, является ли пользователь владельцем."""
-        return self.role == UserRole.OWNER
+        if hasattr(self, 'roles') and self.roles:
+            return UserRole.OWNER.value in self.roles
+        return self.role == UserRole.OWNER.value
     
     def is_employee(self) -> bool:
         """Проверка, является ли пользователь сотрудником."""
-        return self.role == UserRole.EMPLOYEE
+        if hasattr(self, 'roles') and self.roles:
+            return UserRole.EMPLOYEE.value in self.roles
+        return self.role == UserRole.EMPLOYEE.value
     
     def is_applicant(self) -> bool:
         """Проверка, является ли пользователь соискателем."""
-        return self.role == UserRole.APPLICANT
+        if hasattr(self, 'roles') and self.roles:
+            return UserRole.APPLICANT.value in self.roles
+        return self.role == UserRole.APPLICANT.value
     
     def is_superadmin(self) -> bool:
         """Проверка, является ли пользователь суперадмином."""
-        return self.role == UserRole.SUPERADMIN
+        if hasattr(self, 'roles') and self.roles:
+            return UserRole.SUPERADMIN.value in self.roles
+        return self.role == UserRole.SUPERADMIN.value
     
     def has_role(self, role: UserRole) -> bool:
         """Проверка, имеет ли пользователь указанную роль."""
-        return self.role == role
+        # Поддерживаем как старый формат (role), так и новый (roles)
+        if hasattr(self, 'roles') and self.roles:
+            return role.value in self.roles
+        return self.role == role.value
     
     def can_manage_objects(self) -> bool:
         """Проверка, может ли пользователь управлять объектами."""
-        return self.role in [UserRole.OWNER, UserRole.SUPERADMIN]
+        if hasattr(self, 'roles') and self.roles:
+            return any(role in self.roles for role in [UserRole.OWNER.value, UserRole.SUPERADMIN.value])
+        return self.role in [UserRole.OWNER.value, UserRole.SUPERADMIN.value]
     
     def can_manage_users(self) -> bool:
         """Проверка, может ли пользователь управлять пользователями."""
-        return self.role in [UserRole.OWNER, UserRole.SUPERADMIN]
+        if hasattr(self, 'roles') and self.roles:
+            return any(role in self.roles for role in [UserRole.OWNER.value, UserRole.SUPERADMIN.value])
+        return self.role in [UserRole.OWNER.value, UserRole.SUPERADMIN.value]
     
     def can_work_shifts(self) -> bool:
         """Проверка, может ли пользователь работать сменами."""
-        return self.role in [UserRole.EMPLOYEE, UserRole.OWNER]
+        if hasattr(self, 'roles') and self.roles:
+            return any(role in self.roles for role in [UserRole.EMPLOYEE.value, UserRole.OWNER.value, UserRole.SUPERADMIN.value])
+        return self.role in [UserRole.EMPLOYEE.value, UserRole.OWNER.value, UserRole.SUPERADMIN.value]
+    
+    def add_role(self, role: UserRole) -> bool:
+        """Добавление роли пользователю."""
+        if not hasattr(self, 'roles') or not self.roles:
+            self.roles = [self.role] if self.role else []
+        
+        if role.value not in self.roles:
+            self.roles.append(role.value)
+            return True
+        return False
+    
+    def remove_role(self, role: UserRole) -> bool:
+        """Удаление роли у пользователя."""
+        if not hasattr(self, 'roles') or not self.roles:
+            return False
+        
+        if role.value in self.roles:
+            self.roles.remove(role.value)
+            return True
+        return False
+    
+    def get_roles(self) -> list:
+        """Получение списка ролей пользователя."""
+        if hasattr(self, 'roles') and self.roles:
+            return self.roles
+        return [self.role] if self.role else []
 
 
 
