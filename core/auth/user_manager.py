@@ -85,6 +85,10 @@ class UserManager:
             logger.error(f"Failed to get user {user_id} from DB: {e}")
             return None
     
+    async def get_user_by_telegram_id(self, telegram_id: int) -> Optional[dict]:
+        """Получение пользователя по Telegram ID (алиас для get_user)."""
+        return self.get_user(telegram_id)
+    
     def update_user_activity(self, user_id: int) -> None:
         """Обновляем время последней активности пользователя."""
         try:

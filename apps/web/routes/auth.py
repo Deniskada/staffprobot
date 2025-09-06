@@ -28,7 +28,7 @@ async def login_page(request: Request):
     })
 
 
-@router.post("/login", response_class=HTMLResponse)
+@router.post("/login")
 async def login(
     request: Request,
     telegram_id: int = Form(...),
@@ -38,6 +38,13 @@ async def login(
     try:
         # Проверка PIN-кода
         if not await auth_service.verify_pin(telegram_id, pin_code):
+            if request.headers.get("hx-request"):
+                return HTMLResponse("""
+                    <div class="alert alert-danger" role="alert">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Неверный PIN-код или время истекло
+                    </div>
+                """)
             return templates.TemplateResponse("auth/login.html", {
                 "request": request,
                 "title": "Вход в систему",
@@ -47,6 +54,13 @@ async def login(
         # Получение пользователя
         user = await user_manager.get_user_by_telegram_id(telegram_id)
         if not user:
+            if request.headers.get("hx-request"):
+                return HTMLResponse("""
+                    <div class="alert alert-danger" role="alert">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Пользователь не найден
+                    </div>
+                """)
             return templates.TemplateResponse("auth/login.html", {
                 "request": request,
                 "title": "Вход в систему",
@@ -55,12 +69,12 @@ async def login(
         
         # Создание JWT токена
         token = await auth_service.create_token({
-            "id": user.id,
-            "telegram_id": user.telegram_id,
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "role": user.role
+            "id": user["id"],
+            "telegram_id": user["id"],  # В UserManager id = telegram_id
+            "username": user["username"],
+            "first_name": user["first_name"],
+            "last_name": user["last_name"],
+            "role": "user"  # По умолчанию роль user
         })
         
         # Перенаправление на дашборд с токеном
@@ -70,6 +84,13 @@ async def login(
         return response
         
     except Exception as e:
+        if request.headers.get("hx-request"):
+            return HTMLResponse(f"""
+                <div class="alert alert-danger" role="alert">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Ошибка входа: {str(e)}
+                </div>
+            """)
         return templates.TemplateResponse("auth/login.html", {
             "request": request,
             "title": "Вход в систему",
