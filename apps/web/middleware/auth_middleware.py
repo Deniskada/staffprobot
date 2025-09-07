@@ -131,17 +131,21 @@ async def require_owner_or_superadmin(request: Request) -> dict:
     """Требует роль владельца или суперадмина."""
     user = await auth_middleware.get_current_user(request)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Требуется авторизация"
-        )
+        if request.url.path.startswith("/api/"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Требуется авторизация"
+            )
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
     user_roles = user.get("roles", [user.get("role", "employee")])
     if not any(role in ["owner", "superadmin"] for role in user_roles):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Недостаточно прав доступа"
-        )
+        if request.url.path.startswith("/api/"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Недостаточно прав доступа"
+            )
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
     return user
 

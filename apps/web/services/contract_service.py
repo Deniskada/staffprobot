@@ -373,7 +373,12 @@ class ContractService:
     
     async def get_contract_templates(self) -> List[ContractTemplate]:
         """Получение шаблонов договоров."""
-        return await self.get_contract_templates(active_only=True)
+        async with get_async_session() as session:
+            query = select(ContractTemplate).where(ContractTemplate.is_active == True)
+            query = query.order_by(ContractTemplate.created_at.desc())
+            
+            result = await session.execute(query)
+            return result.scalars().all()
     
     async def get_employee_by_id(self, employee_id: int, owner_id: int) -> Optional[Dict[str, Any]]:
         """Получение сотрудника по ID с проверкой прав владельца."""

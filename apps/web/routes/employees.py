@@ -18,8 +18,13 @@ templates = Jinja2Templates(directory="apps/web/templates")
 
 
 @router.get("/", response_class=HTMLResponse)
-async def employees_list(request: Request, current_user: dict = Depends(require_owner_or_superadmin)):
+async def employees_list(request: Request):
     """Список сотрудников владельца."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     # Получаем реальных сотрудников из базы данных
     contract_service = ContractService()
     employees = await contract_service.get_contract_employees(current_user["id"])
@@ -36,8 +41,13 @@ async def employees_list(request: Request, current_user: dict = Depends(require_
 
 
 @router.get("/create", response_class=HTMLResponse)
-async def create_contract_form(request: Request, current_user: dict = Depends(require_owner_or_superadmin)):
+async def create_contract_form(request: Request):
     """Форма создания договора с сотрудником."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     # Получаем доступных сотрудников и объекты
     contract_service = ContractService()
     available_employees = await contract_service.get_available_employees(current_user["id"])
@@ -60,7 +70,6 @@ async def create_contract_form(request: Request, current_user: dict = Depends(re
 @router.post("/create")
 async def create_contract(
     request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
     employee_id: int = Form(...),
     title: str = Form(...),
     content: str = Form(...),
@@ -71,6 +80,11 @@ async def create_contract(
     allowed_objects: List[int] = Form(default=[])
 ):
     """Создание договора с сотрудником."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     try:
         contract_service = ContractService()
         
@@ -103,8 +117,13 @@ async def create_contract(
 
 
 @router.get("/{employee_id}", response_class=HTMLResponse)
-async def employee_detail(request: Request, employee_id: int, current_user: dict = Depends(require_owner_or_superadmin)):
+async def employee_detail(request: Request, employee_id: int):
     """Детали сотрудника."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     contract_service = ContractService()
     employee = await contract_service.get_employee_by_id(employee_id, current_user["id"])
     
@@ -123,8 +142,13 @@ async def employee_detail(request: Request, employee_id: int, current_user: dict
 
 
 @router.get("/contract/{contract_id}", response_class=HTMLResponse)
-async def contract_detail(request: Request, contract_id: int, current_user: dict = Depends(require_owner_or_superadmin)):
+async def contract_detail(request: Request, contract_id: int):
     """Детали договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     contract_service = ContractService()
     contract = await contract_service.get_contract_by_id(contract_id, current_user["id"])
     
@@ -143,8 +167,13 @@ async def contract_detail(request: Request, contract_id: int, current_user: dict
 
 
 @router.get("/contract/{contract_id}/edit", response_class=HTMLResponse)
-async def edit_contract_form(request: Request, contract_id: int, current_user: dict = Depends(require_owner_or_superadmin)):
+async def edit_contract_form(request: Request, contract_id: int):
     """Форма редактирования договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     contract_service = ContractService()
     contract = await contract_service.get_contract_by_id(contract_id, current_user["id"])
     objects = await contract_service.get_owner_objects(current_user["id"])
@@ -168,7 +197,6 @@ async def edit_contract_form(request: Request, contract_id: int, current_user: d
 async def edit_contract(
     request: Request,
     contract_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
     title: str = Form(...),
     content: str = Form(...),
     hourly_rate: Optional[int] = Form(None),
@@ -177,6 +205,11 @@ async def edit_contract(
     allowed_objects: List[int] = Form(default=[])
 ):
     """Редактирование договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     try:
         contract_service = ContractService()
         
@@ -210,10 +243,14 @@ async def edit_contract(
 async def terminate_contract(
     request: Request,
     contract_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
     reason: str = Form(...)
 ):
     """Расторжение договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     try:
         contract_service = ContractService()
         success = await contract_service.terminate_contract(contract_id, current_user["id"], reason)
