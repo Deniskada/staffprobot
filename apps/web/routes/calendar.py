@@ -516,3 +516,120 @@ async def get_objects_api(
     except Exception as e:
         logger.error(f"Error getting objects: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки объектов")
+
+
+@router.get("/api/timeslots-status")
+async def get_timeslots_status(
+    year: int = Query(...),
+    month: int = Query(...),
+    object_id: Optional[int] = Query(None),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение статуса тайм-слотов для календаря"""
+    try:
+        from apps.web.services.shift_service import ShiftService
+        
+        # Получаем тайм-слоты за месяц
+        timeslot_service = TimeSlotService(db)
+        timeslots = await timeslot_service.get_timeslots_by_month(
+            year, month, current_user["telegram_id"], object_id
+        )
+        
+        # Получаем запланированные смены
+        shift_service = ShiftService(db)
+        scheduled_shifts = await shift_service.get_scheduled_shifts_by_month(
+            year, month, current_user["telegram_id"], object_id
+        )
+        
+        # Получаем фактические смены
+        actual_shifts = await shift_service.get_shifts_by_month(
+            year, month, current_user["telegram_id"], object_id
+        )
+        
+        # Создаем карту статусов
+        status_map = {}
+        
+        # Обрабатываем тайм-слоты
+        for slot in timeslots:
+            slot_key = f"{slot.slot_date}_{slot.object_id}_{slot.start_time}_{slot.end_time}"
+            status_map[slot_key] = {
+                "slot_id": slot.id,
+                "object_id": slot.object_id,
+                "object_name": slot.object.name,
+                "date": slot.slot_date.isoformat(),
+                "start_time": slot.start_time.strftime("%H:%M"),
+                "end_time": slot.end_time.strftime("%H:%M"),
+                "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else 0,
+                "status": "empty",  # По умолчанию пустой
+                "scheduled_shifts": [],
+                "actual_shifts": []
+            }
+        
+        # Добавляем запланированные смены
+        for shift in scheduled_shifts:
+            shift_start = shift.planned_start.time()
+            shift_end = shift.planned_end.time()
+            shift_date = shift.planned_start.date()
+            
+            # Ищем подходящий тайм-слот
+            for slot_key, slot_data in status_map.items():
+                if (slot_data["date"] == shift_date.isoformat() and
+                    slot_data["object_id"] == shift.object_id and
+                    slot_data["start_time"] <= shift_start.strftime("%H:%M") and
+                    slot_data["end_time"] >= shift_end.strftime("%H:%M")):
+                    
+                    slot_data["scheduled_shifts"].append({
+                        "id": shift.id,
+                        "user_id": shift.user_id,
+                        "status": shift.status,
+                        "start_time": shift_start.strftime("%H:%M"),
+                        "end_time": shift_end.strftime("%H:%M"),
+                        "notes": shift.notes
+                    })
+                    
+                    # Обновляем статус слота
+                    if shift.status == "planned":
+                        slot_data["status"] = "planned"
+                    elif shift.status == "confirmed":
+                        slot_data["status"] = "confirmed"
+                    elif shift.status == "cancelled":
+                        slot_data["status"] = "cancelled"
+                    break
+        
+        # Добавляем фактические смены
+        for shift in actual_shifts:
+            shift_start = shift.start_time.time()
+            shift_end = shift.end_time.time() if shift.end_time else None
+            shift_date = shift.start_time.date()
+            
+            if shift_end:  # Только если смена завершена
+                # Ищем подходящий тайм-слот
+                for slot_key, slot_data in status_map.items():
+                    if (slot_data["date"] == shift_date.isoformat() and
+                        slot_data["object_id"] == shift.object_id and
+                        slot_data["start_time"] <= shift_start.strftime("%H:%M") and
+                        slot_data["end_time"] >= shift_end.strftime("%H:%M")):
+                        
+                        slot_data["actual_shifts"].append({
+                            "id": shift.id,
+                            "user_id": shift.user_id,
+                            "status": shift.status,
+                            "start_time": shift_start.strftime("%H:%M"),
+                            "end_time": shift_end.strftime("%H:%M"),
+                            "total_hours": float(shift.total_hours) if shift.total_hours else 0,
+                            "total_payment": float(shift.total_payment) if shift.total_payment else 0
+                        })
+                        
+                        # Обновляем статус слота
+                        if shift.status == "completed":
+                            slot_data["status"] = "completed"
+                        elif shift.status == "active":
+                            slot_data["status"] = "active"
+                        break
+        
+        return list(status_map.values())
+        
+    except Exception as e:
+        logger.error(f"Error getting timeslots status: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки статуса тайм-слотов")
