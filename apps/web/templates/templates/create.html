@@ -1,435 +1,77 @@
 {% extends "base.html" %}
 
-{% block title %}Создание шаблона планирования{% endblock %}
-
-{% block extra_css %}
-<style>
-.form-container {
-    max-width: 800px;
-    margin: 0 auto;
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    padding: 30px;
-}
-
-.form-section {
-    margin-bottom: 30px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.form-section:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-}
-
-.section-title {
-    font-size: 1.2em;
-    font-weight: bold;
-    color: #495057;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.section-title i {
-    color: #007bff;
-}
-
-.form-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-label {
-    font-weight: 600;
-    color: #495057;
-    margin-bottom: 8px;
-    display: block;
-}
-
-.form-control, .form-select {
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    padding: 12px 15px;
-    font-size: 1em;
-    transition: all 0.3s ease;
-}
-
-.form-control:focus, .form-select:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.form-check {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 15px;
-}
-
-.form-check-input {
-    width: 20px;
-    height: 20px;
-    margin: 0;
-}
-
-.form-check-label {
-    font-weight: 500;
-    color: #495057;
-    margin: 0;
-}
-
-.help-text {
-    font-size: 0.9em;
-    color: #6c757d;
-    margin-top: 5px;
-}
-
-.btn-group {
-    display: flex;
-    gap: 15px;
-    justify-content: flex-end;
-    margin-top: 30px;
-}
-
-.btn {
-    padding: 12px 24px;
-    font-weight: 600;
-    border-radius: 8px;
-    transition: all 0.3s ease;
-}
-
-.btn-primary {
-    background: #007bff;
-    border: 2px solid #007bff;
-}
-
-.btn-primary:hover {
-    background: #0056b3;
-    border-color: #0056b3;
-    transform: translateY(-2px);
-}
-
-.btn-secondary {
-    background: #6c757d;
-    border: 2px solid #6c757d;
-}
-
-.btn-secondary:hover {
-    background: #545b62;
-    border-color: #545b62;
-}
-
-.repeat-options {
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 20px;
-    margin-top: 15px;
-}
-
-.repeat-options.hidden {
-    display: none;
-}
-
-.time-slots-section {
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 20px;
-    margin-top: 15px;
-}
-
-.time-slot-item {
-    background: white;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr auto;
-    gap: 15px;
-    align-items: end;
-}
-
-.time-slot-item:last-child {
-    margin-bottom: 0;
-}
-
-.remove-slot-btn {
-    background: #dc3545;
-    border: none;
-    color: white;
-    padding: 8px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.remove-slot-btn:hover {
-    background: #c82333;
-    transform: scale(1.05);
-}
-
-.add-slot-btn {
-    background: #28a745;
-    border: none;
-    color: white;
-    padding: 10px 20px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    width: 100%;
-}
-
-.add-slot-btn:hover {
-    background: #218838;
-    transform: translateY(-2px);
-}
-
-@media (max-width: 768px) {
-    .form-container {
-        margin: 0 15px;
-        padding: 20px;
-    }
-    
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-    
-    .time-slot-item {
-        grid-template-columns: 1fr;
-        gap: 10px;
-    }
-    
-    .btn-group {
-        flex-direction: column;
-    }
-}
-</style>
-{% endblock %}
+{% block title %}Создание шаблона договора{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="form-container">
-        <!-- Заголовок -->
-        <div class="d-flex align-items-center mb-4">
-            <a href="/templates" class="btn btn-outline-secondary me-3">
-                <i class="bi bi-arrow-left"></i> Назад
-            </a>
-            <div>
-                <h1 class="h3 mb-0">
-                    <i class="bi bi-plus-circle"></i> Создание шаблона планирования
-                </h1>
-                <p class="text-muted mb-0">Создайте шаблон для быстрого планирования тайм-слотов</p>
+<div class="container mt-4">
+    <h1 class="h3 mb-4">Создание шаблона договора</h1>
+    
+    <form action="/templates/create" method="post">
+        <div class="card mb-4">
+            <div class="card-header">Информация о шаблоне</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">
+                                Название шаблона <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="name" 
+                                   name="name" 
+                                   required
+                                   placeholder="Например: Стандартный трудовой договор">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="version" class="form-label">Версия</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="version" 
+                                   name="version" 
+                                   value="1.0"
+                                   placeholder="1.0">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="description" class="form-label">Описание</label>
+                    <textarea class="form-control" 
+                              id="description" 
+                              name="description" 
+                              rows="3"
+                              placeholder="Краткое описание шаблона (необязательно)"></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label for="content" class="form-label">
+                        Содержимое шаблона <span class="text-danger">*</span>
+                    </label>
+                    <textarea class="form-control" 
+                              id="content" 
+                              name="content" 
+                              rows="15" 
+                              required
+                              placeholder="Введите содержимое шаблона договора. Можно использовать переменные: {{employee_name}}, {{owner_name}}, {{hourly_rate}}, {{start_date}}, {{end_date}}"></textarea>
+                    <div class="form-text">
+                        <strong>Доступные переменные:</strong><br>
+                        <code>{{employee_name}}</code> - имя сотрудника<br>
+                        <code>{{owner_name}}</code> - имя владельца<br>
+                        <code>{{hourly_rate}}</code> - почасовая ставка<br>
+                        <code>{{start_date}}</code> - дата начала<br>
+                        <code>{{end_date}}</code> - дата окончания
+                    </div>
+                </div>
             </div>
         </div>
 
-        <form id="createTemplateForm" method="POST" action="/templates/create">
-            <!-- Основная информация -->
-            <div class="form-section">
-                <h3 class="section-title">
-                    <i class="bi bi-info-circle"></i> Основная информация
-                </h3>
-                
-                <div class="form-group">
-                    <label for="name" class="form-label">Название шаблона *</label>
-                    <input type="text" class="form-control" id="name" name="name" required 
-                           placeholder="Например: Утренняя смена">
-                    <div class="help-text">Краткое описание шаблона для быстрого поиска</div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="description" class="form-label">Описание</label>
-                    <textarea class="form-control" id="description" name="description" rows="3" 
-                              placeholder="Дополнительная информация о шаблоне"></textarea>
-                    <div class="help-text">Необязательное поле для подробного описания</div>
-                </div>
-                
-                <div class="form-row">
-                    <!-- Поле объекта убрано - шаблоны создаются без привязки к конкретному объекту -->
-                    
-                    <div class="form-group">
-                        <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
-                        <input type="number" class="form-control" id="hourly_rate" name="hourly_rate" 
-                               min="1" required placeholder="500">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Время работы -->
-            <div class="form-section">
-                <h3 class="section-title">
-                    <i class="bi bi-clock"></i> Время работы
-                </h3>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="start_time" class="form-label">Время начала *</label>
-                        <input type="time" class="form-control" id="start_time" name="start_time" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="end_time" class="form-label">Время окончания *</label>
-                        <input type="time" class="form-control" id="end_time" name="end_time" required>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Настройки повторения -->
-            <div class="form-section">
-                <h3 class="section-title">
-                    <i class="bi bi-arrow-repeat"></i> Настройки повторения
-                </h3>
-                
-                <div class="form-group">
-                    <label for="repeat_type" class="form-label">Тип повторения</label>
-                    <select class="form-select" id="repeat_type" name="repeat_type" onchange="toggleRepeatOptions()">
-                        <option value="none">Без повторения</option>
-                        <option value="daily">Ежедневно</option>
-                        <option value="weekly">Еженедельно</option>
-                        <option value="monthly">Ежемесячно</option>
-                    </select>
-                </div>
-                
-                <div class="repeat-options" id="repeatOptions">
-                    <div class="form-group" id="repeatDaysGroup" style="display: none;">
-                        <label class="form-label">Дни недели</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="day_1" name="repeat_days" value="1">
-                            <label class="form-check-label" for="day_1">Понедельник</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="day_2" name="repeat_days" value="2">
-                            <label class="form-check-label" for="day_2">Вторник</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="day_3" name="repeat_days" value="3">
-                            <label class="form-check-label" for="day_3">Среда</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="day_4" name="repeat_days" value="4">
-                            <label class="form-check-label" for="day_4">Четверг</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="day_5" name="repeat_days" value="5">
-                            <label class="form-check-label" for="day_5">Пятница</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="day_6" name="repeat_days" value="6">
-                            <label class="form-check-label" for="day_6">Суббота</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="day_7" name="repeat_days" value="7">
-                            <label class="form-check-label" for="day_7">Воскресенье</label>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="repeat_interval" class="form-label">Интервал повторения</label>
-                            <input type="number" class="form-control" id="repeat_interval" name="repeat_interval" 
-                                   min="1" value="1" placeholder="1">
-                            <div class="help-text">Каждый N-й день/неделю/месяц</div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="repeat_end_date" class="form-label">Дата окончания</label>
-                            <input type="date" class="form-control" id="repeat_end_date" name="repeat_end_date">
-                            <div class="help-text">Необязательно</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Дополнительные настройки -->
-            <div class="form-section">
-                <h3 class="section-title">
-                    <i class="bi bi-gear"></i> Дополнительные настройки
-                </h3>
-                
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="is_public" name="is_public">
-                    <label class="form-check-label" for="is_public">
-                        Сделать шаблон публичным
-                    </label>
-                    <div class="help-text">Публичные шаблоны доступны всем владельцам объектов</div>
-                </div>
-            </div>
-
-            <!-- Кнопки -->
-            <div class="btn-group">
-                <a href="/templates" class="btn btn-secondary">
-                    <i class="bi bi-x-lg"></i> Отмена
-                </a>
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-check-lg"></i> Создать шаблон
-                </button>
-            </div>
-        </form>
-    </div>
+        <div class="d-flex justify-content-end">
+            <a href="/templates" class="btn btn-secondary me-2">Отмена</a>
+            <button type="submit" class="btn btn-primary">Создать шаблон</button>
+        </div>
+    </form>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-function toggleRepeatOptions() {
-    const repeatType = document.getElementById('repeat_type').value;
-    const repeatOptions = document.getElementById('repeatOptions');
-    const repeatDaysGroup = document.getElementById('repeatDaysGroup');
-    
-    if (repeatType === 'none') {
-        repeatOptions.classList.add('hidden');
-    } else {
-        repeatOptions.classList.remove('hidden');
-        
-        if (repeatType === 'weekly') {
-            repeatDaysGroup.style.display = 'block';
-        } else {
-            repeatDaysGroup.style.display = 'none';
-        }
-    }
-}
-
-// Устанавливаем время по умолчанию
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('start_time').value = '09:00';
-    document.getElementById('end_time').value = '18:00';
-    
-    // Устанавливаем дату окончания на месяц вперед
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    document.getElementById('repeat_end_date').value = nextMonth.toISOString().split('T')[0];
-});
-
-// Валидация формы
-document.getElementById('createTemplateForm').addEventListener('submit', function(e) {
-    const repeatType = document.getElementById('repeat_type').value;
-    const repeatDays = document.querySelectorAll('input[name="repeat_days"]:checked');
-    
-    if (repeatType === 'weekly' && repeatDays.length === 0) {
-        e.preventDefault();
-        alert('Выберите хотя бы один день недели для еженедельного повторения');
-        return;
-    }
-    
-    const startTime = document.getElementById('start_time').value;
-    const endTime = document.getElementById('end_time').value;
-    
-    if (startTime >= endTime) {
-        e.preventDefault();
-        alert('Время начала должно быть меньше времени окончания');
-        return;
-    }
-});
-
-// Обработка изменения объекта убрана - шаблоны создаются без привязки к объекту
-</script>
 {% endblock %}

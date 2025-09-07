@@ -1,391 +1,200 @@
-"""
-Роуты для управления шаблонами планирования
-"""
-from fastapi import APIRouter, Request, Depends, HTTPException, Form, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, Request, Form, HTTPException, Depends
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from typing import List, Optional
+from datetime import datetime
+from apps.web.services.contract_service import ContractService
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
-from apps.web.services.template_service import TemplateService
-from apps.web.services.object_service import ObjectService
-from core.database.session import get_db_session
 from core.logging.logger import logger
-from typing import Optional, List, Dict, Any
-from datetime import datetime, date, timedelta
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
 
 
 @router.get("/", response_class=HTMLResponse)
-async def templates_list(
-    request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Список шаблонов планирования"""
-    try:
-        template_service = TemplateService(db)
-        templates_data = await template_service.get_templates_by_owner(current_user["telegram_id"])
-        
-        # Отладочная информация
-        logger.info(f"Found {len(templates_data)} templates for user {current_user['telegram_id']}")
-        for template in templates_data:
-            logger.info(f"Template: id={template.id}, name={template.name}, start_time={template.start_time}, hourly_rate={template.hourly_rate}")
-        
-        return templates.TemplateResponse(
-            "templates/index.html",
-            {
-                "request": request,
-                "templates": templates_data,
-                "current_user": current_user
-            }
-        )
-        
-    except Exception as e:
-        logger.error(f"Error loading templates list: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки шаблонов")
+async def templates_list(request: Request):
+    """Список шаблонов договоров."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    contract_service = ContractService()
+    templates_list = await contract_service.get_contract_templates()
+    
+    return templates.TemplateResponse(
+        "templates/list.html",
+        {
+            "request": request,
+            "templates": templates_list,
+            "title": "Шаблоны договоров",
+            "current_user": current_user
+        }
+    )
 
 
 @router.get("/create", response_class=HTMLResponse)
-async def create_template_form(
-    request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Форма создания шаблона"""
-    try:
-        object_service = ObjectService(db)
-        objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
-        
-        return templates.TemplateResponse(
-            "templates/create.html",
-            {
-                "request": request,
-                "objects": objects,
-                "current_user": current_user
-            }
-        )
-        
-    except Exception as e:
-        logger.error(f"Error loading create template form: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки формы")
+async def create_template_form(request: Request):
+    """Форма создания шаблона договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    return templates.TemplateResponse(
+        "templates/create.html",
+        {
+            "request": request,
+            "title": "Создание шаблона договора",
+            "current_user": current_user
+        }
+    )
 
 
 @router.post("/create")
 async def create_template(
     request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
+    name: str = Form(...),
+    description: str = Form(""),
+    content: str = Form(...),
+    version: str = Form("1.0")
 ):
-    """Создание нового шаблона"""
+    """Создание шаблона договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     try:
-        form_data = await request.form()
-        
-        # Парсим данные формы
-        template_data = {
-            "name": form_data.get("name", "").strip(),
-            "description": form_data.get("description", "").strip(),
-            "object_id": None,  # Шаблоны создаются без привязки к объекту
-            "start_time": form_data.get("start_time", "").strip(),
-            "end_time": form_data.get("end_time", "").strip(),
-            "hourly_rate": int(form_data.get("hourly_rate", 0)),
-            "repeat_type": form_data.get("repeat_type", "none"),
-            "repeat_days": form_data.get("repeat_days", "").strip(),
-            "repeat_interval": int(form_data.get("repeat_interval", 1)),
-            "is_public": form_data.get("is_public") == "on"
-        }
-        
-        # Валидация
-        if not template_data["name"]:
-            raise HTTPException(status_code=400, detail="Название шаблона обязательно")
-        
-        if not template_data["start_time"] or not template_data["end_time"]:
-            raise HTTPException(status_code=400, detail="Укажите время начала и окончания")
-        
-        if template_data["hourly_rate"] <= 0:
-            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+        contract_service = ContractService()
         
         # Создаем шаблон
-        template_service = TemplateService(db)
-        template = await template_service.create_template(template_data, current_user["telegram_id"])
+        template_data = {
+            "name": name,
+            "description": description,
+            "content": content,
+            "version": version,
+            "created_by": current_user["id"]  # Это telegram_id
+        }
         
-        if not template:
+        template = await contract_service.create_contract_template(template_data)
+        
+        if template:
+            return RedirectResponse(url="/templates", status_code=303)
+        else:
             raise HTTPException(status_code=400, detail="Ошибка создания шаблона")
-        
-        # Перенаправляем на страницу со списком шаблонов
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url="/templates?created=true", status_code=303)
-        
-    except HTTPException:
-        raise
+            
     except Exception as e:
         logger.error(f"Error creating template: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка создания шаблона: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Ошибка создания шаблона: {str(e)}")
 
 
 @router.get("/{template_id}", response_class=HTMLResponse)
-async def template_detail(
-    template_id: int,
-    request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Детали шаблона"""
-    try:
-        template_service = TemplateService(db)
-        template = await template_service.get_template_by_id(template_id, current_user["telegram_id"])
-        
-        if not template:
-            raise HTTPException(status_code=404, detail="Шаблон не найден")
-        
-        return templates.TemplateResponse(
-            "templates/view.html",
-            {
-                "request": request,
-                "template": template,
-                "current_user": current_user
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error loading template {template_id}: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки шаблона")
-
-
-@router.get("/{template_id}", response_class=HTMLResponse)
-async def view_template(
-    template_id: int,
-    request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Просмотр шаблона"""
-    try:
-        template_service = TemplateService(db)
-        template = await template_service.get_template_by_id(template_id, current_user["telegram_id"])
-        
-        if not template:
-            raise HTTPException(status_code=404, detail="Шаблон не найден")
-        
-        return templates.TemplateResponse(
-            "templates/view.html",
-            {
-                "request": request,
-                "template": template,
-                "current_user": current_user
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error loading template view: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки шаблона")
+async def template_detail(request: Request, template_id: int):
+    """Детали шаблона договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    contract_service = ContractService()
+    template = await contract_service.get_contract_template(template_id)
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Шаблон не найден")
+    
+    return templates.TemplateResponse(
+        "templates/detail.html",
+        {
+            "request": request,
+            "template": template,
+            "title": "Детали шаблона",
+            "current_user": current_user
+        }
+    )
 
 
 @router.get("/{template_id}/edit", response_class=HTMLResponse)
-async def edit_template_form(
-    template_id: int,
-    request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Форма редактирования шаблона"""
-    try:
-        template_service = TemplateService(db)
-        template = await template_service.get_template_by_id(template_id, current_user["telegram_id"])
-        
-        if not template:
-            raise HTTPException(status_code=404, detail="Шаблон не найден")
-        
-        object_service = ObjectService(db)
-        objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
-        
-        return templates.TemplateResponse(
-            "templates/edit.html",
-            {
-                "request": request,
-                "template": template,
-                "objects": objects,
-                "current_user": current_user
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error loading edit template form: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки формы")
+async def edit_template_form(request: Request, template_id: int):
+    """Форма редактирования шаблона договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    contract_service = ContractService()
+    template = await contract_service.get_contract_template(template_id)
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Шаблон не найден")
+    
+    return templates.TemplateResponse(
+        "templates/edit.html",
+        {
+            "request": request,
+            "template": template,
+            "title": "Редактирование шаблона",
+            "current_user": current_user
+        }
+    )
 
 
 @router.post("/{template_id}/edit")
 async def update_template(
-    template_id: int,
     request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
+    template_id: int,
+    name: str = Form(...),
+    description: str = Form(""),
+    content: str = Form(...),
+    version: str = Form("1.0")
 ):
-    """Обновление шаблона"""
+    """Обновление шаблона договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     try:
-        form_data = await request.form()
+        contract_service = ContractService()
         
+        # Обновляем шаблон
         template_data = {
-            "name": form_data.get("name", "").strip(),
-            "description": form_data.get("description", "").strip(),
-            "object_id": None,  # Шаблоны универсальные
-            "start_time": form_data.get("start_time", "").strip(),
-            "end_time": form_data.get("end_time", "").strip(),
-            "hourly_rate": int(form_data.get("hourly_rate", 0)),
-            "repeat_type": form_data.get("repeat_type", "none"),
-            "repeat_days": ",".join(form_data.getlist("repeat_days")),
-            "repeat_interval": int(form_data.get("repeat_interval", 1)),
-            "is_public": form_data.get("is_public") == "on"
+            "name": name,
+            "description": description,
+            "content": content,
+            "version": version
         }
         
-        # Валидация
-        if not template_data["name"]:
-            raise HTTPException(status_code=400, detail="Название шаблона обязательно")
+        success = await contract_service.update_contract_template(template_id, template_data)
         
-        template_service = TemplateService(db)
-        template = await template_service.update_template(template_id, template_data, current_user["telegram_id"])
-        
-        if not template:
+        if success:
+            return RedirectResponse(url=f"/templates/{template_id}", status_code=303)
+        else:
             raise HTTPException(status_code=400, detail="Ошибка обновления шаблона")
-        
-        # Перенаправляем на страницу со списком шаблонов
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url="/templates?updated=true", status_code=303)
-        
-    except HTTPException:
-        raise
+            
     except Exception as e:
-        logger.error(f"Error updating template {template_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка обновления шаблона: {str(e)}")
+        logger.error(f"Error updating template: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка обновления шаблона: {str(e)}")
 
 
 @router.post("/{template_id}/delete")
-async def delete_template(
-    template_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Удаление шаблона"""
+async def delete_template(request: Request, template_id: int):
+    """Удаление шаблона договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
     try:
-        template_service = TemplateService(db)
-        success = await template_service.delete_template(template_id, current_user["telegram_id"])
+        contract_service = ContractService()
         
-        if not success:
-            raise HTTPException(status_code=404, detail="Шаблон не найден")
+        success = await contract_service.delete_contract_template(template_id)
         
-        return JSONResponse({
-            "success": True,
-            "message": "Шаблон успешно удален"
-        })
-        
-    except HTTPException:
-        raise
+        if success:
+            return RedirectResponse(url="/templates", status_code=303)
+        else:
+            raise HTTPException(status_code=400, detail="Ошибка удаления шаблона")
+            
     except Exception as e:
-        logger.error(f"Error deleting template {template_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка удаления шаблона: {str(e)}")
-
-
-@router.post("/{template_id}/apply")
-async def apply_template(
-    template_id: int,
-    request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Применение шаблона к периоду"""
-    try:
-        form_data = await request.form()
-        
-        start_date_str = form_data.get("start_date", "").strip()
-        end_date_str = form_data.get("end_date", "").strip()
-        object_ids = form_data.getlist("object_ids")  # Получаем список ID объектов
-        
-        if not start_date_str or not end_date_str:
-            raise HTTPException(status_code=400, detail="Укажите даты начала и окончания")
-        
-        if not object_ids:
-            raise HTTPException(status_code=400, detail="Выберите хотя бы один объект")
-        
-        try:
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Неверный формат даты")
-        
-        if start_date > end_date:
-            raise HTTPException(status_code=400, detail="Дата начала не может быть позже даты окончания")
-        
-        template_service = TemplateService(db)
-        result = await template_service.apply_template_to_objects(
-            template_id, start_date, end_date, object_ids, current_user["telegram_id"]
-        )
-        
-        return JSONResponse(result)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error applying template {template_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка применения шаблона: {str(e)}")
-
-
-@router.delete("/{template_id}")
-async def delete_template(
-    template_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Удаление шаблона"""
-    try:
-        template_service = TemplateService(db)
-        result = await template_service.delete_template(template_id, current_user["telegram_id"])
-        
-        if not result:
-            raise HTTPException(status_code=404, detail="Шаблон не найден")
-        
-        return JSONResponse({"success": True, "message": "Шаблон успешно удален"})
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting template {template_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка удаления шаблона: {str(e)}")
-
-
-@router.get("/api/templates")
-async def get_templates_api(
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """API для получения списка шаблонов"""
-    try:
-        template_service = TemplateService(db)
-        templates_data = await template_service.get_templates_by_owner(current_user["telegram_id"])
-        
-        templates_list = []
-        for template in templates_data:
-            templates_list.append({
-                "id": template.id,
-                "name": template.name,
-                "description": template.description,
-                "object_name": template.object.name if template.object else "Неизвестный объект",
-                "start_time": template.start_time,
-                "end_time": template.end_time,
-                "hourly_rate": float(template.hourly_rate),
-                "repeat_type": template.repeat_type,
-                "is_public": template.is_public,
-                "created_at": template.created_at.isoformat() if template.created_at else None
-            })
-        
-        return JSONResponse({"templates": templates_list})
-        
-    except Exception as e:
-        logger.error(f"Error getting templates API: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки шаблонов")
+        logger.error(f"Error deleting template: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка удаления шаблона: {str(e)}")
