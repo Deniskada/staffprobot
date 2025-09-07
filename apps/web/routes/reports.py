@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from datetime import date, datetime, timedelta
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func, desc
+from sqlalchemy import select, and_, or_, func, desc, String
 from sqlalchemy.orm import selectinload
 import io
 import pandas as pd
@@ -57,19 +57,16 @@ async def reports_index(request: Request):
         objects_result = await session.execute(objects_query)
         objects = objects_result.scalars().all()
         
-        # Получаем сотрудников, которые работали на объектах владельца
+        # Получаем всех пользователей, которые работали на объектах владельца (не только employee)
         employees_query = select(User).distinct().join(Shift, User.id == Shift.user_id).where(
-            and_(
-                User.role == "employee",
-                Shift.object_id.in_([obj.id for obj in objects])
-            )
+            Shift.object_id.in_([obj.id for obj in objects])
         )
         employees_result = await session.execute(employees_query)
         employees = employees_result.scalars().all()
         
-        # Если нет сотрудников из смен, показываем всех сотрудников
+        # Если нет сотрудников из смен, показываем всех пользователей кроме текущего владельца
         if not employees:
-            all_employees_query = select(User).where(User.role == "employee")
+            all_employees_query = select(User).where(User.id != user_id)
             all_employees_result = await session.execute(all_employees_query)
             employees = all_employees_result.scalars().all()
         
