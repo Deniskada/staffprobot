@@ -58,26 +58,34 @@ class ContractService:
     
     async def create_contract(
         self,
-        owner_id: int,
+        owner_telegram_id: int,
         contract_data: Dict[str, Any]
     ) -> Optional[Contract]:
         """Создание договора с сотрудником."""
         async with get_async_session() as session:
-            # Находим сотрудника по ID
-            employee_query = select(User).where(User.id == contract_data["employee_id"])
+            # Находим владельца по telegram_id
+            owner_query = select(User).where(User.telegram_id == owner_telegram_id)
+            owner_result = await session.execute(owner_query)
+            owner = owner_result.scalar_one_or_none()
+            
+            if not owner:
+                raise ValueError(f"Владелец с Telegram ID {owner_telegram_id} не найден")
+            
+            # Находим сотрудника по telegram_id
+            employee_query = select(User).where(User.telegram_id == contract_data["employee_telegram_id"])
             employee_result = await session.execute(employee_query)
             employee = employee_result.scalar_one_or_none()
             
             if not employee:
-                raise ValueError(f"Сотрудник с ID {contract_data['employee_id']} не найден")
+                raise ValueError(f"Сотрудник с Telegram ID {contract_data['employee_telegram_id']} не найден")
             
             # Генерируем номер договора
-            contract_number = await self._generate_contract_number(owner_id)
+            contract_number = await self._generate_contract_number(owner.id)
             
             # Создаем договор
             contract = Contract(
                 contract_number=contract_number,
-                owner_id=owner_id,
+                owner_id=owner.id,
                 employee_id=employee.id,
                 template_id=contract_data.get("template_id"),
                 title=contract_data["title"],

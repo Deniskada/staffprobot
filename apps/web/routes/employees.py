@@ -84,7 +84,7 @@ async def create_contract_form(request: Request):
 @router.post("/create")
 async def create_contract(
     request: Request,
-    employee_id: int = Form(...),
+    employee_telegram_id: int = Form(...),
     title: str = Form(...),
     content: str = Form(...),
     hourly_rate: Optional[int] = Form(None),
@@ -108,7 +108,7 @@ async def create_contract(
         
         # Создаем договор
         contract_data = {
-            "employee_id": employee_id,
+            "employee_telegram_id": employee_telegram_id,
             "title": title,
             "content": content,
             "hourly_rate": hourly_rate,
