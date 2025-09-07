@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from apps.web.services.object_service import ObjectService, TimeSlotService
-from core.database.session import get_async_session
+from core.database.session import get_db_session
 from core.logging.logger import logger
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,13 +51,13 @@ objects_storage = {
 async def objects_list(
     request: Request,
     current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Список объектов владельца"""
     try:
         # Получение объектов владельца из базы данных
         object_service = ObjectService(db)
-        objects = await object_service.get_objects_by_owner(current_user["id"])
+        objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
         
         # Преобразуем в формат для шаблона
         objects_data = []
@@ -111,7 +111,7 @@ async def create_object(
     closing_time: str = Form(...),
     max_distance: int = Form(500),
     current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Создание нового объекта"""
     try:
@@ -144,7 +144,7 @@ async def create_object(
             "coordinates": "0.0,0.0"  # TODO: Добавить геолокацию
         }
         
-        new_object = await object_service.create_object(object_data, current_user["id"])
+        new_object = await object_service.create_object(object_data, current_user["telegram_id"])
         
         logger.info(f"Object {new_object.id} created successfully")
         
@@ -162,7 +162,7 @@ async def object_detail(
     request: Request, 
     object_id: int,
     current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Детальная информация об объекте"""
     try:
@@ -170,12 +170,12 @@ async def object_detail(
         object_service = ObjectService(db)
         timeslot_service = TimeSlotService(db)
         
-        obj = await object_service.get_object_by_id(object_id, current_user["id"])
+        obj = await object_service.get_object_by_id(object_id, current_user["telegram_id"])
         if not obj:
             raise HTTPException(status_code=404, detail="Объект не найден")
         
         # Получаем тайм-слоты
-        timeslots = await timeslot_service.get_timeslots_by_object(object_id, current_user["id"])
+        timeslots = await timeslot_service.get_timeslots_by_object(object_id, current_user["telegram_id"])
         
         # Преобразуем в формат для шаблона
         object_data = {

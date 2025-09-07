@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
 from domain.entities.object import Object
 from domain.entities.time_slot import TimeSlot
+from domain.entities.user import User
 from core.logging.logger import logger
 from datetime import datetime, time
 
@@ -19,37 +20,63 @@ class ObjectService:
     def __init__(self, db_session: AsyncSession):
         self.db = db_session
     
-    async def get_objects_by_owner(self, owner_id: int) -> List[Object]:
-        """Получить все объекты владельца"""
+    async def _get_user_internal_id(self, telegram_id: int) -> Optional[int]:
+        """Получить внутренний ID пользователя по Telegram ID"""
         try:
+            query = select(User.id).where(User.telegram_id == telegram_id)
+            result = await self.db.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting user internal ID for telegram_id {telegram_id}: {e}")
+            return None
+    
+    async def get_objects_by_owner(self, telegram_id: int) -> List[Object]:
+        """Получить все объекты владельца по Telegram ID"""
+        try:
+            # Получаем внутренний ID пользователя
+            internal_id = await self._get_user_internal_id(telegram_id)
+            if not internal_id:
+                logger.warning(f"User with telegram_id {telegram_id} not found")
+                return []
+            
             query = select(Object).where(
-                Object.owner_id == owner_id,
+                Object.owner_id == internal_id,
                 Object.is_active == True
             ).order_by(Object.created_at.desc())
             
             result = await self.db.execute(query)
             return result.scalars().all()
         except Exception as e:
-            logger.error(f"Error getting objects for owner {owner_id}: {e}")
+            logger.error(f"Error getting objects for owner {telegram_id}: {e}")
             raise
     
-    async def get_object_by_id(self, object_id: int, owner_id: int) -> Optional[Object]:
+    async def get_object_by_id(self, object_id: int, telegram_id: int) -> Optional[Object]:
         """Получить объект по ID с проверкой владельца"""
         try:
+            # Получаем внутренний ID пользователя
+            internal_id = await self._get_user_internal_id(telegram_id)
+            if not internal_id:
+                return None
+            
             query = select(Object).where(
                 Object.id == object_id,
-                Object.owner_id == owner_id
+                Object.owner_id == internal_id
             )
             
             result = await self.db.execute(query)
             return result.scalar_one_or_none()
         except Exception as e:
-            logger.error(f"Error getting object {object_id} for owner {owner_id}: {e}")
+            logger.error(f"Error getting object {object_id} for owner {telegram_id}: {e}")
             raise
     
-    async def create_object(self, object_data: Dict[str, Any], owner_id: int) -> Object:
+    async def create_object(self, object_data: Dict[str, Any], telegram_id: int) -> Object:
         """Создать новый объект"""
         try:
+            # Получаем внутренний ID пользователя
+            internal_id = await self._get_user_internal_id(telegram_id)
+            if not internal_id:
+                raise ValueError(f"User with telegram_id {telegram_id} not found")
+            
             # Парсим координаты
             coordinates = object_data.get('coordinates', '0.0,0.0')
             if isinstance(coordinates, str):
@@ -61,7 +88,7 @@ class ObjectService:
             # Создаем объект
             new_object = Object(
                 name=object_data['name'],
-                owner_id=owner_id,
+                owner_id=internal_id,
                 address=object_data.get('address', ''),
                 coordinates=f"{lat},{lon}",
                 opening_time=time.fromisoformat(object_data['opening_time']),
@@ -76,12 +103,12 @@ class ObjectService:
             await self.db.commit()
             await self.db.refresh(new_object)
             
-            logger.info(f"Created object {new_object.id} for owner {owner_id}")
+            logger.info(f"Created object {new_object.id} for owner {telegram_id}")
             return new_object
             
         except Exception as e:
             await self.db.rollback()
-            logger.error(f"Error creating object for owner {owner_id}: {e}")
+            logger.error(f"Error creating object for owner {telegram_id}: {e}")
             raise
     
     async def update_object(self, object_id: int, object_data: Dict[str, Any], owner_id: int) -> Optional[Object]:
@@ -164,13 +191,28 @@ class TimeSlotService:
     def __init__(self, db_session: AsyncSession):
         self.db = db_session
     
-    async def get_timeslots_by_object(self, object_id: int, owner_id: int) -> List[TimeSlot]:
+    async def _get_user_internal_id(self, telegram_id: int) -> Optional[int]:
+        """Получить внутренний ID пользователя по Telegram ID"""
+        try:
+            query = select(User.id).where(User.telegram_id == telegram_id)
+            result = await self.db.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting user internal ID for telegram_id {telegram_id}: {e}")
+            return None
+    
+    async def get_timeslots_by_object(self, object_id: int, telegram_id: int) -> List[TimeSlot]:
         """Получить тайм-слоты объекта с проверкой владельца"""
         try:
+            # Получаем внутренний ID пользователя
+            internal_id = await self._get_user_internal_id(telegram_id)
+            if not internal_id:
+                return []
+            
             # Сначала проверяем, что объект принадлежит владельцу
             object_query = select(Object).where(
                 Object.id == object_id,
-                Object.owner_id == owner_id
+                Object.owner_id == internal_id
             )
             object_result = await self.db.execute(object_query)
             if not object_result.scalar_one_or_none():

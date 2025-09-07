@@ -33,6 +33,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"❌ Ошибка подключения к Redis: {e}")
     
+    # Инициализация базы данных
+    from core.database.session import init_database
+    try:
+        await init_database()
+        print("✅ База данных подключена")
+    except Exception as e:
+        print(f"❌ Ошибка подключения к базе данных: {e}")
+    
     yield
     
     # Очистка при завершении
@@ -41,6 +49,14 @@ async def lifespan(app: FastAPI):
         print("✅ Redis отключен")
     except Exception as e:
         print(f"❌ Ошибка отключения от Redis: {e}")
+    
+    # Закрытие базы данных
+    from core.database.session import close_database
+    try:
+        await close_database()
+        print("✅ База данных отключена")
+    except Exception as e:
+        print(f"❌ Ошибка отключения от базы данных: {e}")
     
     print("🛑 Остановка веб-приложения StaffProBot")
 
