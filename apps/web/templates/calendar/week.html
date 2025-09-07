@@ -45,6 +45,39 @@
     padding: 8px;
     position: relative;
     border: 1px solid #dee2e6;
+    transition: all 0.2s ease;
+}
+
+.day-column.drag-over {
+    background: #e3f2fd;
+    border: 2px dashed #007bff;
+    transform: scale(1.02);
+}
+
+.day-column.drop-zone {
+    position: relative;
+}
+
+.day-column.drop-zone::after {
+    content: "Перетащите объект сюда";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 123, 255, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.day-column.drop-zone.drag-over::after {
+    opacity: 1;
 }
 
 .day-header {
@@ -165,6 +198,9 @@
 {% endblock %}
 
 {% block content %}
+<!-- Панель drag & drop -->
+{% include 'calendar/drag_drop_panel.html' %}
+
 <div class="container-fluid">
     <!-- Заголовок и навигация -->
     <div class="week-header">
@@ -304,7 +340,7 @@
             
             <!-- Дни недели -->
             {% for day in week_data %}
-            <div class="day-column">
+            <div class="day-column drop-zone" data-date="{{ day.date.strftime('%Y-%m-%d') }}">
                 <div class="day-header {% if day.is_today %}today{% endif %}">
                     <div class="day-number">{{ day.date.day }}</div>
                     <div class="day-name">
