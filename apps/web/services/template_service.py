@@ -73,26 +73,32 @@ class TemplateService:
     ) -> List[PlanningTemplate]:
         """Получение шаблонов владельца"""
         try:
-            query = select(PlanningTemplate).where(
+            # Получаем шаблоны владельца
+            owner_query = select(PlanningTemplate).where(
                 and_(
                     PlanningTemplate.owner_telegram_id == owner_telegram_id,
                     PlanningTemplate.is_active == True
                 )
             )
+            owner_result = await self.db.execute(owner_query)
+            owner_templates = owner_result.scalars().all()
             
+            templates = list(owner_templates)
+            
+            # Добавляем публичные шаблоны, если нужно
             if include_public:
-                query = query.union(
-                    select(PlanningTemplate).where(
-                        and_(
-                            PlanningTemplate.is_public == True,
-                            PlanningTemplate.is_active == True,
-                            PlanningTemplate.owner_telegram_id != owner_telegram_id
-                        )
+                public_query = select(PlanningTemplate).where(
+                    and_(
+                        PlanningTemplate.is_public == True,
+                        PlanningTemplate.is_active == True,
+                        PlanningTemplate.owner_telegram_id != owner_telegram_id
                     )
                 )
+                public_result = await self.db.execute(public_query)
+                public_templates = public_result.scalars().all()
+                templates.extend(public_templates)
             
-            result = await self.db.execute(query)
-            return result.scalars().all()
+            return templates
             
         except Exception as e:
             logger.error(f"Error getting templates: {e}")

@@ -140,7 +140,7 @@ async def template_detail(
             raise HTTPException(status_code=404, detail="Шаблон не найден")
         
         return templates.TemplateResponse(
-            "templates/detail.html",
+            "templates/view.html",
             {
                 "request": request,
                 "template": template,
@@ -255,10 +255,9 @@ async def update_template(
         if not template:
             raise HTTPException(status_code=400, detail="Ошибка обновления шаблона")
         
-        return JSONResponse({
-            "success": True,
-            "message": "Шаблон успешно обновлен"
-        })
+        # Перенаправляем на страницу со списком шаблонов
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/templates?updated=true", status_code=303)
         
     except HTTPException:
         raise
