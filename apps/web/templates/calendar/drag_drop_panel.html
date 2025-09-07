@@ -4,6 +4,9 @@
         <h6 class="mb-3">
             <i class="bi bi-grip-vertical"></i> Объекты для планирования
         </h6>
+        <div class="objects-count" id="objectsCount" style="display: none;">
+            <span class="badge bg-primary" id="objectsCountBadge">0</span>
+        </div>
         <button class="btn btn-sm btn-outline-secondary" onclick="togglePanel()">
             <i class="bi bi-chevron-up" id="panelToggleIcon"></i>
         </button>
@@ -110,11 +113,45 @@
 }
 
 .drag-drop-panel.collapsed {
-    width: 60px;
+    width: 80px;
 }
 
 .drag-drop-panel.collapsed .panel-content {
     display: none;
+}
+
+.drag-drop-panel.collapsed .panel-header h6 {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    margin: 0;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.drag-drop-panel.collapsed .panel-header {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 5px;
+    height: 120px;
+}
+
+.drag-drop-panel.collapsed .panel-header button {
+    margin-top: 10px;
+    transform: rotate(90deg);
+}
+
+.objects-count {
+    margin: 5px 0;
+}
+
+.drag-drop-panel.collapsed .objects-count {
+    margin: 5px 0;
+}
+
+.drag-drop-panel.collapsed .objects-count .badge {
+    font-size: 0.8em;
+    padding: 4px 6px;
 }
 
 .panel-header {
@@ -247,10 +284,36 @@
         transform: none;
         width: 100%;
         margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
     .drag-drop-panel.collapsed {
         width: 100%;
+        height: 60px;
+    }
+    
+    .drag-drop-panel.collapsed .panel-header {
+        height: 60px;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+    
+    .drag-drop-panel.collapsed .panel-header h6 {
+        writing-mode: horizontal-tb;
+        text-orientation: mixed;
+        font-size: 1em;
+    }
+    
+    .drag-drop-panel.collapsed .panel-header button {
+        transform: none;
+        margin-top: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .drag-drop-panel {
+        margin: 0 -15px 20px -15px;
+        border-radius: 0;
     }
 }
 </style>
@@ -264,7 +327,20 @@ let dragPreview = null;
 document.addEventListener('DOMContentLoaded', function() {
     loadObjects();
     setupDragAndDrop();
+    restorePanelState();
 });
+
+function restorePanelState() {
+    const isCollapsed = localStorage.getItem('dragDropPanelCollapsed') === 'true';
+    const panel = document.getElementById('dragDropPanel');
+    const icon = document.getElementById('panelToggleIcon');
+    
+    if (isCollapsed) {
+        panel.classList.add('collapsed');
+        icon.classList.remove('bi-chevron-up');
+        icon.classList.add('bi-chevron-down');
+    }
+}
 
 async function loadObjects() {
     try {
@@ -289,6 +365,12 @@ async function loadObjects() {
 
 function renderObjects() {
     const container = document.getElementById('objectsList');
+    const countBadge = document.getElementById('objectsCountBadge');
+    const countContainer = document.getElementById('objectsCount');
+    
+    // Обновляем счетчик
+    countBadge.textContent = objectsData.length;
+    countContainer.style.display = 'block';
     
     if (objectsData.length === 0) {
         container.innerHTML = `
@@ -478,6 +560,14 @@ function togglePanel() {
     panel.classList.toggle('collapsed');
     icon.classList.toggle('bi-chevron-up');
     icon.classList.toggle('bi-chevron-down');
+    
+    // Сохраняем состояние в localStorage
+    const isCollapsed = panel.classList.contains('collapsed');
+    localStorage.setItem('dragDropPanelCollapsed', isCollapsed);
+    
+    // Показываем уведомление о состоянии
+    const message = isCollapsed ? 'Панель свернута' : 'Панель развернута';
+    showNotification(message, 'info');
 }
 
 function refreshObjects() {
