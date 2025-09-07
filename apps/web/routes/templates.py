@@ -150,6 +150,37 @@ async def template_detail(
         raise HTTPException(status_code=500, detail="Ошибка загрузки шаблона")
 
 
+@router.get("/{template_id}", response_class=HTMLResponse)
+async def view_template(
+    template_id: int,
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Просмотр шаблона"""
+    try:
+        template_service = TemplateService(db)
+        template = await template_service.get_template_by_id(template_id, current_user["telegram_id"])
+        
+        if not template:
+            raise HTTPException(status_code=404, detail="Шаблон не найден")
+        
+        return templates.TemplateResponse(
+            "templates/view.html",
+            {
+                "request": request,
+                "template": template,
+                "current_user": current_user
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading template view: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки шаблона")
+
+
 @router.get("/{template_id}/edit", response_class=HTMLResponse)
 async def edit_template_form(
     template_id: int,
@@ -199,12 +230,12 @@ async def update_template(
         template_data = {
             "name": form_data.get("name", "").strip(),
             "description": form_data.get("description", "").strip(),
-            "object_id": int(form_data.get("object_id", 0)),
+            "object_id": None,  # Шаблоны универсальные
             "start_time": form_data.get("start_time", "").strip(),
             "end_time": form_data.get("end_time", "").strip(),
             "hourly_rate": int(form_data.get("hourly_rate", 0)),
             "repeat_type": form_data.get("repeat_type", "none"),
-            "repeat_days": form_data.get("repeat_days", "").strip(),
+            "repeat_days": ",".join(form_data.getlist("repeat_days")),
             "repeat_interval": int(form_data.get("repeat_interval", 1)),
             "is_public": form_data.get("is_public") == "on"
         }
@@ -299,6 +330,29 @@ async def apply_template(
     except Exception as e:
         logger.error(f"Error applying template {template_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка применения шаблона: {str(e)}")
+
+
+@router.delete("/{template_id}")
+async def delete_template(
+    template_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Удаление шаблона"""
+    try:
+        template_service = TemplateService(db)
+        result = await template_service.delete_template(template_id, current_user["telegram_id"])
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Шаблон не найден")
+        
+        return JSONResponse({"success": True, "message": "Шаблон успешно удален"})
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting template {template_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления шаблона: {str(e)}")
 
 
 @router.get("/api/templates")
