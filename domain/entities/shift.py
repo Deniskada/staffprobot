@@ -17,9 +17,11 @@ class Shift(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     object_id = Column(Integer, ForeignKey("objects.id"), nullable=False, index=True)
     time_slot_id = Column(Integer, ForeignKey("time_slots.id"), nullable=True, index=True)
+    schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True, index=True)  # Связь с планированием
     start_time = Column(DateTime(timezone=True), nullable=False, index=True)
     end_time = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(50), default="active", index=True)  # active, completed, cancelled
+    is_planned = Column(Boolean, default=False)  # Была ли смена запланирована
     start_coordinates = Column(String(100), nullable=True)  # "lat,lon" формат для MVP
     end_coordinates = Column(String(100), nullable=True)  # "lat,lon" формат для MVP
     total_hours = Column(Numeric(5, 2), nullable=True)
@@ -32,6 +34,8 @@ class Shift(Base):
     # Отношения
     user = relationship("User", backref="shifts")
     object = relationship("Object", backref="shifts")
+    time_slot = relationship("TimeSlot", backref="shifts")
+    schedule = relationship("ShiftSchedule", backref="actual_shifts")  # Связь с планированием
     
     def __repr__(self) -> str:
         return f"<Shift(id={self.id}, user_id={self.user_id}, object_id={self.object_id}, status='{self.status}')>"

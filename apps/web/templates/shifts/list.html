@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+
+{% block title %}Управление сменами{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-clock-history"></i> Управление сменами
+                </h1>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#filterModal">
+                        <i class="bi bi-funnel"></i> Фильтры
+                    </button>
+                    <button class="btn btn-primary" onclick="refreshData()">
+                        <i class="bi bi-arrow-clockwise"></i> Обновить
+                    </button>
+                </div>
+            </div>
+
+            <!-- Статистика -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ stats.total }}</h4>
+                                    <p class="card-text">Всего смен</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-list-ul fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ stats.active }}</h4>
+                                    <p class="card-text">Активные</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-play-circle fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ stats.planned }}</h4>
+                                    <p class="card-text">Запланированные</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-calendar-check fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-secondary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ stats.completed }}</h4>
+                                    <p class="card-text">Завершенные</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-check-circle fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Фильтры -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="GET" id="filterForm">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label for="status" class="form-label">Статус</label>
+                                <select class="form-select" id="status" name="status">
+                                    <option value="">Все статусы</option>
+                                    <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Активные</option>
+                                    <option value="planned" {% if filters.status == 'planned' %}selected{% endif %}>Запланированные</option>
+                                    <option value="completed" {% if filters.status == 'completed' %}selected{% endif %}>Завершенные</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="object_id" class="form-label">Объект</label>
+                                <select class="form-select" id="object_id" name="object_id">
+                                    <option value="">Все объекты</option>
+                                    {% for obj in objects %}
+                                    <option value="{{ obj.id }}" {% if filters.object_id == obj.id %}selected{% endif %}>
+                                        {{ obj.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="date_from" class="form-label">С даты</label>
+                                <input type="date" class="form-control" id="date_from" name="date_from" 
+                                       value="{{ filters.date_from or '' }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="date_to" class="form-label">По дату</label>
+                                <input type="date" class="form-control" id="date_to" name="date_to" 
+                                       value="{{ filters.date_to or '' }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">&nbsp;</label>
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-search"></i> Применить
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Список смен -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Смены</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if shifts %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Сотрудник</th>
+                                    <th>Объект</th>
+                                    <th>Время</th>
+                                    <th>Статус</th>
+                                    <th>Часы/Оплата</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for shift in shifts %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
+                                                {{ shift.user.first_name[0] }}
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold">{{ shift.user.first_name }} {{ shift.user.last_name or '' }}</div>
+                                                <small class="text-muted">@{{ shift.user.username or 'без username' }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <div class="fw-bold">{{ shift.object.name }}</div>
+                                            <small class="text-muted">{{ shift.object.address or 'Адрес не указан' }}</small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <div class="fw-bold">
+                                                {{ shift.start_time.strftime('%d.%m.%Y %H:%M') }}
+                                            </div>
+                                            {% if shift.end_time %}
+                                            <small class="text-muted">
+                                                до {{ shift.end_time.strftime('%H:%M') }}
+                                            </small>
+                                            {% else %}
+                                            <small class="text-warning">В процессе</small>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if shift.type == 'schedule' %}
+                                            <span class="badge bg-warning">
+                                                <i class="bi bi-calendar-check"></i> Запланирована
+                                            </span>
+                                        {% elif shift.status == 'active' %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-play-circle"></i> Активна
+                                                {% if shift.is_planned %}
+                                                <br><small class="text-muted">из планирования</small>
+                                                {% endif %}
+                                            </span>
+                                        {% elif shift.status == 'completed' %}
+                                            <span class="badge bg-secondary">
+                                                <i class="bi bi-check-circle"></i> Завершена
+                                                {% if shift.is_planned %}
+                                                <br><small class="text-muted">из планирования</small>
+                                                {% else %}
+                                                <br><small class="text-muted">спонтанная</small>
+                                                {% endif %}
+                                            </span>
+                                        {% elif shift.status == 'cancelled' %}
+                                            <span class="badge bg-danger">
+                                                <i class="bi bi-x-circle"></i> Отменена
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-light text-dark">{{ shift.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if shift.total_hours %}
+                                        <div>
+                                            <div class="fw-bold">{{ "%.1f"|format(shift.total_hours) }} ч</div>
+                                            <small class="text-muted">{{ "%.0f"|format(shift.total_payment or 0) }} ₽</small>
+                                        </div>
+                                        {% else %}
+                                        <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="/shifts/{{ shift.id }}?shift_type={{ shift.type }}" 
+                                               class="btn btn-outline-primary" title="Просмотр">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            {% if shift.type == 'schedule' and shift.status == 'planned' %}
+                                            <button class="btn btn-outline-danger" 
+                                                    onclick="cancelShift({{ shift.id }}, 'schedule')" 
+                                                    title="Отменить">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                            {% elif shift.status == 'active' %}
+                                            <button class="btn btn-outline-warning" 
+                                                    onclick="cancelShift({{ shift.id }}, 'shift')" 
+                                                    title="Завершить">
+                                                <i class="bi bi-stop-circle"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-clock-history fs-1 text-muted"></i>
+                        <h5 class="text-muted mt-3">Смены не найдены</h5>
+                        <p class="text-muted">Попробуйте изменить фильтры поиска</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Пагинация -->
+            {% if pagination.pages > 1 %}
+            <nav aria-label="Пагинация смен" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if pagination.page > 1 %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ pagination.page - 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            Предыдущая
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page_num in range(1, pagination.pages + 1) %}
+                    {% if page_num == pagination.page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_num }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            {{ page_num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    {% if pagination.page < pagination.pages %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ pagination.page + 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            Следующая
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения отмены -->
+<div class="modal fade" id="cancelModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Подтверждение отмены</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите отменить эту смену?</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Это действие нельзя отменить.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger" id="confirmCancel">Да, отменить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentShiftId = null;
+let currentShiftType = null;
+
+function cancelShift(shiftId, shiftType) {
+    currentShiftId = shiftId;
+    currentShiftType = shiftType;
+    const modal = new bootstrap.Modal(document.getElementById('cancelModal'));
+    modal.show();
+}
+
+document.getElementById('confirmCancel').addEventListener('click', async function() {
+    if (!currentShiftId || !currentShiftType) return;
+    
+    try {
+        const response = await fetch(`/shifts/${currentShiftId}/cancel?shift_type=${currentShiftType}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Показываем уведомление об успехе
+            showNotification(result.message, 'success');
+            // Перезагружаем страницу
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showNotification(result.error || 'Ошибка отмены смены', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Ошибка отмены смены', 'error');
+    }
+    
+    // Закрываем модальное окно
+    const modal = bootstrap.Modal.getInstance(document.getElementById('cancelModal'));
+    modal.hide();
+});
+
+function refreshData() {
+    window.location.reload();
+}
+
+function showNotification(message, type) {
+    // Создаем уведомление
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const icon = type === 'success' ? 'bi-check-circle' : 'bi-exclamation-triangle';
+    
+    const notification = document.createElement('div');
+    notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        <i class="bi ${icon}"></i> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Автоматически скрываем через 5 секунд
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}
