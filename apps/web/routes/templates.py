@@ -116,11 +116,9 @@ async def create_template(
         if not template:
             raise HTTPException(status_code=400, detail="Ошибка создания шаблона")
         
-        return JSONResponse({
-            "success": True,
-            "message": "Шаблон успешно создан",
-            "template_id": template.id
-        })
+        # Перенаправляем на страницу со списком шаблонов
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/templates?created=true", status_code=303)
         
     except HTTPException:
         raise
