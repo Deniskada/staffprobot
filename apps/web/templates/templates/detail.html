@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}{{ template.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">{{ template.name }}</h1>
+                    <p class="text-muted mb-0">
+                        Версия: <span class="badge bg-light text-dark">{{ template.version }}</span>
+                    </p>
+                </div>
+                <div>
+                    <a href="/templates/{{ template.id }}/edit" class="btn btn-outline-secondary me-2">
+                        <i class="fas fa-edit me-2"></i>Редактировать
+                    </a>
+                    <a href="/templates" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Назад к списку
+                    </a>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-file-alt me-2"></i>Содержимое шаблона
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="bg-light p-3 rounded">
+                                <pre style="white-space: pre-wrap; font-family: inherit;">{{ template.content }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-info-circle me-2"></i>Информация
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <strong>Название:</strong><br>
+                                {{ template.name }}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Версия:</strong><br>
+                                <span class="badge bg-primary">{{ template.version }}</span>
+                            </div>
+                            
+                            {% if template.description %}
+                            <div class="mb-3">
+                                <strong>Описание:</strong><br>
+                                {{ template.description }}
+                            </div>
+                            {% endif %}
+                            
+                            <div class="mb-3">
+                                <strong>Создан:</strong><br>
+                                {{ template.created_at.strftime('%d.%m.%Y %H:%M') }}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Статус:</strong><br>
+                                <span class="badge bg-success">Активен</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-plus me-2"></i>Быстрые действия
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <a href="/templates/{{ template.id }}/edit" 
+                               class="btn btn-primary w-100 mb-2">
+                                <i class="fas fa-edit me-2"></i>Редактировать
+                            </a>
+                            
+                            <button type="button" 
+                                    class="btn btn-outline-danger w-100"
+                                    onclick="deleteTemplate({{ template.id }}, '{{ template.name }}')">
+                                <i class="fas fa-trash me-2"></i>Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal для подтверждения удаления -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Подтверждение удаления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить шаблон <strong id="templateName"></strong>?</p>
+                <p class="text-muted">Это действие нельзя отменить.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <form id="deleteForm" method="post" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Удалить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function deleteTemplate(templateId, templateName) {
+    document.getElementById('templateName').textContent = templateName;
+    document.getElementById('deleteForm').action = '/templates/' + templateId + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

@@ -151,6 +151,54 @@
                     <div class="card mt-3">
                         <div class="card-header">
                             <h5 class="mb-0">
+                                <i class="fas fa-building me-2"></i>Доступ к объектам
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if employee.contracts %}
+                                {% set has_objects = false %}
+                                {% for contract in employee.contracts %}
+                                    {% if contract.allowed_objects_info %}
+                                        {% set has_objects = true %}
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if has_objects %}
+                                    <div class="mb-3">
+                                        <strong>Объекты с доступом:</strong>
+                                        <ul class="list-unstyled mt-2">
+                                            {% for contract in employee.contracts %}
+                                                {% if contract.allowed_objects_info %}
+                                                    <li class="mb-1">
+                                                        <small class="text-muted">{{ contract.title }}:</small>
+                                                        <div class="ms-3">
+                                                            {% for object in contract.allowed_objects_info %}
+                                                                <span class="badge bg-primary me-1">{{ object.name }}</span>
+                                                            {% endfor %}
+                                                        </div>
+                                                    </li>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                {% else %}
+                                    <div class="text-muted">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        У сотрудника нет доступа к объектам
+                                    </div>
+                                {% endif %}
+                            {% else %}
+                                <div class="text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Нет договоров для отображения доступа
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">
                                 <i class="fas fa-plus me-2"></i>Быстрые действия
                             </h5>
                         </div>

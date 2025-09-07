@@ -1,407 +1,78 @@
 {% extends "base.html" %}
 
-{% block title %}Редактирование шаблона - {{ template.name }}{% endblock %}
-
-{% block extra_css %}
-<style>
-.form-container {
-    max-width: 800px;
-    margin: 0 auto;
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    padding: 30px;
-}
-
-.form-section {
-    margin-bottom: 30px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.form-section:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-}
-
-.section-title {
-    font-size: 1.2em;
-    font-weight: bold;
-    color: #495057;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.section-title i {
-    color: #007bff;
-}
-
-.form-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-label {
-    font-weight: 600;
-    color: #495057;
-    margin-bottom: 8px;
-}
-
-.form-control, .form-select {
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    padding: 12px 15px;
-    font-size: 1em;
-    transition: all 0.3s ease;
-}
-
-.form-control:focus, .form-select:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.help-text {
-    font-size: 0.9em;
-    color: #6c757d;
-    margin-top: 5px;
-}
-
-.btn-submit {
-    background: linear-gradient(135deg, #007bff, #0056b3);
-    border: none;
-    color: white;
-    padding: 12px 30px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 1.1em;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
-}
-
-.btn-submit:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 123, 255, 0.4);
-    background: linear-gradient(135deg, #0056b3, #004085);
-}
-
-.btn-cancel {
-    background: #6c757d;
-    border: none;
-    color: white;
-    padding: 12px 30px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 1.1em;
-    transition: all 0.3s ease;
-    text-decoration: none;
-    display: inline-block;
-}
-
-.btn-cancel:hover {
-    background: #5a6268;
-    color: white;
-    text-decoration: none;
-}
-
-.form-actions {
-    display: flex;
-    gap: 15px;
-    justify-content: flex-end;
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px solid #e9ecef;
-}
-
-.repeat-options {
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 20px;
-    margin-top: 15px;
-}
-
-.weekday-checkboxes {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 10px;
-    margin-top: 10px;
-}
-
-.form-check {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.form-check-input {
-    margin: 0;
-}
-
-.form-check-label {
-    margin: 0;
-    font-weight: 500;
-}
-
-@media (max-width: 768px) {
-    .form-container {
-        margin: 10px;
-        padding: 20px;
-    }
-    
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-    
-    .form-actions {
-        flex-direction: column;
-    }
-    
-    .btn-submit, .btn-cancel {
-        width: 100%;
-    }
-}
-</style>
-{% endblock %}
+{% block title %}Редактирование шаблона{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="form-container">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h3 mb-0">
-                <i class="bi bi-pencil-square"></i> Редактирование шаблона
-            </h1>
-            <a href="/templates" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left"></i> Назад к списку
-            </a>
-        </div>
-
-        <form method="POST" action="/templates/{{ template.id }}/edit">
-            <!-- Основная информация -->
-            <div class="form-section">
-                <h3 class="section-title">
-                    <i class="bi bi-info-circle"></i> Основная информация
-                </h3>
-                
-                <div class="form-group">
-                    <label for="name" class="form-label">Название шаблона *</label>
-                    <input type="text" class="form-control" id="name" name="name" 
-                           value="{{ template.name }}" required>
-                    <div class="help-text">Укажите понятное название для шаблона</div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="description" class="form-label">Описание</label>
-                    <textarea class="form-control" id="description" name="description" rows="3" 
-                              placeholder="Дополнительная информация о шаблоне">{{ template.description or '' }}</textarea>
-                    <div class="help-text">Необязательное поле для подробного описания</div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
-                        <input type="number" class="form-control" id="hourly_rate" name="hourly_rate" 
-                               min="1" required placeholder="500" value="{{ template.hourly_rate }}">
-                        <div class="help-text">Ставка за час работы</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Временные параметры -->
-            <div class="form-section">
-                <h3 class="section-title">
-                    <i class="bi bi-clock"></i> Временные параметры
-                </h3>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="start_time" class="form-label">Время начала *</label>
-                        <input type="time" class="form-control" id="start_time" name="start_time" 
-                               required value="{{ template.start_time }}">
-                        <div class="help-text">Время начала работы</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="end_time" class="form-label">Время окончания *</label>
-                        <input type="time" class="form-control" id="end_time" name="end_time" 
-                               required value="{{ template.end_time }}">
-                        <div class="help-text">Время окончания работы</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Настройки повторения -->
-            <div class="form-section">
-                <h3 class="section-title">
-                    <i class="bi bi-arrow-repeat"></i> Настройки повторения
-                </h3>
-                
-                <div class="form-group">
-                    <label for="repeat_type" class="form-label">Тип повторения</label>
-                    <select class="form-select" id="repeat_type" name="repeat_type">
-                        <option value="none" {% if template.repeat_type == 'none' %}selected{% endif %}>Без повторения</option>
-                        <option value="daily" {% if template.repeat_type == 'daily' %}selected{% endif %}>Ежедневно</option>
-                        <option value="weekly" {% if template.repeat_type == 'weekly' %}selected{% endif %}>Еженедельно</option>
-                        <option value="monthly" {% if template.repeat_type == 'monthly' %}selected{% endif %}>Ежемесячно</option>
-                    </select>
-                    <div class="help-text">Выберите, как часто повторять шаблон</div>
-                </div>
-
-                <div class="repeat-options" id="repeatOptions" style="display: none;">
-                    <div class="form-group">
-                        <label for="repeat_interval" class="form-label">Интервал повторения</label>
-                        <input type="number" class="form-control" id="repeat_interval" name="repeat_interval" 
-                               min="1" value="{{ template.repeat_interval or 1 }}">
-                        <div class="help-text">Каждые N дней/недель/месяцев</div>
-                    </div>
-
-                    <div class="form-group" id="weekdaysGroup" style="display: none;">
-                        <label class="form-label">Дни недели</label>
-                        <div class="weekday-checkboxes">
-                            {% set selected_days = (template.repeat_days or '').split(',') %}
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="repeat_days" value="0" 
-                                       id="day_0" {% if '0' in selected_days %}checked{% endif %}>
-                                <label class="form-check-label" for="day_0">Понедельник</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="repeat_days" value="1" 
-                                       id="day_1" {% if '1' in selected_days %}checked{% endif %}>
-                                <label class="form-check-label" for="day_1">Вторник</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="repeat_days" value="2" 
-                                       id="day_2" {% if '2' in selected_days %}checked{% endif %}>
-                                <label class="form-check-label" for="day_2">Среда</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="repeat_days" value="3" 
-                                       id="day_3" {% if '3' in selected_days %}checked{% endif %}>
-                                <label class="form-check-label" for="day_3">Четверг</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="repeat_days" value="4" 
-                                       id="day_4" {% if '4' in selected_days %}checked{% endif %}>
-                                <label class="form-check-label" for="day_4">Пятница</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="repeat_days" value="5" 
-                                       id="day_5" {% if '5' in selected_days %}checked{% endif %}>
-                                <label class="form-check-label" for="day_5">Суббота</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="repeat_days" value="6" 
-                                       id="day_6" {% if '6' in selected_days %}checked{% endif %}>
-                                <label class="form-check-label" for="day_6">Воскресенье</label>
-                            </div>
+<div class="container mt-4">
+    <h1 class="h3 mb-4">Редактирование шаблона: {{ template.name }}</h1>
+    
+    <form action="/templates/{{ template.id }}/edit" method="post">
+        <div class="card mb-4">
+            <div class="card-header">Информация о шаблоне</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">
+                                Название шаблона <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="name" 
+                                   name="name" 
+                                   required
+                                   value="{{ template.name }}"
+                                   placeholder="Например: Стандартный трудовой договор">
                         </div>
                     </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="version" class="form-label">Версия</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="version" 
+                                   name="version" 
+                                   value="{{ template.version }}"
+                                   placeholder="1.0">
+                        </div>
+                    </div>
+                </div>
 
-                    <div class="form-group">
-                        <label for="repeat_end_date" class="form-label">Дата окончания повторения</label>
-                        <input type="date" class="form-control" id="repeat_end_date" name="repeat_end_date" 
-                               value="{{ template.repeat_end_date.strftime('%Y-%m-%d') if template.repeat_end_date else '' }}">
-                        <div class="help-text">Оставьте пустым для бесконечного повторения</div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Описание</label>
+                    <textarea class="form-control" 
+                              id="description" 
+                              name="description" 
+                              rows="3"
+                              placeholder="Краткое описание шаблона (необязательно)">{{ template.description or '' }}</textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label for="content" class="form-label">
+                        Содержимое шаблона <span class="text-danger">*</span>
+                    </label>
+                    <textarea class="form-control" 
+                              id="content" 
+                              name="content" 
+                              rows="15" 
+                              required
+                              placeholder="Введите содержимое шаблона договора. Можно использовать переменные: {{employee_name}}, {{owner_name}}, {{hourly_rate}}, {{start_date}}, {{end_date}}">{{ template.content }}</textarea>
+                    <div class="form-text">
+                        <strong>Доступные переменные:</strong><br>
+                        <code>{{employee_name}}</code> - имя сотрудника<br>
+                        <code>{{owner_name}}</code> - имя владельца<br>
+                        <code>{{hourly_rate}}</code> - почасовая ставка<br>
+                        <code>{{start_date}}</code> - дата начала<br>
+                        <code>{{end_date}}</code> - дата окончания
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Дополнительные настройки -->
-            <div class="form-section">
-                <h3 class="section-title">
-                    <i class="bi bi-gear"></i> Дополнительные настройки
-                </h3>
-                
-                <div class="form-group">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="is_public" name="is_public" 
-                               {% if template.is_public %}checked{% endif %}>
-                        <label class="form-check-label" for="is_public">
-                            Публичный шаблон
-                        </label>
-                        <div class="help-text">Доступен для всех владельцев</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Кнопки действий -->
-            <div class="form-actions">
-                <a href="/templates" class="btn-cancel">
-                    <i class="bi bi-x-lg"></i> Отмена
-                </a>
-                <button type="submit" class="btn-submit">
-                    <i class="bi bi-check-lg"></i> Сохранить изменения
-                </button>
-            </div>
-        </form>
-    </div>
+        <div class="d-flex justify-content-end">
+            <a href="/templates/{{ template.id }}" class="btn btn-secondary me-2">Отмена</a>
+            <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+        </div>
+    </form>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-// Показ/скрытие опций повторения
-document.getElementById('repeat_type').addEventListener('change', function() {
-    const repeatOptions = document.getElementById('repeatOptions');
-    const weekdaysGroup = document.getElementById('weekdaysGroup');
-    
-    if (this.value === 'none') {
-        repeatOptions.style.display = 'none';
-    } else {
-        repeatOptions.style.display = 'block';
-        
-        if (this.value === 'weekly') {
-            weekdaysGroup.style.display = 'block';
-        } else {
-            weekdaysGroup.style.display = 'none';
-        }
-    }
-});
-
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-    const repeatType = document.getElementById('repeat_type');
-    repeatType.dispatchEvent(new Event('change'));
-});
-
-// Валидация времени
-document.getElementById('end_time').addEventListener('change', function() {
-    const startTime = document.getElementById('start_time').value;
-    const endTime = this.value;
-    
-    if (startTime && endTime && startTime >= endTime) {
-        alert('Время начала должно быть меньше времени окончания');
-        this.value = '';
-        return;
-    }
-});
-
-// Валидация формы
-document.querySelector('form').addEventListener('submit', function(e) {
-    const startTime = document.getElementById('start_time').value;
-    const endTime = document.getElementById('end_time').value;
-    
-    if (startTime && endTime && startTime >= endTime) {
-        e.preventDefault();
-        alert('Время начала должно быть меньше времени окончания');
-        return;
-    }
-    
-    const repeatType = document.getElementById('repeat_type').value;
-    if (repeatType === 'weekly') {
-        const checkedDays = document.querySelectorAll('input[name="repeat_days"]:checked');
-        if (checkedDays.length === 0) {
-            e.preventDefault();
-            alert('Выберите хотя бы один день недели для еженедельного повторения');
-            return;
-        }
-    }
-});
-</script>
 {% endblock %}
