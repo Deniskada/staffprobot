@@ -148,11 +148,19 @@
 
 {% block content %}
 <div class="container-fluid">
-    <!-- Уведомление об успешном создании -->
+    <!-- Уведомления -->
     {% if request.query_params.get('created') %}
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         <i class="bi bi-check-circle"></i>
         <strong>Успешно!</strong> Шаблон планирования создан.
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+    
+    {% if request.query_params.get('updated') %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle"></i>
+        <strong>Успешно!</strong> Шаблон планирования обновлен.
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     {% endif %}
@@ -355,21 +363,40 @@ function applyTemplate(templateId, templateName) {
 
 async function loadObjectsForApply() {
     try {
-        const response = await fetch('/api/objects');
+        console.log('Loading objects for apply...');
+        const response = await fetch('/calendar/api/objects', {
+            credentials: 'include'
+        });
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const objects = await response.json();
+        console.log('Loaded objects:', objects);
         
         const select = document.getElementById('applyObjects');
         select.innerHTML = '';
         
-        objects.forEach(obj => {
+        if (objects && objects.length > 0) {
+            objects.forEach(obj => {
+                const option = document.createElement('option');
+                option.value = obj.id;
+                option.textContent = `${obj.name} (${obj.hourly_rate}₽/час)`;
+                select.appendChild(option);
+            });
+            console.log(`Added ${objects.length} objects to select`);
+        } else {
+            console.log('No objects found');
             const option = document.createElement('option');
-            option.value = obj.id;
-            option.textContent = `${obj.name} (${obj.hourly_rate}₽/час)`;
+            option.value = '';
+            option.textContent = 'Нет доступных объектов';
             select.appendChild(option);
-        });
+        }
     } catch (error) {
         console.error('Error loading objects:', error);
-        alert('Ошибка загрузки объектов');
+        alert('Ошибка загрузки объектов: ' + error.message);
     }
 }
 

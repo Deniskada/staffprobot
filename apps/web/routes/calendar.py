@@ -511,7 +511,7 @@ async def get_objects_api(
                 "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "21:00"
             })
         
-        return JSONResponse({"objects": objects_data})
+        return objects_data
         
     except Exception as e:
         logger.error(f"Error getting objects: {e}")

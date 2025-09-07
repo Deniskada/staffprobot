@@ -287,7 +287,9 @@ function applyTemplate(templateId, templateName) {
 
 async function loadObjectsForApply() {
     try {
-        const response = await fetch('/api/objects');
+        const response = await fetch('/calendar/api/objects', {
+            credentials: 'include'
+        });
         const objects = await response.json();
         
         const select = document.getElementById('applyObjects');
