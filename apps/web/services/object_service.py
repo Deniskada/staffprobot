@@ -230,13 +230,18 @@ class TimeSlotService:
             logger.error(f"Error getting timeslots for object {object_id}: {e}")
             raise
     
-    async def create_timeslot(self, timeslot_data: Dict[str, Any], object_id: int, owner_id: int) -> Optional[TimeSlot]:
+    async def create_timeslot(self, timeslot_data: Dict[str, Any], object_id: int, telegram_id: int) -> Optional[TimeSlot]:
         """Создать новый тайм-слот"""
         try:
+            # Получаем внутренний ID пользователя
+            internal_id = await self._get_user_internal_id(telegram_id)
+            if not internal_id:
+                return None
+            
             # Проверяем, что объект принадлежит владельцу
             object_query = select(Object).where(
                 Object.id == object_id,
-                Object.owner_id == owner_id
+                Object.owner_id == internal_id
             )
             object_result = await self.db.execute(object_query)
             if not object_result.scalar_one_or_none():
@@ -267,13 +272,38 @@ class TimeSlotService:
             logger.error(f"Error creating timeslot for object {object_id}: {e}")
             raise
     
-    async def update_timeslot(self, timeslot_id: int, timeslot_data: Dict[str, Any], owner_id: int) -> Optional[TimeSlot]:
-        """Обновить тайм-слот"""
+    async def get_timeslot_by_id(self, timeslot_id: int, telegram_id: int) -> Optional[TimeSlot]:
+        """Получить тайм-слот по ID с проверкой владельца"""
         try:
+            # Получаем внутренний ID пользователя
+            internal_id = await self._get_user_internal_id(telegram_id)
+            if not internal_id:
+                return None
+            
             # Получаем тайм-слот с проверкой владельца через объект
             query = select(TimeSlot).join(Object).where(
                 TimeSlot.id == timeslot_id,
-                Object.owner_id == owner_id
+                Object.owner_id == internal_id
+            )
+            
+            result = await self.db.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting timeslot {timeslot_id} for owner {telegram_id}: {e}")
+            raise
+    
+    async def update_timeslot(self, timeslot_id: int, timeslot_data: Dict[str, Any], telegram_id: int) -> Optional[TimeSlot]:
+        """Обновить тайм-слот"""
+        try:
+            # Получаем внутренний ID пользователя
+            internal_id = await self._get_user_internal_id(telegram_id)
+            if not internal_id:
+                return None
+            
+            # Получаем тайм-слот с проверкой владельца через объект
+            query = select(TimeSlot).join(Object).where(
+                TimeSlot.id == timeslot_id,
+                Object.owner_id == internal_id
             )
             
             result = await self.db.execute(query)
@@ -302,13 +332,18 @@ class TimeSlotService:
             logger.error(f"Error updating timeslot {timeslot_id}: {e}")
             raise
     
-    async def delete_timeslot(self, timeslot_id: int, owner_id: int) -> bool:
+    async def delete_timeslot(self, timeslot_id: int, telegram_id: int) -> bool:
         """Удалить тайм-слот"""
         try:
+            # Получаем внутренний ID пользователя
+            internal_id = await self._get_user_internal_id(telegram_id)
+            if not internal_id:
+                return False
+            
             # Получаем тайм-слот с проверкой владельца через объект
             query = select(TimeSlot).join(Object).where(
                 TimeSlot.id == timeslot_id,
-                Object.owner_id == owner_id
+                Object.owner_id == internal_id
             )
             
             result = await self.db.execute(query)

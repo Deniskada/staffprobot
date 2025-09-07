@@ -6,86 +6,57 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from apps.web.services.object_service import ObjectService, TimeSlotService
+from core.database.session import get_db_session
 from core.logging.logger import logger
 from typing import Optional
-from datetime import time
+from datetime import time, date
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
-
-# Временное хранилище тайм-слотов в памяти (для демонстрации)
-# TODO: Заменить на работу с базой данных
-timeslots_storage = {
-    1: {
-        "id": 1,
-        "object_id": 1,
-        "name": "Утренняя смена",
-        "start_time": "09:00",
-        "end_time": "12:00",
-        "hourly_rate": 500,
-        "is_active": True,
-        "created_at": "2024-01-15"
-    },
-    2: {
-        "id": 2,
-        "object_id": 1,
-        "name": "Дневная смена",
-        "start_time": "12:00",
-        "end_time": "15:00",
-        "hourly_rate": 500,
-        "is_active": True,
-        "created_at": "2024-01-15"
-    },
-    3: {
-        "id": 3,
-        "object_id": 1,
-        "name": "Вечерняя смена",
-        "start_time": "15:00",
-        "end_time": "18:00",
-        "hourly_rate": 500,
-        "is_active": True,
-        "created_at": "2024-01-15"
-    },
-    4: {
-        "id": 4,
-        "object_id": 1,
-        "name": "Ночная смена",
-        "start_time": "18:00",
-        "end_time": "21:00",
-        "hourly_rate": 600,
-        "is_active": True,
-        "created_at": "2024-01-15"
-    },
-    5: {
-        "id": 5,
-        "object_id": 2,
-        "name": "Рабочий день",
-        "start_time": "08:00",
-        "end_time": "18:00",
-        "hourly_rate": 400,
-        "is_active": True,
-        "created_at": "2024-01-20"
-    }
-}
 
 
 @router.get("/object/{object_id}", response_class=HTMLResponse)
 async def timeslots_list(
     request: Request,
     object_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Список тайм-слотов объекта"""
     try:
-        # Получение тайм-слотов объекта
-        timeslots_data = [
-            slot for slot in timeslots_storage.values() 
-            if slot["object_id"] == object_id
-        ]
+        # Получение информации об объекте и тайм-слотов из базы данных
+        object_service = ObjectService(db)
+        timeslot_service = TimeSlotService(db)
         
-        # Получение информации об объекте (для заголовка)
-        from apps.web.routes.objects import objects_storage
-        object_data = objects_storage.get(object_id, {"name": f"Объект #{object_id}"})
+        # Получаем объект
+        obj = await object_service.get_object_by_id(object_id, current_user["telegram_id"])
+        if not obj:
+            raise HTTPException(status_code=404, detail="Объект не найден")
+        
+        # Получаем тайм-слоты
+        timeslots = await timeslot_service.get_timeslots_by_object(object_id, current_user["telegram_id"])
+        
+        # Преобразуем в формат для шаблона
+        timeslots_data = []
+        for slot in timeslots:
+            timeslots_data.append({
+                "id": slot.id,
+                "object_id": slot.object_id,
+                "start_time": slot.start_time.strftime("%H:%M"),
+                "end_time": slot.end_time.strftime("%H:%M"),
+                "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                "is_active": slot.is_active,
+                "created_at": slot.created_at.strftime("%Y-%m-%d")
+            })
+        
+        # Информация об объекте
+        object_data = {
+            "id": obj.id,
+            "name": obj.name,
+            "address": obj.address or ""
+        }
         
         return templates.TemplateResponse("timeslots/list.html", {
             "request": request,
@@ -96,6 +67,8 @@ async def timeslots_list(
             "current_user": current_user
         })
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error loading timeslots: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки тайм-слотов")
@@ -105,20 +78,22 @@ async def timeslots_list(
 async def create_timeslot_form(
     request: Request,
     object_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Форма создания тайм-слота"""
     try:
-        # Получение информации об объекте
-        from apps.web.routes.objects import objects_storage
-        if object_id not in objects_storage:
+        # Получение информации об объекте из базы данных
+        object_service = ObjectService(db)
+        obj = await object_service.get_object_by_id(object_id, current_user["telegram_id"])
+        if not obj:
             raise HTTPException(status_code=404, detail="Объект не найден")
         
-        object_data = objects_storage[object_id]
-        
-        # Проверка владельца
-        if object_data["owner_id"] != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Нет доступа к этому объекту")
+        object_data = {
+            "id": obj.id,
+            "name": obj.name,
+            "address": obj.address or ""
+        }
         
         return templates.TemplateResponse("timeslots/create.html", {
             "request": request,
@@ -139,26 +114,15 @@ async def create_timeslot_form(
 async def create_timeslot(
     request: Request,
     object_id: int,
-    name: str = Form(...),
     start_time: str = Form(...),
     end_time: str = Form(...),
     hourly_rate: int = Form(...),
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Создание нового тайм-слота"""
     try:
-        # Проверка объекта
-        from apps.web.routes.objects import objects_storage
-        if object_id not in objects_storage:
-            raise HTTPException(status_code=404, detail="Объект не найден")
-        
-        object_data = objects_storage[object_id]
-        
-        # Проверка владельца
-        if object_data["owner_id"] != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Нет доступа к этому объекту")
-        
-        logger.info(f"Creating timeslot '{name}' for object {object_id}")
+        logger.info(f"Creating timeslot for object {object_id}")
         
         # Валидация данных
         if hourly_rate <= 0:
@@ -173,22 +137,21 @@ async def create_timeslot(
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат времени")
         
-        # Генерация нового ID
-        new_id = max(timeslots_storage.keys()) + 1 if timeslots_storage else 1
-        
-        # Создание тайм-слота в временном хранилище
-        timeslots_storage[new_id] = {
-            "id": new_id,
-            "object_id": object_id,
-            "name": name,
+        # Создание тайм-слота в базе данных
+        timeslot_service = TimeSlotService(db)
+        timeslot_data = {
+            "slot_date": date.today(),  # По умолчанию на сегодня
             "start_time": start_time,
             "end_time": end_time,
             "hourly_rate": hourly_rate,
-            "is_active": True,
-            "created_at": "2024-01-15"  # TODO: Использовать реальную дату
+            "is_active": True
         }
         
-        logger.info(f"Timeslot {new_id} created successfully: {timeslots_storage[new_id]}")
+        new_timeslot = await timeslot_service.create_timeslot(timeslot_data, object_id, current_user["telegram_id"])
+        if not new_timeslot:
+            raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
+        
+        logger.info(f"Timeslot {new_timeslot.id} created for object {object_id}")
         
         return RedirectResponse(url=f"/timeslots/object/{object_id}", status_code=status.HTTP_302_FOUND)
         
@@ -203,30 +166,45 @@ async def create_timeslot(
 async def edit_timeslot_form(
     request: Request,
     timeslot_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Форма редактирования тайм-слота"""
     try:
-        # Получение данных тайм-слота
-        if timeslot_id not in timeslots_storage:
+        # Получение тайм-слота из базы данных
+        timeslot_service = TimeSlotService(db)
+        object_service = ObjectService(db)
+        
+        # Получаем тайм-слот с проверкой владельца
+        timeslot = await timeslot_service.get_timeslot_by_id(timeslot_id, current_user["telegram_id"])
+        if not timeslot:
             raise HTTPException(status_code=404, detail="Тайм-слот не найден")
         
-        timeslot_data = timeslots_storage[timeslot_id].copy()
-        
-        # Проверка владельца через объект
-        from apps.web.routes.objects import objects_storage
-        object_id = timeslot_data["object_id"]
-        if object_id not in objects_storage:
+        # Получаем объект
+        obj = await object_service.get_object_by_id(timeslot.object_id, current_user["telegram_id"])
+        if not obj:
             raise HTTPException(status_code=404, detail="Объект не найден")
         
-        object_data = objects_storage[object_id]
-        if object_data["owner_id"] != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Нет доступа к этому тайм-слоту")
+        timeslot_data = {
+            "id": timeslot.id,
+            "object_id": timeslot.object_id,
+            "start_time": timeslot.start_time.strftime("%H:%M"),
+            "end_time": timeslot.end_time.strftime("%H:%M"),
+            "hourly_rate": float(timeslot.hourly_rate) if timeslot.hourly_rate else float(obj.hourly_rate),
+            "is_active": timeslot.is_active
+        }
+        
+        object_data = {
+            "id": obj.id,
+            "name": obj.name,
+            "address": obj.address or ""
+        }
         
         return templates.TemplateResponse("timeslots/edit.html", {
             "request": request,
-            "title": f"Редактирование: {timeslot_data['name']}",
+            "title": f"Редактирование тайм-слота: {object_data['name']}",
             "timeslot": timeslot_data,
+            "object_id": timeslot.object_id,
             "object": object_data,
             "current_user": current_user
         })
@@ -242,31 +220,15 @@ async def edit_timeslot_form(
 async def update_timeslot(
     request: Request,
     timeslot_id: int,
-    name: str = Form(...),
     start_time: str = Form(...),
     end_time: str = Form(...),
     hourly_rate: int = Form(...),
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Обновление тайм-слота"""
     try:
-        # Проверка существования тайм-слота
-        if timeslot_id not in timeslots_storage:
-            raise HTTPException(status_code=404, detail="Тайм-слот не найден")
-        
-        timeslot_data = timeslots_storage[timeslot_id]
-        
-        # Проверка владельца через объект
-        from apps.web.routes.objects import objects_storage
-        object_id = timeslot_data["object_id"]
-        if object_id not in objects_storage:
-            raise HTTPException(status_code=404, detail="Объект не найден")
-        
-        object_data = objects_storage[object_id]
-        if object_data["owner_id"] != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Нет доступа к этому тайм-слоту")
-        
-        logger.info(f"Updating timeslot {timeslot_id} for user {current_user['id']}")
+        logger.info(f"Updating timeslot {timeslot_id}")
         
         # Валидация данных
         if hourly_rate <= 0:
@@ -283,22 +245,24 @@ async def update_timeslot(
         
         # Получение данных формы
         form_data = await request.form()
-        
-        # Обработка чекбокса (он не отправляется, если не отмечен)
         is_active = "is_active" in form_data
         
-        # Обновление тайм-слота в временном хранилище
-        timeslots_storage[timeslot_id].update({
-            "name": name,
+        # Обновление тайм-слота в базе данных
+        timeslot_service = TimeSlotService(db)
+        timeslot_data = {
             "start_time": start_time,
             "end_time": end_time,
             "hourly_rate": hourly_rate,
             "is_active": is_active
-        })
+        }
         
-        logger.info(f"Timeslot {timeslot_id} updated successfully: {timeslots_storage[timeslot_id]}")
+        updated_timeslot = await timeslot_service.update_timeslot(timeslot_id, timeslot_data, current_user["telegram_id"])
+        if not updated_timeslot:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден или нет доступа")
         
-        return RedirectResponse(url=f"/timeslots/object/{object_id}", status_code=status.HTTP_302_FOUND)
+        logger.info(f"Timeslot {timeslot_id} updated successfully")
+        
+        return RedirectResponse(url=f"/timeslots/object/{updated_timeslot.object_id}", status_code=status.HTTP_302_FOUND)
         
     except HTTPException:
         raise
@@ -310,30 +274,27 @@ async def update_timeslot(
 @router.post("/{timeslot_id}/delete")
 async def delete_timeslot(
     timeslot_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Удаление тайм-слота"""
     try:
-        # Проверка существования тайм-слота
-        if timeslot_id not in timeslots_storage:
+        logger.info(f"Deleting timeslot {timeslot_id}")
+        
+        # Удаление тайм-слота из базы данных
+        timeslot_service = TimeSlotService(db)
+        
+        # Получаем тайм-слот для получения object_id
+        timeslot = await timeslot_service.get_timeslot_by_id(timeslot_id, current_user["telegram_id"])
+        if not timeslot:
             raise HTTPException(status_code=404, detail="Тайм-слот не найден")
         
-        timeslot_data = timeslots_storage[timeslot_id]
+        object_id = timeslot.object_id
         
-        # Проверка владельца через объект
-        from apps.web.routes.objects import objects_storage
-        object_id = timeslot_data["object_id"]
-        if object_id not in objects_storage:
-            raise HTTPException(status_code=404, detail="Объект не найден")
-        
-        object_data = objects_storage[object_id]
-        if object_data["owner_id"] != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Нет доступа к этому тайм-слоту")
-        
-        logger.info(f"Deleting timeslot {timeslot_id} for user {current_user['id']}")
-        
-        # Удаление тайм-слота из временного хранилища
-        del timeslots_storage[timeslot_id]
+        # Удаляем тайм-слот
+        success = await timeslot_service.delete_timeslot(timeslot_id, current_user["telegram_id"])
+        if not success:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден или нет доступа")
         
         logger.info(f"Timeslot {timeslot_id} deleted successfully")
         
