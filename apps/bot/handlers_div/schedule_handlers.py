@@ -212,10 +212,29 @@ async def handle_schedule_confirmation(update: Update, context: ContextTypes.DEF
         return
     
     try:
+        # Получаем информацию о тайм-слоте
+        from apps.bot.services.time_slot_service import TimeSlotService
+        from datetime import time
+        time_slot_service = TimeSlotService()
+        timeslot_data = time_slot_service.get_timeslot_by_id(slot_id)
+        
+        if not timeslot_data:
+            await query.edit_message_text("❌ Ошибка: тайм-слот не найден.")
+            return
+        
+        # Парсим время из строк
+        start_time_str = timeslot_data['start_time']
+        end_time_str = timeslot_data['end_time']
+        
+        start_time = time.fromisoformat(start_time_str)
+        end_time = time.fromisoformat(end_time_str)
+        
         # Создаем запланированную смену
         result = await schedule_service.create_scheduled_shift_from_timeslot(
             user_id=user_id,
             time_slot_id=slot_id,
+            start_time=start_time,
+            end_time=end_time,
             notes="Запланировано через бота"
         )
         
@@ -258,11 +277,11 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 return
             
-            # Получаем запланированные смены пользователя из таблицы Shift
-            shifts_query = select(Shift).where(
-                Shift.user_id == user.id,
-                Shift.status == "scheduled"
-            ).order_by(Shift.start_time)
+            # Получаем запланированные смены пользователя из таблицы ShiftSchedule
+            shifts_query = select(ShiftSchedule).where(
+                ShiftSchedule.user_id == user.id,
+                ShiftSchedule.status == "planned"
+            ).order_by(ShiftSchedule.planned_start)
             
             shifts_result = await session.execute(shifts_query)
             shifts = shifts_result.scalars().all()
@@ -286,8 +305,8 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
                 object_name = obj.name if obj else "Неизвестный объект"
                 
                 schedule_text += f"🏢 **{object_name}**\n"
-                schedule_text += f"📅 {shift.start_time.strftime('%d.%m.%Y %H:%M')}\n"
-                schedule_text += f"🕐 До {shift.end_time.strftime('%H:%M')}\n"
+                schedule_text += f"📅 {shift.planned_start.strftime('%d.%m.%Y %H:%M')}\n"
+                schedule_text += f"🕐 До {shift.planned_end.strftime('%H:%M')}\n"
                 if shift.hourly_rate:
                     schedule_text += f"💰 {shift.hourly_rate} ₽/час\n"
                 schedule_text += f"📊 Статус: {shift.status}\n\n"
@@ -298,7 +317,7 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
             # Кнопки отмены для каждой смены (максимум 5)
             for shift in shifts[:5]:
                 # Формируем текст кнопки с датой и временем
-                button_text = f"❌ Отменить {shift.start_time.strftime('%d.%m %H:%M')}"
+                button_text = f"❌ Отменить {shift.planned_start.strftime('%d.%m %H:%M')}"
                 keyboard.append([InlineKeyboardButton(
                     button_text,
                     callback_data=f"cancel_shift_{shift.id}"
@@ -354,10 +373,10 @@ async def handle_cancel_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                 return
             
             # Находим смену
-            shift_query = select(Shift).where(
-                Shift.id == shift_id,
-                Shift.user_id == user.id,
-                Shift.status == "scheduled"
+            shift_query = select(ShiftSchedule).where(
+                ShiftSchedule.id == shift_id,
+                ShiftSchedule.user_id == user.id,
+                ShiftSchedule.status == "planned"
             )
             shift_result = await session.execute(shift_query)
             shift = shift_result.scalar_one_or_none()
@@ -381,8 +400,8 @@ async def handle_cancel_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text(
                 f"✅ **Смена отменена**\n\n"
                 f"🏢 **{object_name}**\n"
-                f"📅 {shift.start_time.strftime('%d.%m.%Y %H:%M')}\n"
-                f"🕐 До {shift.end_time.strftime('%H:%M')}\n\n"
+                f"📅 {shift.planned_start.strftime('%d.%m.%Y %H:%M')}\n"
+                f"🕐 До {shift.planned_end.strftime('%H:%M')}\n\n"
                 f"Смена успешно отменена.",
                 parse_mode='Markdown'
             )
