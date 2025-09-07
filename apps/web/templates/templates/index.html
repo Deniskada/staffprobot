@@ -148,6 +148,15 @@
 
 {% block content %}
 <div class="container-fluid">
+    <!-- Уведомление об успешном создании -->
+    {% if request.query_params.get('created') %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle"></i>
+        <strong>Успешно!</strong> Шаблон планирования создан.
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+    
     <!-- Заголовок и статистика -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
