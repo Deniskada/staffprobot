@@ -5,7 +5,7 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, Query, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from apps.web.dependencies import get_current_user_dependency, require_role
 from apps.web.services.object_service import ObjectService, TimeSlotService
 from core.database.session import get_db_session
 from core.logging.logger import logger
@@ -24,7 +24,8 @@ async def calendar_view(
     year: int = Query(None),
     month: int = Query(None),
     object_id: int = Query(None),
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Календарный вид планирования"""
@@ -170,7 +171,8 @@ async def week_view(
     year: int = Query(None),
     week: int = Query(None),
     object_id: int = Query(None),
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Недельный вид календаря"""
@@ -296,7 +298,8 @@ async def gap_analysis(
     request: Request,
     object_id: int = Query(None),
     days: int = Query(30),
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Анализ пробелов в планировании"""
@@ -410,7 +413,8 @@ async def quick_create_timeslot(
     start_time: str = Form(...),
     end_time: str = Form(...),
     hourly_rate: int = Form(...),
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Быстрое создание тайм-слота через drag & drop"""
@@ -471,7 +475,8 @@ async def quick_create_timeslot(
 @router.delete("/api/timeslot/{timeslot_id}")
 async def delete_timeslot_api(
     timeslot_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Удаление тайм-слота через API"""
@@ -493,7 +498,8 @@ async def delete_timeslot_api(
 
 @router.get("/api/objects")
 async def get_objects_api(
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Получение списка объектов для drag & drop"""
