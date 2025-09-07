@@ -123,7 +123,7 @@
                                     <option value="">Все сотрудники</option>
                                     {% if employees %}
                                         {% for emp in employees %}
-                                        <option value="{{ emp.id }}">{{ emp.first_name }} {{ emp.last_name or '' }}</option>
+                                        <option value="{{ emp[0] }}">{{ emp[3] }} {{ emp[4] or '' }}</option>
                                         {% endfor %}
                                     {% else %}
                                         <option value="">Нет сотрудников</option>
