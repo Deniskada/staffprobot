@@ -40,7 +40,7 @@ async def employees_list(
 @router.get("/create", response_class=HTMLResponse)
 async def create_employee_form(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"]))
 ):
     """Форма создания договора с сотрудником."""
@@ -74,7 +74,7 @@ async def create_employee_contract(
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
     allowed_objects: List[int] = Form(default=[]),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"]))
 ):
     """Создание договора с сотрудником."""
@@ -114,7 +114,7 @@ async def create_employee_contract(
 async def employee_detail(
     employee_id: int,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"]))
 ):
     """Детальная информация о сотруднике."""
@@ -151,7 +151,7 @@ async def employee_detail(
 async def contract_detail(
     contract_id: int,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"]))
 ):
     """Детальная информация о договоре."""
@@ -178,7 +178,7 @@ async def contract_detail(
 async def terminate_contract(
     contract_id: int,
     reason: str = Form(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"]))
 ):
     """Расторжение договора."""
@@ -202,7 +202,7 @@ async def terminate_contract(
 async def edit_contract_form(
     contract_id: int,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"]))
 ):
     """Форма редактирования договора."""
@@ -235,7 +235,7 @@ async def update_contract(
     hourly_rate: Optional[int] = Form(None),
     end_date: Optional[str] = Form(None),
     allowed_objects: List[int] = Form(default=[]),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"]))
 ):
     """Обновление договора."""

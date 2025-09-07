@@ -19,6 +19,7 @@
                                class="form-control" 
                                id="telegram_id" 
                                name="telegram_id" 
+                               value="{{ telegram_id or '' }}"
                                placeholder="Введите ваш Telegram ID"
                                required>
                         <div class="form-text">
@@ -33,6 +34,7 @@
                                    class="form-control" 
                                    id="pin_code" 
                                    name="pin_code" 
+                                   value="{{ pin_code or '' }}"
                                    placeholder="6-значный код"
                                    maxlength="6"
                                    pattern="[0-9]{6}"

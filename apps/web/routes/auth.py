@@ -41,7 +41,9 @@ async def login(
             return templates.TemplateResponse("auth/login.html", {
                 "request": request,
                 "title": "Вход в систему",
-                "error": "Неверный PIN-код или время истекло"
+                "error": "Неверный PIN-код или время истекло",
+                "telegram_id": telegram_id,
+                "pin_code": pin_code
             })
         
         # Получение пользователя
@@ -50,7 +52,9 @@ async def login(
             return templates.TemplateResponse("auth/login.html", {
                 "request": request,
                 "title": "Вход в систему",
-                "error": "Пользователь не найден"
+                "error": "Пользователь не найден",
+                "telegram_id": telegram_id,
+                "pin_code": pin_code
             })
         
         # Создание JWT токена с ролью из базы данных

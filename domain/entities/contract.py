@@ -23,7 +23,7 @@ class ContractTemplate(Base):
     
     # Отношения
     creator = relationship("User", backref="created_templates")
-    contracts = relationship("Contract", backref="template")
+    contracts = relationship("Contract", back_populates="template")
 
 
 class Contract(Base):
@@ -60,7 +60,7 @@ class Contract(Base):
     # Отношения
     owner = relationship("User", foreign_keys=[owner_id], backref="owned_contracts")
     employee = relationship("User", foreign_keys=[employee_id], backref="employee_contracts")
-    template = relationship("ContractTemplate", backref="contracts")
+    template = relationship("ContractTemplate", back_populates="contracts")
     
     # Связанные смены
     shifts = relationship("Shift", backref="contract")
