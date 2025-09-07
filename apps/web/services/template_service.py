@@ -268,6 +268,12 @@ class TemplateService:
     
     async def _get_user_internal_id(self, telegram_id: int) -> int:
         """Получение внутреннего ID пользователя по Telegram ID"""
-        # Здесь должна быть логика получения внутреннего ID
-        # Пока возвращаем telegram_id как есть
-        return telegram_id
+        try:
+            from domain.entities.user import User
+            query = select(User.id).where(User.telegram_id == telegram_id)
+            result = await self.db.execute(query)
+            user_id = result.scalar_one_or_none()
+            return user_id if user_id else telegram_id
+        except Exception as e:
+            logger.error(f"Error getting user internal ID: {e}")
+            return telegram_id
