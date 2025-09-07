@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, Optional, List
 from core.logging.logger import logger
 from core.database.connection import get_sync_session
+from core.database.session import get_async_session
 from domain.entities.user import User
 from sqlalchemy import select
 
@@ -88,9 +89,9 @@ class UserManager:
     async def get_user_by_telegram_id(self, telegram_id: int) -> Optional[dict]:
         """Получение пользователя по Telegram ID."""
         try:
-            with get_sync_session() as session:
+            async with get_async_session() as session:
                 query = select(User).where(User.telegram_id == telegram_id)
-                result = session.execute(query)
+                result = await session.execute(query)
                 user = result.scalar_one_or_none()
                 
                 if not user:
