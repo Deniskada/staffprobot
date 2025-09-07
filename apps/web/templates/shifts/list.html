@@ -102,11 +102,15 @@
                                 <label for="object_id" class="form-label">Объект</label>
                                 <select class="form-select" id="object_id" name="object_id">
                                     <option value="">Все объекты</option>
-                                    {% for obj in objects %}
-                                    <option value="{{ obj.id }}" {% if filters.object_id == obj.id %}selected{% endif %}>
-                                        {{ obj.name }}
-                                    </option>
-                                    {% endfor %}
+                                    {% if objects %}
+                                        {% for obj in objects %}
+                                        <option value="{{ obj.id }}" {% if filters.object_id == obj.id %}selected{% endif %}>
+                                            {{ obj.name }}
+                                        </option>
+                                        {% endfor %}
+                                    {% else %}
+                                        <option value="">Нет объектов</option>
+                                    {% endif %}
                                 </select>
                             </div>
                             <div class="col-md-2">

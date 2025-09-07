@@ -32,9 +32,13 @@ async def reports_index(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
+    # Получаем ID пользователя из словаря
+    user_id = current_user.get("id") if isinstance(current_user, dict) else user_id
+    user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+    
     async with get_async_session() as session:
         # Получаем объекты владельца
-        objects_query = select(Object).where(Object.owner_id == current_user.id)
+        objects_query = select(Object).where(Object.owner_id == user_id)
         objects_result = await session.execute(objects_query)
         objects = objects_result.scalars().all()
         
@@ -96,7 +100,7 @@ async def generate_report(
     
     async with get_async_session() as session:
         # Получаем объекты владельца
-        owner_objects = select(Object.id).where(Object.owner_id == current_user.id)
+        owner_objects = select(Object.id).where(Object.owner_id == user_id)
         objects_result = await session.execute(owner_objects)
         owner_object_ids = [obj.id for obj in objects_result.scalars().all()]
         
@@ -303,7 +307,7 @@ async def period_stats(
     
     async with get_async_session() as session:
         # Получаем объекты владельца
-        owner_objects = select(Object.id).where(Object.owner_id == current_user.id)
+        owner_objects = select(Object.id).where(Object.owner_id == user_id)
         objects_result = await session.execute(owner_objects)
         owner_object_ids = [obj.id for obj in objects_result.scalars().all()]
         

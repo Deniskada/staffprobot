@@ -26,7 +26,7 @@ async def shifts_list(
     status: Optional[str] = Query(None, description="Фильтр по статусу: active, planned, completed"),
     date_from: Optional[str] = Query(None, description="Дата начала (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
-    object_id: Optional[int] = Query(None, description="ID объекта"),
+    object_id: Optional[str] = Query(None, description="ID объекта"),
     page: int = Query(1, ge=1, description="Номер страницы"),
     per_page: int = Query(20, ge=1, le=100, description="Количество на странице")
 ):
@@ -34,6 +34,21 @@ async def shifts_list(
     current_user = await require_owner_or_superadmin(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
+    
+    # Получаем ID пользователя из словаря
+    # current_user содержит telegram_id в поле "id", нужно получить внутренний ID из БД
+    if isinstance(current_user, dict):
+        telegram_id = current_user.get("id")
+        user_role = current_user.get("role")
+        # Получаем внутренний ID пользователя из БД
+        async with get_async_session() as temp_session:
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await temp_session.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            user_id = user_obj.id if user_obj else None
+    else:
+        user_id = current_user.id
+        user_role = current_user.role
     
     async with get_async_session() as session:
         # Базовый запрос для смен
@@ -49,9 +64,9 @@ async def shifts_list(
         )
         
         # Фильтрация по владельцу
-        if current_user.role != "superadmin":
+        if user_role != "superadmin":
             # Получаем объекты владельца
-            owner_objects = select(Object.id).where(Object.owner_id == current_user.id)
+            owner_objects = select(Object.id).where(Object.owner_id == user_id)
             shifts_query = shifts_query.where(Shift.object_id.in_(owner_objects))
             schedules_query = schedules_query.where(ShiftSchedule.object_id.in_(owner_objects))
         
@@ -75,9 +90,14 @@ async def shifts_list(
             shifts_query = shifts_query.where(Shift.start_time <= date_to_obj)
             schedules_query = schedules_query.where(ShiftSchedule.planned_start <= date_to_obj)
         
-        if object_id:
-            shifts_query = shifts_query.where(Shift.object_id == object_id)
-            schedules_query = schedules_query.where(ShiftSchedule.object_id == object_id)
+        if object_id and object_id.strip():
+            try:
+                object_id_int = int(object_id)
+                shifts_query = shifts_query.where(Shift.object_id == object_id_int)
+                schedules_query = schedules_query.where(ShiftSchedule.object_id == object_id_int)
+            except ValueError:
+                # Если object_id не является числом, игнорируем фильтр
+                pass
         
         # Получение данных
         shifts_result = await session.execute(shifts_query.order_by(desc(Shift.start_time)))
@@ -138,7 +158,7 @@ async def shifts_list(
         paginated_shifts = all_shifts[start:end]
         
         # Получение объектов для фильтра
-        objects_query = select(Object).where(Object.owner_id == current_user.id)
+        objects_query = select(Object).where(Object.owner_id == user_id)
         objects_result = await session.execute(objects_query)
         objects = objects_result.scalars().all()
         
@@ -178,6 +198,10 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
     if isinstance(current_user, RedirectResponse):
         return current_user
     
+    # Получаем ID пользователя из словаря
+    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+    
     async with get_async_session() as session:
         if shift_type == "schedule":
             # Запланированная смена
@@ -202,8 +226,8 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
             })
         
         # Проверка прав доступа
-        if current_user.role != "superadmin":
-            if shift.object.owner_id != current_user.id:
+        if user_role != "superadmin":
+            if shift.object.owner_id != user_id:
                 return templates.TemplateResponse("shifts/access_denied.html", {
                     "request": request,
                     "current_user": current_user
@@ -224,6 +248,10 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
     if isinstance(current_user, RedirectResponse):
         return current_user
     
+    # Получаем ID пользователя из словаря
+    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+    
     async with get_async_session() as session:
         if shift_type == "schedule":
             # Отмена запланированной смены
@@ -233,8 +261,8 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
             
             if shift and shift.status == "planned":
                 # Проверка прав доступа
-                if current_user.role != "superadmin":
-                    if shift.object.owner_id != current_user.id:
+                if user_role != "superadmin":
+                    if shift.object.owner_id != user_id:
                         return {"success": False, "error": "Нет прав доступа"}
                 
                 # Отмена смены
@@ -253,8 +281,8 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
             
             if shift and shift.status == "active":
                 # Проверка прав доступа
-                if current_user.role != "superadmin":
-                    if shift.object.owner_id != current_user.id:
+                if user_role != "superadmin":
+                    if shift.object.owner_id != user_id:
                         return {"success": False, "error": "Нет прав доступа"}
                 
                 # Закрытие смены
@@ -275,9 +303,13 @@ async def shifts_stats(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
+    # Получаем ID пользователя из словаря
+    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+    
     async with get_async_session() as session:
         # Получаем объекты владельца
-        owner_objects = select(Object.id).where(Object.owner_id == current_user.id)
+        owner_objects = select(Object.id).where(Object.owner_id == user_id)
         
         # Статистика по реальным сменам
         shifts_query = select(Shift).where(Shift.object_id.in_(owner_objects))
