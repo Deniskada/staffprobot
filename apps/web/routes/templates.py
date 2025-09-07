@@ -28,6 +28,11 @@ async def templates_list(
         template_service = TemplateService(db)
         templates_data = await template_service.get_templates_by_owner(current_user["telegram_id"])
         
+        # Отладочная информация
+        logger.info(f"Found {len(templates_data)} templates for user {current_user['telegram_id']}")
+        for template in templates_data:
+            logger.info(f"Template: id={template.id}, name={template.name}, start_time={template.start_time}, hourly_rate={template.hourly_rate}")
+        
         return templates.TemplateResponse(
             "templates/index.html",
             {

@@ -29,7 +29,7 @@ class TemplateService:
                 name=template_data["name"],
                 description=template_data.get("description", ""),
                 owner_telegram_id=owner_telegram_id,
-                object_id=template_data["object_id"],
+                object_id=template_data.get("object_id"),  # Может быть None
                 start_time=template_data["start_time"],
                 end_time=template_data["end_time"],
                 hourly_rate=template_data["hourly_rate"],
