@@ -254,15 +254,7 @@
                 </div>
                 
                 <div class="form-row">
-                    <div class="form-group">
-                        <label for="object_id" class="form-label">Объект *</label>
-                        <select class="form-select" id="object_id" name="object_id" required>
-                            <option value="">Выберите объект</option>
-                            {% for obj in objects %}
-                            <option value="{{ obj.id }}">{{ obj.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+                    <!-- Поле объекта убрано - шаблоны создаются без привязки к конкретному объекту -->
                     
                     <div class="form-group">
                         <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
@@ -438,13 +430,6 @@ document.getElementById('createTemplateForm').addEventListener('submit', functio
     }
 });
 
-// Обработка изменения объекта - автозаполнение ставки
-document.getElementById('object_id').addEventListener('change', function() {
-    const selectedOption = this.options[this.selectedIndex];
-    if (selectedOption.value) {
-        // Здесь можно добавить логику для получения ставки объекта
-        // Пока оставляем как есть
-    }
-});
+// Обработка изменения объекта убрана - шаблоны создаются без привязки к объекту
 </script>
 {% endblock %}

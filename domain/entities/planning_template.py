@@ -18,7 +18,7 @@ class PlanningTemplate(Base):
     name = Column(String(255), nullable=False, comment="Название шаблона")
     description = Column(Text, comment="Описание шаблона")
     owner_telegram_id = Column(Integer, nullable=False, index=True, comment="Telegram ID владельца")
-    object_id = Column(Integer, ForeignKey("objects.id"), nullable=False, comment="ID объекта")
+    object_id = Column(Integer, ForeignKey("objects.id"), nullable=True, comment="ID объекта (null для универсальных шаблонов)")
     is_active = Column(Boolean, default=True, comment="Активен ли шаблон")
     is_public = Column(Boolean, default=False, comment="Публичный ли шаблон (для всех владельцев)")
     

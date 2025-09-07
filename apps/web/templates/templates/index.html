@@ -219,10 +219,6 @@
                     
                     <div class="template-info">
                         <div class="info-item">
-                            <i class="bi bi-building"></i>
-                            <span>{{ template.object.name if template.object else 'Неизвестный объект' }}</span>
-                        </div>
-                        <div class="info-item">
                             <i class="bi bi-clock"></i>
                             <span>{{ template.start_time }} - {{ template.end_time }}</span>
                         </div>
@@ -290,6 +286,14 @@
                         <input type="text" class="form-control" id="applyTemplateName" readonly>
                     </div>
                     
+                    <div class="mb-3">
+                        <label class="form-label">Объекты для применения *</label>
+                        <select class="form-select" id="applyObjects" name="object_ids" multiple required>
+                            <!-- Объекты будут загружены через JavaScript -->
+                        </select>
+                        <div class="form-text">Выберите объекты, к которым применить шаблон</div>
+                    </div>
+                    
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -328,6 +332,9 @@ function applyTemplate(templateId, templateName) {
     document.getElementById('applyTemplateId').value = templateId;
     document.getElementById('applyTemplateName').value = templateName;
     
+    // Загружаем объекты
+    loadObjectsForApply();
+    
     // Устанавливаем дату начала на сегодня
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('applyStartDate').value = today;
@@ -341,6 +348,26 @@ function applyTemplate(templateId, templateName) {
     modal.show();
 }
 
+async function loadObjectsForApply() {
+    try {
+        const response = await fetch('/api/objects');
+        const objects = await response.json();
+        
+        const select = document.getElementById('applyObjects');
+        select.innerHTML = '';
+        
+        objects.forEach(obj => {
+            const option = document.createElement('option');
+            option.value = obj.id;
+            option.textContent = `${obj.name} (${obj.hourly_rate}₽/час)`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading objects:', error);
+        alert('Ошибка загрузки объектов');
+    }
+}
+
 function submitApplyTemplate() {
     const form = document.getElementById('applyTemplateForm');
     const formData = new FormData(form);
@@ -348,9 +375,10 @@ function submitApplyTemplate() {
     const templateId = formData.get('template_id');
     const startDate = formData.get('start_date');
     const endDate = formData.get('end_date');
+    const objectIds = Array.from(document.getElementById('applyObjects').selectedOptions).map(option => option.value);
     
-    if (!startDate || !endDate) {
-        alert('Заполните все поля');
+    if (!startDate || !endDate || objectIds.length === 0) {
+        alert('Заполните все поля и выберите хотя бы один объект');
         return;
     }
     
@@ -358,6 +386,11 @@ function submitApplyTemplate() {
         alert('Дата начала не может быть позже даты окончания');
         return;
     }
+    
+    // Добавляем object_ids к formData
+    objectIds.forEach(id => {
+        formData.append('object_ids', id);
+    });
     
     // Отправляем запрос
     fetch(`/templates/${templateId}/apply`, {
