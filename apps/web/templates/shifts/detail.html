@@ -61,7 +61,7 @@
                                         <div class="text-muted">{{ shift.object.address or 'Адрес не указан' }}</div>
                                         <div class="text-muted">
                                             <i class="bi bi-geo-alt"></i> 
-                                            {{ "%.6f"|format(shift.object.coordinates.x) }}, {{ "%.6f"|format(shift.object.coordinates.y) }}
+                                            {{ shift.object.coordinates or 'Координаты не указаны' }}
                                         </div>
                                     </div>
                                 </div>
