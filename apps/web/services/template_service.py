@@ -91,7 +91,6 @@ class TemplateService:
                     )
                 )
             
-            query = query.options(selectinload(PlanningTemplate.object))
             result = await self.db.execute(query)
             return result.scalars().all()
             
@@ -116,7 +115,6 @@ class TemplateService:
                     PlanningTemplate.is_active == True
                 )
             ).options(
-                selectinload(PlanningTemplate.object),
                 selectinload(PlanningTemplate.template_slots)
             )
             
