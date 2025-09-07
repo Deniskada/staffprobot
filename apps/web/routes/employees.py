@@ -27,7 +27,9 @@ async def employees_list(request: Request):
     
     # Получаем реальных сотрудников из базы данных
     contract_service = ContractService()
-    employees = await contract_service.get_contract_employees(current_user["id"])
+    # Используем telegram_id для поиска пользователя в БД
+    user_id = current_user["id"]  # Это telegram_id из токена
+    employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
     
     return templates.TemplateResponse(
         "employees/list.html",
@@ -139,7 +141,8 @@ async def employee_detail(request: Request, employee_id: int):
         return current_user
     
     contract_service = ContractService()
-    employee = await contract_service.get_employee_by_id(employee_id, current_user["id"])
+    # Используем telegram_id для поиска владельца в БД
+    employee = await contract_service.get_employee_by_telegram_id(employee_id, current_user["id"])
     
     if not employee:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
