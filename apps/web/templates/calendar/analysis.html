@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.analysis-container {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.analysis-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.gap-card {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-left: 4px solid #dc3545;
+}
+
+.gap-card.no-gaps {
+    border-left-color: #28a745;
+}
+
+.gap-item {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px;
+    margin: 5px 0;
+    border-left: 3px solid #dc3545;
+}
+
+.gap-item.no-gaps {
+    border-left-color: #28a745;
+    background: #d4edda;
+}
+
+.gap-date {
+    font-weight: bold;
+    color: #495057;
+}
+
+.gap-message {
+    color: #6c757d;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
+.stats-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.stats-number {
+    font-size: 3em;
+    font-weight: bold;
+    color: #007bff;
+}
+
+.stats-label {
+    color: #6c757d;
+    font-size: 1.1em;
+    margin-top: 10px;
+}
+
+.recommendation-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.recommendation-title {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.recommendation-list {
+    list-style: none;
+    padding: 0;
+}
+
+.recommendation-list li {
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.recommendation-list li:last-child {
+    border-bottom: none;
+}
+
+.recommendation-list li:before {
+    content: "💡 ";
+    margin-right: 8px;
+}
+
+.object-selector {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.period-selector {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.chart-container {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.no-data {
+    text-align: center;
+    padding: 40px;
+    color: #6c757d;
+}
+
+.no-data i {
+    font-size: 4em;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.quick-actions {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.quick-actions .btn {
+    margin: 5px;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Заголовок -->
+    <div class="analysis-header">
+        <div class="d-flex align-items-center">
+            <h1 class="h3 mb-0 me-3">
+                <i class="bi bi-graph-up"></i> {{ title }}
+            </h1>
+            <span class="badge bg-info fs-6">Период: {{ analysis_data.period }}</span>
+        </div>
+        
+        <div class="d-flex align-items-center gap-3">
+            <!-- Переключение видов -->
+            <div class="btn-group" role="group">
+                <a href="/calendar/" class="btn btn-outline-primary">
+                    <i class="bi bi-calendar3"></i> Месяц
+                </a>
+                <a href="/calendar/week" class="btn btn-outline-primary">
+                    <i class="bi bi-calendar-week"></i> Неделя
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="object-selector">
+                <h6 class="mb-3">
+                    <i class="bi bi-building"></i> Фильтр по объектам
+                </h6>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown">
+                        {% if selected_object %}
+                            {{ selected_object.name }}
+                        {% else %}
+                            Все объекты
+                        {% endif %}
+                    </button>
+                    <ul class="dropdown-menu w-100">
+                        <li><a class="dropdown-item" href="?days={{ days }}">Все объекты</a></li>
+                        {% for obj in objects %}
+                        <li><a class="dropdown-item" href="?object_id={{ obj.id }}&days={{ days }}">{{ obj.name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="period-selector">
+                <h6 class="mb-3">
+                    <i class="bi bi-calendar-range"></i> Период анализа
+                </h6>
+                <div class="btn-group w-100" role="group">
+                    <a href="?{% if selected_object_id %}object_id={{ selected_object_id }}&{% endif %}days=7" 
+                       class="btn btn-outline-secondary {% if days == 7 %}active{% endif %}">7 дней</a>
+                    <a href="?{% if selected_object_id %}object_id={{ selected_object_id }}&{% endif %}days=30" 
+                       class="btn btn-outline-secondary {% if days == 30 %}active{% endif %}">30 дней</a>
+                    <a href="?{% if selected_object_id %}object_id={{ selected_object_id }}&{% endif %}days=90" 
+                       class="btn btn-outline-secondary {% if days == 90 %}active{% endif %}">90 дней</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Общая статистика -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stats-number">{{ analysis_data.total_gaps }}</div>
+                <div class="stats-label">Всего пробелов</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stats-number">{{ analysis_data.object_gaps|length }}</div>
+                <div class="stats-label">Объектов проанализировано</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stats-number">
+                    {% set objects_with_gaps = analysis_data.object_gaps|selectattr('gaps_count', '>', 0)|list|length %}
+                    {{ objects_with_gaps }}
+                </div>
+                <div class="stats-label">Объектов с пробелами</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stats-number">
+                    {% if analysis_data.object_gaps|length > 0 %}
+                        {{ "%.1f"|format((analysis_data.total_gaps / analysis_data.object_gaps|length) * 100) }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </div>
+                <div class="stats-label">Процент покрытия</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Рекомендации -->
+    {% if analysis_data.total_gaps > 0 %}
+    <div class="recommendation-card">
+        <div class="recommendation-title">
+            <i class="bi bi-lightbulb"></i> Рекомендации по улучшению планирования
+        </div>
+        <ul class="recommendation-list">
+            <li>Заполните пробелы в планировании для повышения эффективности</li>
+            <li>Используйте шаблоны для быстрого создания повторяющихся слотов</li>
+            <li>Планируйте смены заранее на неделю вперед</li>
+            <li>Анализируйте популярные временные слоты для оптимизации</li>
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Детальный анализ по объектам -->
+    {% if analysis_data.object_gaps %}
+        {% for object_id, object_data in analysis_data.object_gaps.items() %}
+        <div class="gap-card {% if object_data.gaps_count == 0 %}no-gaps{% endif %}">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-building"></i> {{ object_data.object_name }}
+                </h5>
+                <span class="badge {% if object_data.gaps_count == 0 %}bg-success{% else %}bg-danger{% endif %}">
+                    {{ object_data.gaps_count }} пробелов
+                </span>
+            </div>
+            
+            {% if object_data.gaps_count == 0 %}
+                <div class="gap-item no-gaps">
+                    <div class="gap-date">✅ Отлично!</div>
+                    <div class="gap-message">Все дни в выбранном периоде имеют запланированные тайм-слоты</div>
+                </div>
+            {% else %}
+                {% for gap in object_data.gaps %}
+                <div class="gap-item">
+                    <div class="gap-date">{{ gap.date.strftime('%d.%m.%Y') }}</div>
+                    <div class="gap-message">{{ gap.message }}</div>
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="no-data">
+            <i class="bi bi-inbox"></i>
+            <h4>Нет данных для анализа</h4>
+            <p>Создайте объекты и тайм-слоты для анализа планирования</p>
+            <a href="/objects/create" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i> Создать объект
+            </a>
+        </div>
+    {% endif %}
+
+    <!-- График покрытия (заглушка) -->
+    <div class="chart-container">
+        <h5 class="mb-3">
+            <i class="bi bi-bar-chart"></i> График покрытия планирования
+        </h5>
+        <div class="text-center text-muted">
+            <i class="bi bi-graph-up" style="font-size: 3em; opacity: 0.3;"></i>
+            <p class="mt-3">График будет добавлен в следующих версиях</p>
+        </div>
+    </div>
+</div>
+
+<!-- Быстрые действия -->
+<div class="quick-actions">
+    <a href="/objects/create" class="btn btn-primary" title="Создать объект">
+        <i class="bi bi-plus-lg"></i>
+    </a>
+    <a href="/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create" 
+       class="btn btn-success" title="Создать тайм-слот">
+        <i class="bi bi-clock"></i>
+    </a>
+    <a href="/calendar/" class="btn btn-info" title="Календарь">
+        <i class="bi bi-calendar3"></i>
+    </a>
+</div>
+
+<script>
+// Автообновление анализа каждые 5 минут
+setInterval(function() {
+    // Здесь можно добавить AJAX запрос для обновления данных
+    console.log('Обновление анализа...');
+}, 300000);
+
+// Обработка клавиатурных сокращений
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey || e.metaKey) {
+        switch(e.key) {
+            case 'r': // Ctrl+R - обновить анализ
+                e.preventDefault();
+                location.reload();
+                break;
+            case 'n': // Ctrl+N - новый тайм-слот
+                e.preventDefault();
+                window.location.href = '/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create';
+                break;
+            case 'o': // Ctrl+O - новый объект
+                e.preventDefault();
+                window.location.href = '/objects/create';
+                break;
+        }
+    }
+});
+</script>
+{% endblock %}
