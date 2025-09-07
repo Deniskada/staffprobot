@@ -114,9 +114,6 @@ async def create_timeslot_form(
 async def create_timeslot(
     request: Request,
     object_id: int,
-    start_time: str = Form(...),
-    end_time: str = Form(...),
-    hourly_rate: int = Form(...),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -124,7 +121,18 @@ async def create_timeslot(
     try:
         logger.info(f"Creating timeslot for object {object_id}")
         
-        # Валидация данных
+        # Получение данных формы
+        form_data = await request.form()
+        start_time = form_data.get("start_time", "")
+        end_time = form_data.get("end_time", "")
+        hourly_rate_str = form_data.get("hourly_rate", "0")
+        
+        # Валидация и преобразование данных
+        try:
+            hourly_rate = int(hourly_rate_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат ставки")
+        
         if hourly_rate <= 0:
             raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
         
@@ -220,9 +228,6 @@ async def edit_timeslot_form(
 async def update_timeslot(
     request: Request,
     timeslot_id: int,
-    start_time: str = Form(...),
-    end_time: str = Form(...),
-    hourly_rate: int = Form(...),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -230,7 +235,19 @@ async def update_timeslot(
     try:
         logger.info(f"Updating timeslot {timeslot_id}")
         
-        # Валидация данных
+        # Получение данных формы
+        form_data = await request.form()
+        start_time = form_data.get("start_time", "")
+        end_time = form_data.get("end_time", "")
+        hourly_rate_str = form_data.get("hourly_rate", "0")
+        is_active = "is_active" in form_data
+        
+        # Валидация и преобразование данных
+        try:
+            hourly_rate = int(hourly_rate_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат ставки")
+        
         if hourly_rate <= 0:
             raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
         
@@ -242,10 +259,6 @@ async def update_timeslot(
                 raise HTTPException(status_code=400, detail="Время начала должно быть меньше времени окончания")
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат времени")
-        
-        # Получение данных формы
-        form_data = await request.form()
-        is_active = "is_active" in form_data
         
         # Обновление тайм-слота в базе данных
         timeslot_service = TimeSlotService(db)
