@@ -274,7 +274,14 @@ class TemplateService:
             total_created = 0
             
             # Применяем шаблон к каждому объекту
-            for object_id in object_ids:
+            for object_id_str in object_ids:
+                # Преобразуем строку в число
+                try:
+                    object_id = int(object_id_str)
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid object_id: {object_id_str}")
+                    continue
+                
                 # Проверяем, что объект принадлежит владельцу
                 from apps.web.services.object_service import ObjectService
                 object_service = ObjectService(self.db)
@@ -289,7 +296,6 @@ class TemplateService:
                     if self._should_create_slots_for_date(template, current_date):
                         # Создаем тайм-слот для объекта
                         timeslot_data = {
-                            "object_id": object_id,
                             "slot_date": current_date,
                             "start_time": template.start_time,
                             "end_time": template.end_time,
@@ -300,7 +306,7 @@ class TemplateService:
                         # Создаем тайм-слот через ObjectService
                         from apps.web.services.object_service import TimeSlotService
                         timeslot_service = TimeSlotService(self.db)
-                        timeslot = await timeslot_service.create_timeslot(timeslot_data, owner_telegram_id)
+                        timeslot = await timeslot_service.create_timeslot(timeslot_data, object_id, owner_telegram_id)
                         
                         if timeslot:
                             created_slots.append({
