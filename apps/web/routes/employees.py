@@ -50,9 +50,22 @@ async def create_contract_form(request: Request):
     
     # Получаем доступных сотрудников и объекты
     contract_service = ContractService()
-    available_employees = await contract_service.get_available_employees(current_user["id"])
-    objects = await contract_service.get_owner_objects(current_user["id"])
+    # Используем telegram_id для поиска пользователя в БД
+    user_id = current_user["id"]  # Это telegram_id из токена
+    available_employees = await contract_service.get_available_employees(user_id)
+    objects = await contract_service.get_owner_objects(user_id)
     templates_list = await contract_service.get_contract_templates()
+    
+    # Текущая дата для шаблона (формат YYYY-MM-DD)
+    from datetime import date
+    current_date = date.today().strftime("%Y-%m-%d")
+    
+    # Отладочная информация
+    logger.info(f"Available employees: {len(available_employees)}")
+    logger.info(f"Objects: {len(objects)}")
+    logger.info(f"Templates: {len(templates_list)}")
+    for obj in objects:
+        logger.info(f"Object: {obj.id} - {obj.name}")
     
     return templates.TemplateResponse(
         "employees/create.html",
@@ -62,7 +75,8 @@ async def create_contract_form(request: Request):
             "current_user": current_user,
             "available_employees": available_employees,
             "objects": objects,
-            "templates": templates_list
+            "templates": templates_list,
+            "current_date": current_date
         }
     )
 

@@ -358,12 +358,21 @@ class ContractService:
                 for emp in employees
             ]
     
-    async def get_owner_objects(self, owner_id: int) -> List[Object]:
-        """Получение объектов владельца."""
+    async def get_owner_objects(self, owner_telegram_id: int) -> List[Object]:
+        """Получение объектов владельца по telegram_id."""
         async with get_async_session() as session:
+            # Сначала находим пользователя по telegram_id
+            user_query = select(User).where(User.telegram_id == owner_telegram_id)
+            user_result = await session.execute(user_query)
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                return []
+            
+            # Теперь ищем объекты по owner_id из базы данных
             query = select(Object).where(
                 and_(
-                    Object.owner_id == owner_id,
+                    Object.owner_id == user.id,
                     Object.is_active == True
                 )
             ).order_by(Object.name)
