@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from datetime import date, datetime, timedelta
 from typing import Optional, List
@@ -18,6 +18,18 @@ from domain.entities.user import User
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
 user_manager = UserManager()
+
+
+async def get_user_id_from_current_user(current_user, session):
+    """Получает внутренний ID пользователя из current_user"""
+    if isinstance(current_user, dict):
+        telegram_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == telegram_id)
+        user_result = await session.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        return user_obj.id if user_obj else None
+    else:
+        return current_user.id
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -198,11 +210,12 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    # Получаем ID пользователя из словаря
-    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    # Получаем роль пользователя
     user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
     
     async with get_async_session() as session:
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, session)
         if shift_type == "schedule":
             # Запланированная смена
             query = select(ShiftSchedule).options(
@@ -248,14 +261,17 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    # Получаем ID пользователя из словаря
-    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    # Получаем роль пользователя
     user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
     
     async with get_async_session() as session:
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, session)
         if shift_type == "schedule":
             # Отмена запланированной смены
-            query = select(ShiftSchedule).where(ShiftSchedule.id == shift_id)
+            query = select(ShiftSchedule).options(
+                selectinload(ShiftSchedule.object)
+            ).where(ShiftSchedule.id == shift_id)
             result = await session.execute(query)
             shift = result.scalar_one_or_none()
             
@@ -263,19 +279,21 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
                 # Проверка прав доступа
                 if user_role != "superadmin":
                     if shift.object.owner_id != user_id:
-                        return {"success": False, "error": "Нет прав доступа"}
+                        return JSONResponse({"success": False, "error": "Нет прав доступа"})
                 
                 # Отмена смены
                 shift.status = "cancelled"
                 shift.updated_at = datetime.utcnow()
                 await session.commit()
                 
-                return {"success": True, "message": "Запланированная смена отменена"}
+                return JSONResponse({"success": True, "message": "Запланированная смена отменена"})
             else:
-                return {"success": False, "error": "Смена не найдена или уже отменена"}
+                return JSONResponse({"success": False, "error": "Смена не найдена или уже отменена"})
         else:
             # Отмена активной смены
-            query = select(Shift).where(Shift.id == shift_id)
+            query = select(Shift).options(
+                selectinload(Shift.object)
+            ).where(Shift.id == shift_id)
             result = await session.execute(query)
             shift = result.scalar_one_or_none()
             
@@ -283,7 +301,7 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
                 # Проверка прав доступа
                 if user_role != "superadmin":
                     if shift.object.owner_id != user_id:
-                        return {"success": False, "error": "Нет прав доступа"}
+                        return JSONResponse({"success": False, "error": "Нет прав доступа"})
                 
                 # Закрытие смены
                 shift.status = "completed"
@@ -291,9 +309,9 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
                 shift.updated_at = datetime.utcnow()
                 await session.commit()
                 
-                return {"success": True, "message": "Смена завершена"}
+                return JSONResponse({"success": True, "message": "Смена завершена"})
             else:
-                return {"success": False, "error": "Смена не найдена или уже завершена"}
+                return JSONResponse({"success": False, "error": "Смена не найдена или уже завершена"})
 
 
 @router.get("/stats/summary")
@@ -303,11 +321,12 @@ async def shifts_stats(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    # Получаем ID пользователя из словаря
-    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    # Получаем роль пользователя
     user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
     
     async with get_async_session() as session:
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, session)
         # Получаем объекты владельца
         owner_objects = select(Object.id).where(Object.owner_id == user_id)
         
