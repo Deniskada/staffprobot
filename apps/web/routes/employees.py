@@ -25,7 +25,8 @@ async def employees_list(request: Request):
         {
             "request": request,
             "employees": [],
-            "title": "Управление сотрудниками"
+            "title": "Управление сотрудниками",
+            "current_user": {"role": "owner"}  # Временная заглушка для отображения меню
         }
     )
 
@@ -37,7 +38,8 @@ async def create_contract_form(request: Request):
         "employees/create.html",
         {
             "request": request,
-            "title": "Создание договора"
+            "title": "Создание договора",
+            "current_user": {"role": "owner"}
         }
     )
 
@@ -67,7 +69,8 @@ async def employee_detail(request: Request, employee_id: int):
         {
             "request": request,
             "employee": None,
-            "title": "Детали сотрудника"
+            "title": "Детали сотрудника",
+            "current_user": {"role": "owner"}
         }
     )
 
@@ -80,7 +83,8 @@ async def contract_detail(request: Request, contract_id: int):
         {
             "request": request,
             "contract": None,
-            "title": "Детали договора"
+            "title": "Детали договора",
+            "current_user": {"role": "owner"}
         }
     )
 
@@ -93,7 +97,8 @@ async def edit_contract_form(request: Request, contract_id: int):
         {
             "request": request,
             "contract": None,
-            "title": "Редактирование договора"
+            "title": "Редактирование договора",
+            "current_user": {"role": "owner"}
         }
     )
 
