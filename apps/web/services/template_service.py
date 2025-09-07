@@ -24,21 +24,7 @@ class TemplateService:
     ) -> Optional[PlanningTemplate]:
         """Создание нового шаблона планирования"""
         try:
-            # Проверяем, что объект принадлежит владельцу
-            object_query = select(Object).where(
-                and_(
-                    Object.id == template_data["object_id"],
-                    Object.owner_id == await self._get_user_internal_id(owner_telegram_id)
-                )
-            )
-            result = await self.db.execute(object_query)
-            obj = result.scalar_one_or_none()
-            
-            if not obj:
-                logger.warning(f"Object {template_data['object_id']} not found for owner {owner_telegram_id}")
-                return None
-            
-            # Создаем шаблон
+            # Создаем шаблон (универсальный, без привязки к объекту)
             template = PlanningTemplate(
                 name=template_data["name"],
                 description=template_data.get("description", ""),
