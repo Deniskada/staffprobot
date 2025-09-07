@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.week-container {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.week-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.week-grid {
+    display: grid;
+    grid-template-columns: 200px repeat(7, 1fr);
+    gap: 1px;
+    background: #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.time-column {
+    background: #007bff;
+    color: white;
+    padding: 10px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.day-column {
+    background: white;
+    min-height: 600px;
+    padding: 8px;
+    position: relative;
+    border: 1px solid #dee2e6;
+}
+
+.day-header {
+    background: #e9ecef;
+    padding: 10px;
+    text-align: center;
+    font-weight: bold;
+    margin: -8px -8px 8px -8px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.day-header.today {
+    background: #007bff;
+    color: white;
+}
+
+.day-number {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.day-name {
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+.timeslot-item {
+    background: #28a745;
+    color: white;
+    padding: 4px 8px;
+    margin: 2px 0;
+    border-radius: 4px;
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 4px solid #1e7e34;
+}
+
+.timeslot-item:hover {
+    background: #1e7e34;
+    transform: translateX(2px);
+}
+
+.timeslot-time {
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.timeslot-object {
+    font-size: 0.75em;
+    opacity: 0.9;
+}
+
+.timeslot-rate {
+    font-size: 0.7em;
+    opacity: 0.8;
+}
+
+.no-timeslots {
+    color: #6c757d;
+    font-size: 0.8em;
+    font-style: italic;
+    text-align: center;
+    margin-top: 20px;
+}
+
+.time-slot {
+    height: 40px;
+    border-bottom: 1px solid #e9ecef;
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    font-size: 0.8em;
+    color: #6c757d;
+}
+
+.time-slot:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.hour-marker {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: #007bff;
+    opacity: 0.3;
+}
+
+.stats-panel {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.quick-actions {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.quick-actions .btn {
+    margin: 5px;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Заголовок и навигация -->
+    <div class="week-header">
+        <div class="d-flex align-items-center">
+            <h1 class="h3 mb-0 me-3">
+                <i class="bi bi-calendar-week"></i> {{ title }}
+            </h1>
+            <span class="badge bg-primary fs-6">
+                Неделя {{ week }}, {{ year }} год
+            </span>
+            <span class="badge bg-secondary ms-2">
+                {{ week_start.strftime('%d.%m') }} - {{ week_end.strftime('%d.%m.%Y') }}
+            </span>
+        </div>
+        
+        <div class="d-flex align-items-center gap-3">
+            <!-- Фильтр по объектам -->
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-building"></i>
+                    {% if selected_object %}
+                        {{ selected_object.name }}
+                    {% else %}
+                        Все объекты
+                    {% endif %}
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="?year={{ year }}&week={{ week }}">Все объекты</a></li>
+                    {% for obj in objects %}
+                    <li><a class="dropdown-item" href="?year={{ year }}&week={{ week }}&object_id={{ obj.id }}">{{ obj.name }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <!-- Переключение видов -->
+            <div class="btn-group" role="group">
+                <a href="/calendar/?year={{ year }}&month={{ week_start.month }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
+                   class="btn btn-outline-primary">
+                    <i class="bi bi-calendar3"></i> Месяц
+                </a>
+                <a href="/calendar/analysis{% if selected_object_id %}?object_id={{ selected_object_id }}{% endif %}" 
+                   class="btn btn-outline-info">
+                    <i class="bi bi-graph-up"></i> Анализ
+                </a>
+            </div>
+            
+            <!-- Навигация по неделям -->
+            <div class="btn-group" role="group">
+                <a href="?year={{ prev_year }}&week={{ prev_week }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
+                   class="btn btn-outline-secondary">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+                <a href="?year={{ today.year }}&week={{ today.isocalendar()[1] }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
+                   class="btn btn-outline-secondary">
+                    Текущая неделя
+                </a>
+                <a href="?year={{ next_year }}&week={{ next_week }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
+                   class="btn btn-outline-secondary">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика недели -->
+    <div class="stats-panel">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-clock text-primary fs-3 me-3"></i>
+                    <div>
+                        <div class="fw-bold fs-5">
+                            {% set total_slots = week_data|map(attribute='timeslots')|map('length')|sum %}
+                            {{ total_slots }}
+                        </div>
+                        <div class="text-muted small">Тайм-слотов на неделе</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-calendar-check text-success fs-3 me-3"></i>
+                    <div>
+                        <div class="fw-bold fs-5">
+                            {% set days_with_slots = week_data|selectattr('timeslots_count', '>', 0)|list|length %}
+                            {{ days_with_slots }}/7
+                        </div>
+                        <div class="text-muted small">Дней с планами</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-building text-info fs-3 me-3"></i>
+                    <div>
+                        <div class="fw-bold fs-5">{{ objects|length }}</div>
+                        <div class="text-muted small">Активных объектов</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-currency-dollar text-warning fs-3 me-3"></i>
+                    <div>
+                        <div class="fw-bold fs-5">
+                            {% set total_hours = 0 %}
+                            {% for day in week_data %}
+                                {% for slot in day.timeslots %}
+                                    {% set start_hour = slot.start_time.split(':')[0]|int %}
+                                    {% set end_hour = slot.end_time.split(':')[0]|int %}
+                                    {% set hours = end_hour - start_hour %}
+                                    {% set total_hours = total_hours + hours %}
+                                {% endfor %}
+                            {% endfor %}
+                            {{ total_hours }}ч
+                        </div>
+                        <div class="text-muted small">Общее время</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Недельная сетка -->
+    <div class="week-container">
+        <div class="week-grid">
+            <!-- Колонка времени -->
+            <div class="time-column">
+                <div class="fw-bold mb-2">Время</div>
+                {% for hour in range(6, 23) %}
+                <div class="time-slot">
+                    <span class="hour-marker"></span>
+                    {{ hour }}:00
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Дни недели -->
+            {% for day in week_data %}
+            <div class="day-column">
+                <div class="day-header {% if day.is_today %}today{% endif %}">
+                    <div class="day-number">{{ day.date.day }}</div>
+                    <div class="day-name">
+                        {% set day_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] %}
+                        {{ day_names[day.date.weekday()] }}
+                    </div>
+                </div>
+                
+                {% if day.timeslots_count > 0 %}
+                    {% for slot in day.timeslots %}
+                    <div class="timeslot-item" 
+                         title="{{ slot.object_name }}: {{ slot.start_time }}-{{ slot.end_time }} ({{ slot.hourly_rate }}₽/час)"
+                         onclick="showTimeslotDetails({{ slot.id }})">
+                        <div class="timeslot-time">{{ slot.start_time }}-{{ slot.end_time }}</div>
+                        <div class="timeslot-object">{{ slot.object_name }}</div>
+                        <div class="timeslot-rate">{{ slot.hourly_rate }}₽/час</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="no-timeslots">Нет планов</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Быстрые действия -->
+<div class="quick-actions">
+    <a href="/objects/create" class="btn btn-primary" title="Создать объект">
+        <i class="bi bi-plus-lg"></i>
+    </a>
+    <a href="/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create" 
+       class="btn btn-success" title="Создать тайм-слот">
+        <i class="bi bi-clock"></i>
+    </a>
+    <a href="/calendar/analysis{% if selected_object_id %}?object_id={{ selected_object_id }}{% endif %}" 
+       class="btn btn-info" title="Анализ пробелов">
+        <i class="bi bi-graph-up"></i>
+    </a>
+</div>
+
+<!-- Модальное окно для деталей тайм-слота -->
+<div class="modal fade" id="timeslotModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали тайм-слота</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="timeslotDetails">
+                <!-- Детали будут загружены через JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" id="editTimeslotBtn">Редактировать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showTimeslotDetails(timeslotId) {
+    document.getElementById('timeslotDetails').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+        </div>
+    `;
+    
+    const modal = new bootstrap.Modal(document.getElementById('timeslotModal'));
+    modal.show();
+    
+    // Временная заглушка
+    setTimeout(() => {
+        document.getElementById('timeslotDetails').innerHTML = `
+            <div class="alert alert-info">
+                <h6>Тайм-слот #${timeslotId}</h6>
+                <p>Детали тайм-слота будут загружены здесь.</p>
+                <p><small class="text-muted">Функция в разработке</small></p>
+            </div>
+        `;
+    }, 500);
+}
+
+// Обработка клавиатурных сокращений
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey || e.metaKey) {
+        switch(e.key) {
+            case 'n': // Ctrl+N - новый тайм-слот
+                e.preventDefault();
+                window.location.href = '/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create';
+                break;
+            case 'o': // Ctrl+O - новый объект
+                e.preventDefault();
+                window.location.href = '/objects/create';
+                break;
+        }
+    }
+});
+</script>
+{% endblock %}
