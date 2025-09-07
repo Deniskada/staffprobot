@@ -1,16 +1,31 @@
 {% extends "base.html" %}
 
-{% block title %}Шаблоны договоров{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1 class="h3 mb-0">Шаблоны договоров</h1>
-                <a href="/templates/create" class="btn btn-primary">
-                    <i class="fas fa-plus me-2"></i>Создать шаблон
-                </a>
+                <h1 class="h3 mb-0">{{ title }}</h1>
+                <div class="d-flex gap-2">
+                    <!-- Выбор типа шаблонов -->
+                    <div class="btn-group" role="group">
+                        <a href="/templates?template_type=planning" 
+                           class="btn {% if template_type == 'planning' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            <i class="bi bi-calendar3"></i> Планирование
+                        </a>
+                        <a href="/templates?template_type=contract" 
+                           class="btn {% if template_type == 'contract' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            <i class="bi bi-file-earmark-text"></i> Договоры
+                        </a>
+                    </div>
+                    
+                    <!-- Кнопка создания -->
+                    <a href="/templates/create?template_type={{ template_type }}" class="btn btn-success">
+                        <i class="bi bi-plus-circle"></i> Создать шаблон
+                    </a>
+                </div>
             </div>
 
             {% if templates %}
@@ -19,41 +34,78 @@
                     <div class="col-md-6 col-lg-4 mb-4">
                         <div class="card h-100">
                             <div class="card-body">
-                                <div class="d-flex align-items-center mb-3">
-                                    <div class="avatar bg-primary text-white rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
-                                        <i class="fas fa-file-alt"></i>
-                                    </div>
-                                    <div>
-                                        <h5 class="card-title mb-0">{{ template.name }}</h5>
-                                        <small class="text-muted">v{{ template.version }}</small>
-                                    </div>
-                                </div>
-                                
+                                <h5 class="card-title">{{ template.name }}</h5>
                                 {% if template.description %}
-                                <p class="card-text text-muted">{{ template.description }}</p>
+                                    <p class="card-text text-muted">{{ template.description }}</p>
                                 {% endif %}
                                 
-                                <div class="mb-3">
-                                    <small class="text-muted">Создан:</small><br>
-                                    <span class="badge bg-light text-dark">{{ template.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
-                                </div>
-
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="/templates/{{ template.id }}" 
-                                           class="btn btn-outline-primary">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="/templates/{{ template.id }}/edit" 
-                                           class="btn btn-outline-secondary">
-                                            <i class="fas fa-edit"></i>
-                                        </a>
-                                        <button type="button" 
-                                                class="btn btn-outline-danger"
-                                                onclick="deleteTemplate({{ template.id }}, '{{ template.name }}')">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                                {% if template_type == 'planning' %}
+                                    <!-- Информация для шаблонов планирования -->
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock"></i> 
+                                            {{ template.start_time }} - {{ template.end_time }}
+                                        </small>
                                     </div>
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="bi bi-currency-dollar"></i> 
+                                            {{ template.hourly_rate }} ₽/ч
+                                        </small>
+                                    </div>
+                                    {% if template.repeat_type != 'none' %}
+                                        <div class="mb-2">
+                                            <span class="badge bg-info">
+                                                <i class="bi bi-arrow-repeat"></i> 
+                                                {{ template.repeat_type }}
+                                            </span>
+                                        </div>
+                                    {% endif %}
+                                    {% if template.is_public %}
+                                        <div class="mb-2">
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-globe"></i> Публичный
+                                            </span>
+                                        </div>
+                                    {% endif %}
+                                {% else %}
+                                    <!-- Информация для шаблонов договоров -->
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="bi bi-tag"></i> 
+                                            Версия {{ template.version }}
+                                        </small>
+                                    </div>
+                                    {% if template.is_active %}
+                                        <div class="mb-2">
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-circle"></i> Активен
+                                            </span>
+                                        </div>
+                                    {% else %}
+                                        <div class="mb-2">
+                                            <span class="badge bg-secondary">
+                                                <i class="bi bi-x-circle"></i> Неактивен
+                                            </span>
+                                        </div>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                            
+                            <div class="card-footer">
+                                <div class="btn-group w-100" role="group">
+                                    <a href="/templates/{{ template.id }}?template_type={{ template_type }}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-eye"></i> Просмотр
+                                    </a>
+                                    <a href="/templates/{{ template.id }}/edit?template_type={{ template_type }}" 
+                                       class="btn btn-outline-secondary btn-sm">
+                                        <i class="bi bi-pencil"></i> Редактировать
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                            onclick="deleteTemplate({{ template.id }}, '{{ template_type }}')">
+                                        <i class="bi bi-trash"></i> Удалить
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -62,11 +114,17 @@
                 </div>
             {% else %}
                 <div class="text-center py-5">
-                    <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">Нет шаблонов договоров</h5>
-                    <p class="text-muted">Создайте первый шаблон для быстрого создания договоров</p>
-                    <a href="/templates/create" class="btn btn-primary">
-                        <i class="fas fa-plus me-2"></i>Создать шаблон
+                    <i class="bi bi-layout-text-window-reverse display-1 text-muted"></i>
+                    <h3 class="mt-3">Шаблоны не найдены</h3>
+                    <p class="text-muted">
+                        {% if template_type == 'planning' %}
+                            У вас пока нет шаблонов планирования. Создайте первый шаблон для быстрого планирования работы.
+                        {% else %}
+                            У вас пока нет шаблонов договоров. Создайте первый шаблон для стандартизации договоров.
+                        {% endif %}
+                    </p>
+                    <a href="/templates/create?template_type={{ template_type }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Создать первый шаблон
                     </a>
                 </div>
             {% endif %}
@@ -74,33 +132,28 @@
     </div>
 </div>
 
-<!-- Modal для подтверждения удаления -->
-<div class="modal fade" id="deleteModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Подтверждение удаления</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Вы уверены, что хотите удалить шаблон <strong id="templateName"></strong>?</p>
-                <p class="text-muted">Это действие нельзя отменить.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <form id="deleteForm" method="post" style="display: inline;">
-                    <button type="submit" class="btn btn-danger">Удалить</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
-function deleteTemplate(templateId, templateName) {
-    document.getElementById('templateName').textContent = templateName;
-    document.getElementById('deleteForm').action = '/templates/' + templateId + '/delete';
-    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+function deleteTemplate(templateId, templateType) {
+    if (confirm('Вы уверены, что хотите удалить этот шаблон?')) {
+        fetch(`/templates/${templateId}/delete?template_type=${templateType}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include'
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Ошибка удаления шаблона');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка удаления шаблона');
+        });
+    }
 }
 </script>
 {% endblock %}
