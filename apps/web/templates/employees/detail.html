@@ -1,144 +1,169 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ employee.first_name }} {{ employee.last_name or '' }}{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container-fluid">
     <div class="row">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1 class="h3 mb-0">
-                    <i class="bi bi-person text-primary"></i>
-                    {{ title }}
-                </h1>
-                <div class="btn-group">
-                    <a href="/employees/{{ employee.id }}/edit" class="btn btn-outline-secondary">
-                        <i class="bi bi-pencil"></i> Редактировать
-                    </a>
-                    <a href="/employees" class="btn btn-outline-primary">
-                        <i class="bi bi-arrow-left"></i> Назад к списку
-                    </a>
+                <div>
+                    <h1 class="h3 mb-0">{{ employee.first_name }} {{ employee.last_name or '' }}</h1>
+                    <p class="text-muted mb-0">
+                        @{{ employee.username or 'без username' }} • 
+                        <span class="badge bg-light text-dark">{{ employee.telegram_id }}</span>
+                    </p>
                 </div>
+                <a href="/employees" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Назад к списку
+                </a>
             </div>
-            
+
             <div class="row">
-                <div class="col-md-8">
+                <div class="col-lg-8">
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-0">Информация о сотруднике</h5>
+                            <h5 class="mb-0">
+                                <i class="fas fa-file-contract me-2"></i>Договоры
+                            </h5>
                         </div>
                         <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <dl class="row">
-                                        <dt class="col-sm-4">ID:</dt>
-                                        <dd class="col-sm-8">{{ employee.id }}</dd>
-                                        
-                                        <dt class="col-sm-4">Telegram ID:</dt>
-                                        <dd class="col-sm-8">
-                                            <code>{{ employee.telegram_id }}</code>
-                                        </dd>
-                                        
-                                        <dt class="col-sm-4">Имя:</dt>
-                                        <dd class="col-sm-8">
-                                            <strong>{{ employee.first_name }}</strong>
-                                            {% if employee.last_name %}
-                                            {{ employee.last_name }}
-                                            {% endif %}
-                                        </dd>
-                                        
-                                        <dt class="col-sm-4">Username:</dt>
-                                        <dd class="col-sm-8">
-                                            {% if employee.username %}
-                                            @{{ employee.username }}
-                                            {% else %}
-                                            <span class="text-muted">Не указан</span>
-                                            {% endif %}
-                                        </dd>
-                                    </dl>
-                                </div>
-                                <div class="col-md-6">
-                                    <dl class="row">
-                                        <dt class="col-sm-4">Роли:</dt>
-                                        <dd class="col-sm-8">
-                                            {% for role in employee.roles %}
-                                            <span class="badge me-1
-                                                {% if role == 'owner' %}bg-primary
-                                                {% elif role == 'employee' %}bg-success
-                                                {% elif role == 'applicant' %}bg-warning
-                                                {% elif role == 'superadmin' %}bg-danger
-                                                {% else %}bg-secondary
-                                                {% endif %}">
-                                                {% if role == 'owner' %}Владелец
-                                                {% elif role == 'employee' %}Сотрудник
-                                                {% elif role == 'applicant' %}Соискатель
-                                                {% elif role == 'superadmin' %}Суперадмин
-                                                {% else %}{{ role }}
-                                                {% endif %}
-                                            </span>
+                            {% if contracts %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Номер</th>
+                                                <th>Название</th>
+                                                <th>Статус</th>
+                                                <th>Ставка</th>
+                                                <th>Период</th>
+                                                <th>Действия</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for contract in contracts %}
+                                            <tr>
+                                                <td>
+                                                    <code>{{ contract.contract_number }}</code>
+                                                </td>
+                                                <td>
+                                                    <a href="/employees/contract/{{ contract.id }}" class="text-decoration-none">
+                                                        {{ contract.title }}
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    <span class="badge 
+                                                        {% if contract.status == 'active' %}bg-success
+                                                        {% elif contract.status == 'draft' %}bg-warning
+                                                        {% elif contract.status == 'suspended' %}bg-warning
+                                                        {% elif contract.status == 'terminated' %}bg-secondary
+                                                        {% else %}bg-light text-dark{% endif %}">
+                                                        {{ contract.status }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    {% if contract.hourly_rate %}
+                                                        {{ contract.hourly_rate }} ₽/ч
+                                                    {% else %}
+                                                        <span class="text-muted">—</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <small>
+                                                        {{ contract.start_date.strftime('%d.%m.%Y') }}
+                                                        {% if contract.end_date %}
+                                                            — {{ contract.end_date.strftime('%d.%m.%Y') }}
+                                                        {% else %}
+                                                            — бессрочно
+                                                        {% endif %}
+                                                    </small>
+                                                </td>
+                                                <td>
+                                                    <div class="btn-group btn-group-sm">
+                                                        <a href="/employees/contract/{{ contract.id }}" 
+                                                           class="btn btn-outline-primary">
+                                                            <i class="fas fa-eye"></i>
+                                                        </a>
+                                                        {% if contract.status != 'terminated' %}
+                                                        <a href="/employees/contract/{{ contract.id }}/edit" 
+                                                           class="btn btn-outline-secondary">
+                                                            <i class="fas fa-edit"></i>
+                                                        </a>
+                                                        {% endif %}
+                                                    </div>
+                                                </td>
+                                            </tr>
                                             {% endfor %}
-                                        </dd>
-                                        
-                                        <dt class="col-sm-4">Статус:</dt>
-                                        <dd class="col-sm-8">
-                                            {% if employee.is_active %}
-                                            <span class="badge bg-success">Активен</span>
-                                            {% else %}
-                                            <span class="badge bg-secondary">Неактивен</span>
-                                            {% endif %}
-                                        </dd>
-                                        
-                                        <dt class="col-sm-4">Дата создания:</dt>
-                                        <dd class="col-sm-8">
-                                            {{ employee.created_at.strftime('%d.%m.%Y %H:%M') if employee.created_at else 'Не указана' }}
-                                        </dd>
-                                        
-                                        <dt class="col-sm-4">Последнее обновление:</dt>
-                                        <dd class="col-sm-8">
-                                            {{ employee.updated_at.strftime('%d.%m.%Y %H:%M') if employee.updated_at else 'Не указано' }}
-                                        </dd>
-                                    </dl>
+                                        </tbody>
+                                    </table>
                                 </div>
-                            </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-file-contract fa-2x text-muted mb-3"></i>
+                                    <h5 class="text-muted">Нет договоров</h5>
+                                    <p class="text-muted">У этого сотрудника пока нет договоров</p>
+                                </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
-                
-                <div class="col-md-4">
+
+                <div class="col-lg-4">
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-0">Статистика</h5>
+                            <h5 class="mb-0">
+                                <i class="fas fa-info-circle me-2"></i>Информация
+                            </h5>
                         </div>
                         <div class="card-body">
-                            <div class="text-center">
-                                <h3 class="text-primary">0</h3>
-                                <p class="text-muted mb-3">Отработано смен</p>
-                                
-                                <h3 class="text-success">0</h3>
-                                <p class="text-muted mb-3">Активных смен</p>
-                                
-                                <h3 class="text-info">0</h3>
-                                <p class="text-muted">Доступных объектов</p>
+                            <div class="mb-3">
+                                <strong>Telegram ID:</strong><br>
+                                <code>{{ employee.telegram_id }}</code>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Имя:</strong><br>
+                                {{ employee.first_name }} {{ employee.last_name or '' }}
+                            </div>
+                            
+                            {% if employee.username %}
+                            <div class="mb-3">
+                                <strong>Username:</strong><br>
+                                @{{ employee.username }}
+                            </div>
+                            {% endif %}
+                            
+                            <div class="mb-3">
+                                <strong>Дата регистрации:</strong><br>
+                                {{ employee.created_at.strftime('%d.%m.%Y %H:%M') }}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Активных договоров:</strong><br>
+                                <span class="badge bg-primary">
+                                    {{ contracts|selectattr('status', 'equalto', 'active')|list|length }}
+                                </span>
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="card mt-3">
                         <div class="card-header">
-                            <h5 class="card-title mb-0">Быстрые действия</h5>
+                            <h5 class="mb-0">
+                                <i class="fas fa-plus me-2"></i>Быстрые действия
+                            </h5>
                         </div>
                         <div class="card-body">
-                            <div class="d-grid gap-2">
-                                <a href="/contracts?employee_id={{ employee.id }}" class="btn btn-outline-primary">
-                                    <i class="bi bi-file-text"></i> Договоры
-                                </a>
-                                <a href="/shifts?employee_id={{ employee.id }}" class="btn btn-outline-success">
-                                    <i class="bi bi-clock"></i> Смены
-                                </a>
-                                <a href="/objects?employee_id={{ employee.id }}" class="btn btn-outline-info">
-                                    <i class="bi bi-building"></i> Объекты
-                                </a>
-                            </div>
+                            <a href="/employees/create?employee_telegram_id={{ employee.telegram_id }}" 
+                               class="btn btn-primary w-100 mb-2">
+                                <i class="fas fa-file-contract me-2"></i>Новый договор
+                            </a>
+                            
+                            <a href="/calendar?employee_id={{ employee.id }}" 
+                               class="btn btn-outline-primary w-100">
+                                <i class="fas fa-calendar me-2"></i>Календарь смен
+                            </a>
                         </div>
                     </div>
                 </div>
