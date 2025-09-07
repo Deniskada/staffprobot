@@ -615,12 +615,11 @@ class ContractService:
             if not owner:
                 return None
             
-            # Получаем сотрудника с договорами
+            # Получаем сотрудника с договорами (включая неактивные)
             query = select(Contract).where(
                 and_(
                     Contract.employee_id == employee_id,
-                    Contract.owner_id == owner.id,
-                    Contract.is_active == True
+                    Contract.owner_id == owner.id
                 )
             ).options(
                 selectinload(Contract.employee)
@@ -665,6 +664,7 @@ class ContractService:
                     'start_date': contract.start_date,
                     'end_date': contract.end_date,
                     'allowed_objects': contract.allowed_objects or [],
+                    'is_active': contract.is_active,
                     'allowed_objects_info': [objects_info.get(obj_id) for obj_id in (contract.allowed_objects or []) if objects_info.get(obj_id)]
                 } for contract in contracts]
             }
