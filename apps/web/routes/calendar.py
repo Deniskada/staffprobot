@@ -2,15 +2,15 @@
 Роуты для календарного планирования
 """
 
-from fastapi import APIRouter, Request, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Request, Depends, HTTPException, Query, Form
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from apps.web.services.object_service import ObjectService, TimeSlotService
 from core.database.session import get_db_session
 from core.logging.logger import logger
 from typing import Optional, List, Dict, Any
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 from sqlalchemy.ext.asyncio import AsyncSession
 import calendar
 
@@ -400,3 +400,119 @@ async def _analyze_gaps(
         "object_gaps": object_gaps,
         "period": f"{today.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
     }
+
+
+@router.post("/api/quick-create-timeslot")
+async def quick_create_timeslot(
+    request: Request,
+    object_id: int = Form(...),
+    slot_date: str = Form(...),
+    start_time: str = Form(...),
+    end_time: str = Form(...),
+    hourly_rate: int = Form(...),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Быстрое создание тайм-слота через drag & drop"""
+    try:
+        # Валидация данных
+        try:
+            slot_date_obj = datetime.strptime(slot_date, "%Y-%m-%d").date()
+            start_time_obj = time.fromisoformat(start_time)
+            end_time_obj = time.fromisoformat(end_time)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Неверный формат данных: {str(e)}")
+        
+        if start_time_obj >= end_time_obj:
+            raise HTTPException(status_code=400, detail="Время начала должно быть меньше времени окончания")
+        
+        if hourly_rate <= 0:
+            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+        
+        # Создание тайм-слота
+        timeslot_service = TimeSlotService(db)
+        timeslot_data = {
+            "slot_date": slot_date_obj,
+            "start_time": start_time,
+            "end_time": end_time,
+            "hourly_rate": hourly_rate,
+            "is_active": True
+        }
+        
+        new_timeslot = await timeslot_service.create_timeslot(timeslot_data, object_id, current_user["telegram_id"])
+        if not new_timeslot:
+            raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
+        
+        # Получаем информацию об объекте для ответа
+        object_service = ObjectService(db)
+        obj = await object_service.get_object_by_id(object_id, current_user["telegram_id"])
+        
+        return JSONResponse({
+            "success": True,
+            "timeslot": {
+                "id": new_timeslot.id,
+                "object_id": new_timeslot.object_id,
+                "object_name": obj.name if obj else "Неизвестный объект",
+                "date": new_timeslot.slot_date.strftime("%Y-%m-%d"),
+                "start_time": new_timeslot.start_time.strftime("%H:%M"),
+                "end_time": new_timeslot.end_time.strftime("%H:%M"),
+                "hourly_rate": float(new_timeslot.hourly_rate) if new_timeslot.hourly_rate else 0,
+                "is_active": new_timeslot.is_active
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating quick timeslot: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слота: {str(e)}")
+
+
+@router.delete("/api/timeslot/{timeslot_id}")
+async def delete_timeslot_api(
+    timeslot_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Удаление тайм-слота через API"""
+    try:
+        timeslot_service = TimeSlotService(db)
+        success = await timeslot_service.delete_timeslot(timeslot_id, current_user["telegram_id"])
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден или нет доступа")
+        
+        return JSONResponse({"success": True})
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting timeslot: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления тайм-слота: {str(e)}")
+
+
+@router.get("/api/objects")
+async def get_objects_api(
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение списка объектов для drag & drop"""
+    try:
+        object_service = ObjectService(db)
+        objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
+        
+        objects_data = []
+        for obj in objects:
+            objects_data.append({
+                "id": obj.id,
+                "name": obj.name,
+                "hourly_rate": float(obj.hourly_rate),
+                "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "09:00",
+                "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "21:00"
+            })
+        
+        return JSONResponse({"objects": objects_data})
+        
+    except Exception as e:
+        logger.error(f"Error getting objects: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки объектов")
