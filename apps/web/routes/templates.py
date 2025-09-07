@@ -28,16 +28,11 @@ async def templates_list(
         template_service = TemplateService(db)
         templates_data = await template_service.get_templates_by_owner(current_user["telegram_id"])
         
-        # Получаем объекты для создания новых шаблонов
-        object_service = ObjectService(db)
-        objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
-        
         return templates.TemplateResponse(
             "templates/index.html",
             {
                 "request": request,
                 "templates": templates_data,
-                "objects": objects,
                 "current_user": current_user
             }
         )
@@ -86,7 +81,7 @@ async def create_template(
         template_data = {
             "name": form_data.get("name", "").strip(),
             "description": form_data.get("description", "").strip(),
-            "object_id": int(form_data.get("object_id", 0)),
+            "object_id": None,  # Шаблоны создаются без привязки к объекту
             "start_time": form_data.get("start_time", "").strip(),
             "end_time": form_data.get("end_time", "").strip(),
             "hourly_rate": int(form_data.get("hourly_rate", 0)),
@@ -99,9 +94,6 @@ async def create_template(
         # Валидация
         if not template_data["name"]:
             raise HTTPException(status_code=400, detail="Название шаблона обязательно")
-        
-        if not template_data["object_id"]:
-            raise HTTPException(status_code=400, detail="Выберите объект")
         
         if not template_data["start_time"] or not template_data["end_time"]:
             raise HTTPException(status_code=400, detail="Укажите время начала и окончания")
@@ -278,9 +270,13 @@ async def apply_template(
         
         start_date_str = form_data.get("start_date", "").strip()
         end_date_str = form_data.get("end_date", "").strip()
+        object_ids = form_data.getlist("object_ids")  # Получаем список ID объектов
         
         if not start_date_str or not end_date_str:
             raise HTTPException(status_code=400, detail="Укажите даты начала и окончания")
+        
+        if not object_ids:
+            raise HTTPException(status_code=400, detail="Выберите хотя бы один объект")
         
         try:
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
@@ -292,8 +288,8 @@ async def apply_template(
             raise HTTPException(status_code=400, detail="Дата начала не может быть позже даты окончания")
         
         template_service = TemplateService(db)
-        result = await template_service.apply_template(
-            template_id, start_date, end_date, current_user["telegram_id"]
+        result = await template_service.apply_template_to_objects(
+            template_id, start_date, end_date, object_ids, current_user["telegram_id"]
         )
         
         return JSONResponse(result)

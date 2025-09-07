@@ -266,6 +266,77 @@ class TemplateService:
         
         return False
     
+    async def apply_template_to_objects(
+        self, 
+        template_id: int, 
+        start_date: date, 
+        end_date: date,
+        object_ids: List[int],
+        owner_telegram_id: int
+    ) -> Dict[str, Any]:
+        """Применение шаблона к нескольким объектам"""
+        try:
+            template = await self.get_template_by_id(template_id, owner_telegram_id)
+            if not template:
+                return {"success": False, "error": "Шаблон не найден"}
+            
+            created_slots = []
+            total_created = 0
+            
+            # Применяем шаблон к каждому объекту
+            for object_id in object_ids:
+                # Проверяем, что объект принадлежит владельцу
+                from apps.web.services.object_service import ObjectService
+                object_service = ObjectService(self.db)
+                obj = await object_service.get_object_by_id(object_id, owner_telegram_id)
+                if not obj:
+                    logger.warning(f"Object {object_id} not found for owner {owner_telegram_id}")
+                    continue
+                
+                # Создаем слоты для этого объекта
+                current_date = start_date
+                while current_date <= end_date:
+                    if self._should_create_slots_for_date(template, current_date):
+                        # Создаем тайм-слот для объекта
+                        timeslot_data = {
+                            "object_id": object_id,
+                            "slot_date": current_date,
+                            "start_time": template.start_time,
+                            "end_time": template.end_time,
+                            "hourly_rate": template.hourly_rate,
+                            "is_active": True
+                        }
+                        
+                        # Создаем тайм-слот через ObjectService
+                        from apps.web.services.object_service import TimeSlotService
+                        timeslot_service = TimeSlotService(self.db)
+                        timeslot = await timeslot_service.create_timeslot(timeslot_data, owner_telegram_id)
+                        
+                        if timeslot:
+                            created_slots.append({
+                                "id": timeslot.id,
+                                "object_id": object_id,
+                                "object_name": obj.name,
+                                "slot_date": current_date.isoformat(),
+                                "start_time": template.start_time,
+                                "end_time": template.end_time,
+                                "hourly_rate": template.hourly_rate
+                            })
+                            total_created += 1
+                    
+                    current_date += timedelta(days=1)
+            
+            return {
+                "success": True,
+                "created_slots_count": total_created,
+                "created_slots": created_slots,
+                "message": f"Шаблон применен к {len(object_ids)} объектам. Создано {total_created} тайм-слотов."
+            }
+            
+        except Exception as e:
+            logger.error(f"Error applying template to objects: {e}")
+            return {"success": False, "error": f"Ошибка применения шаблона: {str(e)}"}
+
     async def _get_user_internal_id(self, telegram_id: int) -> int:
         """Получение внутреннего ID пользователя по Telegram ID"""
         try:
