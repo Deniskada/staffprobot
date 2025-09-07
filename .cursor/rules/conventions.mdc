@@ -216,6 +216,7 @@ def test_create_user_with_invalid_email_should_fail():
 
 - [Правила миграций и системных проблем](migrations.mdc) - работа с БД, Docker, отладка
 - [Правила выполнения работ](workflow.mdc) - процесс разработки и согласования
+- [Правила работы с user_id](user_id_handling.mdc) - критически важные правила для аутентификации
 # Правила разработки кода StaffProBot
 
 ## Общие принципы
@@ -430,3 +431,4 @@ def test_create_user_with_invalid_email_should_fail():
 
 - [Правила миграций и системных проблем](migrations.mdc) - работа с БД, Docker, отладка
 - [Правила выполнения работ](workflow.mdc) - процесс разработки и согласования
+- [Правила работы с user_id](user_id_handling.mdc) - критически важные правила для аутентификации
