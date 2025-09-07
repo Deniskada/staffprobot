@@ -121,9 +121,13 @@
                                 <label for="employee_id" class="form-label">Сотрудник</label>
                                 <select class="form-select" id="employee_id" name="employee_id">
                                     <option value="">Все сотрудники</option>
-                                    {% for emp in employees %}
-                                    <option value="{{ emp.id }}">{{ emp.first_name }} {{ emp.last_name or '' }}</option>
-                                    {% endfor %}
+                                    {% if employees %}
+                                        {% for emp in employees %}
+                                        <option value="{{ emp.id }}">{{ emp.first_name }} {{ emp.last_name or '' }}</option>
+                                        {% endfor %}
+                                    {% else %}
+                                        <option value="">Нет сотрудников</option>
+                                    {% endif %}
                                 </select>
                             </div>
                             <div class="col-md-1">
