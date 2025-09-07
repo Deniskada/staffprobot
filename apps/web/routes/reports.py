@@ -12,7 +12,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 
-from core.database.session import get_db_session
+from core.database.session import get_async_session
 from core.auth.user_manager import UserManager
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from domain.entities.shift import Shift
@@ -32,7 +32,7 @@ async def reports_index(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    async with get_db_session() as session:
+    async with get_async_session() as session:
         # Получаем объекты владельца
         objects_query = select(Object).where(Object.owner_id == current_user.id)
         objects_result = await session.execute(objects_query)
@@ -94,7 +94,7 @@ async def generate_report(
     except ValueError:
         return {"error": "Неверный формат даты"}
     
-    async with get_db_session() as session:
+    async with get_async_session() as session:
         # Получаем объекты владельца
         owner_objects = select(Object.id).where(Object.owner_id == current_user.id)
         objects_result = await session.execute(owner_objects)
@@ -301,7 +301,7 @@ async def period_stats(
     except ValueError:
         return {"error": "Неверный формат даты"}
     
-    async with get_db_session() as session:
+    async with get_async_session() as session:
         # Получаем объекты владельца
         owner_objects = select(Object.id).where(Object.owner_id == current_user.id)
         objects_result = await session.execute(owner_objects)

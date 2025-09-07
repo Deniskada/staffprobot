@@ -35,7 +35,7 @@ class Shift(Base):
     user = relationship("User", backref="shifts")
     object = relationship("Object", backref="shifts")
     time_slot = relationship("TimeSlot", backref="shifts")
-    schedule = relationship("ShiftSchedule", backref="actual_shifts")  # Связь с планированием
+    schedule = relationship("ShiftSchedule", back_populates="actual_shifts", foreign_keys=[schedule_id])  # Связь с планированием
     
     def __repr__(self) -> str:
         return f"<Shift(id={self.id}, user_id={self.user_id}, object_id={self.object_id}, status='{self.status}')>"

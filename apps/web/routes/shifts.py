@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, desc
 from sqlalchemy.orm import selectinload
 
-from core.database.session import get_db_session
+from core.database.session import get_async_session
 from core.auth.user_manager import UserManager
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from domain.entities.shift import Shift
@@ -35,7 +35,7 @@ async def shifts_list(
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    async with get_db_session() as session:
+    async with get_async_session() as session:
         # Базовый запрос для смен
         shifts_query = select(Shift).options(
             selectinload(Shift.object),
@@ -178,7 +178,7 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    async with get_db_session() as session:
+    async with get_async_session() as session:
         if shift_type == "schedule":
             # Запланированная смена
             query = select(ShiftSchedule).options(
@@ -224,7 +224,7 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    async with get_db_session() as session:
+    async with get_async_session() as session:
         if shift_type == "schedule":
             # Отмена запланированной смены
             query = select(ShiftSchedule).where(ShiftSchedule.id == shift_id)
@@ -275,7 +275,7 @@ async def shifts_stats(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    async with get_db_session() as session:
+    async with get_async_session() as session:
         # Получаем объекты владельца
         owner_objects = select(Object.id).where(Object.owner_id == current_user.id)
         

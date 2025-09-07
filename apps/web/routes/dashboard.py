@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, desc
 from sqlalchemy.orm import selectinload
 
-from core.database.session import get_db_session
+from core.database.session import get_async_session
 from core.auth.user_manager import UserManager
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from domain.entities.shift import Shift
@@ -28,9 +28,12 @@ async def dashboard_index(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    async with get_db_session() as session:
+    # Получаем ID пользователя из словаря
+    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    
+    async with get_async_session() as session:
         # Получаем объекты владельца
-        objects_query = select(Object).where(Object.owner_id == current_user.id)
+        objects_query = select(Object).where(Object.owner_id == user_id)
         objects_result = await session.execute(objects_query)
         objects = objects_result.scalars().all()
         object_ids = [obj.id for obj in objects]
@@ -41,7 +44,7 @@ async def dashboard_index(request: Request):
         employees = employees_result.scalars().all()
         
         # Получаем договоры
-        contracts_query = select(Contract).where(Contract.owner_id == current_user.id)
+        contracts_query = select(Contract).where(Contract.owner_id == user_id)
         contracts_result = await session.execute(contracts_query)
         contracts = contracts_result.scalars().all()
         
@@ -223,9 +226,12 @@ async def dashboard_metrics(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    async with get_db_session() as session:
+    # Получаем ID пользователя из словаря
+    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    
+    async with get_async_session() as session:
         # Получаем объекты владельца
-        objects_query = select(Object).where(Object.owner_id == current_user.id)
+        objects_query = select(Object).where(Object.owner_id == user_id)
         objects_result = await session.execute(objects_query)
         objects = objects_result.scalars().all()
         object_ids = [obj.id for obj in objects]
@@ -282,11 +288,14 @@ async def dashboard_alerts(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    async with get_db_session() as session:
+    # Получаем ID пользователя из словаря
+    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    
+    async with get_async_session() as session:
         alerts = []
         
         # Получаем объекты владельца
-        objects_query = select(Object).where(Object.owner_id == current_user.id)
+        objects_query = select(Object).where(Object.owner_id == user_id)
         objects_result = await session.execute(objects_query)
         objects = objects_result.scalars().all()
         object_ids = [obj.id for obj in objects]
@@ -362,9 +371,12 @@ async def quick_stats(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    async with get_db_session() as session:
+    # Получаем ID пользователя из словаря
+    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    
+    async with get_async_session() as session:
         # Получаем объекты владельца
-        objects_query = select(Object).where(Object.owner_id == current_user.id)
+        objects_query = select(Object).where(Object.owner_id == user_id)
         objects_result = await session.execute(objects_query)
         objects = objects_result.scalars().all()
         object_ids = [obj.id for obj in objects]

@@ -11,6 +11,7 @@ import asyncio
 
 from core.auth.user_manager import UserManager
 from apps.web.services.auth_service import AuthService
+from core.logging.logger import logger
 
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
@@ -47,8 +48,11 @@ async def login(
             })
         
         # Получение пользователя
+        logger.info(f"Getting user by telegram_id: {telegram_id}")
         user = await user_manager.get_user_by_telegram_id(telegram_id)
+        logger.info(f"User found: {user is not None}")
         if not user:
+            logger.warning(f"User not found for telegram_id: {telegram_id}")
             return templates.TemplateResponse("auth/login.html", {
                 "request": request,
                 "title": "Вход в систему",
@@ -60,7 +64,7 @@ async def login(
         # Создание JWT токена с ролью из базы данных
         token = await auth_service.create_token({
             "id": user["id"],
-            "telegram_id": user["id"],  # В UserManager id = telegram_id
+            "telegram_id": user["telegram_id"],
             "username": user["username"],
             "first_name": user["first_name"],
             "last_name": user["last_name"],

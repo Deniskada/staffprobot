@@ -32,7 +32,7 @@ class ShiftSchedule(Base):
     user = relationship("User", backref="scheduled_shifts")
     object = relationship("Object", backref="scheduled_shifts")
     time_slot = relationship("TimeSlot", backref="scheduled_shifts")
-    actual_shift = relationship("Shift", backref="scheduled_from")
+    actual_shifts = relationship("Shift", back_populates="schedule", foreign_keys="Shift.schedule_id")
     
     def __repr__(self) -> str:
         return f"<ShiftSchedule(id={self.id}, user_id={self.user_id}, object_id={self.object_id}, status='{self.status}')>"
