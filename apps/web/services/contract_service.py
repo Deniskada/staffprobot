@@ -2,7 +2,7 @@
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
 from domain.entities.contract import Contract, ContractTemplate, ContractVersion
@@ -276,10 +276,11 @@ class ContractService:
             if not owner:
                 return []
             
-            # Получаем всех сотрудников, с которыми есть договоры
+            # Получаем всех сотрудников, с которыми есть активные договоры
             query = select(Contract).where(
                 and_(
                     Contract.owner_id == owner.id,
+                    Contract.status == 'active',
                     Contract.is_active == True
                 )
             ).options(
@@ -739,6 +740,17 @@ class ContractService:
             if not contract:
                 return None
             
+            # Получаем информацию об объектах
+            allowed_objects_info = []
+            if contract.allowed_objects:
+                objects_query = select(Object).where(Object.id.in_(contract.allowed_objects))
+                objects_result = await session.execute(objects_query)
+                objects = objects_result.scalars().all()
+                allowed_objects_info = [
+                    {"id": obj.id, "name": obj.name, "address": obj.address}
+                    for obj in objects
+                ]
+            
             return {
                 "id": contract.id,
                 "contract_number": contract.contract_number,
@@ -749,6 +761,7 @@ class ContractService:
                 "end_date": contract.end_date,
                 "status": contract.status,
                 "allowed_objects": contract.allowed_objects or [],
+                "allowed_objects_info": allowed_objects_info,
                 "created_at": contract.created_at,
                 "updated_at": contract.updated_at,
                 "signed_at": contract.signed_at,
@@ -893,6 +906,42 @@ class ContractService:
             await session.commit()
             
             logger.info(f"Terminated contract: {contract.id}")
+            return True
+
+    async def activate_contract_by_telegram_id(self, contract_id: int, owner_telegram_id: int) -> bool:
+        """Активация договора по telegram_id владельца."""
+        async with get_async_session() as session:
+            # Сначала находим владельца по telegram_id
+            owner_query = select(User).where(User.telegram_id == owner_telegram_id)
+            owner_result = await session.execute(owner_query)
+            owner = owner_result.scalar_one_or_none()
+            
+            if not owner:
+                return False
+            
+            # Получаем договор
+            query = select(Contract).where(
+                and_(
+                    Contract.id == contract_id,
+                    Contract.owner_id == owner.id,
+                    Contract.status == "draft"
+                )
+            )
+            
+            result = await session.execute(query)
+            contract = result.scalar_one_or_none()
+            
+            if not contract:
+                return False
+            
+            # Активируем договор
+            contract.status = "active"
+            contract.is_active = True
+            contract.signed_at = func.now()
+            
+            await session.commit()
+            
+            logger.info(f"Activated contract: {contract.id}")
             return True
 
     async def terminate_contract_by_telegram_id(self, contract_id: int, owner_telegram_id: int, reason: str = None) -> bool:

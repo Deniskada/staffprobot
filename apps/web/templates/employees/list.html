@@ -63,16 +63,16 @@
                     <div class="row">
                         {% for employee in employees %}
                         <div class="col-md-6 col-lg-4 mb-4">
-                            <div class="card h-100 {% if not employee.contracts|selectattr('is_active', 'equalto', true)|list %}border-warning{% endif %}">
+                            <div class="card h-100 {% set has_active_contracts = employee.contracts|selectattr('status', 'equalto', 'active')|selectattr('is_active', 'equalto', true)|list %}{% if not has_active_contracts %}border-warning{% endif %}">
                                 <div class="card-body">
                                     <div class="d-flex align-items-center mb-3">
-                                        <div class="avatar {% if employee.contracts|selectattr('is_active', 'equalto', true)|list %}bg-primary{% else %}bg-warning{% endif %} text-white rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                                        <div class="avatar {% if has_active_contracts %}bg-primary{% else %}bg-warning{% endif %} text-white rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
                                             <i class="fas fa-user"></i>
                                         </div>
                                         <div>
                                             <h5 class="card-title mb-0">
                                                 {{ employee.first_name }} {{ employee.last_name or '' }}
-                                                {% if not employee.contracts|selectattr('is_active', 'equalto', true)|list %}
+                                                {% if not has_active_contracts %}
                                                     <span class="badge bg-warning ms-2">Бывший</span>
                                                 {% endif %}
                                             </h5>
@@ -99,7 +99,11 @@
                                                     {% elif contract.status == 'suspended' %}bg-warning
                                                     {% elif contract.status == 'terminated' %}bg-secondary
                                                     {% else %}bg-light text-dark{% endif %}">
-                                                    {{ contract.status }}
+                                                    {% if contract.status == 'active' %}Активен
+                                                    {% elif contract.status == 'draft' %}Черновик
+                                                    {% elif contract.status == 'suspended' %}Приостановлен
+                                                    {% elif contract.status == 'terminated' %}Расторгнут
+                                                    {% else %}{{ contract.status }}{% endif %}
                                                 </span>
                                                 {% if not contract.is_active %}
                                                     <span class="badge bg-secondary ms-1">Неактивен</span>
@@ -133,15 +137,16 @@
                             </thead>
                             <tbody>
                                 {% for employee in employees %}
-                                <tr {% if not employee.contracts|selectattr('is_active', 'equalto', true)|list %}class="table-warning"{% endif %}>
+                                {% set has_active_contracts = employee.contracts|selectattr('status', 'equalto', 'active')|selectattr('is_active', 'equalto', true)|list %}
+                                <tr {% if not has_active_contracts %}class="table-warning"{% endif %}>
                                     <td>
                                         <div class="d-flex align-items-center">
-                                            <div class="avatar {% if employee.contracts|selectattr('is_active', 'equalto', true)|list %}bg-primary{% else %}bg-warning{% endif %} text-white rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                            <div class="avatar {% if has_active_contracts %}bg-primary{% else %}bg-warning{% endif %} text-white rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
                                                 <i class="fas fa-user"></i>
                                             </div>
                                             <div>
                                                 <strong>{{ employee.first_name }} {{ employee.last_name or '' }}</strong>
-                                                {% if not employee.contracts|selectattr('is_active', 'equalto', true)|list %}
+                                                {% if not has_active_contracts %}
                                                     <span class="badge bg-warning ms-2">Бывший</span>
                                                 {% endif %}
                                                 <br>
@@ -162,7 +167,11 @@
                                                     {% elif contract.status == 'suspended' %}bg-warning
                                                     {% elif contract.status == 'terminated' %}bg-secondary
                                                     {% else %}bg-light text-dark{% endif %}">
-                                                    {{ contract.status }}
+                                                    {% if contract.status == 'active' %}Активен
+                                                    {% elif contract.status == 'draft' %}Черновик
+                                                    {% elif contract.status == 'suspended' %}Приостановлен
+                                                    {% elif contract.status == 'terminated' %}Расторгнут
+                                                    {% else %}{{ contract.status }}{% endif %}
                                                 </span>
                                                 {% if not contract.is_active %}
                                                     <span class="badge bg-secondary ms-1">Неактивен</span>
@@ -174,7 +183,7 @@
                                         </div>
                                     </td>
                                     <td>
-                                        {% if employee.contracts|selectattr('is_active', 'equalto', true)|list %}
+                                        {% if has_active_contracts %}
                                             <span class="badge bg-success">Активен</span>
                                         {% else %}
                                             <span class="badge bg-warning">Бывший</span>

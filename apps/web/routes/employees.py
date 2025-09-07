@@ -53,7 +53,10 @@ async def employees_list(
 
 
 @router.get("/create", response_class=HTMLResponse)
-async def create_contract_form(request: Request):
+async def create_contract_form(
+    request: Request,
+    employee_telegram_id: int = Query(None, description="Telegram ID сотрудника для предзаполнения")
+):
     """Форма создания договора с сотрудником."""
     # Проверяем авторизацию
     current_user = await require_owner_or_superadmin(request)
@@ -72,13 +75,6 @@ async def create_contract_form(request: Request):
     from datetime import date
     current_date = date.today().strftime("%Y-%m-%d")
     
-    # Отладочная информация
-    logger.info(f"Available employees: {len(available_employees)}")
-    logger.info(f"Objects: {len(objects)}")
-    logger.info(f"Templates: {len(templates_list)}")
-    for obj in objects:
-        logger.info(f"Object: {obj.id} - {obj.name}")
-    
     return templates.TemplateResponse(
         "employees/create.html",
         {
@@ -88,7 +84,8 @@ async def create_contract_form(request: Request):
             "available_employees": available_employees,
             "objects": objects,
             "templates": templates_list,
-            "current_date": current_date
+            "current_date": current_date,
+            "employee_telegram_id": employee_telegram_id
         }
     )
 
@@ -340,6 +337,28 @@ async def edit_contract(
     except Exception as e:
         logger.error(f"Error updating contract: {e}")
         raise HTTPException(status_code=400, detail=f"Ошибка обновления договора: {str(e)}")
+
+
+@router.post("/contract/{contract_id}/activate")
+async def activate_contract(
+    request: Request,
+    contract_id: int
+):
+    """Активация договора."""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    contract_service = ContractService()
+    try:
+        await contract_service.activate_contract_by_telegram_id(
+            contract_id=contract_id,
+            owner_telegram_id=current_user["id"]
+        )
+        return JSONResponse({"success": True, "message": "Договор успешно активирован"})
+    except Exception as e:
+        logger.error(f"Ошибка активации договора: {str(e)}")
+        return JSONResponse({"success": False, "detail": f"Ошибка активации договора: {str(e)}"}, status_code=500)
 
 
 @router.post("/contract/{contract_id}/terminate")

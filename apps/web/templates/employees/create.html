@@ -25,6 +25,7 @@
                                            id="employee_telegram_id" 
                                            name="employee_telegram_id" 
                                            required
+                                           {% if employee_telegram_id %}value="{{ employee_telegram_id }}"{% endif %}
                                            placeholder="Введите Telegram ID">
                                     <div class="form-text">
                                         Попросите сотрудника отправить команду /start боту, чтобы получить его Telegram ID
