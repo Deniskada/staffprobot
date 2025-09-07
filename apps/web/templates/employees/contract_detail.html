@@ -17,7 +17,11 @@
                             {% elif contract.status == 'suspended' %}bg-warning
                             {% elif contract.status == 'terminated' %}bg-secondary
                             {% else %}bg-light text-dark{% endif %}">
-                            {{ contract.status }}
+                            {% if contract.status == 'active' %}Активен
+                            {% elif contract.status == 'draft' %}Черновик
+                            {% elif contract.status == 'suspended' %}Приостановлен
+                            {% elif contract.status == 'terminated' %}Расторгнут
+                            {% else %}{{ contract.status }}{% endif %}
                         </span>
                     </p>
                 </div>
@@ -25,10 +29,18 @@
                     <a href="/employees/{{ contract.employee.id }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-2"></i>К сотруднику
                     </a>
+                    {% if contract.status == 'draft' %}
+                    <button type="button" class="btn btn-outline-success" onclick="activateContract()">
+                        <i class="fas fa-check me-2"></i>Активировать
+                    </button>
+                    {% endif %}
                     {% if contract.status != 'terminated' %}
                     <a href="/employees/contract/{{ contract.id }}/edit" class="btn btn-outline-primary">
                         <i class="fas fa-edit me-2"></i>Редактировать
                     </a>
+                    <button type="button" class="btn btn-outline-danger" onclick="terminateContract()">
+                        <i class="fas fa-times me-2"></i>Расторгнуть
+                    </button>
                     {% endif %}
                 </div>
             </div>
@@ -118,12 +130,22 @@
                         </div>
                         <div class="card-body">
                             <ul class="list-unstyled mb-0">
-                                {% for object_id in contract.allowed_objects %}
-                                <li class="mb-1">
-                                    <i class="fas fa-building text-muted me-2"></i>
-                                    Объект #{{ object_id }}
-                                </li>
-                                {% endfor %}
+                                {% if contract.allowed_objects_info %}
+                                    {% for object_info in contract.allowed_objects_info %}
+                                    <li class="mb-1">
+                                        <i class="fas fa-building text-muted me-2"></i>
+                                        <strong>{{ object_info.name }}</strong>
+                                        {% if object_info.address %}
+                                            <br><small class="text-muted">{{ object_info.address }}</small>
+                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+                                {% else %}
+                                    <li class="text-muted">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        Доступ ко всем объектам
+                                    </li>
+                                {% endif %}
                             </ul>
                         </div>
                     </div>
@@ -214,4 +236,56 @@
     padding-left: 2rem;
 }
 </style>
+
+<script>
+function activateContract() {
+    if (confirm('Вы уверены, что хотите активировать этот договор?')) {
+        fetch(`/employees/contract/{{ contract.id }}/activate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Договор успешно активирован!');
+                location.reload();
+            } else {
+                alert('Ошибка активации договора: ' + (data.detail || 'Неизвестная ошибка'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка активации договора');
+        });
+    }
+}
+
+function terminateContract() {
+    if (confirm('Вы уверены, что хотите расторгнуть этот договор?')) {
+        fetch(`/employees/contract/{{ contract.id }}/terminate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Договор успешно расторгнут!');
+                location.reload();
+            } else {
+                alert('Ошибка расторжения договора: ' + (data.detail || 'Неизвестная ошибка'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка расторжения договора');
+        });
+    }
+}
+</script>
 {% endblock %}

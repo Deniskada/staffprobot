@@ -59,7 +59,11 @@
                                                         {% elif contract.status == 'suspended' %}bg-warning
                                                         {% elif contract.status == 'terminated' %}bg-secondary
                                                         {% else %}bg-light text-dark{% endif %}">
-                                                        {{ contract.status }}
+                                                        {% if contract.status == 'active' %}Активен
+                                                        {% elif contract.status == 'draft' %}Черновик
+                                                        {% elif contract.status == 'suspended' %}Приостановлен
+                                                        {% elif contract.status == 'terminated' %}Расторгнут
+                                                        {% else %}{{ contract.status }}{% endif %}
                                                     </span>
                                                 </td>
                                                 <td>
@@ -80,14 +84,16 @@
                                                     </small>
                                                 </td>
                                                 <td>
-                                                    <div class="btn-group btn-group-sm">
+                                                    <div class="btn-group">
                                                         <a href="/employees/contract/{{ contract.id }}" 
-                                                           class="btn btn-outline-primary">
+                                                           class="btn btn-outline-primary"
+                                                           title="Просмотр договора">
                                                             <i class="fas fa-eye"></i>
                                                         </a>
                                                         {% if contract.status != 'terminated' %}
                                                         <a href="/employees/contract/{{ contract.id }}/edit" 
-                                                           class="btn btn-outline-secondary">
+                                                           class="btn btn-outline-secondary"
+                                                           title="Редактировать договор">
                                                             <i class="fas fa-edit"></i>
                                                         </a>
                                                         {% endif %}
