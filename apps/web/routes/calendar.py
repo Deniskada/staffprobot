@@ -47,7 +47,7 @@ async def calendar_view(
         object_service = ObjectService(db)
         timeslot_service = TimeSlotService(db)
         
-        objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
+        objects = await object_service.get_objects_by_owner(current_user.telegram_id)
         
         # Если выбран конкретный объект, проверяем доступ
         selected_object = None
@@ -62,7 +62,7 @@ async def calendar_view(
         # Получаем тайм-слоты для выбранного объекта или всех объектов
         timeslots_data = []
         if selected_object:
-            timeslots = await timeslot_service.get_timeslots_by_object(selected_object.id, current_user["telegram_id"])
+            timeslots = await timeslot_service.get_timeslots_by_object(selected_object.id, current_user.telegram_id)
             for slot in timeslots:
                 timeslots_data.append({
                     "id": slot.id,
@@ -78,7 +78,7 @@ async def calendar_view(
         else:
             # Получаем тайм-слоты для всех объектов
             for obj in objects:
-                timeslots = await timeslot_service.get_timeslots_by_object(obj.id, current_user["telegram_id"])
+                timeslots = await timeslot_service.get_timeslots_by_object(obj.id, current_user.telegram_id)
                 for slot in timeslots:
                     timeslots_data.append({
                         "id": slot.id,
@@ -200,7 +200,7 @@ async def week_view(
         object_service = ObjectService(db)
         timeslot_service = TimeSlotService(db)
         
-        objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
+        objects = await object_service.get_objects_by_owner(current_user.telegram_id)
         
         selected_object = None
         if object_id:
@@ -214,7 +214,7 @@ async def week_view(
         # Получаем тайм-слоты для недели
         timeslots_data = []
         if selected_object:
-            timeslots = await timeslot_service.get_timeslots_by_object(selected_object.id, current_user["telegram_id"])
+            timeslots = await timeslot_service.get_timeslots_by_object(selected_object.id, current_user.telegram_id)
             for slot in timeslots:
                 if week_start <= slot.slot_date <= week_days[-1]:
                     timeslots_data.append({
@@ -230,7 +230,7 @@ async def week_view(
                     })
         else:
             for obj in objects:
-                timeslots = await timeslot_service.get_timeslots_by_object(obj.id, current_user["telegram_id"])
+                timeslots = await timeslot_service.get_timeslots_by_object(obj.id, current_user.telegram_id)
                 for slot in timeslots:
                     if week_start <= slot.slot_date <= week_days[-1]:
                         timeslots_data.append({
@@ -308,7 +308,7 @@ async def gap_analysis(
         object_service = ObjectService(db)
         timeslot_service = TimeSlotService(db)
         
-        objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
+        objects = await object_service.get_objects_by_owner(current_user.telegram_id)
         
         selected_object = None
         if object_id:
@@ -323,7 +323,7 @@ async def gap_analysis(
         analysis_data = await _analyze_gaps(
             timeslot_service, 
             objects if not selected_object else [selected_object], 
-            current_user["telegram_id"], 
+            current_user.telegram_id, 
             days
         )
         
@@ -443,13 +443,13 @@ async def quick_create_timeslot(
             "is_active": True
         }
         
-        new_timeslot = await timeslot_service.create_timeslot(timeslot_data, object_id, current_user["telegram_id"])
+        new_timeslot = await timeslot_service.create_timeslot(timeslot_data, object_id, current_user.telegram_id)
         if not new_timeslot:
             raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
         
         # Получаем информацию об объекте для ответа
         object_service = ObjectService(db)
-        obj = await object_service.get_object_by_id(object_id, current_user["telegram_id"])
+        obj = await object_service.get_object_by_id(object_id, current_user.telegram_id)
         
         return JSONResponse({
             "success": True,
@@ -482,7 +482,7 @@ async def delete_timeslot_api(
     """Удаление тайм-слота через API"""
     try:
         timeslot_service = TimeSlotService(db)
-        success = await timeslot_service.delete_timeslot(timeslot_id, current_user["telegram_id"])
+        success = await timeslot_service.delete_timeslot(timeslot_id, current_user.telegram_id)
         
         if not success:
             raise HTTPException(status_code=404, detail="Тайм-слот не найден или нет доступа")
@@ -505,7 +505,7 @@ async def get_objects_api(
     """Получение списка объектов для drag & drop"""
     try:
         object_service = ObjectService(db)
-        objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
+        objects = await object_service.get_objects_by_owner(current_user.telegram_id)
         
         objects_data = []
         for obj in objects:
