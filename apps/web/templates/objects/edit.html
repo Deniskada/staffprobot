@@ -37,6 +37,33 @@
                                 </div>
                                 
                                 <div class="mb-3">
+                                    <label for="coordinates" class="form-label">Координаты</label>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="latitude" 
+                                                   name="latitude" 
+                                                   value="{{ object.coordinates.split(',')[0] if object.coordinates else '' }}"
+                                                   placeholder="55.7558"
+                                                   pattern="^-?[0-9]+\.?[0-9]*$">
+                                            <div class="form-text">Широта (latitude)</div>
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="longitude" 
+                                                   name="longitude" 
+                                                   value="{{ object.coordinates.split(',')[1] if object.coordinates else '' }}"
+                                                   placeholder="37.6176"
+                                                   pattern="^-?[0-9]+\.?[0-9]*$">
+                                            <div class="form-text">Долгота (longitude)</div>
+                                        </div>
+                                    </div>
+                                    <div class="form-text">Координаты для геолокации (необязательно)</div>
+                                </div>
+                                
+                                <div class="mb-3">
                                     <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
                                     <input type="number" 
                                            class="form-control" 

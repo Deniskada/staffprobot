@@ -104,28 +104,61 @@ async def create_object_form(
 @router.post("/create")
 async def create_object(
     request: Request,
-    name: str = Form(...),
-    address: str = Form(...),
-    hourly_rate: int = Form(...),
-    opening_time: str = Form(...),
-    closing_time: str = Form(...),
-    max_distance: int = Form(500),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Создание нового объекта"""
     try:
+        # Получение данных формы
+        form_data = await request.form()
+        
+        name = form_data.get("name", "").strip()
+        address = form_data.get("address", "").strip()
+        hourly_rate_str = form_data.get("hourly_rate", "0").strip()
+        opening_time = form_data.get("opening_time", "").strip()
+        closing_time = form_data.get("closing_time", "").strip()
+        max_distance_str = form_data.get("max_distance", "500").strip()
+        latitude_str = form_data.get("latitude", "").strip()
+        longitude_str = form_data.get("longitude", "").strip()
+        
         logger.info(f"Creating object '{name}' for user {current_user['id']}")
         
-        # Валидация данных
+        # Валидация обязательных полей
+        if not name:
+            raise HTTPException(status_code=400, detail="Название объекта обязательно")
+        if not address:
+            raise HTTPException(status_code=400, detail="Адрес объекта обязателен")
+        
+        # Валидация и преобразование числовых полей
+        try:
+            hourly_rate = int(hourly_rate_str) if hourly_rate_str else 0
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат ставки")
+        
+        try:
+            max_distance = int(max_distance_str) if max_distance_str else 500
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат максимального расстояния")
+        
         if hourly_rate <= 0:
             raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
         
         if max_distance <= 0:
             raise HTTPException(status_code=400, detail="Максимальное расстояние должно быть больше 0")
         
-        # Получение данных формы
-        form_data = await request.form()
+        # Обработка координат
+        coordinates = None
+        if latitude_str and longitude_str:
+            try:
+                lat = float(latitude_str)
+                lon = float(longitude_str)
+                # Проверяем диапазон координат
+                if -90 <= lat <= 90 and -180 <= lon <= 180:
+                    coordinates = f"{lat},{lon}"
+                else:
+                    raise HTTPException(status_code=400, detail="Координаты вне допустимого диапазона")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат координат")
         
         # Обработка чекбокса (он не отправляется, если не отмечен)
         available_for_applicants = "available_for_applicants" in form_data
@@ -141,7 +174,7 @@ async def create_object(
             "max_distance": max_distance,
             "available_for_applicants": available_for_applicants,
             "is_active": True,
-            "coordinates": "0.0,0.0"  # TODO: Добавить геолокацию
+            "coordinates": coordinates
         }
         
         new_object = await object_service.create_object(object_data, current_user["telegram_id"])
@@ -220,19 +253,30 @@ async def object_detail(
 async def edit_object_form(
     request: Request, 
     object_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Форма редактирования объекта"""
     try:
-        # Получение данных объекта для редактирования с проверкой владельца
-        if object_id not in objects_storage:
+        # Получение данных объекта из базы данных с проверкой владельца
+        object_service = ObjectService(db)
+        obj = await object_service.get_object_by_id(object_id, current_user["telegram_id"])
+        if not obj:
             raise HTTPException(status_code=404, detail="Объект не найден")
         
-        object_data = objects_storage[object_id].copy()
-        
-        # Проверка владельца
-        if object_data["owner_id"] != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Нет доступа к этому объекту")
+        # Преобразуем в формат для шаблона
+        object_data = {
+            "id": obj.id,
+            "name": obj.name,
+            "address": obj.address or "",
+            "coordinates": obj.coordinates or "",
+            "hourly_rate": obj.hourly_rate,
+            "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "",
+            "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "",
+            "max_distance": obj.max_distance_meters or 500,
+            "available_for_applicants": obj.available_for_applicants,
+            "is_active": obj.is_active
+        }
         
         return templates.TemplateResponse("objects/edit.html", {
             "request": request,
@@ -241,6 +285,8 @@ async def edit_object_form(
             "current_user": current_user
         })
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error loading edit form: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки формы редактирования")
@@ -250,42 +296,69 @@ async def edit_object_form(
 async def update_object(
     request: Request,
     object_id: int,
-    name: str = Form(...),
-    address: str = Form(...),
-    hourly_rate: int = Form(...),
-    opening_time: str = Form(...),
-    closing_time: str = Form(...),
-    max_distance: int = Form(500),
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Обновление объекта"""
     try:
-        # Проверка существования объекта
-        if object_id not in objects_storage:
-            raise HTTPException(status_code=404, detail="Объект не найден")
+        # Получение данных формы
+        form_data = await request.form()
         
-        # Проверка владельца
-        if objects_storage[object_id]["owner_id"] != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Нет доступа к этому объекту")
+        name = form_data.get("name", "").strip()
+        address = form_data.get("address", "").strip()
+        hourly_rate_str = form_data.get("hourly_rate", "0").strip()
+        opening_time = form_data.get("opening_time", "").strip()
+        closing_time = form_data.get("closing_time", "").strip()
+        max_distance_str = form_data.get("max_distance", "500").strip()
+        latitude_str = form_data.get("latitude", "").strip()
+        longitude_str = form_data.get("longitude", "").strip()
         
         logger.info(f"Updating object {object_id} for user {current_user['id']}")
         
-        # Валидация данных
+        # Валидация обязательных полей
+        if not name:
+            raise HTTPException(status_code=400, detail="Название объекта обязательно")
+        if not address:
+            raise HTTPException(status_code=400, detail="Адрес объекта обязателен")
+        
+        # Валидация и преобразование числовых полей
+        try:
+            hourly_rate = int(hourly_rate_str) if hourly_rate_str else 0
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат ставки")
+        
+        try:
+            max_distance = int(max_distance_str) if max_distance_str else 500
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат максимального расстояния")
+        
         if hourly_rate <= 0:
             raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
         
         if max_distance <= 0:
             raise HTTPException(status_code=400, detail="Максимальное расстояние должно быть больше 0")
         
-        # Получение данных формы
-        form_data = await request.form()
+        # Обработка координат
+        coordinates = None
+        if latitude_str and longitude_str:
+            try:
+                lat = float(latitude_str)
+                lon = float(longitude_str)
+                # Проверяем диапазон координат
+                if -90 <= lat <= 90 and -180 <= lon <= 180:
+                    coordinates = f"{lat},{lon}"
+                else:
+                    raise HTTPException(status_code=400, detail="Координаты вне допустимого диапазона")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат координат")
         
         # Обработка чекбоксов (они не отправляются, если не отмечены)
         available_for_applicants = "available_for_applicants" in form_data
         is_active = "is_active" in form_data
         
-        # Обновление объекта в временном хранилище
-        objects_storage[object_id].update({
+        # Обновление объекта в базе данных
+        object_service = ObjectService(db)
+        object_data = {
             "name": name,
             "address": address,
             "hourly_rate": hourly_rate,
@@ -293,10 +366,15 @@ async def update_object(
             "closing_time": closing_time,
             "max_distance": max_distance,
             "available_for_applicants": available_for_applicants,
-            "is_active": is_active
-        })
+            "is_active": is_active,
+            "coordinates": coordinates
+        }
         
-        logger.info(f"Object {object_id} updated successfully: {objects_storage[object_id]}")
+        updated_object = await object_service.update_object(object_id, object_data, current_user["telegram_id"])
+        if not updated_object:
+            raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
+        
+        logger.info(f"Object {object_id} updated successfully")
         
         return RedirectResponse(url=f"/objects/{object_id}", status_code=status.HTTP_302_FOUND)
         
