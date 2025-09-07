@@ -15,7 +15,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates
 from apps.web.services.auth_service import AuthService
 
 
@@ -144,7 +144,8 @@ app.include_router(reports.router, prefix="/reports", tags=["Отчеты"])
 app.include_router(contracts.router, prefix="/contracts", tags=["Договоры"])
 app.include_router(users.router, prefix="/users", tags=["Пользователи"])
 app.include_router(employees.router, prefix="/employees", tags=["Сотрудники"])
-app.include_router(templates_routes.router, prefix="/templates", tags=["Шаблоны договоров"])
+app.include_router(templates_routes.router, prefix="/templates", tags=["Шаблоны планирования"])
+app.include_router(contract_templates.router, prefix="/contract-templates", tags=["Шаблоны договоров"])
 
 
 # API для интеграции с ботом
