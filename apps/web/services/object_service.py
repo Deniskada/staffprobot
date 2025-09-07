@@ -11,7 +11,7 @@ from domain.entities.object import Object
 from domain.entities.time_slot import TimeSlot
 from domain.entities.user import User
 from core.logging.logger import logger
-from datetime import datetime, time
+from datetime import datetime, time, date
 
 
 class ObjectService:
@@ -362,3 +362,57 @@ class TimeSlotService:
             await self.db.rollback()
             logger.error(f"Error deleting timeslot {timeslot_id}: {e}")
             raise
+    
+    async def get_timeslots_by_month(
+        self, 
+        year: int, 
+        month: int, 
+        owner_telegram_id: int,
+        object_id: Optional[int] = None
+    ) -> List[TimeSlot]:
+        """Получение тайм-слотов за месяц для владельца."""
+        try:
+            # Получаем внутренний ID владельца
+            owner_query = select(User).where(User.telegram_id == owner_telegram_id)
+            owner_result = await self.db.execute(owner_query)
+            owner = owner_result.scalar_one_or_none()
+            
+            if not owner:
+                return []
+            
+            # Получаем объекты владельца
+            objects_query = select(Object).where(Object.owner_id == owner.id)
+            if object_id:
+                objects_query = objects_query.where(Object.id == object_id)
+            
+            objects_result = await self.db.execute(objects_query)
+            objects = objects_result.scalars().all()
+            object_ids = [obj.id for obj in objects]
+            
+            if not object_ids:
+                return []
+            
+            # Получаем тайм-слоты
+            start_date = date(year, month, 1)
+            if month == 12:
+                end_date = date(year + 1, 1, 1)
+            else:
+                end_date = date(year, month + 1, 1)
+            
+            timeslots_query = select(TimeSlot).options(
+                selectinload(TimeSlot.object)
+            ).where(
+                and_(
+                    TimeSlot.object_id.in_(object_ids),
+                    TimeSlot.slot_date >= start_date,
+                    TimeSlot.slot_date < end_date,
+                    TimeSlot.is_active == True
+                )
+            ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
+            
+            timeslots_result = await self.db.execute(timeslots_query)
+            return timeslots_result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error getting timeslots by month: {e}")
+            return []

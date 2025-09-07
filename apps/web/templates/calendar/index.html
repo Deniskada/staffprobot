@@ -102,11 +102,54 @@
     font-size: 0.75em;
     cursor: pointer;
     transition: all 0.2s;
+    position: relative;
 }
 
 .timeslot-item:hover {
     background: #0056b3;
     transform: scale(1.02);
+}
+
+/* Цветовое кодирование статусов */
+.timeslot-empty {
+    background: #f8f9fa !important;
+    color: #6c757d !important;
+    border: 1px solid #dee2e6;
+}
+
+.timeslot-planned {
+    background: #fff3cd !important;
+    color: #856404 !important;
+    border: 1px solid #ffeaa7;
+}
+
+.timeslot-confirmed {
+    background: #d1ecf1 !important;
+    color: #0c5460 !important;
+    border: 1px solid #bee5eb;
+}
+
+.timeslot-completed {
+    background: #d4edda !important;
+    color: #155724 !important;
+    border: 1px solid #c3e6cb;
+}
+
+.timeslot-active {
+    background: #cce5ff !important;
+    color: #004085 !important;
+    border: 1px solid #99d6ff;
+}
+
+.timeslot-cancelled {
+    background: #f8d7da !important;
+    color: #721c24 !important;
+    border: 1px solid #f5c6cb;
+}
+
+.timeslot-status-info {
+    margin-top: 2px;
+    font-size: 0.7rem;
 }
 
 .timeslot-count {
@@ -252,7 +295,44 @@
             </div>
         </div>
     </div>
-
+    
+    <!-- Легенда статусов -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body py-2">
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <span class="text-muted small me-2">Статусы смен:</span>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-empty" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Пустой слот</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-planned" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Запланировано</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-confirmed" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Подтверждено</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-completed" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Отработано</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-active" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Активно</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-cancelled" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Отменено</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- Статистика -->
     <div class="row mb-4">
         <div class="col-md-3">
@@ -342,11 +422,15 @@
                         <div class="timeslot-count">{{ day.timeslots_count }}</div>
                         {% for slot in day.timeslots %}
                         <div class="timeslot-item" 
+                             data-timeslot-id="{{ slot.id }}"
                              title="{{ slot.object_name }}: {{ slot.start_time }}-{{ slot.end_time }} ({{ slot.hourly_rate }}₽/час)"
                              onclick="showTimeslotDetails({{ slot.id }})">
                             <div class="fw-bold">{{ slot.start_time }}-{{ slot.end_time }}</div>
                             <div class="small">{{ slot.object_name }}</div>
                             <div class="small">{{ slot.hourly_rate }}₽/час</div>
+                            <div class="timeslot-status-info">
+                                <span class="badge bg-light text-dark">Загрузка...</span>
+                            </div>
                         </div>
                         {% endfor %}
                     {% elif day.is_current_month %}
@@ -394,6 +478,83 @@
 </div>
 
 <script>
+// Загрузка статуса тайм-слотов
+let timeslotsStatus = {};
+
+async function loadTimeslotsStatus() {
+    try {
+        const year = {{ year }};
+        const month = {{ month }};
+        const objectId = {{ selected_object_id if selected_object_id else 'null' }};
+        
+        const params = new URLSearchParams({
+            year: year,
+            month: month
+        });
+        
+        if (objectId) {
+            params.append('object_id', objectId);
+        }
+        
+        const response = await fetch(`/calendar/api/timeslots-status?${params}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            timeslotsStatus = await response.json();
+            updateTimeslotsDisplay();
+        } else {
+            console.error('Ошибка загрузки статуса тайм-слотов');
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки статуса тайм-слотов:', error);
+    }
+}
+
+function updateTimeslotsDisplay() {
+    // Обновляем отображение тайм-слотов с цветовым кодированием
+    const timeslotElements = document.querySelectorAll('.timeslot-item');
+    
+    timeslotElements.forEach(element => {
+        const timeslotId = element.dataset.timeslotId;
+        const slotData = timeslotsStatus.find(slot => slot.slot_id == timeslotId);
+        
+        if (slotData) {
+            // Удаляем старые классы статуса
+            element.classList.remove('timeslot-empty', 'timeslot-planned', 'timeslot-confirmed', 'timeslot-completed', 'timeslot-active', 'timeslot-cancelled');
+            
+            // Добавляем новый класс статуса
+            element.classList.add(`timeslot-${slotData.status}`);
+            
+            // Обновляем информацию о сменах
+            const statusInfo = element.querySelector('.timeslot-status-info');
+            if (statusInfo) {
+                statusInfo.innerHTML = getStatusInfo(slotData);
+            }
+        }
+    });
+}
+
+function getStatusInfo(slotData) {
+    let info = '';
+    
+    if (slotData.status === 'empty') {
+        info = '<span class="badge bg-light text-dark">Пустой слот</span>';
+    } else if (slotData.status === 'planned') {
+        info = `<span class="badge bg-warning">Запланировано: ${slotData.scheduled_shifts.length}</span>`;
+    } else if (slotData.status === 'confirmed') {
+        info = `<span class="badge bg-info">Подтверждено: ${slotData.scheduled_shifts.length}</span>`;
+    } else if (slotData.status === 'completed') {
+        info = `<span class="badge bg-success">Отработано: ${slotData.actual_shifts.length}</span>`;
+    } else if (slotData.status === 'active') {
+        info = `<span class="badge bg-primary">Активно: ${slotData.actual_shifts.length}</span>`;
+    } else if (slotData.status === 'cancelled') {
+        info = `<span class="badge bg-secondary">Отменено: ${slotData.scheduled_shifts.length}</span>`;
+    }
+    
+    return info;
+}
+
 function showTimeslotDetails(timeslotId) {
     // Здесь можно добавить AJAX запрос для получения деталей тайм-слота
     document.getElementById('timeslotDetails').innerHTML = `
@@ -418,6 +579,11 @@ function showTimeslotDetails(timeslotId) {
         `;
     }, 500);
 }
+
+// Загружаем статус при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadTimeslotsStatus();
+});
 
 // Обработка клавиатурных сокращений
 document.addEventListener('keydown', function(e) {
