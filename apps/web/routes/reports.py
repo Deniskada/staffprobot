@@ -58,17 +58,17 @@ async def reports_index(request: Request):
         objects = objects_result.scalars().all()
         
         # Получаем всех пользователей, которые работали на объектах владельца (не только employee)
-        employees_query = select(User).distinct().join(Shift, User.id == Shift.user_id).where(
+        employees_query = select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.phone, User.role, User.is_active, User.created_at, User.updated_at).distinct().join(Shift, User.id == Shift.user_id).where(
             Shift.object_id.in_([obj.id for obj in objects])
         )
         employees_result = await session.execute(employees_query)
-        employees = employees_result.scalars().all()
+        employees = employees_result.all()
         
         # Если нет сотрудников из смен, показываем всех пользователей кроме текущего владельца
         if not employees:
-            all_employees_query = select(User).where(User.id != user_id)
+            all_employees_query = select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.phone, User.role, User.is_active, User.created_at, User.updated_at).where(User.id != user_id)
             all_employees_result = await session.execute(all_employees_query)
-            employees = all_employees_result.scalars().all()
+            employees = all_employees_result.all()
         
         # Статистика за последний месяц
         month_ago = datetime.now() - timedelta(days=30)
