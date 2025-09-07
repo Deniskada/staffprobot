@@ -601,6 +601,24 @@ async def get_timeslots_status(
         
         logger.info(f"Found {len(scheduled_shifts)} scheduled shifts")
         
+        # Получаем отработанные смены за месяц
+        from domain.entities.shift import Shift
+        
+        actual_shifts_query = select(Shift).options(
+            selectinload(Shift.user)
+        ).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                Shift.start_time >= start_date,
+                Shift.start_time < end_date
+            )
+        ).order_by(Shift.start_time)
+        
+        actual_shifts_result = await db.execute(actual_shifts_query)
+        actual_shifts = actual_shifts_result.scalars().all()
+        
+        logger.info(f"Found {len(actual_shifts)} actual shifts")
+        
         # Создаем карту запланированных смен по time_slot_id
         scheduled_shifts_map = {}
         for shift in scheduled_shifts:
@@ -617,17 +635,53 @@ async def get_timeslots_status(
                     "notes": shift.notes
                 })
         
+        # Создаем карту отработанных смен по time_slot_id
+        actual_shifts_map = {}
+        for shift in actual_shifts:
+            if shift.time_slot_id:
+                if shift.time_slot_id not in actual_shifts_map:
+                    actual_shifts_map[shift.time_slot_id] = []
+                
+                actual_shifts_map[shift.time_slot_id].append({
+                    "id": shift.id,
+                    "user_id": shift.user_id,
+                    "user_name": f"{shift.user.first_name} {shift.user.last_name or ''}".strip(),
+                    "status": shift.status,
+                    "start_time": shift.start_time.time().strftime("%H:%M"),
+                    "end_time": shift.end_time.time().strftime("%H:%M") if shift.end_time else None,
+                    "total_hours": float(shift.total_hours) if shift.total_hours else None,
+                    "total_payment": float(shift.total_payment) if shift.total_payment else None,
+                    "is_planned": shift.is_planned,
+                    "notes": shift.notes
+                })
+        
         # Создаем данные для каждого тайм-слота
         test_data = []
         for slot in timeslots:
-            # Определяем статус на основе запланированных смен
+            # Определяем статус на основе запланированных и отработанных смен
             status = "empty"
             scheduled_shifts = []
+            actual_shifts = []
             
             # Ищем запланированные смены для этого конкретного тайм-слота
             if slot.id in scheduled_shifts_map:
                 scheduled_shifts = scheduled_shifts_map[slot.id]
-                # Определяем статус на основе смен
+            
+            # Ищем отработанные смены для этого конкретного тайм-слота
+            if slot.id in actual_shifts_map:
+                actual_shifts = actual_shifts_map[slot.id]
+            
+            # Определяем статус с приоритетом отработанных смен
+            if actual_shifts:
+                # Есть отработанные смены - показываем их статус
+                if any(shift["status"] == "active" for shift in actual_shifts):
+                    status = "active"
+                elif any(shift["status"] == "completed" for shift in actual_shifts):
+                    status = "completed"
+                elif any(shift["status"] == "cancelled" for shift in actual_shifts):
+                    status = "cancelled"
+            elif scheduled_shifts:
+                # Нет отработанных, но есть запланированные
                 if any(shift["status"] == "planned" for shift in scheduled_shifts):
                     status = "planned"
                 elif any(shift["status"] == "confirmed" for shift in scheduled_shifts):
@@ -635,10 +689,10 @@ async def get_timeslots_status(
                 elif any(shift["status"] == "cancelled" for shift in scheduled_shifts):
                     status = "cancelled"
             
-            # Подсчитываем занятость
-            occupied_slots = len(scheduled_shifts)
+            # Подсчитываем занятость (учитываем и запланированные, и отработанные)
+            total_shifts = len(scheduled_shifts) + len(actual_shifts)
             max_slots = slot.max_employees or 1
-            availability = f"{occupied_slots}/{max_slots}"
+            availability = f"{total_shifts}/{max_slots}"
             
             test_data.append({
                 "slot_id": slot.id,
@@ -650,9 +704,9 @@ async def get_timeslots_status(
                 "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else 0,
                 "status": status,
                 "scheduled_shifts": scheduled_shifts,
-                "actual_shifts": [],
+                "actual_shifts": actual_shifts,
                 "availability": availability,
-                "occupied_slots": occupied_slots,
+                "occupied_slots": total_shifts,
                 "max_slots": max_slots
             })
         

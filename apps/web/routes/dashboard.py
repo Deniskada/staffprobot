@@ -1,165 +1,410 @@
-"""
-Роуты дашборда для веб-приложения
-"""
-
-from fastapi import APIRouter, Request, Depends, HTTPException, status
+from fastapi import APIRouter, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from typing import Dict, Any, Optional
+from datetime import date, datetime, timedelta
+from typing import Optional, List
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_, or_, func, desc
+from sqlalchemy.orm import selectinload
 
-from apps.web.services.auth_service import AuthService
-from apps.web.middleware.auth_middleware import auth_middleware
+from core.database.session import get_db_session
+from core.auth.user_manager import UserManager
+from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from domain.entities.shift import Shift
+from domain.entities.shift_schedule import ShiftSchedule
+from domain.entities.object import Object
+from domain.entities.user import User
+from domain.entities.contract import Contract
 
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
-
-auth_service = AuthService()
-
-
-async def get_current_user(request: Request) -> Dict[str, Any]:
-    """Получение текущего пользователя из токена"""
-    user = await auth_middleware.get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Требуется авторизация")
-    return user
+user_manager = UserManager()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Главная страница дашборда"""
+async def dashboard_index(request: Request):
+    """Главная страница дашборда владельца"""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
     
-    # TODO: Получение реальных данных из базы
-    dashboard_data = {
-        "user": current_user,
-        "stats": {
-            "total_objects": 5,
-            "active_shifts": 2,
-            "total_employees": 12,
-            "monthly_revenue": 150000
-        },
-        "recent_activity": [
-            {
-                "type": "shift_opened",
-                "message": "Иван Петров открыл смену на объекте 'Магазин №1'",
-                "time": "2 часа назад"
+    async with get_db_session() as session:
+        # Получаем объекты владельца
+        objects_query = select(Object).where(Object.owner_id == current_user.id)
+        objects_result = await session.execute(objects_query)
+        objects = objects_result.scalars().all()
+        object_ids = [obj.id for obj in objects]
+        
+        # Получаем сотрудников
+        employees_query = select(User).where(User.role == "employee")
+        employees_result = await session.execute(employees_query)
+        employees = employees_result.scalars().all()
+        
+        # Получаем договоры
+        contracts_query = select(Contract).where(Contract.owner_id == current_user.id)
+        contracts_result = await session.execute(contracts_query)
+        contracts = contracts_result.scalars().all()
+        
+        # Статистика за сегодня
+        today = datetime.now().date()
+        today_shifts_query = select(Shift).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                func.date(Shift.start_time) == today
+            )
+        )
+        today_shifts_result = await session.execute(today_shifts_query)
+        today_shifts = today_shifts_result.scalars().all()
+        
+        # Статистика за неделю
+        week_ago = today - timedelta(days=7)
+        week_shifts_query = select(Shift).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                Shift.start_time >= week_ago
+            )
+        )
+        week_shifts_result = await session.execute(week_shifts_query)
+        week_shifts = week_shifts_result.scalars().all()
+        
+        # Статистика за месяц
+        month_ago = today - timedelta(days=30)
+        month_shifts_query = select(Shift).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                Shift.start_time >= month_ago
+            )
+        )
+        month_shifts_result = await session.execute(month_shifts_query)
+        month_shifts = month_shifts_result.scalars().all()
+        
+        # Запланированные смены
+        planned_schedules_query = select(ShiftSchedule).where(
+            and_(
+                ShiftSchedule.object_id.in_(object_ids),
+                ShiftSchedule.status == "planned",
+                ShiftSchedule.planned_start >= today
+            )
+        )
+        planned_schedules_result = await session.execute(planned_schedules_query)
+        planned_schedules = planned_schedules_result.scalars().all()
+        
+        # Активные смены
+        active_shifts_query = select(Shift).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                Shift.status == "active"
+            )
+        )
+        active_shifts_result = await session.execute(active_shifts_query)
+        active_shifts = active_shifts_result.scalars().all()
+        
+        # Расчет метрик
+        metrics = {
+            "today": {
+                "shifts": len(today_shifts),
+                "hours": sum(s.total_hours or 0 for s in today_shifts if s.total_hours),
+                "payment": sum(s.total_payment or 0 for s in today_shifts if s.total_payment)
             },
-            {
-                "type": "contract_signed",
-                "message": "Подписан договор с Анной Сидоровой",
-                "time": "5 часов назад"
+            "week": {
+                "shifts": len(week_shifts),
+                "hours": sum(s.total_hours or 0 for s in week_shifts if s.total_hours),
+                "payment": sum(s.total_payment or 0 for s in week_shifts if s.total_payment)
             },
-            {
-                "type": "report_generated",
-                "message": "Сформирован отчет за неделю",
-                "time": "1 день назад"
-            }
-        ]
-    }
-    
-    return templates.TemplateResponse("dashboard/index.html", {
-        "request": request,
-        "title": "Дашборд",
-        "data": dashboard_data,
-        "current_user": current_user
-    })
-
-
-@router.get("/owner", response_class=HTMLResponse)
-async def owner_dashboard(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Дашборд владельца объектов"""
-    
-    if current_user["role"] not in ["owner", "superadmin"]:
-        raise HTTPException(status_code=403, detail="Недостаточно прав доступа")
-    
-    # TODO: Получение реальных данных для владельца
-    owner_data = {
-        "user": current_user,
-        "objects": [
-            {
-                "id": 1,
-                "name": "Магазин №1",
-                "address": "ул. Ленина, 10",
-                "active_shifts": 2,
-                "monthly_revenue": 75000
+            "month": {
+                "shifts": len(month_shifts),
+                "hours": sum(s.total_hours or 0 for s in month_shifts if s.total_hours),
+                "payment": sum(s.total_payment or 0 for s in month_shifts if s.total_payment)
             },
-            {
-                "id": 2,
-                "name": "Офис №2",
-                "address": "пр. Мира, 25",
-                "active_shifts": 0,
-                "monthly_revenue": 45000
-            }
-        ],
-        "employees": [
-            {
-                "id": 1,
-                "name": "Иван Петров",
-                "role": "employee",
-                "active_shifts": 1,
-                "monthly_hours": 120
-            },
-            {
-                "id": 2,
-                "name": "Анна Сидорова",
-                "role": "employee",
-                "active_shifts": 1,
-                "monthly_hours": 95
-            }
-        ],
-        "reports": {
-            "total_revenue": 120000,
-            "total_shifts": 45,
-            "total_hours": 360,
-            "average_hourly_rate": 333
+            "planned": len(planned_schedules),
+            "active": len(active_shifts),
+            "objects": len(objects),
+            "employees": len(employees),
+            "contracts": len(contracts)
         }
-    }
-    
-    return templates.TemplateResponse("dashboard/owner.html", {
-        "request": request,
-        "title": "Дашборд владельца",
-        "data": owner_data
-    })
+        
+        # Топ объекты по активности
+        object_stats = {}
+        for shift in month_shifts:
+            obj_id = shift.object_id
+            if obj_id not in object_stats:
+                object_stats[obj_id] = {
+                    "object": next(obj for obj in objects if obj.id == obj_id),
+                    "shifts": 0,
+                    "hours": 0,
+                    "payment": 0
+                }
+            object_stats[obj_id]["shifts"] += 1
+            object_stats[obj_id]["hours"] += shift.total_hours or 0
+            object_stats[obj_id]["payment"] += shift.total_payment or 0
+        
+        top_objects = sorted(
+            object_stats.values(),
+            key=lambda x: x["shifts"],
+            reverse=True
+        )[:5]
+        
+        # Топ сотрудники по активности
+        employee_stats = {}
+        for shift in month_shifts:
+            emp_id = shift.user_id
+            if emp_id not in employee_stats:
+                employee_stats[emp_id] = {
+                    "employee": next(emp for emp in employees if emp.id == emp_id),
+                    "shifts": 0,
+                    "hours": 0,
+                    "payment": 0
+                }
+            employee_stats[emp_id]["shifts"] += 1
+            employee_stats[emp_id]["hours"] += shift.total_hours or 0
+            employee_stats[emp_id]["payment"] += shift.total_payment or 0
+        
+        top_employees = sorted(
+            employee_stats.values(),
+            key=lambda x: x["shifts"],
+            reverse=True
+        )[:5]
+        
+        # График активности по дням (последние 7 дней)
+        daily_stats = []
+        for i in range(7):
+            day = today - timedelta(days=i)
+            day_shifts_query = select(Shift).where(
+                and_(
+                    Shift.object_id.in_(object_ids),
+                    func.date(Shift.start_time) == day
+                )
+            )
+            day_shifts_result = await session.execute(day_shifts_query)
+            day_shifts = day_shifts_result.scalars().all()
+            
+            daily_stats.append({
+                "date": day.strftime("%d.%m"),
+                "shifts": len(day_shifts),
+                "hours": sum(s.total_hours or 0 for s in day_shifts if s.total_hours),
+                "payment": sum(s.total_payment or 0 for s in day_shifts if s.total_payment)
+            })
+        
+        daily_stats.reverse()  # От старых к новым
+        
+        # Предстоящие смены (следующие 7 дней)
+        next_week = today + timedelta(days=7)
+        upcoming_schedules_query = select(ShiftSchedule).options(
+            selectinload(ShiftSchedule.object),
+            selectinload(ShiftSchedule.user)
+        ).where(
+            and_(
+                ShiftSchedule.object_id.in_(object_ids),
+                ShiftSchedule.status == "planned",
+                ShiftSchedule.planned_start >= today,
+                ShiftSchedule.planned_start <= next_week
+            )
+        ).order_by(ShiftSchedule.planned_start)
+        
+        upcoming_schedules_result = await session.execute(upcoming_schedules_query)
+        upcoming_schedules = upcoming_schedules_result.scalars().all()
+        
+        return templates.TemplateResponse("dashboard/index.html", {
+            "request": request,
+            "current_user": current_user,
+            "metrics": metrics,
+            "top_objects": top_objects,
+            "top_employees": top_employees,
+            "daily_stats": daily_stats,
+            "upcoming_schedules": upcoming_schedules,
+            "active_shifts": active_shifts
+        })
 
 
-@router.get("/employee", response_class=HTMLResponse)
-async def employee_dashboard(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Дашборд сотрудника"""
+@router.get("/metrics")
+async def dashboard_metrics(request: Request):
+    """API для получения метрик дашборда"""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
     
-    if current_user["role"] not in ["employee", "owner", "superadmin"]:
-        raise HTTPException(status_code=403, detail="Недостаточно прав доступа")
-    
-    # TODO: Получение реальных данных для сотрудника
-    employee_data = {
-        "user": current_user,
-        "available_objects": [
-            {
-                "id": 1,
-                "name": "Магазин №1",
-                "address": "ул. Ленина, 10",
-                "hourly_rate": 500,
-                "next_shift": "2025-01-15 09:00"
-            }
-        ],
-        "my_shifts": [
-            {
-                "id": 1,
-                "object_name": "Магазин №1",
-                "start_time": "2025-01-15 09:00",
-                "end_time": "2025-01-15 17:00",
-                "status": "planned",
-                "hourly_rate": 500
-            }
-        ],
-        "stats": {
-            "total_hours_this_month": 120,
-            "total_earnings": 60000,
-            "completed_shifts": 15,
-            "upcoming_shifts": 3
+    async with get_db_session() as session:
+        # Получаем объекты владельца
+        objects_query = select(Object).where(Object.owner_id == current_user.id)
+        objects_result = await session.execute(objects_query)
+        objects = objects_result.scalars().all()
+        object_ids = [obj.id for obj in objects]
+        
+        # Статистика за последние 30 дней
+        month_ago = datetime.now().date() - timedelta(days=30)
+        shifts_query = select(Shift).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                Shift.start_time >= month_ago
+            )
+        )
+        shifts_result = await session.execute(shifts_query)
+        shifts = shifts_result.scalars().all()
+        
+        # Группировка по дням
+        daily_data = {}
+        for shift in shifts:
+            day = shift.start_time.date()
+            if day not in daily_data:
+                daily_data[day] = {
+                    "shifts": 0,
+                    "hours": 0,
+                    "payment": 0
+                }
+            daily_data[day]["shifts"] += 1
+            daily_data[day]["hours"] += shift.total_hours or 0
+            daily_data[day]["payment"] += shift.total_payment or 0
+        
+        # Подготовка данных для графика
+        chart_data = []
+        for i in range(30):
+            day = month_ago + timedelta(days=i)
+            data = daily_data.get(day, {"shifts": 0, "hours": 0, "payment": 0})
+            chart_data.append({
+                "date": day.strftime("%Y-%m-%d"),
+                "shifts": data["shifts"],
+                "hours": data["hours"],
+                "payment": data["payment"]
+            })
+        
+        return {
+            "chart_data": chart_data,
+            "total_shifts": len(shifts),
+            "total_hours": sum(s.total_hours or 0 for s in shifts if s.total_hours),
+            "total_payment": sum(s.total_payment or 0 for s in shifts if s.total_payment)
         }
-    }
+
+
+@router.get("/alerts")
+async def dashboard_alerts(request: Request):
+    """API для получения уведомлений и предупреждений"""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
     
-    return templates.TemplateResponse("dashboard/employee.html", {
-        "request": request,
-        "title": "Мой дашборд",
-        "data": employee_data
-    })
+    async with get_db_session() as session:
+        alerts = []
+        
+        # Получаем объекты владельца
+        objects_query = select(Object).where(Object.owner_id == current_user.id)
+        objects_result = await session.execute(objects_query)
+        objects = objects_result.scalars().all()
+        object_ids = [obj.id for obj in objects]
+        
+        # Проверка на длительные активные смены (более 12 часов)
+        long_shifts_query = select(Shift).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                Shift.status == "active",
+                Shift.start_time <= datetime.now() - timedelta(hours=12)
+            )
+        )
+        long_shifts_result = await session.execute(long_shifts_query)
+        long_shifts = long_shifts_result.scalars().all()
+        
+        for shift in long_shifts:
+            alerts.append({
+                "type": "warning",
+                "title": "Длительная активная смена",
+                "message": f"Смена на объекте '{shift.object.name}' активна более 12 часов",
+                "shift_id": shift.id,
+                "created_at": shift.start_time
+            })
+        
+        # Проверка на отсутствие смен сегодня
+        today = datetime.now().date()
+        today_shifts_query = select(Shift).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                func.date(Shift.start_time) == today
+            )
+        )
+        today_shifts_result = await session.execute(today_shifts_query)
+        today_shifts = today_shifts_result.scalars().all()
+        
+        if not today_shifts:
+            alerts.append({
+                "type": "info",
+                "title": "Нет смен сегодня",
+                "message": "Сегодня еще не было ни одной смены",
+                "created_at": datetime.now()
+            })
+        
+        # Проверка на неоплаченные смены (старше 7 дней)
+        week_ago = datetime.now() - timedelta(days=7)
+        unpaid_shifts_query = select(Shift).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                Shift.status == "completed",
+                Shift.end_time <= week_ago,
+                or_(Shift.total_payment == 0, Shift.total_payment.is_(None))
+            )
+        )
+        unpaid_shifts_result = await session.execute(unpaid_shifts_query)
+        unpaid_shifts = unpaid_shifts_result.scalars().all()
+        
+        if unpaid_shifts:
+            alerts.append({
+                "type": "error",
+                "title": "Неоплаченные смены",
+                "message": f"Найдено {len(unpaid_shifts)} неоплаченных смен старше 7 дней",
+                "count": len(unpaid_shifts),
+                "created_at": datetime.now()
+            })
+        
+        return {"alerts": alerts}
+
+
+@router.get("/quick-stats")
+async def quick_stats(request: Request):
+    """Быстрая статистика для виджетов"""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    async with get_db_session() as session:
+        # Получаем объекты владельца
+        objects_query = select(Object).where(Object.owner_id == current_user.id)
+        objects_result = await session.execute(objects_query)
+        objects = objects_result.scalars().all()
+        object_ids = [obj.id for obj in objects]
+        
+        # Статистика за сегодня
+        today = datetime.now().date()
+        today_shifts_query = select(Shift).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                func.date(Shift.start_time) == today
+            )
+        )
+        today_shifts_result = await session.execute(today_shifts_query)
+        today_shifts = today_shifts_result.scalars().all()
+        
+        # Активные смены
+        active_shifts_query = select(Shift).where(
+            and_(
+                Shift.object_id.in_(object_ids),
+                Shift.status == "active"
+            )
+        )
+        active_shifts_result = await session.execute(active_shifts_query)
+        active_shifts = active_shifts_result.scalars().all()
+        
+        # Запланированные смены на завтра
+        tomorrow = today + timedelta(days=1)
+        tomorrow_schedules_query = select(ShiftSchedule).where(
+            and_(
+                ShiftSchedule.object_id.in_(object_ids),
+                ShiftSchedule.status == "planned",
+                func.date(ShiftSchedule.planned_start) == tomorrow
+            )
+        )
+        tomorrow_schedules_result = await session.execute(tomorrow_schedules_query)
+        tomorrow_schedules = tomorrow_schedules_result.scalars().all()
+        
+        return {
+            "today_shifts": len(today_shifts),
+            "active_shifts": len(active_shifts),
+            "tomorrow_schedules": len(tomorrow_schedules),
+            "total_objects": len(objects)
+        }

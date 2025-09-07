@@ -1,209 +1,404 @@
 {% extends "base.html" %}
 
-{% block title %}Дашборд - StaffProBot{% endblock %}
+{% block title %}Дашборд{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <h1 class="h3 mb-4">
-            <i class="bi bi-speedometer2 text-primary"></i>
-            Добро пожаловать, {{ data.user.first_name }}!
-        </h1>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-speedometer2"></i> Дашборд владельца
+                </h1>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" onclick="refreshDashboard()">
+                        <i class="bi bi-arrow-clockwise"></i> Обновить
+                    </button>
+                </div>
+            </div>
+
+            <!-- Ключевые метрики -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ metrics.today.shifts }}</h4>
+                                    <p class="card-text">Смен сегодня</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-calendar-day fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ metrics.active }}</h4>
+                                    <p class="card-text">Активные смены</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-play-circle fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ metrics.planned }}</h4>
+                                    <p class="card-text">Запланированные</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-calendar-check fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ metrics.objects }}</h4>
+                                    <p class="card-text">Объектов</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-building fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Статистика за периоды -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Сегодня</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="text-primary fs-4">{{ metrics.today.shifts }}</div>
+                                    <small class="text-muted">Смены</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-success fs-4">{{ "%.1f"|format(metrics.today.hours) }}</div>
+                                    <small class="text-muted">Часы</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-warning fs-4">{{ "%.0f"|format(metrics.today.payment) }}₽</div>
+                                    <small class="text-muted">Оплата</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">За неделю</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="text-primary fs-4">{{ metrics.week.shifts }}</div>
+                                    <small class="text-muted">Смены</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-success fs-4">{{ "%.1f"|format(metrics.week.hours) }}</div>
+                                    <small class="text-muted">Часы</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-warning fs-4">{{ "%.0f"|format(metrics.week.payment) }}₽</div>
+                                    <small class="text-muted">Оплата</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">За месяц</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="text-primary fs-4">{{ metrics.month.shifts }}</div>
+                                    <small class="text-muted">Смены</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-success fs-4">{{ "%.1f"|format(metrics.month.hours) }}</div>
+                                    <small class="text-muted">Часы</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-warning fs-4">{{ "%.0f"|format(metrics.month.payment) }}₽</div>
+                                    <small class="text-muted">Оплата</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- График активности -->
+                <div class="col-lg-8">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-graph-up"></i> Активность за последние 7 дней
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="activityChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Активные смены -->
+                <div class="col-lg-4">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-play-circle"></i> Активные смены
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            {% if active_shifts %}
+                                {% for shift in active_shifts %}
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3">
+                                        {{ shift.user.first_name[0] }}
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="fw-bold">{{ shift.user.first_name }} {{ shift.user.last_name or '' }}</div>
+                                        <small class="text-muted">{{ shift.object.name }}</small>
+                                        <br><small class="text-success">
+                                            с {{ shift.start_time.strftime('%H:%M') }}
+                                            {% if shift.is_planned %}
+                                            (из планирования)
+                                            {% else %}
+                                            (спонтанная)
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center text-muted">
+                                    <i class="bi bi-clock fs-1"></i>
+                                    <p>Нет активных смен</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Топ объекты -->
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-building"></i> Топ объекты по активности
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            {% if top_objects %}
+                                {% for obj in top_objects %}
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <div class="fw-bold">{{ obj.object.name }}</div>
+                                        <small class="text-muted">{{ obj.object.address or 'Адрес не указан' }}</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="fw-bold text-primary">{{ obj.shifts }}</div>
+                                        <small class="text-muted">смен</small>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center text-muted">
+                                    <i class="bi bi-building fs-1"></i>
+                                    <p>Нет данных</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Топ сотрудники -->
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-people"></i> Топ сотрудники
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            {% if top_employees %}
+                                {% for emp in top_employees %}
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-sm bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
+                                            {{ emp.employee.first_name[0] }}
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ emp.employee.first_name }} {{ emp.employee.last_name or '' }}</div>
+                                            <small class="text-muted">@{{ emp.employee.username or 'без username' }}</small>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="fw-bold text-success">{{ emp.shifts }}</div>
+                                        <small class="text-muted">смен</small>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center text-muted">
+                                    <i class="bi bi-people fs-1"></i>
+                                    <p>Нет данных</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Предстоящие смены -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-calendar-check"></i> Предстоящие смены (следующие 7 дней)
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            {% if upcoming_schedules %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Дата</th>
+                                                <th>Время</th>
+                                                <th>Сотрудник</th>
+                                                <th>Объект</th>
+                                                <th>Статус</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for schedule in upcoming_schedules %}
+                                            <tr>
+                                                <td>{{ schedule.planned_start.strftime('%d.%m.%Y') }}</td>
+                                                <td>
+                                                    {{ schedule.planned_start.strftime('%H:%M') }} - 
+                                                    {{ schedule.planned_end.strftime('%H:%M') }}
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
+                                                            {{ schedule.user.first_name[0] }}
+                                                        </div>
+                                                        <div>
+                                                            {{ schedule.user.first_name }} {{ schedule.user.last_name or '' }}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>{{ schedule.object.name }}</td>
+                                                <td>
+                                                    <span class="badge bg-warning">{{ schedule.status }}</span>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="text-center text-muted">
+                                    <i class="bi bi-calendar-check fs-1"></i>
+                                    <p>Нет предстоящих смен</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Статистика -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title">{{ data.stats.total_objects }}</h4>
-                        <p class="card-text">Объектов</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-building fs-1"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title">{{ data.stats.active_shifts }}</h4>
-                        <p class="card-text">Активных смен</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-clock fs-1"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title">{{ data.stats.total_employees }}</h4>
-                        <p class="card-text">Сотрудников</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-people fs-1"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title">{{ "{:,.0f}".format(data.stats.monthly_revenue) }}₽</h4>
-                        <p class="card-text">Доход за месяц</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-currency-exchange fs-1"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<!-- Основной контент -->
-<div class="row">
-    <!-- Быстрые действия -->
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-lightning"></i> Быстрые действия
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    {% if data.user.role in ['owner', 'superadmin'] %}
-                    <a href="/objects" class="btn btn-outline-primary">
-                        <i class="bi bi-building"></i> Управление объектами
-                    </a>
-                    <a href="/calendar" class="btn btn-outline-primary">
-                        <i class="bi bi-calendar3"></i> Календарное планирование
-                    </a>
-                    <a href="/contracts" class="btn btn-outline-primary">
-                        <i class="bi bi-file-text"></i> Договоры
-                    </a>
-                    {% if data.user.role == 'owner' %}
-                    <a href="/employees" class="btn btn-outline-secondary">
-                        <i class="bi bi-people"></i> Сотрудники
-                    </a>
-                    {% elif data.user.role == 'superadmin' %}
-                    <a href="/users" class="btn btn-outline-secondary">
-                        <i class="bi bi-people"></i> Пользователи
-                    </a>
-                    {% endif %}
-                    {% endif %}
-                    <a href="/shifts" class="btn btn-outline-success">
-                        <i class="bi bi-clock"></i> Мои смены
-                    </a>
-                    <a href="/reports" class="btn btn-outline-info">
-                        <i class="bi bi-graph-up"></i> Отчеты
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Последняя активность -->
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-activity"></i> Последняя активность
-                </h5>
-            </div>
-            <div class="card-body">
-                {% for activity in data.recent_activity %}
-                <div class="d-flex align-items-start mb-3">
-                    <div class="flex-shrink-0">
-                        {% if activity.type == 'shift_opened' %}
-                        <i class="bi bi-play-circle text-success fs-4"></i>
-                        {% elif activity.type == 'contract_signed' %}
-                        <i class="bi bi-file-text text-primary fs-4"></i>
-                        {% elif activity.type == 'report_generated' %}
-                        <i class="bi bi-graph-up text-info fs-4"></i>
-                        {% else %}
-                        <i class="bi bi-circle text-muted fs-4"></i>
-                        {% endif %}
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <p class="mb-1">{{ activity.message }}</p>
-                        <small class="text-muted">{{ activity.time }}</small>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Графики (если есть данные) -->
-{% if data.user.role in ['owner', 'superadmin'] %}
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-bar-chart"></i> Статистика за месяц
-                </h5>
-            </div>
-            <div class="card-body">
-                <canvas id="monthlyChart" width="400" height="100"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-{% endblock %}
-
-{% block extra_js %}
 <script>
-// График статистики за месяц
-const ctx = document.getElementById('monthlyChart');
-if (ctx) {
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: ['Неделя 1', 'Неделя 2', 'Неделя 3', 'Неделя 4'],
-            datasets: [{
-                label: 'Доход (₽)',
-                data: [35000, 40000, 38000, 42000],
-                borderColor: 'rgb(75, 192, 192)',
-                tension: 0.1
-            }, {
-                label: 'Часы работы',
-                data: [80, 95, 88, 92],
-                borderColor: 'rgb(255, 99, 132)',
-                tension: 0.1
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
+// Данные для графика
+const dailyStats = {{ daily_stats | tojson }};
+
+// Создаем график активности
+const ctx = document.getElementById('activityChart').getContext('2d');
+const activityChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: dailyStats.map(stat => stat.date),
+        datasets: [{
+            label: 'Смены',
+            data: dailyStats.map(stat => stat.shifts),
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1
+        }, {
+            label: 'Часы',
+            data: dailyStats.map(stat => stat.hours),
+            borderColor: 'rgb(255, 99, 132)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            tension: 0.1,
+            yAxisID: 'y1'
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                type: 'linear',
+                display: true,
+                position: 'left',
+            },
+            y1: {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                grid: {
+                    drawOnChartArea: false,
+                },
             }
         }
-    });
+    }
+});
+
+function refreshDashboard() {
+    window.location.reload();
 }
+
+// Автообновление каждые 5 минут
+setInterval(() => {
+    // Можно добавить AJAX обновление метрик
+    console.log('Auto-refresh dashboard...');
+}, 300000);
 </script>
 {% endblock %}
