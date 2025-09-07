@@ -62,9 +62,9 @@ class Contract(Base):
     employee = relationship("User", foreign_keys=[employee_id], backref="employee_contracts")
     template = relationship("ContractTemplate", back_populates="contracts")
     
-    # Связанные смены
-    shifts = relationship("Shift", backref="contract")
-    scheduled_shifts = relationship("ShiftSchedule", backref="contract")
+    # Связанные смены (пока без внешних ключей)
+    # shifts = relationship("Shift", backref="contract")
+    # scheduled_shifts = relationship("ShiftSchedule", backref="contract")
 
 
 class ContractVersion(Base):
