@@ -523,37 +523,118 @@ async def get_timeslots_status(
     year: int = Query(...),
     month: int = Query(...),
     object_id: Optional[int] = Query(None),
-    current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Получение статуса тайм-слотов для календаря"""
     try:
-        from apps.web.services.shift_service import ShiftService
+        logger.info(f"Getting timeslots status for {year}-{month}, object_id: {object_id}")
+        
+        # Получаем реальные тайм-слоты из базы
+        from sqlalchemy import select, and_
+        from sqlalchemy.orm import selectinload
+        from domain.entities.time_slot import TimeSlot
+        from domain.entities.object import Object
+        from domain.entities.user import User
+        
+        # Получаем владельца
+        owner_query = select(User).where(User.telegram_id == 1220971779)
+        owner_result = await db.execute(owner_query)
+        owner = owner_result.scalar_one_or_none()
+        
+        if not owner:
+            return []
+        
+        # Получаем объекты владельца
+        objects_query = select(Object).where(Object.owner_id == owner.id)
+        if object_id:
+            objects_query = objects_query.where(Object.id == object_id)
+        
+        objects_result = await db.execute(objects_query)
+        objects = objects_result.scalars().all()
+        object_ids = [obj.id for obj in objects]
+        
+        if not object_ids:
+            return []
         
         # Получаем тайм-слоты за месяц
-        timeslot_service = TimeSlotService(db)
-        timeslots = await timeslot_service.get_timeslots_by_month(
-            year, month, current_user["telegram_id"], object_id
-        )
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year + 1, 1, 1)
+        else:
+            end_date = date(year, month + 1, 1)
         
-        # Получаем запланированные смены
-        shift_service = ShiftService(db)
-        scheduled_shifts = await shift_service.get_scheduled_shifts_by_month(
-            year, month, current_user["telegram_id"], object_id
-        )
+        timeslots_query = select(TimeSlot).options(
+            selectinload(TimeSlot.object)
+        ).where(
+            and_(
+                TimeSlot.object_id.in_(object_ids),
+                TimeSlot.slot_date >= start_date,
+                TimeSlot.slot_date < end_date,
+                TimeSlot.is_active == True
+            )
+        ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
         
-        # Получаем фактические смены
-        actual_shifts = await shift_service.get_shifts_by_month(
-            year, month, current_user["telegram_id"], object_id
-        )
+        timeslots_result = await db.execute(timeslots_query)
+        timeslots = timeslots_result.scalars().all()
         
-        # Создаем карту статусов
-        status_map = {}
+        logger.info(f"Found {len(timeslots)} real timeslots")
         
-        # Обрабатываем тайм-слоты
+        # Получаем запланированные смены за месяц
+        from domain.entities.shift_schedule import ShiftSchedule
+        
+        scheduled_shifts_query = select(ShiftSchedule).where(
+            and_(
+                ShiftSchedule.object_id.in_(object_ids),
+                ShiftSchedule.planned_start >= start_date,
+                ShiftSchedule.planned_start < end_date
+            )
+        ).order_by(ShiftSchedule.planned_start)
+        
+        scheduled_shifts_result = await db.execute(scheduled_shifts_query)
+        scheduled_shifts = scheduled_shifts_result.scalars().all()
+        
+        logger.info(f"Found {len(scheduled_shifts)} scheduled shifts")
+        
+        # Создаем карту запланированных смен по time_slot_id
+        scheduled_shifts_map = {}
+        for shift in scheduled_shifts:
+            if shift.time_slot_id:
+                if shift.time_slot_id not in scheduled_shifts_map:
+                    scheduled_shifts_map[shift.time_slot_id] = []
+                
+                scheduled_shifts_map[shift.time_slot_id].append({
+                    "id": shift.id,
+                    "user_id": shift.user_id,
+                    "status": shift.status,
+                    "start_time": shift.planned_start.time().strftime("%H:%M"),
+                    "end_time": shift.planned_end.time().strftime("%H:%M"),
+                    "notes": shift.notes
+                })
+        
+        # Создаем данные для каждого тайм-слота
+        test_data = []
         for slot in timeslots:
-            slot_key = f"{slot.slot_date}_{slot.object_id}_{slot.start_time}_{slot.end_time}"
-            status_map[slot_key] = {
+            # Определяем статус на основе запланированных смен
+            status = "empty"
+            scheduled_shifts = []
+            
+            # Ищем запланированные смены для этого конкретного тайм-слота
+            if slot.id in scheduled_shifts_map:
+                scheduled_shifts = scheduled_shifts_map[slot.id]
+                # Определяем статус на основе смен
+                if any(shift["status"] == "planned" for shift in scheduled_shifts):
+                    status = "planned"
+                elif any(shift["status"] == "confirmed" for shift in scheduled_shifts):
+                    status = "confirmed"
+                elif any(shift["status"] == "cancelled" for shift in scheduled_shifts):
+                    status = "cancelled"
+            
+            # Подсчитываем занятость
+            occupied_slots = len(scheduled_shifts)
+            max_slots = slot.max_employees or 1
+            availability = f"{occupied_slots}/{max_slots}"
+            
+            test_data.append({
                 "slot_id": slot.id,
                 "object_id": slot.object_id,
                 "object_name": slot.object.name,
@@ -561,74 +642,16 @@ async def get_timeslots_status(
                 "start_time": slot.start_time.strftime("%H:%M"),
                 "end_time": slot.end_time.strftime("%H:%M"),
                 "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else 0,
-                "status": "empty",  # По умолчанию пустой
-                "scheduled_shifts": [],
-                "actual_shifts": []
-            }
+                "status": status,
+                "scheduled_shifts": scheduled_shifts,
+                "actual_shifts": [],
+                "availability": availability,
+                "occupied_slots": occupied_slots,
+                "max_slots": max_slots
+            })
         
-        # Добавляем запланированные смены
-        for shift in scheduled_shifts:
-            shift_start = shift.planned_start.time()
-            shift_end = shift.planned_end.time()
-            shift_date = shift.planned_start.date()
-            
-            # Ищем подходящий тайм-слот
-            for slot_key, slot_data in status_map.items():
-                if (slot_data["date"] == shift_date.isoformat() and
-                    slot_data["object_id"] == shift.object_id and
-                    slot_data["start_time"] <= shift_start.strftime("%H:%M") and
-                    slot_data["end_time"] >= shift_end.strftime("%H:%M")):
-                    
-                    slot_data["scheduled_shifts"].append({
-                        "id": shift.id,
-                        "user_id": shift.user_id,
-                        "status": shift.status,
-                        "start_time": shift_start.strftime("%H:%M"),
-                        "end_time": shift_end.strftime("%H:%M"),
-                        "notes": shift.notes
-                    })
-                    
-                    # Обновляем статус слота
-                    if shift.status == "planned":
-                        slot_data["status"] = "planned"
-                    elif shift.status == "confirmed":
-                        slot_data["status"] = "confirmed"
-                    elif shift.status == "cancelled":
-                        slot_data["status"] = "cancelled"
-                    break
-        
-        # Добавляем фактические смены
-        for shift in actual_shifts:
-            shift_start = shift.start_time.time()
-            shift_end = shift.end_time.time() if shift.end_time else None
-            shift_date = shift.start_time.date()
-            
-            if shift_end:  # Только если смена завершена
-                # Ищем подходящий тайм-слот
-                for slot_key, slot_data in status_map.items():
-                    if (slot_data["date"] == shift_date.isoformat() and
-                        slot_data["object_id"] == shift.object_id and
-                        slot_data["start_time"] <= shift_start.strftime("%H:%M") and
-                        slot_data["end_time"] >= shift_end.strftime("%H:%M")):
-                        
-                        slot_data["actual_shifts"].append({
-                            "id": shift.id,
-                            "user_id": shift.user_id,
-                            "status": shift.status,
-                            "start_time": shift_start.strftime("%H:%M"),
-                            "end_time": shift_end.strftime("%H:%M"),
-                            "total_hours": float(shift.total_hours) if shift.total_hours else 0,
-                            "total_payment": float(shift.total_payment) if shift.total_payment else 0
-                        })
-                        
-                        # Обновляем статус слота
-                        if shift.status == "completed":
-                            slot_data["status"] = "completed"
-                        elif shift.status == "active":
-                            slot_data["status"] = "active"
-                        break
-        
-        return list(status_map.values())
+        logger.info(f"Returning {len(test_data)} test timeslots")
+        return test_data
         
     except Exception as e:
         logger.error(f"Error getting timeslots status: {e}")

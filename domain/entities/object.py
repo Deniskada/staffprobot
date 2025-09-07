@@ -32,7 +32,7 @@ class Object(Base):
     
     # Отношения
     owner = relationship("User", backref="owned_objects")
-    planning_templates = relationship("PlanningTemplate", back_populates="object")
+    # planning_templates = relationship("PlanningTemplate", back_populates="object")
     
     def __repr__(self) -> str:
         return f"<Object(id={self.id}, name='{self.name}', owner_id={self.owner_id})>"

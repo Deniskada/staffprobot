@@ -38,7 +38,7 @@ class PlanningTemplate(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="Дата обновления")
     
     # Связи
-    object = relationship("Object", back_populates="planning_templates")
+    object = relationship("Object")
     template_slots = relationship("TemplateTimeSlot", back_populates="template", cascade="all, delete-orphan")
     
     def __repr__(self) -> str:

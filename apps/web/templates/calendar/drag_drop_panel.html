@@ -344,13 +344,18 @@ function restorePanelState() {
 
 async function loadObjects() {
     try {
-        const response = await fetch('/calendar/api/objects');
+        const response = await fetch('/calendar/api/objects', {
+            credentials: 'include'
+        });
         const data = await response.json();
         
-        if (data.objects) {
-            objectsData = data.objects;
+        // API возвращает массив объектов напрямую
+        if (Array.isArray(data)) {
+            objectsData = data;
             renderObjects();
             populateQuickCreateForm();
+        } else {
+            throw new Error('Неверный формат данных');
         }
     } catch (error) {
         console.error('Ошибка загрузки объектов:', error);
