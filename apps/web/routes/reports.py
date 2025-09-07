@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Query, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
 from datetime import date, datetime, timedelta
 from typing import Optional, List
@@ -131,7 +131,7 @@ async def generate_report(
         # Получаем объекты владельца
         owner_objects = select(Object.id).where(Object.owner_id == user_id)
         objects_result = await session.execute(owner_objects)
-        owner_object_ids = [obj.id for obj in objects_result.scalars().all()]
+        owner_object_ids = [obj[0] for obj in objects_result.all()]
         
         # Базовый запрос для смен
         shifts_query = select(Shift).options(
@@ -186,7 +186,7 @@ async def _generate_shifts_report(shifts: List[Shift], format: str, start_date: 
         })
     
     if format == "excel":
-        return await _create_excel_file(data, f"Отчет_по_сменам_{start_date}_{end_date}")
+        return await _create_excel_file(data, f"shifts_report_{start_date}_{end_date}")
     else:
         return {"data": data, "total": len(data)}
 
@@ -221,7 +221,7 @@ async def _generate_employees_report(shifts: List[Shift], format: str, start_dat
         })
     
     if format == "excel":
-        return await _create_excel_file(data, f"Отчет_по_сотрудникам_{start_date}_{end_date}")
+        return await _create_excel_file(data, f"employees_report_{start_date}_{end_date}")
     else:
         return {"data": data, "total": len(data)}
 
@@ -260,7 +260,7 @@ async def _generate_objects_report(shifts: List[Shift], format: str, start_date:
         })
     
     if format == "excel":
-        return await _create_excel_file(data, f"Отчет_по_объектам_{start_date}_{end_date}")
+        return await _create_excel_file(data, f"objects_report_{start_date}_{end_date}")
     else:
         return {"data": data, "total": len(data)}
 
@@ -309,10 +309,10 @@ async def _create_excel_file(data: List[dict], filename: str):
     wb.save(output)
     output.seek(0)
     
-    return FileResponse(
-        io.BytesIO(output.read()),
+    return Response(
+        content=output.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=f"{filename}.xlsx"
+        headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"}
     )
 
 
@@ -341,7 +341,7 @@ async def period_stats(
         # Получаем объекты владельца
         owner_objects = select(Object.id).where(Object.owner_id == user_id)
         objects_result = await session.execute(owner_objects)
-        owner_object_ids = [obj.id for obj in objects_result.scalars().all()]
+        owner_object_ids = [obj[0] for obj in objects_result.all()]
         
         # Запрос смен за период
         shifts_query = select(Shift).options(
