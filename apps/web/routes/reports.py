@@ -25,6 +25,20 @@ templates = Jinja2Templates(directory="apps/web/templates")
 user_manager = UserManager()
 
 
+async def get_user_id_from_current_user(current_user, session):
+    """Получает внутренний ID пользователя из current_user"""
+    if isinstance(current_user, dict):
+        # current_user - это словарь из JWT payload
+        telegram_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == telegram_id)
+        user_result = await session.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        return user_obj.id if user_obj else None
+    else:
+        # current_user - это объект User
+        return current_user.id
+
+
 @router.get("/", response_class=HTMLResponse)
 async def reports_index(request: Request):
     """Главная страница отчетов"""
@@ -32,11 +46,12 @@ async def reports_index(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    # Получаем ID пользователя из словаря
-    user_id = current_user.get("id") if isinstance(current_user, dict) else user_id
     user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
     
     async with get_async_session() as session:
+        # Получаем внутренний user_id
+        user_id = await get_user_id_from_current_user(current_user, session)
+        
         # Получаем объекты владельца
         objects_query = select(Object).where(Object.owner_id == user_id)
         objects_result = await session.execute(objects_query)
@@ -50,7 +65,10 @@ async def reports_index(request: Request):
         # Статистика за последний месяц
         month_ago = datetime.now() - timedelta(days=30)
         
-        shifts_query = select(Shift).where(
+        shifts_query = select(Shift).options(
+            selectinload(Shift.object),
+            selectinload(Shift.user)
+        ).where(
             and_(
                 Shift.object_id.in_([obj.id for obj in objects]),
                 Shift.start_time >= month_ago
@@ -99,6 +117,9 @@ async def generate_report(
         return {"error": "Неверный формат даты"}
     
     async with get_async_session() as session:
+        # Получаем внутренний user_id
+        user_id = await get_user_id_from_current_user(current_user, session)
+        
         # Получаем объекты владельца
         owner_objects = select(Object.id).where(Object.owner_id == user_id)
         objects_result = await session.execute(owner_objects)
@@ -306,13 +327,19 @@ async def period_stats(
         return {"error": "Неверный формат даты"}
     
     async with get_async_session() as session:
+        # Получаем внутренний user_id
+        user_id = await get_user_id_from_current_user(current_user, session)
+        
         # Получаем объекты владельца
         owner_objects = select(Object.id).where(Object.owner_id == user_id)
         objects_result = await session.execute(owner_objects)
         owner_object_ids = [obj.id for obj in objects_result.scalars().all()]
         
         # Запрос смен за период
-        shifts_query = select(Shift).where(
+        shifts_query = select(Shift).options(
+            selectinload(Shift.object),
+            selectinload(Shift.user)
+        ).where(
             and_(
                 Shift.object_id.in_(owner_object_ids),
                 Shift.start_time >= start_date,
