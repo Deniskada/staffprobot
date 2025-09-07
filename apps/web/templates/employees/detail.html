@@ -28,7 +28,7 @@
                             </h5>
                         </div>
                         <div class="card-body">
-                            {% if contracts %}
+                            {% if employee.contracts %}
                                 <div class="table-responsive">
                                     <table class="table table-hover">
                                         <thead>
@@ -42,7 +42,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for contract in contracts %}
+                                            {% for contract in employee.contracts %}
                                             <tr>
                                                 <td>
                                                     <code>{{ contract.contract_number }}</code>
@@ -142,7 +142,7 @@
                             <div class="mb-3">
                                 <strong>Активных договоров:</strong><br>
                                 <span class="badge bg-primary">
-                                    {{ contracts|selectattr('status', 'equalto', 'active')|list|length }}
+                                    {{ employee.contracts|selectattr('status', 'equalto', 'active')|list|length }}
                                 </span>
                             </div>
                         </div>
