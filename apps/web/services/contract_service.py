@@ -59,24 +59,17 @@ class ContractService:
     async def create_contract(
         self,
         owner_id: int,
-        employee_telegram_id: int,
-        title: str,
-        content: str,
-        hourly_rate: Optional[int] = None,
-        start_date: datetime = None,
-        end_date: Optional[datetime] = None,
-        template_id: Optional[int] = None,
-        allowed_objects: Optional[List[int]] = None
-    ) -> Contract:
+        contract_data: Dict[str, Any]
+    ) -> Optional[Contract]:
         """Создание договора с сотрудником."""
         async with get_async_session() as session:
-            # Находим сотрудника по Telegram ID
-            employee_query = select(User).where(User.telegram_id == employee_telegram_id)
+            # Находим сотрудника по ID
+            employee_query = select(User).where(User.id == contract_data["employee_id"])
             employee_result = await session.execute(employee_query)
             employee = employee_result.scalar_one_or_none()
             
             if not employee:
-                raise ValueError(f"Сотрудник с Telegram ID {employee_telegram_id} не найден")
+                raise ValueError(f"Сотрудник с ID {contract_data['employee_id']} не найден")
             
             # Генерируем номер договора
             contract_number = await self._generate_contract_number(owner_id)
@@ -86,13 +79,13 @@ class ContractService:
                 contract_number=contract_number,
                 owner_id=owner_id,
                 employee_id=employee.id,
-                template_id=template_id,
-                title=title,
-                content=content,
-                hourly_rate=hourly_rate,
-                start_date=start_date or datetime.now(),
-                end_date=end_date,
-                allowed_objects=allowed_objects or []
+                template_id=contract_data.get("template_id"),
+                title=contract_data["title"],
+                content=contract_data["content"],
+                hourly_rate=contract_data.get("hourly_rate"),
+                start_date=contract_data["start_date"],
+                end_date=contract_data.get("end_date"),
+                allowed_objects=contract_data.get("allowed_objects", [])
             )
             
             session.add(contract)
@@ -338,3 +331,204 @@ class ContractService:
             await session.refresh(version)
             
             return version
+    
+    async def get_available_employees(self, owner_id: int) -> List[Dict[str, Any]]:
+        """Получение доступных сотрудников для создания договора."""
+        async with get_async_session() as session:
+            # Получаем всех пользователей с ролью employee
+            query = select(User).where(
+                and_(
+                    User.role == "employee",
+                    User.is_active == True
+                )
+            ).order_by(User.first_name, User.last_name)
+            
+            result = await session.execute(query)
+            employees = result.scalars().all()
+            
+            return [
+                {
+                    "id": emp.id,
+                    "telegram_id": emp.telegram_id,
+                    "first_name": emp.first_name,
+                    "last_name": emp.last_name,
+                    "username": emp.username,
+                    "display_name": f"{emp.first_name} {emp.last_name or ''}".strip() or emp.username or f"ID: {emp.telegram_id}"
+                }
+                for emp in employees
+            ]
+    
+    async def get_owner_objects(self, owner_id: int) -> List[Object]:
+        """Получение объектов владельца."""
+        async with get_async_session() as session:
+            query = select(Object).where(
+                and_(
+                    Object.owner_id == owner_id,
+                    Object.is_active == True
+                )
+            ).order_by(Object.name)
+            
+            result = await session.execute(query)
+            return result.scalars().all()
+    
+    async def get_contract_templates(self) -> List[ContractTemplate]:
+        """Получение шаблонов договоров."""
+        return await self.get_contract_templates(active_only=True)
+    
+    async def get_employee_by_id(self, employee_id: int, owner_id: int) -> Optional[Dict[str, Any]]:
+        """Получение сотрудника по ID с проверкой прав владельца."""
+        async with get_async_session() as session:
+            # Проверяем, что у владельца есть договор с этим сотрудником
+            query = select(Contract).where(
+                and_(
+                    Contract.owner_id == owner_id,
+                    Contract.employee_id == employee_id,
+                    Contract.is_active == True
+                )
+            ).options(selectinload(Contract.employee))
+            
+            result = await session.execute(query)
+            contracts = result.scalars().all()
+            
+            if not contracts:
+                return None
+            
+            employee = contracts[0].employee
+            return {
+                "id": employee.id,
+                "telegram_id": employee.telegram_id,
+                "first_name": employee.first_name,
+                "last_name": employee.last_name,
+                "username": employee.username,
+                "contracts": [
+                    {
+                        "id": contract.id,
+                        "contract_number": contract.contract_number,
+                        "title": contract.title,
+                        "status": contract.status,
+                        "hourly_rate": contract.hourly_rate,
+                        "start_date": contract.start_date,
+                        "end_date": contract.end_date,
+                        "allowed_objects": contract.allowed_objects or []
+                    }
+                    for contract in contracts
+                ]
+            }
+    
+    async def get_contract_by_id(self, contract_id: int, owner_id: int) -> Optional[Dict[str, Any]]:
+        """Получение договора по ID с проверкой прав владельца."""
+        async with get_async_session() as session:
+            query = select(Contract).where(
+                and_(
+                    Contract.id == contract_id,
+                    Contract.owner_id == owner_id
+                )
+            ).options(
+                selectinload(Contract.employee),
+                selectinload(Contract.template)
+            )
+            
+            result = await session.execute(query)
+            contract = result.scalar_one_or_none()
+            
+            if not contract:
+                return None
+            
+            return {
+                "id": contract.id,
+                "contract_number": contract.contract_number,
+                "title": contract.title,
+                "content": contract.content,
+                "status": contract.status,
+                "hourly_rate": contract.hourly_rate,
+                "start_date": contract.start_date,
+                "end_date": contract.end_date,
+                "allowed_objects": contract.allowed_objects or [],
+                "employee": {
+                    "id": contract.employee.id,
+                    "telegram_id": contract.employee.telegram_id,
+                    "first_name": contract.employee.first_name,
+                    "last_name": contract.employee.last_name,
+                    "username": contract.employee.username
+                },
+                "template": {
+                    "id": contract.template.id,
+                    "name": contract.template.name
+                } if contract.template else None
+            }
+    
+    async def update_contract(self, contract_id: int, owner_id: int, contract_data: Dict[str, Any]) -> bool:
+        """Обновление договора."""
+        async with get_async_session() as session:
+            query = select(Contract).where(
+                and_(
+                    Contract.id == contract_id,
+                    Contract.owner_id == owner_id
+                )
+            )
+            result = await session.execute(query)
+            contract = result.scalar_one_or_none()
+            
+            if not contract:
+                return False
+            
+            # Сохраняем версию перед изменением
+            if "content" in contract_data and contract_data["content"] != contract.content:
+                await self._create_contract_version(
+                    contract_id, 
+                    contract.content, 
+                    "Обновление содержания договора",
+                    owner_id
+                )
+            
+            # Обновляем поля
+            if "title" in contract_data:
+                contract.title = contract_data["title"]
+            if "content" in contract_data:
+                contract.content = contract_data["content"]
+            if "hourly_rate" in contract_data:
+                contract.hourly_rate = contract_data["hourly_rate"]
+            if "start_date" in contract_data:
+                contract.start_date = contract_data["start_date"]
+            if "end_date" in contract_data:
+                contract.end_date = contract_data["end_date"]
+            if "allowed_objects" in contract_data:
+                contract.allowed_objects = contract_data["allowed_objects"]
+            
+            contract.updated_at = datetime.now()
+            await session.commit()
+            
+            logger.info(f"Updated contract: {contract.id}")
+            return True
+    
+    async def terminate_contract(self, contract_id: int, owner_id: int, reason: str) -> bool:
+        """Расторжение договора."""
+        async with get_async_session() as session:
+            query = select(Contract).where(
+                and_(
+                    Contract.id == contract_id,
+                    Contract.owner_id == owner_id
+                )
+            )
+            result = await session.execute(query)
+            contract = result.scalar_one_or_none()
+            
+            if not contract:
+                return False
+            
+            contract.status = "terminated"
+            contract.is_active = False
+            contract.terminated_at = datetime.now()
+            
+            # Создаем версию с причиной расторжения
+            await self._create_contract_version(
+                contract_id,
+                contract.content,
+                f"Договор расторгнут. Причина: {reason}",
+                owner_id
+            )
+            
+            await session.commit()
+            
+            logger.info(f"Terminated contract: {contract.id}")
+            return True
