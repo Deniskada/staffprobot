@@ -242,11 +242,19 @@ async def update_timeslot(
         hourly_rate_str = form_data.get("hourly_rate", "0")
         is_active = "is_active" in form_data
         
+        # Логирование для отладки
+        logger.info(f"Form data: start_time={start_time}, end_time={end_time}, hourly_rate_str='{hourly_rate_str}', is_active={is_active}")
+        
         # Валидация и преобразование данных
         try:
+            # Очищаем строку от пробелов и проверяем на пустоту
+            hourly_rate_str = hourly_rate_str.strip()
+            if not hourly_rate_str:
+                raise ValueError("Пустое значение ставки")
             hourly_rate = int(hourly_rate_str)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Неверный формат ставки")
+        except ValueError as e:
+            logger.error(f"Error parsing hourly_rate '{hourly_rate_str}': {e}")
+            raise HTTPException(status_code=400, detail=f"Неверный формат ставки: '{hourly_rate_str}'")
         
         if hourly_rate <= 0:
             raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")

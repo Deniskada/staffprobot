@@ -33,31 +33,18 @@
                 <div class="card-body">
                     <form method="POST" id="editForm">
                         <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="name" class="form-label">
-                                    <i class="bi bi-tag"></i> Название тайм-слота *
-                                </label>
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="name" 
-                                       name="name" 
-                                       value="{{ timeslot.name }}"
-                                       required
-                                       placeholder="Например: Утренняя смена">
-                                <div class="form-text">Краткое описание тайм-слота</div>
-                            </div>
                             
                             <div class="col-md-6 mb-3">
                                 <label for="hourly_rate" class="form-label">
                                     <i class="bi bi-currency-dollar"></i> Ставка за час *
                                 </label>
                                 <div class="input-group">
-                                    <input type="number" 
+                                    <input type="text" 
                                            class="form-control" 
                                            id="hourly_rate" 
                                            name="hourly_rate" 
                                            value="{{ timeslot.hourly_rate }}"
-                                           min="1"
+                                           pattern="[0-9]+"
                                            required
                                            placeholder="500">
                                     <span class="input-group-text">₽/час</span>
