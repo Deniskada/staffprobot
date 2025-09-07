@@ -1,6 +1,6 @@
 """Роуты для управления сотрудниками."""
 
-from fastapi import APIRouter, Depends, Request, Form, HTTPException
+from fastapi import APIRouter, Depends, Request, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from typing import List, Optional
@@ -18,7 +18,11 @@ templates = Jinja2Templates(directory="apps/web/templates")
 
 
 @router.get("/", response_class=HTMLResponse)
-async def employees_list(request: Request):
+async def employees_list(
+    request: Request,
+    view_mode: str = Query("cards", description="Режим отображения: cards или list"),
+    show_former: bool = Query(False, description="Показать бывших сотрудников")
+):
     """Список сотрудников владельца."""
     # Проверяем авторизацию
     current_user = await require_owner_or_superadmin(request)
@@ -29,7 +33,11 @@ async def employees_list(request: Request):
     contract_service = ContractService()
     # Используем telegram_id для поиска пользователя в БД
     user_id = current_user["id"]  # Это telegram_id из токена
-    employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
+    
+    if show_former:
+        employees = await contract_service.get_all_contract_employees_by_telegram_id(user_id)
+    else:
+        employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
     
     return templates.TemplateResponse(
         "employees/list.html",
@@ -37,7 +45,9 @@ async def employees_list(request: Request):
             "request": request,
             "employees": employees,
             "title": "Управление сотрудниками",
-            "current_user": current_user
+            "current_user": current_user,
+            "view_mode": view_mode,
+            "show_former": show_former
         }
     )
 

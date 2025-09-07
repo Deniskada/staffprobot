@@ -316,6 +316,56 @@ class ContractService:
             
             return list(employees.values())
     
+    async def get_all_contract_employees_by_telegram_id(self, owner_telegram_id: int) -> List[Dict[str, Any]]:
+        """Получение всех сотрудников владельца (включая бывших) по telegram_id."""
+        async with get_async_session() as session:
+            # Сначала находим владельца по telegram_id
+            owner_query = select(User).where(User.telegram_id == owner_telegram_id)
+            owner_result = await session.execute(owner_query)
+            owner = owner_result.scalar_one_or_none()
+            
+            if not owner:
+                return []
+            
+            # Получаем всех сотрудников, с которыми есть договоры (включая неактивные)
+            query = select(Contract).where(
+                Contract.owner_id == owner.id
+            ).options(
+                selectinload(Contract.employee)
+            )
+            
+            result = await session.execute(query)
+            contracts = result.scalars().all()
+            
+            # Группируем по сотрудникам
+            employees = {}
+            for contract in contracts:
+                employee = contract.employee
+                if employee.id not in employees:
+                    employees[employee.id] = {
+                        'id': employee.id,
+                        'telegram_id': employee.telegram_id,
+                        'first_name': employee.first_name,
+                        'last_name': employee.last_name,
+                        'username': employee.username,
+                        'created_at': employee.created_at,
+                        'contracts': []
+                    }
+                
+                employees[employee.id]['contracts'].append({
+                    'id': contract.id,
+                    'contract_number': contract.contract_number,
+                    'title': contract.title,
+                    'status': contract.status,
+                    'hourly_rate': contract.hourly_rate,
+                    'start_date': contract.start_date,
+                    'end_date': contract.end_date,
+                    'allowed_objects': contract.allowed_objects or [],
+                    'is_active': contract.is_active
+                })
+            
+            return list(employees.values())
+    
     async def get_available_objects_for_contract(self, owner_id: int) -> List[Object]:
         """Получение доступных объектов для назначения в договор."""
         async with get_async_session() as session:
