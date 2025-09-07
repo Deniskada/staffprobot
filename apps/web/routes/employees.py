@@ -1,113 +1,268 @@
-"""Роуты для управления сотрудниками (для владельцев объектов)."""
-from fastapi import APIRouter, Request, Depends, HTTPException, status
+"""Роуты для управления сотрудниками."""
+
+from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from core.auth.user_manager import user_manager
-from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from typing import List, Optional
+from datetime import datetime, timedelta
+from sqlalchemy import select
+from core.database.session import get_async_session
+from domain.entities.user import User
+from domain.entities.object import Object
+from apps.web.services.contract_service import ContractService
+from apps.web.dependencies import get_current_user_dependency, require_role
 from core.logging.logger import logger
 
-router = APIRouter()
+router = APIRouter(prefix="/employees", tags=["employees"])
 templates = Jinja2Templates(directory="apps/web/templates")
 
 
-@router.get("/employees")
+@router.get("/", response_class=HTMLResponse)
 async def employees_list(
     request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: User = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"]))
 ):
-    """Страница списка сотрудников владельца."""
-    try:
-        # Получаем всех пользователей с ролью employee
-        all_users = await user_manager.get_all_users()
-        employees = [
-            user for user in all_users 
-            if 'employee' in user.get('roles', [])
-        ]
-        
-        return templates.TemplateResponse("employees/list.html", {
+    """Список сотрудников владельца."""
+    contract_service = ContractService()
+    employees = await contract_service.get_contract_employees(current_user.id)
+    
+    return templates.TemplateResponse(
+        "employees/list.html",
+        {
             "request": request,
-            "title": "Сотрудники",
             "employees": employees,
             "current_user": current_user
-        })
-        
-    except Exception as e:
-        logger.error(f"Error loading employees list: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки списка сотрудников")
+        }
+    )
 
 
-@router.get("/employees/{employee_id}")
-async def employee_detail(
+@router.get("/create", response_class=HTMLResponse)
+async def create_employee_form(
     request: Request,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_role(["owner", "superadmin"]))
+):
+    """Форма создания договора с сотрудником."""
+    contract_service = ContractService()
+    
+    # Получаем доступные объекты
+    objects = await contract_service.get_available_objects_for_contract(current_user.id)
+    
+    # Получаем шаблоны договоров
+    templates_list = await contract_service.get_contract_templates()
+    
+    return templates.TemplateResponse(
+        "employees/create.html",
+        {
+            "request": request,
+            "objects": objects,
+            "templates": templates_list,
+            "current_user": current_user
+        }
+    )
+
+
+@router.post("/create")
+async def create_employee_contract(
+    request: Request,
+    employee_telegram_id: int = Form(...),
+    title: str = Form(...),
+    content: str = Form(...),
+    hourly_rate: Optional[int] = Form(None),
+    start_date: str = Form(...),
+    end_date: Optional[str] = Form(None),
+    template_id: Optional[int] = Form(None),
+    allowed_objects: List[int] = Form(default=[]),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_role(["owner", "superadmin"]))
+):
+    """Создание договора с сотрудником."""
+    try:
+        contract_service = ContractService()
+        
+        # Парсим даты
+        start_date_obj = datetime.fromisoformat(start_date)
+        end_date_obj = None
+        if end_date:
+            end_date_obj = datetime.fromisoformat(end_date)
+        
+        # Создаем договор
+        contract = await contract_service.create_contract(
+            owner_id=current_user.id,
+            employee_telegram_id=employee_telegram_id,
+            title=title,
+            content=content,
+            hourly_rate=hourly_rate,
+            start_date=start_date_obj,
+            end_date=end_date_obj,
+            template_id=template_id,
+            allowed_objects=allowed_objects
+        )
+        
+        logger.info(f"Created contract {contract.id} for employee {employee_telegram_id}")
+        return RedirectResponse(url="/employees", status_code=303)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating contract: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка создания договора")
+
+
+@router.get("/{employee_id}", response_class=HTMLResponse)
+async def employee_detail(
     employee_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_role(["owner", "superadmin"]))
 ):
     """Детальная информация о сотруднике."""
-    try:
-        employee = await user_manager.get_user_by_id(employee_id)
+    contract_service = ContractService()
+    
+    # Получаем договоры сотрудника
+    async with get_async_session() as session:
+        # Находим сотрудника
+        employee_query = select(User).where(User.id == employee_id)
+        employee_result = await session.execute(employee_query)
+        employee = employee_result.scalar_one_or_none()
+        
         if not employee:
             raise HTTPException(status_code=404, detail="Сотрудник не найден")
         
-        if 'employee' not in employee.get('roles', []):
-            raise HTTPException(status_code=404, detail="Пользователь не является сотрудником")
+        # Получаем договоры
+        contracts = await contract_service.get_employee_contracts(employee_id)
         
-        return templates.TemplateResponse("employees/detail.html", {
+        # Фильтруем только договоры текущего владельца
+        owner_contracts = [c for c in contracts if c.owner_id == current_user.id]
+    
+    return templates.TemplateResponse(
+        "employees/detail.html",
+        {
             "request": request,
-            "title": f"Сотрудник {employee.get('first_name', '')} {employee.get('last_name', '')}",
             "employee": employee,
+            "contracts": owner_contracts,
             "current_user": current_user
-        })
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error loading employee detail: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки информации о сотруднике")
+        }
+    )
 
 
-@router.get("/employees/add")
-async def add_employee_form(
+@router.get("/contract/{contract_id}", response_class=HTMLResponse)
+async def contract_detail(
+    contract_id: int,
     request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_role(["owner", "superadmin"]))
 ):
-    """Форма добавления нового сотрудника."""
-    return templates.TemplateResponse("employees/add.html", {
-        "request": request,
-        "title": "Добавить сотрудника",
-        "current_user": current_user
-    })
+    """Детальная информация о договоре."""
+    contract_service = ContractService()
+    contract = await contract_service.get_contract(contract_id)
+    
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+    
+    if contract.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Нет доступа к этому договору")
+    
+    return templates.TemplateResponse(
+        "employees/contract_detail.html",
+        {
+            "request": request,
+            "contract": contract,
+            "current_user": current_user
+        }
+    )
 
 
-@router.post("/employees/add")
-async def add_employee(
+@router.post("/contract/{contract_id}/terminate")
+async def terminate_contract(
+    contract_id: int,
+    reason: str = Form(...),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_role(["owner", "superadmin"]))
+):
+    """Расторжение договора."""
+    contract_service = ContractService()
+    
+    # Проверяем, что договор принадлежит владельцу
+    contract = await contract_service.get_contract(contract_id)
+    if not contract or contract.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Нет доступа к этому договору")
+    
+    success = await contract_service.terminate_contract(contract_id, reason)
+    
+    if not success:
+        raise HTTPException(status_code=400, detail="Ошибка расторжения договора")
+    
+    logger.info(f"Terminated contract {contract_id} by user {current_user.id}")
+    return RedirectResponse(url="/employees", status_code=303)
+
+
+@router.get("/contract/{contract_id}/edit", response_class=HTMLResponse)
+async def edit_contract_form(
+    contract_id: int,
     request: Request,
-    telegram_id: int,
-    first_name: str,
-    last_name: str = "",
-    username: str = "",
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_role(["owner", "superadmin"]))
 ):
-    """Добавление нового сотрудника."""
+    """Форма редактирования договора."""
+    contract_service = ContractService()
+    contract = await contract_service.get_contract(contract_id)
+    
+    if not contract or contract.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Нет доступа к этому договору")
+    
+    # Получаем доступные объекты
+    objects = await contract_service.get_available_objects_for_contract(current_user.id)
+    
+    return templates.TemplateResponse(
+        "employees/edit_contract.html",
+        {
+            "request": request,
+            "contract": contract,
+            "objects": objects,
+            "current_user": current_user
+        }
+    )
+
+
+@router.post("/contract/{contract_id}/edit")
+async def update_contract(
+    contract_id: int,
+    request: Request,
+    title: str = Form(...),
+    content: str = Form(...),
+    hourly_rate: Optional[int] = Form(None),
+    end_date: Optional[str] = Form(None),
+    allowed_objects: List[int] = Form(default=[]),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_role(["owner", "superadmin"]))
+):
+    """Обновление договора."""
     try:
-        # Проверяем, существует ли пользователь
-        existing_user = await user_manager.get_user_by_telegram_id(telegram_id)
+        contract_service = ContractService()
         
-        if existing_user:
-            # Пользователь существует, добавляем роль employee
-            if 'employee' not in existing_user.get('roles', []):
-                new_roles = existing_user.get('roles', []) + ['employee']
-                await user_manager.update_user_roles(telegram_id, new_roles)
-                logger.info(f"Added employee role to existing user {telegram_id}")
-        else:
-            # Создаем нового пользователя
-            # TODO: Реализовать создание пользователя через user_manager
-            logger.warning(f"User creation not implemented yet for telegram_id {telegram_id}")
-            raise HTTPException(status_code=501, detail="Создание пользователей пока не реализовано")
+        # Парсим дату окончания
+        end_date_obj = None
+        if end_date:
+            end_date_obj = datetime.fromisoformat(end_date)
         
-        return RedirectResponse(url="/employees", status_code=status.HTTP_302_FOUND)
+        # Обновляем договор
+        contract = await contract_service.update_contract(
+            contract_id=contract_id,
+            title=title,
+            content=content,
+            hourly_rate=hourly_rate,
+            end_date=end_date_obj,
+            allowed_objects=allowed_objects
+        )
         
-    except HTTPException:
-        raise
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        logger.info(f"Updated contract {contract_id}")
+        return RedirectResponse(url=f"/employees/contract/{contract_id}", status_code=303)
+        
     except Exception as e:
-        logger.error(f"Error adding employee: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка добавления сотрудника: {str(e)}")
+        logger.error(f"Error updating contract: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка обновления договора")
