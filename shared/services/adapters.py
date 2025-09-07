@@ -70,10 +70,12 @@ class ScheduleServiceAdapter:
         self,
         user_id: int,
         time_slot_id: int,
+        start_time,
+        end_time,
         notes: Optional[str] = None
     ) -> Dict[str, Any]:
         """Создание запланированной смены через общий сервис."""
-        return await self._service.create_scheduled_shift_from_timeslot(user_id, time_slot_id, notes)
+        return await self._service.create_scheduled_shift_from_timeslot(user_id, time_slot_id, start_time, end_time, notes)
     
     async def get_user_scheduled_shifts(
         self,

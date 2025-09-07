@@ -111,6 +111,8 @@ class ScheduleService(BaseService):
         self,
         user_id: int,
         time_slot_id: int,
+        start_time,
+        end_time,
         notes: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -119,6 +121,8 @@ class ScheduleService(BaseService):
         Args:
             user_id: Telegram ID пользователя
             time_slot_id: ID тайм-слота
+            start_time: Время начала смены
+            end_time: Время окончания смены
             notes: Дополнительные заметки
             
         Returns:
@@ -156,10 +160,10 @@ class ScheduleService(BaseService):
                     }
                 
                 # Проверяем, не занят ли уже тайм-слот
-                existing_shift_query = select(Shift).where(
+                existing_shift_query = select(ShiftSchedule).where(
                     and_(
-                        Shift.time_slot_id == time_slot_id,
-                        Shift.status.in_(["scheduled", "active"])
+                        ShiftSchedule.time_slot_id == time_slot_id,
+                        ShiftSchedule.status.in_(["planned", "confirmed"])
                     )
                 )
                 existing_shift_result = await session.execute(existing_shift_query)
@@ -172,17 +176,17 @@ class ScheduleService(BaseService):
                     }
                 
                 # Создаем смену
-                start_datetime = datetime.combine(time_slot.slot_date, time_slot.start_time)
-                end_datetime = datetime.combine(time_slot.slot_date, time_slot.end_time)
+                start_datetime = datetime.combine(time_slot.slot_date, start_time)
+                end_datetime = datetime.combine(time_slot.slot_date, end_time)
                 
-                new_shift = Shift(
+                new_shift = ShiftSchedule(
                     user_id=user.id,
                     object_id=time_slot.object_id,
                     time_slot_id=time_slot_id,
-                    start_time=start_datetime,
-                    end_time=end_datetime,
+                    planned_start=start_datetime,
+                    planned_end=end_datetime,
                     hourly_rate=time_slot.hourly_rate,
-                    status="scheduled",
+                    status="planned",
                     notes=notes
                 )
                 
