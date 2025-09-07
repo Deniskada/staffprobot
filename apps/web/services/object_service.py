@@ -378,7 +378,10 @@ class TimeSlotService:
             owner = owner_result.scalar_one_or_none()
             
             if not owner:
+                logger.warning(f"Owner not found for telegram_id: {owner_telegram_id}")
                 return []
+            
+            logger.info(f"Found owner: {owner.id} for telegram_id: {owner_telegram_id}")
             
             # Получаем объекты владельца
             objects_query = select(Object).where(Object.owner_id == owner.id)
@@ -389,6 +392,8 @@ class TimeSlotService:
             objects = objects_result.scalars().all()
             object_ids = [obj.id for obj in objects]
             
+            logger.info(f"Found objects: {object_ids} for owner {owner.id}")
+            
             if not object_ids:
                 return []
             
@@ -398,6 +403,8 @@ class TimeSlotService:
                 end_date = date(year + 1, 1, 1)
             else:
                 end_date = date(year, month + 1, 1)
+            
+            logger.info(f"Looking for timeslots between {start_date} and {end_date}")
             
             timeslots_query = select(TimeSlot).options(
                 selectinload(TimeSlot.object)
@@ -411,7 +418,10 @@ class TimeSlotService:
             ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
             
             timeslots_result = await self.db.execute(timeslots_query)
-            return timeslots_result.scalars().all()
+            timeslots = timeslots_result.scalars().all()
+            
+            logger.info(f"Found {len(timeslots)} timeslots")
+            return timeslots
             
         except Exception as e:
             logger.error(f"Error getting timeslots by month: {e}")

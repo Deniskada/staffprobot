@@ -429,7 +429,7 @@
                             <div class="small">{{ slot.object_name }}</div>
                             <div class="small">{{ slot.hourly_rate }}₽/час</div>
                             <div class="timeslot-status-info">
-                                <span class="badge bg-light text-dark">Загрузка...</span>
+                                <span class="badge bg-light text-dark">Пустой слот</span>
                             </div>
                         </div>
                         {% endfor %}
@@ -502,6 +502,7 @@ async function loadTimeslotsStatus() {
         
         if (response.ok) {
             timeslotsStatus = await response.json();
+            console.log('Загружен статус тайм-слотов:', timeslotsStatus);
             updateTimeslotsDisplay();
         } else {
             console.error('Ошибка загрузки статуса тайм-слотов');
@@ -539,17 +540,17 @@ function getStatusInfo(slotData) {
     let info = '';
     
     if (slotData.status === 'empty') {
-        info = '<span class="badge bg-light text-dark">Пустой слот</span>';
+        info = `<span class="badge bg-light text-dark">Пустой слот (${slotData.availability})</span>`;
     } else if (slotData.status === 'planned') {
-        info = `<span class="badge bg-warning">Запланировано: ${slotData.scheduled_shifts.length}</span>`;
+        info = `<span class="badge bg-warning">Запланировано: ${slotData.availability}</span>`;
     } else if (slotData.status === 'confirmed') {
-        info = `<span class="badge bg-info">Подтверждено: ${slotData.scheduled_shifts.length}</span>`;
+        info = `<span class="badge bg-info">Подтверждено: ${slotData.availability}</span>`;
     } else if (slotData.status === 'completed') {
         info = `<span class="badge bg-success">Отработано: ${slotData.actual_shifts.length}</span>`;
     } else if (slotData.status === 'active') {
         info = `<span class="badge bg-primary">Активно: ${slotData.actual_shifts.length}</span>`;
     } else if (slotData.status === 'cancelled') {
-        info = `<span class="badge bg-secondary">Отменено: ${slotData.scheduled_shifts.length}</span>`;
+        info = `<span class="badge bg-secondary">Отменено: ${slotData.availability}</span>`;
     }
     
     return info;

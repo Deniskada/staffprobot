@@ -16,6 +16,7 @@ class ShiftSchedule(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     object_id = Column(Integer, ForeignKey("objects.id"), nullable=False, index=True)
+    time_slot_id = Column(Integer, ForeignKey("time_slots.id"), nullable=True, index=True)
     planned_start = Column(DateTime(timezone=True), nullable=False, index=True)
     planned_end = Column(DateTime(timezone=True), nullable=False, index=True)
     status = Column(String(50), default="planned", index=True)  # planned, confirmed, cancelled, completed
@@ -30,6 +31,7 @@ class ShiftSchedule(Base):
     # Отношения
     user = relationship("User", backref="scheduled_shifts")
     object = relationship("Object", backref="scheduled_shifts")
+    time_slot = relationship("TimeSlot", backref="scheduled_shifts")
     actual_shift = relationship("Shift", backref="scheduled_from")
     
     def __repr__(self) -> str:

@@ -172,6 +172,9 @@ async def handle_schedule_date_selection(update: Update, context: ContextTypes.D
             slot_text = f"🕐 {slot['start_time']}-{slot['end_time']}"
             if slot['hourly_rate']:
                 slot_text += f" ({slot['hourly_rate']}₽/ч)"
+            # Добавляем информацию о занятости
+            if slot.get('max_employees', 1) > 1:
+                slot_text += f" [{slot.get('availability', '0/1')}]"
             keyboard.append([InlineKeyboardButton(
                 slot_text,
                 callback_data=f"schedule_select_slot_{slot['id']}"
@@ -496,6 +499,9 @@ async def _handle_schedule_date_selection_direct(update: Update, context: Contex
             slot_text = f"🕐 {slot['start_time']}-{slot['end_time']}"
             if slot['hourly_rate']:
                 slot_text += f" ({slot['hourly_rate']}₽/ч)"
+            # Добавляем информацию о занятости
+            if slot.get('max_employees', 1) > 1:
+                slot_text += f" [{slot.get('availability', '0/1')}]"
             keyboard.append([InlineKeyboardButton(
                 slot_text,
                 callback_data=f"schedule_select_slot_{slot['id']}"
