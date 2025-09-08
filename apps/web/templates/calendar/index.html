@@ -582,28 +582,81 @@ function getStatusInfo(slotData) {
 }
 
 function showTimeslotDetails(timeslotId) {
-    // Здесь можно добавить AJAX запрос для получения деталей тайм-слота
-    document.getElementById('timeslotDetails').innerHTML = `
+    const detailsEl = document.getElementById('timeslotDetails');
+    detailsEl.innerHTML = `
         <div class="text-center">
             <div class="spinner-border" role="status">
                 <span class="visually-hidden">Загрузка...</span>
             </div>
         </div>
     `;
-    
+
     const modal = new bootstrap.Modal(document.getElementById('timeslotModal'));
     modal.show();
-    
-    // Временная заглушка
-    setTimeout(() => {
-        document.getElementById('timeslotDetails').innerHTML = `
-            <div class="alert alert-info">
-                <h6>Тайм-слот #${timeslotId}</h6>
-                <p>Детали тайм-слота будут загружены здесь.</p>
-                <p><small class="text-muted">Функция в разработке</small></p>
-            </div>
-        `;
-    }, 500);
+
+    fetch(`/calendar/api/timeslot/${timeslotId}`, { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.detail) {
+                detailsEl.innerHTML = `<div class="alert alert-danger">${data.detail}</div>`;
+                return;
+            }
+            const slot = data.slot;
+            const scheduled = data.scheduled || [];
+            const actual = data.actual || [];
+
+            const statusRu = (st) => ({
+                planned: 'Запланировано',
+                confirmed: 'Подтверждено',
+                cancelled: 'Отменено',
+                active: 'Активно',
+                completed: 'Отработано'
+            }[st] || st);
+
+            const schedRows = scheduled.map(s => `<tr>
+                <td>${s.start_time} - ${s.end_time}</td>
+                <td>${statusRu(s.status)}</td>
+                <td>${s.user_name ?? s.user_id ?? '-'}</td>
+                <td>${s.notes ?? ''}</td>
+            </tr>`).join('');
+
+            const actualRows = actual.map(a => `<tr>
+                <td>${a.start_time} - ${a.end_time ?? ''}</td>
+                <td>${statusRu(a.status)}</td>
+                <td>${a.user_name ?? a.user_id ?? '-'}</td>
+                <td>${a.total_hours ?? ''}</td>
+                <td>${a.total_payment ?? ''}</td>
+            </tr>`).join('');
+
+            detailsEl.innerHTML = `
+                <div class="mb-2"><strong>Объект:</strong> ${slot.object_name} (#${slot.object_id})</div>
+                <div class="mb-2"><strong>Дата:</strong> ${slot.date}</div>
+                <div class="mb-2"><strong>Время:</strong> ${slot.start_time} - ${slot.end_time}</div>
+                <div class="mb-2"><strong>Ставка:</strong> ${slot.hourly_rate ?? '-'} ₽/час</div>
+                <div class="mb-3"><strong>Лимит:</strong> ${slot.max_employees}</div>
+                <div class="mb-3"><strong>Заметки:</strong> ${slot.notes || ''}</div>
+
+                <h6>Запланированные</h6>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle">
+                    <thead><tr><th>Время</th><th>Статус</th><th>Сотрудник</th><th>Заметки</th></tr></thead>
+                    <tbody>${schedRows || '<tr><td colspan="4" class="text-muted">Нет</td></tr>'}</tbody>
+                  </table>
+                </div>
+
+                <h6>Фактические</h6>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle">
+                    <thead><tr><th>Время</th><th>Статус</th><th>Сотрудник</th><th>Часы</th><th>Оплата</th></tr></thead>
+                    <tbody>${actualRows || '<tr><td colspan="5" class="text-muted">Нет</td></tr>'}</tbody>
+                  </table>
+                </div>
+            `;
+        })
+        .catch(err => {
+            detailsEl.innerHTML = `<div class="alert alert-danger">Ошибка загрузки деталей тайм-слота</div>`;
+            console.error(err);
+        });
 }
 
 // Загружаем статус при загрузке страницы
