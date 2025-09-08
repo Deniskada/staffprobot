@@ -1,7 +1,7 @@
 """Роуты для управления сотрудниками."""
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -10,6 +10,7 @@ from core.database.session import get_async_session
 from domain.entities.user import User
 from domain.entities.object import Object
 from apps.web.services.contract_service import ContractService
+from apps.web.services.pdf_service import PDFService
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from core.logging.logger import logger
 
@@ -95,7 +96,7 @@ async def create_contract(
     request: Request,
     employee_telegram_id: int = Form(...),
     title: str = Form(...),
-    content: str = Form(...),
+    content: str = Form(""),
     hourly_rate: Optional[int] = Form(None),
     start_date: str = Form(...),
     end_date: Optional[str] = Form(None),
@@ -115,16 +116,27 @@ async def create_contract(
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
         
+        # Получаем данные формы для динамических полей
+        form_data = await request.form()
+        dynamic_values = {}
+        
+        # Извлекаем значения динамических полей
+        for key, value in form_data.items():
+            if key.startswith("field_"):
+                field_key = key[6:]  # Убираем префикс "field_"
+                dynamic_values[field_key] = value
+        
         # Создаем договор
         contract_data = {
             "employee_telegram_id": employee_telegram_id,
             "title": title,
-            "content": content,
+            "content": content if content else None,
             "hourly_rate": hourly_rate,
             "start_date": start_date_obj,
             "end_date": end_date_obj,
             "template_id": template_id,
-            "allowed_objects": allowed_objects
+            "allowed_objects": allowed_objects,
+            "values": dynamic_values if dynamic_values else None
         }
         
         contract = await contract_service.create_contract(current_user["id"], contract_data)
@@ -385,3 +397,42 @@ async def terminate_contract(
     except Exception as e:
         logger.error(f"Error terminating contract: {e}")
         raise HTTPException(status_code=400, detail=f"Ошибка расторжения договора: {str(e)}")
+
+
+@router.get("/contract/{contract_id}/pdf")
+async def download_contract_pdf(
+    request: Request,
+    contract_id: int
+):
+    """Скачать договор в формате PDF."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    try:
+        contract_service = ContractService()
+        contract = await contract_service.get_contract_by_telegram_id(contract_id, current_user["id"])
+        
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        # Генерируем PDF
+        pdf_service = PDFService()
+        pdf_data = await pdf_service.generate_contract_pdf(contract)
+        
+        # Формируем имя файла
+        filename = f"contract_{contract.contract_number}_{contract.start_date.strftime('%Y%m%d')}.pdf"
+        
+        # Возвращаем PDF как файл для скачивания
+        return Response(
+            content=pdf_data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating contract PDF: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка генерации PDF: {str(e)}")

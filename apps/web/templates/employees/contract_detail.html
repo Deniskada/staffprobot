@@ -29,6 +29,9 @@
                     <a href="/employees/{{ contract.employee.id }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-2"></i>К сотруднику
                     </a>
+                    <a href="/employees/contract/{{ contract.id }}/pdf" class="btn btn-outline-info">
+                        <i class="fas fa-file-pdf me-2"></i>Скачать PDF
+                    </a>
                     {% if contract.status == 'draft' %}
                     <button type="button" class="btn btn-outline-success" onclick="activateContract()">
                         <i class="fas fa-check me-2"></i>Активировать

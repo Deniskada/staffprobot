@@ -124,18 +124,25 @@
                             {% endif %}
                         </div>
 
+                        <!-- Динамические поля шаблона -->
+                        <div id="dynamic-fields" style="display: none;">
+                            <h5 class="mb-3">Дополнительные поля</h5>
+                            <div id="dynamic-fields-container">
+                                <!-- Поля будут добавлены через JavaScript -->
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label for="content" class="form-label">
-                                Содержание договора <span class="text-danger">*</span>
+                                Содержание договора
                             </label>
                             <textarea class="form-control" 
                                       id="content" 
                                       name="content" 
                                       rows="10" 
-                                      required
-                                      placeholder="Введите текст договора..."></textarea>
+                                      placeholder="Введите текст договора или оставьте пустым для автогенерации из шаблона..."></textarea>
                             <div class="form-text">
-                                Вы можете использовать HTML теги для форматирования текста
+                                Если выбран шаблон и заполнены дополнительные поля, содержание будет сгенерировано автоматически
                             </div>
                         </div>
 
@@ -156,12 +163,122 @@
 
 <script>
 // Автозаполнение содержания договора при выборе шаблона
-document.getElementById('template_id').addEventListener('change', function() {
+document.getElementById('template_id').addEventListener('change', async function() {
     const templateId = this.value;
+    const dynamicFieldsDiv = document.getElementById('dynamic-fields');
+    const dynamicFieldsContainer = document.getElementById('dynamic-fields-container');
+    const contentTextarea = document.getElementById('content');
+    
     if (templateId) {
-        // Здесь можно добавить AJAX запрос для получения содержания шаблона
-        // Пока оставляем пустым
+        try {
+            // Получаем данные шаблона
+            const response = await fetch(`/contract-templates/api/${templateId}`);
+            const template = await response.json();
+            
+            // Очищаем контейнер
+            dynamicFieldsContainer.innerHTML = '';
+            
+            // Если есть схема полей, создаем поля
+            if (template.fields_schema && template.fields_schema.length > 0) {
+                dynamicFieldsDiv.style.display = 'block';
+                
+                template.fields_schema.forEach(field => {
+                    const fieldDiv = createDynamicField(field);
+                    dynamicFieldsContainer.appendChild(fieldDiv);
+                });
+            } else {
+                dynamicFieldsDiv.style.display = 'none';
+            }
+            
+            // Заполняем содержание из шаблона
+            if (template.content) {
+                contentTextarea.value = template.content;
+            }
+            
+        } catch (error) {
+            console.error('Ошибка загрузки шаблона:', error);
+        }
+    } else {
+        // Скрываем динамические поля
+        dynamicFieldsDiv.style.display = 'none';
+        dynamicFieldsContainer.innerHTML = '';
+        contentTextarea.value = '';
     }
 });
+
+function createDynamicField(field) {
+    const div = document.createElement('div');
+    div.className = 'mb-3';
+    
+    const label = document.createElement('label');
+    label.className = 'form-label';
+    label.textContent = field.label;
+    if (field.required) {
+        label.innerHTML += ' <span class="text-danger">*</span>';
+    }
+    
+    let input;
+    const fieldName = `field_${field.key}`;
+    
+    switch (field.type) {
+        case 'text':
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+            break;
+        case 'email':
+            input = document.createElement('input');
+            input.type = 'email';
+            input.className = 'form-control';
+            break;
+        case 'date':
+            input = document.createElement('input');
+            input.type = 'date';
+            input.className = 'form-control';
+            break;
+        case 'number':
+            input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'form-control';
+            break;
+        case 'textarea':
+            input = document.createElement('textarea');
+            input.className = 'form-control';
+            input.rows = 3;
+            break;
+        case 'select':
+            input = document.createElement('select');
+            input.className = 'form-select';
+            if (field.options) {
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = 'Выберите...';
+                input.appendChild(emptyOption);
+                
+                field.options.forEach(option => {
+                    const optionEl = document.createElement('option');
+                    optionEl.value = option;
+                    optionEl.textContent = option;
+                    input.appendChild(optionEl);
+                });
+            }
+            break;
+        default:
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+    }
+    
+    input.name = fieldName;
+    input.id = fieldName;
+    if (field.required) {
+        input.required = true;
+    }
+    
+    div.appendChild(label);
+    div.appendChild(input);
+    
+    return div;
+}
 </script>
 {% endblock %}
