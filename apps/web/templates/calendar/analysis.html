@@ -252,7 +252,7 @@
         <div class="col-md-3">
             <div class="stats-card">
                 <div class="stats-number">
-                    {% set objects_with_gaps = analysis_data.object_gaps|selectattr('gaps_count', '>', 0)|list|length %}
+                    {% set objects_with_gaps = analysis_data.object_gaps.values()|selectattr('gaps_count', '>', 0)|list|length %}
                     {{ objects_with_gaps }}
                 </div>
                 <div class="stats-label">Объектов с пробелами</div>
