@@ -284,9 +284,9 @@
                    class="btn btn-outline-secondary">
                     <i class="bi bi-chevron-left"></i>
                 </a>
-                <a href="?year={{ today.year }}&month={{ today.month }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
+                <a href="?year={{ year }}&month={{ month }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
                    class="btn btn-outline-secondary">
-                    Сегодня
+                    {{ month_name }} {{ year }}
                 </a>
                 <a href="?year={{ next_year }}&month={{ next_month }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
                    class="btn btn-outline-secondary">

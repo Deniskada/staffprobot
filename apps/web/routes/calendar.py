@@ -14,6 +14,23 @@ from datetime import datetime, date, timedelta, time
 from sqlalchemy.ext.asyncio import AsyncSession
 import calendar
 
+# Русские названия месяцев (И.п.)
+RU_MONTHS = [
+    "",
+    "Январь",
+    "Февраль",
+    "Март",
+    "Апрель",
+    "Май",
+    "Июнь",
+    "Июль",
+    "Август",
+    "Сентябрь",
+    "Октябрь",
+    "Ноябрь",
+    "Декабрь",
+]
+
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
 
@@ -110,7 +127,7 @@ async def calendar_view(
             "current_user": current_user,
             "year": year,
             "month": month,
-            "month_name": calendar.month_name[month],
+            "month_name": RU_MONTHS[month],
             "calendar_data": calendar_data,
             "objects": objects_list,
             "selected_object_id": object_id,
