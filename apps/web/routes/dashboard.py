@@ -21,6 +21,21 @@ templates = Jinja2Templates(directory="apps/web/templates")
 user_manager = UserManager()
 
 
+async def get_user_id_from_current_user(current_user, session: AsyncSession):
+    """Возвращает внутренний ID пользователя по current_user.
+    В JWT payload текущий user.id — это telegram_id, нужно маппить на User.id.
+    """
+    if isinstance(current_user, dict):
+        telegram_id = current_user.get("id")
+        if telegram_id is None:
+            return None
+        user_query = select(User).where(User.telegram_id == telegram_id)
+        user_result = await session.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        return user_obj.id if user_obj else None
+    return current_user.id
+
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_index(request: Request):
     """Главная страница дашборда владельца"""
@@ -28,10 +43,30 @@ async def dashboard_index(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    # Получаем ID пользователя из словаря
-    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
-    
     async with get_async_session() as session:
+        # Всегда используем внутренний user_id
+        user_id = await get_user_id_from_current_user(current_user, session)
+        if not user_id:
+            # Нет пользователя в БД — отдаем пустые данные, чтобы не падать
+            return templates.TemplateResponse("dashboard/index.html", {
+                "request": request,
+                "current_user": current_user,
+                "metrics": {
+                    "today": {"shifts": 0, "hours": 0, "payment": 0},
+                    "week": {"shifts": 0, "hours": 0, "payment": 0},
+                    "month": {"shifts": 0, "hours": 0, "payment": 0},
+                    "planned": 0,
+                    "active": 0,
+                    "objects": 0,
+                    "employees": 0,
+                    "contracts": 0
+                },
+                "top_objects": [],
+                "top_employees": [],
+                "daily_stats": [],
+                "upcoming_schedules": [],
+                "active_shifts": []
+            })
         # Получаем объекты владельца
         objects_query = select(Object).where(Object.owner_id == user_id)
         objects_result = await session.execute(objects_query)
@@ -93,7 +128,10 @@ async def dashboard_index(request: Request):
         planned_schedules = planned_schedules_result.scalars().all()
         
         # Активные смены
-        active_shifts_query = select(Shift).where(
+        active_shifts_query = select(Shift).options(
+            selectinload(Shift.user),
+            selectinload(Shift.object)
+        ).where(
             and_(
                 Shift.object_id.in_(object_ids),
                 Shift.status == "active"
@@ -147,13 +185,18 @@ async def dashboard_index(request: Request):
             reverse=True
         )[:5]
         
-        # Топ сотрудники по активности
+        # Топ сотрудники по активности (безопасный доступ)
         employee_stats = {}
+        employees_by_id = {emp.id: emp for emp in employees}
         for shift in month_shifts:
             emp_id = shift.user_id
+            employee_obj = employees_by_id.get(emp_id)
+            if not employee_obj:
+                # Пользователь не сотрудник или отсутствует — пропускаем
+                continue
             if emp_id not in employee_stats:
                 employee_stats[emp_id] = {
-                    "employee": next(emp for emp in employees if emp.id == emp_id),
+                    "employee": employee_obj,
                     "shifts": 0,
                     "hours": 0,
                     "payment": 0
@@ -181,11 +224,13 @@ async def dashboard_index(request: Request):
             day_shifts_result = await session.execute(day_shifts_query)
             day_shifts = day_shifts_result.scalars().all()
             
+            hours_sum = sum(s.total_hours or 0 for s in day_shifts if s.total_hours)
+            payment_sum = sum(s.total_payment or 0 for s in day_shifts if s.total_payment)
             daily_stats.append({
                 "date": day.strftime("%d.%m"),
-                "shifts": len(day_shifts),
-                "hours": sum(s.total_hours or 0 for s in day_shifts if s.total_hours),
-                "payment": sum(s.total_payment or 0 for s in day_shifts if s.total_payment)
+                "shifts": int(len(day_shifts)),
+                "hours": float(hours_sum) if hours_sum is not None else 0.0,
+                "payment": float(payment_sum) if payment_sum is not None else 0.0
             })
         
         daily_stats.reverse()  # От старых к новым
@@ -226,10 +271,8 @@ async def dashboard_metrics(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    # Получаем ID пользователя из словаря
-    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
-    
     async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
         # Получаем объекты владельца
         objects_query = select(Object).where(Object.owner_id == user_id)
         objects_result = await session.execute(objects_query)
@@ -275,9 +318,9 @@ async def dashboard_metrics(request: Request):
         
         return {
             "chart_data": chart_data,
-            "total_shifts": len(shifts),
-            "total_hours": sum(s.total_hours or 0 for s in shifts if s.total_hours),
-            "total_payment": sum(s.total_payment or 0 for s in shifts if s.total_payment)
+            "total_shifts": int(len(shifts)),
+            "total_hours": float(sum(s.total_hours or 0 for s in shifts if s.total_hours)),
+            "total_payment": float(sum(s.total_payment or 0 for s in shifts if s.total_payment))
         }
 
 
@@ -288,10 +331,8 @@ async def dashboard_alerts(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    # Получаем ID пользователя из словаря
-    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
-    
     async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
         alerts = []
         
         # Получаем объекты владельца
@@ -371,10 +412,8 @@ async def quick_stats(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    # Получаем ID пользователя из словаря
-    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
-    
     async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
         # Получаем объекты владельца
         objects_query = select(Object).where(Object.owner_id == user_id)
         objects_result = await session.execute(objects_query)
@@ -415,8 +454,8 @@ async def quick_stats(request: Request):
         tomorrow_schedules = tomorrow_schedules_result.scalars().all()
         
         return {
-            "today_shifts": len(today_shifts),
-            "active_shifts": len(active_shifts),
-            "tomorrow_schedules": len(tomorrow_schedules),
-            "total_objects": len(objects)
+            "today_shifts": int(len(today_shifts)),
+            "active_shifts": int(len(active_shifts)),
+            "tomorrow_schedules": int(len(tomorrow_schedules)),
+            "total_objects": int(len(objects))
         }
