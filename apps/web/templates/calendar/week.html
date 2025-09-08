@@ -24,7 +24,7 @@
 
 .week-grid {
     display: grid;
-    grid-template-columns: 200px repeat(7, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 1px;
     background: #dee2e6;
     border-radius: 8px;
@@ -105,21 +105,31 @@
 }
 
 .timeslot-item {
-    background: #28a745;
+    background: #007bff;
     color: white;
-    padding: 4px 8px;
-    margin: 2px 0;
-    border-radius: 4px;
-    font-size: 0.8em;
+    padding: 2px 6px;
+    margin: 1px 0;
+    border-radius: 3px;
+    font-size: 0.75em;
     cursor: pointer;
     transition: all 0.2s;
-    border-left: 4px solid #1e7e34;
+    position: relative;
 }
 
 .timeslot-item:hover {
-    background: #1e7e34;
-    transform: translateX(2px);
+    background: #0056b3;
+    transform: scale(1.02);
 }
+
+/* Цветовое кодирование статусов (как в месячном) */
+.timeslot-empty { background: #f8f9fa !important; color: #6c757d !important; border: 1px solid #dee2e6; }
+.timeslot-planned { background: #fff3cd !important; color: #856404 !important; border: 1px solid #ffeaa7; }
+.timeslot-confirmed { background: #d1ecf1 !important; color: #0c5460 !important; border: 1px solid #bee5eb; }
+.timeslot-completed { background: #d4edda !important; color: #155724 !important; border: 1px solid #c3e6cb; }
+.timeslot-active { background: #cce5ff !important; color: #004085 !important; border: 1px solid #99d6ff; }
+.timeslot-cancelled { background: #f8d7da !important; color: #721c24 !important; border: 1px solid #f5c6cb; }
+
+.timeslot-status-info { margin-top: 2px; font-size: 0.7rem; }
 
 .timeslot-time {
     font-weight: bold;
@@ -327,17 +337,6 @@
     <!-- Недельная сетка -->
     <div class="week-container">
         <div class="week-grid">
-            <!-- Колонка времени -->
-            <div class="time-column">
-                <div class="fw-bold mb-2">Время</div>
-                {% for hour in range(6, 23) %}
-                <div class="time-slot">
-                    <span class="hour-marker"></span>
-                    {{ hour }}:00
-                </div>
-                {% endfor %}
-            </div>
-            
             <!-- Дни недели -->
             {% for day in week_data %}
             <div class="day-column drop-zone" data-date="{{ day.date.strftime('%Y-%m-%d') }}">
@@ -352,11 +351,15 @@
                 {% if day.timeslots_count > 0 %}
                     {% for slot in day.timeslots %}
                     <div class="timeslot-item" 
+                         data-timeslot-id="{{ slot.id }}"
                          title="{{ slot.object_name }}: {{ slot.start_time }}-{{ slot.end_time }} ({{ slot.hourly_rate }}₽/час)"
                          onclick="showTimeslotDetails({{ slot.id }})">
-                        <div class="timeslot-time">{{ slot.start_time }}-{{ slot.end_time }}</div>
-                        <div class="timeslot-object">{{ slot.object_name }}</div>
-                        <div class="timeslot-rate">{{ slot.hourly_rate }}₽/час</div>
+                        <div class="fw-bold">{{ slot.start_time }}-{{ slot.end_time }}</div>
+                        <div class="small">{{ slot.object_name }}</div>
+                        <div class="small">{{ slot.hourly_rate }}₽/час</div>
+                        <div class="timeslot-status-info">
+                            <span class="badge bg-light text-dark">Пустой слот</span>
+                        </div>
                     </div>
                     {% endfor %}
                 {% else %}
@@ -403,6 +406,70 @@
 </div>
 
 <script>
+// Подсветка статусов как в месячном представлении
+let timeslotsStatus = {};
+
+async function loadTimeslotsStatusWeek() {
+    try {
+        const year = {{ week_start.year }};
+        const month = {{ week_start.month }};
+        const objectId = {{ selected_object_id if selected_object_id else 'null' }};
+        const params = new URLSearchParams({ year: year, month: month });
+        if (objectId) params.append('object_id', objectId);
+        const response = await fetch(`/calendar/api/timeslots-status?${params}`, { credentials: 'include' });
+        if (response.ok) {
+            timeslotsStatus = await response.json();
+            updateTimeslotsDisplayWeek();
+        }
+    } catch (e) { console.error(e); }
+}
+
+function updateTimeslotsDisplayWeek() {
+    const timeslotElements = document.querySelectorAll('.timeslot-item');
+    timeslotElements.forEach(el => {
+        const id = el.dataset.timeslotId;
+        const slotData = timeslotsStatus.find(s => s.slot_id == id);
+        if (!slotData) return;
+        el.classList.remove('timeslot-empty','timeslot-planned','timeslot-confirmed','timeslot-completed','timeslot-active','timeslot-cancelled');
+        el.classList.add(`timeslot-${slotData.status}`);
+        const info = el.querySelector('.timeslot-status-info');
+        if (info) info.innerHTML = getStatusInfoWeek(slotData);
+    });
+}
+
+function getStatusInfoWeek(slotData) {
+    let info = '';
+    if (slotData.status === 'empty') {
+        info = `<span class="badge bg-light text-dark">Пустой слот (${slotData.availability})</span>`;
+    } else if (slotData.status === 'planned') {
+        info = `<span class="badge bg-warning">Запланировано: ${slotData.availability}</span>`;
+    } else if (slotData.status === 'confirmed') {
+        info = `<span class="badge bg-info">Подтверждено: ${slotData.availability}</span>`;
+    } else if (slotData.status === 'completed') {
+        let completedInfo = `<span class="badge bg-success">Отработано: ${slotData.actual_shifts.length}</span>`;
+        if (slotData.actual_shifts.length > 0) {
+            const shift = slotData.actual_shifts[0];
+            completedInfo += `<br><small class="text-muted">${shift.user_name || ''}`;
+            if (shift.total_hours) completedInfo += ` (${shift.total_hours}ч)`;
+            if (shift.total_payment) completedInfo += ` - ${shift.total_payment}₽`;
+            completedInfo += `</small>`;
+        }
+        info = completedInfo;
+    } else if (slotData.status === 'active') {
+        let activeInfo = `<span class="badge bg-primary">Активно: ${slotData.actual_shifts.length}</span>`;
+        if (slotData.actual_shifts.length > 0) {
+            const shift = slotData.actual_shifts[0];
+            activeInfo += `<br><small class="text-muted">${shift.user_name || ''}`;
+            activeInfo += shift.is_planned ? ` (из планирования)` : ` (спонтанная)`;
+            activeInfo += `</small>`;
+        }
+        info = activeInfo;
+    } else if (slotData.status === 'cancelled') {
+        info = `<span class="badge bg-secondary">Отменено: ${slotData.availability}</span>`;
+    }
+    return info;
+}
+
 function showTimeslotDetails(timeslotId) {
     document.getElementById('timeslotDetails').innerHTML = `
         <div class="text-center">
@@ -414,17 +481,36 @@ function showTimeslotDetails(timeslotId) {
     
     const modal = new bootstrap.Modal(document.getElementById('timeslotModal'));
     modal.show();
-    
-    // Временная заглушка
-    setTimeout(() => {
-        document.getElementById('timeslotDetails').innerHTML = `
-            <div class="alert alert-info">
-                <h6>Тайм-слот #${timeslotId}</h6>
-                <p>Детали тайм-слота будут загружены здесь.</p>
-                <p><small class="text-muted">Функция в разработке</small></p>
-            </div>
-        `;
-    }, 500);
+
+    fetch(`/calendar/api/timeslot/${timeslotId}`, { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.detail) {
+                document.getElementById('timeslotDetails').innerHTML = `<div class="alert alert-danger">${data.detail}</div>`;
+                return;
+            }
+            const slot = data.slot;
+            const scheduled = data.scheduled || [];
+            const actual = data.actual || [];
+            const statusRu = (st) => ({ planned:'Запланировано', confirmed:'Подтверждено', cancelled:'Отменено', active:'Активно', completed:'Отработано' }[st] || st);
+            const schedRows = scheduled.map(s => `<tr><td>${s.start_time} - ${s.end_time}</td><td>${statusRu(s.status)}</td><td>${s.user_name ?? s.user_id ?? '-'}</td><td>${s.notes ?? ''}</td></tr>`).join('');
+            const actualRows = actual.map(a => `<tr><td>${a.start_time} - ${a.end_time ?? ''}</td><td>${statusRu(a.status)}</td><td>${a.user_name ?? a.user_id ?? '-'}</td><td>${a.total_hours ?? ''}</td><td>${a.total_payment ?? ''}</td></tr>`).join('');
+            document.getElementById('timeslotDetails').innerHTML = `
+                <div class="mb-2"><strong>Объект:</strong> ${slot.object_name} (#${slot.object_id})</div>
+                <div class="mb-2"><strong>Дата:</strong> ${slot.date}</div>
+                <div class="mb-2"><strong>Время:</strong> ${slot.start_time} - ${slot.end_time}</div>
+                <div class="mb-2"><strong>Ставка:</strong> ${slot.hourly_rate ?? '-'} ₽/час</div>
+                <div class="mb-3"><strong>Лимит:</strong> ${slot.max_employees}</div>
+                <div class="mb-3"><strong>Заметки:</strong> ${slot.notes || ''}</div>
+                <h6>Запланированные</h6>
+                <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Время</th><th>Статус</th><th>Сотрудник</th><th>Заметки</th></tr></thead><tbody>${schedRows || '<tr><td colspan="4" class="text-muted">Нет</td></tr>'}</tbody></table></div>
+                <h6>Фактические</h6>
+                <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Время</th><th>Статус</th><th>Сотрудник</th><th>Часы</th><th>Оплата</th></tr></thead><tbody>${actualRows || '<tr><td colspan="5" class="text-muted">Нет</td></tr>'}</tbody></table></div>
+            `;
+        })
+        .catch(() => {
+            document.getElementById('timeslotDetails').innerHTML = `<div class="alert alert-danger">Ошибка загрузки деталей тайм-слота</div>`;
+        });
 }
 
 // Обработка клавиатурных сокращений
@@ -441,6 +527,11 @@ document.addEventListener('keydown', function(e) {
                 break;
         }
     }
+});
+
+// Инициализация статусов
+document.addEventListener('DOMContentLoaded', function() {
+    loadTimeslotsStatusWeek();
 });
 </script>
 {% endblock %}
