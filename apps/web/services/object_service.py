@@ -30,8 +30,10 @@ class ObjectService:
             logger.error(f"Error getting user internal ID for telegram_id {telegram_id}: {e}")
             return None
     
-    async def get_objects_by_owner(self, telegram_id: int) -> List[Object]:
-        """Получить все объекты владельца по Telegram ID"""
+    async def get_objects_by_owner(self, telegram_id: int, include_inactive: bool = False) -> List[Object]:
+        """Получить все объекты владельца по Telegram ID.
+        include_inactive=True возвращает также неактивные объекты.
+        """
         try:
             # Получаем внутренний ID пользователя
             internal_id = await self._get_user_internal_id(telegram_id)
@@ -40,9 +42,11 @@ class ObjectService:
                 return []
             
             query = select(Object).where(
-                Object.owner_id == internal_id,
-                Object.is_active == True
-            ).order_by(Object.created_at.desc())
+                Object.owner_id == internal_id
+            )
+            if not include_inactive:
+                query = query.where(Object.is_active == True)
+            query = query.order_by(Object.created_at.desc())
             
             result = await self.db.execute(query)
             return result.scalars().all()
@@ -158,6 +162,12 @@ class ObjectService:
             
             # Мягкое удаление - помечаем как неактивный
             obj.is_active = False
+            # Также деактивируем связанные тайм-слоты
+            timeslots_query = select(TimeSlot).where(TimeSlot.object_id == object_id)
+            timeslots_result = await self.db.execute(timeslots_query)
+            timeslots = timeslots_result.scalars().all()
+            for slot in timeslots:
+                slot.is_active = False
             await self.db.commit()
             
             logger.info(f"Soft deleted object {object_id} for owner {owner_id}")

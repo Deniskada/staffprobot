@@ -2,7 +2,7 @@
 Роуты управления объектами для веб-приложения
 """
 
-from fastapi import APIRouter, Request, Depends, HTTPException, status, Form
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
@@ -51,13 +51,15 @@ objects_storage = {
 async def objects_list(
     request: Request,
     current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    show_inactive: bool = Query(False),
+    view_mode: str = Query("cards")
 ):
     """Список объектов владельца"""
     try:
         # Получение объектов владельца из базы данных
         object_service = ObjectService(db)
-        objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
+        objects = await object_service.get_objects_by_owner(current_user["telegram_id"], include_inactive=show_inactive)
         
         # Преобразуем в формат для шаблона
         objects_data = []
@@ -80,7 +82,9 @@ async def objects_list(
             "request": request,
             "title": "Управление объектами",
             "objects": objects_data,
-            "current_user": current_user
+            "current_user": current_user,
+            "show_inactive": show_inactive,
+            "view_mode": view_mode
         })
         
     except Exception as e:
