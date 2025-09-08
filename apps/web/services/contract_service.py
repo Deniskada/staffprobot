@@ -87,6 +87,20 @@ class ContractService:
             # Генерируем номер договора
             contract_number = await self._generate_contract_number(owner.id)
             
+            # Генерируем контент из шаблона, если нужно
+            content = contract_data.get("content")
+            values = contract_data.get("values", {})
+            
+            if contract_data.get("template_id") and values:
+                # Получаем шаблон
+                template_query = select(ContractTemplate).where(ContractTemplate.id == contract_data["template_id"])
+                template_result = await session.execute(template_query)
+                template = template_result.scalar_one_or_none()
+                
+                if template and template.content and not content:
+                    # Генерируем контент из шаблона
+                    content = await self._generate_content_from_template(template.content, values, owner, employee)
+            
             # Создаем договор
             contract = Contract(
                 contract_number=contract_number,
@@ -94,7 +108,8 @@ class ContractService:
                 employee_id=employee.id,
                 template_id=contract_data.get("template_id"),
                 title=contract_data["title"],
-                content=contract_data["content"],
+                content=content,
+                values=values if values else None,
                 hourly_rate=contract_data.get("hourly_rate"),
                 start_date=contract_data["start_date"],
                 end_date=contract_data.get("end_date"),
@@ -992,3 +1007,46 @@ class ContractService:
             
             logger.info(f"Terminated contract: {contract.id} by owner telegram_id: {owner_telegram_id}")
             return True
+    
+    async def _generate_content_from_template(
+        self, 
+        template_content: str, 
+        values: Dict[str, Any], 
+        owner: User, 
+        employee: User
+    ) -> str:
+        """Генерация контента договора из шаблона с подстановкой значений."""
+        try:
+            from jinja2 import Template
+            
+            # Создаем контекст для подстановки
+            context = {
+                # Базовые поля владельца
+                'owner_name': owner.first_name or '',
+                'owner_last_name': owner.last_name or '',
+                'owner_telegram_id': owner.telegram_id,
+                
+                # Базовые поля сотрудника
+                'employee_name': employee.first_name or '',
+                'employee_last_name': employee.last_name or '',
+                'employee_telegram_id': employee.telegram_id,
+                
+                # Текущая дата
+                'current_date': datetime.now().strftime("%d.%m.%Y"),
+                
+                # Динамические поля из формы
+                **values
+            }
+            
+            # Создаем шаблон Jinja2
+            jinja_template = Template(template_content)
+            
+            # Генерируем контент
+            generated_content = jinja_template.render(context)
+            
+            return generated_content
+            
+        except Exception as e:
+            logger.error(f"Error generating content from template: {e}")
+            # Возвращаем исходный шаблон в случае ошибки
+            return template_content

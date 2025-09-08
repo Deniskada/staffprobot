@@ -154,6 +154,39 @@ async def edit_contract_template_form(request: Request, template_id: int):
     )
 
 
+@router.get("/api/{template_id}")
+async def get_contract_template_api(
+    template_id: int,
+    request: Request
+):
+    """API для получения шаблона договора."""
+    # Проверяем авторизацию
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    try:
+        contract_service = ContractService()
+        template = await contract_service.get_contract_template(template_id, current_user["id"])
+        
+        if not template:
+            raise HTTPException(status_code=404, detail="Шаблон не найден")
+        
+        return {
+            "id": template.id,
+            "name": template.name,
+            "description": template.description,
+            "content": template.content,
+            "version": template.version,
+            "is_public": template.is_public,
+            "fields_schema": template.fields_schema or []
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting template API: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка получения шаблона: {str(e)}")
+
+
 @router.post("/{template_id}/edit")
 async def update_contract_template(
     request: Request,
