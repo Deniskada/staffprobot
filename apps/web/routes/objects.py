@@ -360,9 +360,14 @@ async def update_object(
             except ValueError:
                 raise HTTPException(status_code=400, detail="Неверный формат координат")
         
-        # Обработка чекбоксов (они не отправляются, если не отмечены)
-        available_for_applicants = "available_for_applicants" in form_data
-        is_active = "is_active" in form_data
+        # Обработка чекбоксов/скрытых значений
+        def to_bool(value: Optional[str]) -> bool:
+            if value is None:
+                return False
+            return value.lower() in ("true", "on", "1", "yes")
+
+        available_for_applicants = to_bool(form_data.get("available_for_applicants"))
+        is_active = to_bool(form_data.get("is_active"))
         
         # Обновление объекта в базе данных
         object_service = ObjectService(db)
@@ -396,16 +401,18 @@ async def update_object(
 @router.post("/{object_id}/delete")
 async def delete_object(
     object_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Удаление объекта"""
     try:
-        # TODO: Удаление объекта из базы данных с проверкой владельца
         logger.info(f"Deleting object {object_id} for user {current_user['id']}")
-        
-        # TODO: Здесь будет удаление из базы данных
-        # await object_service.delete_object(object_id, current_user["id"])
-        
+
+        object_service = ObjectService(db)
+        success = await object_service.delete_object(object_id, current_user["telegram_id"])
+        if not success:
+            raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
+
         return RedirectResponse(url="/objects", status_code=status.HTTP_302_FOUND)
         
     except Exception as e:
