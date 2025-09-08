@@ -135,7 +135,9 @@ async def create_object(
         
         # Валидация и преобразование числовых полей
         try:
-            hourly_rate = int(hourly_rate_str) if hourly_rate_str else 0
+            # Поддержка запятой как десятичного разделителя ("500,00")
+            normalized_rate = hourly_rate_str.replace(",", ".") if hourly_rate_str else "0"
+            hourly_rate = int(float(normalized_rate)) if normalized_rate else 0
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат ставки")
         
@@ -327,7 +329,9 @@ async def update_object(
         
         # Валидация и преобразование числовых полей
         try:
-            hourly_rate = int(hourly_rate_str) if hourly_rate_str else 0
+            # Поддержка запятой как десятичного разделителя ("500,00")
+            normalized_rate = hourly_rate_str.replace(",", ".") if hourly_rate_str else "0"
+            hourly_rate = int(float(normalized_rate)) if normalized_rate else 0
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат ставки")
         
