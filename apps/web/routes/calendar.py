@@ -788,3 +788,120 @@ async def get_timeslots_status(
     except Exception as e:
         logger.error(f"Error getting timeslots status: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки статуса тайм-слотов")
+
+
+@router.get("/api/timeslot/{timeslot_id}")
+async def get_timeslot_details(
+    timeslot_id: int,
+    current_user: Optional[dict] = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Детали конкретного тайм-слота: слот, запланированные и фактические смены."""
+    try:
+        from sqlalchemy import select, and_
+        from sqlalchemy.orm import selectinload
+        from domain.entities.time_slot import TimeSlot
+        from domain.entities.object import Object
+        from domain.entities.user import User
+        from domain.entities.shift_schedule import ShiftSchedule
+        from domain.entities.shift import Shift
+
+        # Владелец по текущему пользователю
+        if not current_user or not getattr(current_user, "telegram_id", None):
+            raise HTTPException(status_code=403, detail="Нет доступа")
+        owner_q = select(User).where(User.telegram_id == current_user.telegram_id)
+        owner = (await db.execute(owner_q)).scalar_one_or_none()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+        # Слот + проверка принадлежности через объект
+        slot_q = select(TimeSlot).options(selectinload(TimeSlot.object)).where(TimeSlot.id == timeslot_id)
+        slot = (await db.execute(slot_q)).scalar_one_or_none()
+        if not slot:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+        obj_q = select(Object).where(Object.id == slot.object_id, Object.owner_id == owner.id)
+        if (await db.execute(obj_q)).scalar_one_or_none() is None:
+            raise HTTPException(status_code=403, detail="Нет доступа к тайм-слоту")
+
+        # Запланированные смены по тайм-слоту
+        sched_q = select(ShiftSchedule).options(selectinload(ShiftSchedule.user)).where(ShiftSchedule.time_slot_id == timeslot_id).order_by(ShiftSchedule.planned_start)
+        sched = (await db.execute(sched_q)).scalars().all()
+        scheduled = [
+            {
+                "id": s.id,
+                "user_id": s.user_id,
+                "user_name": f"{s.user.first_name} {s.user.last_name or ''}".strip() if s.user else None,
+                "status": s.status,
+                "start_time": s.planned_start.time().strftime("%H:%M"),
+                "end_time": s.planned_end.time().strftime("%H:%M"),
+                "notes": s.notes,
+            }
+            for s in sched
+        ]
+
+        # Фактические смены: сначала связанные с тайм-слотом напрямую
+        act_q = select(Shift).options(selectinload(Shift.user)).where(Shift.time_slot_id == timeslot_id).order_by(Shift.start_time)
+        acts_linked = (await db.execute(act_q)).scalars().all()
+
+        # Плюс спонтанные/несвязанные: по объекту и дате слота, с пересечением времени
+        day_start = datetime.combine(slot.slot_date, time.min)
+        day_end = datetime.combine(slot.slot_date, time.max)
+        act_day_q = select(Shift).options(selectinload(Shift.user)).where(
+            and_(
+                Shift.object_id == slot.object_id,
+                Shift.start_time >= day_start,
+                Shift.start_time <= day_end,
+            )
+        ).order_by(Shift.start_time)
+        acts_day = (await db.execute(act_day_q)).scalars().all()
+
+        # Отбираем пересекающиеся по времени и не дублируем
+        def is_overlap(sh: Shift) -> bool:
+            sh_start = sh.start_time.time()
+            sh_end = sh.end_time.time() if sh.end_time else None
+            if sh_end is None:
+                return sh_start < slot.end_time
+            return (sh_start < slot.end_time) and (slot.start_time < sh_end)
+
+        linked_ids = {sh.id for sh in acts_linked}
+        acts_overlap = [sh for sh in acts_day if (sh.id not in linked_ids) and is_overlap(sh)]
+
+        acts_all = acts_linked + acts_overlap
+        actual = [
+            {
+                "id": sh.id,
+                "user_id": sh.user_id,
+                "user_name": f"{sh.user.first_name} {sh.user.last_name or ''}".strip() if sh.user else None,
+                "status": sh.status,
+                "start_time": sh.start_time.time().strftime("%H:%M"),
+                "end_time": sh.end_time.time().strftime("%H:%M") if sh.end_time else None,
+                "total_hours": float(sh.total_hours) if sh.total_hours else None,
+                "total_payment": float(sh.total_payment) if sh.total_payment else None,
+                "is_planned": sh.is_planned,
+                "notes": sh.notes,
+            }
+            for sh in acts_all
+        ]
+
+        return {
+            "slot": {
+                "id": slot.id,
+                "object_id": slot.object_id,
+                "object_name": slot.object.name if slot.object else None,
+                "date": slot.slot_date.strftime("%Y-%m-%d"),
+                "start_time": slot.start_time.strftime("%H:%M"),
+                "end_time": slot.end_time.strftime("%H:%M"),
+                "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else None,
+                "max_employees": slot.max_employees or 1,
+                "is_active": slot.is_active,
+                "notes": slot.notes or "",
+            },
+            "scheduled": scheduled,
+            "actual": actual,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting timeslot details: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
