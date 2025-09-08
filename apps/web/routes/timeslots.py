@@ -44,6 +44,7 @@ async def timeslots_list(
             timeslots_data.append({
                 "id": slot.id,
                 "object_id": slot.object_id,
+                "slot_date": slot.slot_date.strftime("%Y-%m-%d"),
                 "start_time": slot.start_time.strftime("%H:%M"),
                 "end_time": slot.end_time.strftime("%H:%M"),
                 "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
@@ -89,6 +90,35 @@ async def create_timeslot_form(
         if not obj:
             raise HTTPException(status_code=404, detail="Объект не найден")
         
+        # Получаем все объекты пользователя для мульти-выбора
+        all_objects = await object_service.get_objects_by_owner(current_user["telegram_id"], include_inactive=False)
+        objects_data = []
+        for obj_item in all_objects:
+            objects_data.append({
+                "id": obj_item.id,
+                "name": obj_item.name,
+                "address": obj_item.address or "",
+                "hourly_rate": float(obj_item.hourly_rate),
+                "opening_time": obj_item.opening_time.strftime("%H:%M"),
+                "closing_time": obj_item.closing_time.strftime("%H:%M")
+            })
+        
+        # Получаем шаблоны планирования
+        from apps.web.services.template_service import TemplateService
+        template_service = TemplateService(db)
+        planning_templates = await template_service.get_templates_by_owner(current_user["telegram_id"])
+        templates_data = []
+        for template in planning_templates:
+            templates_data.append({
+                "id": template.id,
+                "name": template.name,
+                "description": template.description or "",
+                "start_time": template.start_time,
+                "end_time": template.end_time,
+                "hourly_rate": template.hourly_rate,
+                "is_public": template.is_public
+            })
+        
         object_data = {
             "id": obj.id,
             "name": obj.name,
@@ -97,9 +127,11 @@ async def create_timeslot_form(
         
         return templates.TemplateResponse("timeslots/create.html", {
             "request": request,
-            "title": f"Создание тайм-слота: {object_data['name']}",
+            "title": f"Создание тайм-слотов",
             "object_id": object_id,
             "object": object_data,
+            "all_objects": objects_data,
+            "templates": templates_data,
             "current_user": current_user
         })
         
@@ -117,15 +149,23 @@ async def create_timeslot(
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """Создание нового тайм-слота"""
+    """Создание новых тайм-слотов"""
     try:
-        logger.info(f"Creating timeslot for object {object_id}")
+        logger.info(f"Creating timeslots for object {object_id}")
         
         # Получение данных формы
         form_data = await request.form()
         start_time = form_data.get("start_time", "")
         end_time = form_data.get("end_time", "")
         hourly_rate_str = form_data.get("hourly_rate", "0")
+        template_id_str = form_data.get("template_id", "")
+        start_date_str = form_data.get("start_date", "")
+        end_date_str = form_data.get("end_date", "")
+        
+        # Получаем выбранные объекты
+        selected_objects = form_data.getlist("selected_objects")
+        if not selected_objects:
+            raise HTTPException(status_code=400, detail="Не выбрано ни одного объекта")
         
         # Валидация и преобразование данных
         try:
@@ -145,29 +185,61 @@ async def create_timeslot(
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат времени")
         
-        # Создание тайм-слота в базе данных
-        timeslot_service = TimeSlotService(db)
-        timeslot_data = {
-            "slot_date": date.today(),  # По умолчанию на сегодня
-            "start_time": start_time,
-            "end_time": end_time,
-            "hourly_rate": hourly_rate,
-            "is_active": True
-        }
+        # Если выбран шаблон и задан диапазон дат — применяем шаблон
+        created_count = 0
+        if template_id_str and start_date_str and end_date_str:
+            try:
+                from apps.web.services.template_service import TemplateService
+                template_service = TemplateService(db)
+                start_date_parsed = date.fromisoformat(start_date_str)
+                end_date_parsed = date.fromisoformat(end_date_str)
+                apply_result = await template_service.apply_template_to_objects(
+                    template_id=int(template_id_str),
+                    start_date=start_date_parsed,
+                    end_date=end_date_parsed,
+                    object_ids=selected_objects,
+                    owner_telegram_id=current_user["telegram_id"],
+                    start_time_override=start_time or None,
+                    end_time_override=end_time or None,
+                    hourly_rate_override=hourly_rate,
+                )
+                if not apply_result.get("success"):
+                    raise HTTPException(status_code=400, detail=apply_result.get("error", "Ошибка применения шаблона"))
+                created_count = apply_result.get("created_slots_count", 0)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат дат")
+        else:
+            # Иначе создаем одиночные слоты по введенным времени/ставке на сегодня
+            timeslot_service = TimeSlotService(db)
+            for obj_id in selected_objects:
+                try:
+                    timeslot_data = {
+                        "slot_date": date.today(),
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "hourly_rate": hourly_rate,
+                        "is_active": True
+                    }
+                    new_timeslot = await timeslot_service.create_timeslot(timeslot_data, int(obj_id), current_user["telegram_id"])
+                    if new_timeslot:
+                        created_count += 1
+                        logger.info(f"Timeslot {new_timeslot.id} created for object {obj_id}")
+                except Exception as e:
+                    logger.error(f"Error creating timeslot for object {obj_id}: {e}")
+                    continue
         
-        new_timeslot = await timeslot_service.create_timeslot(timeslot_data, object_id, current_user["telegram_id"])
-        if not new_timeslot:
-            raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
+        if created_count == 0:
+            raise HTTPException(status_code=400, detail="Не удалось создать ни одного тайм-слота")
         
-        logger.info(f"Timeslot {new_timeslot.id} created for object {object_id}")
+        logger.info(f"Created {created_count} timeslots for {len(selected_objects)} objects")
         
         return RedirectResponse(url=f"/timeslots/object/{object_id}", status_code=status.HTTP_302_FOUND)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating timeslot: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слота: {str(e)}")
+        logger.error(f"Error creating timeslots: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слотов: {str(e)}")
 
 
 @router.get("/{timeslot_id}/edit", response_class=HTMLResponse)
@@ -326,3 +398,40 @@ async def delete_timeslot(
     except Exception as e:
         logger.error(f"Error deleting timeslot: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка удаления тайм-слота: {str(e)}")
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_timeslots(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Множественное удаление тайм-слотов"""
+    try:
+        form_data = await request.form()
+        object_id = int(form_data.get("object_id", 0))
+        ids_str = form_data.get("timeslot_ids", "")
+        if not ids_str:
+            return RedirectResponse(url=f"/timeslots/object/{object_id}", status_code=status.HTTP_302_FOUND)
+        ids = [int(x) for x in ids_str.split(',') if x.strip().isdigit()]
+        if not ids:
+            return RedirectResponse(url=f"/timeslots/object/{object_id}", status_code=status.HTTP_302_FOUND)
+
+        timeslot_service = TimeSlotService(db)
+        deleted = 0
+        for ts_id in ids:
+            try:
+                ts = await timeslot_service.get_timeslot_by_id(ts_id, current_user["telegram_id"])
+                if ts:
+                    ok = await timeslot_service.delete_timeslot(ts_id, current_user["telegram_id"])
+                    if ok:
+                        deleted += 1
+            except Exception as e:
+                logger.error(f"Error bulk deleting {ts_id}: {e}")
+                continue
+
+        logger.info(f"Bulk deleted {deleted}/{len(ids)} timeslots for object {object_id}")
+        return RedirectResponse(url=f"/timeslots/object/{object_id}", status_code=status.HTTP_302_FOUND)
+    except Exception as e:
+        logger.error(f"Error bulk deleting timeslots: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка массового удаления тайм-слотов")

@@ -262,7 +262,10 @@ class TemplateService:
         start_date: date, 
         end_date: date,
         object_ids: List[int],
-        owner_telegram_id: int
+        owner_telegram_id: int,
+        start_time_override: Optional[str] = None,
+        end_time_override: Optional[str] = None,
+        hourly_rate_override: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Применение шаблона к нескольким объектам"""
         try:
@@ -297,9 +300,9 @@ class TemplateService:
                         # Создаем тайм-слот для объекта
                         timeslot_data = {
                             "slot_date": current_date,
-                            "start_time": template.start_time,
-                            "end_time": template.end_time,
-                            "hourly_rate": template.hourly_rate,
+                            "start_time": start_time_override or template.start_time,
+                            "end_time": end_time_override or template.end_time,
+                            "hourly_rate": hourly_rate_override if hourly_rate_override is not None else template.hourly_rate,
                             "is_active": True
                         }
                         
