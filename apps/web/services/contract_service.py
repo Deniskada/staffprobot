@@ -307,6 +307,16 @@ class ContractService:
             result = await session.execute(query)
             contracts = result.scalars().all()
             
+            # Получаем информацию об объектах владельца
+            objects_query = select(Object).where(
+                and_(
+                    Object.owner_id == owner.id,
+                    Object.is_active == True
+                )
+            )
+            objects_result = await session.execute(objects_query)
+            objects = {obj.id: obj for obj in objects_result.scalars().all()}
+            
             # Группируем по сотрудникам
             employees = {}
             for contract in contracts:
@@ -318,19 +328,57 @@ class ContractService:
                         'first_name': employee.first_name,
                         'last_name': employee.last_name,
                         'username': employee.username,
-                        'contracts': []
+                        'contracts': [],
+                        'accessible_objects': set()  # Объекты, к которым есть доступ
                     }
+                
+                # Определяем доступные объекты для этого договора
+                contract_objects = []
+                if contract.allowed_objects:
+                    # Если указаны конкретные объекты
+                    for obj_id in contract.allowed_objects:
+                        if obj_id in objects:
+                            obj = objects[obj_id]
+                            contract_objects.append({
+                                'id': obj.id,
+                                'name': obj.name,
+                                'address': obj.address
+                            })
+                            employees[employee.id]['accessible_objects'].add(obj.id)
+                else:
+                    # Если не указаны - доступ ко всем объектам
+                    contract_objects = [
+                        {
+                            'id': obj.id,
+                            'name': obj.name,
+                            'address': obj.address
+                        } for obj in objects.values()
+                    ]
+                    for obj in objects.values():
+                        employees[employee.id]['accessible_objects'].add(obj.id)
                 
                 employees[employee.id]['contracts'].append({
                     'id': contract.id,
                     'contract_number': contract.contract_number,
                     'title': contract.title,
                     'status': contract.status,
+                    'is_active': contract.is_active,
                     'hourly_rate': contract.hourly_rate,
                     'start_date': contract.start_date,
                     'end_date': contract.end_date,
-                    'allowed_objects': contract.allowed_objects or []
+                    'allowed_objects': contract.allowed_objects or [],
+                    'allowed_objects_info': contract_objects
                 })
+            
+            # Преобразуем set в list для JSON сериализации
+            for employee in employees.values():
+                employee['accessible_objects'] = [
+                    {
+                        'id': obj_id,
+                        'name': objects[obj_id].name,
+                        'address': objects[obj_id].address
+                    } for obj_id in employee['accessible_objects'] if obj_id in objects
+                ]
             
             return list(employees.values())
     
