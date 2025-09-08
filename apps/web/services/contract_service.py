@@ -33,7 +33,9 @@ class ContractService:
                 description=template_data.get("description", ""),
                 content=template_data["content"],
                 version=template_data.get("version", "1.0"),
-                created_by=user.id  # Используем id из БД
+                created_by=user.id,  # Используем id из БД
+                is_public=bool(template_data.get("is_public", False)),
+                fields_schema=template_data.get("fields_schema")
             )
             
             session.add(template)
@@ -536,6 +538,9 @@ class ContractService:
             template.description = template_data.get("description", "")
             template.content = template_data["content"]
             template.version = template_data["version"]
+            # Новые поля
+            template.is_public = bool(template_data.get("is_public", False))
+            template.fields_schema = template_data.get("fields_schema")
             
             await session.commit()
             

@@ -20,6 +20,9 @@ class ContractTemplate(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # Новые поля
+    is_public = Column(Boolean, default=False, nullable=False)
+    fields_schema = Column(JSON, nullable=True)  # [{key,label,type,required,options}]
     
     # Отношения
     creator = relationship("User", backref="created_templates")
@@ -39,7 +42,7 @@ class Contract(Base):
     
     # Основные данные договора
     title = Column(String(255), nullable=False)
-    content = Column(Text, nullable=False)  # Финальный текст договора
+    content = Column(Text, nullable=True)  # Финальный текст договора (может генерироваться из шаблона)
     hourly_rate = Column(Integer, nullable=True)  # Почасовая ставка в копейках
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=True)  # None = бессрочный
@@ -50,6 +53,8 @@ class Contract(Base):
     
     # Доступ к объектам
     allowed_objects = Column(JSON, nullable=True)  # Список ID объектов, к которым есть доступ
+    # Динамические значения по схеме полей шаблона
+    values = Column(JSON, nullable=True)  # {key: value}
     
     # Метаданные
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

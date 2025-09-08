@@ -61,7 +61,9 @@ async def create_contract_template(
     name: str = Form(...),
     description: str = Form(""),
     content: str = Form(...),
-    version: str = Form("1.0")
+    version: str = Form("1.0"),
+    is_public: Optional[bool] = Form(False),
+    fields_schema: Optional[str] = Form(None)
 ):
     """Создание шаблона договора."""
     # Проверяем авторизацию
@@ -78,8 +80,17 @@ async def create_contract_template(
             "description": description,
             "content": content,
             "version": version,
-            "created_by": current_user["id"]  # Это telegram_id
+            "created_by": current_user["id"],  # Это telegram_id
+            "is_public": bool(is_public),
+            "fields_schema": None
         }
+        # Парсим JSON схемы полей, если передана
+        if fields_schema:
+            try:
+                import json
+                template_data["fields_schema"] = json.loads(fields_schema)
+            except Exception:
+                template_data["fields_schema"] = None
         
         template = await contract_service.create_contract_template(template_data)
         
@@ -150,7 +161,9 @@ async def update_contract_template(
     name: str = Form(...),
     description: str = Form(""),
     content: str = Form(...),
-    version: str = Form("1.0")
+    version: str = Form("1.0"),
+    is_public: Optional[bool] = Form(False),
+    fields_schema: Optional[str] = Form(None)
 ):
     """Обновление шаблона договора."""
     # Проверяем авторизацию
@@ -166,8 +179,16 @@ async def update_contract_template(
             "name": name,
             "description": description,
             "content": content,
-            "version": version
+            "version": version,
+            "is_public": bool(is_public),
+            "fields_schema": None
         }
+        if fields_schema:
+            try:
+                import json
+                template_data["fields_schema"] = json.loads(fields_schema)
+            except Exception:
+                template_data["fields_schema"] = None
         
         success = await contract_service.update_contract_template(template_id, template_data)
         
