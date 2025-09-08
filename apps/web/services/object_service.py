@@ -9,6 +9,8 @@ from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
 from domain.entities.object import Object
 from domain.entities.time_slot import TimeSlot
+from domain.entities.shift import Shift
+from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.user import User
 from core.logging.logger import logger
 from datetime import datetime, time, date
@@ -168,6 +170,22 @@ class ObjectService:
             timeslots = timeslots_result.scalars().all()
             for slot in timeslots:
                 slot.is_active = False
+
+            # Отменяем связанные запланированные смены
+            schedules_query = select(ShiftSchedule).where(ShiftSchedule.object_id == object_id)
+            schedules_result = await self.db.execute(schedules_query)
+            schedules = schedules_result.scalars().all()
+            for sched in schedules:
+                if sched.status not in ("cancelled", "completed"):
+                    sched.status = "cancelled"
+
+            # Отменяем активные/плановые фактические смены (не трогаем завершенные)
+            shifts_query = select(Shift).where(Shift.object_id == object_id)
+            shifts_result = await self.db.execute(shifts_query)
+            shifts = shifts_result.scalars().all()
+            for sh in shifts:
+                if sh.status not in ("completed", "cancelled"):
+                    sh.status = "cancelled"
             await self.db.commit()
             
             logger.info(f"Soft deleted object {object_id} for owner {owner_id}")
