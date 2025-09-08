@@ -113,6 +113,24 @@
                                         {% endfor %}
                                     </div>
 
+                                    {% if employee.accessible_objects %}
+                                    <div class="mb-3">
+                                        <h6 class="text-muted mb-2">Доступ к объектам ({{ employee.accessible_objects|length }})</h6>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            {% for object in employee.accessible_objects[:3] %}
+                                            <span class="badge bg-light text-dark" title="{{ object.address or object.name }}">
+                                                <i class="fas fa-building me-1"></i>{{ object.name }}
+                                            </span>
+                                            {% endfor %}
+                                            {% if employee.accessible_objects|length > 3 %}
+                                            <span class="badge bg-light text-muted">
+                                                +{{ employee.accessible_objects|length - 3 }} ещё
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+
                                     <div class="d-flex gap-2">
                                         <a href="/employees/{{ employee.id }}" class="btn btn-outline-primary btn-sm flex-fill">
                                             <i class="fas fa-eye me-1"></i>Подробнее
@@ -131,6 +149,7 @@
                                     <th>Сотрудник</th>
                                     <th>Telegram ID</th>
                                     <th>Договоры</th>
+                                    <th>Доступ к объектам</th>
                                     <th>Статус</th>
                                     <th>Действия</th>
                                 </tr>
@@ -181,6 +200,22 @@
                                             </div>
                                             {% endfor %}
                                         </div>
+                                    </td>
+                                    <td>
+                                        {% if employee.accessible_objects %}
+                                        <div class="small">
+                                            {% for object in employee.accessible_objects[:2] %}
+                                            <span class="badge bg-light text-dark mb-1" title="{{ object.address or object.name }}">
+                                                <i class="fas fa-building me-1"></i>{{ object.name }}
+                                            </span>
+                                            {% endfor %}
+                                            {% if employee.accessible_objects|length > 2 %}
+                                            <br><small class="text-muted">+{{ employee.accessible_objects|length - 2 }} ещё</small>
+                                            {% endif %}
+                                        </div>
+                                        {% else %}
+                                        <span class="text-muted">—</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         {% if has_active_contracts %}

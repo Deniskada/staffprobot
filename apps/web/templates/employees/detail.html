@@ -202,6 +202,37 @@
                         </div>
                     </div>
 
+                    {% if employee.accessible_objects %}
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-building me-2"></i>Доступ к объектам
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                {% for object in employee.accessible_objects %}
+                                <div class="col-12 mb-2">
+                                    <div class="d-flex align-items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                                                <i class="fas fa-building"></i>
+                                            </div>
+                                        </div>
+                                        <div class="flex-grow-1 ms-3">
+                                            <h6 class="mb-0">{{ object.name }}</h6>
+                                            {% if object.address %}
+                                            <small class="text-muted">{{ object.address }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <div class="card mt-3">
                         <div class="card-header">
                             <h5 class="mb-0">
