@@ -95,7 +95,7 @@
                     <div class="card mt-4">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">Тайм-слоты</h5>
-                            <a href="/calendar?object_id={{ object.id }}" class="btn btn-sm btn-outline-primary">
+                            <a href="/timeslots/object/{{ object.id }}" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-clock-history"></i> Управление тайм-слотами
                             </a>
                         </div>
@@ -147,9 +147,9 @@
                             <div class="text-center py-3">
                                 <i class="bi bi-clock text-muted fs-1"></i>
                                 <p class="text-muted mt-2">Тайм-слоты не настроены</p>
-                                <a href="/calendar?object_id={{ object.id }}" class="btn btn-primary btn-sm">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="openCreateTimeslotModal({{ object.id }})">
                                     <i class="bi bi-plus"></i> Создать тайм-слоты
-                                </a>
+                                </button>
                             </div>
                             {% endif %}
                         </div>
@@ -192,7 +192,7 @@
                         </div>
                         <div class="card-body">
                             <div class="d-grid gap-2">
-                                <a href="/calendar?object_id={{ object.id }}" class="btn btn-outline-primary">
+                                <a href="/timeslots/object/{{ object.id }}" class="btn btn-outline-primary">
                                     <i class="bi bi-clock"></i> Управление тайм-слотами
                                 </a>
                                 <a href="/calendar?object_id={{ object.id }}" class="btn btn-outline-info">
@@ -233,6 +233,18 @@
 </div>
 
 <script>
+function openCreateTimeslotModal(objectId) {
+    // Если на странице нет модалки, переходим в календарь с параметром
+    if (!document.getElementById('quickCreateModal')) {
+        window.location.href = `/calendar?object_id=${objectId}`;
+        return;
+    }
+    // Установим выбранный объект и предзаполним поля
+    const select = document.getElementById('quickObject');
+    if (select) select.value = String(objectId);
+    const modal = new bootstrap.Modal(document.getElementById('quickCreateModal'));
+    modal.show();
+}
 function confirmDeleteTimeslot(timeslotId, timeslotName) {
     if (confirm(`Вы уверены, что хотите удалить тайм-слот ${timeslotName}?`)) {
         // Создаем форму для отправки POST запроса

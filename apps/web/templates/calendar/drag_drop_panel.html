@@ -459,6 +459,21 @@ function setupDragAndDrop() {
             handleDropOnDay(dayElement, draggedObject);
         }
     });
+
+    // Клик по объекту: открыть быстрое создание с предзаполнением
+    document.addEventListener('click', function(e) {
+        const item = e.target.closest('.object-item');
+        if (item) {
+            const object = {
+                id: item.dataset.objectId,
+                name: item.dataset.objectName,
+                hourlyRate: item.dataset.hourlyRate,
+                openingTime: item.dataset.openingTime,
+                closingTime: item.dataset.closingTime
+            };
+            showQuickCreateForm(object);
+        }
+    });
 }
 
 function createDragPreview(e) {

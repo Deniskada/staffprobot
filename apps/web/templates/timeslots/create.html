@@ -32,6 +32,44 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" id="createForm">
+                        <!-- Выбор шаблона -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <label for="template_select" class="form-label">
+                                    <i class="bi bi-file-earmark-text"></i> Шаблон планирования
+                                </label>
+                                <select class="form-select" id="template_select" name="template_id" onchange="applyTemplate()">
+                                    <option value="">Выберите шаблон (необязательно)</option>
+                                    {% for template in templates %}
+                                    <option value="{{ template.id }}" 
+                                            data-start-time="{{ template.start_time }}"
+                                            data-end-time="{{ template.end_time }}"
+                                            data-hourly-rate="{{ template.hourly_rate }}">
+                                        {{ template.name }}{% if template.is_public %} (Публичный){% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">Выберите шаблон для автозаполнения полей</div>
+                            </div>
+                        </div>
+
+                        <!-- Диапазон дат для периодичности -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label for="start_date" class="form-label">
+                                    <i class="bi bi-calendar-event"></i> Дата начала
+                                </label>
+                                <input type="date" class="form-control" id="start_date" name="start_date">
+                                <div class="form-text">Если выбран шаблон, будут созданы слоты по периодичности</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="end_date" class="form-label">
+                                    <i class="bi bi-calendar-check"></i> Дата окончания
+                                </label>
+                                <input type="date" class="form-control" id="end_date" name="end_date">
+                            </div>
+                        </div>
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="hourly_rate" class="form-label">
@@ -77,6 +115,41 @@
                             </div>
                         </div>
 
+                        <!-- Выбор объектов -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <label class="form-label">
+                                    <i class="bi bi-building"></i> Выберите объекты *
+                                </label>
+                                <div class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="select_all" onchange="toggleAllObjects()">
+                                        <label class="form-check-label fw-bold" for="select_all">
+                                            <i class="bi bi-check-square"></i> Выбрать все объекты
+                                        </label>
+                                    </div>
+                                    <hr class="my-2">
+                                    {% for obj in all_objects %}
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input object-checkbox" 
+                                               type="checkbox" 
+                                               id="object_{{ obj.id }}" 
+                                               name="selected_objects" 
+                                               value="{{ obj.id }}"
+                                               {% if obj.id == object_id %}checked{% endif %}>
+                                        <label class="form-check-label" for="object_{{ obj.id }}">
+                                            <strong>{{ obj.name }}</strong>
+                                            <small class="text-muted d-block">
+                                                {{ obj.address }} • {{ obj.hourly_rate }}₽/час • {{ obj.opening_time }}-{{ obj.closing_time }}
+                                            </small>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="form-text">Выберите один или несколько объектов для создания тайм-слотов</div>
+                            </div>
+                        </div>
+
                         <div class="row">
                             <div class="col-12">
                                 <div class="form-check">
@@ -99,8 +172,8 @@
                             <a href="/timeslots/object/{{ object_id }}" class="btn btn-outline-secondary">
                                 <i class="bi bi-arrow-left"></i> Отмена
                             </a>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle"></i> Создать тайм-слот
+                            <button type="submit" class="btn btn-primary" id="submitBtn">
+                                <i class="bi bi-check-circle"></i> Создать тайм-слоты
                             </button>
                         </div>
                     </form>
@@ -183,14 +256,59 @@
 </div>
 
 <script>
-// Валидация времени
+// Применение шаблона
+function applyTemplate() {
+    const templateSelect = document.getElementById('template_select');
+    const selectedOption = templateSelect.options[templateSelect.selectedIndex];
+    
+    if (selectedOption.value) {
+        document.getElementById('start_time').value = selectedOption.dataset.startTime;
+        document.getElementById('end_time').value = selectedOption.dataset.endTime;
+        document.getElementById('hourly_rate').value = selectedOption.dataset.hourlyRate;
+    }
+}
+
+// Переключение всех объектов
+function toggleAllObjects() {
+    const selectAll = document.getElementById('select_all');
+    const objectCheckboxes = document.querySelectorAll('.object-checkbox');
+    
+    objectCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    
+    updateSubmitButton();
+}
+
+// Обновление кнопки отправки
+function updateSubmitButton() {
+    const checkedBoxes = document.querySelectorAll('.object-checkbox:checked');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    if (checkedBoxes.length > 0) {
+        submitBtn.textContent = `Создать тайм-слоты (${checkedBoxes.length})`;
+        submitBtn.disabled = false;
+    } else {
+        submitBtn.textContent = 'Создать тайм-слоты';
+        submitBtn.disabled = true;
+    }
+}
+
+// Валидация формы
 document.getElementById('createForm').addEventListener('submit', function(e) {
     const startTime = document.getElementById('start_time').value;
     const endTime = document.getElementById('end_time').value;
+    const checkedBoxes = document.querySelectorAll('.object-checkbox:checked');
     
     if (startTime && endTime && startTime >= endTime) {
         e.preventDefault();
         alert('Время начала должно быть меньше времени окончания');
+        return false;
+    }
+    
+    if (checkedBoxes.length === 0) {
+        e.preventDefault();
+        alert('Выберите хотя бы один объект');
         return false;
     }
 });
@@ -206,6 +324,17 @@ document.getElementById('start_time').addEventListener('change', function() {
                 String(endHours).padStart(2, '0') + ':' + minutes;
         }
     }
+});
+
+// Обработчики для чекбоксов объектов
+document.addEventListener('DOMContentLoaded', function() {
+    const objectCheckboxes = document.querySelectorAll('.object-checkbox');
+    objectCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateSubmitButton);
+    });
+    
+    // Инициализация кнопки
+    updateSubmitButton();
 });
 </script>
 {% endblock %}
