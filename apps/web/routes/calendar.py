@@ -529,6 +529,8 @@ async def get_timeslots_status(
     year: int = Query(...),
     month: int = Query(...),
     object_id: Optional[int] = Query(None),
+    current_user: Optional[dict] = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Получение статуса тайм-слотов для календаря"""
@@ -542,8 +544,10 @@ async def get_timeslots_status(
         from domain.entities.object import Object
         from domain.entities.user import User
         
-        # Получаем владельца
-        owner_query = select(User).where(User.telegram_id == 1220971779)
+        # Получаем владельца из текущего пользователя (по telegram_id)
+        if not current_user or not getattr(current_user, "telegram_id", None):
+            return []
+        owner_query = select(User).where(User.telegram_id == current_user.telegram_id)
         owner_result = await db.execute(owner_query)
         owner = owner_result.scalar_one_or_none()
         
@@ -621,11 +625,11 @@ async def get_timeslots_status(
         
         # Создаем карту запланированных смен по time_slot_id
         scheduled_shifts_map = {}
+        # Индекс для запланированных смен по объекту и дате (на случай отсутствия привязки к time_slot)
+        scheduled_by_object_date = {}
         for shift in scheduled_shifts:
             if shift.time_slot_id:
-                if shift.time_slot_id not in scheduled_shifts_map:
-                    scheduled_shifts_map[shift.time_slot_id] = []
-                
+                scheduled_shifts_map.setdefault(shift.time_slot_id, [])
                 scheduled_shifts_map[shift.time_slot_id].append({
                     "id": shift.id,
                     "user_id": shift.user_id,
@@ -634,14 +638,17 @@ async def get_timeslots_status(
                     "end_time": shift.planned_end.time().strftime("%H:%M"),
                     "notes": shift.notes
                 })
+            # Индекс по объекту и дате
+            key = (shift.object_id, shift.planned_start.date())
+            scheduled_by_object_date.setdefault(key, []).append(shift)
         
         # Создаем карту отработанных смен по time_slot_id
         actual_shifts_map = {}
+        # Дополнительно индексируем смены по объекту и дате для поиска пересечений со слотами без time_slot_id
+        actual_by_object_date = {}
         for shift in actual_shifts:
             if shift.time_slot_id:
-                if shift.time_slot_id not in actual_shifts_map:
-                    actual_shifts_map[shift.time_slot_id] = []
-                
+                actual_shifts_map.setdefault(shift.time_slot_id, [])
                 actual_shifts_map[shift.time_slot_id].append({
                     "id": shift.id,
                     "user_id": shift.user_id,
@@ -654,6 +661,9 @@ async def get_timeslots_status(
                     "is_planned": shift.is_planned,
                     "notes": shift.notes
                 })
+            # Индекс по объекту и дате
+            key = (shift.object_id, shift.start_time.date())
+            actual_by_object_date.setdefault(key, []).append(shift)
         
         # Создаем данные для каждого тайм-слота
         test_data = []
@@ -666,32 +676,94 @@ async def get_timeslots_status(
             # Ищем запланированные смены для этого конкретного тайм-слота
             if slot.id in scheduled_shifts_map:
                 scheduled_shifts = scheduled_shifts_map[slot.id]
+            else:
+                # Дополнительно ищем пересечения по объекту и дате для запланированных (если были без time_slot_id)
+                key_sched = (slot.object_id, slot.slot_date)
+                overlaps_sched = []
+                for sh in scheduled_by_object_date.get(key_sched, []):
+                    sh_start = sh.planned_start.time()
+                    sh_end = sh.planned_end.time()
+                    if (sh_start < slot.end_time) and (slot.start_time < sh_end):
+                        overlaps_sched.append(sh)
+                if overlaps_sched:
+                    for sh in overlaps_sched:
+                        scheduled_shifts.append({
+                            "id": sh.id,
+                            "user_id": sh.user_id,
+                            "status": sh.status,
+                            "start_time": sh.planned_start.time().strftime("%H:%M"),
+                            "end_time": sh.planned_end.time().strftime("%H:%M"),
+                            "notes": sh.notes
+                        })
             
             # Ищем отработанные смены для этого конкретного тайм-слота
             if slot.id in actual_shifts_map:
                 actual_shifts = actual_shifts_map[slot.id]
+            else:
+                # Дополнительно ищем пересечения по объекту и дате (для спонтанных/без привязки к слоту)
+                key = (slot.object_id, slot.slot_date)
+                overlaps = []
+                for sh in actual_by_object_date.get(key, []):
+                    # Пересечение по времени: (sh.start < slot.end) and (slot.start < sh.end)
+                    sh_start = sh.start_time.time()
+                    sh_end = sh.end_time.time() if sh.end_time else None
+                    if sh_end is None:
+                        # Активная смена без конца – считаем пересекающейся, если начата до конца слота
+                        if sh_start < slot.end_time:
+                            overlaps.append(sh)
+                    else:
+                        if (sh_start < slot.end_time) and (slot.start_time < sh_end):
+                            overlaps.append(sh)
+                if overlaps:
+                    for sh in overlaps:
+                        actual_shifts.append({
+                            "id": sh.id,
+                            "user_id": sh.user_id,
+                            "user_name": f"{sh.user.first_name} {sh.user.last_name or ''}".strip(),
+                            "status": sh.status,
+                            "start_time": sh.start_time.time().strftime("%H:%M"),
+                            "end_time": sh.end_time.time().strftime("%H:%M") if sh.end_time else None,
+                            "total_hours": float(sh.total_hours) if sh.total_hours else None,
+                            "total_payment": float(sh.total_payment) if sh.total_payment else None,
+                            "is_planned": sh.is_planned,
+                            "notes": sh.notes
+                        })
             
-            # Определяем статус с приоритетом отработанных смен
-            if actual_shifts:
-                # Есть отработанные смены - показываем их статус
-                if any(shift["status"] == "active" for shift in actual_shifts):
-                    status = "active"
-                elif any(shift["status"] == "completed" for shift in actual_shifts):
-                    status = "completed"
-                elif any(shift["status"] == "cancelled" for shift in actual_shifts):
-                    status = "cancelled"
-            elif scheduled_shifts:
-                # Нет отработанных, но есть запланированные
-                if any(shift["status"] == "planned" for shift in scheduled_shifts):
-                    status = "planned"
-                elif any(shift["status"] == "confirmed" for shift in scheduled_shifts):
-                    status = "confirmed"
-                elif any(shift["status"] == "cancelled" for shift in scheduled_shifts):
-                    status = "cancelled"
+            # Определяем статус с приоритетом:
+            # active > completed > confirmed(scheduled) > planned(scheduled) > cancelled (если нет планов) > empty
+            has_actual_active = any(shift["status"] == "active" for shift in actual_shifts)
+            has_actual_completed = any(shift["status"] == "completed" for shift in actual_shifts)
+            has_actual_only_cancelled = bool(actual_shifts) and all(shift["status"] == "cancelled" for shift in actual_shifts)
+            has_sched_confirmed = any(shift["status"] == "confirmed" for shift in scheduled_shifts)
+            has_sched_planned = any(shift["status"] == "planned" for shift in scheduled_shifts)
+            has_sched_cancelled = any(shift["status"] == "cancelled" for shift in scheduled_shifts)
+
+            if has_actual_active:
+                status = "active"
+            elif has_actual_completed:
+                status = "completed"
+            elif has_sched_confirmed:
+                status = "confirmed"
+            elif has_sched_planned:
+                status = "planned"
+            elif has_actual_only_cancelled or has_sched_cancelled:
+                status = "cancelled"
             
-            # Подсчитываем занятость (учитываем и запланированные, и отработанные)
-            total_shifts = len(scheduled_shifts) + len(actual_shifts)
+            # Подсчитываем занятость с учётом правил
             max_slots = slot.max_employees or 1
+            # Плановые для счётчика: только planned/confirmed, ограничиваем лимитом
+            scheduled_effective = [s for s in scheduled_shifts if s.get("status") in ("planned", "confirmed")]
+            planned_count = min(len(scheduled_effective), max_slots)
+
+            # Фактические для счётчика: исключаем отменённые
+            actual_non_cancelled = [a for a in actual_shifts if a.get("status") != "cancelled"]
+            actual_planned_nc = [a for a in actual_non_cancelled if a.get("is_planned")]
+            actual_spont_nc = [a for a in actual_non_cancelled if not a.get("is_planned")]
+
+            # Базовая нагрузка: плановые + фактические запланированные, не превышает лимит
+            base_total = min(max_slots, planned_count + len(actual_planned_nc))
+            # Спонтанные (не отменённые) могут превышать лимит
+            total_shifts = base_total + len(actual_spont_nc)
             availability = f"{total_shifts}/{max_slots}"
             
             test_data.append({
