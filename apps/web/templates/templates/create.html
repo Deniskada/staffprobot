@@ -107,6 +107,13 @@
                                         <input type="text" class="form-control" id="version" name="version" 
                                                value="1.0" placeholder="1.0">
                                     </div>
+                                    
+                                    <div class="mb-3 form-check">
+                                        <input type="checkbox" class="form-check-input" id="is_public" name="is_public" value="true">
+                                        <label class="form-check-label" for="is_public">
+                                            Публичный шаблон (доступен всем владельцам)
+                                        </label>
+                                    </div>
                                 {% endif %}
                                 
                                 <div class="d-flex gap-2">
@@ -152,9 +159,80 @@
                                     <li>Создайте стандартный текст договора</li>
                                     <li>Используйте HTML для форматирования</li>
                                     <li>Версионируйте изменения</li>
-                                    <li>Используйте при создании договоров с сотрудниками</li>
+                                    <li>Сделайте шаблон публичным для других владельцев</li>
                                 </ul>
                             {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if template_type == 'contract' %}
+                    <!-- Справка по ТЭГам для шаблонов договоров -->
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-tags"></i> Справка по ТЭГам
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">
+                                Используйте теги для автозаполнения данных в договоре:
+                            </p>
+                            
+                            <div class="accordion accordion-flush" id="tagsAccordion">
+                                <div class="accordion-item">
+                                    <h6 class="accordion-header">
+                                        <button class="accordion-button collapsed small" type="button" data-bs-toggle="collapse" data-bs-target="#employeeTags">
+                                            <i class="bi bi-person me-2"></i> Данные сотрудника
+                                        </button>
+                                    </h6>
+                                    <div id="employeeTags" class="accordion-collapse collapse" data-bs-parent="#tagsAccordion">
+                                        <div class="accordion-body small">
+                                            <code>{{ employee_name }}</code> - ФИО сотрудника<br>
+                                            <code>{{ birth_date }}</code> - Дата рождения<br>
+                                            <code>{{ inn }}</code> - ИНН<br>
+                                            <code>{{ passport_series }}</code> - Серия паспорта<br>
+                                            <code>{{ passport_number }}</code> - Номер паспорта
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="accordion-item">
+                                    <h6 class="accordion-header">
+                                        <button class="accordion-button collapsed small" type="button" data-bs-toggle="collapse" data-bs-target="#ownerTags">
+                                            <i class="bi bi-building me-2"></i> Данные владельца
+                                        </button>
+                                    </h6>
+                                    <div id="ownerTags" class="accordion-collapse collapse" data-bs-parent="#tagsAccordion">
+                                        <div class="accordion-body small">
+                                            <code>{{ owner_name }}</code> - Имя владельца<br>
+                                            <code>{{ owner_last_name }}</code> - Фамилия владельца
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="accordion-item">
+                                    <h6 class="accordion-header">
+                                        <button class="accordion-button collapsed small" type="button" data-bs-toggle="collapse" data-bs-target="#systemTags">
+                                            <i class="bi bi-gear me-2"></i> Системные данные
+                                        </button>
+                                    </h6>
+                                    <div id="systemTags" class="accordion-collapse collapse" data-bs-parent="#tagsAccordion">
+                                        <div class="accordion-body small">
+                                            <code>{{ current_date }}</code> - Текущая дата
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3 p-2 bg-light rounded">
+                                <small class="text-muted">
+                                    <i class="bi bi-lightbulb"></i> <strong>Пример:</strong><br>
+                                    <code>&lt;p&gt;Исполнитель: {{ employee_name }}&lt;/p&gt;</code>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                         </div>
                     </div>
                 </div>

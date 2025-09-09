@@ -225,11 +225,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const employeeName = document.querySelector('input[name="field_employee_name"]')?.value || '';
         const birthDate = document.querySelector('input[name="field_birth_date"]')?.value || '';
         const inn = document.querySelector('input[name="field_inn"]')?.value || '';
+        const snils = document.querySelector('input[name="field_snils"]')?.value || '';
         const passportSeries = document.querySelector('input[name="field_passport_series"]')?.value || '';
         const passportNumber = document.querySelector('input[name="field_passport_number"]')?.value || '';
         
         console.log('Raw field values:', {
-            employeeName, birthDate, inn, passportSeries, passportNumber
+            employeeName, birthDate, inn, snils, passportSeries, passportNumber
         });
         
         // Простая замена тегов без сложной логики
@@ -247,6 +248,11 @@ document.addEventListener('DOMContentLoaded', function() {
             content = content.replace(/\{\{\s*inn\s*\}\}/g, `<span class="filled-value">${inn}</span>`);
         }
         
+        if (snils) {
+            content = content.replace(/\{\{\s*snils\s*\}\}/g, `<span class="filled-value">${snils}</span>`);
+            console.log(`Replaced snils with: ${snils}`);
+        }
+        
         if (passportSeries) {
             content = content.replace(/\{\{\s*passport_series\s*\}\}/g, `<span class="filled-value">${passportSeries}</span>`);
         }
@@ -259,6 +265,7 @@ document.addEventListener('DOMContentLoaded', function() {
         content = content.replace(/\{\{\s*employee_name\s*\}\}/g, '<span class="highlight-tag">{{ employee_name }}</span>');
         content = content.replace(/\{\{\s*birth_date\s*\}\}/g, '<span class="highlight-tag">{{ birth_date }}</span>');
         content = content.replace(/\{\{\s*inn\s*\}\}/g, '<span class="highlight-tag">{{ inn }}</span>');
+        content = content.replace(/\{\{\s*snils\s*\}\}/g, '<span class="highlight-tag">{{ snils }}</span>');
         content = content.replace(/\{\{\s*passport_series\s*\}\}/g, '<span class="highlight-tag">{{ passport_series }}</span>');
         content = content.replace(/\{\{\s*passport_number\s*\}\}/g, '<span class="highlight-tag">{{ passport_number }}</span>');
         content = content.replace(/\{\{\s*owner_name\s*\}\}/g, '<span class="highlight-tag">[ИМЯ ВЛАДЕЛЬЦА]</span>');

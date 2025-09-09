@@ -28,6 +28,9 @@ class ContractService:
             if not user:
                 raise ValueError(f"Пользователь с Telegram ID {template_data['created_by']} не найден")
             
+            # Автоматически генерируем fields_schema на основе тегов в контенте
+            fields_schema = self._extract_fields_schema_from_content(template_data["content"])
+            
             template = ContractTemplate(
                 name=template_data["name"],
                 description=template_data.get("description", ""),
@@ -35,7 +38,7 @@ class ContractService:
                 version=template_data.get("version", "1.0"),
                 created_by=user.id,  # Используем id из БД
                 is_public=bool(template_data.get("is_public", False)),
-                fields_schema=template_data.get("fields_schema")
+                fields_schema=fields_schema
             )
             
             session.add(template)
@@ -44,6 +47,57 @@ class ContractService:
             
             logger.info(f"Created contract template: {template.id} - {template_data['name']}")
             return template
+    
+    def _extract_fields_schema_from_content(self, content: str) -> List[Dict[str, Any]]:
+        """Извлекает схему полей из контента шаблона на основе найденных тегов."""
+        import re
+        
+        # Находим все теги в формате {{ tag_name }} с сохранением порядка
+        tags = re.findall(r'\{\{\s*(\w+)\s*\}\}', content)
+        
+        # Убираем дубликаты, но СОХРАНЯЕМ ПОРЯДОК появления в тексте
+        seen = set()
+        ordered_tags = []
+        for tag in tags:
+            if tag not in seen:
+                ordered_tags.append(tag)
+                seen.add(tag)
+        
+        # Убираем системные теги
+        system_tags = ['owner_name', 'owner_last_name', 'current_date']
+        user_tags = [tag for tag in ordered_tags if tag not in system_tags]
+        
+        # Создаем схему полей
+        fields_schema = []
+        
+        tag_mapping = {
+            'employee_name': {'label': 'ФИО сотрудника', 'type': 'text', 'required': True},
+            'birth_date': {'label': 'Дата рождения', 'type': 'date', 'required': True},
+            'inn': {'label': 'ИНН', 'type': 'text', 'required': False},
+            'snils': {'label': 'СНИЛС', 'type': 'text', 'required': False},
+            'passport_series': {'label': 'Серия паспорта', 'type': 'text', 'required': True},
+            'passport_number': {'label': 'Номер паспорта', 'type': 'text', 'required': True},
+            'passport_issuer': {'label': 'Кем выдан паспорт', 'type': 'text', 'required': False},
+            'passport_date': {'label': 'Дата выдачи паспорта', 'type': 'date', 'required': False},
+            'email': {'label': 'Email', 'type': 'email', 'required': False},
+        }
+        
+        for tag in user_tags:
+            if tag in tag_mapping:
+                field_config = tag_mapping[tag].copy()
+                field_config['key'] = tag
+                fields_schema.append(field_config)
+            else:
+                # Для неизвестных тегов создаем базовое поле
+                fields_schema.append({
+                    'key': tag,
+                    'label': tag.replace('_', ' ').title(),
+                    'type': 'text',
+                    'required': False
+                })
+        
+        logger.info(f"Extracted fields schema: {fields_schema}")
+        return fields_schema
     
     async def get_contract_templates(self) -> List[ContractTemplate]:
         """Получение списка шаблонов договоров."""
@@ -662,9 +716,9 @@ class ContractService:
             template.description = template_data.get("description", "")
             template.content = template_data["content"]
             template.version = template_data["version"]
-            # Новые поля
             template.is_public = bool(template_data.get("is_public", False))
-            template.fields_schema = template_data.get("fields_schema")
+            # Автоматически обновляем fields_schema на основе нового контента
+            template.fields_schema = self._extract_fields_schema_from_content(template_data["content"])
             
             await session.commit()
             
