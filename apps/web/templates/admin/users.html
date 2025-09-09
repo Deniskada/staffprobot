@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.user-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+    margin-bottom: 20px;
+}
+
+.user-card:hover {
+    transform: translateY(-3px);
+}
+
+.role-badge {
+    font-size: 0.8rem;
+    padding: 5px 10px;
+    border-radius: 15px;
+}
+
+.status-badge {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 10px;
+}
+
+.filter-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+}
+
+.filter-section .form-control,
+.filter-section .form-control:focus {
+    background: rgba(255,255,255,0.9);
+    border: none;
+    border-radius: 25px;
+}
+
+.filter-section .btn {
+    border-radius: 25px;
+    padding: 8px 20px;
+}
+
+.action-btn {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    border-radius: 15px;
+    margin: 2px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок и навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>👥 Управление пользователями</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('admin_dashboard') }}">Админ панель</a>
+                    </li>
+                    <li class="breadcrumb-item active">Пользователи</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                ← Назад к панели
+            </a>
+        </div>
+    </div>
+
+    <!-- Фильтры и поиск -->
+    <div class="filter-section">
+        <form method="GET" class="row align-items-end">
+            <div class="col-md-3">
+                <label for="role" class="form-label">Роль пользователя</label>
+                <select name="role" id="role" class="form-control">
+                    <option value="all" {% if not current_role_filter or current_role_filter == 'all' %}selected{% endif %}>
+                        Все роли
+                    </option>
+                    {% for role in roles %}
+                    <option value="{{ role.value }}" {% if current_role_filter == role.value %}selected{% endif %}>
+                        {{ role.value|title }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="search" class="form-label">Поиск по имени/username</label>
+                <input type="text" name="search" id="search" class="form-control" 
+                       placeholder="Введите имя или username" 
+                       value="{{ current_search or '' }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-light btn-block">
+                    🔍 Найти
+                </button>
+            </div>
+            <div class="col-md-2">
+                <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light btn-block">
+                    🔄 Сбросить
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Статистика -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="alert alert-info">
+                <strong>📊 Найдено пользователей:</strong> {{ users|length }}
+                {% if current_role_filter and current_role_filter != 'all' %}
+                    (роль: {{ current_role_filter }})
+                {% endif %}
+                {% if current_search %}
+                    (поиск: "{{ current_search }}")
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Список пользователей -->
+    <div class="row">
+        {% for user in users %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card user-card">
+                <div class="card-body">
+                    <!-- Заголовок пользователя -->
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title mb-1">
+                                {{ user.first_name }} {{ user.last_name }}
+                            </h5>
+                            <p class="card-text text-muted mb-1">
+                                @{{ user.username or 'N/A' }}
+                            </p>
+                            <small class="text-muted">
+                                ID: {{ user.telegram_id }}
+                            </small>
+                        </div>
+                        <div class="text-right">
+                            <!-- Статус активности -->
+                            {% if user.is_active %}
+                                <span class="badge badge-success status-badge">Активен</span>
+                            {% else %}
+                                <span class="badge badge-danger status-badge">Заблокирован</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Роль пользователя -->
+                    <div class="mb-3">
+                        {% if user.role.value == 'owner' %}
+                            <span class="badge badge-primary role-badge">🏢 Владелец</span>
+                        {% elif user.role.value == 'employee' %}
+                            <span class="badge badge-success role-badge">👷 Сотрудник</span>
+                        {% elif user.role.value == 'applicant' %}
+                            <span class="badge badge-warning role-badge">📝 Соискатель</span>
+                        {% elif user.role.value == 'superadmin' %}
+                            <span class="badge badge-danger role-badge">⚡ Суперадмин</span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Дополнительная информация -->
+                    <div class="small text-muted mb-3">
+                        <div><strong>Регистрация:</strong> {{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+                        {% if user.updated_at != user.created_at %}
+                        <div><strong>Обновление:</strong> {{ user.updated_at.strftime('%d.%m.%Y %H:%M') }}</div>
+                        {% endif %}
+                        {% if user.phone %}
+                        <div><strong>Телефон:</strong> {{ user.phone }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Действия -->
+                    <div class="text-center">
+                        <!-- Изменение роли -->
+                        {% if user.role.value != 'superadmin' %}
+                        <form method="POST" action="{{ url_for('admin_update_user_role', user_id=user.id) }}" 
+                              class="d-inline-block mb-2">
+                            <div class="input-group input-group-sm">
+                                <select name="new_role" class="form-control" required>
+                                    {% for role in roles %}
+                                        {% if role.value != 'superadmin' %}
+                                        <option value="{{ role.value }}" 
+                                                {% if role == user.role %}selected{% endif %}>
+                                            {{ role.value|title }}
+                                        </option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                                <div class="input-group-append">
+                                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                                        Изменить
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                        {% endif %}
+
+                        <!-- Блокировка/разблокировка -->
+                        {% if user.role.value != 'superadmin' %}
+                        <form method="POST" action="{{ url_for('admin_toggle_user_active', user_id=user.id) }}" 
+                              class="d-inline-block">
+                            <button type="submit" class="action-btn btn btn-sm 
+                                    {% if user.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}"
+                                    onclick="return confirm('Вы уверены?')">
+                                {% if user.is_active %}🔒 Заблокировать{% else %}🔓 Разблокировать{% endif %}
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if not users %}
+    <div class="text-center py-5">
+        <div class="alert alert-warning">
+            <h4>🔍 Пользователи не найдены</h4>
+            <p>Попробуйте изменить параметры поиска или фильтры.</p>
+            <a href="{{ url_for('admin_users') }}" class="btn btn-primary">
+                Показать всех пользователей
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Автоотправка формы при изменении фильтров
+document.getElementById('role').addEventListener('change', function() {
+    this.form.submit();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.coming-soon {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 60px;
+    border-radius: 20px;
+    text-align: center;
+    margin: 40px 0;
+}
+
+.coming-soon h1 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.coming-soon p {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    margin-bottom: 30px;
+}
+
+.feature-list {
+    background: white;
+    color: #333;
+    padding: 40px;
+    border-radius: 20px;
+    margin-top: 30px;
+}
+
+.feature-item {
+    padding: 15px 0;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+}
+
+.feature-item:last-child {
+    border-bottom: none;
+}
+
+.feature-icon {
+    font-size: 1.5rem;
+    margin-right: 15px;
+    width: 40px;
+    text-align: center;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок и навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>💰 Тарифные планы</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('admin_dashboard') }}">Админ панель</a>
+                    </li>
+                    <li class="breadcrumb-item active">Тарифы</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                ← Назад к панели
+            </a>
+        </div>
+    </div>
+
+    <!-- В разработке -->
+    <div class="coming-soon">
+        <h1>🚧 В разработке</h1>
+        <p>Система тарифных планов находится в стадии разработки</p>
+        <div class="mt-4">
+            <span class="badge badge-light badge-lg px-4 py-2" style="font-size: 1rem;">
+                Ожидаемый запуск: следующая итерация
+            </span>
+        </div>
+    </div>
+
+    <!-- Планируемый функционал -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="feature-list">
+                <h3 class="mb-4 text-center">📋 Планируемый функционал</h3>
+                
+                <div class="feature-item">
+                    <div class="feature-icon">📦</div>
+                    <div>
+                        <strong>Создание тарифных планов</strong>
+                        <br>
+                        <small class="text-muted">Настройка лимитов и возможностей для владельцев</small>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">👥</div>
+                    <div>
+                        <strong>Назначение тарифов пользователям</strong>
+                        <br>
+                        <small class="text-muted">Привязка владельцев к конкретным тарифным планам</small>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">💳</div>
+                    <div>
+                        <strong>Система биллинга</strong>
+                        <br>
+                        <small class="text-muted">Отслеживание использования и автоматические списания</small>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">📊</div>
+                    <div>
+                        <strong>Аналитика по тарифам</strong>
+                        <br>
+                        <small class="text-muted">Статистика использования и доходности тарифов</small>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">🔒</div>
+                    <div>
+                        <strong>Контроль лимитов</strong>
+                        <br>
+                        <small class="text-muted">Автоматическое ограничение функций при превышении</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="feature-list">
+                <h3 class="mb-4 text-center">💡 Примеры тарифов</h3>
+                
+                <!-- Базовый тариф -->
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">🆓 Базовый (Бесплатный)</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <li>✅ До 2 объектов</li>
+                            <li>✅ До 5 сотрудников</li>
+                            <li>✅ Базовые отчеты</li>
+                            <li>❌ Расширенная аналитика</li>
+                            <li>❌ API доступ</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Стандартный тариф -->
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">⭐ Стандартный (990₽/мес)</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <li>✅ До 10 объектов</li>
+                            <li>✅ До 50 сотрудников</li>
+                            <li>✅ Все виды отчетов</li>
+                            <li>✅ Расширенная аналитика</li>
+                            <li>❌ API доступ</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Премиум тариф -->
+                <div class="card mb-3">
+                    <div class="card-header bg-warning text-white">
+                        <h5 class="mb-0">💎 Премиум (2990₽/мес)</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <li>✅ Неограниченно объектов</li>
+                            <li>✅ Неограниченно сотрудников</li>
+                            <li>✅ Все функции</li>
+                            <li>✅ API доступ</li>
+                            <li>✅ Приоритетная поддержка</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Текущий статус -->
+    <div class="alert alert-info mt-4">
+        <h5>ℹ️ Текущий статус</h5>
+        <p class="mb-2">
+            <strong>Все пользователи:</strong> пока что работают без ограничений
+        </p>
+        <p class="mb-0">
+            <strong>После запуска тарифов:</strong> существующие пользователи получат базовый тариф автоматически
+        </p>
+    </div>
+</div>
+{% endblock %}

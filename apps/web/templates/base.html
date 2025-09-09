@@ -97,6 +97,12 @@
                                 <li><a class="dropdown-item" href="/profile">
                                     <i class="bi bi-person"></i> Профиль
                                 </a></li>
+                                {% if current_user.role == 'superadmin' %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="/admin">
+                                    <i class="bi bi-gear-fill text-danger"></i> Админ панель
+                                </a></li>
+                                {% endif %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="/auth/logout">
                                     <i class="bi bi-box-arrow-right"></i> Выход

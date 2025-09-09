@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.monitoring-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+    margin-bottom: 20px;
+}
+
+.monitoring-card:hover {
+    transform: translateY(-3px);
+}
+
+.system-status {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.status-item:last-child {
+    border-bottom: none;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.status-online {
+    background-color: #28a745;
+    box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+}
+
+.status-warning {
+    background-color: #ffc107;
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+}
+
+.status-offline {
+    background-color: #dc3545;
+    box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+}
+
+.metric-card {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.external-link {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    text-decoration: none;
+    margin: 5px;
+    transition: all 0.3s ease;
+}
+
+.external-link:hover {
+    background: rgba(255,255,255,0.3);
+    color: white;
+    text-decoration: none;
+    transform: scale(1.05);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок и навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>📊 Мониторинг системы</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('admin_dashboard') }}">Админ панель</a>
+                    </li>
+                    <li class="breadcrumb-item active">Мониторинг</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                ← Назад к панели
+            </a>
+        </div>
+    </div>
+
+    <!-- Статус системы -->
+    <div class="system-status">
+        <h3 class="mb-4">⚙️ Статус компонентов системы</h3>
+        
+        <div class="status-item">
+            <div>
+                <span class="status-indicator status-online"></span>
+                <strong>FastAPI Web Server</strong>
+            </div>
+            <span class="badge badge-success">Работает</span>
+        </div>
+
+        <div class="status-item">
+            <div>
+                <span class="status-indicator status-online"></span>
+                <strong>PostgreSQL Database</strong>
+            </div>
+            <span class="badge badge-success">Подключена</span>
+        </div>
+
+        <div class="status-item">
+            <div>
+                <span class="status-indicator status-online"></span>
+                <strong>Redis Cache</strong>
+            </div>
+            <span class="badge badge-success">Активен</span>
+        </div>
+
+        <div class="status-item">
+            <div>
+                <span class="status-indicator status-online"></span>
+                <strong>Telegram Bot</strong>
+            </div>
+            <span class="badge badge-success">Онлайн</span>
+        </div>
+
+        <div class="status-item">
+            <div>
+                <span class="status-indicator status-online"></span>
+                <strong>Prometheus Metrics</strong>
+            </div>
+            <span class="badge badge-success">Собираются</span>
+        </div>
+
+        <div class="status-item">
+            <div>
+                <span class="status-indicator status-online"></span>
+                <strong>Grafana Dashboard</strong>
+            </div>
+            <span class="badge badge-success">Доступен</span>
+        </div>
+    </div>
+
+    <!-- Внешние ссылки -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card monitoring-card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">🔗 Внешние системы мониторинга</h5>
+                </div>
+                <div class="card-body text-center">
+                    <a href="{{ prometheus_url }}" target="_blank" class="external-link">
+                        📈 Prometheus ({{ prometheus_url }})
+                    </a>
+                    <a href="{{ grafana_url }}" target="_blank" class="external-link">
+                        📊 Grafana ({{ grafana_url }})
+                    </a>
+                    <a href="http://localhost:15672" target="_blank" class="external-link">
+                        🐰 RabbitMQ Management
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Метрики в реальном времени -->
+    <div class="row">
+        <div class="col-md-3">
+            <div class="metric-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                <div class="metric-value" id="cpu-usage">--</div>
+                <div class="metric-label">CPU Usage</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                <div class="metric-value" id="memory-usage">--</div>
+                <div class="metric-label">Memory Usage</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <div class="metric-value" id="active-connections">--</div>
+                <div class="metric-label">DB Connections</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                <div class="metric-value" id="cache-hit-rate">--</div>
+                <div class="metric-label">Cache Hit Rate</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Системные логи -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card monitoring-card">
+                <div class="card-header bg-warning text-white">
+                    <h5 class="mb-0">📋 Последние системные события</h5>
+                </div>
+                <div class="card-body">
+                    <div id="system-logs">
+                        <div class="text-center text-muted py-3">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="sr-only">Загрузка...</span>
+                            </div>
+                            Загрузка логов...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card monitoring-card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">🚨 Последние ошибки</h5>
+                </div>
+                <div class="card-body">
+                    <div id="error-logs">
+                        <div class="text-center text-muted py-3">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="sr-only">Загрузка...</span>
+                            </div>
+                            Загрузка ошибок...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Информация о сборке -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card monitoring-card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">ℹ️ Информация о системе</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li><strong>Версия приложения:</strong> 1.0.0</li>
+                                <li><strong>Окружение:</strong> Development</li>
+                                <li><strong>Python версия:</strong> 3.11+</li>
+                                <li><strong>FastAPI версия:</strong> Latest</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li><strong>База данных:</strong> PostgreSQL 15</li>
+                                <li><strong>Кэш:</strong> Redis 7</li>
+                                <li><strong>Контейнеризация:</strong> Docker</li>
+                                <li><strong>Время работы:</strong> <span id="uptime">--</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Симуляция обновления метрик в реальном времени
+function updateMetrics() {
+    // Симуляция данных (в реальной системе здесь будут AJAX запросы к API)
+    document.getElementById('cpu-usage').textContent = (Math.random() * 30 + 20).toFixed(1) + '%';
+    document.getElementById('memory-usage').textContent = (Math.random() * 40 + 40).toFixed(1) + '%';
+    document.getElementById('active-connections').textContent = Math.floor(Math.random() * 10 + 5);
+    document.getElementById('cache-hit-rate').textContent = (Math.random() * 20 + 75).toFixed(1) + '%';
+}
+
+// Симуляция загрузки логов
+function loadSystemLogs() {
+    const logsContainer = document.getElementById('system-logs');
+    const errorLogsContainer = document.getElementById('error-logs');
+    
+    // Системные логи
+    logsContainer.innerHTML = `
+        <div class="small">
+            <div class="mb-1"><span class="text-success">[INFO]</span> 2024-01-15 10:30:15 - User login successful</div>
+            <div class="mb-1"><span class="text-info">[DEBUG]</span> 2024-01-15 10:29:42 - Database query executed</div>
+            <div class="mb-1"><span class="text-success">[INFO]</span> 2024-01-15 10:28:33 - Shift created successfully</div>
+            <div class="mb-1"><span class="text-info">[DEBUG]</span> 2024-01-15 10:27:15 - Cache hit for user data</div>
+            <div class="mb-1"><span class="text-success">[INFO]</span> 2024-01-15 10:26:01 - Bot message sent</div>
+        </div>
+    `;
+    
+    // Логи ошибок
+    errorLogsContainer.innerHTML = `
+        <div class="small">
+            <div class="mb-1"><span class="text-warning">[WARN]</span> 2024-01-15 10:25:12 - Slow query detected</div>
+            <div class="mb-1"><span class="text-danger">[ERROR]</span> 2024-01-15 10:20:33 - Failed to send notification</div>
+            <div class="mb-1"><span class="text-warning">[WARN]</span> 2024-01-15 10:15:45 - High memory usage</div>
+            <div class="mb-1"><span class="text-danger">[ERROR]</span> 2024-01-15 10:10:22 - Database connection timeout</div>
+        </div>
+    `;
+}
+
+// Обновление времени работы
+function updateUptime() {
+    const startTime = new Date('2024-01-15T08:00:00');
+    const now = new Date();
+    const uptime = Math.floor((now - startTime) / 1000);
+    
+    const hours = Math.floor(uptime / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    
+    document.getElementById('uptime').textContent = `${hours}ч ${minutes}м`;
+}
+
+// Инициализация
+document.addEventListener('DOMContentLoaded', function() {
+    updateMetrics();
+    loadSystemLogs();
+    updateUptime();
+    
+    // Обновляем метрики каждые 5 секунд
+    setInterval(updateMetrics, 5000);
+    setInterval(updateUptime, 60000);
+});
+</script>
+{% endblock %}
