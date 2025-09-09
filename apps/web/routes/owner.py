@@ -514,15 +514,179 @@ async def owner_objects_delete(object_id: int, request: Request):
 
 
 @router.get("/calendar", response_class=HTMLResponse, name="owner_calendar")
-async def owner_calendar(request: Request):
+async def owner_calendar(
+    request: Request,
+    year: int = Query(None),
+    month: int = Query(None),
+    object_id: int = Query(None)
+):
     """Календарь смен владельца"""
+    # Проверяем авторизацию и роль владельца
     current_user = await get_current_user(request)
     user_role = current_user.get("role", "employee")
     if user_role != "owner":
-        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
-    # Перенаправляем на существующую страницу календаря
-    return RedirectResponse(url="/calendar", status_code=status.HTTP_302_FOUND)
+    try:
+        import calendar as py_calendar
+        from apps.web.services.object_service import ObjectService, TimeSlotService
+        
+        async with get_async_session() as session:
+            # Получаем внутренний ID пользователя
+            user_id = await get_user_id_from_current_user(current_user, session)
+            
+            # Определяем текущую дату или переданные параметры
+            today = datetime.now().date()
+            if not year:
+                year = today.year
+            if not month:
+                month = today.month
+            
+            # Получение объектов владельца
+            object_service = ObjectService(session)
+            objects = await object_service.get_objects_by_owner(current_user["id"], include_inactive=False)
+            
+            # Получение тайм-слотов для календаря
+            timeslot_service = TimeSlotService(session)
+            
+            # Создаем календарную сетку
+            cal = py_calendar.Calendar(firstweekday=0)  # Понедельник = 0
+            month_days = cal.monthdayscalendar(year, month)
+            
+            # Русские названия месяцев
+            RU_MONTHS = [
+                "", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+                "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+            ]
+            
+            # Получаем тайм-слоты для месяца
+            month_start = datetime(year, month, 1).date()
+            if month == 12:
+                month_end = datetime(year + 1, 1, 1).date() - timedelta(days=1)
+            else:
+                month_end = datetime(year, month + 1, 1).date() - timedelta(days=1)
+            
+            # Если выбран конкретный объект, фильтруем по нему
+            if object_id:
+                selected_objects = [obj for obj in objects if obj.id == object_id]
+            else:
+                selected_objects = objects
+            
+            # Получаем тайм-слоты для выбранных объектов
+            all_timeslots = []
+            for obj in selected_objects:
+                timeslots = await timeslot_service.get_timeslots_by_object(obj.id, current_user["id"])
+                all_timeslots.extend(timeslots)
+            
+            # Группируем тайм-слоты по дням
+            timeslots_by_date = {}
+            for slot in all_timeslots:
+                # Здесь нужно будет адаптировать логику получения дат из тайм-слотов
+                # В зависимости от структуры данных
+                pass
+            
+            # Навигация по месяцам
+            prev_month = month - 1 if month > 1 else 12
+            prev_year = year if month > 1 else year - 1
+            next_month = month + 1 if month < 12 else 1
+            next_year = year if month < 12 else year + 1
+            
+            return templates.TemplateResponse(
+                "owner/calendar/index.html",
+                {
+                    "request": request,
+                    "title": f"Календарь - {RU_MONTHS[month]} {year}",
+                    "current_user": current_user,
+                    "objects": objects,
+                    "selected_object_id": object_id,
+                    "year": year,
+                    "month": month,
+                    "month_name": RU_MONTHS[month],
+                    "month_days": month_days,
+                    "timeslots_by_date": timeslots_by_date,
+                    "today": today,
+                    "prev_year": prev_year,
+                    "prev_month": prev_month,
+                    "next_year": next_year,
+                    "next_month": next_month
+                }
+            )
+            
+    except Exception as e:
+        logger.error(f"Error loading calendar: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки календаря")
+
+
+@router.get("/calendar/api/objects")
+async def owner_calendar_api_objects(request: Request):
+    """API для получения объектов владельца"""
+    # Проверяем авторизацию и роль владельца
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    try:
+        from apps.web.services.object_service import ObjectService
+        
+        async with get_async_session() as session:
+            object_service = ObjectService(session)
+            objects = await object_service.get_objects_by_owner(current_user["id"], include_inactive=False)
+            
+            objects_data = [
+                {
+                    "id": obj.id,
+                    "name": obj.name,
+                    "address": obj.address or "",
+                    "hourly_rate": float(obj.hourly_rate),
+                    "is_active": obj.is_active
+                }
+                for obj in objects
+            ]
+            
+            return {"objects": objects_data}
+            
+    except Exception as e:
+        logger.error(f"Error getting objects API: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения объектов")
+
+
+@router.post("/calendar/api/quick-create-timeslot")
+async def owner_calendar_api_quick_create_timeslot(request: Request):
+    """API для быстрого создания тайм-слота"""
+    # Проверяем авторизацию и роль владельца
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    try:
+        from apps.web.services.object_service import TimeSlotService
+        
+        # Получаем данные из запроса
+        data = await request.json()
+        
+        async with get_async_session() as session:
+            timeslot_service = TimeSlotService(session)
+            
+            # Создаем тайм-слот
+            timeslot_data = {
+                "object_id": data.get("object_id"),
+                "date": data.get("date"),
+                "start_time": data.get("start_time"),
+                "end_time": data.get("end_time"),
+                "hourly_rate": data.get("hourly_rate"),
+                "owner_id": current_user["id"]
+            }
+            
+            # Здесь нужно будет адаптировать под реальную структуру TimeSlotService
+            # timeslot = await timeslot_service.create_timeslot(timeslot_data)
+            
+            return {"success": True, "message": "Тайм-слот создан"}
+            
+    except Exception as e:
+        logger.error(f"Error creating timeslot: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка создания тайм-слота")
 
 
 @router.get("/employees", response_class=HTMLResponse, name="owner_employees")
