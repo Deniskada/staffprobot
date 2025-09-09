@@ -70,11 +70,31 @@ async def create_contract_form(
     user_id = current_user["id"]  # Это telegram_id из токена
     available_employees = await contract_service.get_available_employees(user_id)
     objects = await contract_service.get_owner_objects(user_id)
-    templates_list = await contract_service.get_contract_templates()
+    
+    # Получаем внутренний ID пользователя для шаблонов
+    async with get_async_session() as session:
+        user_query = select(User).where(User.telegram_id == user_id)
+        user_result = await session.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        internal_user_id = user_obj.id if user_obj else None
+    
+    # Получаем шаблоны с учетом владельца и публичных
+    templates_list = await contract_service.get_contract_templates_for_user(internal_user_id)
     
     # Текущая дата для шаблона (формат YYYY-MM-DD)
     from datetime import date
     current_date = date.today().strftime("%Y-%m-%d")
+    
+    # Подготавливаем шаблоны в JSON формате для JavaScript
+    templates_json = []
+    for template in templates_list:
+        templates_json.append({
+            "id": template.id,
+            "name": template.name,
+            "content": template.content,
+            "version": template.version,
+            "fields_schema": template.fields_schema or []
+        })
     
     return templates.TemplateResponse(
         "employees/create.html",
@@ -85,6 +105,7 @@ async def create_contract_form(
             "available_employees": available_employees,
             "objects": objects,
             "templates": templates_list,
+            "templates_json": templates_json,  # Добавляем JSON данные для JavaScript
             "current_date": current_date,
             "employee_telegram_id": employee_telegram_id
         }
