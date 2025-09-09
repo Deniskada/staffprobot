@@ -15,7 +15,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner
 from apps.web.services.auth_service import AuthService
 
 
@@ -128,6 +128,9 @@ async def root(request: Request):
                 if user_role == "superadmin":
                     # Суперадмин идёт в админ-панель
                     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+                elif user_role == "owner":
+                    # Владелец идёт в свой раздел
+                    return RedirectResponse(url="/owner", status_code=status.HTTP_302_FOUND)
                 else:
                     # Остальные пользователи идут на дашборд
                     return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
@@ -154,6 +157,7 @@ app.include_router(templates_routes.router, prefix="/templates", tags=["Шабл
 app.include_router(contract_templates.router, prefix="/contract-templates", tags=["Шаблоны договоров"])
 app.include_router(profile.router, tags=["Профиль владельца"])
 app.include_router(admin.router, prefix="/admin", tags=["Администрирование"])
+app.include_router(owner.router, prefix="/owner", tags=["Владелец"])
 
 
 # API для интеграции с ботом

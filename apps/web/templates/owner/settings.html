@@ -1,0 +1,117 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.settings-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.coming-soon {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    padding: 60px;
+    border-radius: 20px;
+    text-align: center;
+    margin: 40px 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Заголовок -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>⚙️ Настройки владельца</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/owner">Дашборд</a>
+                    </li>
+                    <li class="breadcrumb-item active">Настройки</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- В разработке -->
+    <div class="coming-soon">
+        <h1>🚧 В разработке</h1>
+        <p>Настройки владельца находятся в стадии разработки</p>
+    </div>
+
+    <!-- Планируемые настройки -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card settings-card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">🏢 Настройки объектов</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li>• Настройки по умолчанию для новых объектов</li>
+                        <li>• Шаблоны рабочего времени</li>
+                        <li>• Настройки геолокации</li>
+                        <li>• Автоматическое закрытие смен</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card settings-card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">👥 Настройки сотрудников</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li>• Автоматическое одобрение заявок</li>
+                        <li>• Уведомления о новых заявках</li>
+                        <li>• Настройки доступа к объектам</li>
+                        <li>• Шаблоны договоров</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card settings-card">
+                <div class="card-header bg-warning text-white">
+                    <h5 class="mb-0">📊 Настройки отчетов</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li>• Автоматическая отправка отчетов</li>
+                        <li>• Формат отчетов по умолчанию</li>
+                        <li>• Периодичность уведомлений</li>
+                        <li>• Настройки экспорта</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card settings-card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">🔔 Уведомления</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li>• Email уведомления</li>
+                        <li>• Telegram уведомления</li>
+                        <li>• SMS уведомления</li>
+                        <li>• Push уведомления</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
