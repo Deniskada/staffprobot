@@ -2,6 +2,7 @@
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, JSON
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
 from typing import Optional
@@ -117,6 +118,9 @@ class User(Base):
         if hasattr(self, 'roles') and self.roles:
             return self.roles
         return [self.role] if self.role else []
+    
+    # Связи
+    owner_profile = relationship("OwnerProfile", back_populates="user", uselist=False)
 
 
 

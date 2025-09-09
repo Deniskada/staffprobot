@@ -9,5 +9,7 @@ from .object import Object
 from .shift import Shift
 from .shift_schedule import ShiftSchedule
 from .time_slot import TimeSlot
+from .tag_reference import TagReference
+from .owner_profile import OwnerProfile
 
-__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot"]
+__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile"]

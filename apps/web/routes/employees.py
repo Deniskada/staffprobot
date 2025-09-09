@@ -77,6 +77,11 @@ async def create_contract_form(
         user_result = await session.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
         internal_user_id = user_obj.id if user_obj else None
+        
+        # Получаем профиль владельца для тегов
+        from apps.web.services.tag_service import TagService
+        tag_service = TagService()
+        owner_profile = await tag_service.get_owner_profile(session, internal_user_id)
     
     # Получаем шаблоны с учетом владельца и публичных
     templates_list = await contract_service.get_contract_templates_for_user(internal_user_id)
@@ -96,6 +101,18 @@ async def create_contract_form(
             "fields_schema": template.fields_schema or []
         })
     
+    # Получаем теги владельца для подстановки
+    owner_tags = {}
+    if owner_profile:
+        owner_tags = owner_profile.get_tags_for_templates()
+        # Добавляем системные теги
+        from datetime import datetime
+        owner_tags.update({
+            'current_date': datetime.now().strftime('%d.%m.%Y'),
+            'current_time': datetime.now().strftime('%H:%M'),
+            'current_year': str(datetime.now().year)
+        })
+    
     return templates.TemplateResponse(
         "employees/create.html",
         {
@@ -107,7 +124,8 @@ async def create_contract_form(
             "templates": templates_list,
             "templates_json": templates_json,  # Добавляем JSON данные для JavaScript
             "current_date": current_date,
-            "employee_telegram_id": employee_telegram_id
+            "employee_telegram_id": employee_telegram_id,
+            "owner_tags": owner_tags  # Теги владельца для JavaScript
         }
     )
 
