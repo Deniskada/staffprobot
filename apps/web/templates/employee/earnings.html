@@ -1,0 +1,39 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.coming-soon {
+    background: linear-gradient(135deg, #17a2b8 0%, #007bff 100%);
+    color: white;
+    padding: 60px;
+    border-radius: 20px;
+    text-align: center;
+    margin: 40px 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>💰 Мой заработок</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/employee">Дашборд</a>
+                    </li>
+                    <li class="breadcrumb-item active">Заработок</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="coming-soon">
+        <h1>🚧 В разработке</h1>
+        <p>Детальная статистика заработка и выплат</p>
+    </div>
+</div>
+{% endblock %}

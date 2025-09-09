@@ -1,0 +1,120 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.coming-soon {
+    background: linear-gradient(135deg, #17a2b8 0%, #007bff 100%);
+    color: white;
+    padding: 60px;
+    border-radius: 20px;
+    text-align: center;
+    margin: 40px 0;
+}
+
+.feature-list {
+    background: white;
+    color: #333;
+    padding: 40px;
+    border-radius: 20px;
+    margin-top: 30px;
+}
+
+.feature-item {
+    padding: 15px 0;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+}
+
+.feature-item:last-child {
+    border-bottom: none;
+}
+
+.feature-icon {
+    font-size: 1.5rem;
+    margin-right: 15px;
+    width: 40px;
+    text-align: center;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Заголовок -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>🗺️ Карта смен</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/employee">Дашборд</a>
+                    </li>
+                    <li class="breadcrumb-item active">Карта смен</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- В разработке -->
+    <div class="coming-soon">
+        <h1>🚧 В разработке</h1>
+        <p>Интерактивная карта для поиска доступных смен</p>
+    </div>
+
+    <!-- Планируемые функции -->
+    <div class="feature-list">
+        <h3 class="mb-4">📋 Планируемые функции</h3>
+        
+        <div class="feature-item">
+            <div class="feature-icon">🗺️</div>
+            <div>
+                <strong>Интерактивная карта</strong><br>
+                <small class="text-muted">Просмотр доступных смен на карте с фильтрами по расстоянию</small>
+            </div>
+        </div>
+        
+        <div class="feature-item">
+            <div class="feature-icon">📍</div>
+            <div>
+                <strong>Геолокация</strong><br>
+                <small class="text-muted">Автоматическое определение местоположения и поиск ближайших смен</small>
+            </div>
+        </div>
+        
+        <div class="feature-item">
+            <div class="feature-icon">🔍</div>
+            <div>
+                <strong>Фильтры поиска</strong><br>
+                <small class="text-muted">Поиск по типу работы, времени, оплате и другим параметрам</small>
+            </div>
+        </div>
+        
+        <div class="feature-item">
+            <div class="feature-icon">📝</div>
+            <div>
+                <strong>Быстрая подача заявки</strong><br>
+                <small class="text-muted">Подача заявки на смену прямо с карты одним кликом</small>
+            </div>
+        </div>
+        
+        <div class="feature-item">
+            <div class="feature-icon">🚗</div>
+            <div>
+                <strong>Маршрут до объекта</strong><br>
+                <small class="text-muted">Построение маршрута и расчет времени в пути</small>
+            </div>
+        </div>
+        
+        <div class="feature-item">
+            <div class="feature-icon">⭐</div>
+            <div>
+                <strong>Рейтинг объектов</strong><br>
+                <small class="text-muted">Отзывы и рейтинги от других сотрудников</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
