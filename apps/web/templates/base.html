@@ -36,12 +36,12 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     {% if current_user %}
+                        {% if current_user.role == 'owner' %}
                         <li class="nav-item">
                             <a class="nav-link" href="/dashboard">
                                 <i class="bi bi-speedometer2"></i> Дашборд
                             </a>
                         </li>
-                        {% if current_user.role == 'owner' %}
                         <li class="nav-item">
                             <a class="nav-link" href="/objects">
                                 <i class="bi bi-building"></i> Объекты
@@ -59,16 +59,26 @@
                         </li>
                         {% elif current_user.role == 'superadmin' %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/tariffs">
-                                <i class="bi bi-credit-card"></i> Тарифные планы
+                            <a class="nav-link" href="/admin">
+                                <i class="bi bi-speedometer2"></i> Дашборд
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/users">
+                            <a class="nav-link" href="/admin/users">
                                 <i class="bi bi-people"></i> Пользователи
                             </a>
                         </li>
-                        {% endif %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin/tariffs">
+                                <i class="bi bi-credit-card"></i> Тарифы
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin/monitoring">
+                                <i class="bi bi-graph-up"></i> Мониторинг
+                            </a>
+                        </li>
+                        {% else %}
                         <li class="nav-item">
                             <a class="nav-link" href="/shifts">
                                 <i class="bi bi-clock"></i> Смены
@@ -84,6 +94,7 @@
                                 <i class="bi bi-graph-up"></i> Отчеты
                             </a>
                         </li>
+                        {% endif %}
                     {% endif %}
                 </ul>
                 

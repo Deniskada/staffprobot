@@ -138,8 +138,16 @@ async def require_owner_or_superadmin(request: Request) -> dict:
             )
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
-    user_roles = user.get("roles", [user.get("role", "employee")])
-    if not any(role in ["owner", "superadmin"] for role in user_roles):
+    # Проверяем основную роль пользователя (приоритет основной роли)
+    user_role = user.get("role", "employee")
+    user_roles = user.get("roles", [])
+    
+    # Суперадмин имеет доступ везде
+    if user_role == "superadmin":
+        return user
+    
+    # Проверяем права для владельцев и суперадминов
+    if user_role not in ["owner", "superadmin"] and not any(role in ["owner", "superadmin"] for role in user_roles):
         if request.url.path.startswith("/api/"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -158,8 +166,11 @@ async def require_superadmin(request: Request) -> dict:
             detail="Требуется авторизация"
         )
     
-    user_roles = user.get("roles", [user.get("role", "employee")])
-    if "superadmin" not in user_roles:
+    # Проверяем основную роль пользователя
+    user_role = user.get("role", "employee")
+    user_roles = user.get("roles", [])
+    
+    if user_role != "superadmin" and "superadmin" not in user_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Недостаточно прав доступа"

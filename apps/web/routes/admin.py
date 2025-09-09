@@ -105,8 +105,10 @@ async def admin_users_list(
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
     try:
+        logger.info("Starting admin users list request")
         async with get_async_session() as session:
-            query = select(User).options(selectinload(User.owner_profile))
+            logger.info("Database session created")
+            query = select(User)
             
             # Фильтрация по роли
             if role and role != "all":
@@ -126,18 +128,21 @@ async def admin_users_list(
                 )
             
             query = query.order_by(desc(User.created_at))
+            logger.info("Executing query")
             result = await session.execute(query)
+            logger.info("Query executed, getting users")
             users = result.scalars().all()
-        
-        return templates.TemplateResponse("admin/users.html", {
-            "request": request,
-            "current_user": current_user,
-            "users": users,
-            "roles": [role for role in UserRole],
-            "current_role_filter": role,
-            "current_search": search,
-            "title": "Управление пользователями"
-        })
+            logger.info(f"Found {len(users)} users")
+            
+            return templates.TemplateResponse("admin/users.html", {
+                "request": request,
+                "current_user": current_user,
+                "users": users,
+                "roles": list(UserRole),
+                "current_role_filter": role,
+                "current_search": search,
+                "title": "Управление пользователями"
+            })
         
     except Exception as e:
         logger.error(f"Error loading admin users: {e}")
@@ -265,4 +270,21 @@ async def admin_monitoring(
         "title": "Мониторинг системы",
         "prometheus_url": "http://localhost:9090",
         "grafana_url": "http://localhost:3000"
+    })
+
+
+@router.get("/reports", response_class=HTMLResponse, name="admin_reports")
+async def admin_reports(request: Request):
+    """Административные отчеты"""
+    # Проверяем авторизацию и роль суперадмина
+    current_user = await get_current_user_from_request(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "superadmin":
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    
+    return templates.TemplateResponse("admin/reports.html", {
+        "request": request,
+        "current_user": current_user,
+        "title": "Административные отчеты",
+        "message": "Функция в разработке"
     })

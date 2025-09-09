@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.coming-soon {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 60px;
+    border-radius: 20px;
+    text-align: center;
+    margin: 40px 0;
+}
+
+.coming-soon h1 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.coming-soon p {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    margin-bottom: 30px;
+}
+
+.feature-list {
+    background: white;
+    color: #333;
+    padding: 40px;
+    border-radius: 20px;
+    margin-top: 30px;
+}
+
+.feature-item {
+    padding: 15px 0;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+}
+
+.feature-item:last-child {
+    border-bottom: none;
+}
+
+.feature-icon {
+    font-size: 1.5rem;
+    margin-right: 15px;
+    width: 40px;
+    text-align: center;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок и навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>📊 Административные отчеты</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/admin">Админ панель</a>
+                    </li>
+                    <li class="breadcrumb-item active">Отчеты</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="/admin" class="btn btn-secondary">
+                ← Назад к панели
+            </a>
+        </div>
+    </div>
+
+    <!-- В разработке -->
+    <div class="coming-soon">
+        <h1>🚧 В разработке</h1>
+        <p>Система административных отчетов находится в стадии разработки</p>
+        <div class="mt-4">
+            <span class="badge badge-light badge-lg px-4 py-2" style="font-size: 1rem;">
+                Ожидаемый запуск: следующая итерация
+            </span>
+        </div>
+    </div>
+
+    <!-- Планируемый функционал -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="feature-list">
+                <h3 class="mb-4 text-center">📋 Планируемые отчеты</h3>
+                
+                <div class="feature-item">
+                    <div class="feature-icon">👥</div>
+                    <div>
+                        <strong>Отчет по пользователям</strong>
+                        <br>
+                        <small class="text-muted">Статистика регистраций, активности, ролей</small>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">🏢</div>
+                    <div>
+                        <strong>Отчет по владельцам</strong>
+                        <br>
+                        <small class="text-muted">Количество объектов, сотрудников, активность</small>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">💰</div>
+                    <div>
+                        <strong>Финансовые отчеты</strong>
+                        <br>
+                        <small class="text-muted">Доходы по тарифам, оплаты, статистика</small>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">📊</div>
+                    <div>
+                        <strong>Системная аналитика</strong>
+                        <br>
+                        <small class="text-muted">Производительность, ошибки, использование</small>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">📈</div>
+                    <div>
+                        <strong>Отчеты роста</strong>
+                        <br>
+                        <small class="text-muted">Динамика пользователей, объектов, смен</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="feature-list">
+                <h3 class="mb-4 text-center">📈 Доступная статистика</h3>
+                
+                <!-- Prometheus -->
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">📊 Prometheus Metrics</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Системные метрики в реальном времени</p>
+                        <a href="http://localhost:9090" target="_blank" class="btn btn-outline-primary">
+                            Открыть Prometheus
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Grafana -->
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">📈 Grafana Dashboards</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Визуализация метрик и графики</p>
+                        <a href="http://localhost:3000" target="_blank" class="btn btn-outline-success">
+                            Открыть Grafana
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Мониторинг -->
+                <div class="card mb-3">
+                    <div class="card-header bg-warning text-white">
+                        <h5 class="mb-0">🔍 Системный мониторинг</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Статус компонентов и производительность</p>
+                        <a href="/admin/monitoring" class="btn btn-outline-warning">
+                            Открыть мониторинг
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Текущий статус -->
+    <div class="alert alert-info mt-4">
+        <h5>ℹ️ Текущий статус</h5>
+        <p class="mb-2">
+            <strong>Доступно сейчас:</strong> базовая статистика в дашборде, Prometheus/Grafana метрики
+        </p>
+        <p class="mb-0">
+            <strong>В разработке:</strong> детализированные отчеты по всем аспектам системы
+        </p>
+    </div>
+</div>
+{% endblock %}
