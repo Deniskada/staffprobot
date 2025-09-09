@@ -56,7 +56,7 @@ async def employee_dashboard(request: Request):
             # Получаем статистику сотрудника
             # Смены, в которых участвовал сотрудник
             shifts_count = await session.execute(
-                select(func.count(Shift.id)).where(Shift.employee_id == user_id)
+                select(func.count(Shift.id)).where(Shift.user_id == user_id)
             )
             total_shifts = shifts_count.scalar()
             
@@ -64,7 +64,7 @@ async def employee_dashboard(request: Request):
             active_shifts_count = await session.execute(
                 select(func.count(Shift.id)).where(
                     and_(
-                        Shift.employee_id == user_id,
+                        Shift.user_id == user_id,
                         Shift.status == 'active'
                     )
                 )
@@ -76,7 +76,7 @@ async def employee_dashboard(request: Request):
             monthly_earnings_result = await session.execute(
                 select(func.sum(Shift.total_payment)).where(
                     and_(
-                        Shift.employee_id == user_id,
+                        Shift.user_id == user_id,
                         Shift.status == 'completed',
                         Shift.created_at >= current_month_start
                     )
@@ -87,7 +87,7 @@ async def employee_dashboard(request: Request):
             # Последние смены
             recent_shifts_result = await session.execute(
                 select(Shift).options(selectinload(Shift.object))
-                .where(Shift.employee_id == user_id)
+                .where(Shift.user_id == user_id)
                 .order_by(desc(Shift.created_at)).limit(5)
             )
             recent_shifts = recent_shifts_result.scalars().all()
