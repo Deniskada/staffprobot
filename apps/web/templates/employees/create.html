@@ -221,56 +221,62 @@ document.addEventListener('DOMContentLoaded', function() {
         
         let content = previewDiv.dataset.template;
         
-        // Получаем значения из полей формы
-        const employeeName = document.querySelector('input[name="field_employee_name"]')?.value || '';
-        const birthDate = document.querySelector('input[name="field_birth_date"]')?.value || '';
-        const inn = document.querySelector('input[name="field_inn"]')?.value || '';
-        const snils = document.querySelector('input[name="field_snils"]')?.value || '';
-        const passportSeries = document.querySelector('input[name="field_passport_series"]')?.value || '';
-        const passportNumber = document.querySelector('input[name="field_passport_number"]')?.value || '';
+        // Получаем текущий выбранный шаблон для доступа к fieldsSchema
+        const templateSelect = document.getElementById('template_id');
+        const selectedTemplateId = templateSelect.value;
         
-        console.log('Raw field values:', {
-            employeeName, birthDate, inn, snils, passportSeries, passportNumber
+        if (!selectedTemplateId) {
+            console.log('No template selected');
+            return;
+        }
+        
+        const selectedTemplate = templatesData.find(t => t.id == selectedTemplateId);
+        if (!selectedTemplate || !selectedTemplate.fields_schema) {
+            console.log('Template not found or no fields schema');
+            return;
+        }
+        
+        console.log('Using fields schema:', selectedTemplate.fields_schema);
+        
+        // ДИНАМИЧЕСКАЯ замена тегов на основе fieldsSchema
+        const fieldValues = {};
+        
+        // 1. Собираем все значения из полей формы
+        selectedTemplate.fields_schema.forEach(field => {
+            const fieldElement = document.querySelector('input[name="field_' + field.key + '"], select[name="field_' + field.key + '"], textarea[name="field_' + field.key + '"]');
+            const value = fieldElement?.value || '';
+            fieldValues[field.key] = value;
+            
+            console.log('Field ' + field.key + ': "' + value + '"');
         });
         
-        // Простая замена тегов без сложной логики
-        if (employeeName) {
-            content = content.replace(/\{\{\s*employee_name\s*\}\}/g, `<span class="filled-value">${employeeName}</span>`);
-            console.log(`Replaced employee_name with: ${employeeName}`);
-        }
+        // 2. Заменяем заполненные теги на выделенные значения
+        selectedTemplate.fields_schema.forEach(field => {
+            const value = fieldValues[field.key];
+            if (value) {
+                const regex = new RegExp('\\{\\{\\s*' + field.key + '\\s*\\}\\}', 'g');
+                content = content.replace(regex, '<span class="filled-value">' + value + '</span>');
+                console.log('✅ Replaced ' + field.key + ' with: ' + value);
+            }
+        });
         
-        if (birthDate) {
-            content = content.replace(/\{\{\s*birth_date\s*\}\}/g, `<span class="filled-value">${birthDate}</span>`);
-            console.log(`Replaced birth_date with: ${birthDate}`);
-        }
+        // 3. Заменяем незаполненные теги на выделенные метки
+        selectedTemplate.fields_schema.forEach(field => {
+            const regex = new RegExp('\\{\\{\\s*' + field.key + '\\s*\\}\\}', 'g');
+            content = content.replace(regex, '<span class="highlight-tag">{{ ' + field.key + ' }}</span>');
+        });
         
-        if (inn) {
-            content = content.replace(/\{\{\s*inn\s*\}\}/g, `<span class="filled-value">${inn}</span>`);
-        }
+        // 4. Обрабатываем системные теги (owner_name, owner_last_name, current_date)
+        const systemTags = {
+            'owner_name': '[ИМЯ ВЛАДЕЛЬЦА]',
+            'owner_last_name': '[ФАМИЛИЯ ВЛАДЕЛЬЦА]', 
+            'current_date': new Date().toLocaleDateString('ru-RU')
+        };
         
-        if (snils) {
-            content = content.replace(/\{\{\s*snils\s*\}\}/g, `<span class="filled-value">${snils}</span>`);
-            console.log(`Replaced snils with: ${snils}`);
-        }
-        
-        if (passportSeries) {
-            content = content.replace(/\{\{\s*passport_series\s*\}\}/g, `<span class="filled-value">${passportSeries}</span>`);
-        }
-        
-        if (passportNumber) {
-            content = content.replace(/\{\{\s*passport_number\s*\}\}/g, `<span class="filled-value">${passportNumber}</span>`);
-        }
-        
-        // Заменяем незаполненные теги на выделенные
-        content = content.replace(/\{\{\s*employee_name\s*\}\}/g, '<span class="highlight-tag">{{ employee_name }}</span>');
-        content = content.replace(/\{\{\s*birth_date\s*\}\}/g, '<span class="highlight-tag">{{ birth_date }}</span>');
-        content = content.replace(/\{\{\s*inn\s*\}\}/g, '<span class="highlight-tag">{{ inn }}</span>');
-        content = content.replace(/\{\{\s*snils\s*\}\}/g, '<span class="highlight-tag">{{ snils }}</span>');
-        content = content.replace(/\{\{\s*passport_series\s*\}\}/g, '<span class="highlight-tag">{{ passport_series }}</span>');
-        content = content.replace(/\{\{\s*passport_number\s*\}\}/g, '<span class="highlight-tag">{{ passport_number }}</span>');
-        content = content.replace(/\{\{\s*owner_name\s*\}\}/g, '<span class="highlight-tag">[ИМЯ ВЛАДЕЛЬЦА]</span>');
-        content = content.replace(/\{\{\s*owner_last_name\s*\}\}/g, '<span class="highlight-tag">[ФАМИЛИЯ ВЛАДЕЛЬЦА]</span>');
-        content = content.replace(/\{\{\s*current_date\s*\}\}/g, `<span class="highlight-tag">${new Date().toLocaleDateString('ru-RU')}</span>`);
+        Object.keys(systemTags).forEach(tagKey => {
+            const regex = new RegExp('\\{\\{\\s*' + tagKey + '\\s*\\}\\}', 'g');
+            content = content.replace(regex, '<span class="highlight-tag">' + systemTags[tagKey] + '</span>');
+        });
         
         // Обновляем предпросмотр
         previewDiv.innerHTML = content;
@@ -312,10 +318,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     dynamicFieldsContainer.appendChild(fieldDiv);
                     
                     // Добавляем обработчик для обновления тегов ТОЛЬКО на blur (выход из поля)
-                    const input = fieldDiv.querySelector('input');
-                    if (input) {
-                        input.addEventListener('blur', updateTagsInPreview);
-                        console.log(`Added blur listener for field: ${input.name}`);
+                    const fieldElement = fieldDiv.querySelector('input, select, textarea');
+                    if (fieldElement) {
+                        fieldElement.addEventListener('blur', updateTagsInPreview);
+                        console.log('Added blur listener for field: ' + fieldElement.name);
                     }
                 });
             } else {
@@ -369,7 +375,7 @@ function createDynamicField(field) {
     }
     
     let input;
-    const fieldName = `field_${field.key}`;
+    const fieldName = 'field_' + field.key;
     
     switch (field.type) {
         case 'text':
