@@ -131,7 +131,8 @@ async def create_template(
                 "description": description,
                 "content": content,
                 "version": version,
-                "created_by": current_user["id"]
+                "created_by": current_user["id"],
+                "is_public": is_public
             }
             
             template = await contract_service.create_contract_template(template_data)
@@ -277,7 +278,8 @@ async def update_template(
                 "name": name,
                 "description": description,
                 "content": content,
-                "version": version
+                "version": version,
+                "is_public": is_public
             }
             
             success = await contract_service.update_contract_template(template_id, template_data)
