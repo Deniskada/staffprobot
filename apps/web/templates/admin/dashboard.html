@@ -83,13 +83,13 @@
         
         <!-- Быстрые действия -->
         <div class="mt-3">
-            <a href="{{ url_for('admin_users') }}" class="admin-btn">
+            <a href="/admin/users" class="admin-btn">
                 👥 Управление пользователями
             </a>
-            <a href="{{ url_for('admin_tariffs') }}" class="admin-btn">
+            <a href="/admin/tariffs" class="admin-btn">
                 💰 Тарифные планы
             </a>
-            <a href="{{ url_for('admin_monitoring') }}" class="admin-btn">
+            <a href="/admin/monitoring" class="admin-btn">
                 📊 Мониторинг
             </a>
         </div>
@@ -214,22 +214,22 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-3">
-                            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-primary btn-block">
+                            <a href="/admin/users" class="btn btn-outline-primary btn-block">
                                 👥 Все пользователи
                             </a>
                         </div>
                         <div class="col-md-3">
-                            <a href="{{ url_for('admin_users', role='owner') }}" class="btn btn-outline-success btn-block">
+                            <a href="/admin/users?role=owner" class="btn btn-outline-success btn-block">
                                 🏢 Только владельцы
                             </a>
                         </div>
                         <div class="col-md-3">
-                            <a href="{{ url_for('admin_tariffs') }}" class="btn btn-outline-warning btn-block">
+                            <a href="/admin/tariffs" class="btn btn-outline-warning btn-block">
                                 💰 Тарифы
                             </a>
                         </div>
                         <div class="col-md-3">
-                            <a href="{{ url_for('admin_monitoring') }}" class="btn btn-outline-info btn-block">
+                            <a href="/admin/monitoring" class="btn btn-outline-info btn-block">
                                 📊 Статистика
                             </a>
                         </div>

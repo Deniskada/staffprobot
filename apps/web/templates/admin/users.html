@@ -66,14 +66,14 @@
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item">
-                        <a href="{{ url_for('admin_dashboard') }}">Админ панель</a>
+                        <a href="/admin">Админ панель</a>
                     </li>
                     <li class="breadcrumb-item active">Пользователи</li>
                 </ol>
             </nav>
         </div>
         <div>
-            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+            <a href="/admin" class="btn btn-secondary">
                 ← Назад к панели
             </a>
         </div>
@@ -186,7 +186,7 @@
                     <div class="text-center">
                         <!-- Изменение роли -->
                         {% if user.role.value != 'superadmin' %}
-                        <form method="POST" action="{{ url_for('admin_update_user_role', user_id=user.id) }}" 
+                        <form method="POST" action="/admin/users/{{ user.id }}/role" 
                               class="d-inline-block mb-2">
                             <div class="input-group input-group-sm">
                                 <select name="new_role" class="form-control" required>
@@ -210,7 +210,7 @@
 
                         <!-- Блокировка/разблокировка -->
                         {% if user.role.value != 'superadmin' %}
-                        <form method="POST" action="{{ url_for('admin_toggle_user_active', user_id=user.id) }}" 
+                        <form method="POST" action="/admin/users/{{ user.id }}/toggle-active" 
                               class="d-inline-block">
                             <button type="submit" class="action-btn btn btn-sm 
                                     {% if user.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}"
@@ -231,9 +231,9 @@
         <div class="alert alert-warning">
             <h4>🔍 Пользователи не найдены</h4>
             <p>Попробуйте изменить параметры поиска или фильтры.</p>
-            <a href="{{ url_for('admin_users') }}" class="btn btn-primary">
-                Показать всех пользователей
-            </a>
+                <a href="/admin/users" class="btn btn-primary">
+                    Показать всех пользователей
+                </a>
         </div>
     </div>
     {% endif %}
