@@ -123,8 +123,14 @@ async def root(request: Request):
         try:
             user_data = await auth_service.verify_token(token)
             if user_data:
-                # Пользователь авторизован, перенаправляем на дашборд
-                return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+                # Проверяем роль пользователя
+                user_role = user_data.get("role", "employee")
+                if user_role == "superadmin":
+                    # Суперадмин идёт в админ-панель
+                    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+                else:
+                    # Остальные пользователи идут на дашборд
+                    return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
         except Exception:
             # Токен невалиден, показываем страницу входа
             pass

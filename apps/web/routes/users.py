@@ -40,7 +40,7 @@ async def users_list(request: Request, current_user: dict = Depends(require_owne
             "request": request,
             "title": "Управление пользователями",
             "users": users,
-            "roles": [role for role in UserRole]
+            "roles": list(UserRole)
         })
     except Exception as e:
         logger.error(f"Error getting users list: {e}")
@@ -48,7 +48,7 @@ async def users_list(request: Request, current_user: dict = Depends(require_owne
             "request": request,
             "title": "Управление пользователями",
             "users": [],
-            "roles": [role for role in UserRole],
+            "roles": list(UserRole),
             "error": f"Ошибка загрузки пользователей: {str(e)}"
         })
 
