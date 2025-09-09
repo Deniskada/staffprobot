@@ -118,25 +118,21 @@ async def require_role(required_role: str):
 async def root(request: Request):
     """Главная страница - перенаправление на дашборд или вход"""
     # Проверяем, авторизован ли пользователь
-    token = request.cookies.get("access_token")
-    if token:
-        try:
-            user_data = await auth_service.verify_token(token)
-            if user_data:
-                # Проверяем роль пользователя
-                user_role = user_data.get("role", "employee")
-                if user_role == "superadmin":
-                    # Суперадмин идёт в админ-панель
-                    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
-                elif user_role == "owner":
-                    # Владелец идёт в свой раздел
-                    return RedirectResponse(url="/owner", status_code=status.HTTP_302_FOUND)
-                else:
-                    # Остальные пользователи идут на дашборд
-                    return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-        except Exception:
-            # Токен невалиден, показываем страницу входа
-            pass
+    # Получаем актуальные данные пользователя из middleware
+    from apps.web.middleware.auth_middleware import get_current_user
+    user_data = await get_current_user(request)
+    if user_data:
+        # Проверяем роль пользователя (актуальную из БД)
+        user_role = user_data.get("role", "employee")
+        if user_role == "superadmin":
+            # Суперадмин идёт в админ-панель
+            return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+        elif user_role == "owner":
+            # Владелец идёт в свой раздел
+            return RedirectResponse(url="/owner", status_code=status.HTTP_302_FOUND)
+        else:
+            # Остальные пользователи идут на дашборд
+            return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
     # Пользователь не авторизован, показываем страницу входа
     return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
