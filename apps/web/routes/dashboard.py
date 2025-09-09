@@ -50,8 +50,11 @@ async def dashboard_index(request: Request):
         return RedirectResponse(url="/admin", status_code=302)
     elif user_role == "employee":
         return RedirectResponse(url="/employee", status_code=302)
-    elif user_role != "owner":
-        # Если не владелец, не суперадмин и не сотрудник - отказываем в доступе
+    elif user_role == "owner":
+        # Владельцы должны использовать новый интерфейс /owner
+        return RedirectResponse(url="/owner", status_code=302)
+    else:
+        # Остальные роли - отказываем в доступе
         return RedirectResponse(url="/auth/login", status_code=302)
     
     async with get_async_session() as session:
