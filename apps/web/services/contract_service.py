@@ -125,7 +125,8 @@ class ContractService:
                 hourly_rate=contract_data.get("hourly_rate"),
                 start_date=contract_data["start_date"],
                 end_date=contract_data.get("end_date"),
-                allowed_objects=contract_data.get("allowed_objects", [])
+                allowed_objects=contract_data.get("allowed_objects", []),
+                status="active"  # Устанавливаем активный статус по умолчанию
             )
             
             session.add(contract)

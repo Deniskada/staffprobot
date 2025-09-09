@@ -190,19 +190,7 @@
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="content" class="form-label">
-                                Содержание договора
-                            </label>
-                            <!-- Quill Editor -->
-                            <div id="quill-editor" style="height: 300px;"></div>
-                            <textarea id="content" name="content" style="display: none;"></textarea>
-                            <div class="form-text">
-                                Если выбран шаблон и заполнены дополнительные поля, содержание будет сгенерировано автоматически
-                            </div>
-                        </div>
-
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 mb-4">
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-save me-2"></i>Создать договор
                             </button>
@@ -210,7 +198,27 @@
                                 <i class="fas fa-times me-2"></i>Отмена
                             </a>
                         </div>
+
+                        <!-- Скрытое поле для содержания -->
+                        <textarea id="content" name="content" style="display: none;"></textarea>
                     </form>
+                </div>
+            </div>
+
+            <!-- Предпросмотр договора -->
+            <div class="card mt-4" id="preview-section" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-eye me-2"></i>Предпросмотр договора
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Здесь отображается предварительный вид договора с заполненными данными
+                    </div>
+                    <!-- Quill Editor для предпросмотра -->
+                    <div id="quill-editor" style="min-height: 400px;"></div>
                 </div>
             </div>
         </div>
@@ -248,6 +256,34 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('content').value = quill.getText();
     });
     
+    // Функция живого обновления тегов в редакторе
+    function updateTagsInEditor() {
+        const currentHtml = quill.root.innerHTML;
+        let updatedHtml = currentHtml;
+        
+        // Получаем значения из полей формы
+        const tagValues = {
+            '{{ employee_name }}': document.querySelector('input[name="dynamic_field_employee_name"]')?.value || '{{ employee_name }}',
+            '{{ birth_date }}': document.querySelector('input[name="dynamic_field_birth_date"]')?.value || '{{ birth_date }}',
+            '{{ inn }}': document.querySelector('input[name="dynamic_field_inn"]')?.value || '{{ inn }}',
+            '{{ passport_series }}': document.querySelector('input[name="dynamic_field_passport_series"]')?.value || '{{ passport_series }}',
+            '{{ passport_number }}': document.querySelector('input[name="dynamic_field_passport_number"]')?.value || '{{ passport_number }}'
+        };
+        
+        // Заменяем теги на реальные значения (если поля заполнены)
+        Object.keys(tagValues).forEach(tag => {
+            if (tagValues[tag] && tagValues[tag] !== tag) {
+                const regex = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                updatedHtml = updatedHtml.replace(regex, `<strong>${tagValues[tag]}</strong>`);
+            }
+        });
+        
+        // Обновляем редактор только если есть изменения
+        if (updatedHtml !== currentHtml) {
+            quill.root.innerHTML = updatedHtml;
+        }
+    }
+    
     // Автозаполнение содержания договора при выборе шаблона
     const templateSelect = document.getElementById('template_id');
     if (!templateSelect) {
@@ -277,9 +313,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 template.fields_schema.forEach(field => {
                     const fieldDiv = createDynamicField(field);
                     dynamicFieldsContainer.appendChild(fieldDiv);
+                    
+                    // Добавляем обработчик для живого обновления тегов
+                    const input = fieldDiv.querySelector('input');
+                    if (input) {
+                        input.addEventListener('input', updateTagsInEditor);
+                        input.addEventListener('blur', updateTagsInEditor);
+                    }
                 });
             } else {
                 dynamicFieldsDiv.style.display = 'none';
+            }
+            
+            // Показываем секцию предпросмотра
+            const previewSection = document.getElementById('preview-section');
+            if (previewSection) {
+                previewSection.style.display = 'block';
             }
             
             // Заполняем содержание из шаблона, конвертируя в читаемый формат
@@ -296,9 +345,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     } else {
-        // Скрываем динамические поля
+        // Скрываем динамические поля и предпросмотр
         dynamicFieldsDiv.style.display = 'none';
         dynamicFieldsContainer.innerHTML = '';
+        
+        const previewSection = document.getElementById('preview-section');
+        if (previewSection) {
+            previewSection.style.display = 'none';
+        }
         
         // Очищаем Quill редактор
         quill.setText('');
