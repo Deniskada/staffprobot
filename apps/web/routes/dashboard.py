@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from core.database.session import get_async_session
 from core.auth.user_manager import UserManager
-from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from apps.web.middleware.auth_middleware import require_owner_or_superadmin, get_current_user
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.object import Object
@@ -39,14 +39,20 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession):
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_index(request: Request):
     """Главная страница дашборда владельца"""
-    current_user = await require_owner_or_superadmin(request)
-    if isinstance(current_user, RedirectResponse):
-        return current_user
+    # Получаем текущего пользователя
+    current_user = await get_current_user(request)
+    if not current_user:
+        return RedirectResponse(url="/auth/login", status_code=302)
     
-    # Проверяем роль - суперадмины должны идти в админ-панель
+    # Проверяем роль - перенаправляем в соответствующие разделы
     user_role = current_user.get("role", "employee") if isinstance(current_user, dict) else current_user.role
     if user_role == "superadmin":
         return RedirectResponse(url="/admin", status_code=302)
+    elif user_role == "employee":
+        return RedirectResponse(url="/employee", status_code=302)
+    elif user_role != "owner":
+        # Если не владелец, не суперадмин и не сотрудник - отказываем в доступе
+        return RedirectResponse(url="/auth/login", status_code=302)
     
     async with get_async_session() as session:
         # Всегда используем внутренний user_id
