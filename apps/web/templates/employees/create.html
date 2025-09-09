@@ -206,6 +206,10 @@
 const templatesData = {{ templates_json|tojson }};
 console.log('All templates data:', templatesData);
 
+// Теги владельца из профиля
+const ownerTags = {{ owner_tags|tojson }};
+console.log('Owner tags from profile:', ownerTags);
+
 // Ждем загрузки DOM
 document.addEventListener('DOMContentLoaded', function() {
     
@@ -238,10 +242,22 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log('Using fields schema:', selectedTemplate.fields_schema);
         
-        // ДИНАМИЧЕСКАЯ замена тегов на основе fieldsSchema
-        const fieldValues = {};
+        // ДИНАМИЧЕСКАЯ замена тегов
         
-        // 1. Собираем все значения из полей формы
+        // 1. Сначала подставляем теги владельца из профиля (если есть)
+        if (ownerTags && Object.keys(ownerTags).length > 0) {
+            Object.keys(ownerTags).forEach(tagKey => {
+                const value = ownerTags[tagKey];
+                if (value && value.trim()) {
+                    const regex = new RegExp('\\{\\{\\s*' + tagKey + '\\s*\\}\\}', 'g');
+                    content = content.replace(regex, '<span class="filled-value">' + value + '</span>');
+                    console.log('✅ Owner tag ' + tagKey + ' replaced with: ' + value);
+                }
+            });
+        }
+        
+        // 2. Собираем значения из полей формы (для тегов сотрудника)
+        const fieldValues = {};
         selectedTemplate.fields_schema.forEach(field => {
             const fieldElement = document.querySelector('input[name="field_' + field.key + '"], select[name="field_' + field.key + '"], textarea[name="field_' + field.key + '"]');
             const value = fieldElement?.value || '';
@@ -250,32 +266,35 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Field ' + field.key + ': "' + value + '"');
         });
         
-        // 2. Заменяем заполненные теги на выделенные значения
+        // 3. Заменяем заполненные теги сотрудника
         selectedTemplate.fields_schema.forEach(field => {
             const value = fieldValues[field.key];
             if (value) {
                 const regex = new RegExp('\\{\\{\\s*' + field.key + '\\s*\\}\\}', 'g');
                 content = content.replace(regex, '<span class="filled-value">' + value + '</span>');
-                console.log('✅ Replaced ' + field.key + ' with: ' + value);
+                console.log('✅ Employee tag ' + field.key + ' replaced with: ' + value);
             }
         });
         
-        // 3. Заменяем незаполненные теги на выделенные метки
+        // 4. Заменяем незаполненные теги на выделенные метки
+        // Сначала теги сотрудника
         selectedTemplate.fields_schema.forEach(field => {
             const regex = new RegExp('\\{\\{\\s*' + field.key + '\\s*\\}\\}', 'g');
             content = content.replace(regex, '<span class="highlight-tag">{{ ' + field.key + ' }}</span>');
         });
         
-        // 4. Обрабатываем системные теги (owner_name, owner_last_name, current_date)
-        const systemTags = {
-            'owner_name': '[ИМЯ ВЛАДЕЛЬЦА]',
-            'owner_last_name': '[ФАМИЛИЯ ВЛАДЕЛЬЦА]', 
-            'current_date': new Date().toLocaleDateString('ru-RU')
-        };
+        // Затем любые оставшиеся теги (включая теги владельца, которые не заполнены)
+        const allPossibleTags = [
+            'owner_name', 'owner_last_name', 'owner_middle_name', 'owner_full_name', 
+            'owner_birth_date', 'owner_inn', 'owner_snils', 'owner_phone', 'owner_email',
+            'company_name', 'company_short_name', 'company_inn', 'company_kpp', 'company_ogrn',
+            'company_address', 'company_bank_name', 'company_bank_account', 'company_bank_bik',
+            'company_bank_corr_account', 'current_date', 'current_time', 'current_year'
+        ];
         
-        Object.keys(systemTags).forEach(tagKey => {
+        allPossibleTags.forEach(tagKey => {
             const regex = new RegExp('\\{\\{\\s*' + tagKey + '\\s*\\}\\}', 'g');
-            content = content.replace(regex, '<span class="highlight-tag">' + systemTags[tagKey] + '</span>');
+            content = content.replace(regex, '<span class="highlight-tag">{{ ' + tagKey + ' }}</span>');
         });
         
         // Обновляем предпросмотр

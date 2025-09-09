@@ -1,0 +1,130 @@
+"""
+Профиль владельца с динамическими полями.
+
+Позволяет владельцу создавать свой профиль с произвольными полями
+на основе справочника тегов для использования в шаблонах договоров.
+"""
+
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, JSON, ForeignKey
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
+from domain.entities.base import Base
+
+
+class OwnerProfile(Base):
+    """
+    Профиль владельца с динамическими полями.
+    
+    Содержит информацию о владельце бизнеса, которая может использоваться
+    в шаблонах договоров через систему тегов.
+    """
+    __tablename__ = "owner_profiles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Связь с пользователем
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True,
+                     comment="ID пользователя-владельца")
+    
+    # Основная информация
+    profile_name = Column(String(200), nullable=False, default="Мой профиль",
+                         comment="Название профиля")
+    
+    # Тип собственника
+    legal_type = Column(String(20), nullable=False, default="individual",
+                       comment="Тип: individual (ФЛ) или legal (ЮЛ)")
+    
+    # Динамические поля профиля
+    profile_data = Column(JSON, nullable=False, default=dict,
+                         comment="Динамические поля профиля в формате {tag_key: value}")
+    
+    # Активные теги профиля
+    active_tags = Column(JSON, nullable=False, default=list,
+                        comment="Список активных тегов профиля")
+    
+    # Настройки
+    is_complete = Column(Boolean, default=False,
+                        comment="Заполнен ли профиль полностью")
+    
+    is_public = Column(Boolean, default=False,
+                      comment="Доступен ли профиль другим пользователям")
+    
+    # Метаинформация
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Связи
+    user = relationship("User", back_populates="owner_profile")
+    
+    def __repr__(self):
+        return f"<OwnerProfile(user_id={self.user_id}, legal_type='{self.legal_type}')>"
+    
+    def to_dict(self):
+        """Преобразование в словарь для JSON API."""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'profile_name': self.profile_name,
+            'legal_type': self.legal_type,
+            'profile_data': self.profile_data,
+            'active_tags': self.active_tags,
+            'is_complete': self.is_complete,
+            'is_public': self.is_public,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    def get_tag_value(self, tag_key: str) -> str:
+        """Получить значение тега из профиля."""
+        return self.profile_data.get(tag_key, "")
+    
+    def set_tag_value(self, tag_key: str, value: str):
+        """Установить значение тега в профиле."""
+        if self.profile_data is None:
+            self.profile_data = {}
+        self.profile_data[tag_key] = value
+    
+    def get_tags_for_templates(self) -> dict:
+        """
+        Получить все теги профиля для использования в шаблонах.
+        
+        Возвращает словарь вида {tag_key: value} для подстановки в Jinja2 шаблоны.
+        """
+        result = {}
+        
+        # Добавляем все динамические поля
+        if self.profile_data:
+            result.update(self.profile_data)
+        
+        # Добавляем системные теги
+        result.update({
+            'current_date': None,  # Будет заполнено при рендеринге
+            'current_time': None,  # Будет заполнено при рендеринге
+            'current_year': None,  # Будет заполнено при рендеринге
+        })
+        
+        return result
+    
+    def is_tag_filled(self, tag_key: str) -> bool:
+        """Проверить, заполнен ли тег в профиле."""
+        value = self.get_tag_value(tag_key)
+        return bool(value and str(value).strip())
+    
+    def get_completion_percentage(self, required_tags: list = None) -> float:
+        """
+        Рассчитать процент заполненности профиля.
+        
+        Args:
+            required_tags: Список обязательных тегов. Если None, используются все активные теги.
+        
+        Returns:
+            Процент заполненности от 0.0 до 100.0
+        """
+        if not required_tags:
+            required_tags = self.active_tags or []
+        
+        if not required_tags:
+            return 100.0
+        
+        filled_count = sum(1 for tag in required_tags if self.is_tag_filled(tag))
+        return (filled_count / len(required_tags)) * 100.0
