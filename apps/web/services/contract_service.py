@@ -54,6 +54,18 @@ class ContractService:
             result = await session.execute(query)
             return result.scalars().all()
     
+    async def get_contract_templates_for_user(self, user_id: int) -> List[ContractTemplate]:
+        """Получение списка шаблонов договоров для пользователя (свои + публичные)."""
+        async with get_async_session() as session:
+            query = select(ContractTemplate).where(
+                (ContractTemplate.created_by == user_id) | 
+                (ContractTemplate.is_public == True)
+            ).where(ContractTemplate.is_active == True)
+            query = query.order_by(ContractTemplate.created_at.desc())
+            
+            result = await session.execute(query)
+            return result.scalars().all()
+    
     async def get_contract_template(self, template_id: int) -> Optional[ContractTemplate]:
         """Получение шаблона договора по ID."""
         async with get_async_session() as session:
