@@ -211,6 +211,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Функция живого обновления тегов в предпросмотре
     function updateTagsInPreview() {
+        console.log('=== updateTagsInPreview called ===');
+        
         const previewDiv = document.getElementById('contract-preview');
         if (!previewDiv.dataset.template) {
             console.log('No template data found');
@@ -219,49 +221,57 @@ document.addEventListener('DOMContentLoaded', function() {
         
         let content = previewDiv.dataset.template;
         
-        // Получаем значения из полей формы (правильные имена полей)
-        const tagValues = {
-            '{{ employee_name }}': document.querySelector('input[name="field_employee_name"]')?.value || '',
-            '{{ birth_date }}': document.querySelector('input[name="field_birth_date"]')?.value || '',
-            '{{ inn }}': document.querySelector('input[name="field_inn"]')?.value || '',
-            '{{ passport_series }}': document.querySelector('input[name="field_passport_series"]')?.value || '',
-            '{{ passport_number }}': document.querySelector('input[name="field_passport_number"]')?.value || '',
-            '{{ owner_name }}': '[ИМЯ ВЛАДЕЛЬЦА]',
-            '{{ owner_last_name }}': '[ФАМИЛИЯ ВЛАДЕЛЬЦА]',
-            '{{ current_date }}': new Date().toLocaleDateString('ru-RU')
-        };
+        // Получаем значения из полей формы
+        const employeeName = document.querySelector('input[name="field_employee_name"]')?.value || '';
+        const birthDate = document.querySelector('input[name="field_birth_date"]')?.value || '';
+        const inn = document.querySelector('input[name="field_inn"]')?.value || '';
+        const passportSeries = document.querySelector('input[name="field_passport_series"]')?.value || '';
+        const passportNumber = document.querySelector('input[name="field_passport_number"]')?.value || '';
         
-        console.log('Tag values:', tagValues); // Отладка
-        
-        // ИСПРАВЛЕНИЕ: Сортируем теги по длине (длинные первыми) чтобы избежать частичной замены
-        const sortedTags = Object.keys(tagValues)
-            .filter(tag => tag && tag.trim() !== '' && tag.startsWith('{{') && tag.endsWith('}}'))
-            .sort((a, b) => b.length - a.length);
-        
-        console.log('Sorted tags:', sortedTags);
-        
-        // Заменяем теги на значения или выделяем незаполненные
-        sortedTags.forEach(tag => {
-            const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(escapedTag, 'g');
-            
-            if (tagValues[tag] && tagValues[tag] !== '' && !tagValues[tag].startsWith('[')) {
-                // Заполненное поле - зеленое выделение
-                content = content.replace(regex, `<span class="filled-value">${tagValues[tag]}</span>`);
-                console.log(`Replaced "${tag}" with "${tagValues[tag]}"`);
-            } else {
-                // Незаполненное поле - желтое выделение
-                const displayValue = tagValues[tag] || tag;
-                content = content.replace(regex, `<span class="highlight-tag">${displayValue}</span>`);
-                console.log(`Highlighted unfilled tag "${tag}"`);
-            }
+        console.log('Raw field values:', {
+            employeeName, birthDate, inn, passportSeries, passportNumber
         });
         
-        // Обновляем предпросмотр (HTML будет корректно отображен)
+        // Простая замена тегов без сложной логики
+        if (employeeName) {
+            content = content.replace(/\{\{\s*employee_name\s*\}\}/g, `<span class="filled-value">${employeeName}</span>`);
+            console.log(`Replaced employee_name with: ${employeeName}`);
+        }
+        
+        if (birthDate) {
+            content = content.replace(/\{\{\s*birth_date\s*\}\}/g, `<span class="filled-value">${birthDate}</span>`);
+            console.log(`Replaced birth_date with: ${birthDate}`);
+        }
+        
+        if (inn) {
+            content = content.replace(/\{\{\s*inn\s*\}\}/g, `<span class="filled-value">${inn}</span>`);
+        }
+        
+        if (passportSeries) {
+            content = content.replace(/\{\{\s*passport_series\s*\}\}/g, `<span class="filled-value">${passportSeries}</span>`);
+        }
+        
+        if (passportNumber) {
+            content = content.replace(/\{\{\s*passport_number\s*\}\}/g, `<span class="filled-value">${passportNumber}</span>`);
+        }
+        
+        // Заменяем незаполненные теги на выделенные
+        content = content.replace(/\{\{\s*employee_name\s*\}\}/g, '<span class="highlight-tag">{{ employee_name }}</span>');
+        content = content.replace(/\{\{\s*birth_date\s*\}\}/g, '<span class="highlight-tag">{{ birth_date }}</span>');
+        content = content.replace(/\{\{\s*inn\s*\}\}/g, '<span class="highlight-tag">{{ inn }}</span>');
+        content = content.replace(/\{\{\s*passport_series\s*\}\}/g, '<span class="highlight-tag">{{ passport_series }}</span>');
+        content = content.replace(/\{\{\s*passport_number\s*\}\}/g, '<span class="highlight-tag">{{ passport_number }}</span>');
+        content = content.replace(/\{\{\s*owner_name\s*\}\}/g, '<span class="highlight-tag">[ИМЯ ВЛАДЕЛЬЦА]</span>');
+        content = content.replace(/\{\{\s*owner_last_name\s*\}\}/g, '<span class="highlight-tag">[ФАМИЛИЯ ВЛАДЕЛЬЦА]</span>');
+        content = content.replace(/\{\{\s*current_date\s*\}\}/g, `<span class="highlight-tag">${new Date().toLocaleDateString('ru-RU')}</span>`);
+        
+        // Обновляем предпросмотр
         previewDiv.innerHTML = content;
         
-        // Обновляем скрытое поле для отправки формы (БЕЗ вызова updateTagsInPreview!)
+        // Обновляем скрытое поле для отправки формы
         document.getElementById('content').value = previewDiv.textContent || previewDiv.innerText || '';
+        
+        console.log('=== updateTagsInPreview finished ===');
     }
     
     // Автозаполнение содержания договора при выборе шаблона
@@ -294,11 +304,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     const fieldDiv = createDynamicField(field);
                     dynamicFieldsContainer.appendChild(fieldDiv);
                     
-                    // Добавляем обработчик для живого обновления тегов
+                    // Добавляем обработчик для обновления тегов ТОЛЬКО на blur (выход из поля)
                     const input = fieldDiv.querySelector('input');
                     if (input) {
-                        input.addEventListener('input', updateTagsInPreview);
                         input.addEventListener('blur', updateTagsInPreview);
+                        console.log(`Added blur listener for field: ${input.name}`);
                     }
                 });
             } else {
