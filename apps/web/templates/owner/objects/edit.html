@@ -1,0 +1,230 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">
+                        <i class="bi bi-pencil text-primary"></i>
+                        {{ title }}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/owner/objects/{{ object.id }}/edit">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Название объекта *</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="name" 
+                                           name="name" 
+                                           value="{{ object.name }}"
+                                           required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="address" class="form-label">Адрес *</label>
+                                    <textarea class="form-control" 
+                                              id="address" 
+                                              name="address" 
+                                              rows="3"
+                                              required>{{ object.address }}</textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="coordinates" class="form-label">Координаты</label>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="latitude" 
+                                                   name="latitude" 
+                                                   value="{{ object.coordinates.split(',')[0] if object.coordinates else '' }}"
+                                                   placeholder="55.7558"
+                                                   pattern="^-?[0-9]+\.?[0-9]*$">
+                                            <div class="form-text">Широта (latitude)</div>
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="longitude" 
+                                                   name="longitude" 
+                                                   value="{{ object.coordinates.split(',')[1] if object.coordinates else '' }}"
+                                                   placeholder="37.6176"
+                                                   pattern="^-?[0-9]+\.?[0-9]*$">
+                                            <div class="form-text">Долгота (longitude)</div>
+                                        </div>
+                                    </div>
+                                    <div class="form-text">Координаты для геолокации (необязательно)</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="hourly_rate" 
+                                           name="hourly_rate" 
+                                           min="1"
+                                           value="{{ object.hourly_rate }}"
+                                           required>
+                                    <div class="form-text">Минимальная ставка: 1 ₽/час</div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="opening_time" class="form-label">Время открытия *</label>
+                                    <input type="time" 
+                                           class="form-control" 
+                                           id="opening_time" 
+                                           name="opening_time" 
+                                           value="{{ object.opening_time }}"
+                                           required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="closing_time" class="form-label">Время закрытия *</label>
+                                    <input type="time" 
+                                           class="form-control" 
+                                           id="closing_time" 
+                                           name="closing_time" 
+                                           value="{{ object.closing_time }}"
+                                           required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="max_distance" class="form-label">Максимальное расстояние (м)</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="max_distance" 
+                                           name="max_distance" 
+                                           min="1"
+                                           value="{{ object.max_distance }}">
+                                    <div class="form-text">Максимальное расстояние для открытия смены</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" 
+                                               type="checkbox" 
+                                               id="available_for_applicants" 
+                                               name="available_for_applicants" 
+                                               value="true"
+                                               {% if object.available_for_applicants %}checked{% endif %}>
+                                        <label class="form-check-label" for="available_for_applicants">
+                                            <strong>Доступен для соискателей</strong>
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        Если включено, соискатели смогут записываться на пробные смены к этому объекту
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" 
+                                               type="checkbox" 
+                                               id="is_active" 
+                                               name="is_active" 
+                                               value="true"
+                                               {% if object.is_active %}checked{% endif %}>
+                                        <label class="form-check-label" for="is_active">
+                                            <strong>Объект активен</strong>
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        Неактивные объекты не отображаются в списках для сотрудников
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Внимание:</strong> Изменение времени работы или ставки может повлиять 
+                            на существующие тайм-слоты и запланированные смены.
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Сохранить изменения
+                            </button>
+                            <a href="/owner/objects/{{ object.id }}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Назад к объекту
+                            </a>
+                            <a href="/owner/objects" class="btn btn-outline-secondary">
+                                <i class="bi bi-list"></i> К списку объектов
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const openingTime = document.getElementById('opening_time');
+    const closingTime = document.getElementById('closing_time');
+    
+    // Валидация времени
+    form.addEventListener('submit', function(e) {
+        if (openingTime.value >= closingTime.value) {
+            e.preventDefault();
+            alert('Время открытия должно быть раньше времени закрытия');
+            return;
+        }
+        
+        const hourlyRate = parseInt(document.getElementById('hourly_rate').value);
+        if (hourlyRate <= 0) {
+            e.preventDefault();
+            alert('Почасовая ставка должна быть больше 0');
+            return;
+        }
+    });
+    
+    // Автоматическое обновление времени закрытия при изменении времени открытия
+    openingTime.addEventListener('change', function() {
+        if (this.value && closingTime.value && this.value >= closingTime.value) {
+            const opening = new Date('2000-01-01T' + this.value);
+            opening.setHours(opening.getHours() + 1);
+            closingTime.value = opening.toTimeString().slice(0, 5);
+        }
+    });
+    
+    // Обработка чекбоксов
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            if (!this.checked) {
+                // Создаем скрытое поле для отправки false
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = this.name;
+                hiddenInput.value = 'false';
+                form.appendChild(hiddenInput);
+            } else {
+                // Удаляем скрытое поле если чекбокс отмечен
+                const hiddenInput = form.querySelector(`input[type="hidden"][name="${this.name}"]`);
+                if (hiddenInput) {
+                    hiddenInput.remove();
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}
