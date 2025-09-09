@@ -526,15 +526,234 @@ async def owner_calendar(request: Request):
 
 
 @router.get("/employees", response_class=HTMLResponse, name="owner_employees")
-async def owner_employees(request: Request):
-    """Управление сотрудниками владельца"""
+async def owner_employees(
+    request: Request,
+    view_mode: str = Query("cards"),
+    show_former: bool = Query(False)
+):
+    """Список сотрудников владельца"""
+    # Проверяем авторизацию и роль владельца
     current_user = await get_current_user(request)
     user_role = current_user.get("role", "employee")
     if user_role != "owner":
-        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
-    # Перенаправляем на существующую страницу сотрудников
-    return RedirectResponse(url="/employees", status_code=status.HTTP_302_FOUND)
+    try:
+        from apps.web.services.contract_service import ContractService
+        
+        # Получаем реальных сотрудников из базы данных
+        contract_service = ContractService()
+        # Используем telegram_id для поиска пользователя в БД
+        user_id = current_user["id"]  # Это telegram_id из токена
+        
+        if show_former:
+            employees = await contract_service.get_all_contract_employees_by_telegram_id(user_id)
+        else:
+            employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
+        
+        return templates.TemplateResponse(
+            "owner/employees/list.html",
+            {
+                "request": request,
+                "employees": employees,
+                "title": "Управление сотрудниками",
+                "current_user": current_user,
+                "view_mode": view_mode,
+                "show_former": show_former
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error loading employees list: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки списка сотрудников")
+
+
+@router.get("/employees/create", response_class=HTMLResponse, name="owner_employees_create")
+async def owner_employees_create(
+    request: Request,
+    employee_telegram_id: Optional[int] = Query(None)
+):
+    """Создание договора с сотрудником"""
+    # Проверяем авторизацию и роль владельца
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        from apps.web.services.contract_service import ContractService
+        from domain.entities.contract_template import ContractTemplate
+        from domain.entities.owner_profile import OwnerProfile
+        
+        async with get_async_session() as session:
+            # Получаем внутренний ID пользователя
+            user_id = await get_user_id_from_current_user(current_user, session)
+            
+            # Получаем объекты владельца
+            objects_query = select(Object).where(Object.owner_id == user_id)
+            objects_result = await session.execute(objects_query)
+            objects = objects_result.scalars().all()
+            
+            # Получаем шаблоны договоров владельца
+            templates_query = select(ContractTemplate).where(ContractTemplate.owner_id == user_id)
+            templates_result = await session.execute(templates_query)
+            templates = templates_result.scalars().all()
+            
+            # Получаем данные сотрудника, если указан telegram_id
+            employee_data = None
+            if employee_telegram_id:
+                employee_query = select(User).where(User.telegram_id == employee_telegram_id)
+                employee_result = await session.execute(employee_query)
+                employee = employee_result.scalar_one_or_none()
+                if employee:
+                    employee_data = {
+                        "id": employee.id,
+                        "telegram_id": employee.telegram_id,
+                        "username": employee.username,
+                        "first_name": employee.first_name,
+                        "last_name": employee.last_name,
+                        "phone": employee.phone
+                    }
+            
+            # Получаем профиль владельца
+            owner_profile_query = select(OwnerProfile).where(OwnerProfile.owner_id == user_id)
+            owner_profile_result = await session.execute(owner_profile_query)
+            owner_profile = owner_profile_result.scalar_one_or_none()
+            
+            # Подготавливаем данные профиля владельца для шаблона
+            owner_profile_data = {}
+            if owner_profile and owner_profile.profile_data:
+                for tag_ref in owner_profile.profile_data:
+                    if hasattr(tag_ref, 'to_dict'):
+                        tag_dict = tag_ref.to_dict()
+                        owner_profile_data[tag_dict['tag']] = tag_dict['value']
+                    else:
+                        # Если это уже словарь
+                        owner_profile_data[tag_ref['tag']] = tag_ref['value']
+            
+            return templates.TemplateResponse(
+                "owner/employees/create.html",
+                {
+                    "request": request,
+                    "title": "Создание договора с сотрудником",
+                    "current_user": current_user,
+                    "objects": objects,
+                    "templates": templates,
+                    "employee": employee_data,
+                    "owner_profile": owner_profile_data
+                }
+            )
+            
+    except Exception as e:
+        logger.error(f"Error loading employee creation form: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки формы: {str(e)}")
+
+
+@router.post("/employees/create")
+async def owner_employees_create_post(request: Request):
+    """Создание договора с сотрудником"""
+    # Проверяем авторизацию и роль владельца
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        from apps.web.services.contract_service import ContractService
+        from apps.web.services.pdf_service import PDFService
+        
+        # Получаем данные формы
+        form_data = await request.form()
+        
+        # Создаем договор
+        contract_service = ContractService()
+        pdf_service = PDFService()
+        
+        # Получаем данные из формы
+        employee_name = form_data.get("employee_name", "").strip()
+        employee_telegram_id = form_data.get("employee_telegram_id", "").strip()
+        object_id = form_data.get("object_id", "").strip()
+        template_id = form_data.get("template_id", "").strip()
+        hourly_rate = form_data.get("hourly_rate", "").strip()
+        
+        # Валидация
+        if not employee_name:
+            raise HTTPException(status_code=400, detail="Имя сотрудника обязательно")
+        if not employee_telegram_id:
+            raise HTTPException(status_code=400, detail="Telegram ID сотрудника обязателен")
+        if not object_id:
+            raise HTTPException(status_code=400, detail="Объект обязателен")
+        if not template_id:
+            raise HTTPException(status_code=400, detail="Шаблон договора обязателен")
+        
+        try:
+            employee_telegram_id = int(employee_telegram_id)
+            object_id = int(object_id)
+            template_id = int(template_id)
+            if hourly_rate:
+                hourly_rate = float(hourly_rate.replace(",", "."))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат числовых полей")
+        
+        # Создаем договор
+        contract_data = {
+            "employee_name": employee_name,
+            "employee_telegram_id": employee_telegram_id,
+            "object_id": object_id,
+            "template_id": template_id,
+            "hourly_rate": hourly_rate,
+            "owner_telegram_id": current_user["id"]
+        }
+        
+        # Добавляем дополнительные поля из формы
+        for key, value in form_data.items():
+            if key.startswith("field_"):
+                contract_data[key] = value
+        
+        contract = await contract_service.create_contract(contract_data)
+        
+        return RedirectResponse(url="/owner/employees", status_code=status.HTTP_302_FOUND)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating employee contract: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка создания договора: {str(e)}")
+
+
+@router.get("/employees/{employee_id}", response_class=HTMLResponse, name="owner_employees_detail")
+async def owner_employees_detail(request: Request, employee_id: int):
+    """Детальная информация о сотруднике"""
+    # Проверяем авторизацию и роль владельца
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        from apps.web.services.contract_service import ContractService
+        
+        contract_service = ContractService()
+        employee = await contract_service.get_employee_by_id(employee_id, current_user["id"])
+        
+        if not employee:
+            raise HTTPException(status_code=404, detail="Сотрудник не найден")
+        
+        return templates.TemplateResponse(
+            "owner/employees/detail.html",
+            {
+                "request": request,
+                "title": f"Сотрудник: {employee.get('name', 'Неизвестно')}",
+                "current_user": current_user,
+                "employee": employee
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading employee detail: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки информации о сотруднике")
 
 
 @router.get("/shifts", response_class=HTMLResponse, name="owner_shifts")

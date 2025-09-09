@@ -1,0 +1,463 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Добавить сотрудника{% endblock %}
+
+{% block head %}
+<style>
+/* Стили для предпросмотра договора */
+#contract-preview {
+    font-size: 14px;
+    color: #333;
+}
+
+#contract-preview h1, #contract-preview h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+#contract-preview .highlight-tag {
+    background-color: #fff3cd;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: bold;
+    color: #856404;
+}
+
+#contract-preview .filled-value {
+    background-color: #d4edda;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: bold;
+    color: #155724;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-user-plus me-2"></i>Добавить сотрудника
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="/owner/employees/create">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="employee_telegram_id" class="form-label">
+                                        Telegram ID сотрудника <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="employee_telegram_id" 
+                                           name="employee_telegram_id" 
+                                           required
+                                           {% if employee_telegram_id %}value="{{ employee_telegram_id }}"{% endif %}
+                                           placeholder="Введите Telegram ID">
+                                    <div class="form-text">
+                                        Попросите сотрудника отправить команду /start боту, чтобы получить его Telegram ID
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="title" class="form-label">
+                                        Название договора <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="title" 
+                                           name="title" 
+                                           required
+                                           placeholder="Например: Трудовой договор с Ивановым И.И.">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="hourly_rate" class="form-label">Почасовая ставка (₽)</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="hourly_rate" 
+                                           name="hourly_rate" 
+                                           min="0"
+                                           placeholder="500">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="template_id" class="form-label">Шаблон договора</label>
+                                    <select class="form-select" id="template_id" name="template_id">
+                                        <option value="">Выберите шаблон (необязательно)</option>
+                                        {% for template in templates %}
+                                        <option value="{{ template.id }}">{{ template.name }} (v{{ template.version }})</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="start_date" class="form-label">
+                                        Дата начала <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="date" 
+                                           class="form-control" 
+                                           id="start_date" 
+                                           name="start_date" 
+                                           required
+                                           value="{{ current_date }}">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="end_date" class="form-label">Дата окончания</label>
+                                    <input type="date" 
+                                           class="form-control" 
+                                           id="end_date" 
+                                           name="end_date"
+                                           placeholder="Оставьте пустым для бессрочного договора">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Доступ к объектам</label>
+                            <div class="row">
+                                {% for object in objects %}
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" 
+                                               type="checkbox" 
+                                               name="allowed_objects" 
+                                               value="{{ object.id }}" 
+                                               id="object_{{ object.id }}">
+                                        <label class="form-check-label" for="object_{{ object.id }}">
+                                            {{ object.name }}
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% if not objects %}
+                            <div class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                У вас нет объектов. Сначала создайте объекты в разделе "Управление объектами"
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Динамические поля шаблона -->
+                        <div id="dynamic-fields" style="display: none;">
+                            <h5 class="mb-3">Дополнительные поля</h5>
+                            <div id="dynamic-fields-container">
+                                <!-- Поля будут добавлены через JavaScript -->
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 mb-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Создать договор
+                            </button>
+                            <a href="/owner/employees" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>Отмена
+                            </a>
+                        </div>
+
+                        <!-- Скрытое поле для содержания -->
+                        <textarea id="content" name="content" style="display: none;"></textarea>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Предпросмотр договора -->
+            <div class="card mt-4" id="preview-section" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-eye me-2"></i>Предпросмотр договора
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Здесь отображается предварительный вид договора с заполненными данными
+                    </div>
+                    <!-- Предпросмотр договора -->
+                    <div id="contract-preview" class="border rounded p-3" style="min-height: 400px; background: white; font-family: 'Times New Roman', serif; line-height: 1.6;">
+                        <div class="text-muted">Выберите шаблон для предпросмотра договора...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Данные шаблонов из сервера
+const templatesData = {{ templates_json|tojson }};
+console.log('All templates data:', templatesData);
+
+// Теги владельца из профиля
+const ownerTags = {{ owner_tags|tojson }};
+console.log('Owner tags from profile:', ownerTags);
+
+// Ждем загрузки DOM
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // Функция живого обновления тегов в предпросмотре
+    function updateTagsInPreview() {
+        console.log('=== updateTagsInPreview called ===');
+        
+        const previewDiv = document.getElementById('contract-preview');
+        if (!previewDiv.dataset.template) {
+            console.log('No template data found');
+            return;
+        }
+        
+        let content = previewDiv.dataset.template;
+        
+        // Получаем текущий выбранный шаблон для доступа к fieldsSchema
+        const templateSelect = document.getElementById('template_id');
+        const selectedTemplateId = templateSelect.value;
+        
+        if (!selectedTemplateId) {
+            console.log('No template selected');
+            return;
+        }
+        
+        const selectedTemplate = templatesData.find(t => t.id == selectedTemplateId);
+        if (!selectedTemplate || !selectedTemplate.fields_schema) {
+            console.log('Template not found or no fields schema');
+            return;
+        }
+        
+        console.log('Using fields schema:', selectedTemplate.fields_schema);
+        
+        // ДИНАМИЧЕСКАЯ замена тегов
+        
+        // 1. Сначала подставляем теги владельца из профиля (если есть)
+        if (ownerTags && Object.keys(ownerTags).length > 0) {
+            Object.keys(ownerTags).forEach(tagKey => {
+                const value = ownerTags[tagKey];
+                if (value && value.trim()) {
+                    const regex = new RegExp('\\{\\{\\s*' + tagKey + '\\s*\\}\\}', 'g');
+                    content = content.replace(regex, '<span class="filled-value">' + value + '</span>');
+                    console.log('✅ Owner tag ' + tagKey + ' replaced with: ' + value);
+                }
+            });
+        }
+        
+        // 2. Собираем значения из полей формы (для тегов сотрудника)
+        const fieldValues = {};
+        selectedTemplate.fields_schema.forEach(field => {
+            const fieldElement = document.querySelector('input[name="field_' + field.key + '"], select[name="field_' + field.key + '"], textarea[name="field_' + field.key + '"]');
+            const value = fieldElement?.value || '';
+            fieldValues[field.key] = value;
+            
+            console.log('Field ' + field.key + ': "' + value + '"');
+        });
+        
+        // 3. Заменяем заполненные теги сотрудника
+        selectedTemplate.fields_schema.forEach(field => {
+            const value = fieldValues[field.key];
+            if (value) {
+                const regex = new RegExp('\\{\\{\\s*' + field.key + '\\s*\\}\\}', 'g');
+                content = content.replace(regex, '<span class="filled-value">' + value + '</span>');
+                console.log('✅ Employee tag ' + field.key + ' replaced with: ' + value);
+            }
+        });
+        
+        // 4. Заменяем незаполненные теги на выделенные метки
+        // Сначала теги сотрудника
+        selectedTemplate.fields_schema.forEach(field => {
+            const regex = new RegExp('\\{\\{\\s*' + field.key + '\\s*\\}\\}', 'g');
+            content = content.replace(regex, '<span class="highlight-tag">{{ ' + field.key + ' }}</span>');
+        });
+        
+        // Затем любые оставшиеся теги (включая теги владельца, которые не заполнены)
+        const allPossibleTags = [
+            'owner_name', 'owner_last_name', 'owner_middle_name', 'owner_full_name', 
+            'owner_birth_date', 'owner_inn', 'owner_snils', 'owner_phone', 'owner_email',
+            'company_name', 'company_short_name', 'company_inn', 'company_kpp', 'company_ogrn',
+            'company_address', 'company_bank_name', 'company_bank_account', 'company_bank_bik',
+            'company_bank_corr_account', 'current_date', 'current_time', 'current_year'
+        ];
+        
+        allPossibleTags.forEach(tagKey => {
+            const regex = new RegExp('\\{\\{\\s*' + tagKey + '\\s*\\}\\}', 'g');
+            content = content.replace(regex, '<span class="highlight-tag">{{ ' + tagKey + ' }}</span>');
+        });
+        
+        // Обновляем предпросмотр
+        previewDiv.innerHTML = content;
+        
+        // Обновляем скрытое поле для отправки формы
+        document.getElementById('content').value = previewDiv.textContent || previewDiv.innerText || '';
+        
+        console.log('=== updateTagsInPreview finished ===');
+    }
+    
+    // Автозаполнение содержания договора при выборе шаблона
+    const templateSelect = document.getElementById('template_id');
+    if (!templateSelect) {
+        console.error('Template select not found!');
+        return;
+    }
+    
+    templateSelect.addEventListener('change', function() {
+    const templateId = this.value;
+    const dynamicFieldsDiv = document.getElementById('dynamic-fields');
+    const dynamicFieldsContainer = document.getElementById('dynamic-fields-container');
+    
+    if (templateId) {
+        // Находим шаблон в данных
+        const template = templatesData.find(t => t.id == templateId);
+        
+        console.log('Selected template:', template);
+        
+        if (template) {
+            // Очищаем контейнер
+            dynamicFieldsContainer.innerHTML = '';
+            
+            // Если есть схема полей, создаем поля
+            if (template.fields_schema && template.fields_schema.length > 0) {
+                dynamicFieldsDiv.style.display = 'block';
+                
+                template.fields_schema.forEach(field => {
+                    const fieldDiv = createDynamicField(field);
+                    dynamicFieldsContainer.appendChild(fieldDiv);
+                    
+                    // Добавляем обработчик для обновления тегов ТОЛЬКО на blur (выход из поля)
+                    const fieldElement = fieldDiv.querySelector('input, select, textarea');
+                    if (fieldElement) {
+                        fieldElement.addEventListener('blur', updateTagsInPreview);
+                        console.log('Added blur listener for field: ' + fieldElement.name);
+                    }
+                });
+            } else {
+                dynamicFieldsDiv.style.display = 'none';
+            }
+            
+            // Показываем секцию предпросмотра
+            const previewSection = document.getElementById('preview-section');
+            if (previewSection) {
+                previewSection.style.display = 'block';
+            }
+            
+            // Заполняем содержание из шаблона
+            if (template.content) {
+                const previewDiv = document.getElementById('contract-preview');
+                previewDiv.dataset.template = template.content;
+                
+                // Запускаем обновление тегов (один раз!)
+                updateTagsInPreview();
+                
+                console.log('Preview updated with template content');
+            }
+        }
+    } else {
+        // Скрываем динамические поля и предпросмотр
+        dynamicFieldsDiv.style.display = 'none';
+        dynamicFieldsContainer.innerHTML = '';
+        
+        const previewSection = document.getElementById('preview-section');
+        if (previewSection) {
+            previewSection.style.display = 'none';
+        }
+        
+        // Очищаем предпросмотр
+        const previewDiv = document.getElementById('contract-preview');
+        previewDiv.innerHTML = '<div class="text-muted">Выберите шаблон для предпросмотра договора...</div>';
+        previewDiv.dataset.template = '';
+        document.getElementById('content').value = '';
+    }
+});
+
+function createDynamicField(field) {
+    const div = document.createElement('div');
+    div.className = 'mb-3';
+    
+    const label = document.createElement('label');
+    label.className = 'form-label';
+    label.textContent = field.label;
+    if (field.required) {
+        label.innerHTML += ' <span class="text-danger">*</span>';
+    }
+    
+    let input;
+    const fieldName = 'field_' + field.key;
+    
+    switch (field.type) {
+        case 'text':
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+            break;
+        case 'email':
+            input = document.createElement('input');
+            input.type = 'email';
+            input.className = 'form-control';
+            break;
+        case 'date':
+            input = document.createElement('input');
+            input.type = 'date';
+            input.className = 'form-control';
+            break;
+        case 'number':
+            input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'form-control';
+            break;
+        case 'textarea':
+            input = document.createElement('textarea');
+            input.className = 'form-control';
+            input.rows = 3;
+            break;
+        case 'select':
+            input = document.createElement('select');
+            input.className = 'form-select';
+            if (field.options) {
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = 'Выберите...';
+                input.appendChild(emptyOption);
+                
+                field.options.forEach(option => {
+                    const optionEl = document.createElement('option');
+                    optionEl.value = option;
+                    optionEl.textContent = option;
+                    input.appendChild(optionEl);
+                });
+            }
+            break;
+        default:
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+    }
+    
+    input.name = fieldName;
+    input.id = fieldName;
+    if (field.required) {
+        input.required = true;
+    }
+    
+    div.appendChild(label);
+    div.appendChild(input);
+    
+    return div;
+}
+
+
+}); // Конец DOMContentLoaded
+</script>
+{% endblock %}
