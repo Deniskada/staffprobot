@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+}
+
+.stat-card .stat-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.stat-card .stat-label {
+    font-size: 1rem;
+    opacity: 0.9;
+}
+
+.admin-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+}
+
+.admin-card:hover {
+    transform: translateY(-3px);
+}
+
+.admin-menu {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+}
+
+.admin-menu h2 {
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.admin-btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 12px 25px;
+    margin: 5px;
+    border-radius: 25px;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+.admin-btn:hover {
+    background: rgba(255,255,255,0.3);
+    color: white;
+    text-decoration: none;
+    transform: scale(1.05);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок -->
+    <div class="admin-menu">
+        <h2>🛠️ Панель суперадминистратора</h2>
+        <p>Добро пожаловать в административную панель StaffProBot</p>
+        
+        <!-- Быстрые действия -->
+        <div class="mt-3">
+            <a href="{{ url_for('admin_users') }}" class="admin-btn">
+                👥 Управление пользователями
+            </a>
+            <a href="{{ url_for('admin_tariffs') }}" class="admin-btn">
+                💰 Тарифные планы
+            </a>
+            <a href="{{ url_for('admin_monitoring') }}" class="admin-btn">
+                📊 Мониторинг
+            </a>
+        </div>
+    </div>
+
+    <!-- Статистика -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.total_users }}</div>
+                <div class="stat-label">Всего пользователей</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                <div class="stat-number">{{ stats.total_owners }}</div>
+                <div class="stat-label">Владельцев</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                <div class="stat-number">{{ stats.total_objects }}</div>
+                <div class="stat-label">Объектов</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                <div class="stat-number">{{ stats.total_shifts }}</div>
+                <div class="stat-label">Смен</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stat-card" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333;">
+                <div class="stat-number">{{ stats.active_users }}</div>
+                <div class="stat-label">Активных за месяц</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Последние пользователи -->
+        <div class="col-md-6">
+            <div class="card admin-card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">👤 Последние регистрации</h5>
+                </div>
+                <div class="card-body">
+                    {% if stats.recent_users %}
+                        <div class="list-group list-group-flush">
+                            {% for user in stats.recent_users %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ user.first_name }} {{ user.last_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">@{{ user.username or 'N/A' }}</small>
+                                    <span class="badge badge-{{ 'success' if user.role.value == 'owner' else 'secondary' }} ml-2">
+                                        {{ user.role.value }}
+                                    </span>
+                                </div>
+                                <small class="text-muted">
+                                    {{ user.created_at.strftime('%d.%m.%Y') }}
+                                </small>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted">Нет новых регистраций</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Системная информация -->
+        <div class="col-md-6">
+            <div class="card admin-card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">⚙️ Системная информация</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <strong>🐳 Docker:</strong> 
+                            <span class="badge badge-success">Активен</span>
+                        </li>
+                        <li class="mb-2">
+                            <strong>🗄️ PostgreSQL:</strong> 
+                            <span class="badge badge-success">Подключен</span>
+                        </li>
+                        <li class="mb-2">
+                            <strong>🔴 Redis:</strong> 
+                            <span class="badge badge-success">Работает</span>
+                        </li>
+                        <li class="mb-2">
+                            <strong>🤖 Telegram Bot:</strong> 
+                            <span class="badge badge-success">Онлайн</span>
+                        </li>
+                        <li class="mb-2">
+                            <strong>📊 Prometheus:</strong> 
+                            <a href="http://localhost:9090" target="_blank" class="badge badge-info">
+                                Открыть
+                            </a>
+                        </li>
+                        <li class="mb-2">
+                            <strong>📈 Grafana:</strong> 
+                            <a href="http://localhost:3000" target="_blank" class="badge badge-info">
+                                Открыть
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Быстрые действия -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card admin-card">
+                <div class="card-header bg-warning text-white">
+                    <h5 class="mb-0">⚡ Быстрые действия</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-primary btn-block">
+                                👥 Все пользователи
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ url_for('admin_users', role='owner') }}" class="btn btn-outline-success btn-block">
+                                🏢 Только владельцы
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ url_for('admin_tariffs') }}" class="btn btn-outline-warning btn-block">
+                                💰 Тарифы
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ url_for('admin_monitoring') }}" class="btn btn-outline-info btn-block">
+                                📊 Статистика
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
