@@ -1,0 +1,259 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-building text-primary"></i>
+                    {{ title }}
+                </h1>
+                <div class="btn-group">
+                    <a href="/owner/objects/{{ object.id }}/edit" class="btn btn-outline-secondary">
+                        <i class="bi bi-pencil"></i> Редактировать
+                    </a>
+                    <a href="/owner/objects" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left"></i> Назад к списку
+                    </a>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Информация об объекте</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <dl class="row">
+                                        <dt class="col-sm-4">Название:</dt>
+                                        <dd class="col-sm-8">
+                                            <strong>{{ object.name }}</strong>
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">Адрес:</dt>
+                                        <dd class="col-sm-8">
+                                            <i class="bi bi-geo-alt text-muted"></i>
+                                            {{ object.address }}
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">Ставка:</dt>
+                                        <dd class="col-sm-8">
+                                            <strong class="text-success">{{ object.hourly_rate }} ₽/час</strong>
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">Время работы:</dt>
+                                        <dd class="col-sm-8">
+                                            <i class="bi bi-clock text-muted"></i>
+                                            {{ object.opening_time }} - {{ object.closing_time }}
+                                        </dd>
+                                    </dl>
+                                </div>
+                                <div class="col-md-6">
+                                    <dl class="row">
+                                        <dt class="col-sm-4">Макс. расстояние:</dt>
+                                        <dd class="col-sm-8">
+                                            <i class="bi bi-geo-alt-fill text-muted"></i>
+                                            {{ object.max_distance }} м
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">Статус:</dt>
+                                        <dd class="col-sm-8">
+                                            {% if object.is_active %}
+                                            <span class="badge bg-success">Активен</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">Неактивен</span>
+                                            {% endif %}
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">Для соискателей:</dt>
+                                        <dd class="col-sm-8">
+                                            {% if object.available_for_applicants %}
+                                            <span class="badge bg-info">Доступен</span>
+                                            {% else %}
+                                            <span class="badge bg-warning">Недоступен</span>
+                                            {% endif %}
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">Создан:</dt>
+                                        <dd class="col-sm-8">
+                                            <i class="bi bi-calendar text-muted"></i>
+                                            {{ object.created_at }}
+                                        </dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Тайм-слоты -->
+                    <div class="card mt-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">Тайм-слоты</h5>
+                            <a href="/owner/timeslots/object/{{ object.id }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-clock-history"></i> Управление тайм-слотами
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            {% if object.timeslots %}
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Время</th>
+                                            <th>Ставка</th>
+                                            <th>Статус</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for slot in object.timeslots %}
+                                        <tr>
+                                            <td>
+                                                <i class="bi bi-clock text-muted"></i>
+                                                {{ slot.start_time }} - {{ slot.end_time }}
+                                            </td>
+                                            <td>
+                                                <strong class="text-success">{{ slot.hourly_rate }} ₽/час</strong>
+                                            </td>
+                                            <td>
+                                                {% if slot.is_active %}
+                                                <span class="badge bg-success">Активен</span>
+                                                {% else %}
+                                                <span class="badge bg-secondary">Неактивен</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <a href="/timeslots/{{ slot.id }}/edit" class="btn btn-outline-secondary" title="Редактировать">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </a>
+                                                    <button class="btn btn-outline-danger" title="Удалить" onclick="confirmDeleteTimeslot({{ slot.id }}, '{{ slot.start_time }}-{{ slot.end_time }}')">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="text-center py-3">
+                                <i class="bi bi-clock text-muted fs-1"></i>
+                                <p class="text-muted mt-2">Тайм-слоты не настроены</p>
+                                <button type="button" class="btn btn-primary btn-sm" onclick="openCreateTimeslotModal({{ object.id }})">
+                                    <i class="bi bi-plus"></i> Создать тайм-слоты
+                                </button>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <!-- Статистика -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Статистика</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="text-center mb-3">
+                                <h3 class="text-primary">0</h3>
+                                <p class="text-muted mb-0">Активных смен</p>
+                            </div>
+                            
+                            <div class="text-center mb-3">
+                                <h3 class="text-success">0</h3>
+                                <p class="text-muted mb-0">Отработано часов</p>
+                            </div>
+                            
+                            <div class="text-center mb-3">
+                                <h3 class="text-info">0</h3>
+                                <p class="text-muted mb-0">Сотрудников</p>
+                            </div>
+                            
+                            <div class="text-center">
+                                <h3 class="text-warning">0</h3>
+                                <p class="text-muted mb-0">Пробных смен</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Быстрые действия -->
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Быстрые действия</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <a href="/owner/timeslots/object/{{ object.id }}" class="btn btn-outline-primary">
+                                    <i class="bi bi-clock"></i> Управление тайм-слотами
+                                </a>
+                                <a href="/calendar?object_id={{ object.id }}" class="btn btn-outline-info">
+                                    <i class="bi bi-calendar3"></i> Календарь
+                                </a>
+                                <a href="/shifts?object_id={{ object.id }}" class="btn btn-outline-success">
+                                    <i class="bi bi-clock-history"></i> Смены
+                                </a>
+                                <a href="/employees?object_id={{ object.id }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-people"></i> Сотрудники
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Опасные действия -->
+                    <div class="card mt-3 border-danger">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="card-title mb-0">Опасная зона</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small">
+                                Удаление объекта приведет к удалению всех связанных данных: 
+                                тайм-слотов, смен, договоров.
+                            </p>
+                            <form method="POST" action="/owner/objects/{{ object.id }}/delete" 
+                                  onsubmit="return confirm('Вы уверены, что хотите удалить объект? Это действие нельзя отменить!')">
+                                <button type="submit" class="btn btn-danger btn-sm w-100">
+                                    <i class="bi bi-trash"></i> Удалить объект
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openCreateTimeslotModal(objectId) {
+    // Если на странице нет модалки, переходим в календарь с параметром
+    if (!document.getElementById('quickCreateModal')) {
+        window.location.href = `/calendar?object_id=${objectId}`;
+        return;
+    }
+    // Установим выбранный объект и предзаполним поля
+    const select = document.getElementById('quickObject');
+    if (select) select.value = String(objectId);
+    const modal = new bootstrap.Modal(document.getElementById('quickCreateModal'));
+    modal.show();
+}
+function confirmDeleteTimeslot(timeslotId, timeslotName) {
+    if (confirm(`Вы уверены, что хотите удалить тайм-слот ${timeslotName}?`)) {
+        // Создаем форму для отправки POST запроса
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/timeslots/${timeslotId}/delete`;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}
