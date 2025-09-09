@@ -3,59 +3,33 @@
 {% block title %}Добавить сотрудника{% endblock %}
 
 {% block head %}
-<!-- Quill.js CSS -->
-<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 <style>
-/* ПОЛНОЕ скрытие всех навигационных элементов Quill */
-.ql-tooltip,
-.ql-tooltip-arrow,
-.ql-tooltip.ql-editing,
-.ql-tooltip.ql-editing .ql-tooltip-editor,
-.ql-formats .ql-picker,
-.ql-picker,
-.ql-picker-options,
-.ql-picker-label,
-.ql-stroke,
-.ql-thin,
-.ql-fill {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    position: absolute !important;
-    left: -9999px !important;
-}
-
-/* Скрываем все стрелки и указатели */
-*[class*="arrow"],
-*[class*="tooltip"],
-*::before,
-*::after {
-    content: none !important;
-}
-
-/* Улучшаем внешний вид редактора */
-#quill-editor {
-    border: 1px solid #ced4da;
-    border-radius: 0.375rem;
-    overflow: hidden;
-}
-
-#quill-editor .ql-editor {
-    min-height: 300px;
+/* Стили для предпросмотра договора */
+#contract-preview {
     font-size: 14px;
-    line-height: 1.5;
-    padding: 15px;
+    color: #333;
 }
 
-/* Упрощаем панель инструментов */
-.ql-toolbar {
-    border-bottom: 1px solid #ced4da;
-    background: #f8f9fa;
+#contract-preview h1, #contract-preview h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    font-weight: bold;
 }
 
-/* Скрываем всё лишнее глобально */
-.ql-container * {
-    box-shadow: none !important;
+#contract-preview .highlight-tag {
+    background-color: #fff3cd;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: bold;
+    color: #856404;
+}
+
+#contract-preview .filled-value {
+    background-color: #d4edda;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: bold;
+    color: #155724;
 }
 </style>
 {% endblock %}
@@ -217,71 +191,77 @@
                         <i class="fas fa-info-circle me-2"></i>
                         Здесь отображается предварительный вид договора с заполненными данными
                     </div>
-                    <!-- Quill Editor для предпросмотра -->
-                    <div id="quill-editor" style="min-height: 400px;"></div>
+                    <!-- Предпросмотр договора -->
+                    <div id="contract-preview" class="border rounded p-3" style="min-height: 400px; background: white; font-family: 'Times New Roman', serif; line-height: 1.6;">
+                        <div class="text-muted">Выберите шаблон для предпросмотра договора...</div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Quill.js JavaScript -->
-<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
-
 <script>
 // Данные шаблонов из сервера
 const templatesData = {{ templates_json|tojson }};
 console.log('All templates data:', templatesData);
 
-// Инициализируем Quill редактор
-let quill;
-
 // Ждем загрузки DOM
 document.addEventListener('DOMContentLoaded', function() {
-    // Инициализируем Quill с минимальной панелью инструментов
-    quill = new Quill('#quill-editor', {
-        theme: 'snow',
-        placeholder: 'Выберите шаблон договора для автозаполнения...',
-        modules: {
-            toolbar: [
-                ['bold', 'italic'],
-                [{ 'header': [1, 2, false] }],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }]
-            ]
+    
+    // Функция живого обновления тегов в предпросмотре
+    function updateTagsInPreview() {
+        const previewDiv = document.getElementById('contract-preview');
+        if (!previewDiv.dataset.template) {
+            console.log('No template data found');
+            return;
         }
-    });
-    
-    // Синхронизация с скрытым textarea
-    quill.on('text-change', function() {
-        document.getElementById('content').value = quill.getText();
-    });
-    
-    // Функция живого обновления тегов в редакторе
-    function updateTagsInEditor() {
-        const currentHtml = quill.root.innerHTML;
-        let updatedHtml = currentHtml;
         
-        // Получаем значения из полей формы
+        let content = previewDiv.dataset.template;
+        
+        // Получаем значения из полей формы (правильные имена полей)
         const tagValues = {
-            '{{ employee_name }}': document.querySelector('input[name="dynamic_field_employee_name"]')?.value || '{{ employee_name }}',
-            '{{ birth_date }}': document.querySelector('input[name="dynamic_field_birth_date"]')?.value || '{{ birth_date }}',
-            '{{ inn }}': document.querySelector('input[name="dynamic_field_inn"]')?.value || '{{ inn }}',
-            '{{ passport_series }}': document.querySelector('input[name="dynamic_field_passport_series"]')?.value || '{{ passport_series }}',
-            '{{ passport_number }}': document.querySelector('input[name="dynamic_field_passport_number"]')?.value || '{{ passport_number }}'
+            '{{ employee_name }}': document.querySelector('input[name="field_employee_name"]')?.value || '',
+            '{{ birth_date }}': document.querySelector('input[name="field_birth_date"]')?.value || '',
+            '{{ inn }}': document.querySelector('input[name="field_inn"]')?.value || '',
+            '{{ passport_series }}': document.querySelector('input[name="field_passport_series"]')?.value || '',
+            '{{ passport_number }}': document.querySelector('input[name="field_passport_number"]')?.value || '',
+            '{{ owner_name }}': '[ИМЯ ВЛАДЕЛЬЦА]',
+            '{{ owner_last_name }}': '[ФАМИЛИЯ ВЛАДЕЛЬЦА]',
+            '{{ current_date }}': new Date().toLocaleDateString('ru-RU')
         };
         
-        // Заменяем теги на реальные значения (если поля заполнены)
-        Object.keys(tagValues).forEach(tag => {
-            if (tagValues[tag] && tagValues[tag] !== tag) {
-                const regex = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                updatedHtml = updatedHtml.replace(regex, `<strong>${tagValues[tag]}</strong>`);
+        console.log('Tag values:', tagValues); // Отладка
+        
+        // ИСПРАВЛЕНИЕ: Сортируем теги по длине (длинные первыми) чтобы избежать частичной замены
+        const sortedTags = Object.keys(tagValues)
+            .filter(tag => tag && tag.trim() !== '' && tag.startsWith('{{') && tag.endsWith('}}'))
+            .sort((a, b) => b.length - a.length);
+        
+        console.log('Sorted tags:', sortedTags);
+        
+        // Заменяем теги на значения или выделяем незаполненные
+        sortedTags.forEach(tag => {
+            const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escapedTag, 'g');
+            
+            if (tagValues[tag] && tagValues[tag] !== '' && !tagValues[tag].startsWith('[')) {
+                // Заполненное поле - зеленое выделение
+                content = content.replace(regex, `<span class="filled-value">${tagValues[tag]}</span>`);
+                console.log(`Replaced "${tag}" with "${tagValues[tag]}"`);
+            } else {
+                // Незаполненное поле - желтое выделение
+                const displayValue = tagValues[tag] || tag;
+                content = content.replace(regex, `<span class="highlight-tag">${displayValue}</span>`);
+                console.log(`Highlighted unfilled tag "${tag}"`);
             }
         });
         
-        // Обновляем редактор только если есть изменения
-        if (updatedHtml !== currentHtml) {
-            quill.root.innerHTML = updatedHtml;
-        }
+        // Обновляем предпросмотр (HTML будет корректно отображен)
+        previewDiv.innerHTML = content;
+        
+        // Обновляем скрытое поле для отправки формы (БЕЗ вызова updateTagsInPreview!)
+        document.getElementById('content').value = previewDiv.textContent || previewDiv.innerText || '';
     }
     
     // Автозаполнение содержания договора при выборе шаблона
@@ -317,8 +297,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Добавляем обработчик для живого обновления тегов
                     const input = fieldDiv.querySelector('input');
                     if (input) {
-                        input.addEventListener('input', updateTagsInEditor);
-                        input.addEventListener('blur', updateTagsInEditor);
+                        input.addEventListener('input', updateTagsInPreview);
+                        input.addEventListener('blur', updateTagsInPreview);
                     }
                 });
             } else {
@@ -331,17 +311,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 previewSection.style.display = 'block';
             }
             
-            // Заполняем содержание из шаблона, конвертируя в читаемый формат
+            // Заполняем содержание из шаблона
             if (template.content) {
-                const readableContent = convertTemplateToReadableFormat(template.content);
+                const previewDiv = document.getElementById('contract-preview');
+                previewDiv.dataset.template = template.content;
                 
-                // Устанавливаем HTML содержание в Quill редактор (сохраняем форматирование)
-                quill.root.innerHTML = readableContent;
+                // Запускаем обновление тегов (один раз!)
+                updateTagsInPreview();
                 
-                // Обновляем скрытое поле (для отправки формы используем текст)
-                document.getElementById('content').value = quill.getText();
-                
-                console.log('Quill editor updated with:', readableContent.substring(0, 100));
+                console.log('Preview updated with template content');
             }
         }
     } else {
@@ -354,8 +332,10 @@ document.addEventListener('DOMContentLoaded', function() {
             previewSection.style.display = 'none';
         }
         
-        // Очищаем Quill редактор
-        quill.setText('');
+        // Очищаем предпросмотр
+        const previewDiv = document.getElementById('contract-preview');
+        previewDiv.innerHTML = '<div class="text-muted">Выберите шаблон для предпросмотра договора...</div>';
+        previewDiv.dataset.template = '';
         document.getElementById('content').value = '';
     }
 });
@@ -435,53 +415,6 @@ function createDynamicField(field) {
     return div;
 }
 
-function convertTemplateToReadableFormat(htmlContent) {
-    console.log('Original content:', htmlContent); // Отладка
-    
-    // Заменяем Jinja2 теги на понятные метки, НО СОХРАНЯЕМ HTML
-    let text = htmlContent;
-    
-    const tagReplacements = {
-        '{{ owner_name }}': '[ИМЯ ВЛАДЕЛЬЦА]',
-        '{{ owner_last_name }}': '[ФАМИЛИЯ ВЛАДЕЛЬЦА]', 
-        '{{ employee_name }}': '[ФИО СОТРУДНИКА]',
-        '{{ birth_date }}': '[ДАТА РОЖДЕНИЯ]',
-        '{{ inn }}': '[ИНН]',
-        '{{ passport_series }}': '[СЕРИЯ ПАСПОРТА]',
-        '{{ passport_number }}': '[НОМЕР ПАСПОРТА]',
-        '{{ current_date }}': '[ТЕКУЩАЯ ДАТА]'
-    };
-    
-    // Заменяем теги (фильтруем пустые ключи и сортируем по длине)
-    const sortedTags = Object.keys(tagReplacements)
-        .filter(tag => tag.length > 0) // Убираем пустые строки!
-        .sort((a, b) => b.length - a.length);
-    
-    console.log('Tags to replace:', sortedTags);
-    
-    sortedTags.forEach(tag => {
-        // Проверяем, что тег не пустой
-        if (!tag || tag.length === 0) {
-            console.error('Empty tag found!', tag);
-            return;
-        }
-        
-        // Экранируем спецсимволы для регулярного выражения
-        const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(escapedTag, 'g');
-        const oldText = text;
-        text = text.replace(regex, tagReplacements[tag]);
-        
-        console.log(`Replaced "${tag}" with "${tagReplacements[tag]}" (${oldText.length} -> ${text.length})`);
-    });
-    
-    console.log('After tag replacement:', text); // Отладка
-    
-    // Возвращаем HTML с замененными тегами (БЕЗ конвертации в текст)
-    console.log('Final HTML:', text.substring(0, 200)); // Отладка
-    
-    return text;
-}
 
 }); // Конец DOMContentLoaded
 </script>
