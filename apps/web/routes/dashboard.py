@@ -43,6 +43,11 @@ async def dashboard_index(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
+    # Проверяем роль - суперадмины должны идти в админ-панель
+    user_role = current_user.get("role", "employee") if isinstance(current_user, dict) else current_user.role
+    if user_role == "superadmin":
+        return RedirectResponse(url="/admin", status_code=302)
+    
     async with get_async_session() as session:
         # Всегда используем внутренний user_id
         user_id = await get_user_id_from_current_user(current_user, session)
@@ -271,6 +276,11 @@ async def dashboard_metrics(request: Request):
     if isinstance(current_user, RedirectResponse):
         return current_user
     
+    # Суперадмины не должны использовать метрики владельца
+    user_role = current_user.get("role", "employee") if isinstance(current_user, dict) else current_user.role
+    if user_role == "superadmin":
+        return {"error": "Access denied for superadmin"}
+    
     async with get_async_session() as session:
         user_id = await get_user_id_from_current_user(current_user, session)
         # Получаем объекты владельца
@@ -330,6 +340,11 @@ async def dashboard_alerts(request: Request):
     current_user = await require_owner_or_superadmin(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
+    
+    # Суперадмины не должны использовать алерты владельца
+    user_role = current_user.get("role", "employee") if isinstance(current_user, dict) else current_user.role
+    if user_role == "superadmin":
+        return {"alerts": [], "message": "Access denied for superadmin"}
     
     async with get_async_session() as session:
         user_id = await get_user_id_from_current_user(current_user, session)
@@ -407,10 +422,15 @@ async def dashboard_alerts(request: Request):
 
 @router.get("/quick-stats")
 async def quick_stats(request: Request):
-    """Быстрая статистика для виджетов"""
+    """API для быстрых статистик"""
     current_user = await require_owner_or_superadmin(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
+    
+    # Суперадмины не должны использовать статистики владельца
+    user_role = current_user.get("role", "employee") if isinstance(current_user, dict) else current_user.role
+    if user_role == "superadmin":
+        return {"error": "Access denied for superadmin"}
     
     async with get_async_session() as session:
         user_id = await get_user_id_from_current_user(current_user, session)
