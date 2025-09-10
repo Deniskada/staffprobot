@@ -28,8 +28,9 @@ class ContractService:
             if not user:
                 raise ValueError(f"Пользователь с Telegram ID {template_data['created_by']} не найден")
             
-            # Автоматически генерируем fields_schema на основе тегов в контенте
-            fields_schema = self._extract_fields_schema_from_content(template_data["content"])
+            # Если пришла явная схема полей, используем её; иначе генерируем из контента
+            explicit_schema: Optional[List[Dict[str, Any]]] = template_data.get("fields_schema")
+            fields_schema = explicit_schema if explicit_schema else self._extract_fields_schema_from_content(template_data["content"])
             
             template = ContractTemplate(
                 name=template_data["name"],
@@ -717,8 +718,9 @@ class ContractService:
             template.content = template_data["content"]
             template.version = template_data["version"]
             template.is_public = bool(template_data.get("is_public", False))
-            # Автоматически обновляем fields_schema на основе нового контента
-            template.fields_schema = self._extract_fields_schema_from_content(template_data["content"])
+            # Если пришла явная схема полей, используем её; иначе генерируем из нового контента
+            explicit_schema: Optional[List[Dict[str, Any]]] = template_data.get("fields_schema")
+            template.fields_schema = explicit_schema if explicit_schema else self._extract_fields_schema_from_content(template_data["content"])
             
             await session.commit()
             
