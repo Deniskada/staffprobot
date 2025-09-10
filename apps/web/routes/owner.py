@@ -1589,15 +1589,135 @@ async def owner_timeslot_create(
 
 
 @router.get("/shifts", response_class=HTMLResponse, name="owner_shifts")
-async def owner_shifts(request: Request):
-    """Управление сменами владельца"""
-    current_user = await get_current_user(request)
-    user_role = current_user.get("role", "employee")
-    if user_role != "owner":
-        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-    
-    # Перенаправляем на существующую страницу смен
-    return RedirectResponse(url="/shifts", status_code=status.HTTP_302_FOUND)
+async def owner_shifts_list(
+    request: Request,
+    status: Optional[str] = Query(None, description="Фильтр по статусу: active, planned, completed"),
+    date_from: Optional[str] = Query(None, description="Дата начала (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
+    object_id: Optional[str] = Query(None, description="ID объекта"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    per_page: int = Query(20, ge=1, le=100, description="Количество на странице"),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Список смен владельца."""
+    try:
+        # Получаем telegram_id из current_user
+        telegram_id = current_user.get("id")
+        user_role = current_user.get("role")
+        
+        # Получаем внутренний ID пользователя из БД
+        user_query = select(User).where(User.telegram_id == telegram_id)
+        user_result = await db.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        user_id = user_obj.id if user_obj else None
+        
+        # Базовый запрос для смен
+        shifts_query = select(Shift).options(
+            selectinload(Shift.object),
+            selectinload(Shift.user)
+        )
+        
+        # Базовый запрос для запланированных смен
+        schedules_query = select(ShiftSchedule).options(
+            selectinload(ShiftSchedule.object),
+            selectinload(ShiftSchedule.user)
+        )
+        
+        # Фильтрация по владельцу
+        if user_role != "superadmin":
+            # Получаем объекты владельца
+            owner_objects = select(Object.id).where(Object.owner_id == user_id)
+            shifts_query = shifts_query.where(Shift.object_id.in_(owner_objects))
+            schedules_query = schedules_query.where(ShiftSchedule.object_id.in_(owner_objects))
+        
+        # Получение объектов для фильтра
+        objects_query = select(Object)
+        if user_role != "superadmin":
+            objects_query = objects_query.where(Object.owner_id == user_id)
+        objects_result = await db.execute(objects_query)
+        objects = objects_result.scalars().all()
+        
+        # Применение фильтров
+        if object_id:
+            shifts_query = shifts_query.where(Shift.object_id == int(object_id))
+            schedules_query = schedules_query.where(ShiftSchedule.object_id == int(object_id))
+        
+        # Получение данных
+        shifts_result = await db.execute(shifts_query.order_by(desc(Shift.created_at)))
+        shifts = shifts_result.scalars().all()
+        
+        schedules_result = await db.execute(schedules_query.order_by(desc(ShiftSchedule.created_at)))
+        schedules = schedules_result.scalars().all()
+        
+        # Объединение и форматирование данных
+        all_shifts = []
+        
+        # Добавляем обычные смены
+        for shift in shifts:
+            all_shifts.append({
+                'id': shift.id,
+                'type': 'shift',
+                'object_name': shift.object.name if shift.object else 'Неизвестный объект',
+                'user_name': f"{shift.user.first_name} {shift.user.last_name or ''}".strip() if shift.user else 'Неизвестный пользователь',
+                'start_time': shift.start_time.strftime('%Y-%m-%d %H:%M') if shift.start_time else '-',
+                'end_time': shift.end_time.strftime('%Y-%m-%d %H:%M') if shift.end_time else '-',
+                'status': shift.status,
+                'created_at': shift.created_at
+            })
+        
+        # Добавляем запланированные смены
+        for schedule in schedules:
+            all_shifts.append({
+                'id': schedule.id,
+                'type': 'schedule',
+                'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
+                'user_name': f"{schedule.user.first_name} {schedule.user.last_name}" if schedule.user else 'Неизвестный пользователь',
+                'start_time': schedule.planned_start.strftime('%Y-%m-%d %H:%M') if schedule.planned_start else '-',
+                'end_time': schedule.planned_end.strftime('%Y-%m-%d %H:%M') if schedule.planned_end else '-',
+                'status': schedule.status,
+                'created_at': schedule.created_at
+            })
+        
+        # Сортировка по дате создания
+        all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
+        
+        # Пагинация
+        total_shifts = len(all_shifts)
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_shifts = all_shifts[start_idx:end_idx]
+        
+        # Статистика
+        stats = {
+            'total': total_shifts,
+            'active': len([s for s in all_shifts if s['status'] == 'active']),
+            'planned': len([s for s in all_shifts if s['type'] == 'schedule']),
+            'completed': len([s for s in all_shifts if s['status'] == 'completed'])
+        }
+        
+        return templates.TemplateResponse("owner/shifts/list.html", {
+            "request": request,
+            "shifts": paginated_shifts,
+            "objects": objects,
+            "stats": stats,
+            "filters": {
+                "status": status,
+                "date_from": date_from,
+                "date_to": date_to,
+                "object_id": object_id
+            },
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total_shifts,
+                "pages": (total_shifts + per_page - 1) // per_page
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading shifts: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки смен")
 
 
 @router.get("/templates", response_class=HTMLResponse, name="owner_templates")
