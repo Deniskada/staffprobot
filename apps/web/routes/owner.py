@@ -4,6 +4,7 @@ URL-префикс: /owner/*
 """
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query
+from typing import List, Optional
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1571,7 +1572,7 @@ async def owner_employees_create(
             
             # Получаем шаблоны договоров как в рабочем коде (через сервис)
             contract_service = ContractService()
-            templates = await contract_service.get_contract_templates_for_user(user_id)
+            contract_templates = await contract_service.get_contract_templates_for_user(user_id)
             
             # Получаем данные сотрудника, если указан telegram_id
             employee_data = None
@@ -1596,7 +1597,7 @@ async def owner_employees_create(
 
             # Готовим список шаблонов для JS
             templates_json = []
-            for t in templates:
+            for t in contract_templates:
                 templates_json.append({
                     "id": t.id,
                     "name": t.name,
@@ -1615,6 +1616,9 @@ async def owner_employees_create(
                     'current_time': datetime.now().strftime('%H:%M'),
                     'current_year': str(datetime.now().year)
                 })
+            # Текущая дата для value атрибутов формы (YYYY-MM-DD)
+            from datetime import date
+            current_date = date.today().strftime('%Y-%m-%d')
             
             return templates.TemplateResponse(
                 "owner/employees/create.html",
@@ -1623,9 +1627,11 @@ async def owner_employees_create(
                     "title": "Создание договора с сотрудником",
                     "current_user": current_user,
                     "objects": objects,
-                    "templates": templates,
+                    "templates": contract_templates,
                     "templates_json": templates_json,
                     "employee": employee_data,
+                    "employee_telegram_id": employee_telegram_id,
+                    "current_date": current_date,
                     "owner_tags": owner_tags
                 }
             )
@@ -1658,45 +1664,60 @@ async def owner_employees_create_post(request: Request):
         # Получаем данные из формы
         employee_name = form_data.get("employee_name", "").strip()
         employee_telegram_id = form_data.get("employee_telegram_id", "").strip()
-        object_id = form_data.get("object_id", "").strip()
-        template_id = form_data.get("template_id", "").strip()
+        # Список объектов доступа (как в исходном коде)
+        allowed_objects = [int(x) for x in form_data.getlist("allowed_objects")] if hasattr(form_data, "getlist") else []
+        template_id_str = form_data.get("template_id", "").strip()
+        title = form_data.get("title", "").strip()
+        content = form_data.get("content", "").strip()
+        start_date_str = form_data.get("start_date", "").strip()
+        end_date_str = form_data.get("end_date", "").strip()
         hourly_rate = form_data.get("hourly_rate", "").strip()
         
-        # Валидация
-        if not employee_name:
-            raise HTTPException(status_code=400, detail="Имя сотрудника обязательно")
+        # Валидация (временно без проверки имени по @move.md)
         if not employee_telegram_id:
             raise HTTPException(status_code=400, detail="Telegram ID сотрудника обязателен")
-        if not object_id:
-            raise HTTPException(status_code=400, detail="Объект обязателен")
-        if not template_id:
-            raise HTTPException(status_code=400, detail="Шаблон договора обязателен")
+        # Шаблон НЕ обязателен
         
+        from datetime import datetime, date
         try:
             employee_telegram_id = int(employee_telegram_id)
-            object_id = int(object_id)
-            template_id = int(template_id)
+            template_id = int(template_id_str) if template_id_str else None
             if hourly_rate:
                 hourly_rate = float(hourly_rate.replace(",", "."))
+            # Даты
+            start_date_obj = datetime.strptime(start_date_str, "%Y-%m-%d") if start_date_str else datetime.combine(date.today(), datetime.min.time())
+            end_date_obj = datetime.strptime(end_date_str, "%Y-%m-%d") if end_date_str else None
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат числовых полей")
         
         # Создаем договор
-        contract_data = {
-            "employee_name": employee_name,
-            "employee_telegram_id": employee_telegram_id,
-            "object_id": object_id,
-            "template_id": template_id,
-            "hourly_rate": hourly_rate,
-            "owner_telegram_id": current_user["id"]
-        }
-        
-        # Добавляем дополнительные поля из формы
+        # Собираем значения динамических полей
+        dynamic_values = {}
         for key, value in form_data.items():
             if key.startswith("field_"):
-                contract_data[key] = value
+                dynamic_values[key[6:]] = value
+
+        contract_data = {
+            "title": title or "Договор",
+            "content": content or None,
+            "employee_name": employee_name,
+            "employee_telegram_id": employee_telegram_id,
+            "hourly_rate": hourly_rate if hourly_rate else None,
+            "start_date": start_date_obj,
+            "end_date": end_date_obj,
+            "owner_telegram_id": current_user["id"],
+            "values": dynamic_values if dynamic_values else None
+        }
         
-        contract = await contract_service.create_contract(contract_data)
+        # Добавляем доступные объекты, если указаны
+        if allowed_objects:
+            contract_data["allowed_objects"] = allowed_objects
+
+        # Добавляем template_id, если выбран
+        if template_id is not None:
+            contract_data["template_id"] = template_id
+        
+        contract = await contract_service.create_contract(current_user["id"], contract_data)
         
         return RedirectResponse(url="/owner/employees", status_code=status.HTTP_302_FOUND)
         
@@ -1757,6 +1778,84 @@ async def owner_employees_detail(request: Request, employee_id: int):
     except Exception as e:
         logger.error(f"Error loading employee detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки информации о сотруднике")
+
+
+# ===============================
+# РЕДАКТИРОВАНИЕ ДОГОВОРА
+# ===============================
+
+@router.get("/employees/contract/{contract_id}/edit", response_class=HTMLResponse, name="owner_contract_edit_form")
+async def owner_contract_edit_form(request: Request, contract_id: int):
+    current_user = await get_current_user(request)
+    if (current_user.get("role") != "owner"):
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    try:
+        from apps.web.services.contract_service import ContractService
+        contract_service = ContractService()
+        contract = await contract_service.get_contract_by_telegram_id(contract_id, current_user["id"])
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        # Получаем объекты и шаблоны
+        objects = await contract_service.get_owner_objects(current_user["id"])
+        templates_list = await contract_service.get_contract_templates()
+        return templates.TemplateResponse(
+            "owner/employees/edit_contract.html",
+            {
+                "request": request,
+                "contract": contract,
+                "objects": objects,
+                "templates": templates_list,
+                "title": "Редактирование договора",
+                "current_user": current_user
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading contract edit form: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки формы договора")
+
+
+@router.post("/employees/contract/{contract_id}/edit", name="owner_contract_edit")
+async def owner_contract_edit(
+    request: Request,
+    contract_id: int,
+    title: str = Form(...),
+    content: str = Form(...),
+    hourly_rate: Optional[int] = Form(None),
+    start_date: str = Form(...),
+    end_date: Optional[str] = Form(None),
+    template_id: Optional[int] = Form(None),
+    allowed_objects: List[int] = Form(default=[])
+):
+    current_user = await get_current_user(request)
+    if (current_user.get("role") != "owner"):
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    try:
+        from apps.web.services.contract_service import ContractService
+        from datetime import datetime
+        contract_service = ContractService()
+        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+        contract_data = {
+            "title": title,
+            "content": content,
+            "hourly_rate": hourly_rate,
+            "start_date": start_date_obj,
+            "end_date": end_date_obj,
+            "template_id": template_id,
+            "allowed_objects": allowed_objects
+        }
+        success = await contract_service.update_contract_by_telegram_id(contract_id, current_user["id"], contract_data)
+        if success:
+            return RedirectResponse(url=f"/owner/employees/contract/{contract_id}", status_code=303)
+        else:
+            raise HTTPException(status_code=400, detail="Ошибка обновления договора")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating contract: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка обновления договора: {str(e)}")
 
 
 # ===============================
