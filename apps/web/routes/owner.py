@@ -1558,7 +1558,7 @@ async def owner_employees_create(
     
     try:
         from apps.web.services.contract_service import ContractService
-        from domain.entities.contract_template import ContractTemplate
+        from domain.entities.contract import ContractTemplate
         from domain.entities.owner_profile import OwnerProfile
         
         async with get_async_session() as session:
@@ -1802,6 +1802,40 @@ async def owner_contract_detail(request: Request, contract_id: int):
     except Exception as e:
         logger.error(f"Error loading contract detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки информации о договоре")
+
+
+# ===============================
+# ШАБЛОНЫ ДОГОВОРОВ
+# ===============================
+
+@router.get("/templates/contracts", response_class=HTMLResponse, name="owner_contract_templates")
+async def owner_contract_templates(request: Request):
+    """Список шаблонов договоров."""
+    # Проверяем авторизацию и роль владельца
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        from apps.web.services.contract_service import ContractService
+        
+        contract_service = ContractService()
+        templates_list = await contract_service.get_contract_templates()
+        
+        return templates.TemplateResponse(
+            "owner/templates/contracts/list.html",
+            {
+                "request": request,
+                "templates": templates_list,
+                "title": "Шаблоны договоров",
+                "current_user": current_user
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error loading contract templates: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки шаблонов договоров")
 
 
 @router.get("/shifts", response_class=HTMLResponse, name="owner_shifts")
