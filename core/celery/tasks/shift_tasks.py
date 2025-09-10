@@ -1,6 +1,6 @@
 """Celery задачи для работы со сменами."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Dict, Any, List
 from celery import Task
 
@@ -278,3 +278,69 @@ def sync_shift_schedules(self):
     except Exception as e:
         logger.error(f"Failed to sync shift schedules: {e}")
         raise
+
+
+@celery_app.task(base=ShiftTask, bind=True)
+def plan_next_year_timeslots(self):
+    """1 декабря — автогенерация тайм-слотов объектов на следующий год по графику работы."""
+    try:
+        from core.database.session import DatabaseManager
+        from sqlalchemy import select, and_
+        from domain.entities.object import Object
+        from domain.entities.time_slot import TimeSlot
+
+        db_manager = DatabaseManager()
+
+        async def _plan_next_year():
+            async with db_manager.get_session() as session:
+                next_year = date.today().year + 1
+                start_date = date(next_year, 1, 1)
+                end_date = date(next_year, 12, 31)
+
+                objs_res = await session.execute(select(Object).where(Object.is_active == True))
+                objects = objs_res.scalars().all()
+
+                created_total = 0
+                for obj in objects:
+                    work_days_mask = getattr(obj, "work_days_mask", 31)
+                    schedule_repeat_weeks = getattr(obj, "schedule_repeat_weeks", 1)
+
+                    base_week_index = start_date.isocalendar().week
+                    d = start_date
+
+                    while d <= end_date:
+                        dow_mask = 1 << (d.weekday())
+                        if (work_days_mask & dow_mask) != 0:
+                            week_index = d.isocalendar().week
+                            if ((week_index - base_week_index) % schedule_repeat_weeks) == 0:
+                                exists_res = await session.execute(
+                                    select(TimeSlot).where(
+                                        and_(
+                                            TimeSlot.object_id == obj.id,
+                                            TimeSlot.slot_date == d
+                                        )
+                                    )
+                                )
+                                if not exists_res.scalars().first():
+                                    ts = TimeSlot(
+                                        object_id=obj.id,
+                                        slot_date=d,
+                                        start_time=obj.opening_time,
+                                        end_time=obj.closing_time,
+                                        hourly_rate=obj.hourly_rate,
+                                        is_active=True
+                                    )
+                                    session.add(ts)
+                                    created_total += 1
+                        d = d + timedelta(days=1)
+
+                await session.commit()
+                return created_total
+
+        import asyncio
+        created = asyncio.run(_plan_next_year())
+        logger.info(f"Planned next year timeslots: created={created}")
+        return created
+    except Exception as e:
+        logger.error(f"Error in plan_next_year_timeslots: {e}")
+        return 0

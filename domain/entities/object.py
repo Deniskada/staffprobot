@@ -26,6 +26,10 @@ class Object(Base):
     max_distance_meters = Column(Integer, nullable=False, default=500)  # Максимальное расстояние для геолокации
     auto_close_minutes = Column(Integer, nullable=False, default=60)  # Автоматическое закрытие смен через N минут
     available_for_applicants = Column(Boolean, default=False)  # Доступен для соискателей
+    # График работы: битовая маска дней (1=Пн ... 64=Вс), по умолчанию Пн-Пт (31)
+    work_days_mask = Column(Integer, nullable=False, server_default="31")
+    # Периодичность повторения недель: 1 = каждую неделю
+    schedule_repeat_weeks = Column(Integer, nullable=False, server_default="1")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

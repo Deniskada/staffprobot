@@ -61,6 +61,17 @@ celery_app.conf.update(
             'task': 'core.celery.tasks.analytics_tasks.cleanup_cache',
             'schedule': 6 * 60 * 60,  # каждые 6 часов
         },
+        # 1 декабря — планирование тайм-слотов на следующий год
+        'plan-next-year-timeslots': {
+            'task': 'core.celery.tasks.shift_tasks.plan_next_year_timeslots',
+            'schedule': {
+                'type': 'crontab',
+                'minute': 0,
+                'hour': 3,
+                'day_of_month': 1,
+                'month_of_year': 12,
+            },
+        },
     },
     
     # Маршрутизация задач

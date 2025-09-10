@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "owner/base_owner.html" %}
 
 {% block title %}{{ title }}{% endblock %}
 
@@ -130,10 +130,33 @@
                             </div>
                         </div>
                         
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle"></i>
-                            <strong>Информация:</strong> После создания объекта вы сможете настроить тайм-слоты 
-                            и управлять доступом сотрудников к нему.
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><i class="bi bi-calendar3"></i> График работы</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <label class="form-label d-block">Рабочие дни</label>
+                                        <div class="d-flex gap-3 flex-wrap">
+                                            {% set days = [
+                                                (1, 'Пн'), (2, 'Вт'), (4, 'Ср'), (8, 'Чт'), (16, 'Пт'), (32, 'Сб'), (64, 'Вс')
+                                            ] %}
+                                            {% for mask, label in days %}
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" id="day_{{ mask }}" name="work_days" value="{{ mask }}" {% if mask in [1,2,4,8,16] %}checked{% endif %}>
+                                                <label class="form-check-label" for="day_{{ mask }}">{{ label }}</label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="schedule_repeat_weeks" class="form-label">Периодичность (недель)</label>
+                                        <input type="number" class="form-control" id="schedule_repeat_weeks" name="schedule_repeat_weeks" min="1" value="1">
+                                        <div class="form-text">Например, 1 — каждую неделю; 2 — через неделю</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
                         <div class="d-flex gap-2">
