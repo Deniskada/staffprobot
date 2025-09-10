@@ -12,6 +12,9 @@
                     {{ title }}
                 </h1>
                 <div class="btn-group">
+                    <a href="/owner/timeslots/object/{{ object.id }}" class="btn btn-primary">
+                        <i class="bi bi-clock-history"></i> Тайм-слоты
+                    </a>
                     <a href="/owner/objects/{{ object.id }}/edit" class="btn btn-outline-secondary">
                         <i class="bi bi-pencil"></i> Редактировать
                     </a>
@@ -130,7 +133,7 @@
                                             </td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <a href="/timeslots/{{ slot.id }}/edit" class="btn btn-outline-secondary" title="Редактировать">
+                                                    <a href="/owner/timeslots/{{ slot.id }}/edit" class="btn btn-outline-secondary" title="Редактировать">
                                                         <i class="bi bi-pencil"></i>
                                                     </a>
                                                     <button class="btn btn-outline-danger" title="Удалить" onclick="confirmDeleteTimeslot({{ slot.id }}, '{{ slot.start_time }}-{{ slot.end_time }}')">
