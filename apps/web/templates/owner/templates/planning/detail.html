@@ -1,0 +1,289 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">{{ title }}</h1>
+                <div class="d-flex gap-2">
+                    <a href="/owner/templates/planning" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Назад к списку
+                    </a>
+                    <a href="/owner/templates/planning/{{ template.id }}/edit" class="btn btn-outline-primary">
+                        <i class="bi bi-pencil"></i> Редактировать
+                    </a>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                {% if template_type == 'planning' %}
+                                    <i class="bi bi-calendar3"></i> Шаблон планирования
+                                {% else %}
+                                    <i class="bi bi-file-earmark-text"></i> Шаблон договора
+                                {% endif %}
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Название</h6>
+                                    <p class="text-muted">{{ template.name }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Описание</h6>
+                                    <p class="text-muted">{{ template.description or 'Не указано' }}</p>
+                                </div>
+                            </div>
+
+                            {% if template_type == 'planning' %}
+                                <!-- Информация для шаблонов планирования -->
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Время работы</h6>
+                                        <p class="text-muted">
+                                            <i class="bi bi-clock"></i> 
+                                            {{ template.start_time }} - {{ template.end_time }}
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>Почасовая ставка</h6>
+                                        <p class="text-muted">
+                                            <i class="bi bi-currency-dollar"></i> 
+                                            {{ template.hourly_rate }} ₽/ч
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Повторение</h6>
+                                        <p class="text-muted">
+                                            {% if template.repeat_type == 'none' %}
+                                                Не повторяется
+                                            {% elif template.repeat_type == 'daily' %}
+                                                Ежедневно
+                                            {% elif template.repeat_type == 'weekly' %}
+                                                Еженедельно
+                                            {% elif template.repeat_type == 'monthly' %}
+                                                Ежемесячно
+                                            {% else %}
+                                                {{ template.repeat_type }}
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>Дни недели</h6>
+                                        <p class="text-muted">
+                                            {% if template.repeat_days %}
+                                                {{ template.repeat_days }}
+                                            {% else %}
+                                                Не указаны
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Статус</h6>
+                                        <p>
+                                            {% if template.is_public %}
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-globe"></i> Публичный
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">
+                                                    <i class="bi bi-lock"></i> Приватный
+                                                </span>
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>Активность</h6>
+                                        <p>
+                                            {% if template.is_active %}
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-check-circle"></i> Активен
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-danger">
+                                                    <i class="bi bi-x-circle"></i> Неактивен
+                                                </span>
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+
+                            {% else %}
+                                <!-- Информация для шаблонов договоров -->
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Версия</h6>
+                                        <p class="text-muted">{{ template.version }}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>Статус</h6>
+                                        <p>
+                                            {% if template.is_active %}
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-check-circle"></i> Активен
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">
+                                                    <i class="bi bi-x-circle"></i> Неактивен
+                                                </span>
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-12">
+                                        <h6>Содержимое договора</h6>
+                                        <div class="border rounded p-3 bg-light">
+                                            <div class="contract-content">
+                                                {{ template.content|safe }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <h6>Дата создания</h6>
+                                    <p class="text-muted">
+                                        <i class="bi bi-calendar"></i> 
+                                        {{ template.created_at.strftime('%d.%m.%Y %H:%M') }}
+                                    </p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Дата обновления</h6>
+                                    <p class="text-muted">
+                                        <i class="bi bi-calendar"></i> 
+                                        {{ template.updated_at.strftime('%d.%m.%Y %H:%M') if template.updated_at else 'Не обновлялся' }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Действия</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <a href="/owner/templates/planning/{{ template.id }}/edit" 
+                                   class="btn btn-primary">
+                                    <i class="bi bi-pencil"></i> Редактировать
+                                </a>
+                                <button type="button" class="btn btn-outline-danger" 
+                                        onclick="deleteTemplate({{ template.id }}, '{{ template_type }}')">
+                                    <i class="bi bi-trash"></i> Удалить
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if template_type == 'planning' %}
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-info-circle"></i> О шаблоне планирования
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="small text-muted">
+                                    Этот шаблон можно использовать для быстрого создания тайм-слотов в календаре.
+                                </p>
+                                <ul class="small text-muted">
+                                    <li>Примените к объектам для создания смен</li>
+                                    <li>Настройте повторение для регулярных смен</li>
+                                    <li>Сделайте публичным для других владельцев</li>
+                                </ul>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-info-circle"></i> О шаблоне договора
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="small text-muted">
+                                    Этот шаблон можно использовать при создании договоров с сотрудниками.
+                                </p>
+                                <ul class="small text-muted">
+                                    <li>Стандартизирует создание договоров</li>
+                                    <li>Содержит HTML разметку</li>
+                                    <li>Версионируется для отслеживания изменений</li>
+                                </ul>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.contract-content {
+    line-height: 1.6;
+    font-size: 14px;
+}
+
+.contract-content h1,
+.contract-content h2,
+.contract-content h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.contract-content p {
+    margin-bottom: 1rem;
+}
+
+.contract-content ul,
+.contract-content ol {
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+}
+</style>
+
+<script>
+function deleteTemplate(templateId, templateType) {
+    if (confirm('Вы уверены, что хотите удалить этот шаблон?')) {
+        fetch(`/owner/templates/planning/${templateId}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include'
+        })
+        .then(response => {
+            if (response.ok) {
+                window.location.href = `/owner/templates/planning`;
+            } else {
+                alert('Ошибка удаления шаблона');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка удаления шаблона');
+        });
+    }
+}
+</script>
+{% endblock %}
