@@ -3,7 +3,7 @@
 URL-префикс: /owner/*
 """
 
-from fastapi import APIRouter, Request, HTTPException, status, Form, Query
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,8 +12,10 @@ from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 from typing import Optional
 
-from core.database.session import get_async_session
+from core.database.session import get_async_session, get_db_session
 from apps.web.middleware.auth_middleware import get_current_user
+from apps.web.dependencies import get_current_user_dependency, require_role
+from apps.web.services.object_service import ObjectService, TimeSlotService
 from domain.entities.user import User, UserRole
 from domain.entities.object import Object
 from domain.entities.shift import Shift
@@ -928,6 +930,71 @@ async def owner_calendar_api_timeslot_detail(
     except Exception as e:
         logger.error(f"Error getting timeslot details: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
+
+
+# ===============================
+# ТАЙМ-СЛОТЫ
+# ===============================
+
+@router.get("/timeslots/object/{object_id}", response_class=HTMLResponse)
+async def owner_timeslots_list(
+    request: Request,
+    object_id: int,
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Список тайм-слотов объекта владельца."""
+    try:
+        telegram_id = current_user.get("id")
+        
+        # Получение информации об объекте и тайм-слотов из базы данных
+        object_service = ObjectService(db)
+        timeslot_service = TimeSlotService(db)
+        
+        # Получаем объект
+        obj = await object_service.get_object_by_id(object_id, telegram_id)
+        if not obj:
+            raise HTTPException(status_code=404, detail="Объект не найден")
+        
+        # Получаем тайм-слоты
+        timeslots = await timeslot_service.get_timeslots_by_object(object_id, telegram_id)
+        
+        # Преобразуем в формат для шаблона
+        timeslots_data = []
+        for slot in timeslots:
+            timeslots_data.append({
+                "id": slot.id,
+                "object_id": slot.object_id,
+                "slot_date": slot.slot_date.strftime("%Y-%m-%d"),
+                "start_time": slot.start_time.strftime("%H:%M"),
+                "end_time": slot.end_time.strftime("%H:%M"),
+                "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                "is_active": slot.is_active,
+                "created_at": slot.created_at.strftime("%Y-%m-%d")
+            })
+        
+        # Информация об объекте
+        object_data = {
+            "id": obj.id,
+            "name": obj.name,
+            "address": obj.address or ""
+        }
+        
+        return templates.TemplateResponse("owner/timeslots/list.html", {
+            "request": request,
+            "title": f"Тайм-слоты: {object_data['name']}",
+            "timeslots": timeslots_data,
+            "object_id": object_id,
+            "object": object_data,
+            "current_user": current_user
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading timeslots: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки тайм-слотов")
 
 
 @router.get("/employees", response_class=HTMLResponse, name="owner_employees")
