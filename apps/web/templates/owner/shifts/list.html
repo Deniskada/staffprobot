@@ -190,7 +190,7 @@
                                         </div>
                                     </td>
                                     <td>
-                                        {% if shift.type == 'schedule' %}
+                                        {% if shift.type == 'schedule' and shift.status == 'planned' %}
                                             <span class="badge bg-warning">
                                                 <i class="bi bi-calendar-check"></i> Запланирована
                                             </span>
