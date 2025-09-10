@@ -1456,6 +1456,51 @@ async def owner_cancel_shift(
                 return JSONResponse({"success": False, "error": "Смена не найдена или уже завершена"})
 
 
+@router.get("/shifts/stats/summary")
+async def owner_shifts_stats(
+    request: Request,
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"]))
+):
+    """Статистика по сменам владельца"""
+    # Получаем роль пользователя
+    user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+    
+    async with get_async_session() as session:
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, session)
+        # Получаем объекты владельца
+        owner_objects = select(Object.id).where(Object.owner_id == user_id)
+        
+        # Статистика по реальным сменам
+        shifts_query = select(Shift).where(Shift.object_id.in_(owner_objects))
+        shifts_result = await session.execute(shifts_query)
+        shifts = shifts_result.scalars().all()
+        
+        # Статистика по запланированным сменам
+        schedules_query = select(ShiftSchedule).where(ShiftSchedule.object_id.in_(owner_objects))
+        schedules_result = await session.execute(schedules_query)
+        schedules = schedules_result.scalars().all()
+        
+        # Расчет статистики
+        stats = {
+            "total_shifts": len(shifts),
+            "active_shifts": len([s for s in shifts if s.status == "active"]),
+            "completed_shifts": len([s for s in shifts if s.status == "completed"]),
+            "planned_shifts": len([s for s in schedules if s.status == "planned"]),
+            "total_hours": sum(s.total_hours or 0 for s in shifts if s.total_hours),
+            "total_payment": sum(s.total_payment or 0 for s in shifts if s.total_payment),
+            "avg_hours_per_shift": 0,
+            "avg_payment_per_shift": 0
+        }
+        
+        if stats["completed_shifts"] > 0:
+            stats["avg_hours_per_shift"] = stats["total_hours"] / stats["completed_shifts"]
+            stats["avg_payment_per_shift"] = stats["total_payment"] / stats["completed_shifts"]
+        
+        return stats
+
+
 @router.get("/employees", response_class=HTMLResponse, name="owner_employees")
 async def owner_employees(
     request: Request,
