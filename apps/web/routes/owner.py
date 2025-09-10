@@ -804,6 +804,119 @@ async def owner_calendar_week(
         raise HTTPException(status_code=500, detail="Ошибка загрузки недельного вида")
 
 
+@router.get("/calendar/analysis", response_class=HTMLResponse, name="owner_calendar_analysis")
+async def owner_calendar_analysis(
+    request: Request,
+    object_id: int = Query(None),
+    days: int = Query(30),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Анализ пробелов в планировании"""
+    try:
+        # Получаем объекты и тайм-слоты (как в месячном календаре)
+        object_service = ObjectService(db)
+        timeslot_service = TimeSlotService(db)
+        
+        # ОРИГИНАЛ: используем telegram_id владельца (как в месячном календаре)
+        owner_telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        objects = await object_service.get_objects_by_owner(owner_telegram_id)
+        
+        selected_object = None
+        if object_id:
+            for obj in objects:
+                if obj.id == object_id:
+                    selected_object = obj
+                    break
+            if not selected_object:
+                raise HTTPException(status_code=404, detail="Объект не найден")
+        
+        # Анализируем пробелы (как в оригинале)
+        analysis_data = await _analyze_gaps(
+            timeslot_service, 
+            objects if not selected_object else [selected_object], 
+            owner_telegram_id, 
+            days
+        )
+        
+        objects_list = [{"id": obj.id, "name": obj.name} for obj in objects]
+        
+        return templates.TemplateResponse("owner/calendar/analysis.html", {
+            "request": request,
+            "title": "Анализ пробелов в планировании",
+            "current_user": current_user,
+            "objects": objects_list,
+            "selected_object_id": object_id,
+            "selected_object": selected_object,
+            "analysis_data": analysis_data,
+            "days": days
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading gap analysis: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки анализа пробелов")
+
+
+async def _analyze_gaps(
+    timeslot_service: TimeSlotService, 
+    objects: List, 
+    telegram_id: int, 
+    days: int
+) -> Dict[str, Any]:
+    """Анализирует пробелы в планировании (как в оригинале)"""
+    today = date.today()
+    end_date = today + timedelta(days=days)
+    
+    total_gaps = 0
+    object_gaps = {}
+    
+    for obj in objects:
+        timeslots = await timeslot_service.get_timeslots_by_object(obj.id, telegram_id)
+        
+        # Группируем тайм-слоты по дням
+        daily_slots = {}
+        for slot in timeslots:
+            if today <= slot.slot_date <= end_date and slot.is_active:
+                if slot.slot_date not in daily_slots:
+                    daily_slots[slot.slot_date] = []
+                daily_slots[slot.slot_date].append(slot)
+        
+        # Анализируем пробелы для каждого дня
+        gaps = []
+        current_date = today
+        while current_date <= end_date:
+            if current_date not in daily_slots:
+                gaps.append({
+                    "date": current_date,
+                    "type": "no_slots",
+                    "message": "Нет тайм-слотов на этот день"
+                })
+                total_gaps += 1
+            else:
+                # Проверяем покрытие рабочего времени
+                slots = daily_slots[current_date]
+                slots.sort(key=lambda x: x.start_time)
+                
+                # Здесь можно добавить логику анализа покрытия рабочего времени
+                # Например, проверка на пробелы между тайм-слотами
+                
+            current_date += timedelta(days=1)
+        
+        object_gaps[obj.id] = {
+            "object_name": obj.name,
+            "gaps": gaps,
+            "gaps_count": len(gaps)
+        }
+    
+    return {
+        "total_gaps": total_gaps,
+        "object_gaps": object_gaps,
+        "period": f"{today.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
+    }
+
+
 @router.get("/calendar/api/timeslots-status")
 async def owner_calendar_api_timeslots_status(
     year: int = Query(...),
