@@ -675,6 +675,135 @@ async def owner_calendar(
         raise HTTPException(status_code=500, detail="Ошибка загрузки календаря")
 
 
+@router.get("/calendar/week", response_class=HTMLResponse, name="owner_calendar_week")
+async def owner_calendar_week(
+    request: Request,
+    year: int = Query(None),
+    week: int = Query(None),
+    object_id: int = Query(None),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Недельный вид календаря владельца"""
+    try:
+        # Определяем текущую неделю или переданные параметры
+        today = date.today()
+        if year is None:
+            year = today.year
+        if week is None:
+            # Получаем номер недели для текущей даты
+            week = today.isocalendar()[1]
+        
+        # Получаем первый день недели (понедельник)
+        first_day_of_year = date(year, 1, 1)
+        first_monday = first_day_of_year - timedelta(days=first_day_of_year.weekday())
+        week_start = first_monday + timedelta(weeks=week-1)
+        
+        # Создаем список дней недели
+        week_days = []
+        for i in range(7):
+            current_date = week_start + timedelta(days=i)
+            week_days.append(current_date)
+        
+        # Получаем объекты и тайм-слоты (как в месячном календаре)
+        object_service = ObjectService(db)
+        timeslot_service = TimeSlotService(db)
+        
+        # ОРИГИНАЛ: используем telegram_id владельца (как в месячном календаре)
+        owner_telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        objects = await object_service.get_objects_by_owner(owner_telegram_id)
+        
+        selected_object = None
+        if object_id:
+            for obj in objects:
+                if obj.id == object_id:
+                    selected_object = obj
+                    break
+            if not selected_object:
+                raise HTTPException(status_code=404, detail="Объект не найден")
+        
+        # Получаем тайм-слоты для недели (как в месячном календаре)
+        timeslots_data = []
+        if selected_object:
+            timeslots = await timeslot_service.get_timeslots_by_object(selected_object.id, owner_telegram_id)
+            for slot in timeslots:
+                if week_start <= slot.slot_date <= week_days[-1]:
+                    timeslots_data.append({
+                        "id": slot.id,
+                        "object_id": slot.object_id,
+                        "object_name": selected_object.name,
+                        "date": slot.slot_date,
+                        "start_time": slot.start_time.strftime("%H:%M"),
+                        "end_time": slot.end_time.strftime("%H:%M"),
+                        "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(selected_object.hourly_rate),
+                        "is_active": slot.is_active,
+                        "notes": slot.notes or ""
+                    })
+        else:
+            for obj in objects:
+                timeslots = await timeslot_service.get_timeslots_by_object(obj.id, owner_telegram_id)
+                for slot in timeslots:
+                    if week_start <= slot.slot_date <= week_days[-1]:
+                        timeslots_data.append({
+                            "id": slot.id,
+                            "object_id": slot.object_id,
+                            "object_name": obj.name,
+                            "date": slot.slot_date,
+                            "start_time": slot.start_time.strftime("%H:%M"),
+                            "end_time": slot.end_time.strftime("%H:%M"),
+                            "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                            "is_active": slot.is_active,
+                            "notes": slot.notes or ""
+                        })
+        
+        # Группируем тайм-слоты по дням
+        week_data = []
+        for day_date in week_days:
+            day_timeslots = [
+                slot for slot in timeslots_data 
+                if slot["date"] == day_date and slot["is_active"]
+            ]
+            week_data.append({
+                "date": day_date,
+                "is_today": day_date == today,
+                "timeslots": day_timeslots,
+                "timeslots_count": len(day_timeslots)
+            })
+        
+        # Навигация по неделям
+        prev_week = week - 1 if week > 1 else 52
+        prev_year = year if week > 1 else year - 1
+        next_week = week + 1 if week < 52 else 1
+        next_year = year if week < 52 else year + 1
+        
+        objects_list = [{"id": obj.id, "name": obj.name} for obj in objects]
+        
+        return templates.TemplateResponse("owner/calendar/week.html", {
+            "request": request,
+            "title": "Недельное планирование",
+            "current_user": current_user,
+            "year": year,
+            "week": week,
+            "week_data": week_data,
+            "week_start": week_start,
+            "week_end": week_days[-1],
+            "objects": objects_list,
+            "selected_object_id": object_id,
+            "selected_object": selected_object,
+            "prev_week": prev_week,
+            "prev_year": prev_year,
+            "next_week": next_week,
+            "next_year": next_year,
+            "today": today
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading week view: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки недельного вида")
+
+
 @router.get("/calendar/api/timeslots-status")
 async def owner_calendar_api_timeslots_status(
     year: int = Query(...),
