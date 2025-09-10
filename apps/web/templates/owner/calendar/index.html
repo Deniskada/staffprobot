@@ -235,7 +235,7 @@
 
 {% block content %}
 <!-- Панель drag & drop -->
-{% include 'calendar/drag_drop_panel.html' %}
+{% include 'owner/calendar/drag_drop_panel.html' %}
 
 <div class="container-fluid">
     <!-- Заголовок и навигация -->
@@ -670,11 +670,11 @@ document.addEventListener('keydown', function(e) {
         switch(e.key) {
             case 'n': // Ctrl+N - новый тайм-слот
                 e.preventDefault();
-                window.location.href = '/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create';
+                window.location.href = '/owner/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create';
                 break;
             case 'o': // Ctrl+O - новый объект
                 e.preventDefault();
-                window.location.href = '/objects/create';
+                window.location.href = '/owner/objects/create';
                 break;
         }
     }

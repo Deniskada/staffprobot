@@ -364,7 +364,7 @@ function applyTemplate(templateId, templateName) {
 async function loadObjectsForApply() {
     try {
         console.log('Loading objects for apply...');
-        const response = await fetch('/calendar/api/objects', {
+        const response = await fetch('/owner/calendar/api/objects', {
             credentials: 'include'
         });
         console.log('Response status:', response.status);
