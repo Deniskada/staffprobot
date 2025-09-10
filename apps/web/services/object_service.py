@@ -79,18 +79,22 @@ class ObjectService:
     async def create_object(self, object_data: Dict[str, Any], telegram_id: int) -> Object:
         """Создать новый объект"""
         try:
+            logger.info(f"Creating object for telegram_id {telegram_id} (type: {type(telegram_id)})")
             # Получаем внутренний ID пользователя
             internal_id = await self._get_user_internal_id(telegram_id)
             if not internal_id:
                 raise ValueError(f"User with telegram_id {telegram_id} not found")
+            logger.info(f"Found internal_id {internal_id} for telegram_id {telegram_id}")
             
             # Парсим координаты
-            coordinates = object_data.get('coordinates', '0.0,0.0')
-            if isinstance(coordinates, str):
+            coordinates = object_data.get('coordinates')
+            if coordinates and isinstance(coordinates, str):
                 lat, lon = coordinates.split(',')
                 lat, lon = float(lat.strip()), float(lon.strip())
-            else:
+            elif coordinates and isinstance(coordinates, dict):
                 lat, lon = coordinates.get('lat', 0.0), coordinates.get('lon', 0.0)
+            else:
+                lat, lon = 0.0, 0.0
             
             # Создаем объект
             new_object = Object(
@@ -225,6 +229,54 @@ class ObjectService:
             return result.scalar_one_or_none()
         except Exception as e:
             logger.error(f"Error getting object {object_id} with timeslots for owner {owner_id}: {e}")
+            raise
+    
+    async def plan_timeslots_for_object(self, obj: Object, start_date: date, end_date: date) -> int:
+        """Планирует тайм-слоты для объекта на основе графика работы"""
+        try:
+            if not obj.work_days_mask or obj.work_days_mask == 0:
+                logger.warning(f"Object {obj.id} has no work schedule, skipping timeslot planning")
+                return 0
+            
+            # Определяем рабочие дни из маски
+            work_days = []
+            for i in range(7):  # 0=Пн, 1=Вт, ..., 6=Вс
+                if obj.work_days_mask & (1 << i):
+                    work_days.append(i)
+            
+            if not work_days:
+                logger.warning(f"Object {obj.id} has no work days selected")
+                return 0
+            
+            # Планируем тайм-слоты
+            planned_count = 0
+            current_date = start_date
+            
+            while current_date <= end_date:
+                # Проверяем, является ли текущий день рабочим
+                weekday = current_date.weekday()  # 0=Пн, 1=Вт, ..., 6=Вс
+                if weekday in work_days:
+                    # Создаем тайм-слот на этот день
+                    timeslot = TimeSlot(
+                        object_id=obj.id,
+                        slot_date=current_date,
+                        start_time=obj.opening_time,
+                        end_time=obj.closing_time,
+                        is_active=True
+                    )
+                    self.db.add(timeslot)
+                    planned_count += 1
+                
+                # Переходим к следующему дню
+                current_date += timedelta(days=1)
+            
+            await self.db.commit()
+            logger.info(f"Planned {planned_count} timeslots for object {obj.id} from {start_date} to {end_date}")
+            return planned_count
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error planning timeslots for object {obj.id}: {e}")
             raise
 
 
@@ -469,51 +521,3 @@ class TimeSlotService:
         except Exception as e:
             logger.error(f"Error getting timeslots by month: {e}")
             return []
-    
-    async def plan_timeslots_for_object(self, obj: Object, start_date: date, end_date: date) -> int:
-        """Планирует тайм-слоты для объекта на основе графика работы"""
-        try:
-            if not obj.work_days_mask or obj.work_days_mask == 0:
-                logger.warning(f"Object {obj.id} has no work schedule, skipping timeslot planning")
-                return 0
-            
-            # Определяем рабочие дни из маски
-            work_days = []
-            for i in range(7):  # 0=Пн, 1=Вт, ..., 6=Вс
-                if obj.work_days_mask & (1 << i):
-                    work_days.append(i)
-            
-            if not work_days:
-                logger.warning(f"Object {obj.id} has no work days selected")
-                return 0
-            
-            # Планируем тайм-слоты
-            planned_count = 0
-            current_date = start_date
-            
-            while current_date <= end_date:
-                # Проверяем, является ли текущий день рабочим
-                weekday = current_date.weekday()  # 0=Пн, 1=Вт, ..., 6=Вс
-                if weekday in work_days:
-                    # Создаем тайм-слот на этот день
-                    timeslot = TimeSlot(
-                        object_id=obj.id,
-                        slot_date=current_date,
-                        start_time=obj.opening_time,
-                        end_time=obj.closing_time,
-                        is_active=True
-                    )
-                    self.db.add(timeslot)
-                    planned_count += 1
-                
-                # Переходим к следующему дню
-                current_date += timedelta(days=1)
-            
-            await self.db.commit()
-            logger.info(f"Planned {planned_count} timeslots for object {obj.id} from {start_date} to {end_date}")
-            return planned_count
-            
-        except Exception as e:
-            await self.db.rollback()
-            logger.error(f"Error planning timeslots for object {obj.id}: {e}")
-            raise
