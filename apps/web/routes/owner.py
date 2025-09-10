@@ -1720,6 +1720,162 @@ async def owner_shifts_list(
         raise HTTPException(status_code=500, detail="Ошибка загрузки смен")
 
 
+@router.get("/shifts/{shift_id}", response_class=HTMLResponse)
+async def owner_shift_detail(
+    request: Request, 
+    shift_id: int, 
+    shift_type: Optional[str] = Query("shift"),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Детали смены владельца"""
+    try:
+        # Получаем роль пользователя
+        user_role = current_user.get("role")
+        
+        # Получаем внутренний ID пользователя
+        telegram_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == telegram_id)
+        user_result = await db.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        user_id = user_obj.id if user_obj else None
+        
+        if shift_type == "schedule":
+            # Запланированная смена
+            query = select(ShiftSchedule).options(
+                selectinload(ShiftSchedule.object),
+                selectinload(ShiftSchedule.user)
+            ).where(ShiftSchedule.id == shift_id)
+        else:
+            # Реальная смена
+            query = select(Shift).options(
+                selectinload(Shift.object),
+                selectinload(Shift.user)
+            ).where(Shift.id == shift_id)
+        
+        result = await db.execute(query)
+        shift = result.scalar_one_or_none()
+        
+        if not shift:
+            return templates.TemplateResponse("owner/shifts/not_found.html", {
+                "request": request,
+                "current_user": current_user
+            })
+        
+        # Проверка прав доступа
+        if user_role != "superadmin":
+            if shift.object.owner_id != user_id:
+                return templates.TemplateResponse("owner/shifts/access_denied.html", {
+                    "request": request,
+                    "current_user": current_user
+                })
+        
+        return templates.TemplateResponse("owner/shifts/detail.html", {
+            "request": request,
+            "current_user": current_user,
+            "shift": shift,
+            "shift_type": shift_type
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading shift detail: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
+
+
+@router.post("/shifts/{shift_id}/cancel")
+async def owner_cancel_shift(
+    request: Request, 
+    shift_id: int, 
+    shift_type: Optional[str] = Query("shift"),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Отмена смены владельца"""
+    from fastapi.responses import JSONResponse
+    from datetime import datetime
+    
+    try:
+        # Получаем роль пользователя
+        user_role = current_user.get("role")
+        
+        # Получаем внутренний ID пользователя
+        telegram_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == telegram_id)
+        user_result = await db.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        user_id = user_obj.id if user_obj else None
+        
+        if shift_type == "schedule":
+            # Отмена запланированной смены
+            query = select(ShiftSchedule).options(
+                selectinload(ShiftSchedule.object)
+            ).where(ShiftSchedule.id == shift_id)
+            result = await db.execute(query)
+            shift = result.scalar_one_or_none()
+            
+            if shift and shift.status == "planned":
+                # Проверка прав доступа
+                if user_role != "superadmin":
+                    if shift.object.owner_id != user_id:
+                        return JSONResponse(
+                            status_code=403,
+                            content={"success": False, "message": "Доступ запрещен"}
+                        )
+                
+                # Отменяем смену
+                shift.status = "cancelled"
+                shift.updated_at = datetime.utcnow()
+                await db.commit()
+                
+                return JSONResponse(
+                    status_code=200,
+                    content={"success": True, "message": "Смена отменена"}
+                )
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "message": "Смена не найдена или уже отменена"}
+                )
+        else:
+            # Отмена реальной смены
+            query = select(Shift).options(
+                selectinload(Shift.object)
+            ).where(Shift.id == shift_id)
+            result = await db.execute(query)
+            shift = result.scalar_one_or_none()
+            
+            if shift and shift.status == "active":
+                # Проверка прав доступа
+                if user_role != "superadmin":
+                    if shift.object.owner_id != user_id:
+                        return JSONResponse(
+                            status_code=403,
+                            content={"success": False, "message": "Доступ запрещен"}
+                        )
+                
+                # Отменяем смену
+                shift.status = "cancelled"
+                shift.updated_at = datetime.utcnow()
+                await db.commit()
+                
+                return JSONResponse(
+                    status_code=200,
+                    content={"success": True, "message": "Смена отменена"}
+                )
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "message": "Смена не найдена или уже завершена"}
+                )
+                
+    except Exception as e:
+        logger.error(f"Error canceling shift: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": "Ошибка отмены смены"}
+        )
+
+
 @router.get("/templates", response_class=HTMLResponse, name="owner_templates")
 async def owner_templates(request: Request):
     """Шаблоны договоров владельца"""
