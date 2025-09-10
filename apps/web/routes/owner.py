@@ -1706,11 +1706,32 @@ async def owner_employees_detail(request: Request, employee_id: int):
     if user_role != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
+    async def get_user_id_from_current_user(current_user, session):
+        """Получает внутренний ID пользователя из current_user"""
+        if isinstance(current_user, dict):
+            # current_user - это словарь из JWT payload
+            telegram_id = current_user.get("id")
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await session.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            return user_obj.id if user_obj else None
+        else:
+            # current_user - это объект User
+            return current_user.id
+    
     try:
         from apps.web.services.contract_service import ContractService
         
+        # Получаем внутренний user_id
+        async with get_async_session() as session:
+            user_id = await get_user_id_from_current_user(current_user, session)
+        
+        logger.info(f"Employee detail request: employee_id={employee_id}, owner_user_id={user_id}, owner_telegram_id={current_user.get('id')}")
+        
         contract_service = ContractService()
-        employee = await contract_service.get_employee_by_id(employee_id, current_user["id"])
+        employee = await contract_service.get_employee_by_id(employee_id, user_id)
+        
+        logger.info(f"Employee found: {employee is not None}")
         
         if not employee:
             raise HTTPException(status_code=404, detail="Сотрудник не найден")
