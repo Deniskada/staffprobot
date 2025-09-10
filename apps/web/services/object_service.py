@@ -214,6 +214,49 @@ class ObjectService:
             await self.db.rollback()
             logger.error(f"Error deleting object {object_id} for owner {owner_id}: {e}")
             raise
+
+    async def hard_delete_object(self, object_id: int, owner_id: int) -> bool:
+        """Полное удаление объекта из базы данных"""
+        try:
+            obj = await self.get_object_by_id(object_id, owner_id)
+            if not obj:
+                return False
+            
+            # Удаляем все связанные сущности в правильном порядке
+            
+            # 1. Удаляем смены
+            shifts_query = select(Shift).where(Shift.object_id == object_id)
+            shifts_result = await self.db.execute(shifts_query)
+            shifts = shifts_result.scalars().all()
+            for shift in shifts:
+                await self.db.delete(shift)
+            
+            # 2. Удаляем расписания смен
+            schedules_query = select(ShiftSchedule).where(ShiftSchedule.object_id == object_id)
+            schedules_result = await self.db.execute(schedules_query)
+            schedules = schedules_result.scalars().all()
+            for schedule in schedules:
+                await self.db.delete(schedule)
+            
+            # 3. Удаляем тайм-слоты
+            timeslots_query = select(TimeSlot).where(TimeSlot.object_id == object_id)
+            timeslots_result = await self.db.execute(timeslots_query)
+            timeslots = timeslots_result.scalars().all()
+            for timeslot in timeslots:
+                await self.db.delete(timeslot)
+            
+            # 4. Удаляем сам объект
+            await self.db.delete(obj)
+            
+            await self.db.commit()
+            
+            logger.info(f"Hard deleted object {object_id} for owner {owner_id}")
+            return True
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error hard deleting object {object_id} for owner {owner_id}: {e}")
+            raise
     
     async def get_object_with_timeslots(self, object_id: int, owner_id: int) -> Optional[Object]:
         """Получить объект с тайм-слотами"""

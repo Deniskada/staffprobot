@@ -529,29 +529,27 @@ async def owner_objects_edit_post(request: Request, object_id: int):
 
 
 @router.post("/objects/{object_id}/delete")
-async def owner_objects_delete(object_id: int, request: Request):
-    """Удаление объекта"""
-    # Проверяем авторизацию и роль владельца
-    current_user = await get_current_user(request)
-    user_role = current_user.get("role", "employee")
-    if user_role != "owner":
-        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
-    
+async def owner_objects_delete(
+    object_id: int, 
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Полное удаление объекта из базы данных"""
     try:
         from apps.web.services.object_service import ObjectService
         
-        logger.info(f"Deleting object {object_id} for user {current_user['id']}")
+        logger.info(f"Hard deleting object {object_id} for user {current_user['id']}")
 
-        async with get_async_session() as session:
-            object_service = ObjectService(session)
-            success = await object_service.delete_object(object_id, current_user["id"])
-            if not success:
-                raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
+        object_service = ObjectService(db)
+        success = await object_service.hard_delete_object(object_id, int(current_user["id"]))
+        if not success:
+            raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
 
         return RedirectResponse(url="/owner/objects", status_code=status.HTTP_302_FOUND)
         
     except Exception as e:
-        logger.error(f"Error deleting object: {e}")
+        logger.error(f"Error hard deleting object: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка удаления объекта: {str(e)}")
 
 
