@@ -274,6 +274,18 @@ async def owner_objects_create_post(request: Request):
         # Обработка чекбокса (он не отправляется, если не отмечен)
         available_for_applicants = "available_for_applicants" in form_data
         
+        # Обработка графика работы
+        work_days = form_data.getlist("work_days")
+        work_days_mask = 0
+        for day in work_days:
+            work_days_mask += int(day)
+        
+        schedule_repeat_weeks_str = form_data.get("schedule_repeat_weeks", "1").strip()
+        try:
+            schedule_repeat_weeks = int(schedule_repeat_weeks_str) if schedule_repeat_weeks_str else 1
+        except ValueError:
+            schedule_repeat_weeks = 1
+        
         # Создание объекта в базе данных
         async with get_async_session() as session:
             object_service = ObjectService(session)
@@ -286,7 +298,9 @@ async def owner_objects_create_post(request: Request):
                 "max_distance": max_distance,
                 "available_for_applicants": available_for_applicants,
                 "is_active": True,
-                "coordinates": coordinates
+                "coordinates": coordinates,
+                "work_days_mask": work_days_mask,
+                "schedule_repeat_weeks": schedule_repeat_weeks
             }
             
             new_object = await object_service.create_object(object_data, current_user["id"])
