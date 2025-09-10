@@ -1589,21 +1589,32 @@ async def owner_employees_create(
                         "phone": employee.phone
                     }
             
-            # Получаем профиль владельца
-            owner_profile_query = select(OwnerProfile).where(OwnerProfile.user_id == user_id)
-            owner_profile_result = await session.execute(owner_profile_query)
-            owner_profile = owner_profile_result.scalar_one_or_none()
-            
-            # Подготавливаем данные профиля владельца для шаблона
-            owner_profile_data = {}
-            if owner_profile and owner_profile.profile_data:
-                for tag_ref in owner_profile.profile_data:
-                    if hasattr(tag_ref, 'to_dict'):
-                        tag_dict = tag_ref.to_dict()
-                        owner_profile_data[tag_dict['tag']] = tag_dict['value']
-                    else:
-                        # Если это уже словарь
-                        owner_profile_data[tag_ref['tag']] = tag_ref['value']
+            # Получаем профиль владельца (как в рабочем коде) и теги
+            from apps.web.services.tag_service import TagService
+            tag_service = TagService()
+            owner_profile = await tag_service.get_owner_profile(session, user_id)
+
+            # Готовим список шаблонов для JS
+            templates_json = []
+            for t in templates:
+                templates_json.append({
+                    "id": t.id,
+                    "name": t.name,
+                    "content": t.content,
+                    "version": t.version,
+                    "fields_schema": t.fields_schema or []
+                })
+
+            # Теги владельца для подстановки
+            owner_tags = {}
+            if owner_profile:
+                owner_tags = owner_profile.get_tags_for_templates()
+                from datetime import datetime
+                owner_tags.update({
+                    'current_date': datetime.now().strftime('%d.%m.%Y'),
+                    'current_time': datetime.now().strftime('%H:%M'),
+                    'current_year': str(datetime.now().year)
+                })
             
             return templates.TemplateResponse(
                 "owner/employees/create.html",
@@ -1613,8 +1624,9 @@ async def owner_employees_create(
                     "current_user": current_user,
                     "objects": objects,
                     "templates": templates,
+                    "templates_json": templates_json,
                     "employee": employee_data,
-                    "owner_profile": owner_profile_data
+                    "owner_tags": owner_tags
                 }
             )
             
