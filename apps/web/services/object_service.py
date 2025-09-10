@@ -245,7 +245,26 @@ class ObjectService:
             for timeslot in timeslots:
                 await self.db.delete(timeslot)
             
-            # 4. Удаляем сам объект
+            # 4. Удаляем шаблоны планирования и их тайм-слоты
+            from domain.entities.planning_template import PlanningTemplate, TemplateTimeSlot
+            
+            # Сначала получаем все шаблоны планирования для объекта
+            templates_query = select(PlanningTemplate).where(PlanningTemplate.object_id == object_id)
+            templates_result = await self.db.execute(templates_query)
+            templates = templates_result.scalars().all()
+            
+            for template in templates:
+                # Удаляем тайм-слоты шаблона
+                template_timeslots_query = select(TemplateTimeSlot).where(TemplateTimeSlot.template_id == template.id)
+                template_timeslots_result = await self.db.execute(template_timeslots_query)
+                template_timeslots = template_timeslots_result.scalars().all()
+                for template_timeslot in template_timeslots:
+                    await self.db.delete(template_timeslot)
+                
+                # Удаляем сам шаблон
+                await self.db.delete(template)
+            
+            # 5. Удаляем сам объект
             await self.db.delete(obj)
             
             await self.db.commit()
