@@ -596,18 +596,77 @@ async def owner_calendar(
             else:
                 selected_objects = objects
             
-            # Получаем тайм-слоты для выбранных объектов
+            # Получаем тайм-слоты для выбранных объектов напрямую из базы
+            from domain.entities.time_slot import TimeSlot
+            from datetime import date
+            
             all_timeslots = []
-            for obj in selected_objects:
-                timeslots = await timeslot_service.get_timeslots_by_object(obj.id, current_user["id"])
-                all_timeslots.extend(timeslots)
+            if selected_objects:
+                object_ids = [obj.id for obj in selected_objects]
+                
+                # Получаем тайм-слоты за текущий месяц
+                start_date = date(year, month, 1)
+                if month == 12:
+                    end_date = date(year + 1, 1, 1)
+                else:
+                    end_date = date(year, month + 1, 1)
+                
+                timeslots_query = select(TimeSlot).where(
+                    and_(
+                        TimeSlot.object_id.in_(object_ids),
+                        TimeSlot.slot_date >= start_date,
+                        TimeSlot.slot_date < end_date,
+                        TimeSlot.is_active == True
+                    )
+                ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
+                
+                timeslots_result = await session.execute(timeslots_query)
+                all_timeslots = timeslots_result.scalars().all()
             
             # Группируем тайм-слоты по дням
             timeslots_by_date = {}
             for slot in all_timeslots:
-                # Здесь нужно будет адаптировать логику получения дат из тайм-слотов
-                # В зависимости от структуры данных
-                pass
+                # Получаем дату слота
+                slot_date = slot.slot_date if hasattr(slot, 'slot_date') else datetime.now().date()
+                date_str = slot_date.strftime("%Y-%m-%d")
+                
+                if date_str not in timeslots_by_date:
+                    timeslots_by_date[date_str] = []
+                
+                timeslots_by_date[date_str].append({
+                    "id": slot.id,
+                    "object_name": next((obj.name for obj in objects if obj.id == slot.object_id), "Неизвестный объект"),
+                    "start_time": slot.start_time.strftime("%H:%M") if hasattr(slot, 'start_time') else "00:00",
+                    "end_time": slot.end_time.strftime("%H:%M") if hasattr(slot, 'end_time') else "00:00",
+                    "hourly_rate": float(slot.hourly_rate) if hasattr(slot, 'hourly_rate') and slot.hourly_rate else 0
+                })
+            
+            # Создаем структуру календаря с тайм-слотами
+            calendar_days = []
+            for week in month_days:
+                calendar_week = []
+                for day in week:
+                    if day == 0:  # Пустой день
+                        calendar_week.append({
+                            "day": 0,
+                            "is_today": False,
+                            "is_other_month": True,
+                            "timeslots": [],
+                            "timeslots_count": 0
+                        })
+                    else:
+                        day_date = datetime(year, month, day).date()
+                        date_str = day_date.strftime("%Y-%m-%d")
+                        day_timeslots = timeslots_by_date.get(date_str, [])
+                        
+                        calendar_week.append({
+                            "day": day,
+                            "is_today": day_date == today,
+                            "is_other_month": False,
+                            "timeslots": day_timeslots,
+                            "timeslots_count": len(day_timeslots)
+                        })
+                calendar_days.append(calendar_week)
             
             # Навигация по месяцам
             prev_month = month - 1 if month > 1 else 12
@@ -626,7 +685,7 @@ async def owner_calendar(
                     "year": year,
                     "month": month,
                     "month_name": RU_MONTHS[month],
-                    "month_days": month_days,
+                    "month_days": calendar_days,
                     "timeslots_by_date": timeslots_by_date,
                     "today": today,
                     "prev_year": prev_year,
