@@ -32,21 +32,33 @@ class PDFService:
             # Попытка использовать системные шрифты
             font_paths = [
                 '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
                 '/System/Library/Fonts/Helvetica.ttc',
                 'C:\\Windows\\Fonts\\arial.ttf',
             ]
             
+            font_registered = False
             for font_path in font_paths:
                 if os.path.exists(font_path):
                     try:
                         pdfmetrics.registerFont(TTFont('DejaVuSans', font_path))
+                        pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', font_path))
                         logger.info(f"Registered font from: {font_path}")
+                        font_registered = True
                         break
                     except Exception as e:
                         logger.warning(f"Failed to register font {font_path}: {e}")
                         continue
-            else:
+            
+            if not font_registered:
                 logger.warning("No suitable font found, using default")
+                # Регистрируем встроенный шрифт как fallback
+                try:
+                    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+                    pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+                    logger.info("Registered fallback Unicode font")
+                except Exception as e:
+                    logger.warning(f"Failed to register fallback font: {e}")
                 
         except Exception as e:
             logger.error(f"Error setting up fonts: {e}")
@@ -75,6 +87,10 @@ class PDFService:
             # Стили
             styles = getSampleStyleSheet()
             
+            # Определяем доступный шрифт
+            available_fonts = pdfmetrics.getRegisteredFontNames()
+            font_name = 'DejaVuSans' if 'DejaVuSans' in available_fonts else 'STSong-Light' if 'STSong-Light' in available_fonts else 'Helvetica'
+            
             # Создаем кастомные стили с поддержкой русского языка
             title_style = ParagraphStyle(
                 'CustomTitle',
@@ -82,7 +98,7 @@ class PDFService:
                 fontSize=16,
                 spaceAfter=20,
                 alignment=TA_CENTER,
-                fontName='DejaVuSans' if 'DejaVuSans' in pdfmetrics.getRegisteredFontNames() else 'Helvetica'
+                fontName=font_name
             )
             
             normal_style = ParagraphStyle(
@@ -91,7 +107,7 @@ class PDFService:
                 fontSize=12,
                 spaceAfter=12,
                 alignment=TA_LEFT,
-                fontName='DejaVuSans' if 'DejaVuSans' in pdfmetrics.getRegisteredFontNames() else 'Helvetica'
+                fontName=font_name
             )
             
             # Контент документа

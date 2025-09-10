@@ -1934,17 +1934,18 @@ async def owner_contract_pdf(request: Request, contract_id: int):
         from fastapi.responses import Response
         
         contract_service = ContractService()
-        contract = await contract_service.get_contract_by_telegram_id(contract_id, current_user["id"])
+        # Получаем ORM объект для PDF генерации
+        contract_orm = await contract_service.get_contract_by_id_and_owner_telegram_id(contract_id, current_user["id"])
         
-        if not contract:
+        if not contract_orm:
             raise HTTPException(status_code=404, detail="Договор не найден")
         
         # Генерируем PDF
         pdf_service = PDFService()
-        pdf_data = await pdf_service.generate_contract_pdf(contract)
+        pdf_data = await pdf_service.generate_contract_pdf(contract_orm)
         
         # Формируем имя файла
-        filename = f"contract_{contract['contract_number']}_{contract['start_date'].strftime('%Y%m%d')}.pdf"
+        filename = f"contract_{contract_orm.contract_number}_{contract_orm.start_date.strftime('%Y%m%d')}.pdf"
         
         # Возвращаем PDF как файл для скачивания
         return Response(
