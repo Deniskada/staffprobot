@@ -1338,6 +1338,124 @@ async def owner_shifts_list(
         raise HTTPException(status_code=500, detail="Ошибка загрузки смен")
 
 
+@router.get("/shifts/{shift_id}", response_class=HTMLResponse)
+async def owner_shift_detail(
+    request: Request, 
+    shift_id: int, 
+    shift_type: Optional[str] = Query("shift"),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"]))
+):
+    """Детали смены владельца"""
+    # Получаем роль пользователя
+    user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+    
+    async with get_async_session() as session:
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, session)
+        if shift_type == "schedule":
+            # Запланированная смена
+            query = select(ShiftSchedule).options(
+                selectinload(ShiftSchedule.object),
+                selectinload(ShiftSchedule.user)
+            ).where(ShiftSchedule.id == shift_id)
+        else:
+            # Реальная смена
+            query = select(Shift).options(
+                selectinload(Shift.object),
+                selectinload(Shift.user)
+            ).where(Shift.id == shift_id)
+        
+        result = await session.execute(query)
+        shift = result.scalar_one_or_none()
+        
+        if not shift:
+            return templates.TemplateResponse("owner/shifts/not_found.html", {
+                "request": request,
+                "current_user": current_user
+            })
+        
+        # Проверка прав доступа
+        if user_role != "superadmin":
+            if shift.object.owner_id != user_id:
+                return templates.TemplateResponse("owner/shifts/access_denied.html", {
+                    "request": request,
+                    "current_user": current_user
+                })
+        
+        return templates.TemplateResponse("owner/shifts/detail.html", {
+            "request": request,
+            "current_user": current_user,
+            "shift": shift,
+            "shift_type": shift_type
+        })
+
+
+@router.post("/shifts/{shift_id}/cancel")
+async def owner_cancel_shift(
+    request: Request, 
+    shift_id: int, 
+    shift_type: Optional[str] = Query("shift"),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"]))
+):
+    """Отмена смены владельца"""
+    from fastapi.responses import JSONResponse
+    from datetime import datetime
+    
+    # Получаем роль пользователя
+    user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+    
+    async with get_async_session() as session:
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, session)
+        if shift_type == "schedule":
+            # Отмена запланированной смены
+            query = select(ShiftSchedule).options(
+                selectinload(ShiftSchedule.object)
+            ).where(ShiftSchedule.id == shift_id)
+            result = await session.execute(query)
+            shift = result.scalar_one_or_none()
+            
+            if shift and shift.status == "planned":
+                # Проверка прав доступа
+                if user_role != "superadmin":
+                    if shift.object.owner_id != user_id:
+                        return JSONResponse({"success": False, "error": "Нет прав доступа"})
+                
+                # Отмена смены
+                shift.status = "cancelled"
+                shift.updated_at = datetime.utcnow()
+                await session.commit()
+                
+                return JSONResponse({"success": True, "message": "Запланированная смена отменена"})
+            else:
+                return JSONResponse({"success": False, "error": "Смена не найдена или уже отменена"})
+        else:
+            # Отмена активной смены
+            query = select(Shift).options(
+                selectinload(Shift.object)
+            ).where(Shift.id == shift_id)
+            result = await session.execute(query)
+            shift = result.scalar_one_or_none()
+            
+            if shift and shift.status == "active":
+                # Проверка прав доступа
+                if user_role != "superadmin":
+                    if shift.object.owner_id != user_id:
+                        return JSONResponse({"success": False, "error": "Нет прав доступа"})
+                
+                # Закрытие смены
+                shift.status = "completed"
+                shift.end_time = datetime.utcnow()
+                shift.updated_at = datetime.utcnow()
+                await session.commit()
+                
+                return JSONResponse({"success": True, "message": "Смена завершена"})
+            else:
+                return JSONResponse({"success": False, "error": "Смена не найдена или уже завершена"})
+
+
 @router.get("/employees", response_class=HTMLResponse, name="owner_employees")
 async def owner_employees(
     request: Request,
