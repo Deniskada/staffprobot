@@ -8,6 +8,8 @@ from typing import List, Optional
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
+from core.database.session import get_db_session
+from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from sqlalchemy import select, func, desc, and_
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta, date, time
@@ -207,14 +209,12 @@ async def owner_objects_create(request: Request):
 
 
 @router.post("/objects/create")
-async def owner_objects_create_post(request: Request):
+async def owner_objects_create_post(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
     """Создание нового объекта"""
-    # Проверяем авторизацию и роль владельца
-    current_user = await get_current_user(request)
-    user_role = current_user.get("role", "employee")
-    if user_role != "owner":
-        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
-    
     try:
         from apps.web.services.object_service import ObjectService
         
@@ -287,24 +287,23 @@ async def owner_objects_create_post(request: Request):
             schedule_repeat_weeks = 1
         
         # Создание объекта в базе данных
-        async with get_async_session() as session:
-            object_service = ObjectService(session)
-            object_data = {
-                "name": name,
-                "address": address,
-                "hourly_rate": hourly_rate,
-                "opening_time": opening_time,
-                "closing_time": closing_time,
-                "max_distance": max_distance,
-                "available_for_applicants": available_for_applicants,
-                "is_active": True,
-                "coordinates": coordinates,
-                "work_days_mask": work_days_mask,
-                "schedule_repeat_weeks": schedule_repeat_weeks
-            }
-            
-            new_object = await object_service.create_object(object_data, int(current_user["id"]))
-            logger.info(f"Object {new_object.id} created successfully")
+        object_service = ObjectService(db)
+        object_data = {
+            "name": name,
+            "address": address,
+            "hourly_rate": hourly_rate,
+            "opening_time": opening_time,
+            "closing_time": closing_time,
+            "max_distance": max_distance,
+            "available_for_applicants": available_for_applicants,
+            "is_active": True,
+            "coordinates": coordinates,
+            "work_days_mask": work_days_mask,
+            "schedule_repeat_weeks": schedule_repeat_weeks
+        }
+        
+        new_object = await object_service.create_object(object_data, int(current_user["id"]))
+        logger.info(f"Object {new_object.id} created successfully")
             
         return RedirectResponse(url="/owner/objects", status_code=status.HTTP_302_FOUND)
         
