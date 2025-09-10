@@ -1714,16 +1714,16 @@ async def owner_timeslot_create_form(
 ):
     """Форма создания тайм-слота владельца."""
     try:
-        # Получаем telegram_id из current_user
+        # Получаем telegram_id из current_user (как в старом коде)
         if isinstance(current_user, dict):
-            telegram_id = current_user.get("id")
+            telegram_id = current_user["telegram_id"]
         else:
             telegram_id = current_user.telegram_id
         
         # Получение информации об объекте из базы данных
         object_service = ObjectService(db)
         
-        # Получаем объект
+        # Получаем объект (как в старом коде)
         obj = await object_service.get_object_by_id(object_id, telegram_id)
         if not obj:
             raise HTTPException(status_code=404, detail="Объект не найден")
