@@ -1277,9 +1277,9 @@ async def owner_shifts_list(
                     'type': 'schedule',
                     'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
                     'user_name': f"{schedule.user.first_name} {schedule.user.last_name}" if schedule.user else 'Неизвестный пользователь',
-                    'start_time': schedule.scheduled_date.strftime('%Y-%m-%d') + ' ' + schedule.start_time.strftime('%H:%M') if schedule.scheduled_date and schedule.start_time else '-',
-                    'end_time': schedule.scheduled_date.strftime('%Y-%m-%d') + ' ' + schedule.end_time.strftime('%H:%M') if schedule.scheduled_date and schedule.end_time else '-',
-                    'status': 'planned',
+                    'start_time': schedule.planned_start.strftime('%Y-%m-%d %H:%M') if schedule.planned_start else '-',
+                    'end_time': schedule.planned_end.strftime('%Y-%m-%d %H:%M') if schedule.planned_end else '-',
+                    'status': schedule.status,
                     'created_at': schedule.created_at
                 })
             
@@ -1296,7 +1296,7 @@ async def owner_shifts_list(
             stats = {
                 'total': total_shifts,
                 'active': len([s for s in all_shifts if s['status'] == 'active']),
-                'planned': len([s for s in all_shifts if s['type'] == 'schedule']),
+                'planned': len([s for s in all_shifts if s['status'] == 'planned']),
                 'completed': len([s for s in all_shifts if s['status'] == 'completed'])
             }
             
