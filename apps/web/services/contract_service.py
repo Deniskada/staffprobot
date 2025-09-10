@@ -773,6 +773,7 @@ class ContractService:
                 "first_name": employee.first_name,
                 "last_name": employee.last_name,
                 "username": employee.username,
+                "created_at": employee.created_at,
                 "contracts": [
                     {
                         "id": contract.id,

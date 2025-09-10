@@ -1726,12 +1726,8 @@ async def owner_employees_detail(request: Request, employee_id: int):
         async with get_async_session() as session:
             user_id = await get_user_id_from_current_user(current_user, session)
         
-        logger.info(f"Employee detail request: employee_id={employee_id}, owner_user_id={user_id}, owner_telegram_id={current_user.get('id')}")
-        
         contract_service = ContractService()
         employee = await contract_service.get_employee_by_id(employee_id, user_id)
-        
-        logger.info(f"Employee found: {employee is not None}")
         
         if not employee:
             raise HTTPException(status_code=404, detail="Сотрудник не найден")
