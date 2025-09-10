@@ -615,7 +615,7 @@ class ContractService:
             version = ContractVersion(
                 contract_id=contract_id,
                 version_number=version_number,
-                content=content,
+                content=content or "",
                 changes_description=changes_description,
                 created_by=created_by
             )

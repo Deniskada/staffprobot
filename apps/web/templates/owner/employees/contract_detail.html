@@ -270,16 +270,21 @@ function terminateContract() {
     if (confirm('Вы уверены, что хотите расторгнуть этот договор?')) {
         fetch(`/owner/employees/contract/{{ contract.id }}/terminate`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'Расторжение по кнопке' }),
             credentials: 'include'
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Договор успешно расторгнут!');
-                location.reload();
+                const div = document.createElement('div');
+                div.className = 'alert alert-success position-fixed top-0 end-0 m-3';
+                div.innerText = data.message || 'Договор расторгнут';
+                document.body.appendChild(div);
+                // Перенаправляем на список сотрудников вместо перезагрузки
+                setTimeout(() => {
+                    window.location.href = '/owner/employees';
+                }, 800);
             } else {
                 alert('Ошибка расторжения договора: ' + (data.detail || 'Неизвестная ошибка'));
             }

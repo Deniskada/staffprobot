@@ -1881,7 +1881,7 @@ async def owner_contract_activate(request: Request, contract_id: int):
 
 
 @router.post("/employees/contract/{contract_id}/terminate", name="owner_contract_terminate")
-async def owner_contract_terminate(request: Request, contract_id: int, reason: str = Form(...)):
+async def owner_contract_terminate(request: Request, contract_id: int):
     """Расторжение договора."""
     current_user = await get_current_user(request)
     if current_user.get("role") != "owner":
@@ -1889,17 +1889,36 @@ async def owner_contract_terminate(request: Request, contract_id: int, reason: s
     
     try:
         from apps.web.services.contract_service import ContractService
+        from fastapi.responses import JSONResponse
+        
+        # Получаем reason из JSON или формы
+        content_type = request.headers.get("content-type", "")
+        if content_type.startswith("application/json"):
+            body = await request.json()
+            reason = body.get("reason", "Расторжение договора")
+        else:
+            form_data = await request.form()
+            reason = form_data.get("reason", "Расторжение договора")
         
         contract_service = ContractService()
-        success = await contract_service.terminate_contract_by_telegram_id(contract_id, current_user["id"], reason)
-        
-        if success:
-            return RedirectResponse(url="/owner/employees", status_code=303)
-        else:
+        success = await contract_service.terminate_contract_by_telegram_id(
+            contract_id, current_user["id"], reason
+        )
+
+        # Если пришла обычная форма (нижняя кнопка) — делаем редирект на список сотрудников
+        if content_type.startswith("application/x-www-form-urlencoded"):
+            if success:
+                return RedirectResponse(url="/owner/employees", status_code=303)
             raise HTTPException(status_code=400, detail="Ошибка расторжения договора")
+
+        # Иначе (fetch из JS) — отдаем JSON
+        if success:
+            return JSONResponse({"success": True, "message": "Договор расторгнут"})
+        return JSONResponse({"success": False, "detail": "Ошибка расторжения договора"}, status_code=400)
     except Exception as e:
+        from fastapi.responses import JSONResponse
         logger.error(f"Error terminating contract: {e}")
-        raise HTTPException(status_code=400, detail=f"Ошибка расторжения договора: {str(e)}")
+        return JSONResponse({"success": False, "detail": f"Ошибка расторжения договора: {str(e)}"}, status_code=400)
 
 
 @router.get("/employees/contract/{contract_id}/pdf", name="owner_contract_pdf")
