@@ -973,6 +973,33 @@ class ContractService:
                 } if contract.template else None
             }
     
+    async def get_contract_by_id_and_owner_telegram_id(self, contract_id: int, owner_telegram_id: int) -> Optional[Contract]:
+        """Получение ORM объекта договора по ID с проверкой прав владельца по telegram_id."""
+        async with get_async_session() as session:
+            # Сначала находим владельца по telegram_id
+            owner_query = select(User).where(User.telegram_id == owner_telegram_id)
+            owner_result = await session.execute(owner_query)
+            owner = owner_result.scalar_one_or_none()
+            
+            if not owner:
+                return None
+            
+            query = select(Contract).where(
+                and_(
+                    Contract.id == contract_id,
+                    Contract.owner_id == owner.id,
+                    Contract.is_active == True
+                )
+            ).options(
+                selectinload(Contract.employee),
+                selectinload(Contract.template)
+            )
+            
+            result = await session.execute(query)
+            contract = result.scalar_one_or_none()
+            
+            return contract
+    
     async def update_contract_by_telegram_id(
         self, 
         contract_id: int, 

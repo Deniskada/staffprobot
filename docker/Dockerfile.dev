@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
     proj-bin \
     curl \
     vim \
+    fonts-dejavu-core \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
