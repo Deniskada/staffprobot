@@ -16,7 +16,6 @@ from typing import Optional
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
 from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee
-from apps.web.routes import owner_contract_templates
 from apps.web.services.auth_service import AuthService
 
 
@@ -155,7 +154,6 @@ app.include_router(users.router, prefix="/users", tags=["Пользовател�
 app.include_router(employees.router, prefix="/employees", tags=["Сотрудники"])
 app.include_router(templates_routes.router, prefix="/templates", tags=["Шаблоны планирования"])
 app.include_router(contract_templates.router, prefix="/contract-templates", tags=["Шаблоны договоров"])
-app.include_router(owner_contract_templates.router, prefix="/owner/templates/contracts", tags=["Шаблоны договоров (owner)"])
 app.include_router(profile.router, tags=["Профиль владельца"])
 app.include_router(admin.router, prefix="/admin", tags=["Администрирование"])
 app.include_router(owner.router, prefix="/owner", tags=["Владелец"])
