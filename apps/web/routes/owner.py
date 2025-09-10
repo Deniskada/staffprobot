@@ -230,7 +230,7 @@ async def owner_objects_create_post(request: Request):
         latitude_str = form_data.get("latitude", "").strip()
         longitude_str = form_data.get("longitude", "").strip()
         
-        logger.info(f"Creating object '{name}' for user {current_user['id']}")
+        logger.info(f"Creating object '{name}' for user {current_user['id']} (type: {type(current_user['id'])})")
         
         # Валидация обязательных полей
         if not name:
@@ -303,7 +303,7 @@ async def owner_objects_create_post(request: Request):
                 "schedule_repeat_weeks": schedule_repeat_weeks
             }
             
-            new_object = await object_service.create_object(object_data, current_user["id"])
+            new_object = await object_service.create_object(object_data, int(current_user["id"]))
             logger.info(f"Object {new_object.id} created successfully")
             
         return RedirectResponse(url="/owner/objects", status_code=status.HTTP_302_FOUND)
