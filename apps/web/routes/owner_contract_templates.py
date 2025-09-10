@@ -167,7 +167,8 @@ async def get_contract_template_api(
     
     try:
         contract_service = ContractService()
-        template = await contract_service.get_contract_template(template_id, current_user["id"])
+        # В оригинале метод принимает только template_id
+        template = await contract_service.get_contract_template(template_id)
         
         if not template:
             raise HTTPException(status_code=404, detail="Шаблон не найден")
@@ -226,7 +227,7 @@ async def update_contract_template(
         success = await contract_service.update_contract_template(template_id, template_data)
         
         if success:
-            return RedirectResponse(url=f"/contract-templates/{template_id}", status_code=303)
+            return RedirectResponse(url=f"/owner/templates/contracts/{template_id}", status_code=303)
         else:
             raise HTTPException(status_code=400, detail="Ошибка обновления шаблона")
             
