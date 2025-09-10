@@ -4,6 +4,7 @@ URL-префикс: /owner/*
 """
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query
+from fastapi.responses import RedirectResponse
 from typing import List, Optional
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -1726,7 +1727,14 @@ async def owner_timeslot_create_form(
         # Получаем объект (как в старом коде)
         obj = await object_service.get_object_by_id(object_id, telegram_id)
         if not obj:
-            raise HTTPException(status_code=404, detail="Объект не найден")
+            # Если объект не найден, попробуем найти первый объект пользователя
+            user_objects = await object_service.get_objects_by_owner(telegram_id, include_inactive=False)
+            if not user_objects:
+                raise HTTPException(status_code=404, detail="У вас нет объектов. Сначала создайте объект.")
+            
+            # Перенаправляем на первый объект пользователя
+            first_object = user_objects[0]
+            return RedirectResponse(url=f"/owner/timeslots/object/{first_object.id}/create", status_code=302)
         
         # Информация об объекте
         object_data = {
