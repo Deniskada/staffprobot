@@ -1672,7 +1672,7 @@ async def owner_shifts_list(
                 'id': schedule.id,
                 'type': 'schedule',
                 'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
-                'user_name': f"{schedule.user.first_name} {schedule.user.last_name}" if schedule.user else 'Неизвестный пользователь',
+                'user_name': f"{schedule.user.first_name} {schedule.user.last_name or ''}".strip() if schedule.user else 'Неизвестный пользователь',
                 'start_time': schedule.planned_start.strftime('%Y-%m-%d %H:%M') if schedule.planned_start else '-',
                 'end_time': schedule.planned_end.strftime('%Y-%m-%d %H:%M') if schedule.planned_end else '-',
                 'status': schedule.status,

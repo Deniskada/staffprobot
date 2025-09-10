@@ -161,28 +161,28 @@
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
-                                                {{ shift.user.first_name[0] }}
+                                                {{ shift.user_name[0] }}
                                             </div>
                                             <div>
-                                                <div class="fw-bold">{{ shift.user.first_name }} {{ shift.user.last_name or '' }}</div>
-                                                <small class="text-muted">@{{ shift.user.username or 'без username' }}</small>
+                                                <div class="fw-bold">{{ shift.user_name }}</div>
+                                                <small class="text-muted">ID: {{ shift.id }}</small>
                                             </div>
                                         </div>
                                     </td>
                                     <td>
                                         <div>
-                                            <div class="fw-bold">{{ shift.object.name }}</div>
-                                            <small class="text-muted">{{ shift.object.address or 'Адрес не указан' }}</small>
+                                            <div class="fw-bold">{{ shift.object_name }}</div>
+                                            <small class="text-muted">Объект ID: {{ shift.id }}</small>
                                         </div>
                                     </td>
                                     <td>
                                         <div>
                                             <div class="fw-bold">
-                                                {{ shift.start_time.strftime('%d.%m.%Y %H:%M') }}
+                                                {{ shift.start_time }}
                                             </div>
                                             {% if shift.end_time %}
                                             <small class="text-muted">
-                                                до {{ shift.end_time.strftime('%H:%M') }}
+                                                до {{ shift.end_time }}
                                             </small>
                                             {% else %}
                                             <small class="text-warning">В процессе</small>
