@@ -26,10 +26,10 @@
                     </p>
                 </div>
                 <div class="btn-group">
-                    <a href="/employees/{{ contract.employee.id }}" class="btn btn-outline-secondary">
+                    <a href="/owner/employees/{{ contract.employee.id }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-2"></i>К сотруднику
                     </a>
-                    <a href="/employees/contract/{{ contract.id }}/pdf" class="btn btn-outline-info">
+                    <a href="/owner/employees/contract/{{ contract.id }}/pdf" class="btn btn-outline-info">
                         <i class="fas fa-file-pdf me-2"></i>Скачать PDF
                     </a>
                     {% if contract.status == 'draft' %}
@@ -38,7 +38,7 @@
                     </button>
                     {% endif %}
                     {% if contract.status != 'terminated' %}
-                    <a href="/employees/contract/{{ contract.id }}/edit" class="btn btn-outline-primary">
+                    <a href="/owner/employees/contract/{{ contract.id }}/edit" class="btn btn-outline-primary">
                         <i class="fas fa-edit me-2"></i>Редактировать
                     </a>
                     <button type="button" class="btn btn-outline-danger" onclick="terminateContract()">
@@ -74,7 +74,7 @@
                         <div class="card-body">
                             <div class="mb-3">
                                 <strong>Сотрудник:</strong><br>
-                                <a href="/employees/{{ contract.employee.id }}" class="text-decoration-none">
+                                <a href="/owner/employees/{{ contract.employee.id }}" class="text-decoration-none">
                                     {{ contract.employee.first_name }} {{ contract.employee.last_name or '' }}
                                 </a>
                             </div>
@@ -186,7 +186,7 @@
                 <h5 class="modal-title">Расторжение договора</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="/employees/contract/{{ contract.id }}/terminate">
+            <form method="post" action="/owner/employees/contract/{{ contract.id }}/terminate">
                 <div class="modal-body">
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle me-2"></i>
@@ -243,7 +243,7 @@
 <script>
 function activateContract() {
     if (confirm('Вы уверены, что хотите активировать этот договор?')) {
-        fetch(`/employees/contract/{{ contract.id }}/activate`, {
+        fetch(`/owner/employees/contract/{{ contract.id }}/activate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -268,7 +268,7 @@ function activateContract() {
 
 function terminateContract() {
     if (confirm('Вы уверены, что хотите расторгнуть этот договор?')) {
-        fetch(`/employees/contract/{{ contract.id }}/terminate`, {
+        fetch(`/owner/employees/contract/{{ contract.id }}/terminate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
