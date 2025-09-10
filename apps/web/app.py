@@ -144,7 +144,7 @@ async def root(request: Request):
 # Включение роутов
 app.include_router(auth.router, prefix="/auth", tags=["Авторизация"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Дашборд"])
-app.include_router(objects.router, prefix="/objects", tags=["Объекты"])
+# app.include_router(objects.router, prefix="/objects", tags=["Объекты"])  # Перенесено в owner.py
 app.include_router(timeslots.router, prefix="/timeslots", tags=["Тайм-слоты"])
 app.include_router(calendar.router, prefix="/calendar", tags=["Календарь"])
 app.include_router(shifts.router, prefix="/shifts", tags=["Смены"])
