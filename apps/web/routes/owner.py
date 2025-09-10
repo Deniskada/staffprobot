@@ -1001,6 +1001,186 @@ async def owner_timeslots_list(
         raise HTTPException(status_code=500, detail="Ошибка загрузки тайм-слотов")
 
 
+@router.get("/timeslots/{timeslot_id}/edit", response_class=HTMLResponse)
+async def owner_timeslot_edit_form(
+    request: Request,
+    timeslot_id: int,
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Форма редактирования тайм-слота владельца."""
+    try:
+        # Получаем telegram_id из current_user
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("id")
+        else:
+            telegram_id = current_user.telegram_id
+        
+        # Получение тайм-слота из базы данных
+        timeslot_service = TimeSlotService(db)
+        object_service = ObjectService(db)
+        
+        # Получаем тайм-слот с проверкой владельца
+        timeslot = await timeslot_service.get_timeslot_by_id(timeslot_id, telegram_id)
+        if not timeslot:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+        
+        # Получаем объект
+        obj = await object_service.get_object_by_id(timeslot.object_id, telegram_id)
+        if not obj:
+            raise HTTPException(status_code=404, detail="Объект не найден")
+        
+        timeslot_data = {
+            "id": timeslot.id,
+            "object_id": timeslot.object_id,
+            "start_time": timeslot.start_time.strftime("%H:%M"),
+            "end_time": timeslot.end_time.strftime("%H:%M"),
+            "hourly_rate": float(timeslot.hourly_rate) if timeslot.hourly_rate else float(obj.hourly_rate),
+            "is_active": timeslot.is_active
+        }
+        
+        object_data = {
+            "id": obj.id,
+            "name": obj.name,
+            "address": obj.address or ""
+        }
+        
+        return templates.TemplateResponse("owner/timeslots/edit.html", {
+            "request": request,
+            "title": f"Редактирование тайм-слота: {object_data['name']}",
+            "timeslot": timeslot_data,
+            "object_id": timeslot.object_id,
+            "object": object_data,
+            "current_user": current_user
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading edit form: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки формы редактирования")
+
+
+@router.post("/timeslots/{timeslot_id}/edit")
+async def owner_timeslot_update(
+    request: Request,
+    timeslot_id: int,
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Обновление тайм-слота владельца."""
+    try:
+        # Получаем telegram_id из current_user
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("id")
+        else:
+            telegram_id = current_user.telegram_id
+            
+        logger.info(f"Updating timeslot {timeslot_id}")
+        
+        # Получение данных формы
+        form_data = await request.form()
+        start_time = form_data.get("start_time", "")
+        end_time = form_data.get("end_time", "")
+        hourly_rate_str = form_data.get("hourly_rate", "0")
+        is_active = "is_active" in form_data
+        
+        # Логирование для отладки
+        logger.info(f"Form data: start_time={start_time}, end_time={end_time}, hourly_rate_str='{hourly_rate_str}', is_active={is_active}")
+        
+        # Валидация и преобразование данных
+        try:
+            # Очищаем строку от пробелов и проверяем на пустоту
+            hourly_rate_str = hourly_rate_str.strip()
+            if not hourly_rate_str:
+                raise ValueError("Пустое значение ставки")
+            hourly_rate = int(hourly_rate_str)
+        except ValueError as e:
+            logger.error(f"Error parsing hourly_rate '{hourly_rate_str}': {e}")
+            raise HTTPException(status_code=400, detail=f"Неверный формат ставки: '{hourly_rate_str}'")
+        
+        if hourly_rate <= 0:
+            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+        
+        # Валидация времени
+        from datetime import time
+        try:
+            start = time.fromisoformat(start_time)
+            end = time.fromisoformat(end_time)
+            if start >= end:
+                raise HTTPException(status_code=400, detail="Время начала должно быть меньше времени окончания")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат времени")
+        
+        # Обновление тайм-слота в базе данных
+        timeslot_service = TimeSlotService(db)
+        timeslot_data = {
+            "start_time": start_time,
+            "end_time": end_time,
+            "hourly_rate": hourly_rate,
+            "is_active": is_active
+        }
+        
+        updated_timeslot = await timeslot_service.update_timeslot(timeslot_id, timeslot_data, telegram_id)
+        if not updated_timeslot:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден или нет доступа")
+        
+        logger.info(f"Timeslot {timeslot_id} updated successfully")
+        
+        return RedirectResponse(url=f"/owner/timeslots/object/{updated_timeslot.object_id}", status_code=status.HTTP_302_FOUND)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating timeslot: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления тайм-слота: {str(e)}")
+
+
+@router.post("/timeslots/{timeslot_id}/delete")
+async def owner_timeslot_delete(
+    timeslot_id: int,
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Удаление тайм-слота владельца."""
+    try:
+        # Получаем telegram_id из current_user
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("id")
+        else:
+            telegram_id = current_user.telegram_id
+            
+        logger.info(f"Deleting timeslot {timeslot_id}")
+        
+        # Удаление тайм-слота из базы данных
+        timeslot_service = TimeSlotService(db)
+        
+        # Получаем тайм-слот для получения object_id
+        timeslot = await timeslot_service.get_timeslot_by_id(timeslot_id, telegram_id)
+        if not timeslot:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+        
+        object_id = timeslot.object_id
+        
+        # Удаляем тайм-слот
+        success = await timeslot_service.delete_timeslot(timeslot_id, telegram_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден или нет доступа")
+        
+        logger.info(f"Timeslot {timeslot_id} deleted successfully")
+        
+        return RedirectResponse(url=f"/owner/timeslots/object/{object_id}", status_code=status.HTTP_302_FOUND)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting timeslot: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления тайм-слота: {str(e)}")
+
+
 @router.get("/employees", response_class=HTMLResponse, name="owner_employees")
 async def owner_employees(
     request: Request,
