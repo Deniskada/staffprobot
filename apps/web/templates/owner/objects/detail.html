@@ -198,10 +198,10 @@
                                 <a href="/owner/timeslots/object/{{ object.id }}" class="btn btn-outline-primary">
                                     <i class="bi bi-clock"></i> Управление тайм-слотами
                                 </a>
-                                <a href="/calendar?object_id={{ object.id }}" class="btn btn-outline-info">
+                                <a href="/owner/calendar?object_id={{ object.id }}" class="btn btn-outline-info">
                                     <i class="bi bi-calendar3"></i> Календарь
                                 </a>
-                                <a href="/shifts?object_id={{ object.id }}" class="btn btn-outline-success">
+                                <a href="/owner/shifts?object_id={{ object.id }}" class="btn btn-outline-success">
                                     <i class="bi bi-clock-history"></i> Смены
                                 </a>
                                 <a href="/owner/employees?object_id={{ object.id }}" class="btn btn-outline-secondary">
@@ -239,7 +239,7 @@
 function openCreateTimeslotModal(objectId) {
     // Если на странице нет модалки, переходим в календарь с параметром
     if (!document.getElementById('quickCreateModal')) {
-        window.location.href = `/calendar?object_id=${objectId}`;
+        window.location.href = `/owner/calendar?object_id=${objectId}`;
         return;
     }
     // Установим выбранный объект и предзаполним поля
@@ -253,7 +253,7 @@ function confirmDeleteTimeslot(timeslotId, timeslotName) {
         // Создаем форму для отправки POST запроса
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = `/timeslots/${timeslotId}/delete`;
+        form.action = `/owner/timeslots/${timeslotId}/delete`;
         document.body.appendChild(form);
         form.submit();
     }
