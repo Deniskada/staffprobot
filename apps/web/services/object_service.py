@@ -102,7 +102,9 @@ class ObjectService:
                 hourly_rate=object_data['hourly_rate'],
                 max_distance_meters=object_data.get('max_distance', 500),
                 available_for_applicants=object_data.get('available_for_applicants', False),
-                is_active=object_data.get('is_active', True)
+                is_active=object_data.get('is_active', True),
+                work_days_mask=object_data.get('work_days_mask', 31),
+                schedule_repeat_weeks=object_data.get('schedule_repeat_weeks', 1)
             )
             
             self.db.add(new_object)

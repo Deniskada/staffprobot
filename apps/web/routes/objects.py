@@ -124,6 +124,9 @@ async def create_object(
         max_distance_str = form_data.get("max_distance", "500").strip()
         latitude_str = form_data.get("latitude", "").strip()
         longitude_str = form_data.get("longitude", "").strip()
+        # График работы
+        selected_days = form_data.getlist("work_days")
+        repeat_weeks_str = form_data.get("schedule_repeat_weeks", "1").strip()
         
         logger.info(f"Creating object '{name}' for user {current_user['id']}")
         
@@ -171,6 +174,17 @@ async def create_object(
         
         # Создание объекта в базе данных
         object_service = ObjectService(db)
+        # Вычисляем битовую маску дней
+        try:
+            work_days_mask = 0
+            for val in selected_days:
+                work_days_mask |= int(val)
+            schedule_repeat_weeks = int(repeat_weeks_str) if repeat_weeks_str else 1
+            if schedule_repeat_weeks <= 0:
+                schedule_repeat_weeks = 1
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат графика работы")
+
         object_data = {
             "name": name,
             "address": address,
@@ -180,10 +194,48 @@ async def create_object(
             "max_distance": max_distance,
             "available_for_applicants": available_for_applicants,
             "is_active": True,
-            "coordinates": coordinates
+            "coordinates": coordinates,
+            "work_days_mask": work_days_mask,
+            "schedule_repeat_weeks": schedule_repeat_weeks
         }
         
         new_object = await object_service.create_object(object_data, current_user["telegram_id"])
+        
+        # Планирование тайм-слотов до конца текущего года
+        try:
+            timeslot_service = TimeSlotService(db)
+            from datetime import date, timedelta, datetime as dt
+            today = date.today()
+            end_date = date(today.year, 12, 31)
+            # Опорная неделя для периодичности
+            base_week_index = today.isocalendar().week
+            # Время
+            open_time = opening_time
+            close_time = closing_time
+            # Часы/минуты
+            open_h, open_m = map(int, open_time.split(":"))
+            close_h, close_m = map(int, close_time.split(":"))
+
+            d = today
+            created = 0
+            while d <= end_date:
+                dow_mask = 1 << (d.weekday())  # Monday=0 -> 1, Sunday=6 -> 64
+                if (work_days_mask & dow_mask) != 0:
+                    week_index = d.isocalendar().week
+                    if ((week_index - base_week_index) % schedule_repeat_weeks) == 0:
+                        # Создаем тайм-слот
+                        await timeslot_service.create_timeslot({
+                            "slot_date": d.isoformat(),
+                            "start_time": f"{open_h:02d}:{open_m:02d}",
+                            "end_time": f"{close_h:02d}:{close_m:02d}",
+                            "hourly_rate": hourly_rate,
+                            "is_active": True
+                        }, new_object.id, current_user["telegram_id"])
+                        created += 1
+                d = d + timedelta(days=1)
+            logger.info(f"Pre-planned {created} timeslots for object {new_object.id}")
+        except Exception as e:
+            logger.error(f"Failed to pre-plan timeslots for object {new_object.id}: {e}")
         
         logger.info(f"Object {new_object.id} created successfully")
         
