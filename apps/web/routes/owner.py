@@ -1257,34 +1257,47 @@ async def owner_shifts_list(
             # Объединение и форматирование данных
             all_shifts = []
             
-            # Добавляем обычные смены
+            # Добавляем реальные смены (отработанные)
             for shift in shifts:
                 all_shifts.append({
                     'id': shift.id,
                     'type': 'shift',
-                    'object_name': shift.object.name if shift.object else 'Неизвестный объект',
-                    'user_name': f"{shift.user.first_name} {shift.user.last_name}" if shift.user else 'Неизвестный пользователь',
-                    'start_time': shift.start_time.strftime('%Y-%m-%d %H:%M') if shift.start_time else '-',
-                    'end_time': shift.end_time.strftime('%Y-%m-%d %H:%M') if shift.end_time else '-',
+                    'user': shift.user,
+                    'object': shift.object,
+                    'start_time': shift.start_time,
+                    'end_time': shift.end_time,
                     'status': shift.status,
-                    'created_at': shift.created_at
+                    'total_hours': shift.total_hours,
+                    'hourly_rate': shift.hourly_rate,
+                    'total_payment': shift.total_payment,
+                    'notes': shift.notes,
+                    'created_at': shift.created_at,
+                    'is_planned': shift.is_planned,
+                    'schedule_id': shift.schedule_id
                 })
             
-            # Добавляем запланированные смены
-            for schedule in schedules:
-                all_shifts.append({
-                    'id': schedule.id,
-                    'type': 'schedule',
-                    'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
-                    'user_name': f"{schedule.user.first_name} {schedule.user.last_name}" if schedule.user else 'Неизвестный пользователь',
-                    'start_time': schedule.planned_start.strftime('%Y-%m-%d %H:%M') if schedule.planned_start else '-',
-                    'end_time': schedule.planned_end.strftime('%Y-%m-%d %H:%M') if schedule.planned_end else '-',
-                    'status': schedule.status,
-                    'created_at': schedule.created_at
-                })
+            # Добавляем запланированные смены (если не отфильтрованы)
+            if not status or status == "planned":
+                for schedule in schedules:
+                    all_shifts.append({
+                        'id': schedule.id,
+                        'type': 'schedule',
+                        'user': schedule.user,
+                        'object': schedule.object,
+                        'start_time': schedule.planned_start,
+                        'end_time': schedule.planned_end,
+                        'status': schedule.status,
+                        'total_hours': None,
+                        'hourly_rate': None,
+                        'total_payment': None,
+                        'notes': None,
+                        'created_at': schedule.created_at,
+                        'is_planned': True,
+                        'schedule_id': schedule.id
+                    })
             
-            # Сортировка по дате создания
-            all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
+            # Сортировка по времени
+            all_shifts.sort(key=lambda x: x['start_time'], reverse=True)
             
             # Пагинация
             total_shifts = len(all_shifts)
@@ -1296,7 +1309,7 @@ async def owner_shifts_list(
             stats = {
                 'total': total_shifts,
                 'active': len([s for s in all_shifts if s['status'] == 'active']),
-                'planned': len([s for s in all_shifts if s['status'] == 'planned']),
+                'planned': len([s for s in all_shifts if s['type'] == 'schedule']),
                 'completed': len([s for s in all_shifts if s['status'] == 'completed'])
             }
             
@@ -1316,7 +1329,7 @@ async def owner_shifts_list(
                     "page": page,
                     "per_page": per_page,
                     "total": total_shifts,
-                    "total_pages": (total_shifts + per_page - 1) // per_page
+                    "pages": (total_shifts + per_page - 1) // per_page
                 }
             })
             
