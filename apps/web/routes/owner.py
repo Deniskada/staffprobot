@@ -1749,6 +1749,61 @@ async def owner_employees_detail(request: Request, employee_id: int):
         raise HTTPException(status_code=500, detail="Ошибка загрузки информации о сотруднике")
 
 
+# ===============================
+# ДОГОВОРЫ
+# ===============================
+
+@router.get("/employees/contract/{contract_id}", response_class=HTMLResponse, name="owner_contract_detail")
+async def owner_contract_detail(request: Request, contract_id: int):
+    """Детали договора."""
+    # Проверяем авторизацию и роль владельца
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    async def get_user_id_from_current_user(current_user, session):
+        """Получает внутренний ID пользователя из current_user"""
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("id")
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await session.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            return user_obj.id if user_obj else None
+        else:
+            return current_user.id
+    
+    try:
+        from apps.web.services.contract_service import ContractService
+        
+        # Получаем внутренний user_id
+        async with get_async_session() as session:
+            user_id = await get_user_id_from_current_user(current_user, session)
+        
+        contract_service = ContractService()
+        # Используем telegram_id как в оригинальном коде
+        contract = await contract_service.get_contract_by_telegram_id(contract_id, current_user.get("id"))
+        
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        return templates.TemplateResponse(
+            "owner/employees/contract_detail.html",
+            {
+                "request": request,
+                "contract": contract,
+                "title": "Детали договора",
+                "current_user": current_user
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading contract detail: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки информации о договоре")
+
+
 @router.get("/shifts", response_class=HTMLResponse, name="owner_shifts")
 async def owner_shifts(request: Request):
     """Управление сменами владельца"""

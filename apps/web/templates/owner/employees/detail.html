@@ -48,7 +48,7 @@
                                                     <code>{{ contract.contract_number }}</code>
                                                 </td>
                                                 <td>
-                                                    <a href="/employees/contract/{{ contract.id }}" class="text-decoration-none">
+                                                    <a href="/owner/employees/contract/{{ contract.id }}" class="text-decoration-none">
                                                         {{ contract.title }}
                                                     </a>
                                                 </td>
@@ -85,13 +85,13 @@
                                                 </td>
                                                 <td>
                                                     <div class="btn-group">
-                                                        <a href="/employees/contract/{{ contract.id }}" 
+                                                        <a href="/owner/employees/contract/{{ contract.id }}" 
                                                            class="btn btn-outline-primary"
                                                            title="Просмотр договора">
                                                             <i class="fas fa-eye"></i>
                                                         </a>
                                                         {% if contract.status != 'terminated' %}
-                                                        <a href="/employees/contract/{{ contract.id }}/edit" 
+                                                        <a href="/owner/owner/employees/contract/{{ contract.id }}/edit" 
                                                            class="btn btn-outline-secondary"
                                                            title="Редактировать договор">
                                                             <i class="fas fa-edit"></i>
@@ -240,7 +240,7 @@
                             </h5>
                         </div>
                         <div class="card-body">
-                            <a href="/employees/create?employee_telegram_id={{ employee.telegram_id }}" 
+                            <a href="/owner/employees/create?employee_telegram_id={{ employee.telegram_id }}" 
                                class="btn btn-primary w-100 mb-2">
                                 <i class="fas fa-file-contract me-2"></i>Новый договор
                             </a>
