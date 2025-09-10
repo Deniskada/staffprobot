@@ -946,7 +946,11 @@ async def owner_timeslots_list(
 ):
     """Список тайм-слотов объекта владельца."""
     try:
-        telegram_id = current_user.get("id")
+        # Получаем telegram_id из current_user
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("id")
+        else:
+            telegram_id = current_user.telegram_id
         
         # Получение информации об объекте и тайм-слотов из базы данных
         object_service = ObjectService(db)
