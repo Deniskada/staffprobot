@@ -2095,3 +2095,231 @@ async def owner_settings(request: Request):
         "title": "Настройки владельца",
         "message": "Настройки в разработке"
     })
+
+
+# ===== ШАБЛОНЫ ПЛАНИРОВАНИЯ =====
+
+@router.get("/templates/planning", response_class=HTMLResponse, name="owner_planning_templates_list")
+async def owner_planning_templates_list(request: Request):
+    """Список шаблонов планирования."""
+    current_user = await get_current_user(request)
+    if current_user.get("role") != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        async with get_async_session() as session:
+            from apps.web.services.template_service import TemplateService
+            template_service = TemplateService(session)
+            templates_list = await template_service.get_templates_by_owner(current_user["id"])
+        
+        return templates.TemplateResponse(
+            "owner/templates/planning/list.html",
+            {
+                "request": request,
+                "templates": templates_list,
+                "template_type": "planning",
+                "title": "Шаблоны планирования",
+                "current_user": current_user
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error loading planning templates: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки шаблонов планирования")
+
+
+@router.get("/templates/planning/create", response_class=HTMLResponse, name="owner_planning_template_create")
+async def owner_planning_template_create(request: Request):
+    """Форма создания шаблона планирования."""
+    current_user = await get_current_user(request)
+    if current_user.get("role") != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    return templates.TemplateResponse(
+        "owner/templates/planning/create.html",
+        {
+            "request": request,
+            "template_type": "planning",
+            "title": "Создание шаблона планирования",
+            "current_user": current_user
+        }
+    )
+
+
+@router.post("/templates/planning/create", name="owner_planning_template_create_post")
+async def owner_planning_template_create_post(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(""),
+    start_time: str = Form(""),
+    end_time: str = Form(""),
+    hourly_rate: int = Form(0),
+    repeat_type: str = Form("none"),
+    repeat_days: str = Form(""),
+    is_public: bool = Form(False)
+):
+    """Создание шаблона планирования."""
+    current_user = await get_current_user(request)
+    if current_user.get("role") != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        async with get_async_session() as session:
+            from apps.web.services.template_service import TemplateService
+            template_service = TemplateService(session)
+            
+            template_data = {
+                "name": name,
+                "description": description,
+                "start_time": start_time,
+                "end_time": end_time,
+                "hourly_rate": hourly_rate,
+                "repeat_type": repeat_type,
+                "repeat_days": repeat_days,
+                "is_public": is_public
+            }
+            
+            template = await template_service.create_template(template_data, current_user["id"])
+            
+            if template:
+                return RedirectResponse(url="/owner/templates/planning", status_code=303)
+            else:
+                raise HTTPException(status_code=400, detail="Ошибка создания шаблона планирования")
+                
+    except Exception as e:
+        logger.error(f"Error creating planning template: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка создания шаблона планирования: {str(e)}")
+
+
+@router.get("/templates/planning/{template_id}", response_class=HTMLResponse, name="owner_planning_template_detail")
+async def owner_planning_template_detail(request: Request, template_id: int):
+    """Детали шаблона планирования."""
+    current_user = await get_current_user(request)
+    if current_user.get("role") != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        async with get_async_session() as session:
+            from apps.web.services.template_service import TemplateService
+            template_service = TemplateService(session)
+            template = await template_service.get_template_by_id(template_id, current_user["id"])
+        
+        if not template:
+            raise HTTPException(status_code=404, detail="Шаблон планирования не найден")
+        
+        return templates.TemplateResponse(
+            "owner/templates/planning/detail.html",
+            {
+                "request": request,
+                "template": template,
+                "template_type": "planning",
+                "title": "Детали шаблона планирования",
+                "current_user": current_user
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading planning template detail: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки шаблона планирования")
+
+
+@router.get("/templates/planning/{template_id}/edit", response_class=HTMLResponse, name="owner_planning_template_edit")
+async def owner_planning_template_edit(request: Request, template_id: int):
+    """Форма редактирования шаблона планирования."""
+    current_user = await get_current_user(request)
+    if current_user.get("role") != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        async with get_async_session() as session:
+            from apps.web.services.template_service import TemplateService
+            template_service = TemplateService(session)
+            template = await template_service.get_template_by_id(template_id, current_user["id"])
+        
+        if not template:
+            raise HTTPException(status_code=404, detail="Шаблон планирования не найден")
+        
+        return templates.TemplateResponse(
+            "owner/templates/planning/edit.html",
+            {
+                "request": request,
+                "template": template,
+                "template_type": "planning",
+                "title": "Редактирование шаблона планирования",
+                "current_user": current_user
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading planning template edit: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки формы редактирования")
+
+
+@router.post("/templates/planning/{template_id}/edit", name="owner_planning_template_edit_post")
+async def owner_planning_template_edit_post(
+    request: Request,
+    template_id: int,
+    name: str = Form(...),
+    description: str = Form(""),
+    start_time: str = Form(""),
+    end_time: str = Form(""),
+    hourly_rate: int = Form(0),
+    repeat_type: str = Form("none"),
+    repeat_days: str = Form(""),
+    is_public: bool = Form(False)
+):
+    """Обновление шаблона планирования."""
+    current_user = await get_current_user(request)
+    if current_user.get("role") != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        async with get_async_session() as session:
+            from apps.web.services.template_service import TemplateService
+            template_service = TemplateService(session)
+            
+            template_data = {
+                "name": name,
+                "description": description,
+                "start_time": start_time,
+                "end_time": end_time,
+                "hourly_rate": hourly_rate,
+                "repeat_type": repeat_type,
+                "repeat_days": repeat_days,
+                "is_public": is_public
+            }
+            
+            success = await template_service.update_template(template_id, template_data, current_user["id"])
+            
+            if success:
+                return RedirectResponse(url=f"/owner/templates/planning/{template_id}", status_code=303)
+            else:
+                raise HTTPException(status_code=400, detail="Ошибка обновления шаблона планирования")
+                
+    except Exception as e:
+        logger.error(f"Error updating planning template: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка обновления шаблона планирования: {str(e)}")
+
+
+@router.post("/templates/planning/{template_id}/delete", name="owner_planning_template_delete")
+async def owner_planning_template_delete(request: Request, template_id: int):
+    """Удаление шаблона планирования."""
+    current_user = await get_current_user(request)
+    if current_user.get("role") != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        async with get_async_session() as session:
+            from apps.web.services.template_service import TemplateService
+            template_service = TemplateService(session)
+            success = await template_service.delete_template(template_id, current_user["id"])
+        
+        if success:
+            return RedirectResponse(url="/owner/templates/planning", status_code=303)
+        else:
+            raise HTTPException(status_code=400, detail="Ошибка удаления шаблона планирования")
+            
+    except Exception as e:
+        logger.error(f"Error deleting planning template: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка удаления шаблона планирования: {str(e)}")
