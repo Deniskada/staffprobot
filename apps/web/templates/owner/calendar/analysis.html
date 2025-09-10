@@ -320,7 +320,7 @@
             <i class="bi bi-inbox"></i>
             <h4>Нет данных для анализа</h4>
             <p>Создайте объекты и тайм-слоты для анализа планирования</p>
-            <a href="/objects/create" class="btn btn-primary">
+            <a href="/owner/objects/create" class="btn btn-primary">
                 <i class="bi bi-plus-lg"></i> Создать объект
             </a>
         </div>
@@ -340,7 +340,7 @@
 
 <!-- Быстрые действия -->
 <div class="quick-actions">
-    <a href="/objects/create" class="btn btn-primary" title="Создать объект">
+    <a href="/owner/objects/create" class="btn btn-primary" title="Создать объект">
         <i class="bi bi-plus-lg"></i>
     </a>
     <a href="/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create" 
@@ -373,7 +373,7 @@ document.addEventListener('keydown', function(e) {
                 break;
             case 'o': // Ctrl+O - новый объект
                 e.preventDefault();
-                window.location.href = '/objects/create';
+                window.location.href = '/owner/objects/create';
                 break;
         }
     }
