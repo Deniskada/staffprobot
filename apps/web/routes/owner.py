@@ -1858,6 +1858,88 @@ async def owner_contract_edit(
         raise HTTPException(status_code=400, detail=f"Ошибка обновления договора: {str(e)}")
 
 
+@router.post("/employees/contract/{contract_id}/activate", name="owner_contract_activate")
+async def owner_contract_activate(request: Request, contract_id: int):
+    """Активация договора."""
+    current_user = await get_current_user(request)
+    if current_user.get("role") != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        from apps.web.services.contract_service import ContractService
+        from fastapi.responses import JSONResponse
+        
+        contract_service = ContractService()
+        await contract_service.activate_contract_by_telegram_id(
+            contract_id=contract_id,
+            owner_telegram_id=current_user["id"]
+        )
+        return JSONResponse({"success": True, "message": "Договор успешно активирован"})
+    except Exception as e:
+        logger.error(f"Ошибка активации договора: {str(e)}")
+        return JSONResponse({"success": False, "detail": f"Ошибка активации договора: {str(e)}"}, status_code=500)
+
+
+@router.post("/employees/contract/{contract_id}/terminate", name="owner_contract_terminate")
+async def owner_contract_terminate(request: Request, contract_id: int, reason: str = Form(...)):
+    """Расторжение договора."""
+    current_user = await get_current_user(request)
+    if current_user.get("role") != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        from apps.web.services.contract_service import ContractService
+        
+        contract_service = ContractService()
+        success = await contract_service.terminate_contract_by_telegram_id(contract_id, current_user["id"], reason)
+        
+        if success:
+            return RedirectResponse(url="/owner/employees", status_code=303)
+        else:
+            raise HTTPException(status_code=400, detail="Ошибка расторжения договора")
+    except Exception as e:
+        logger.error(f"Error terminating contract: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка расторжения договора: {str(e)}")
+
+
+@router.get("/employees/contract/{contract_id}/pdf", name="owner_contract_pdf")
+async def owner_contract_pdf(request: Request, contract_id: int):
+    """Скачать договор в формате PDF."""
+    current_user = await get_current_user(request)
+    if current_user.get("role") != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        from apps.web.services.contract_service import ContractService
+        from apps.web.services.pdf_service import PDFService
+        from fastapi.responses import Response
+        
+        contract_service = ContractService()
+        contract = await contract_service.get_contract_by_telegram_id(contract_id, current_user["id"])
+        
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        # Генерируем PDF
+        pdf_service = PDFService()
+        pdf_data = await pdf_service.generate_contract_pdf(contract)
+        
+        # Формируем имя файла
+        filename = f"contract_{contract['contract_number']}_{contract['start_date'].strftime('%Y%m%d')}.pdf"
+        
+        # Возвращаем PDF как файл для скачивания
+        return Response(
+            content=pdf_data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error generating contract PDF: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка генерации PDF: {str(e)}")
+
+
 # ===============================
 # ДОГОВОРЫ
 # ===============================
