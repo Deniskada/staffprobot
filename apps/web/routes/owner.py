@@ -15,6 +15,11 @@ from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta, date, time
 from typing import Optional, List, Dict, Any
 import calendar
+import io
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill
+from openpyxl.utils.dataframe import dataframe_to_rows
 
 from core.database.session import get_async_session, get_db_session
 from apps.web.middleware.auth_middleware import get_current_user
@@ -2131,15 +2136,382 @@ async def owner_templates(request: Request):
 
 
 @router.get("/reports", response_class=HTMLResponse, name="owner_reports")
-async def owner_reports(request: Request):
+async def owner_reports(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
     """Отчеты владельца"""
-    current_user = await get_current_user(request)
-    user_role = current_user.get("role", "employee")
-    if user_role != "owner":
-        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    try:
+        # Получаем внутренний user_id (как в оригинале)
+        user_id = await get_user_id_from_current_user(current_user, db)
+        
+        # Получаем объекты владельца (как в оригинале)
+        objects_query = select(Object).where(Object.owner_id == user_id)
+        objects_result = await db.execute(objects_query)
+        objects = objects_result.scalars().all()
+        
+        # Получаем всех пользователей, которые работали на объектах владельца (как в оригинале)
+        employees_query = select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.phone, User.role, User.is_active, User.created_at, User.updated_at).distinct().join(Shift, User.id == Shift.user_id).where(
+            Shift.object_id.in_([obj.id for obj in objects])
+        )
+        employees_result = await db.execute(employees_query)
+        employees = employees_result.all()
+        
+        # Если нет сотрудников из смен, показываем всех пользователей кроме текущего владельца (как в оригинале)
+        if not employees:
+            all_employees_query = select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.phone, User.role, User.is_active, User.created_at, User.updated_at).where(User.id != user_id)
+            all_employees_result = await db.execute(all_employees_query)
+            employees = all_employees_result.all()
+        
+        # Статистика за последний месяц (как в оригинале)
+        month_ago = datetime.now() - timedelta(days=30)
+        
+        shifts_query = select(Shift).options(
+            selectinload(Shift.object),
+            selectinload(Shift.user)
+        ).where(
+            and_(
+                Shift.object_id.in_([obj.id for obj in objects]),
+                Shift.start_time >= month_ago
+            )
+        )
+        shifts_result = await db.execute(shifts_query)
+        recent_shifts = shifts_result.scalars().all()
+        
+        stats = {
+            "total_shifts": len(recent_shifts),
+            "total_hours": sum(s.total_hours or 0 for s in recent_shifts if s.total_hours),
+            "total_payment": sum(s.total_payment or 0 for s in recent_shifts if s.total_payment),
+            "active_objects": len(objects),
+            "employees": len(employees)
+        }
+        
+        return templates.TemplateResponse("owner/reports/index.html", {
+            "request": request,
+            "current_user": current_user,
+            "objects": objects,
+            "employees": employees,
+            "stats": stats
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading reports: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки отчетов")
+
+
+@router.post("/reports/generate")
+async def owner_generate_report(
+    request: Request,
+    report_type: str = Form(...),
+    date_from: str = Form(...),
+    date_to: str = Form(...),
+    object_id: Optional[int] = Form(None),
+    employee_id: Optional[int] = Form(None),
+    format: str = Form("excel"),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Генерация отчета (как в оригинале)"""
+    # Парсинг дат (как в оригинале)
+    try:
+        start_date = datetime.strptime(date_from, "%Y-%m-%d").date()
+        end_date = datetime.strptime(date_to, "%Y-%m-%d").date()
+    except ValueError:
+        return {"error": "Неверный формат даты"}
     
-    # Перенаправляем на существующую страницу отчетов
-    return RedirectResponse(url="/reports", status_code=status.HTTP_302_FOUND)
+    # Получаем внутренний user_id (как в оригинале)
+    user_id = await get_user_id_from_current_user(current_user, db)
+    
+    # Получаем объекты владельца (как в оригинале)
+    owner_objects = select(Object.id).where(Object.owner_id == user_id)
+    objects_result = await db.execute(owner_objects)
+    owner_object_ids = [obj[0] for obj in objects_result.all()]
+    
+    # Базовый запрос для смен (как в оригинале)
+    shifts_query = select(Shift).options(
+        selectinload(Shift.object),
+        selectinload(Shift.user)
+    ).where(
+        and_(
+            Shift.object_id.in_(owner_object_ids),
+            Shift.start_time >= start_date,
+            Shift.start_time <= end_date + timedelta(days=1)
+        )
+    )
+    
+    # Применение фильтров (как в оригинале)
+    if object_id and object_id in owner_object_ids:
+        shifts_query = shifts_query.where(Shift.object_id == object_id)
+    
+    if employee_id:
+        shifts_query = shifts_query.where(Shift.user_id == employee_id)
+    
+    # Выполнение запроса (как в оригинале)
+    shifts_result = await db.execute(shifts_query.order_by(desc(Shift.start_time)))
+    shifts = shifts_result.scalars().all()
+    
+    # Генерация отчета в зависимости от типа (как в оригинале)
+    if report_type == "shifts":
+        return await _generate_shifts_report(shifts, format, start_date, end_date)
+    elif report_type == "employees":
+        return await _generate_employees_report(shifts, format, start_date, end_date)
+    elif report_type == "objects":
+        return await _generate_objects_report(shifts, format, start_date, end_date)
+    else:
+        return {"error": "Неизвестный тип отчета"}
+
+
+@router.get("/reports/stats/period")
+async def owner_reports_stats_period(
+    request: Request,
+    date_from: str = Query(...),
+    date_to: str = Query(...),
+    object_id: Optional[int] = Query(None),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Статистика за период (как в оригинале)"""
+    try:
+        start_date = datetime.strptime(date_from, "%Y-%m-%d").date()
+        end_date = datetime.strptime(date_to, "%Y-%m-%d").date()
+    except ValueError:
+        return {"error": "Неверный формат даты"}
+    
+    # Получаем внутренний user_id (как в оригинале)
+    user_id = await get_user_id_from_current_user(current_user, db)
+    
+    # Получаем объекты владельца (как в оригинале)
+    owner_objects = select(Object.id).where(Object.owner_id == user_id)
+    objects_result = await db.execute(owner_objects)
+    owner_object_ids = [obj[0] for obj in objects_result.all()]
+    
+    # Запрос смен за период (как в оригинале)
+    shifts_query = select(Shift).options(
+        selectinload(Shift.object),
+        selectinload(Shift.user)
+    ).where(
+        and_(
+            Shift.object_id.in_(owner_object_ids),
+            Shift.start_time >= start_date,
+            Shift.start_time <= end_date + timedelta(days=1)
+        )
+    )
+    
+    if object_id and object_id in owner_object_ids:
+        shifts_query = shifts_query.where(Shift.object_id == object_id)
+    
+    shifts_result = await db.execute(shifts_query)
+    shifts = shifts_result.scalars().all()
+    
+    # Расчет статистики (как в оригинале)
+    stats = {
+        "period": {
+            "from": start_date.strftime("%d.%m.%Y"),
+            "to": end_date.strftime("%d.%m.%Y")
+        },
+        "total_shifts": len(shifts),
+        "total_hours": sum(s.total_hours or 0 for s in shifts if s.total_hours),
+        "total_payment": sum(s.total_payment or 0 for s in shifts if s.total_payment),
+        "avg_hours_per_shift": 0,
+        "avg_payment_per_shift": 0,
+        "by_status": {},
+        "by_object": {},
+        "by_employee": {}
+    }
+    
+    if stats["total_shifts"] > 0:
+        stats["avg_hours_per_shift"] = stats["total_hours"] / stats["total_shifts"]
+        stats["avg_payment_per_shift"] = stats["total_payment"] / stats["total_shifts"]
+    
+    # Статистика по статусам (как в оригинале)
+    status_counts = {}
+    for shift in shifts:
+        status = shift.status
+        status_counts[status] = status_counts.get(status, 0) + 1
+    stats["by_status"] = status_counts
+    
+    # Статистика по объектам (как в оригинале)
+    object_stats = {}
+    for shift in shifts:
+        obj_name = shift.object.name
+        if obj_name not in object_stats:
+            object_stats[obj_name] = {
+                "shifts": 0,
+                "hours": 0,
+                "payment": 0
+            }
+        object_stats[obj_name]["shifts"] += 1
+        object_stats[obj_name]["hours"] += shift.total_hours or 0
+        object_stats[obj_name]["payment"] += shift.total_payment or 0
+    stats["by_object"] = object_stats
+    
+    # Статистика по сотрудникам (как в оригинале)
+    employee_stats = {}
+    for shift in shifts:
+        emp_name = f"{shift.user.first_name} {shift.user.last_name or ''}".strip()
+        if emp_name not in employee_stats:
+            employee_stats[emp_name] = {
+                "shifts": 0,
+                "hours": 0,
+                "payment": 0
+            }
+        employee_stats[emp_name]["shifts"] += 1
+        employee_stats[emp_name]["hours"] += shift.total_hours or 0
+        employee_stats[emp_name]["payment"] += shift.total_payment or 0
+    stats["by_employee"] = employee_stats
+    
+    return stats
+
+
+async def _generate_shifts_report(shifts: List[Shift], format: str, start_date: date, end_date: date):
+    """Генерация отчета по сменам (как в оригинале)"""
+    data = []
+    
+    for shift in shifts:
+        data.append({
+            "ID": shift.id,
+            "Сотрудник": f"{shift.user.first_name} {shift.user.last_name or ''}".strip(),
+            "Объект": shift.object.name,
+            "Дата начала": shift.start_time.strftime("%d.%m.%Y %H:%M"),
+            "Дата окончания": shift.end_time.strftime("%d.%m.%Y %H:%M") if shift.end_time else "Не завершена",
+            "Статус": shift.status,
+            "Часов": shift.total_hours or 0,
+            "Ставка": shift.hourly_rate or 0,
+            "Сумма": shift.total_payment or 0,
+            "Заметки": shift.notes or ""
+        })
+    
+    if format == "excel":
+        return await _create_excel_file(data, f"shifts_report_{start_date}_{end_date}")
+    else:
+        return {"data": data, "total": len(data)}
+
+
+async def _generate_employees_report(shifts: List[Shift], format: str, start_date: date, end_date: date):
+    """Генерация отчета по сотрудникам (как в оригинале)"""
+    # Группировка по сотрудникам (как в оригинале)
+    employees_data = {}
+    
+    for shift in shifts:
+        employee_id = shift.user_id
+        if employee_id not in employees_data:
+            employees_data[employee_id] = {
+                "employee": shift.user,
+                "shifts": [],
+                "total_hours": 0,
+                "total_payment": 0
+            }
+        
+        employees_data[employee_id]["shifts"].append(shift)
+        employees_data[employee_id]["total_hours"] += shift.total_hours or 0
+        employees_data[employee_id]["total_payment"] += shift.total_payment or 0
+    
+    data = []
+    for emp_data in employees_data.values():
+        data.append({
+            "Сотрудник": f"{emp_data['employee'].first_name} {emp_data['employee'].last_name or ''}".strip(),
+            "Количество смен": len(emp_data["shifts"]),
+            "Общее время": emp_data["total_hours"],
+            "Общая сумма": emp_data["total_payment"],
+            "Средняя ставка": emp_data["total_payment"] / emp_data["total_hours"] if emp_data["total_hours"] > 0 else 0
+        })
+    
+    if format == "excel":
+        return await _create_excel_file(data, f"employees_report_{start_date}_{end_date}")
+    else:
+        return {"data": data, "total": len(data)}
+
+
+async def _generate_objects_report(shifts: List[Shift], format: str, start_date: date, end_date: date):
+    """Генерация отчета по объектам (как в оригинале)"""
+    # Группировка по объектам (как в оригинале)
+    objects_data = {}
+    
+    for shift in shifts:
+        object_id = shift.object_id
+        if object_id not in objects_data:
+            objects_data[object_id] = {
+                "object": shift.object,
+                "shifts": [],
+                "total_hours": 0,
+                "total_payment": 0,
+                "employees": set()
+            }
+        
+        objects_data[object_id]["shifts"].append(shift)
+        objects_data[object_id]["total_hours"] += shift.total_hours or 0
+        objects_data[object_id]["total_payment"] += shift.total_payment or 0
+        objects_data[object_id]["employees"].add(shift.user_id)
+    
+    data = []
+    for obj_data in objects_data.values():
+        data.append({
+            "Объект": obj_data["object"].name,
+            "Адрес": obj_data["object"].address or "",
+            "Количество смен": len(obj_data["shifts"]),
+            "Количество сотрудников": len(obj_data["employees"]),
+            "Общее время": obj_data["total_hours"],
+            "Общая сумма": obj_data["total_payment"],
+            "Средняя ставка": obj_data["total_payment"] / obj_data["total_hours"] if obj_data["total_hours"] > 0 else 0
+        })
+    
+    if format == "excel":
+        return await _create_excel_file(data, f"objects_report_{start_date}_{end_date}")
+    else:
+        return {"data": data, "total": len(data)}
+
+
+async def _create_excel_file(data: List[dict], filename: str):
+    """Создание Excel файла (как в оригинале)"""
+    if not data:
+        return {"error": "Нет данных для отчета"}
+    
+    # Создание DataFrame (как в оригинале)
+    
+    df = pd.DataFrame(data)
+    
+    # Создание Excel файла (как в оригинале)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Отчет"
+    
+    # Добавление данных (как в оригинале)
+    for r in dataframe_to_rows(df, index=False, header=True):
+        ws.append(r)
+    
+    # Стилизация (как в оригинале)
+    header_font = Font(bold=True)
+    header_fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+    
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+    
+    # Автоширина колонок (как в оригинале)
+    for column in ws.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = min(max_length + 2, 50)
+        ws.column_dimensions[column_letter].width = adjusted_width
+    
+    # Сохранение в память (как в оригинале)
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"}
+    )
 
 
 @router.get("/profile", response_class=HTMLResponse, name="owner_profile")

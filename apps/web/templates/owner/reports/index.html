@@ -1,0 +1,451 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Отчеты{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-graph-up"></i> Отчеты и аналитика
+                </h1>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" onclick="refreshStats()">
+                        <i class="bi bi-arrow-clockwise"></i> Обновить
+                    </button>
+                </div>
+            </div>
+
+            <!-- Статистика за последний месяц -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ stats.total_shifts }}</h4>
+                                    <p class="card-text">Смен за месяц</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-clock-history fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ "%.1f"|format(stats.total_hours) }}</h4>
+                                    <p class="card-text">Часов отработано</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-hourglass-split fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ "%.0f"|format(stats.total_payment) }} ₽</h4>
+                                    <p class="card-text">Общая оплата</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-currency-dollar fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ stats.employees }}</h4>
+                                    <p class="card-text">Сотрудников</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-people fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Форма генерации отчетов -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-file-earmark-text"></i> Генерация отчета
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="reportForm" method="POST" action="/owner/reports/generate">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label for="report_type" class="form-label">Тип отчета</label>
+                                <select class="form-select" id="report_type" name="report_type" required>
+                                    <option value="">Выберите тип отчета</option>
+                                    <option value="shifts">По сменам</option>
+                                    <option value="employees">По сотрудникам</option>
+                                    <option value="objects">По объектам</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="date_from" class="form-label">С даты</label>
+                                <input type="date" class="form-control" id="date_from" name="date_from" required>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="date_to" class="form-label">По дату</label>
+                                <input type="date" class="form-control" id="date_to" name="date_to" required>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="object_id" class="form-label">Объект</label>
+                                <select class="form-select" id="object_id" name="object_id">
+                                    <option value="">Все объекты</option>
+                                    {% for obj in objects %}
+                                    <option value="{{ obj.id }}">{{ obj.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="employee_id" class="form-label">Сотрудник</label>
+                                <select class="form-select" id="employee_id" name="employee_id">
+                                    <option value="">Все сотрудники</option>
+                                    {% if employees %}
+                                        {% for emp in employees %}
+                                        <option value="{{ emp[0] }}">{{ emp[3] }} {{ emp[4] or '' }}</option>
+                                        {% endfor %}
+                                    {% else %}
+                                        <option value="">Нет сотрудников</option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                            <div class="col-md-1">
+                                <label for="format" class="form-label">Формат</label>
+                                <select class="form-select" id="format" name="format">
+                                    <option value="excel">Excel</option>
+                                    <option value="json">JSON</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-download"></i> Сгенерировать отчет
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="resetForm()">
+                                    <i class="bi bi-arrow-clockwise"></i> Сбросить
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Быстрые отчеты -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-lightning"></i> Быстрые отчеты
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-primary" onclick="generateQuickReport('today')">
+                                    <i class="bi bi-calendar-day"></i> За сегодня
+                                </button>
+                                <button class="btn btn-outline-primary" onclick="generateQuickReport('week')">
+                                    <i class="bi bi-calendar-week"></i> За неделю
+                                </button>
+                                <button class="btn btn-outline-primary" onclick="generateQuickReport('month')">
+                                    <i class="bi bi-calendar-month"></i> За месяц
+                                </button>
+                                <button class="btn btn-outline-primary" onclick="generateQuickReport('year')">
+                                    <i class="bi bi-calendar-year"></i> За год
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-graph-up"></i> Аналитика
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-info" onclick="showAnalytics('period')">
+                                    <i class="bi bi-bar-chart"></i> Анализ по периоду
+                                </button>
+                                <button class="btn btn-outline-info" onclick="showAnalytics('employees')">
+                                    <i class="bi bi-people"></i> Топ сотрудники
+                                </button>
+                                <button class="btn btn-outline-info" onclick="showAnalytics('objects')">
+                                    <i class="bi bi-building"></i> Топ объекты
+                                </button>
+                                <button class="btn btn-outline-info" onclick="showAnalytics('trends')">
+                                    <i class="bi bi-graph-up"></i> Тренды
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Результаты аналитики -->
+            <div id="analyticsResults" class="mt-4" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="bi bi-graph-up"></i> Результаты аналитики
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="analyticsContent">
+                            <!-- Здесь будут отображаться результаты аналитики -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Устанавливаем даты по умолчанию
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date();
+    const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+    
+    document.getElementById('date_from').value = monthAgo.toISOString().split('T')[0];
+    document.getElementById('date_to').value = today.toISOString().split('T')[0];
+});
+
+function refreshStats() {
+    window.location.reload();
+}
+
+function resetForm() {
+    document.getElementById('reportForm').reset();
+    const today = new Date();
+    const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+    
+    document.getElementById('date_from').value = monthAgo.toISOString().split('T')[0];
+    document.getElementById('date_to').value = today.toISOString().split('T')[0];
+}
+
+function generateQuickReport(period) {
+    const today = new Date();
+    let dateFrom, dateTo;
+    
+    switch(period) {
+        case 'today':
+            dateFrom = dateTo = today.toISOString().split('T')[0];
+            break;
+        case 'week':
+            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            dateFrom = weekAgo.toISOString().split('T')[0];
+            dateTo = today.toISOString().split('T')[0];
+            break;
+        case 'month':
+            const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+            dateFrom = monthAgo.toISOString().split('T')[0];
+            dateTo = today.toISOString().split('T')[0];
+            break;
+        case 'year':
+            const yearAgo = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+            dateFrom = yearAgo.toISOString().split('T')[0];
+            dateTo = today.toISOString().split('T')[0];
+            break;
+    }
+    
+    // Заполняем форму
+    document.getElementById('date_from').value = dateFrom;
+    document.getElementById('date_to').value = dateTo;
+    document.getElementById('report_type').value = 'shifts';
+    document.getElementById('format').value = 'excel';
+    
+    // Отправляем форму
+    document.getElementById('reportForm').submit();
+}
+
+async function showAnalytics(type) {
+    const resultsDiv = document.getElementById('analyticsResults');
+    const contentDiv = document.getElementById('analyticsContent');
+    
+    // Показываем загрузку
+    contentDiv.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Загрузка...</span></div></div>';
+    resultsDiv.style.display = 'block';
+    
+    try {
+        const today = new Date();
+        const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+        
+        const response = await fetch(`/owner/reports/stats/period?date_from=${monthAgo.toISOString().split('T')[0]}&date_to=${today.toISOString().split('T')[0]}`, {
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (type === 'period') {
+            contentDiv.innerHTML = generatePeriodAnalytics(data);
+        } else if (type === 'employees') {
+            contentDiv.innerHTML = generateEmployeesAnalytics(data);
+        } else if (type === 'objects') {
+            contentDiv.innerHTML = generateObjectsAnalytics(data);
+        } else if (type === 'trends') {
+            contentDiv.innerHTML = generateTrendsAnalytics(data);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        contentDiv.innerHTML = '<div class="alert alert-danger">Ошибка загрузки аналитики</div>';
+    }
+}
+
+function generatePeriodAnalytics(data) {
+    return `
+        <div class="row">
+            <div class="col-md-4">
+                <div class="text-center">
+                    <h4 class="text-primary">${data.total_shifts}</h4>
+                    <p class="text-muted">Всего смен</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center">
+                    <h4 class="text-success">${data.total_hours.toFixed(1)}</h4>
+                    <p class="text-muted">Часов отработано</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center">
+                    <h4 class="text-warning">${data.total_payment.toFixed(0)} ₽</h4>
+                    <p class="text-muted">Общая оплата</p>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="text-center">
+                    <h5>Среднее за смену</h5>
+                    <p>${data.avg_hours_per_shift.toFixed(1)} часов / ${data.avg_payment_per_shift.toFixed(0)} ₽</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="text-center">
+                    <h5>Статистика по статусам</h5>
+                    <div class="d-flex justify-content-around">
+                        ${Object.entries(data.by_status).map(([status, count]) => 
+                            `<span class="badge bg-secondary">${status}: ${count}</span>`
+                        ).join('')}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function generateEmployeesAnalytics(data) {
+    const employees = Object.entries(data.by_employee)
+        .sort((a, b) => b[1].shifts - a[1].shifts)
+        .slice(0, 5);
+    
+    return `
+        <h5>Топ-5 сотрудников по количеству смен</h5>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Сотрудник</th>
+                        <th>Смены</th>
+                        <th>Часы</th>
+                        <th>Оплата</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${employees.map(([name, stats]) => `
+                        <tr>
+                            <td>${name}</td>
+                            <td>${stats.shifts}</td>
+                            <td>${stats.hours.toFixed(1)}</td>
+                            <td>${stats.payment.toFixed(0)} ₽</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function generateObjectsAnalytics(data) {
+    const objects = Object.entries(data.by_object)
+        .sort((a, b) => b[1].shifts - a[1].shifts)
+        .slice(0, 5);
+    
+    return `
+        <h5>Топ-5 объектов по активности</h5>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Объект</th>
+                        <th>Смены</th>
+                        <th>Сотрудники</th>
+                        <th>Часы</th>
+                        <th>Оплата</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${objects.map(([name, stats]) => `
+                        <tr>
+                            <td>${name}</td>
+                            <td>${stats.shifts}</td>
+                            <td>${stats.employees}</td>
+                            <td>${stats.hours.toFixed(1)}</td>
+                            <td>${stats.payment.toFixed(0)} ₽</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function generateTrendsAnalytics(data) {
+    return `
+        <h5>Анализ трендов</h5>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="text-center">
+                    <h6>Средняя продолжительность смены</h6>
+                    <p class="fs-4 text-primary">${data.avg_hours_per_shift.toFixed(1)} часов</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="text-center">
+                    <h6>Средняя оплата за смену</h6>
+                    <p class="fs-4 text-success">${data.avg_payment_per_shift.toFixed(0)} ₽</p>
+                </div>
+            </div>
+        </div>
+        <div class="mt-3">
+            <p class="text-muted">Анализ основан на данных за выбранный период</p>
+        </div>
+    `;
+}
+</script>
+{% endblock %}
