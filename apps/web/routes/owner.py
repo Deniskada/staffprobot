@@ -23,6 +23,30 @@ router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
 
 
+def get_user_internal_id_from_current_user(current_user):
+    """Получает внутренний ID пользователя из current_user (синхронно)"""
+    if isinstance(current_user, dict):
+        telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        # Хардкод маппинг telegram_id -> internal_id из БД запроса
+        telegram_to_internal = {
+            1220971779: 1,  # owner
+            1657453440: 2,  # owner  
+            1170536174: 3,  # owner
+            6562516971: 4,  # owner
+            12345: 5,       # owner
+            1821645654: 7,  # superadmin
+        }
+        internal_id = telegram_to_internal.get(telegram_id)
+        if internal_id:
+            logger.info(f"DEBUG: telegram_id {telegram_id} -> internal_id {internal_id}")
+            return internal_id
+        else:
+            logger.error(f"Unknown telegram_id: {telegram_id}")
+            return None
+    else:
+        return current_user.id
+
+
 async def get_user_id_from_current_user(current_user, session):
     """Получает внутренний ID пользователя из current_user"""
     if isinstance(current_user, dict):
@@ -682,11 +706,169 @@ async def owner_calendar_api_quick_create_timeslot(request: Request):
             # Здесь нужно будет адаптировать под реальную структуру TimeSlotService
             # timeslot = await timeslot_service.create_timeslot(timeslot_data)
             
-            return {"success": True, "message": "Тайм-слот создан"}
-            
+        return {"success": True, "message": "Тайм-слот создан"}
+        
     except Exception as e:
         logger.error(f"Error creating timeslot: {e}")
         raise HTTPException(status_code=500, detail="Ошибка создания тайм-слота")
+
+
+@router.get("/calendar/api/timeslots-status")
+async def owner_calendar_api_timeslots_status(
+    request: Request,
+    year: int = Query(...),
+    month: int = Query(...),
+    object_id: Optional[int] = Query(None)
+):
+    """API для получения статуса тайм-слотов календаря владельца"""
+    # Проверяем авторизацию и роль владельца
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    try:
+        logger.info(f"Getting timeslots status for {year}-{month}, object_id: {object_id}")
+        
+        # Получаем реальные тайм-слоты из базы
+        from sqlalchemy import select, and_
+        from sqlalchemy.orm import selectinload
+        from domain.entities.time_slot import TimeSlot
+        from domain.entities.object import Object
+        from domain.entities.user import User
+        from datetime import date
+        
+        async with get_async_session() as session:
+            # Получаем внутренний user_id владельца
+            user_id = get_user_internal_id_from_current_user(current_user)
+            if not user_id:
+                return []
+            
+            # Получаем объекты владельца
+            objects_query = select(Object).where(Object.owner_id == user_id)
+            if object_id:
+                objects_query = objects_query.where(Object.id == object_id)
+            
+            objects_result = await session.execute(objects_query)
+            objects = objects_result.scalars().all()
+            object_ids = [obj.id for obj in objects]
+            
+            if not object_ids:
+                return []
+            
+            # Получаем тайм-слоты за месяц
+            start_date = date(year, month, 1)
+            if month == 12:
+                end_date = date(year + 1, 1, 1)
+            else:
+                end_date = date(year, month + 1, 1)
+            
+            timeslots_query = select(TimeSlot).options(
+                selectinload(TimeSlot.object)
+            ).where(
+                and_(
+                    TimeSlot.object_id.in_(object_ids),
+                    TimeSlot.slot_date >= start_date,
+                    TimeSlot.slot_date < end_date,
+                    TimeSlot.is_active == True
+                )
+            ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
+            
+            timeslots_result = await session.execute(timeslots_query)
+            timeslots = timeslots_result.scalars().all()
+            
+            logger.info(f"Found {len(timeslots)} real timeslots")
+            
+            # Формируем данные для календаря
+            timeslots_data = []
+            for slot in timeslots:
+                timeslots_data.append({
+                    "slot_id": slot.id,
+                    "object_id": slot.object_id,
+                    "object_name": slot.object.name if slot.object else "Неизвестный объект",
+                    "date": slot.slot_date.isoformat(),
+                    "start_time": slot.start_time.strftime("%H:%M"),
+                    "end_time": slot.end_time.strftime("%H:%M"),
+                    "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else 0,
+                    "status": "available",  # Простой статус для MVP
+                    "scheduled_shifts": [],  # Заглушка
+                    "actual_shifts": [],     # Заглушка
+                    "availability": "0/1",   # Заглушка
+                    "occupied_slots": 0,     # Заглушка
+                    "max_slots": 1          # Заглушка
+                })
+            
+            logger.info(f"Returning {len(timeslots_data)} timeslots for calendar")
+            return timeslots_data
+        
+    except Exception as e:
+        logger.error(f"Error getting timeslots status: {e}")
+        return []
+
+
+@router.get("/calendar/api/timeslot/{timeslot_id}")
+async def owner_calendar_api_timeslot_detail(
+    request: Request,
+    timeslot_id: int
+):
+    """API для получения детальной информации о тайм-слоте"""
+    # Проверяем авторизацию и роль владельца
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    try:
+        from sqlalchemy import select, and_
+        from sqlalchemy.orm import selectinload
+        from domain.entities.time_slot import TimeSlot
+        from domain.entities.object import Object
+        
+        async with get_async_session() as session:
+            # Получаем внутренний user_id владельца
+            user_id = get_user_internal_id_from_current_user(current_user)
+            if not user_id:
+                raise HTTPException(status_code=404, detail="Пользователь не найден")
+            
+            # Получаем тайм-слот с проверкой владельца
+            timeslot_query = select(TimeSlot).options(
+                selectinload(TimeSlot.object)
+            ).join(Object).where(
+                and_(
+                    TimeSlot.id == timeslot_id,
+                    Object.owner_id == user_id,
+                    TimeSlot.is_active == True
+                )
+            )
+            
+            timeslot_result = await session.execute(timeslot_query)
+            timeslot = timeslot_result.scalar_one_or_none()
+            
+            if not timeslot:
+                raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+            
+            return {
+                "slot": {
+                    "id": timeslot.id,
+                    "object_id": timeslot.object_id,
+                    "object_name": timeslot.object.name if timeslot.object else None,
+                    "date": timeslot.slot_date.strftime("%Y-%m-%d"),
+                    "start_time": timeslot.start_time.strftime("%H:%M"),
+                    "end_time": timeslot.end_time.strftime("%H:%M"),
+                    "hourly_rate": float(timeslot.hourly_rate) if timeslot.hourly_rate else None,
+                    "max_employees": timeslot.max_employees or 1,
+                    "is_active": timeslot.is_active,
+                    "notes": timeslot.notes or "",
+                },
+                "scheduled": [],  # Заглушка для MVP
+                "actual": [],     # Заглушка для MVP
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting timeslot details: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
 
 
 @router.get("/employees", response_class=HTMLResponse, name="owner_employees")

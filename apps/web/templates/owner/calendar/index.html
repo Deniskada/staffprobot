@@ -496,7 +496,7 @@ async function loadTimeslotsStatus() {
             params.append('object_id', objectId);
         }
         
-        const response = await fetch(`/calendar/api/timeslots-status?${params}`, {
+        const response = await fetch(`/owner/calendar/api/timeslots-status?${params}`, {
             credentials: 'include'
         });
         
@@ -594,7 +594,7 @@ function showTimeslotDetails(timeslotId) {
     const modal = new bootstrap.Modal(document.getElementById('timeslotModal'));
     modal.show();
 
-    fetch(`/calendar/api/timeslot/${timeslotId}`, { credentials: 'include' })
+    fetch(`/owner/calendar/api/timeslot/${timeslotId}`, { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
             if (data.detail) {
