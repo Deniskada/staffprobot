@@ -1953,6 +1953,7 @@ async def owner_shifts_list(
         
         return templates.TemplateResponse("owner/shifts/list.html", {
             "request": request,
+            "current_user": current_user,
             "shifts": paginated_shifts,
             "objects": objects,
             "stats": stats,

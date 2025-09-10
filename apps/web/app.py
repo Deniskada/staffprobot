@@ -145,16 +145,16 @@ async def root(request: Request):
 app.include_router(auth.router, prefix="/auth", tags=["Авторизация"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Дашборд"])
 # app.include_router(objects.router, prefix="/objects", tags=["Объекты"])  # Перенесено в owner.py
-app.include_router(timeslots.router, prefix="/timeslots", tags=["Тайм-слоты"])
-app.include_router(calendar.router, prefix="/calendar", tags=["Календарь"])
-app.include_router(shifts.router, prefix="/shifts", tags=["Смены"])
-app.include_router(reports.router, prefix="/reports", tags=["Отчеты"])
-app.include_router(contracts.router, prefix="/contracts", tags=["Договоры"])
+# app.include_router(timeslots.router, prefix="/timeslots", tags=["Тайм-слоты"])  # Перенесено в owner.py
+# app.include_router(calendar.router, prefix="/calendar", tags=["Календарь"])  # Перенесено в owner.py
+# app.include_router(shifts.router, prefix="/shifts", tags=["Смены"])  # Перенесено в owner.py
+# app.include_router(reports.router, prefix="/reports", tags=["Отчеты"])  # Перенесено в owner.py
+# app.include_router(contracts.router, prefix="/contracts", tags=["Договоры"])  # Перенесено в owner.py
 app.include_router(users.router, prefix="/users", tags=["Пользователи"])
-app.include_router(employees.router, prefix="/employees", tags=["Сотрудники"])
-app.include_router(templates_routes.router, prefix="/templates", tags=["Шаблоны планирования"])
+# app.include_router(employees.router, prefix="/employees", tags=["Сотрудники"])  # Перенесено в owner.py
+# app.include_router(templates_routes.router, prefix="/templates", tags=["Шаблоны планирования"])  # Перенесено в owner.py
 app.include_router(contract_templates.router, prefix="/contract-templates", tags=["Шаблоны договоров"])
-app.include_router(profile.router, tags=["Профиль владельца"])
+# app.include_router(profile.router, tags=["Профиль владельца"])  # Перенесено в owner.py
 app.include_router(admin.router, prefix="/admin", tags=["Администрирование"])
 app.include_router(owner.router, prefix="/owner", tags=["Владелец"])
 app.include_router(employee.router, prefix="/employee", tags=["Сотрудник"])
