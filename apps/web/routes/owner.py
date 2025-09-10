@@ -2515,15 +2515,164 @@ async def _create_excel_file(data: List[dict], filename: str):
 
 
 @router.get("/profile", response_class=HTMLResponse, name="owner_profile")
-async def owner_profile(request: Request):
-    """Профиль владельца"""
-    current_user = await get_current_user(request)
-    user_role = current_user.get("role", "employee")
-    if user_role != "owner":
-        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-    
-    # Перенаправляем на существующую страницу профиля
-    return RedirectResponse(url="/profile", status_code=status.HTTP_302_FOUND)
+async def owner_profile(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница профиля владельца (как в оригинале)"""
+    try:
+        # Получаем внутренний user_id (как в оригинале)
+        user_id = await get_user_id_from_current_user(current_user, db)
+        
+        # Получаем существующий профиль (как в оригинале)
+        from apps.web.services.tag_service import TagService
+        tag_service = TagService()
+        profile = await tag_service.get_owner_profile(db, user_id)
+        
+        # Получаем все доступные теги (как в оригинале)
+        all_tags = await tag_service.get_all_tags(db)
+        
+        # Группируем теги по категориям (для HTML) (как в оригинале)
+        tags_by_category = {}
+        # Группируем теги по категориям (для JSON) (как в оригинале)
+        tags_by_category_json = {}
+        
+        for tag in all_tags:
+            if tag.category not in tags_by_category:
+                tags_by_category[tag.category] = []
+                tags_by_category_json[tag.category] = []
+            tags_by_category[tag.category].append(tag)
+            tags_by_category_json[tag.category].append(tag.to_dict())
+        
+        return templates.TemplateResponse("owner/profile/index.html", {
+            "request": request,
+            "current_user": current_user,
+            "profile": profile,
+            "tags_by_category": tags_by_category,
+            "tags_by_category_json": tags_by_category_json,
+            "legal_types": [
+                {"value": "individual", "label": "Физическое лицо (ИП)"},
+                {"value": "legal", "label": "Юридическое лицо (ООО)"}
+            ]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading profile: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки профиля")
+
+
+@router.post("/profile/save")
+async def owner_profile_save(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Сохранение профиля владельца (как в оригинале)"""
+    try:
+        # Получаем данные формы (как в оригинале)
+        form_data = await request.form()
+        
+        # Получаем внутренний user_id (как в оригинале)
+        user_id = await get_user_id_from_current_user(current_user, db)
+        
+        # Извлекаем основные данные профиля (как в оригинале)
+        profile_name = form_data.get("profile_name", "Мой профиль")
+        legal_type = form_data.get("legal_type", "individual")
+        is_public = form_data.get("is_public") == "on"
+        
+        # Извлекаем выбранные теги (как в оригинале)
+        selected_tags = []
+        for key, value in form_data.items():
+            if key.startswith("tag_") and value == "on":
+                tag_key = key[4:]  # убираем префикс "tag_"
+                selected_tags.append(tag_key)
+        
+        # Извлекаем значения тегов (как в оригинале)
+        profile_data = {}
+        for key, value in form_data.items():
+            if key.startswith("value_") and value.strip():
+                tag_key = key[6:]  # убираем префикс "value_"
+                if tag_key in selected_tags:  # только для выбранных тегов
+                    profile_data[tag_key] = value.strip()
+        
+        # Сохраняем профиль (как в оригинале)
+        from apps.web.services.tag_service import TagService
+        tag_service = TagService()
+        profile = await tag_service.create_or_update_owner_profile(
+            db,
+            user_id,
+            {
+                "profile_name": profile_name,
+                "profile_data": profile_data,
+                "active_tags": selected_tags,
+                "is_public": is_public
+            },
+            legal_type
+        )
+        
+        logger.info(f"Profile saved for user {user_id}: {len(selected_tags)} tags, {len(profile_data)} values")
+        
+        return RedirectResponse(url="/owner/profile?success=1", status_code=303)
+        
+    except Exception as e:
+        logger.error(f"Error saving profile: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка сохранения профиля")
+
+
+@router.get("/profile/tags/{category}")
+async def owner_profile_tags_category(
+    request: Request,
+    category: str,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API для получения тегов по категории (как в оригинале)"""
+    try:
+        from apps.web.services.tag_service import TagService
+        tag_service = TagService()
+        tags = await tag_service.get_tags_by_category(db, category)
+        
+        return {
+            "tags": [tag.to_dict() for tag in tags]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error loading tags for category {category}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки тегов")
+
+
+@router.get("/profile/preview")
+async def owner_profile_preview(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Предпросмотр данных профиля для использования в договорах (как в оригинале)"""
+    try:
+        # Получаем внутренний user_id (как в оригинале)
+        user_id = await get_user_id_from_current_user(current_user, db)
+        
+        # Получаем профиль (как в оригинале)
+        from apps.web.services.tag_service import TagService
+        tag_service = TagService()
+        profile = await tag_service.get_owner_profile(db, user_id)
+        
+        if not profile:
+            return {"error": "Профиль не найден"}
+        
+        # Получаем все теги для подстановки в договоры (как в оригинале)
+        tags_for_templates = profile.get_tags_for_templates()
+        
+        return {
+            "profile": profile.to_dict(),
+            "tags_for_templates": tags_for_templates,
+            "completion": profile.get_completion_percentage()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error loading profile preview: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки предпросмотра профиля")
 
 
 @router.get("/settings", response_class=HTMLResponse, name="owner_settings")

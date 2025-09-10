@@ -1,0 +1,471 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Профиль владельца{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tag-category {
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .tag-category-header {
+        background-color: #f8f9fa;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #dee2e6;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    
+    .tag-category-body {
+        padding: 1rem;
+    }
+    
+    .tag-item {
+        margin-bottom: 0.75rem;
+        padding: 0.5rem;
+        border: 1px solid #e9ecef;
+        border-radius: 0.25rem;
+        background-color: #fff;
+    }
+    
+    .tag-item.selected {
+        border-color: #0d6efd;
+        background-color: #e7f3ff;
+    }
+    
+    .tag-checkbox {
+        margin-right: 0.5rem;
+    }
+    
+    .tag-label {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .tag-description {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    
+    .tag-value-input {
+        margin-top: 0.5rem;
+        display: none;
+    }
+    
+    .tag-value-input.show {
+        display: block;
+    }
+    
+    .profile-stats {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .completion-bar {
+        background-color: rgba(255,255,255,0.3);
+        border-radius: 1rem;
+        height: 0.5rem;
+        margin-top: 0.5rem;
+        overflow: hidden;
+    }
+    
+    .completion-fill {
+        background-color: #fff;
+        height: 100%;
+        transition: width 0.3s ease;
+    }
+    
+    .legal-type-selector {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .category-icon {
+        width: 1.5rem;
+        height: 1.5rem;
+        margin-right: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-user-circle me-2"></i>
+                    Профиль владельца
+                </h1>
+                <div>
+                    <button type="button" class="btn btn-outline-primary me-2" onclick="previewProfile()">
+                        <i class="fas fa-eye me-1"></i> Предпросмотр
+                    </button>
+                    <button type="submit" form="profileForm" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Сохранить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if request.query_params.get('success') %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="fas fa-check-circle me-2"></i>
+        Профиль успешно сохранён!
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <form id="profileForm" method="POST" action="/owner/profile/save">
+        <div class="row">
+            <!-- Левая колонка - настройки профиля -->
+            <div class="col-lg-4">
+                <!-- Статистика профиля -->
+                <div class="profile-stats">
+                    <h5 class="mb-1">
+                        <i class="fas fa-chart-pie me-2"></i>
+                        Заполненность профиля
+                    </h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Готовность к использованию</span>
+                        <span id="completionPercent">{{ profile.get_completion_percentage() if profile else 0 }}%</span>
+                    </div>
+                    <div class="completion-bar">
+                        <div class="completion-fill" style="width: {{ profile.get_completion_percentage() if profile else 0 }}%"></div>
+                    </div>
+                </div>
+
+                <!-- Основные настройки -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-cog me-2"></i>
+                            Основные настройки
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="profile_name" class="form-label">Название профиля</label>
+                            <input type="text" class="form-control" id="profile_name" name="profile_name" 
+                                   value="{{ profile.profile_name if profile else 'Мой профиль' }}" required>
+                        </div>
+
+                        <!-- Тип собственника -->
+                        <div class="legal-type-selector">
+                            <label class="form-label">Тип собственника</label>
+                            {% for legal_type in legal_types %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="legal_type" 
+                                       id="legal_type_{{ legal_type.value }}" value="{{ legal_type.value }}"
+                                       {% if (profile and profile.legal_type == legal_type.value) or (not profile and legal_type.value == 'individual') %}checked{% endif %}
+                                       onchange="updateAvailableTags()">
+                                <label class="form-check-label" for="legal_type_{{ legal_type.value }}">
+                                    {% if legal_type.value == 'individual' %}
+                                        <i class="fas fa-user category-icon"></i>
+                                    {% else %}
+                                        <i class="fas fa-building category-icon"></i>
+                                    {% endif %}
+                                    {{ legal_type.label }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="is_public" name="is_public"
+                                   {% if profile and profile.is_public %}checked{% endif %}>
+                            <label class="form-check-label" for="is_public">
+                                <i class="fas fa-globe me-1"></i>
+                                Разрешить использование другими пользователями
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Справка по тегам -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Справка по ТЭГам
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-2">
+                            Теги используются для автоматической подстановки данных в шаблоны договоров.
+                        </p>
+                        <div class="small">
+                            <strong>Системные теги:</strong>
+                            <ul class="mb-2">
+                                <li><code>{{ "{{ current_date }}" }}</code> - текущая дата</li>
+                                <li><code>{{ "{{ current_time }}" }}</code> - текущее время</li>
+                                <li><code>{{ "{{ current_year }}" }}</code> - текущий год</li>
+                            </ul>
+                            <strong>Пример использования:</strong><br>
+                            <code>{{ "{{ owner_name }}" }}</code> → <span class="text-primary">Иван Иванов</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Правая колонка - выбор тегов -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-tags me-2"></i>
+                            Доступные теги для заполнения
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="tagsContainer">
+                            {% for category, tags in tags_by_category.items() %}
+                            <div class="tag-category" data-category="{{ category }}">
+                                <div class="tag-category-header" onclick="toggleCategory('{{ category }}')">
+                                    {% if category == 'system' %}
+                                        <i class="fas fa-cog category-icon"></i> Системные теги
+                                    {% elif category == 'owner' %}
+                                        <i class="fas fa-user category-icon"></i> Данные владельца
+                                    {% elif category == 'company' %}
+                                        <i class="fas fa-building category-icon"></i> Данные компании
+                                    {% elif category == 'employee' %}
+                                        <i class="fas fa-users category-icon"></i> Данные сотрудника
+                                    {% elif category == 'contract' %}
+                                        <i class="fas fa-file-contract category-icon"></i> Договорные данные
+                                    {% else %}
+                                        <i class="fas fa-tag category-icon"></i> {{ category }}
+                                    {% endif %}
+                                    <i class="fas fa-chevron-down float-end"></i>
+                                </div>
+                                <div class="tag-category-body" id="category_{{ category }}">
+                                    {% for tag in tags %}
+                                    <div class="tag-item" data-tag="{{ tag.key }}">
+                                        <div class="d-flex align-items-start">
+                                            <input class="form-check-input tag-checkbox" type="checkbox" 
+                                                   id="tag_{{ tag.key }}" name="tag_{{ tag.key }}"
+                                                   {% if profile and tag.key in profile.active_tags %}checked{% endif %}
+                                                   onchange="toggleTagValue('{{ tag.key }}')">
+                                            <div class="flex-grow-1">
+                                                <label class="tag-label" for="tag_{{ tag.key }}">
+                                                    <code>{{ "{{ " + tag.key + " }}" }}</code>
+                                                    - {{ tag.label }}
+                                                    {% if tag.is_required %}
+                                                        <span class="badge bg-danger ms-1">Обязательно</span>
+                                                    {% endif %}
+                                                </label>
+                                                {% if tag.description %}
+                                                <div class="tag-description">{{ tag.description }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="tag-value-input{% if profile and tag.key in profile.active_tags %} show{% endif %}" 
+                                             id="value_container_{{ tag.key }}">
+                                            {% if tag.data_type == 'textarea' %}
+                                                <textarea class="form-control" name="value_{{ tag.key }}" 
+                                                          placeholder="Введите {{ tag.label.lower() }}" rows="3"
+                                                          {% if tag.validation_pattern %}pattern="{{ tag.validation_pattern }}"{% endif %}>{{ profile.get_tag_value(tag.key) if profile else '' }}</textarea>
+                                            {% elif tag.data_type == 'select' and tag.options %}
+                                                <select class="form-select" name="value_{{ tag.key }}">
+                                                    <option value="">Выберите...</option>
+                                                    {% for option in tag.options %}
+                                                    <option value="{{ option }}" 
+                                                            {% if profile and profile.get_tag_value(tag.key) == option %}selected{% endif %}>
+                                                        {{ option }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            {% elif tag.data_type == 'date' %}
+                                                <input type="date" class="form-control" name="value_{{ tag.key }}" 
+                                                       value="{{ profile.get_tag_value(tag.key) if profile else '' }}">
+                                            {% elif tag.data_type == 'email' %}
+                                                <input type="email" class="form-control" name="value_{{ tag.key }}" 
+                                                       placeholder="Введите {{ tag.label.lower() }}"
+                                                       value="{{ profile.get_tag_value(tag.key) if profile else '' }}">
+                                            {% elif tag.data_type == 'number' %}
+                                                <input type="number" class="form-control" name="value_{{ tag.key }}" 
+                                                       placeholder="Введите {{ tag.label.lower() }}"
+                                                       value="{{ profile.get_tag_value(tag.key) if profile else '' }}">
+                                            {% else %}
+                                                <input type="text" class="form-control" name="value_{{ tag.key }}" 
+                                                       placeholder="Введите {{ tag.label.lower() }}"
+                                                       {% if tag.validation_pattern %}pattern="{{ tag.validation_pattern }}"{% endif %}
+                                                       value="{{ profile.get_tag_value(tag.key) if profile else '' }}">
+                                            {% endif %}
+                                            {% if tag.validation_message %}
+                                            <div class="form-text text-muted">{{ tag.validation_message }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Модальное окно предпросмотра -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye me-2"></i>
+                    Предпросмотр профиля
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="previewContent">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Данные тегов по категориям
+const tagsByCategory = {{ tags_by_category_json | tojson }};
+
+// Переключение видимости категории
+function toggleCategory(category) {
+    const categoryBody = document.getElementById('category_' + category);
+    const chevron = document.querySelector('[onclick="toggleCategory(\'' + category + '\')"] .fa-chevron-down');
+    
+    if (categoryBody.style.display === 'none') {
+        categoryBody.style.display = 'block';
+        chevron.style.transform = 'rotate(0deg)';
+    } else {
+        categoryBody.style.display = 'none';
+        chevron.style.transform = 'rotate(-90deg)';
+    }
+}
+
+// Переключение поля ввода значения тега
+function toggleTagValue(tagKey) {
+    const checkbox = document.getElementById('tag_' + tagKey);
+    const valueContainer = document.getElementById('value_container_' + tagKey);
+    const tagItem = document.querySelector('[data-tag="' + tagKey + '"]');
+    
+    if (checkbox.checked) {
+        valueContainer.classList.add('show');
+        tagItem.classList.add('selected');
+    } else {
+        valueContainer.classList.remove('show');
+        tagItem.classList.remove('selected');
+        // Очищаем значение
+        const input = valueContainer.querySelector('input, select, textarea');
+        if (input) input.value = '';
+    }
+    
+    updateCompletionBar();
+}
+
+// Обновление доступных тегов в зависимости от типа собственника
+function updateAvailableTags() {
+    const legalType = document.querySelector('input[name="legal_type"]:checked').value;
+    const companyCategory = document.querySelector('[data-category="company"]');
+    
+    if (legalType === 'individual') {
+        // Скрываем категорию компании для ФЛ
+        companyCategory.style.display = 'none';
+    } else {
+        // Показываем категорию компании для ЮЛ
+        companyCategory.style.display = 'block';
+    }
+}
+
+// Обновление индикатора заполненности
+function updateCompletionBar() {
+    const totalTags = document.querySelectorAll('.tag-checkbox').length;
+    const checkedTags = document.querySelectorAll('.tag-checkbox:checked').length;
+    const filledTags = document.querySelectorAll('.tag-checkbox:checked').length; // Упрощенно
+    
+    const percentage = totalTags > 0 ? Math.round((filledTags / totalTags) * 100) : 0;
+    
+    document.getElementById('completionPercent').textContent = percentage + '%';
+    document.querySelector('.completion-fill').style.width = percentage + '%';
+}
+
+// Предпросмотр профиля
+async function previewProfile() {
+    const modal = new bootstrap.Modal(document.getElementById('previewModal'));
+    modal.show();
+    
+    try {
+        const response = await fetch('/owner/profile/preview');
+        const data = await response.json();
+        
+        let html = '<div class="row">';
+        
+        // Информация о профиле
+        html += '<div class="col-md-6">';
+        html += '<h6><i class="fas fa-info-circle me-2"></i>Информация о профиле</h6>';
+        html += '<table class="table table-sm">';
+        html += '<tr><td>Название:</td><td>' + (data.profile?.profile_name || 'Не указано') + '</td></tr>';
+        html += '<tr><td>Тип:</td><td>' + (data.profile?.legal_type === 'legal' ? 'Юридическое лицо' : 'Физическое лицо') + '</td></tr>';
+        html += '<tr><td>Заполненность:</td><td>' + Math.round(data.completion || 0) + '%</td></tr>';
+        html += '<tr><td>Активных тегов:</td><td>' + (data.profile?.active_tags?.length || 0) + '</td></tr>';
+        html += '</table>';
+        html += '</div>';
+        
+        // Теги для шаблонов
+        html += '<div class="col-md-6">';
+        html += '<h6><i class="fas fa-tags me-2"></i>Теги для использования в договорах</h6>';
+        html += '<div class="small">';
+        
+        if (data.tags_for_templates) {
+            for (const [key, value] of Object.entries(data.tags_for_templates)) {
+                if (value && key !== 'current_date' && key !== 'current_time' && key !== 'current_year') {
+                    html += '<div class="mb-1">';
+                    html += '<code>{{ ' + key + ' }}</code> → <span class="text-primary">' + value + '</span>';
+                    html += '</div>';
+                }
+            }
+        }
+        
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+        
+        document.getElementById('previewContent').innerHTML = html;
+        
+    } catch (error) {
+        document.getElementById('previewContent').innerHTML = 
+            '<div class="alert alert-danger">Ошибка загрузки предпросмотра: ' + error.message + '</div>';
+    }
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    updateAvailableTags();
+    updateCompletionBar();
+    
+    // Добавляем обработчики для обновления заполненности
+    document.querySelectorAll('.tag-value-input input, .tag-value-input select, .tag-value-input textarea').forEach(input => {
+        input.addEventListener('input', updateCompletionBar);
+    });
+});
+</script>
+{% endblock %}
