@@ -1590,7 +1590,7 @@ async def owner_employees_create(
                     }
             
             # Получаем профиль владельца
-            owner_profile_query = select(OwnerProfile).where(OwnerProfile.owner_id == user_id)
+            owner_profile_query = select(OwnerProfile).where(OwnerProfile.user_id == user_id)
             owner_profile_result = await session.execute(owner_profile_query)
             owner_profile = owner_profile_result.scalar_one_or_none()
             
