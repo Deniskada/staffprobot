@@ -1558,7 +1558,6 @@ async def owner_employees_create(
     
     try:
         from apps.web.services.contract_service import ContractService
-        from domain.entities.contract import ContractTemplate
         from domain.entities.owner_profile import OwnerProfile
         
         async with get_async_session() as session:
@@ -1570,10 +1569,9 @@ async def owner_employees_create(
             objects_result = await session.execute(objects_query)
             objects = objects_result.scalars().all()
             
-            # Получаем шаблоны договоров владельца
-            templates_query = select(ContractTemplate).where(ContractTemplate.owner_id == user_id)
-            templates_result = await session.execute(templates_query)
-            templates = templates_result.scalars().all()
+            # Получаем шаблоны договоров как в рабочем коде (через сервис)
+            contract_service = ContractService()
+            templates = await contract_service.get_contract_templates_for_user(user_id)
             
             # Получаем данные сотрудника, если указан telegram_id
             employee_data = None
