@@ -2016,7 +2016,7 @@ async def owner_employee_detail(
         user_id = current_user["id"]
         
         # Получаем информацию о сотруднике
-        employee_info = await contract_service.get_employee_info(employee_id, user_id)
+        employee_info = await contract_service.get_employee_by_telegram_id(employee_id, user_id)
         
         if not employee_info:
             raise HTTPException(status_code=404, detail="Сотрудник не найден")
