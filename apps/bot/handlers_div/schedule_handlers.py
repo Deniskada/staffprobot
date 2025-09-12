@@ -23,51 +23,42 @@ async def handle_schedule_shift(update: Update, context: ContextTypes.DEFAULT_TY
     """Начало планирования смены."""
     user_id = update.effective_user.id
     
-    # Получаем доступные объекты пользователя
+    # Получаем доступные объекты сотрудника по договорам
     try:
-        from core.database.session import get_async_session
-        async with get_async_session() as session:
-            # Сначала находим пользователя по telegram_id
-            user_query = select(User).where(User.telegram_id == user_id)
-            user_result = await session.execute(user_query)
-            user = user_result.scalar_one_or_none()
-            
-            if not user:
-                await update.callback_query.edit_message_text(
-                    "❌ Пользователь не найден в базе данных."
-                )
-                return
-            
-            # Теперь находим объекты пользователя
-            objects_query = select(Object).where(Object.owner_id == user.id, Object.is_active == True)
-            objects_result = await session.execute(objects_query)
-            objects = objects_result.scalars().all()
-            
-            if not objects:
-                await update.callback_query.edit_message_text(
-                    "❌ У вас нет доступных объектов для планирования смен.\n\n"
-                    "Сначала создайте объект через меню управления объектами."
-                )
-                return
-            
-            # Создаем клавиатуру с объектами
-            keyboard = []
-            for obj in objects:
-                keyboard.append([InlineKeyboardButton(
-                    f"🏢 {obj.name}",
-                    callback_data=f"schedule_select_object_{obj.id}"
-                )])
-            
-            keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel_schedule")])
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
+        from apps.bot.services.employee_objects_service import EmployeeObjectsService
+        
+        employee_objects_service = EmployeeObjectsService()
+        objects = await employee_objects_service.get_employee_objects(user_id)
+        
+        if not objects:
             await update.callback_query.edit_message_text(
-                "📅 **Планирование смены**\n\n"
-                "Выберите объект для планирования:",
-                parse_mode='Markdown',
-                reply_markup=reply_markup
+                "❌ У вас нет доступных объектов для планирования смен.\n\n"
+                "У вас должен быть активный договор с владельцем объекта."
             )
+            return
+        
+        # Создаем клавиатуру с объектами
+        keyboard = []
+        for obj in objects:
+            # Показываем количество договоров для объекта
+            contracts_count = len(obj.get('contracts', []))
+            contracts_info = f" ({contracts_count} договор)" if contracts_count > 1 else ""
             
+            keyboard.append([InlineKeyboardButton(
+                f"🏢 {obj['name']}{contracts_info}",
+                callback_data=f"schedule_select_object_{obj['id']}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel_schedule")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.callback_query.edit_message_text(
+            "📅 **Планирование смены**\n\n"
+            "Выберите объект для планирования:",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
     except Exception as e:
         logger.error(f"Error getting objects for scheduling: {e}")
         await update.callback_query.edit_message_text(

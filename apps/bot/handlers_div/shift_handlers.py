@@ -49,49 +49,52 @@ async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
-    # Получаем список объектов пользователя
+    # Получаем список объектов сотрудника по договорам
     try:
-        async with get_async_session() as session:
-            # Получаем объекты, к которым у пользователя есть доступ
-            objects_query = select(Object).where(Object.is_active == True)
-            objects_result = await session.execute(objects_query)
-            objects = objects_result.scalars().all()
-            
-            if not objects:
-                await query.edit_message_text(
-                    text="❌ <b>Нет доступных объектов</b>\n\nСначала создайте объект или получите доступ к существующему.",
-                    parse_mode='HTML'
-                )
-                return
-            
-            # Создаем состояние пользователя
-            user_state_manager.create_state(
-                user_id=user_id,
-                action=UserAction.OPEN_SHIFT,
-                step=UserStep.OBJECT_SELECTION
+        from apps.bot.services.employee_objects_service import EmployeeObjectsService
+        
+        employee_objects_service = EmployeeObjectsService()
+        objects = await employee_objects_service.get_employee_objects(user_id)
+        
+        if not objects:
+            await query.edit_message_text(
+                text="❌ <b>Нет доступных объектов</b>\n\nУ вас должен быть активный договор с владельцем объекта.",
+                parse_mode='HTML'
             )
+            return
             
-            # Создаем кнопки для выбора объекта
-            keyboard = []
-            for obj in objects:
-                keyboard.append([
-                    InlineKeyboardButton(
-                        f"🏢 {obj.name} ({obj.address or 'без адреса'})", 
-                        callback_data=f"open_shift_object:{obj.id}"
-                    )
-                ])
+        # Создаем состояние пользователя
+        user_state_manager.create_state(
+            user_id=user_id,
+            action=UserAction.OPEN_SHIFT,
+            step=UserStep.OBJECT_SELECTION
+        )
+        
+        # Создаем кнопки для выбора объекта
+        keyboard = []
+        for obj in objects:
+            # Показываем количество договоров для объекта
+            contracts_count = len(obj.get('contracts', []))
+            contracts_info = f" ({contracts_count} договор)" if contracts_count > 1 else ""
             
             keyboard.append([
-                InlineKeyboardButton("❌ Отмена", callback_data="main_menu")
+                InlineKeyboardButton(
+                    f"🏢 {obj['name']}{contracts_info}", 
+                    callback_data=f"open_shift_object:{obj['id']}"
+                )
             ])
-            
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.edit_message_text(
-                text="🔄 <b>Открытие смены</b>\n\nВыберите объект для открытия смены:",
-                parse_mode='HTML',
-                reply_markup=reply_markup
-            )
+        
+        keyboard.append([
+            InlineKeyboardButton("❌ Отмена", callback_data="main_menu")
+        ])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text="🔄 <b>Открытие смены</b>\n\nВыберите объект для открытия смены:",
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
             
     except Exception as e:
         logger.error(f"Error getting objects: {e}")
@@ -232,44 +235,55 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
         )
         return
     
-    # Обновляем состояние - сохраняем выбранный объект
-    user_state_manager.update_state(
-        user_id=user_id,
-        selected_object_id=object_id,
-        step=UserStep.LOCATION_REQUEST
-    )
-    
-    # Получаем информацию об объекте
+    # Проверяем доступ к объекту
     try:
-        async with get_async_session() as session:
-            obj_query = select(Object).where(Object.id == object_id)
-            obj_result = await session.execute(obj_query)
-            obj = obj_result.scalar_one_or_none()
-            
-            if not obj:
-                await query.edit_message_text(
-                    text="❌ Объект не найден.",
-                    parse_mode='HTML'
-                )
-                user_state_manager.clear_state(user_id)
-                return
-            
-            # Запрашиваем геопозицию
+        from apps.bot.services.employee_objects_service import EmployeeObjectsService
+        
+        employee_objects_service = EmployeeObjectsService()
+        
+        # Проверяем, есть ли у пользователя доступ к объекту
+        has_access = await employee_objects_service.has_access_to_object(user_id, object_id)
+        if not has_access:
             await query.edit_message_text(
-                text=f"📍 <b>Отправьте геопозицию</b>\n\n"
-                     f"🏢 Объект: <b>{obj.name}</b>\n"
-                     f"📍 Адрес: {obj.address or 'не указан'}\n\n"
-                     f"Нажмите кнопку ниже для отправки вашего местоположения:",
+                text="❌ <b>Доступ запрещен</b>\n\nУ вас нет активного договора с этим объектом.",
                 parse_mode='HTML'
             )
-            
-            # Отправляем клавиатуру для геопозиции
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text="👇 Используйте кнопку для отправки геопозиции:",
-                reply_markup=get_location_keyboard()
+            user_state_manager.clear_state(user_id)
+            return
+        
+        # Получаем информацию об объекте
+        obj_data = await employee_objects_service.get_employee_object_by_id(user_id, object_id)
+        if not obj_data:
+            await query.edit_message_text(
+                text="❌ Объект не найден или недоступен.",
+                parse_mode='HTML'
             )
-            
+            user_state_manager.clear_state(user_id)
+            return
+        
+        # Обновляем состояние - сохраняем выбранный объект
+        user_state_manager.update_state(
+            user_id=user_id,
+            selected_object_id=object_id,
+            step=UserStep.LOCATION_REQUEST
+        )
+        
+        # Запрашиваем геопозицию
+        await query.edit_message_text(
+            text=f"📍 <b>Отправьте геопозицию</b>\n\n"
+                 f"🏢 Объект: <b>{obj_data['name']}</b>\n"
+                 f"📍 Адрес: {obj_data['address'] or 'не указан'}\n\n"
+                 f"Нажмите кнопку ниже для отправки вашего местоположения:",
+            parse_mode='HTML'
+        )
+        
+        # Отправляем клавиатуру для геопозиции
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="👇 Используйте кнопку для отправки геопозиции:",
+            reply_markup=get_location_keyboard()
+        )
+        
     except Exception as e:
         logger.error(f"Error handling object selection for user {user_id}: {e}")
         await query.edit_message_text(
