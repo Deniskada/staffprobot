@@ -284,18 +284,6 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
             parse_mode='HTML',
             reply_markup=reply_markup
         )
-                 f"🏢 Объект: <b>{obj_data['name']}</b>\n"
-                 f"📍 Адрес: {obj_data['address'] or 'не указан'}\n\n"
-                 f"Нажмите кнопку ниже для отправки вашего местоположения:",
-            parse_mode='HTML'
-        )
-        
-        # Отправляем клавиатуру для геопозиции
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text="👇 Используйте кнопку для отправки геопозиции:",
-            reply_markup=get_location_keyboard()
-        )
         
     except Exception as e:
         logger.error(f"Error handling object selection for user {user_id}: {e}")
