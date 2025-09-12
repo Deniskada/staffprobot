@@ -27,9 +27,10 @@ class ShiftService:
         self, 
         user_id: int, 
         object_id: int, 
-        coordinates: str,
+        coordinates: str, 
         shift_type: str = "spontaneous",
-        timeslot_id: Optional[int] = None
+        timeslot_id: Optional[int] = None,
+        schedule_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Открытие смены с проверкой геолокации.
@@ -99,14 +100,33 @@ class ShiftService:
                     }
                 
                 # Создаем смену
+                # Получаем данные для смены
+                hourly_rate = obj.hourly_rate
+                planned_start = None
+                planned_end = None
+                
+                # Если это запланированная смена, получаем данные из расписания
+                if shift_type == "planned" and schedule_id:
+                    from apps.bot.services.shift_schedule_service import ShiftScheduleService
+                    schedule_service = ShiftScheduleService()
+                    schedule_data = await schedule_service.get_shift_schedule_by_id(schedule_id)
+                    
+                    if schedule_data:
+                        hourly_rate = schedule_data.get('hourly_rate', obj.hourly_rate)
+                        planned_start = schedule_data.get('planned_start')
+                        planned_end = schedule_data.get('planned_end')
+                
+                # Создаем новую смену
                 new_shift = Shift(
                     user_id=db_user.id,  # Используем id из БД, а не telegram_id
                     object_id=object_id,
                     start_time=datetime.now(),
                     status='active',
                     start_coordinates=coordinates,
-                    hourly_rate=obj.hourly_rate,
-                    time_slot_id=timeslot_id if shift_type == "planned" else None
+                    hourly_rate=hourly_rate,
+                    time_slot_id=timeslot_id if shift_type == "planned" else None,
+                    planned_start=planned_start,
+                    planned_end=planned_end
                 )
                 
                 session.add(new_shift)

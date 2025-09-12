@@ -49,52 +49,95 @@ async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
-    # Получаем список объектов сотрудника по договорам
+    # Ищем запланированные смены пользователя на сегодня
     try:
-        from apps.bot.services.employee_objects_service import EmployeeObjectsService
+        from apps.bot.services.shift_schedule_service import ShiftScheduleService
+        from datetime import date
         
-        employee_objects_service = EmployeeObjectsService()
-        objects = await employee_objects_service.get_employee_objects(user_id)
+        shift_schedule_service = ShiftScheduleService()
+        today = date.today()
         
-        if not objects:
-            await query.edit_message_text(
-                text="❌ <b>Нет доступных объектов</b>\n\nУ вас должен быть активный договор с владельцем объекта.",
-                parse_mode='HTML'
+        # Получаем запланированные смены на сегодня
+        planned_shifts = await shift_schedule_service.get_user_planned_shifts_for_date(user_id, today)
+        
+        if planned_shifts:
+            # Есть запланированные смены - показываем их для выбора
+            user_state_manager.create_state(
+                user_id=user_id,
+                action=UserAction.OPEN_SHIFT,
+                step=UserStep.SHIFT_SELECTION
             )
-            return
             
-        # Создаем состояние пользователя
-        user_state_manager.create_state(
-            user_id=user_id,
-            action=UserAction.OPEN_SHIFT,
-            step=UserStep.OBJECT_SELECTION
-        )
-        
-        # Создаем кнопки для выбора объекта
-        keyboard = []
-        for obj in objects:
-            # Показываем количество договоров для объекта
-            contracts_count = len(obj.get('contracts', []))
-            contracts_info = f" ({contracts_count} договор)" if contracts_count > 1 else ""
+            # Создаем кнопки для выбора запланированной смены
+            keyboard = []
+            for shift in planned_shifts:
+                start_time = shift['planned_start'].strftime("%H:%M")
+                end_time = shift['planned_end'].strftime("%H:%M")
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"📅 {shift['object_name']} {start_time}-{end_time}", 
+                        callback_data=f"open_planned_shift:{shift['id']}"
+                    )
+                ])
             
             keyboard.append([
-                InlineKeyboardButton(
-                    f"🏢 {obj['name']}{contracts_info}", 
-                    callback_data=f"open_shift_object:{obj['id']}"
-                )
+                InlineKeyboardButton("❌ Отмена", callback_data="main_menu")
             ])
-        
-        keyboard.append([
-            InlineKeyboardButton("❌ Отмена", callback_data="main_menu")
-        ])
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text="🔄 <b>Открытие смены</b>\n\nВыберите объект для открытия смены:",
-            parse_mode='HTML',
-            reply_markup=reply_markup
-        )
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                text="📅 <b>Запланированные смены на сегодня</b>\n\nВыберите смену для открытия:",
+                parse_mode='HTML',
+                reply_markup=reply_markup
+            )
+        else:
+            # Нет запланированных смен - показываем выбор объекта для спонтанной смены
+            from apps.bot.services.employee_objects_service import EmployeeObjectsService
+            
+            employee_objects_service = EmployeeObjectsService()
+            objects = await employee_objects_service.get_employee_objects(user_id)
+            
+            if not objects:
+                await query.edit_message_text(
+                    text="❌ <b>Нет доступных объектов</b>\n\nУ вас должен быть активный договор с владельцем объекта.",
+                    parse_mode='HTML'
+                )
+                return
+                
+            # Создаем состояние пользователя
+            user_state_manager.create_state(
+                user_id=user_id,
+                action=UserAction.OPEN_SHIFT,
+                step=UserStep.OBJECT_SELECTION,
+                shift_type="spontaneous"
+            )
+            
+            # Создаем кнопки для выбора объекта
+            keyboard = []
+            for obj in objects:
+                # Показываем количество договоров для объекта
+                contracts_count = len(obj.get('contracts', []))
+                contracts_info = f" ({contracts_count} договор)" if contracts_count > 1 else ""
+                
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"🏢 {obj['name']}{contracts_info}", 
+                        callback_data=f"open_shift_object:{obj['id']}"
+                    )
+                ])
+            
+            keyboard.append([
+                InlineKeyboardButton("❌ Отмена", callback_data="main_menu")
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                text="⚡ <b>Внеплановая смена</b>\n\nУ вас нет запланированных смен на сегодня.\nВыберите объект для открытия спонтанной смены:",
+                parse_mode='HTML',
+                reply_markup=reply_markup
+            )
             
     except Exception as e:
         logger.error(f"Error getting objects: {e}")
@@ -294,6 +337,68 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
         user_state_manager.clear_state(user_id)
 
 
+async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAULT_TYPE, schedule_id: int):
+    """Обработчик выбора запланированной смены для открытия."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    # Получаем состояние пользователя
+    user_state = user_state_manager.get_state(user_id)
+    if not user_state or user_state.action != UserAction.OPEN_SHIFT:
+        await query.edit_message_text(
+            text="❌ Состояние сессии истекло. Попробуйте еще раз.",
+            parse_mode='HTML'
+        )
+        return
+    
+    try:
+        # Получаем информацию о запланированной смене
+        from apps.bot.services.shift_schedule_service import ShiftScheduleService
+        shift_schedule_service = ShiftScheduleService()
+        
+        shift_data = await shift_schedule_service.get_shift_schedule_by_id(schedule_id)
+        if not shift_data:
+            await query.edit_message_text(
+                text="❌ Запланированная смена не найдена или недоступна.",
+                parse_mode='HTML'
+            )
+            return
+        
+        # Обновляем состояние
+        user_state_manager.update_state(
+            user_id=user_id,
+            selected_object_id=shift_data['object_id'],
+            step=UserStep.LOCATION_REQUEST,
+            shift_type="planned",
+            selected_timeslot_id=shift_data['time_slot_id'],
+            selected_schedule_id=schedule_id
+        )
+        
+        # Форматируем время
+        start_time = shift_data['planned_start'].strftime("%H:%M")
+        end_time = shift_data['planned_end'].strftime("%H:%M")
+        planned_date = shift_data['planned_start'].strftime("%d.%m.%Y")
+        
+        # Запрашиваем геопозицию
+        await query.edit_message_text(
+            text=f"📅 <b>Запланированная смена</b>\n\n"
+                 f"🏢 <b>Объект:</b> {shift_data['object_name']}\n"
+                 f"📅 <b>Дата:</b> {planned_date}\n"
+                 f"🕐 <b>Время:</b> {start_time}-{end_time}\n\n"
+                 f"📍 <b>Отправьте геопозицию</b>\n\n"
+                 f"Нажмите кнопку ниже для отправки вашего местоположения:",
+            parse_mode='HTML',
+            reply_markup=get_location_keyboard()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting planned shift {schedule_id}: {e}")
+        await query.edit_message_text(
+            text="❌ Ошибка при получении данных запланированной смены. Попробуйте позже.",
+            parse_mode='HTML'
+        )
+
+
 async def _handle_close_shift_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, shift_id: int):
     """Обработчик выбора смены для закрытия."""
     query = update.callback_query
@@ -454,205 +559,3 @@ async def _handle_retry_location_close(update: Update, context: ContextTypes.DEF
     )
 
 
-async def _handle_shift_type_planned(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: int):
-    """Обработчик выбора запланированной смены."""
-    query = update.callback_query
-    user_id = query.from_user.id
-    
-    # Получаем состояние пользователя
-    user_state = user_state_manager.get_state(user_id)
-    if not user_state or user_state.action != UserAction.OPEN_SHIFT:
-        await query.edit_message_text(
-            text="❌ Состояние сессии истекло. Попробуйте еще раз.",
-            parse_mode='HTML'
-        )
-        return
-    
-    try:
-        # Получаем доступные тайм-слоты для объекта на сегодня и завтра
-        from apps.bot.services.timeslot_service import TimeSlotService
-        timeslot_service = TimeSlotService()
-        
-        # Получаем тайм-слоты на сегодня и завтра
-        from datetime import date, timedelta
-        today = date.today()
-        tomorrow = today + timedelta(days=1)
-        
-        timeslots = await timeslot_service.get_available_timeslots_for_object(object_id, today)
-        tomorrow_timeslots = await timeslot_service.get_available_timeslots_for_object(object_id, tomorrow)
-        
-        if not timeslots and not tomorrow_timeslots:
-            await query.edit_message_text(
-                text="❌ <b>Нет доступных тайм-слотов</b>\n\n"
-                     "На сегодня и завтра нет запланированных тайм-слотов для этого объекта.",
-                parse_mode='HTML'
-            )
-            return
-        
-        # Обновляем состояние
-        user_state_manager.update_state(
-            user_id=user_id,
-            selected_object_id=object_id,
-            step=UserStep.TIMESLOT_SELECTION,
-            shift_type="planned"
-        )
-        
-        # Создаем кнопки для выбора тайм-слотов
-        keyboard = []
-        
-        if timeslots:
-            keyboard.append([InlineKeyboardButton("📅 Сегодня", callback_data="timeslot_date_today")])
-            for timeslot in timeslots:
-                start_time = timeslot['start_time'].strftime("%H:%M")
-                end_time = timeslot['end_time'].strftime("%H:%M")
-                keyboard.append([
-                    InlineKeyboardButton(
-                        f"🕐 {start_time}-{end_time}",
-                        callback_data=f"timeslot_select:{timeslot['id']}"
-                    )
-                ])
-        
-        if tomorrow_timeslots:
-            keyboard.append([InlineKeyboardButton("📅 Завтра", callback_data="timeslot_date_tomorrow")])
-            for timeslot in tomorrow_timeslots:
-                start_time = timeslot['start_time'].strftime("%H:%M")
-                end_time = timeslot['end_time'].strftime("%H:%M")
-                keyboard.append([
-                    InlineKeyboardButton(
-                        f"🕐 {start_time}-{end_time}",
-                        callback_data=f"timeslot_select:{timeslot['id']}"
-                    )
-                ])
-        
-        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="main_menu")])
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text="📅 <b>Запланированная смена</b>\n\n"
-                 "Выберите тайм-слот для открытия смены:",
-            parse_mode='HTML',
-            reply_markup=reply_markup
-        )
-        
-    except Exception as e:
-        logger.error(f"Error getting timeslots for object {object_id}: {e}")
-        await query.edit_message_text(
-            text="❌ Ошибка при получении тайм-слотов. Попробуйте позже.",
-            parse_mode='HTML'
-        )
-
-
-async def _handle_shift_type_spontaneous(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: int):
-    """Обработчик выбора внеплановой смены."""
-    query = update.callback_query
-    user_id = query.from_user.id
-    
-    # Получаем состояние пользователя
-    user_state = user_state_manager.get_state(user_id)
-    if not user_state or user_state.action != UserAction.OPEN_SHIFT:
-        await query.edit_message_text(
-            text="❌ Состояние сессии истекло. Попробуйте еще раз.",
-            parse_mode='HTML'
-        )
-        return
-    
-    # Обновляем состояние
-    user_state_manager.update_state(
-        user_id=user_id,
-        selected_object_id=object_id,
-        step=UserStep.LOCATION_REQUEST,
-        shift_type="spontaneous"
-    )
-    
-    # Получаем информацию об объекте
-    try:
-        from apps.bot.services.employee_objects_service import EmployeeObjectsService
-        employee_objects_service = EmployeeObjectsService()
-        obj_data = await employee_objects_service.get_employee_object_by_id(user_id, object_id)
-        
-        if not obj_data:
-            await query.edit_message_text(
-                text="❌ Объект не найден или недоступен.",
-                parse_mode='HTML'
-            )
-            return
-        
-        # Запрашиваем геопозицию
-        await query.edit_message_text(
-            text=f"⚡ <b>Внеплановая смена</b>\n\n"
-                 f"🏢 <b>Объект:</b> {obj_data['name']}\n"
-                 f"📍 <b>Адрес:</b> {obj_data['address'] or 'не указан'}\n\n"
-                 f"📍 <b>Отправьте геопозицию</b>\n\n"
-                 f"Нажмите кнопку ниже для отправки вашего местоположения:",
-            parse_mode='HTML',
-            reply_markup=get_location_keyboard()
-        )
-        
-    except Exception as e:
-        logger.error(f"Error getting object data for spontaneous shift: {e}")
-        await query.edit_message_text(
-            text="❌ Ошибка при получении данных объекта. Попробуйте позже.",
-            parse_mode='HTML'
-        )
-
-
-async def _handle_timeslot_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, timeslot_id: int):
-    """Обработчик выбора тайм-слота."""
-    query = update.callback_query
-    user_id = query.from_user.id
-    
-    # Получаем состояние пользователя
-    user_state = user_state_manager.get_state(user_id)
-    if not user_state or user_state.action != UserAction.OPEN_SHIFT:
-        await query.edit_message_text(
-            text="❌ Состояние сессии истекло. Попробуйте еще раз.",
-            parse_mode='HTML'
-        )
-        return
-    
-    try:
-        # Получаем информацию о тайм-слоте
-        from apps.bot.services.timeslot_service import TimeSlotService
-        timeslot_service = TimeSlotService()
-        
-        timeslot_data = await timeslot_service.get_timeslot_by_id(timeslot_id)
-        if not timeslot_data:
-            await query.edit_message_text(
-                text="❌ Тайм-слот не найден или недоступен.",
-                parse_mode='HTML'
-            )
-            return
-        
-        # Обновляем состояние
-        user_state_manager.update_state(
-            user_id=user_id,
-            selected_object_id=user_state.selected_object_id,
-            step=UserStep.LOCATION_REQUEST,
-            shift_type="planned",
-            selected_timeslot_id=timeslot_id
-        )
-        
-        # Форматируем время
-        start_time = timeslot_data['start_time'].strftime("%H:%M")
-        end_time = timeslot_data['end_time'].strftime("%H:%M")
-        slot_date = timeslot_data['slot_date'].strftime("%d.%m.%Y")
-        
-        # Запрашиваем геопозицию
-        await query.edit_message_text(
-            text=f"📅 <b>Запланированная смена</b>\n\n"
-                 f"🏢 <b>Объект:</b> {timeslot_data['object_name']}\n"
-                 f"📅 <b>Дата:</b> {slot_date}\n"
-                 f"🕐 <b>Время:</b> {start_time}-{end_time}\n\n"
-                 f"📍 <b>Отправьте геопозицию</b>\n\n"
-                 f"Нажмите кнопку ниже для отправки вашего местоположения:",
-            parse_mode='HTML',
-            reply_markup=get_location_keyboard()
-        )
-        
-    except Exception as e:
-        logger.error(f"Error getting timeslot {timeslot_id}: {e}")
-        await query.edit_message_text(
-            text="❌ Ошибка при получении данных тайм-слота. Попробуйте позже.",
-            parse_mode='HTML'
-        )
