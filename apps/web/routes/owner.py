@@ -1131,6 +1131,94 @@ async def owner_fill_gaps(
         raise HTTPException(status_code=500, detail="Ошибка заполнения пробелов")
 
 
+@router.get("/calendar/analysis/chart-data")
+async def owner_analysis_chart_data(
+    object_id: int = Query(None),
+    days: int = Query(30),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение данных для графика покрытия планирования."""
+    try:
+        from apps.web.services.object_service import ObjectService, TimeSlotService
+        
+        object_service = ObjectService(db)
+        timeslot_service = TimeSlotService(db)
+        
+        # Получаем объекты
+        owner_telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        objects = await object_service.get_objects_by_owner(owner_telegram_id)
+        
+        if object_id:
+            objects = [obj for obj in objects if obj.id == object_id]
+        
+        if not objects:
+            return {"error": "Нет объектов для анализа"}
+        
+        # Анализируем пробелы
+        analysis_data = await _analyze_gaps(
+            timeslot_service, 
+            objects, 
+            owner_telegram_id, 
+            days
+        )
+        
+        # Подготавливаем данные для графика
+        chart_data = {
+            "labels": [],  # Даты
+            "datasets": []  # Данные по объектам
+        }
+        
+        # Получаем все даты в периоде
+        today = date.today()
+        end_date = today + timedelta(days=days)
+        current_date = today
+        
+        dates = []
+        while current_date <= end_date:
+            dates.append(current_date)
+            current_date += timedelta(days=1)
+        
+        chart_data["labels"] = [d.strftime("%d.%m") for d in dates]
+        
+        # Создаем датасет для каждого объекта
+        colors = ["#007bff", "#28a745", "#ffc107", "#dc3545", "#6f42c1", "#fd7e14", "#20c997", "#6c757d"]
+        
+        for i, (obj_id, obj_data) in enumerate(analysis_data["object_gaps"].items()):
+            color = colors[i % len(colors)]
+            
+            # Создаем массив покрытия для каждого дня
+            coverage_data = []
+            gaps_by_date = {gap["date"]: gap for gap in obj_data["gaps"]}
+            
+            for d in dates:
+                if d in gaps_by_date:
+                    gap = gaps_by_date[d]
+                    if gap["type"] == "no_slots":
+                        coverage_data.append(0)  # Нет покрытия
+                    elif gap["type"] == "time_gap":
+                        coverage_data.append(50)  # Частичное покрытие
+                    else:
+                        coverage_data.append(100)  # Полное покрытие
+                else:
+                    coverage_data.append(100)  # Полное покрытие
+            
+            chart_data["datasets"].append({
+                "label": obj_data["object_name"],
+                "data": coverage_data,
+                "borderColor": color,
+                "backgroundColor": color + "20",  # Прозрачность
+                "fill": False,
+                "tension": 0.1
+            })
+        
+        return chart_data
+        
+    except Exception as e:
+        logger.error(f"Error getting chart data: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения данных графика")
+
+
 @router.get("/calendar/api/timeslots-status")
 async def owner_calendar_api_timeslots_status(
     year: int = Query(...),

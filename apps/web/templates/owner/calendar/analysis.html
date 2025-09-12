@@ -159,6 +159,40 @@
     opacity: 0.5;
 }
 
+.chart-container {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.chart-wrapper {
+    position: relative;
+    height: 400px;
+    margin-bottom: 20px;
+}
+
+.chart-legend {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 15px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    margin-right: 8px;
+    display: inline-block;
+}
+
 .quick-actions {
     position: fixed;
     bottom: 20px;
@@ -378,14 +412,45 @@
         </div>
     {% endif %}
 
-    <!-- График покрытия (заглушка) -->
+    <!-- График покрытия -->
     <div class="chart-container">
-        <h5 class="mb-3">
-            <i class="bi bi-bar-chart"></i> График покрытия планирования
-        </h5>
-        <div class="text-center text-muted">
-            <i class="bi bi-graph-up" style="font-size: 3em; opacity: 0.3;"></i>
-            <p class="mt-3">График будет добавлен в следующих версиях</p>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">
+                <i class="bi bi-bar-chart"></i> График покрытия планирования
+            </h5>
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-primary" onclick="loadChart('line')">
+                    <i class="bi bi-graph-up"></i> Линейный
+                </button>
+                <button type="button" class="btn btn-outline-primary" onclick="loadChart('bar')">
+                    <i class="bi bi-bar-chart"></i> Столбчатый
+                </button>
+            </div>
+        </div>
+        <div class="chart-wrapper">
+            <canvas id="coverageChart" width="400" height="200"></canvas>
+        </div>
+        <div class="chart-legend mt-3">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #28a745;"></span>
+                        <span>100% - Полное покрытие</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #ffc107;"></span>
+                        <span>50% - Частичное покрытие</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #dc3545;"></span>
+                        <span>0% - Нет покрытия</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -429,6 +494,108 @@ document.addEventListener('keydown', function(e) {
                 break;
         }
     }
+});
+</script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let coverageChart = null;
+let currentChartType = 'line';
+
+async function loadChart(type = 'line') {
+    currentChartType = type;
+    
+    try {
+        const response = await fetch(`/owner/calendar/analysis/chart-data?object_id={{ selected_object_id or '' }}&days={{ days }}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            console.error('Error loading chart data:', data.error);
+            return;
+        }
+        
+        const ctx = document.getElementById('coverageChart').getContext('2d');
+        
+        // Уничтожаем предыдущий график
+        if (coverageChart) {
+            coverageChart.destroy();
+        }
+        
+        // Создаем новый график
+        coverageChart = new Chart(ctx, {
+            type: type,
+            data: data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Покрытие планирования (%)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Даты'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                let status = '';
+                                if (value === 100) status = 'Полное покрытие';
+                                else if (value === 50) status = 'Частичное покрытие';
+                                else if (value === 0) status = 'Нет покрытия';
+                                else status = 'Неизвестно';
+                                
+                                return context.dataset.label + ': ' + value + '% (' + status + ')';
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error loading chart:', error);
+    }
+}
+
+// Загружаем график при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadChart('line');
+});
+
+// Обработчики кнопок переключения типа графика
+document.querySelectorAll('button[onclick^="loadChart"]').forEach(button => {
+    button.addEventListener('click', function() {
+        // Убираем активный класс со всех кнопок
+        document.querySelectorAll('button[onclick^="loadChart"]').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        // Добавляем активный класс к текущей кнопке
+        this.classList.add('active');
+    });
 });
 </script>
 {% endblock %}
