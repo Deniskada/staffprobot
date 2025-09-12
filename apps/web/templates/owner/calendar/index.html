@@ -629,19 +629,12 @@ function showTimeslotDetails(timeslotId) {
             </tr>`).join('');
 
             detailsEl.innerHTML = `
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <div class="mb-2"><strong>Объект:</strong> ${slot.object_name} (#${slot.object_id})</div>
-                        <div class="mb-2"><strong>Дата:</strong> ${slot.date}</div>
-                        <div class="mb-2"><strong>Время:</strong> ${slot.start_time} - ${slot.end_time}</div>
-                        <div class="mb-2"><strong>Ставка:</strong> ${slot.hourly_rate ?? '-'} ₽/час</div>
-                        <div class="mb-2"><strong>Лимит:</strong> ${slot.max_employees}</div>
-                        <div class="mb-2"><strong>Заметки:</strong> ${slot.notes || ''}</div>
-                    </div>
-                    <button type="button" class="btn btn-primary btn-sm" id="editTimeslotBtn" data-timeslot-id="${slot.id}">
-                        <i class="bi bi-pencil"></i> Редактировать
-                    </button>
-                </div>
+                <div class="mb-2"><strong>Объект:</strong> ${slot.object_name} (#${slot.object_id})</div>
+                <div class="mb-2"><strong>Дата:</strong> ${slot.date}</div>
+                <div class="mb-2"><strong>Время:</strong> ${slot.start_time} - ${slot.end_time}</div>
+                <div class="mb-2"><strong>Ставка:</strong> ${slot.hourly_rate ?? '-'} ₽/час</div>
+                <div class="mb-2"><strong>Лимит:</strong> ${slot.max_employees}</div>
+                <div class="mb-3"><strong>Заметки:</strong> ${slot.notes || ''}</div>
 
                 <h6>Запланированные</h6>
                 <div class="table-responsive">
@@ -660,11 +653,9 @@ function showTimeslotDetails(timeslotId) {
                 </div>
             `;
             
-            // Добавляем обработчик для кнопки редактирования
-            document.getElementById('editTimeslotBtn').addEventListener('click', function() {
-                const timeslotId = this.dataset.timeslotId;
-                window.location.href = `/owner/timeslots/${timeslotId}/edit`;
-            });
+            // Устанавливаем timeslot_id для кнопки редактирования в footer
+            const editBtn = document.getElementById('editTimeslotBtn');
+            editBtn.dataset.timeslotId = slot.id;
         })
         .catch(err => {
             detailsEl.innerHTML = `<div class="alert alert-danger">Ошибка загрузки деталей тайм-слота</div>`;
@@ -675,6 +666,14 @@ function showTimeslotDetails(timeslotId) {
 // Загружаем статус при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     loadTimeslotsStatus();
+    
+    // Обработчик для кнопки редактирования в модальном окне
+    document.getElementById('editTimeslotBtn').addEventListener('click', function() {
+        const timeslotId = this.dataset.timeslotId;
+        if (timeslotId) {
+            window.location.href = `/owner/timeslots/${timeslotId}/edit`;
+        }
+    });
 });
 
 // Обработка клавиатурных сокращений
