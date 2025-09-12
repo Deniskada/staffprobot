@@ -5,7 +5,7 @@ URL-префикс: /owner/*
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query
 from fastapi.responses import RedirectResponse
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -865,13 +865,86 @@ async def owner_calendar_analysis(
         raise HTTPException(status_code=500, detail="Ошибка загрузки анализа пробелов")
 
 
+def _is_working_day(obj, check_date: date) -> bool:
+    """Проверяет, является ли день рабочим для объекта."""
+    # Получаем день недели (0=Понедельник, 6=Воскресенье)
+    weekday = check_date.weekday()  # 0=Пн, 1=Вт, ..., 6=Вс
+    
+    # Конвертируем в битовую позицию (1=Пн, 2=Вт, ..., 64=Вс)
+    bit_position = 1 << weekday
+    
+    # Проверяем, установлен ли бит для этого дня
+    return (obj.work_days_mask & bit_position) != 0
+
+
+def _check_timeslot_coverage(obj, slots, check_date: date) -> List[Dict[str, Any]]:
+    """Проверяет покрытие рабочего времени тайм-слотами."""
+    gaps = []
+    
+    if not slots:
+        return [{
+            "date": check_date,
+            "type": "no_slots",
+            "message": "Нет тайм-слотов на рабочий день"
+        }]
+    
+    # Сортируем слоты по времени начала
+    slots.sort(key=lambda x: x.start_time)
+    
+    # Проверяем покрытие от времени открытия до времени закрытия
+    opening_time = obj.opening_time
+    closing_time = obj.closing_time
+    
+    current_time = opening_time
+    slot_index = 0
+    
+    while current_time < closing_time and slot_index < len(slots):
+        slot = slots[slot_index]
+        
+        # Если есть пробел между текущим временем и началом слота
+        if current_time < slot.start_time:
+            gap_duration = (datetime.combine(check_date, slot.start_time) - 
+                          datetime.combine(check_date, current_time)).total_seconds() / 60
+            if gap_duration >= 30:  # Пробелы меньше 30 минут не считаем
+                gaps.append({
+                    "date": check_date,
+                    "type": "time_gap",
+                    "message": f"Пробел в расписании: {current_time.strftime('%H:%M')} - {slot.start_time.strftime('%H:%M')} ({gap_duration:.0f} мин)"
+                })
+            current_time = slot.start_time
+        
+        # Переходим к концу текущего слота
+        if slot.end_time:
+            current_time = slot.end_time
+        else:
+            # Если слот без времени окончания, считаем до закрытия
+            current_time = closing_time
+        
+        slot_index += 1
+    
+    # Проверяем, есть ли пробел в конце дня
+    if current_time < closing_time:
+        gap_duration = (datetime.combine(check_date, closing_time) - 
+                      datetime.combine(check_date, current_time)).total_seconds() / 60
+        if gap_duration >= 30:
+            gaps.append({
+                "date": check_date,
+                "type": "time_gap",
+                "message": f"Пробел в конце дня: {current_time.strftime('%H:%M')} - {closing_time.strftime('%H:%M')} ({gap_duration:.0f} мин)"
+            })
+    
+    return gaps
+
+
 async def _analyze_gaps(
     timeslot_service: TimeSlotService, 
     objects: List, 
     telegram_id: int, 
     days: int
 ) -> Dict[str, Any]:
-    """Анализирует пробелы в планировании (как в оригинале)"""
+    """Анализирует пробелы в планировании с учетом расписания работы объектов."""
+    from datetime import datetime
+    
     today = date.today()
     end_date = today + timedelta(days=days)
     
@@ -893,27 +966,30 @@ async def _analyze_gaps(
         gaps = []
         current_date = today
         while current_date <= end_date:
-            if current_date not in daily_slots:
-                gaps.append({
-                    "date": current_date,
-                    "type": "no_slots",
-                    "message": "Нет тайм-слотов на этот день"
-                })
-                total_gaps += 1
-            else:
-                # Проверяем покрытие рабочего времени
-                slots = daily_slots[current_date]
-                slots.sort(key=lambda x: x.start_time)
-                
-                # Здесь можно добавить логику анализа покрытия рабочего времени
-                # Например, проверка на пробелы между тайм-слотами
-                
+            # Проверяем, является ли день рабочим
+            if _is_working_day(obj, current_date):
+                if current_date not in daily_slots:
+                    # Рабочий день без тайм-слотов
+                    gaps.append({
+                        "date": current_date,
+                        "type": "no_slots",
+                        "message": "Нет тайм-слотов на рабочий день"
+                    })
+                    total_gaps += 1
+                else:
+                    # Проверяем покрытие рабочего времени
+                    day_gaps = _check_timeslot_coverage(obj, daily_slots[current_date], current_date)
+                    gaps.extend(day_gaps)
+                    total_gaps += len(day_gaps)
+            
             current_date += timedelta(days=1)
         
         object_gaps[obj.id] = {
             "object_name": obj.name,
             "gaps": gaps,
-            "gaps_count": len(gaps)
+            "gaps_count": len(gaps),
+            "work_schedule": f"{obj.opening_time.strftime('%H:%M')} - {obj.closing_time.strftime('%H:%M')}",
+            "work_days": _get_work_days_text(obj.work_days_mask)
         }
     
     return {
@@ -921,6 +997,18 @@ async def _analyze_gaps(
         "object_gaps": object_gaps,
         "period": f"{today.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
     }
+
+
+def _get_work_days_text(work_days_mask: int) -> str:
+    """Преобразует битовую маску дней в читаемый текст."""
+    days = []
+    day_names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    
+    for i in range(7):
+        if work_days_mask & (1 << i):
+            days.append(day_names[i])
+    
+    return ", ".join(days) if days else "Нет рабочих дней"
 
 
 @router.get("/calendar/api/timeslots-status")
