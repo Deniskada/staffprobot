@@ -432,16 +432,22 @@
         </div>
         <div class="chart-legend mt-3">
             <div class="row">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <div class="legend-item">
                         <span class="legend-color" style="background-color: #28a745;"></span>
-                        <span>100% - Есть тайм-слоты и запланированные смены</span>
+                        <span>100% - Полное покрытие</span>
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #ffc107;"></span>
+                        <span>50% - Частичное покрытие</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
                     <div class="legend-item">
                         <span class="legend-color" style="background-color: #dc3545;"></span>
-                        <span>0% - Нет тайм-слотов или нет запланированных смен</span>
+                        <span>0% - Нет покрытия</span>
                     </div>
                 </div>
             </div>
@@ -567,9 +573,10 @@ async function loadChart(type = 'line') {
                             label: function(context) {
                                 const value = context.parsed.y;
                                 let status = '';
-                                if (value === 100) status = 'Есть тайм-слоты и запланированные смены';
-                                else if (value === 0) status = 'Нет тайм-слотов или нет запланированных смен';
-                                else status = 'Неизвестно';
+                                if (value === 100) status = 'Полное покрытие';
+                                else if (value >= 50) status = 'Частичное покрытие';
+                                else if (value > 0) status = 'Низкое покрытие';
+                                else status = 'Нет покрытия';
                                 
                                 return context.dataset.label + ': ' + value + '% (' + status + ')';
                             }
