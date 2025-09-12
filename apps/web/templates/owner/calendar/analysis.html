@@ -48,6 +48,16 @@
     background: #d4edda;
 }
 
+.gap-item.time-gap {
+    border-left-color: #ffc107;
+    background: #fff3cd;
+}
+
+.gap-item.no-slots {
+    border-left-color: #dc3545;
+    background: #f8d7da;
+}
+
 .gap-date {
     font-weight: bold;
     color: #495057;
@@ -300,6 +310,20 @@
                 </span>
             </div>
             
+            <!-- Информация о расписании работы -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        <i class="bi bi-clock"></i> <strong>Время работы:</strong> {{ object_data.work_schedule }}
+                    </small>
+                </div>
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        <i class="bi bi-calendar-week"></i> <strong>Рабочие дни:</strong> {{ object_data.work_days }}
+                    </small>
+                </div>
+            </div>
+            
             {% if object_data.gaps_count == 0 %}
                 <div class="gap-item no-gaps">
                     <div class="gap-date">✅ Отлично!</div>
@@ -307,7 +331,7 @@
                 </div>
             {% else %}
                 {% for gap in object_data.gaps %}
-                <div class="gap-item">
+                <div class="gap-item {{ gap.type }}">
                     <div class="gap-date">{{ gap.date.strftime('%d.%m.%Y') }}</div>
                     <div class="gap-message">{{ gap.message }}</div>
                 </div>
