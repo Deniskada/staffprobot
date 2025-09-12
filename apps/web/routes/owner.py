@@ -2944,6 +2944,10 @@ async def owner_employees_list(
     try:
         from apps.web.services.contract_service import ContractService
         
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if not isinstance(current_user, dict):
+            return current_user
+        
         # Получаем реальных сотрудников из базы данных
         contract_service = ContractService()
         # Используем telegram_id для поиска пользователя в БД
@@ -2955,7 +2959,7 @@ async def owner_employees_list(
             employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
         
         return templates.TemplateResponse(
-            "employees/list.html",
+            "owner/employees/list.html",
             {
                 "request": request,
                 "employees": employees,
@@ -3030,7 +3034,7 @@ async def owner_employees_create_form(
             })
         
         return templates.TemplateResponse(
-            "employees/create.html",
+            "owner/employees/create.html",
             {
                 "request": request,
                 "title": "Создание договора",
@@ -3070,7 +3074,7 @@ async def owner_employee_detail(
             raise HTTPException(status_code=404, detail="Сотрудник не найден")
         
         return templates.TemplateResponse(
-            "employees/detail.html",
+            "owner/employees/detail.html",
             {
                 "request": request,
                 "title": f"Сотрудник {employee_info.get('name', 'Неизвестно')}",
@@ -3162,7 +3166,7 @@ async def owner_contract_detail(
             raise HTTPException(status_code=404, detail="Договор не найден")
         
         return templates.TemplateResponse(
-            "employees/contract.html",
+            "owner/employees/contract_detail.html",
             {
                 "request": request,
                 "contract": contract,
@@ -3234,7 +3238,7 @@ async def owner_contract_edit_form(
             })
         
         return templates.TemplateResponse(
-            "employees/contract_edit.html",
+            "owner/employees/edit_contract.html",
             {
                 "request": request,
                 "contract": contract,
