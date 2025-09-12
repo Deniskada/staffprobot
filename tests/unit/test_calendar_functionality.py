@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 
-from apps.web.routes.owner import _analyze_gaps
-from apps.web.services.timeslot_service import TimeSlotService
+# from apps.web.routes.owner import _analyze_gaps  # Функция перемещена в owner.py
+from apps.bot.services.time_slot_service import TimeSlotService
 from domain.entities.time_slot import TimeSlot
 from domain.entities.object import Object
 
