@@ -507,7 +507,11 @@ async function loadChart(type = 'line') {
     currentChartType = type;
     
     try {
-        const response = await fetch(`/owner/calendar/analysis/chart-data?object_id={{ selected_object_id or '' }}&days={{ days }}`);
+        const objectId = {{ selected_object_id if selected_object_id else 'null' }};
+        const url = objectId ? 
+            `/owner/calendar/analysis/chart-data?object_id=${objectId}&days={{ days }}` :
+            `/owner/calendar/analysis/chart-data?days={{ days }}`;
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.error) {
