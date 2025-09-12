@@ -1133,13 +1133,17 @@ async def owner_fill_gaps(
 
 @router.get("/calendar/analysis/chart-data")
 async def owner_analysis_chart_data(
-    object_id: int = Query(None),
+    object_id: Optional[int] = Query(None),
     days: int = Query(30),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Получение данных для графика покрытия планирования."""
     try:
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if not isinstance(current_user, dict):
+            raise HTTPException(status_code=401, detail="Необходима аутентификация")
+        
         from apps.web.services.object_service import ObjectService, TimeSlotService
         
         object_service = ObjectService(db)
@@ -1162,6 +1166,8 @@ async def owner_analysis_chart_data(
             owner_telegram_id, 
             days
         )
+        
+        logger.info(f"Chart data analysis: {len(objects)} objects, {len(analysis_data.get('object_gaps', {}))} object_gaps")
         
         # Подготавливаем данные для графика
         chart_data = {
