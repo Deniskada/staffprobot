@@ -3393,7 +3393,7 @@ async def owner_contract_detail(
         from apps.web.services.contract_service import ContractService
         
         contract_service = ContractService()
-        contract = await contract_service.get_contract_by_telegram_id(contract_id, current_user["id"])
+        contract = await contract_service.get_contract_by_telegram_id_including_inactive(contract_id, current_user["id"])
         
         if not contract:
             raise HTTPException(status_code=404, detail="Договор не найден")
