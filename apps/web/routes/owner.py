@@ -1313,7 +1313,7 @@ async def owner_calendar_api_timeslot_detail(
 ):
     """Детали конкретного тайм-слота"""
     current_user = await get_current_user(request)
-    if current_user.get("role") != "owner":
+    if not current_user or current_user.get("role") != "owner":
         raise HTTPException(status_code=403, detail="Доступ запрещен")
     
     try:
@@ -1347,7 +1347,7 @@ async def owner_calendar_api_timeslot_detail(
                 selectinload(ShiftSchedule.user)
             ).where(
                 and_(
-                    ShiftSchedule.timeslot_id == timeslot_id,
+                    ShiftSchedule.time_slot_id == timeslot_id,
                     ShiftSchedule.status.in_(["planned", "confirmed"])
                 )
             )
@@ -1360,7 +1360,7 @@ async def owner_calendar_api_timeslot_detail(
                 selectinload(Shift.user)
             ).where(
                 and_(
-                    Shift.timeslot_id == timeslot_id,
+                    Shift.time_slot_id == timeslot_id,
                     Shift.status.in_(["active", "completed"])
                 )
             )
@@ -1374,7 +1374,7 @@ async def owner_calendar_api_timeslot_detail(
                     "id": shift.id,
                     "user_name": f"{shift.user.first_name} {shift.user.last_name}".strip() if shift.user else "Неизвестно",
                     "status": shift.status,
-                    "planned_hours": shift.planned_hours,
+                    "planned_hours": shift.planned_duration_hours,
                     "notes": shift.notes or ""
                 })
             
@@ -1383,8 +1383,8 @@ async def owner_calendar_api_timeslot_detail(
             total_hours = 0
             total_payment = 0
             for shift in actual_shifts:
-                hours = shift.actual_hours or 0
-                payment = hours * (slot.hourly_rate or 0)
+                hours = shift.total_hours or 0
+                payment = shift.total_payment or (hours * (slot.hourly_rate or 0))
                 total_hours += hours
                 total_payment += payment
                 
