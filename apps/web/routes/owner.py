@@ -1135,14 +1135,15 @@ async def owner_fill_gaps(
 async def owner_analysis_chart_data(
     object_id: Optional[int] = Query(None),
     days: int = Query(30),
-    current_user: dict = Depends(require_owner_or_superadmin),
+    request: Request = None,
     db: AsyncSession = Depends(get_db_session)
 ):
     """Получение данных для графика покрытия планирования."""
     try:
-        # Проверяем, что current_user - это словарь, а не RedirectResponse
-        if not isinstance(current_user, dict):
-            raise HTTPException(status_code=401, detail="Необходима аутентификация")
+        # Получаем текущего пользователя
+        current_user = await get_current_user(request)
+        if not current_user or current_user.get("role") not in ["owner", "superadmin"]:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
         
         from apps.web.services.object_service import ObjectService, TimeSlotService
         
@@ -1221,7 +1222,7 @@ async def owner_analysis_chart_data(
         return chart_data
         
     except Exception as e:
-        logger.error(f"Error getting chart data: {e}")
+        logger.error(f"Error getting chart data: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка получения данных графика")
 
 
