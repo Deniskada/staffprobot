@@ -183,10 +183,10 @@
         <div class="d-flex align-items-center gap-3">
             <!-- Переключение видов -->
             <div class="btn-group" role="group">
-                <a href="/calendar/" class="btn btn-outline-primary">
+                <a href="/owner/calendar/" class="btn btn-outline-primary">
                     <i class="bi bi-calendar3"></i> Месяц
                 </a>
-                <a href="/calendar/week" class="btn btn-outline-primary">
+                <a href="/owner/calendar/week" class="btn btn-outline-primary">
                     <i class="bi bi-calendar-week"></i> Неделя
                 </a>
             </div>
@@ -343,11 +343,11 @@
     <a href="/owner/objects/create" class="btn btn-primary" title="Создать объект">
         <i class="bi bi-plus-lg"></i>
     </a>
-    <a href="/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create" 
+    <a href="/owner/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create" 
        class="btn btn-success" title="Создать тайм-слот">
         <i class="bi bi-clock"></i>
     </a>
-    <a href="/calendar/" class="btn btn-info" title="Календарь">
+    <a href="/owner/calendar/" class="btn btn-info" title="Календарь">
         <i class="bi bi-calendar3"></i>
     </a>
 </div>

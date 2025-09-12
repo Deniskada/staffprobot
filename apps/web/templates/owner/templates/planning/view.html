@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "owner/base_owner.html" %}
 
 {% block title %}{{ template.name }} - Просмотр шаблона{% endblock %}
 
@@ -188,10 +188,10 @@
 
         <!-- Действия -->
         <div class="template-actions">
-            <a href="/templates" class="btn btn-outline-secondary btn-action">
+            <a href="/owner/templates/planning" class="btn btn-outline-secondary btn-action">
                 <i class="bi bi-arrow-left"></i> Назад к списку
             </a>
-            <a href="/templates/{{ template.id }}/edit" class="btn btn-outline-primary btn-action">
+            <a href="/owner/templates/planning/{{ template.id }}/edit" class="btn btn-outline-primary btn-action">
                 <i class="bi bi-pencil"></i> Редактировать
             </a>
             <button class="btn btn-outline-success btn-action" onclick="applyTemplate({{ template.id }}, '{{ template.name }}')">

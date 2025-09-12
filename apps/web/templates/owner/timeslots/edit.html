@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "owner/base_owner.html" %}
 
 {% block title %}{{ title }}{% endblock %}
 
@@ -14,7 +14,7 @@
                     <p class="text-muted mb-0">Редактирование тайм-слота</p>
                 </div>
                 <div>
-                    <a href="/timeslots/object/{{ timeslot.object_id }}" class="btn btn-outline-secondary">
+                    <a href="/owner/timeslots/object/{{ timeslot.object_id }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-left"></i> Назад к тайм-слотам
                     </a>
                 </div>
@@ -100,7 +100,7 @@
                         <hr class="my-4">
 
                         <div class="d-flex justify-content-between">
-                            <a href="/timeslots/object/{{ timeslot.object_id }}" class="btn btn-outline-secondary">
+                            <a href="/owner/timeslots/object/{{ timeslot.object_id }}" class="btn btn-outline-secondary">
                                 <i class="bi bi-arrow-left"></i> Отмена
                             </a>
                             <button type="submit" class="btn btn-primary">
