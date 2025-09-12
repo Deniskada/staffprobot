@@ -1025,8 +1025,7 @@ async def owner_fill_gaps(
 ):
     """Автоматическое заполнение пробелов в планировании для объекта."""
     try:
-        from apps.web.services.object_service import ObjectService
-        from apps.web.services.timeslot_service import TimeSlotService
+        from apps.web.services.object_service import ObjectService, TimeSlotService
         
         object_service = ObjectService(db)
         timeslot_service = TimeSlotService(db)
@@ -1077,7 +1076,7 @@ async def owner_fill_gaps(
                     "notes": "Автоматически создан для заполнения пробела"
                 }
                 
-                await timeslot_service.create_timeslot(slot_data, owner_telegram_id)
+                await timeslot_service.create_timeslot(slot_data, object_id, owner_telegram_id)
                 created_slots += 1
         
         return RedirectResponse(
