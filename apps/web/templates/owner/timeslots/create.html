@@ -50,16 +50,32 @@
                                     <i class="bi bi-currency-dollar"></i> Ставка за час *
                                 </label>
                                 <div class="input-group">
-                                    <input type="text" 
+                                    <input type="number" 
                                            class="form-control" 
                                            id="hourly_rate" 
                                            name="hourly_rate" 
-                                           pattern="[0-9]+"
+                                           min="0"
+                                           step="0.01"
                                            required
                                            placeholder="{{ object.hourly_rate }}">
                                     <span class="input-group-text">₽/час</span>
                                 </div>
                                 <div class="form-text">Почасовая ставка для этого тайм-слота</div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="max_employees" class="form-label">
+                                    <i class="bi bi-people"></i> Лимит сотрудников *
+                                </label>
+                                <input type="number"
+                                       class="form-control"
+                                       id="max_employees"
+                                       name="max_employees"
+                                       min="1"
+                                       step="1"
+                                       value="1"
+                                       required>
+                                <div class="form-text">Максимальное количество сотрудников на этот тайм-слот</div>
                             </div>
                         </div>
 

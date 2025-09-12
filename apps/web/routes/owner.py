@@ -1558,16 +1558,22 @@ async def owner_timeslot_edit_form(
         timeslot_data = {
             "id": timeslot.id,
             "object_id": timeslot.object_id,
+            "slot_date": timeslot.slot_date.strftime("%Y-%m-%d"),
             "start_time": timeslot.start_time.strftime("%H:%M"),
             "end_time": timeslot.end_time.strftime("%H:%M"),
             "hourly_rate": float(timeslot.hourly_rate) if timeslot.hourly_rate else float(obj.hourly_rate),
+            "max_employees": timeslot.max_employees or 1,
             "is_active": timeslot.is_active
         }
         
         object_data = {
             "id": obj.id,
             "name": obj.name,
-            "address": obj.address or ""
+            "address": obj.address or "",
+            "hourly_rate": float(obj.hourly_rate) if obj.hourly_rate else 0,
+            "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "00:00",
+            "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "23:59",
+            "max_distance": obj.max_distance_meters or 0
         }
         
         return templates.TemplateResponse("owner/timeslots/edit.html", {
@@ -1620,7 +1626,7 @@ async def owner_timeslot_update(
             hourly_rate_str = hourly_rate_str.strip()
             if not hourly_rate_str:
                 raise ValueError("Пустое значение ставки")
-            hourly_rate = int(hourly_rate_str)
+            hourly_rate = float(hourly_rate_str)
         except ValueError as e:
             logger.error(f"Error parsing hourly_rate '{hourly_rate_str}': {e}")
             raise HTTPException(status_code=400, detail=f"Неверный формат ставки: '{hourly_rate_str}'")
@@ -1644,6 +1650,8 @@ async def owner_timeslot_update(
             "start_time": start_time,
             "end_time": end_time,
             "hourly_rate": hourly_rate,
+            # Новое поле лимита сотрудников
+            "max_employees": int((await request.form()).get("max_employees", 1)),
             "is_active": is_active
         }
         
@@ -1793,7 +1801,7 @@ async def owner_timeslot_create(
             hourly_rate_str = hourly_rate_str.strip()
             if not hourly_rate_str:
                 raise ValueError("Пустое значение ставки")
-            hourly_rate = int(hourly_rate_str)
+            hourly_rate = float(hourly_rate_str)
         except ValueError as e:
             logger.error(f"Error parsing hourly_rate '{hourly_rate_str}': {e}")
             raise HTTPException(status_code=400, detail=f"Неверный формат ставки: '{hourly_rate_str}'")
@@ -1825,6 +1833,8 @@ async def owner_timeslot_create(
             "start_time": start_time,
             "end_time": end_time,
             "hourly_rate": hourly_rate,
+            # Новое поле лимита сотрудников
+            "max_employees": int(form_data.get("max_employees", 1)),
             "is_active": is_active
         }
         
