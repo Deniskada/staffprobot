@@ -43,7 +43,7 @@ class EmployeeObjectsService:
                         Contract.employee_id == user.id,
                         Contract.status == 'active'
                     )
-                ).options(joinedload(Contract.object))
+                )
                 
                 contracts_result = await session.execute(contracts_query)
                 contracts = contracts_result.scalars().all()
@@ -52,35 +52,57 @@ class EmployeeObjectsService:
                     logger.info(f"No active contracts found for user {telegram_id}")
                     return []
                 
-                # Собираем уникальные объекты из договоров
-                objects_dict = {}
+                # Собираем ID объектов из всех договоров
+                object_ids = set()
                 for contract in contracts:
-                    if contract.object and contract.object.is_active:
-                        obj = contract.object
-                        if obj.id not in objects_dict:
-                            objects_dict[obj.id] = {
-                                'id': obj.id,
-                                'name': obj.name,
-                                'address': obj.address,
-                                'coordinates': obj.coordinates,
-                                'hourly_rate': float(obj.hourly_rate) if obj.hourly_rate else 0.0,
-                                'opening_time': obj.opening_time.strftime('%H:%M') if obj.opening_time else None,
-                                'closing_time': obj.closing_time.strftime('%H:%M') if obj.closing_time else None,
-                                'is_active': obj.is_active,
-                                'created_at': obj.created_at.isoformat() if obj.created_at else None,
-                                'max_distance_meters': obj.max_distance_meters or 500,
-                                'contracts': []
-                            }
-                        
-                        # Добавляем информацию о договоре
-                        objects_dict[obj.id]['contracts'].append({
-                            'id': contract.id,
-                            'title': contract.title,
-                            'start_date': contract.start_date.isoformat() if contract.start_date else None,
-                            'end_date': contract.end_date.isoformat() if contract.end_date else None,
-                            'hourly_rate': float(contract.hourly_rate) if contract.hourly_rate else None,
-                            'status': contract.status
-                        })
+                    if contract.allowed_objects:
+                        object_ids.update(contract.allowed_objects)
+                
+                if not object_ids:
+                    logger.info(f"No allowed objects found in contracts for user {telegram_id}")
+                    return []
+                
+                # Получаем объекты по ID
+                objects_query = select(Object).where(
+                    and_(
+                        Object.id.in_(object_ids),
+                        Object.is_active == True
+                    )
+                )
+                
+                objects_result = await session.execute(objects_query)
+                objects = objects_result.scalars().all()
+                
+                # Собираем уникальные объекты с информацией о договорах
+                objects_dict = {}
+                for obj in objects:
+                    objects_dict[obj.id] = {
+                        'id': obj.id,
+                        'name': obj.name,
+                        'address': obj.address,
+                        'coordinates': obj.coordinates,
+                        'hourly_rate': float(obj.hourly_rate) if obj.hourly_rate else 0.0,
+                        'opening_time': obj.opening_time.strftime('%H:%M') if obj.opening_time else None,
+                        'closing_time': obj.closing_time.strftime('%H:%M') if obj.closing_time else None,
+                        'is_active': obj.is_active,
+                        'created_at': obj.created_at.isoformat() if obj.created_at else None,
+                        'max_distance_meters': obj.max_distance_meters or 500,
+                        'contracts': []
+                    }
+                
+                # Добавляем информацию о договорах для каждого объекта
+                for contract in contracts:
+                    if contract.allowed_objects:
+                        for obj_id in contract.allowed_objects:
+                            if obj_id in objects_dict:
+                                objects_dict[obj_id]['contracts'].append({
+                                    'id': contract.id,
+                                    'title': contract.title,
+                                    'start_date': contract.start_date.isoformat() if contract.start_date else None,
+                                    'end_date': contract.end_date.isoformat() if contract.end_date else None,
+                                    'hourly_rate': float(contract.hourly_rate) if contract.hourly_rate else None,
+                                    'status': contract.status
+                                })
                 
                 objects_list = list(objects_dict.values())
                 
@@ -141,19 +163,23 @@ class EmployeeObjectsService:
                 if not user:
                     return False
                 
-                # Проверяем наличие активного договора с этим объектом
-                contract_query = select(Contract).where(
+                # Проверяем наличие активного договора с доступом к этому объекту
+                contracts_query = select(Contract).where(
                     and_(
                         Contract.employee_id == user.id,
-                        Contract.object_id == object_id,
                         Contract.status == 'active'
                     )
                 )
                 
-                contract_result = await session.execute(contract_query)
-                contract = contract_result.scalar_one_or_none()
+                contracts_result = await session.execute(contracts_query)
+                contracts = contracts_result.scalars().all()
                 
-                return contract is not None
+                # Проверяем, есть ли объект в allowed_objects любого договора
+                for contract in contracts:
+                    if contract.allowed_objects and object_id in contract.allowed_objects:
+                        return True
+                
+                return False
                 
         except Exception as e:
             logger.error(f"Error checking access to object {object_id} for {telegram_id}: {e}")
@@ -185,18 +211,28 @@ class EmployeeObjectsService:
                         Contract.employee_id == user.id,
                         Contract.status == 'active'
                     )
-                ).options(joinedload(Contract.object))
+                )
                 
                 contracts_result = await session.execute(contracts_query)
                 contracts = contracts_result.scalars().all()
                 
                 contracts_list = []
                 for contract in contracts:
+                    # Получаем названия объектов из allowed_objects
+                    object_names = []
+                    if contract.allowed_objects:
+                        for obj_id in contract.allowed_objects:
+                            obj_query = select(Object).where(Object.id == obj_id)
+                            obj_result = await session.execute(obj_query)
+                            obj = obj_result.scalar_one_or_none()
+                            if obj:
+                                object_names.append(obj.name)
+                    
                     contracts_list.append({
                         'id': contract.id,
                         'title': contract.title,
-                        'object_id': contract.object_id,
-                        'object_name': contract.object.name if contract.object else 'Неизвестный объект',
+                        'allowed_objects': contract.allowed_objects or [],
+                        'object_names': object_names,
                         'start_date': contract.start_date.isoformat() if contract.start_date else None,
                         'end_date': contract.end_date.isoformat() if contract.end_date else None,
                         'hourly_rate': float(contract.hourly_rate) if contract.hourly_rate else None,
