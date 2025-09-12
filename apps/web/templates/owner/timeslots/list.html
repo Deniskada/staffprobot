@@ -17,6 +17,9 @@
                     <a href="/owner/timeslots/object/{{ object_id }}/create" class="btn btn-primary">
                         <i class="bi bi-plus-circle"></i> Создать тайм-слот
                     </a>
+                    <button type="button" class="btn btn-outline-warning" id="bulkEditBtn" disabled onclick="openBulkEditModal()">
+                        <i class="bi bi-pencil-square"></i> Редактировать выбранные
+                    </button>
                     <form id="bulkDeleteForm" method="POST" action="/owner/timeslots/bulk-delete" onsubmit="return confirmBulkDelete()">
                         <input type="hidden" name="object_id" value="{{ object_id }}">
                         <input type="hidden" name="timeslot_ids" id="bulk_ids">
@@ -31,6 +34,14 @@
             </div>
         </div>
     </div>
+
+    {% if request.query_params.get('success') == 'bulk_updated' %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle"></i>
+        Успешно обновлено {{ request.query_params.get('count', 0) }} тайм-слотов
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
 
     {% if timeslots %}
     <div class="row">
@@ -160,6 +171,93 @@
     </div>
 </div>
 
+<!-- Модальное окно массового редактирования -->
+<div class="modal fade" id="bulkEditModal" tabindex="-1" aria-labelledby="bulkEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkEditModalLabel">
+                    <i class="bi bi-pencil-square"></i> Массовое редактирование тайм-слотов
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="/owner/timeslots/bulk-edit">
+                <div class="modal-body">
+                    <input type="hidden" name="object_id" value="{{ object_id }}">
+                    <input type="hidden" name="timeslot_ids" id="bulkEditIds">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="date_from" class="form-label">Период с</label>
+                            <input type="date" class="form-control" id="date_from" name="date_from">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="date_to" class="form-label">Период по</label>
+                            <input type="date" class="form-control" id="date_to" name="date_to">
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Будут изменены выбранные тайм-слоты. Если указан период - только тайм-слоты в этом периоде. Дата тайм-слотов не изменяется.
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="bulk_start_time" class="form-label">Время начала</label>
+                            <input type="time" class="form-control" id="bulk_start_time" name="start_time">
+                            <div class="form-text">Оставьте пустым, чтобы не изменять</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="bulk_end_time" class="form-label">Время окончания</label>
+                            <input type="time" class="form-control" id="bulk_end_time" name="end_time">
+                            <div class="form-text">Оставьте пустым, чтобы не изменять</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="bulk_hourly_rate" class="form-label">Ставка за час</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="bulk_hourly_rate" name="hourly_rate" min="0" step="0.01">
+                                <span class="input-group-text">₽/час</span>
+                            </div>
+                            <div class="form-text">Оставьте пустым, чтобы не изменять</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="bulk_max_employees" class="form-label">Лимит сотрудников</label>
+                            <input type="number" class="form-control" id="bulk_max_employees" name="max_employees" min="1" step="1">
+                            <div class="form-text">Оставьте пустым, чтобы не изменять</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="bulk_is_active" name="is_active" value="true">
+                            <label class="form-check-label" for="bulk_is_active">
+                                Сделать активными
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="bulk_is_inactive" name="is_inactive" value="true">
+                            <label class="form-check-label" for="bulk_is_inactive">
+                                Сделать неактивными
+                            </label>
+                        </div>
+                        <div class="form-text">Оставьте пустым, чтобы не изменять статус</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-check-circle"></i> Применить изменения
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function confirmDelete(timeslotId, timeslotName) {
     document.getElementById('deleteName').textContent = timeslotName;
@@ -176,12 +274,25 @@ function updateBulkState() {
     const ids = Array.from(document.querySelectorAll('.ts-check:checked')).map(cb => cb.value);
     document.getElementById('bulk_ids').value = ids.join(',');
     document.getElementById('bulkDeleteBtn').disabled = ids.length === 0;
+    document.getElementById('bulkEditBtn').disabled = ids.length === 0;
 }
 
 function confirmBulkDelete() {
     const ids = document.getElementById('bulk_ids').value;
     if (!ids) return false;
     return confirm(`Удалить выбранные тайм-слоты (${ids.split(',').length})?`);
+}
+
+function openBulkEditModal() {
+    const selectedIds = document.getElementById('bulk_ids').value;
+    if (!selectedIds) return;
+    
+    // Передаем выбранные ID в форму
+    document.getElementById('bulkEditIds').value = selectedIds;
+    
+    // Открываем модальное окно массового редактирования
+    const modal = new bootstrap.Modal(document.getElementById('bulkEditModal'));
+    modal.show();
 }
 </script>
 {% endblock %}
