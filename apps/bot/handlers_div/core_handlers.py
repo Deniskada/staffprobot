@@ -130,7 +130,8 @@ from .utils import get_location_keyboard
 # Импортируем обработчики для button_callback
 from .shift_handlers import (
     _handle_open_shift, _handle_close_shift, _handle_open_shift_object_selection,
-    _handle_close_shift_selection, _handle_retry_location_open, _handle_retry_location_close
+    _handle_close_shift_selection, _handle_retry_location_open, _handle_retry_location_close,
+    _handle_shift_type_planned, _handle_shift_type_spontaneous, _handle_timeslot_selection
 )
 from .object_handlers import (
     _handle_manage_objects, _handle_edit_object, _handle_edit_field
@@ -178,7 +179,9 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             result = await shift_service.open_shift(
                 user_id=user_id,
                 object_id=user_state.selected_object_id,
-                coordinates=coordinates
+                coordinates=coordinates,
+                shift_type=getattr(user_state, 'shift_type', 'spontaneous'),
+                timeslot_id=getattr(user_state, 'selected_timeslot_id', None)
             )
             
             if result['success']:
@@ -290,6 +293,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif query.data.startswith("open_shift_object:"):
         object_id = int(query.data.split(":", 1)[1])
         await _handle_open_shift_object_selection(update, context, object_id)
+        return
+    elif query.data.startswith("shift_type_planned:"):
+        object_id = int(query.data.split(":", 1)[1])
+        await _handle_shift_type_planned(update, context, object_id)
+        return
+    elif query.data.startswith("shift_type_spontaneous:"):
+        object_id = int(query.data.split(":", 1)[1])
+        await _handle_shift_type_spontaneous(update, context, object_id)
+        return
+    elif query.data.startswith("timeslot_select:"):
+        timeslot_id = int(query.data.split(":", 1)[1])
+        await _handle_timeslot_selection(update, context, timeslot_id)
         return
     elif query.data.startswith("close_shift_select:"):
         shift_id = int(query.data.split(":", 1)[1])

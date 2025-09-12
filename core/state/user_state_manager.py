@@ -26,6 +26,8 @@ class UserAction(str, Enum):
 class UserStep(str, Enum):
     """Шаги в диалоге."""
     OBJECT_SELECTION = "object_selection"
+    SHIFT_TYPE_SELECTION = "shift_type_selection"
+    TIMESLOT_SELECTION = "timeslot_selection"
     SHIFT_SELECTION = "shift_selection"
     LOCATION_REQUEST = "location_request"
     PROCESSING = "processing"
@@ -49,6 +51,8 @@ class UserState:
         step: UserStep,
         selected_object_id: Optional[int] = None,
         selected_shift_id: Optional[int] = None,
+        selected_timeslot_id: Optional[int] = None,
+        shift_type: Optional[str] = None,
         data: Optional[Dict[str, Any]] = None,
         timeout_minutes: int = 5
     ):
@@ -57,6 +61,8 @@ class UserState:
         self.step = step
         self.selected_object_id = selected_object_id
         self.selected_shift_id = selected_shift_id
+        self.selected_timeslot_id = selected_timeslot_id
+        self.shift_type = shift_type
         self.data = data or {}
         self.created_at = datetime.now()
         self.expires_at = self.created_at + timedelta(minutes=timeout_minutes)
@@ -136,6 +142,10 @@ class UserStateManager:
             state.set_selected_object(kwargs['selected_object_id'])
         if 'selected_shift_id' in kwargs:
             state.set_selected_shift(kwargs['selected_shift_id'])
+        if 'selected_timeslot_id' in kwargs:
+            state.selected_timeslot_id = kwargs['selected_timeslot_id']
+        if 'shift_type' in kwargs:
+            state.shift_type = kwargs['shift_type']
         if 'data' in kwargs:
             for key, value in kwargs['data'].items():
                 state.add_data(key, value)

@@ -27,7 +27,9 @@ class ShiftService:
         self, 
         user_id: int, 
         object_id: int, 
-        coordinates: str
+        coordinates: str,
+        shift_type: str = "spontaneous",
+        timeslot_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Открытие смены с проверкой геолокации.
@@ -103,7 +105,8 @@ class ShiftService:
                     start_time=datetime.now(),
                     status='active',
                     start_coordinates=coordinates,
-                    hourly_rate=obj.hourly_rate
+                    hourly_rate=obj.hourly_rate,
+                    time_slot_id=timeslot_id if shift_type == "planned" else None
                 )
                 
                 session.add(new_shift)
