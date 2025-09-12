@@ -245,6 +245,23 @@
         </div>
     </div>
 
+    <!-- Сообщения -->
+    {% if message %}
+        {% if message == "success" %}
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="bi bi-check-circle"></i>
+                <strong>Успешно!</strong> Создано {{ created }} тайм-слотов для заполнения пробелов.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% elif message == "no_gaps" %}
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle"></i>
+                <strong>Информация:</strong> Для этого объекта нет пробелов в планировании.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endif %}
+    {% endif %}
+
     <!-- Общая статистика -->
     <div class="row mb-4">
         <div class="col-md-3">
@@ -305,9 +322,20 @@
                 <h5 class="mb-0">
                     <i class="bi bi-building"></i> {{ object_data.object_name }}
                 </h5>
-                <span class="badge {% if object_data.gaps_count == 0 %}bg-success{% else %}bg-danger{% endif %}">
-                    {{ object_data.gaps_count }} пробелов
-                </span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge {% if object_data.gaps_count == 0 %}bg-success{% else %}bg-danger{% endif %}">
+                        {{ object_data.gaps_count }} пробелов
+                    </span>
+                    {% if object_data.gaps_count > 0 %}
+                    <form method="POST" action="/owner/calendar/analysis/fill-gaps/{{ object_id }}" class="d-inline">
+                        <input type="hidden" name="days" value="{{ days }}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary" 
+                                onclick="return confirm('Заполнить все пробелы для этого объекта?')">
+                            <i class="bi bi-magic"></i> Заполнить пробелы
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
             </div>
             
             <!-- Информация о расписании работы -->

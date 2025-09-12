@@ -815,6 +815,8 @@ async def owner_calendar_analysis(
     request: Request,
     object_id: int = Query(None),
     days: int = Query(30),
+    message: str = Query(None),
+    created: int = Query(None),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -855,7 +857,9 @@ async def owner_calendar_analysis(
             "selected_object_id": object_id,
             "selected_object": selected_object,
             "analysis_data": analysis_data,
-            "days": days
+            "days": days,
+            "message": message,
+            "created": created
         })
         
     except HTTPException:
@@ -1009,6 +1013,83 @@ def _get_work_days_text(work_days_mask: int) -> str:
             days.append(day_names[i])
     
     return ", ".join(days) if days else "Нет рабочих дней"
+
+
+@router.post("/calendar/analysis/fill-gaps/{object_id}")
+async def owner_fill_gaps(
+    object_id: int,
+    request: Request,
+    days: int = Form(30),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Автоматическое заполнение пробелов в планировании для объекта."""
+    try:
+        from apps.web.services.object_service import ObjectService
+        from apps.web.services.timeslot_service import TimeSlotService
+        
+        object_service = ObjectService(db)
+        timeslot_service = TimeSlotService(db)
+        
+        # Получаем объект
+        owner_telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        objects = await object_service.get_objects_by_owner(owner_telegram_id)
+        
+        target_object = None
+        for obj in objects:
+            if obj.id == object_id:
+                target_object = obj
+                break
+        
+        if not target_object:
+            raise HTTPException(status_code=404, detail="Объект не найден")
+        
+        # Анализируем пробелы для объекта
+        analysis_data = await _analyze_gaps(
+            timeslot_service, 
+            [target_object], 
+            owner_telegram_id, 
+            days
+        )
+        
+        object_data = analysis_data["object_gaps"].get(object_id, {})
+        gaps = object_data.get("gaps", [])
+        
+        if not gaps:
+            return RedirectResponse(
+                url=f"/owner/calendar/analysis?object_id={object_id}&days={days}&message=no_gaps",
+                status_code=303
+            )
+        
+        # Создаем тайм-слоты для пробелов
+        created_slots = 0
+        for gap in gaps:
+            if gap["type"] == "no_slots":
+                # Создаем тайм-слот на весь рабочий день
+                slot_data = {
+                    "object_id": object_id,
+                    "slot_date": gap["date"].strftime("%Y-%m-%d"),
+                    "start_time": target_object.opening_time.strftime("%H:%M"),
+                    "end_time": target_object.closing_time.strftime("%H:%M"),
+                    "hourly_rate": float(target_object.hourly_rate),
+                    "max_employees": 1,
+                    "is_active": True,
+                    "notes": "Автоматически создан для заполнения пробела"
+                }
+                
+                await timeslot_service.create_timeslot(slot_data, owner_telegram_id)
+                created_slots += 1
+        
+        return RedirectResponse(
+            url=f"/owner/calendar/analysis?object_id={object_id}&days={days}&message=success&created={created_slots}",
+            status_code=303
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error filling gaps: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка заполнения пробелов")
 
 
 @router.get("/calendar/api/timeslots-status")
