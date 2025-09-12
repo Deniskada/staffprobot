@@ -973,6 +973,88 @@ class ContractService:
                 } if contract.template else None
             }
     
+    async def get_contract_by_telegram_id_including_inactive(self, contract_id: int, owner_telegram_id: int) -> Optional[Dict[str, Any]]:
+        """Получение договора по ID с проверкой прав владельца по telegram_id (включая расторгнутые)."""
+        async with get_async_session() as session:
+            # Сначала находим владельца по telegram_id
+            owner_query = select(User).where(User.telegram_id == owner_telegram_id)
+            owner_result = await session.execute(owner_query)
+            owner = owner_result.scalar_one_or_none()
+            
+            if not owner:
+                return None
+            
+            query = select(Contract).where(
+                and_(
+                    Contract.id == contract_id,
+                    Contract.owner_id == owner.id
+                    # Убираем условие is_active == True
+                )
+            ).options(
+                selectinload(Contract.employee),
+                selectinload(Contract.template)
+            )
+            
+            result = await session.execute(query)
+            contract = result.scalar_one_or_none()
+            
+            if not contract:
+                return None
+            
+            # Получаем информацию об объектах
+            allowed_objects_info = []
+            if contract.allowed_objects:
+                try:
+                    allowed_objects_data = json.loads(contract.allowed_objects)
+                    for obj_data in allowed_objects_data:
+                        if isinstance(obj_data, dict) and 'id' in obj_data:
+                            obj_query = select(Object).where(Object.id == obj_data['id'])
+                            obj_result = await session.execute(obj_query)
+                            obj = obj_result.scalar_one_or_none()
+                            if obj:
+                                allowed_objects_info.append({
+                                    "id": obj.id,
+                                    "name": obj.name,
+                                    "address": obj.address
+                                })
+                except (json.JSONDecodeError, KeyError):
+                    pass
+            
+            return {
+                "id": contract.id,
+                "employee_id": contract.employee_id,
+                "object_id": contract.object_id,
+                "template_id": contract.template_id,
+                "status": contract.status,
+                "is_active": contract.is_active,
+                "hourly_rate": float(contract.hourly_rate) if contract.hourly_rate else None,
+                "allowed_objects": contract.allowed_objects,
+                "allowed_objects_info": allowed_objects_info,
+                "created_at": contract.created_at,
+                "updated_at": contract.updated_at,
+                "signed_at": contract.signed_at,
+                "terminated_at": contract.terminated_at,
+                "owner": {
+                    "id": owner.id,
+                    "telegram_id": owner.telegram_id,
+                    "first_name": owner.first_name,
+                    "last_name": owner.last_name,
+                    "username": owner.username
+                },
+                "employee": {
+                    "id": contract.employee.id,
+                    "telegram_id": contract.employee.telegram_id,
+                    "first_name": contract.employee.first_name,
+                    "last_name": contract.employee.last_name,
+                    "username": contract.employee.username
+                },
+                "template": {
+                    "id": contract.template.id,
+                    "name": contract.template.name,
+                    "version": contract.template.version
+                } if contract.template else None
+            }
+    
     async def get_contract_by_id_and_owner_telegram_id(self, contract_id: int, owner_telegram_id: int) -> Optional[Contract]:
         """Получение ORM объекта договора по ID с проверкой прав владельца по telegram_id."""
         async with get_async_session() as session:
