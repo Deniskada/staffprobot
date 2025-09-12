@@ -1,5 +1,6 @@
 """Сервис для управления договорами."""
 
+import json
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from sqlalchemy import select, and_, or_, func
