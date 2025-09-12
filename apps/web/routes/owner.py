@@ -1498,6 +1498,7 @@ async def owner_timeslots_list(
                 "start_time": slot.start_time.strftime("%H:%M"),
                 "end_time": slot.end_time.strftime("%H:%M"),
                 "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                "max_employees": slot.max_employees or 1,
                 "is_active": slot.is_active,
                 "created_at": slot.created_at.strftime("%Y-%m-%d")
             })
@@ -1764,6 +1765,166 @@ async def owner_timeslot_create_form(
     except Exception as e:
         logger.error(f"Error loading create form: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки формы создания")
+
+
+@router.post("/timeslots/bulk-edit")
+async def owner_timeslots_bulk_edit(
+    request: Request,
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Массовое редактирование тайм-слотов владельца."""
+    try:
+        # Получаем telegram_id из current_user
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("id")
+        else:
+            telegram_id = current_user.telegram_id
+            
+        logger.info(f"Bulk editing timeslots for user {telegram_id}")
+        
+        # Получение данных формы
+        form_data = await request.form()
+        object_id = int(form_data.get("object_id", 0))
+        timeslot_ids_str = form_data.get("timeslot_ids", "")
+        date_from = form_data.get("date_from", "")
+        date_to = form_data.get("date_to", "")
+        
+        # Параметры для обновления
+        start_time = form_data.get("start_time", "").strip()
+        end_time = form_data.get("end_time", "").strip()
+        hourly_rate_str = form_data.get("hourly_rate", "").strip()
+        max_employees_str = form_data.get("max_employees", "").strip()
+        is_active = "is_active" in form_data
+        is_inactive = "is_inactive" in form_data
+        
+        # Валидация периода (если указан)
+        date_from_obj = None
+        date_to_obj = None
+        
+        if date_from and date_to:
+            from datetime import date
+            try:
+                date_from_obj = date.fromisoformat(date_from)
+                date_to_obj = date.fromisoformat(date_to)
+                if date_from_obj > date_to_obj:
+                    raise HTTPException(status_code=400, detail="Дата начала не может быть больше даты окончания")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат даты")
+        elif date_from or date_to:
+            raise HTTPException(status_code=400, detail="Укажите обе даты периода или оставьте пустыми")
+        
+        # Подготовка данных для обновления
+        update_data = {}
+        
+        if start_time and end_time:
+            try:
+                from datetime import time
+                start = time.fromisoformat(start_time)
+                end = time.fromisoformat(end_time)
+                if start >= end:
+                    raise HTTPException(status_code=400, detail="Время начала должно быть меньше времени окончания")
+                update_data["start_time"] = start_time
+                update_data["end_time"] = end_time
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат времени")
+        
+        if hourly_rate_str:
+            try:
+                hourly_rate = float(hourly_rate_str)
+                if hourly_rate <= 0:
+                    raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+                update_data["hourly_rate"] = hourly_rate
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат ставки")
+        
+        if max_employees_str:
+            try:
+                max_employees = int(max_employees_str)
+                if max_employees < 1:
+                    raise HTTPException(status_code=400, detail="Лимит должен быть больше 0")
+                update_data["max_employees"] = max_employees
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат лимита")
+        
+        if is_active and not is_inactive:
+            update_data["is_active"] = True
+        elif is_inactive and not is_active:
+            update_data["is_active"] = False
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="Не указано ни одного параметра для изменения")
+        
+        # Получаем тайм-слоты
+        from domain.entities.time_slot import TimeSlot
+        timeslot_service = TimeSlotService(db)
+        
+        # Если переданы конкретные ID, используем их
+        if timeslot_ids_str:
+            timeslot_ids = [int(id_str.strip()) for id_str in timeslot_ids_str.split(",") if id_str.strip()]
+            
+            # Если указан период, фильтруем по нему
+            if date_from_obj and date_to_obj:
+                timeslots_query = select(TimeSlot).where(
+                    and_(
+                        TimeSlot.id.in_(timeslot_ids),
+                        TimeSlot.object_id == object_id,
+                        TimeSlot.slot_date >= date_from_obj,
+                        TimeSlot.slot_date <= date_to_obj
+                    )
+                )
+            else:
+                # Без периода - только по ID
+                timeslots_query = select(TimeSlot).where(
+                    and_(
+                        TimeSlot.id.in_(timeslot_ids),
+                        TimeSlot.object_id == object_id
+                    )
+                )
+        else:
+            # Если не переданы ID, но указан период - ищем по периоду
+            if date_from_obj and date_to_obj:
+                timeslots_query = select(TimeSlot).where(
+                    and_(
+                        TimeSlot.object_id == object_id,
+                        TimeSlot.slot_date >= date_from_obj,
+                        TimeSlot.slot_date <= date_to_obj
+                    )
+                )
+            else:
+                raise HTTPException(status_code=400, detail="Укажите тайм-слоты для изменения или период")
+        
+        timeslots_result = await db.execute(timeslots_query)
+        timeslots = timeslots_result.scalars().all()
+        
+        if not timeslots:
+            raise HTTPException(status_code=404, detail="Тайм-слоты в указанном периоде не найдены")
+        
+        # Обновляем каждый тайм-слот
+        updated_count = 0
+        for timeslot in timeslots:
+            # Проверяем права доступа
+            if not await timeslot_service.get_timeslot_by_id(timeslot.id, telegram_id):
+                continue
+                
+            # Обновляем поля
+            for field, value in update_data.items():
+                setattr(timeslot, field, value)
+            
+            updated_count += 1
+        
+        await db.commit()
+        
+        logger.info(f"Bulk updated {updated_count} timeslots for user {telegram_id}")
+        
+        return RedirectResponse(url=f"/owner/timeslots/object/{object_id}?success=bulk_updated&count={updated_count}", status_code=status.HTTP_302_FOUND)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error bulk editing timeslots: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка массового редактирования: {str(e)}")
 
 
 @router.post("/timeslots/object/{object_id}/create")
