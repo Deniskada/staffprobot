@@ -1170,6 +1170,10 @@ async def owner_analysis_chart_data(
         
         logger.info(f"Chart data analysis: {len(objects)} objects, {len(analysis_data.get('object_gaps', {}))} object_gaps")
         
+        # Отладочная информация
+        for obj in objects:
+            logger.info(f"Object {obj.id}: {obj.name}, opening: {obj.opening_time}, closing: {obj.closing_time}")
+        
         # Подготавливаем данные для графика
         chart_data = {
             "labels": [],  # Даты
@@ -1237,8 +1241,39 @@ async def owner_analysis_chart_data(
             
             for d in dates:
                 if d in timeslots_by_date and d in scheduled_by_date:
-                    # Есть тайм-слоты И есть запланированные смены - полное покрытие
-                    coverage_data.append(100)
+                    # Есть тайм-слоты И есть запланированные смены - вычисляем процент покрытия
+                    timeslots_for_day = timeslots_by_date[d]
+                    scheduled_for_day = scheduled_by_date[d]
+                    
+                    # Получаем объект для расчета рабочего времени
+                    obj = next((o for o in objects if o.id == obj_id), None)
+                    if not obj:
+                        coverage_data.append(0)
+                        continue
+                    
+                    # Вычисляем общее рабочее время в день (в минутах)
+                    opening_minutes = obj.opening_time.hour * 60 + obj.opening_time.minute
+                    closing_minutes = obj.closing_time.hour * 60 + obj.closing_time.minute
+                    total_work_minutes = closing_minutes - opening_minutes
+                    
+                    if total_work_minutes <= 0:
+                        coverage_data.append(0)
+                        continue
+                    
+                    # Вычисляем общее время запланированных смен (в минутах)
+                    total_scheduled_minutes = 0
+                    for shift in scheduled_for_day:
+                        # Получаем тайм-слот для этой смены
+                        timeslot = next((ts for ts in timeslots_for_day if ts.id == shift.time_slot_id), None)
+                        if timeslot:
+                            start_minutes = timeslot.start_time.hour * 60 + timeslot.start_time.minute
+                            end_minutes = timeslot.end_time.hour * 60 + timeslot.end_time.minute
+                            total_scheduled_minutes += (end_minutes - start_minutes)
+                    
+                    # Вычисляем процент покрытия
+                    coverage_percent = min(100, (total_scheduled_minutes / total_work_minutes) * 100)
+                    coverage_data.append(round(coverage_percent))
+                    
                 elif d in timeslots_by_date:
                     # Есть тайм-слоты, но нет запланированных смен - нет покрытия
                     coverage_data.append(0)
