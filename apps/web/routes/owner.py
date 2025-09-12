@@ -1067,7 +1067,7 @@ async def owner_fill_gaps(
                 # Создаем тайм-слот на весь рабочий день
                 slot_data = {
                     "object_id": object_id,
-                    "slot_date": gap["date"].strftime("%Y-%m-%d"),
+                    "slot_date": gap["date"],  # Передаем объект date, а не строку
                     "start_time": target_object.opening_time.strftime("%H:%M"),
                     "end_time": target_object.closing_time.strftime("%H:%M"),
                     "hourly_rate": float(target_object.hourly_rate),
