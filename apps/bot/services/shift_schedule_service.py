@@ -98,12 +98,14 @@ class ShiftScheduleService:
             Информация о запланированной смене или None
         """
         try:
+            logger.info(f"Getting shift schedule by ID: {schedule_id}")
             async with get_async_session() as session:
                 query = select(ShiftSchedule).where(ShiftSchedule.id == schedule_id)
                 result = await session.execute(query)
                 shift = result.scalar_one_or_none()
                 
                 if not shift:
+                    logger.warning(f"Shift schedule with ID {schedule_id} not found")
                     return None
                 
                 # Получаем информацию об объекте

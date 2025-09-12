@@ -356,8 +356,10 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
         from apps.bot.services.shift_schedule_service import ShiftScheduleService
         shift_schedule_service = ShiftScheduleService()
         
+        logger.info(f"Getting shift schedule data for schedule_id: {schedule_id}")
         shift_data = await shift_schedule_service.get_shift_schedule_by_id(schedule_id)
         if not shift_data:
+            logger.warning(f"Shift schedule data not found for schedule_id: {schedule_id}")
             await query.edit_message_text(
                 text="❌ Запланированная смена не найдена или недоступна.",
                 parse_mode='HTML'
@@ -370,7 +372,7 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
             selected_object_id=shift_data['object_id'],
             step=UserStep.LOCATION_REQUEST,
             shift_type="planned",
-            selected_timeslot_id=shift_data['time_slot_id'],
+            selected_timeslot_id=shift_data.get('time_slot_id'),
             selected_schedule_id=schedule_id
         )
         
