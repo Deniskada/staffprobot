@@ -1341,6 +1341,62 @@ async def owner_calendar_api_timeslot_detail(
             if (await session.execute(obj_q)).scalar_one_or_none() is None:
                 raise HTTPException(status_code=403, detail="Нет доступа к тайм-слоту")
 
+            # Загружаем запланированные смены (ShiftSchedule)
+            from domain.entities.shift_schedule import ShiftSchedule
+            scheduled_query = select(ShiftSchedule).options(
+                selectinload(ShiftSchedule.user)
+            ).where(
+                and_(
+                    ShiftSchedule.timeslot_id == timeslot_id,
+                    ShiftSchedule.status.in_(["planned", "confirmed"])
+                )
+            )
+            scheduled_result = await session.execute(scheduled_query)
+            scheduled_shifts = scheduled_result.scalars().all()
+            
+            # Загружаем фактические смены (Shift)
+            from domain.entities.shift import Shift
+            actual_query = select(Shift).options(
+                selectinload(Shift.user)
+            ).where(
+                and_(
+                    Shift.timeslot_id == timeslot_id,
+                    Shift.status.in_(["active", "completed"])
+                )
+            )
+            actual_result = await session.execute(actual_query)
+            actual_shifts = actual_result.scalars().all()
+            
+            # Формируем данные для запланированных смен
+            scheduled_data = []
+            for shift in scheduled_shifts:
+                scheduled_data.append({
+                    "id": shift.id,
+                    "user_name": f"{shift.user.first_name} {shift.user.last_name}".strip() if shift.user else "Неизвестно",
+                    "status": shift.status,
+                    "planned_hours": shift.planned_hours,
+                    "notes": shift.notes or ""
+                })
+            
+            # Формируем данные для фактических смен
+            actual_data = []
+            total_hours = 0
+            total_payment = 0
+            for shift in actual_shifts:
+                hours = shift.actual_hours or 0
+                payment = hours * (slot.hourly_rate or 0)
+                total_hours += hours
+                total_payment += payment
+                
+                actual_data.append({
+                    "id": shift.id,
+                    "user_name": f"{shift.user.first_name} {shift.user.last_name}".strip() if shift.user else "Неизвестно",
+                    "status": shift.status,
+                    "actual_hours": hours,
+                    "payment": payment,
+                    "notes": shift.notes or ""
+                })
+
             return {
                 "slot": {
                     "id": slot.id,
@@ -1354,8 +1410,12 @@ async def owner_calendar_api_timeslot_detail(
                     "is_active": slot.is_active,
                     "notes": slot.notes or "",
                 },
-                "scheduled": [],
-                "actual": [],
+                "scheduled": scheduled_data,
+                "actual": actual_data,
+                "summary": {
+                    "total_hours": total_hours,
+                    "total_payment": total_payment
+                }
             }
     except HTTPException:
         raise

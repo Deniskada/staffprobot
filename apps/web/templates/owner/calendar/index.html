@@ -614,27 +614,34 @@ function showTimeslotDetails(timeslotId) {
             }[st] || st);
 
             const schedRows = scheduled.map(s => `<tr>
-                <td>${s.start_time} - ${s.end_time}</td>
+                <td>${slot.start_time} - ${slot.end_time}</td>
                 <td>${statusRu(s.status)}</td>
-                <td>${s.user_name ?? s.user_id ?? '-'}</td>
-                <td>${s.notes ?? ''}</td>
+                <td>${s.user_name || '-'}</td>
+                <td>${s.notes || ''}</td>
             </tr>`).join('');
 
             const actualRows = actual.map(a => `<tr>
-                <td>${a.start_time} - ${a.end_time ?? ''}</td>
+                <td>${slot.start_time} - ${slot.end_time}</td>
                 <td>${statusRu(a.status)}</td>
-                <td>${a.user_name ?? a.user_id ?? '-'}</td>
-                <td>${a.total_hours ?? ''}</td>
-                <td>${a.total_payment ?? ''}</td>
+                <td>${a.user_name || '-'}</td>
+                <td>${a.actual_hours || ''}</td>
+                <td>${a.payment || ''}</td>
             </tr>`).join('');
 
             detailsEl.innerHTML = `
-                <div class="mb-2"><strong>Объект:</strong> ${slot.object_name} (#${slot.object_id})</div>
-                <div class="mb-2"><strong>Дата:</strong> ${slot.date}</div>
-                <div class="mb-2"><strong>Время:</strong> ${slot.start_time} - ${slot.end_time}</div>
-                <div class="mb-2"><strong>Ставка:</strong> ${slot.hourly_rate ?? '-'} ₽/час</div>
-                <div class="mb-3"><strong>Лимит:</strong> ${slot.max_employees}</div>
-                <div class="mb-3"><strong>Заметки:</strong> ${slot.notes || ''}</div>
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <div class="mb-2"><strong>Объект:</strong> ${slot.object_name} (#${slot.object_id})</div>
+                        <div class="mb-2"><strong>Дата:</strong> ${slot.date}</div>
+                        <div class="mb-2"><strong>Время:</strong> ${slot.start_time} - ${slot.end_time}</div>
+                        <div class="mb-2"><strong>Ставка:</strong> ${slot.hourly_rate ?? '-'} ₽/час</div>
+                        <div class="mb-2"><strong>Лимит:</strong> ${slot.max_employees}</div>
+                        <div class="mb-2"><strong>Заметки:</strong> ${slot.notes || ''}</div>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" id="editTimeslotBtn" data-timeslot-id="${slot.id}">
+                        <i class="bi bi-pencil"></i> Редактировать
+                    </button>
+                </div>
 
                 <h6>Запланированные</h6>
                 <div class="table-responsive">
@@ -652,6 +659,12 @@ function showTimeslotDetails(timeslotId) {
                   </table>
                 </div>
             `;
+            
+            // Добавляем обработчик для кнопки редактирования
+            document.getElementById('editTimeslotBtn').addEventListener('click', function() {
+                const timeslotId = this.dataset.timeslotId;
+                window.location.href = `/owner/timeslots/${timeslotId}/edit`;
+            });
         })
         .catch(err => {
             detailsEl.innerHTML = `<div class="alert alert-danger">Ошибка загрузки деталей тайм-слота</div>`;
