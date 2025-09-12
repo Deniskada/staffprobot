@@ -1169,10 +1169,19 @@ async def owner_analysis_chart_data(
         )
         
         logger.info(f"Chart data analysis: {len(objects)} objects, {len(analysis_data.get('object_gaps', {}))} object_gaps")
+        logger.info(f"Analysis data keys: {list(analysis_data.keys())}")
         
         # Отладочная информация
         for obj in objects:
             logger.info(f"Object {obj.id}: {obj.name}, opening: {obj.opening_time}, closing: {obj.closing_time}")
+        
+        if "object_gaps" not in analysis_data:
+            logger.error("No object_gaps in analysis_data")
+            return {"error": "Нет данных для анализа"}
+        
+        if not analysis_data["object_gaps"]:
+            logger.error("object_gaps is empty")
+            return {"error": "Нет объектов для анализа"}
         
         # Подготавливаем данные для графика
         chart_data = {
