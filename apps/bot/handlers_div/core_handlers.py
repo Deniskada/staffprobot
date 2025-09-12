@@ -131,7 +131,7 @@ from .utils import get_location_keyboard
 from .shift_handlers import (
     _handle_open_shift, _handle_close_shift, _handle_open_shift_object_selection,
     _handle_close_shift_selection, _handle_retry_location_open, _handle_retry_location_close,
-    _handle_shift_type_planned, _handle_shift_type_spontaneous, _handle_timeslot_selection
+    _handle_open_planned_shift
 )
 from .object_handlers import (
     _handle_manage_objects, _handle_edit_object, _handle_edit_field
@@ -175,14 +175,15 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     try:
         if user_state.action == UserAction.OPEN_SHIFT:
-            # Открываем смену
-            result = await shift_service.open_shift(
-                user_id=user_id,
-                object_id=user_state.selected_object_id,
-                coordinates=coordinates,
-                shift_type=getattr(user_state, 'shift_type', 'spontaneous'),
-                timeslot_id=getattr(user_state, 'selected_timeslot_id', None)
-            )
+        # Открываем смену
+        result = await shift_service.open_shift(
+            user_id=user_id,
+            object_id=user_state.selected_object_id,
+            coordinates=coordinates,
+            shift_type=getattr(user_state, 'shift_type', 'spontaneous'),
+            timeslot_id=getattr(user_state, 'selected_timeslot_id', None),
+            schedule_id=getattr(user_state, 'selected_schedule_id', None)
+        )
             
             if result['success']:
                 object_name = result.get('object_name', 'Неизвестно') or 'Неизвестно'
@@ -294,17 +295,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         object_id = int(query.data.split(":", 1)[1])
         await _handle_open_shift_object_selection(update, context, object_id)
         return
-    elif query.data.startswith("shift_type_planned:"):
-        object_id = int(query.data.split(":", 1)[1])
-        await _handle_shift_type_planned(update, context, object_id)
-        return
-    elif query.data.startswith("shift_type_spontaneous:"):
-        object_id = int(query.data.split(":", 1)[1])
-        await _handle_shift_type_spontaneous(update, context, object_id)
-        return
-    elif query.data.startswith("timeslot_select:"):
-        timeslot_id = int(query.data.split(":", 1)[1])
-        await _handle_timeslot_selection(update, context, timeslot_id)
+    elif query.data.startswith("open_planned_shift:"):
+        schedule_id = int(query.data.split(":", 1)[1])
+        await _handle_open_planned_shift(update, context, schedule_id)
         return
     elif query.data.startswith("close_shift_select:"):
         shift_id = int(query.data.split(":", 1)[1])
