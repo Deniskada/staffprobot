@@ -54,6 +54,7 @@
                                     <th>Дата</th>
                                     <th>Время</th>
                                     <th>Ставка</th>
+                                    <th>Лимит</th>
                                     <th>Статус</th>
                                     <th>Действия</th>
                                 </tr>
@@ -77,6 +78,11 @@
                                     <td>
                                         <span class="fw-bold text-success">
                                             {{ timeslot.hourly_rate }} ₽/час
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">
+                                            {{ timeslot.max_employees or 1 }} чел.
                                         </span>
                                     </td>
                                     <td>

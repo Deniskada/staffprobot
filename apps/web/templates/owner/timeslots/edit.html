@@ -33,23 +33,51 @@
                 <div class="card-body">
                     <form method="POST" id="editForm">
                         <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="slot_date" class="form-label">
+                                    <i class="bi bi-calendar-event"></i> Дата тайм-слота *
+                                </label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="slot_date" 
+                                       name="slot_date" 
+                                       value="{{ timeslot.slot_date }}"
+                                       required>
+                                <div class="form-text">Дата для тайм-слота</div>
+                            </div>
                             
                             <div class="col-md-6 mb-3">
                                 <label for="hourly_rate" class="form-label">
                                     <i class="bi bi-currency-dollar"></i> Ставка за час *
                                 </label>
                                 <div class="input-group">
-                                    <input type="text" 
+                                    <input type="number" 
                                            class="form-control" 
                                            id="hourly_rate" 
                                            name="hourly_rate" 
                                            value="{{ timeslot.hourly_rate }}"
-                                           pattern="[0-9]+"
+                                           min="0"
+                                           step="0.01"
                                            required
                                            placeholder="500">
                                     <span class="input-group-text">₽/час</span>
                                 </div>
                                 <div class="form-text">Почасовая ставка для этого тайм-слота</div>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="max_employees" class="form-label">
+                                    <i class="bi bi-people"></i> Лимит сотрудников *
+                                </label>
+                                <input type="number"
+                                       class="form-control"
+                                       id="max_employees"
+                                       name="max_employees"
+                                       min="1"
+                                       step="1"
+                                       value="{{ timeslot.max_employees or 1 }}"
+                                       required>
+                                <div class="form-text">Максимальное количество сотрудников на этот тайм-слот</div>
                             </div>
                         </div>
 
@@ -150,6 +178,20 @@
                                 <div class="fw-bold text-info">{{ object.max_distance }}м</div>
                                 <small class="text-muted">Макс. расстояние</small>
                             </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <div class="text-center">
+                        <h6 class="text-muted mb-2">Текущий тайм-слот</h6>
+                        <div class="border rounded p-3 bg-light">
+                            <div class="fw-bold text-success">{{ timeslot.hourly_rate }} ₽/час</div>
+                            <small class="text-muted">Ставка</small>
+                        </div>
+                        <div class="mt-2">
+                            <span class="badge bg-info">{{ timeslot.max_employees or 1 }} чел.</span>
+                            <small class="text-muted d-block">Лимит сотрудников</small>
                         </div>
                     </div>
                 </div>
