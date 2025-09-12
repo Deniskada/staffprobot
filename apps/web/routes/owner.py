@@ -1067,7 +1067,7 @@ async def owner_fill_gaps(
                 # Создаем тайм-слот на весь рабочий день
                 slot_data = {
                     "object_id": object_id,
-                    "slot_date": gap["date"],  # Передаем объект date, а не строку
+                    "slot_date": gap["date"],
                     "start_time": target_object.opening_time.strftime("%H:%M"),
                     "end_time": target_object.closing_time.strftime("%H:%M"),
                     "hourly_rate": float(target_object.hourly_rate),
@@ -1078,6 +1078,46 @@ async def owner_fill_gaps(
                 
                 await timeslot_service.create_timeslot(slot_data, object_id, owner_telegram_id)
                 created_slots += 1
+            elif gap["type"] == "time_gap":
+                # Для пробелов во времени создаем тайм-слот только для конкретного интервала
+                # Парсим время из сообщения "Пробел в расписании: 12:00 - 21:00 (540 мин)"
+                message = gap["message"]
+                if "Пробел в расписании:" in message:
+                    # Извлекаем время из сообщения
+                    time_part = message.split("Пробел в расписании: ")[1].split(" (")[0]
+                    start_time_str, end_time_str = time_part.split(" - ")
+                    
+                    slot_data = {
+                        "object_id": object_id,
+                        "slot_date": gap["date"],
+                        "start_time": start_time_str,
+                        "end_time": end_time_str,
+                        "hourly_rate": float(target_object.hourly_rate),
+                        "max_employees": 1,
+                        "is_active": True,
+                        "notes": "Автоматически создан для заполнения пробела во времени"
+                    }
+                    
+                    await timeslot_service.create_timeslot(slot_data, object_id, owner_telegram_id)
+                    created_slots += 1
+                elif "Пробел в конце дня:" in message:
+                    # Извлекаем время из сообщения
+                    time_part = message.split("Пробел в конце дня: ")[1].split(" (")[0]
+                    start_time_str, end_time_str = time_part.split(" - ")
+                    
+                    slot_data = {
+                        "object_id": object_id,
+                        "slot_date": gap["date"],
+                        "start_time": start_time_str,
+                        "end_time": end_time_str,
+                        "hourly_rate": float(target_object.hourly_rate),
+                        "max_employees": 1,
+                        "is_active": True,
+                        "notes": "Автоматически создан для заполнения пробела в конце дня"
+                    }
+                    
+                    await timeslot_service.create_timeslot(slot_data, object_id, owner_telegram_id)
+                    created_slots += 1
         
         return RedirectResponse(
             url=f"/owner/calendar/analysis?object_id={object_id}&days={days}&message=success&created={created_slots}",
