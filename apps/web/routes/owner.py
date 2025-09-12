@@ -1212,7 +1212,7 @@ async def owner_analysis_chart_data(
             gaps_by_date = {gap["date"]: gap for gap in obj_data["gaps"]}
             
             # Получаем все тайм-слоты для этого объекта
-            from domain.entities.timeslot import TimeSlot
+            from domain.entities.time_slot import TimeSlot
             from domain.entities.shift_schedule import ShiftSchedule
             
             timeslots_query = select(TimeSlot).where(
