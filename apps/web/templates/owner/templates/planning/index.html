@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "owner/base_owner.html" %}
 
 {% block title %}Шаблоны планирования{% endblock %}
 
@@ -174,7 +174,7 @@
             <p class="text-muted mb-0">Создавайте и используйте шаблоны для быстрого планирования</p>
         </div>
         <div>
-            <a href="/templates/create" class="btn btn-primary">
+            <a href="/owner/templates/planning/create" class="btn btn-primary">
                 <i class="bi bi-plus-lg"></i> Создать шаблон
             </a>
         </div>
@@ -241,10 +241,10 @@
                     </div>
                     
                     <div class="template-actions">
-                        <a href="/templates/{{ template.id }}" class="btn btn-outline-primary btn-sm">
+                        <a href="/owner/templates/planning/{{ template.id }}" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-eye"></i> Просмотр
                         </a>
-                        <a href="/templates/{{ template.id }}/edit" class="btn btn-outline-secondary btn-sm">
+                        <a href="/owner/templates/planning/{{ template.id }}/edit" class="btn btn-outline-secondary btn-sm">
                             <i class="bi bi-pencil"></i> Редактировать
                         </a>
                         <button class="btn btn-outline-success btn-sm" onclick="applyTemplate({{ template.id }}, '{{ template.name }}')">
@@ -268,7 +268,7 @@
             <i class="bi bi-layout-text-window-reverse"></i>
             <h3>Нет шаблонов планирования</h3>
             <p>Создайте свой первый шаблон для быстрого планирования тайм-слотов</p>
-            <a href="/templates/create" class="btn btn-primary btn-lg">
+            <a href="/owner/templates/planning/create" class="btn btn-primary btn-lg">
                 <i class="bi bi-plus-lg"></i> Создать первый шаблон
             </a>
         </div>
@@ -276,7 +276,7 @@
 </div>
 
 <!-- Кнопка быстрого создания -->
-<a href="/templates/create" class="btn btn-primary btn-lg create-template-btn d-md-none">
+<a href="/owner/templates/planning/create" class="btn btn-primary btn-lg create-template-btn d-md-none">
     <i class="bi bi-plus-lg"></i> Создать шаблон
 </a>
 

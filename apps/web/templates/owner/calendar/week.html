@@ -376,11 +376,11 @@
     <a href="/owner/objects/create" class="btn btn-primary" title="Создать объект">
         <i class="bi bi-plus-lg"></i>
     </a>
-    <a href="/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create" 
+    <a href="/owner/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create" 
        class="btn btn-success" title="Создать тайм-слот">
         <i class="bi bi-clock"></i>
     </a>
-    <a href="/calendar/analysis{% if selected_object_id %}?object_id={{ selected_object_id }}{% endif %}" 
+    <a href="/owner/calendar/analysis{% if selected_object_id %}?object_id={{ selected_object_id }}{% endif %}" 
        class="btn btn-info" title="Анализ пробелов">
         <i class="bi bi-graph-up"></i>
     </a>
