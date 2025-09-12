@@ -175,46 +175,46 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     try:
         if user_state.action == UserAction.OPEN_SHIFT:
-        # Открываем смену
-        result = await shift_service.open_shift(
-            user_id=user_id,
-            object_id=user_state.selected_object_id,
-            coordinates=coordinates,
-            shift_type=getattr(user_state, 'shift_type', 'spontaneous'),
-            timeslot_id=getattr(user_state, 'selected_timeslot_id', None),
-            schedule_id=getattr(user_state, 'selected_schedule_id', None)
-        )
+            # Открываем смену
+            result = await shift_service.open_shift(
+                user_id=user_id,
+                object_id=user_state.selected_object_id,
+                coordinates=coordinates,
+                shift_type=getattr(user_state, 'shift_type', 'spontaneous'),
+                timeslot_id=getattr(user_state, 'selected_timeslot_id', None),
+                schedule_id=getattr(user_state, 'selected_schedule_id', None)
+            )
             
-            if result['success']:
-                object_name = result.get('object_name', 'Неизвестно') or 'Неизвестно'
-                start_time = result.get('start_time', 'Сейчас') or 'Сейчас'
-                hourly_rate = result.get('hourly_rate', 0) or 0
-                
-                # Убираем клавиатуру
-                from telegram import ReplyKeyboardRemove
-                await update.message.reply_text(
-                    f"✅ Смена успешно открыта!\n"
-                    f"📍 Объект: {object_name}\n"
-                    f"🕐 Время начала: {start_time}\n"
-                    f"💰 Часовая ставка: {hourly_rate}₽",
-                    reply_markup=ReplyKeyboardRemove()
-                )
-            else:
-                error_msg = f"❌ Ошибка при открытии смены: {result['error']}"
-                if 'distance_meters' in result:
-                    error_msg += f"\n📏 Расстояние: {result['distance_meters']:.0f}м"
-                    error_msg += f"\n📐 Максимум: {result.get('max_distance_meters', 100)}м"
-                
-                # Добавляем кнопки для повторной отправки или отмены
-                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-                keyboard = [
-                    [InlineKeyboardButton("📍 Отправить геопозицию повторно", callback_data=f"retry_location:{user_state.selected_object_id}")],
-                    [InlineKeyboardButton("❌ Отмена", callback_data="main_menu")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await update.message.reply_text(error_msg, reply_markup=reply_markup)
-                
+                        if result['success']:
+                            object_name = result.get('object_name', 'Неизвестно') or 'Неизвестно'
+                            start_time = result.get('start_time', 'Сейчас') or 'Сейчас'
+                            hourly_rate = result.get('hourly_rate', 0) or 0
+                            
+                            # Убираем клавиатуру
+                            from telegram import ReplyKeyboardRemove
+                            await update.message.reply_text(
+                                f"✅ Смена успешно открыта!\n"
+                                f"📍 Объект: {object_name}\n"
+                                f"🕐 Время начала: {start_time}\n"
+                                f"💰 Часовая ставка: {hourly_rate}₽",
+                                reply_markup=ReplyKeyboardRemove()
+                            )
+                        else:
+                            error_msg = f"❌ Ошибка при открытии смены: {result['error']}"
+                            if 'distance_meters' in result:
+                                error_msg += f"\n📏 Расстояние: {result['distance_meters']:.0f}м"
+                                error_msg += f"\n📐 Максимум: {result.get('max_distance_meters', 100)}м"
+                            
+                            # Добавляем кнопки для повторной отправки или отмены
+                            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                            keyboard = [
+                                [InlineKeyboardButton("📍 Отправить геопозицию повторно", callback_data=f"retry_location:{user_state.selected_object_id}")],
+                                [InlineKeyboardButton("❌ Отмена", callback_data="main_menu")]
+                            ]
+                            reply_markup = InlineKeyboardMarkup(keyboard)
+                            
+                            await update.message.reply_text(error_msg, reply_markup=reply_markup)
+                            
         elif user_state.action == UserAction.CLOSE_SHIFT:
             # Закрываем смену
             result = await shift_service.close_shift(
