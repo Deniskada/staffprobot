@@ -1198,17 +1198,53 @@ async def owner_analysis_chart_data(
             coverage_data = []
             gaps_by_date = {gap["date"]: gap for gap in obj_data["gaps"]}
             
+            # Получаем все тайм-слоты для этого объекта
+            from domain.entities.timeslot import TimeSlot
+            from domain.entities.shift_schedule import ShiftSchedule
+            
+            timeslots_query = select(TimeSlot).where(
+                TimeSlot.object_id == obj_id,
+                TimeSlot.slot_date >= today,
+                TimeSlot.slot_date <= end_date
+            )
+            timeslots_result = await db.execute(timeslots_query)
+            timeslots = timeslots_result.scalars().all()
+            timeslots_by_date = {}
+            for ts in timeslots:
+                if ts.slot_date not in timeslots_by_date:
+                    timeslots_by_date[ts.slot_date] = []
+                timeslots_by_date[ts.slot_date].append(ts)
+            
+            # Получаем запланированные смены для тайм-слотов
+            timeslot_ids = [ts.id for ts in timeslots]
+            scheduled_shifts_query = select(ShiftSchedule).where(
+                ShiftSchedule.time_slot_id.in_(timeslot_ids),
+                ShiftSchedule.status.in_(["planned", "confirmed"])
+            )
+            scheduled_result = await db.execute(scheduled_shifts_query)
+            scheduled_shifts = scheduled_result.scalars().all()
+            
+            # Группируем смены по датам тайм-слотов
+            scheduled_by_date = {}
+            for shift in scheduled_shifts:
+                # Находим тайм-слот для этой смены
+                for ts in timeslots:
+                    if ts.id == shift.time_slot_id:
+                        if ts.slot_date not in scheduled_by_date:
+                            scheduled_by_date[ts.slot_date] = []
+                        scheduled_by_date[ts.slot_date].append(shift)
+                        break
+            
             for d in dates:
-                if d in gaps_by_date:
-                    gap = gaps_by_date[d]
-                    if gap["type"] == "no_slots":
-                        coverage_data.append(0)  # Нет покрытия
-                    elif gap["type"] == "time_gap":
-                        coverage_data.append(50)  # Частичное покрытие
-                    else:
-                        coverage_data.append(100)  # Полное покрытие
+                if d in timeslots_by_date and d in scheduled_by_date:
+                    # Есть тайм-слоты И есть запланированные смены - полное покрытие
+                    coverage_data.append(100)
+                elif d in timeslots_by_date:
+                    # Есть тайм-слоты, но нет запланированных смен - нет покрытия
+                    coverage_data.append(0)
                 else:
-                    coverage_data.append(100)  # Полное покрытие
+                    # Нет тайм-слотов - нет покрытия
+                    coverage_data.append(0)
             
             chart_data["datasets"].append({
                 "label": obj_data["object_name"],
