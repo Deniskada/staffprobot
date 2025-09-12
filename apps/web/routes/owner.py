@@ -1318,7 +1318,7 @@ async def owner_calendar_api_timeslot_detail(
     
     try:
         async with get_async_session() as session:
-            from sqlalchemy import select, and_
+            from sqlalchemy import select, and_, func
             from sqlalchemy.orm import selectinload
             from domain.entities.time_slot import TimeSlot
             from domain.entities.object import Object
@@ -1354,13 +1354,15 @@ async def owner_calendar_api_timeslot_detail(
             scheduled_result = await session.execute(scheduled_query)
             scheduled_shifts = scheduled_result.scalars().all()
             
-            # Загружаем фактические смены (Shift)
+            # Загружаем фактические смены (Shift) по объекту и дате
             from domain.entities.shift import Shift
+            from sqlalchemy import func
             actual_query = select(Shift).options(
                 selectinload(Shift.user)
             ).where(
                 and_(
-                    Shift.time_slot_id == timeslot_id,
+                    Shift.object_id == slot.object_id,
+                    func.date(Shift.start_time) == slot.slot_date,
                     Shift.status.in_(["active", "completed"])
                 )
             )
