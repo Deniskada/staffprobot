@@ -57,7 +57,9 @@ class EmployeeObjectsService:
                 for contract in contracts:
                     if contract.allowed_objects:
                         object_ids.update(contract.allowed_objects)
+                        logger.info(f"Contract {contract.id} allows objects: {contract.allowed_objects}")
                 
+                logger.info(f"Total allowed object IDs for user {telegram_id}: {object_ids}")
                 if not object_ids:
                     logger.info(f"No allowed objects found in contracts for user {telegram_id}")
                     return []
@@ -129,10 +131,13 @@ class EmployeeObjectsService:
             Информация об объекте или None
         """
         try:
+            logger.info(f"Getting object {object_id} for employee {telegram_id}")
             objects = await self.get_employee_objects(telegram_id)
+            logger.info(f"Found {len(objects)} objects for employee {telegram_id}")
             
             for obj in objects:
                 if obj['id'] == object_id:
+                    logger.info(f"Found object {object_id}: {obj['name']}")
                     return obj
             
             logger.warning(f"Object {object_id} not found for employee {telegram_id}")
