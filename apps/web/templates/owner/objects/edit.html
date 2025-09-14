@@ -213,10 +213,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const workDaysMask = {{ object.work_days_mask or 0 }};
     const workDaysCheckboxes = document.querySelectorAll('.work-day-checkbox');
     
+    console.log('Work days mask:', workDaysMask);
+    console.log('Found checkboxes:', workDaysCheckboxes.length);
+    
     workDaysCheckboxes.forEach(checkbox => {
-        const mask = parseInt(checkbox.dataset.mask);
+        const mask = parseInt(checkbox.value);
+        console.log('Checkbox mask:', mask, 'Value:', checkbox.value);
         if (workDaysMask & mask) {
             checkbox.checked = true;
+            console.log('Checked checkbox for mask:', mask);
         }
     });
     
