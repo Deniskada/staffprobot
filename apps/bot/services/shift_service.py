@@ -124,7 +124,28 @@ class ShiftService:
                     else:
                         logger.warning(f"No schedule data found for schedule_id: {schedule_id}")
                 else:
-                    logger.info(f"Using object rate for spontaneous shift: {hourly_rate}")
+                    # Для спонтанной смены проверяем доступные тайм-слоты на сегодня
+                    if shift_type == "spontaneous":
+                        from apps.bot.services.timeslot_service import TimeSlotService
+                        from datetime import date
+                        
+                        timeslot_service = TimeSlotService()
+                        today = date.today()
+                        available_timeslots = await timeslot_service.get_available_timeslots_for_object(object_id, today)
+                        
+                        if available_timeslots:
+                            # Есть доступные тайм-слоты - берем ставку из первого
+                            first_timeslot = available_timeslots[0]
+                            timeslot_rate = first_timeslot.get('hourly_rate')
+                            if timeslot_rate:
+                                hourly_rate = timeslot_rate
+                                logger.info(f"Using timeslot rate for spontaneous shift: {hourly_rate}")
+                            else:
+                                logger.info(f"Using object rate for spontaneous shift (no timeslot rate): {hourly_rate}")
+                        else:
+                            logger.info(f"Using object rate for spontaneous shift (no available timeslots): {hourly_rate}")
+                    else:
+                        logger.info(f"Using object rate for shift: {hourly_rate}")
                 
                 # Создаем новую смену
                 new_shift = Shift(
