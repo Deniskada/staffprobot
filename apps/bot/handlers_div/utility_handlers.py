@@ -98,11 +98,12 @@ async def _handle_status_callback(update: Update, context: ContextTypes.DEFAULT_
         else:
             shift = active_shifts[0]
             obj_data = object_service.get_object_by_id(shift['object_id'])
-            user_timezone = timezone_helper.get_user_timezone(user_id)
+            # Используем часовой пояс объекта
+            object_timezone = obj_data.get('timezone', 'Europe/Moscow') if obj_data else 'Europe/Moscow'
             from datetime import datetime
             try:
                 start_time_utc = datetime.strptime(shift['start_time'], '%Y-%m-%d %H:%M:%S')
-                local_start_time = timezone_helper.format_local_time(start_time_utc, user_timezone)
+                local_start_time = timezone_helper.format_local_time(start_time_utc, object_timezone)
             except Exception:
                 local_start_time = shift.get('start_time', '')
             obj_name = obj_data['name'] if obj_data else 'Неизвестный'

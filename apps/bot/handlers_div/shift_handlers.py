@@ -198,13 +198,14 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                     user_state_manager.clear_state(user_id)
                     return
                 
-                # Конвертируем время начала смены в локальную зону
+                # Конвертируем время начала смены в часовой пояс объекта
                 from datetime import datetime
                 try:
                     # Парсим строку времени из БД (формат: 'YYYY-MM-DD HH:MM:SS')
                     start_time_utc = datetime.strptime(shift['start_time'], '%Y-%m-%d %H:%M:%S')
-                    user_timezone = timezone_helper.get_user_timezone(user_id)
-                    local_start_time = timezone_helper.format_local_time(start_time_utc, user_timezone)
+                    # Используем часовой пояс объекта, если он есть
+                    object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
+                    local_start_time = timezone_helper.format_local_time(start_time_utc, object_timezone)
                 except (ValueError, KeyError):
                     local_start_time = shift['start_time']  # Fallback к исходному значению
                 
@@ -485,9 +486,9 @@ async def _handle_close_shift_selection(update: Update, context: ContextTypes.DE
                 user_state_manager.clear_state(user_id)
                 return
             
-            # Конвертируем время начала смены в локальную зону
-            user_timezone = timezone_helper.get_user_timezone(user_id)
-            local_start_time = timezone_helper.format_local_time(shift.start_time, user_timezone)
+            # Конвертируем время начала смены в часовой пояс объекта
+            object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
+            local_start_time = timezone_helper.format_local_time(shift.start_time, object_timezone)
             
             # Запрашиваем геопозицию
             await query.edit_message_text(
@@ -598,10 +599,10 @@ async def _handle_retry_location_close(update: Update, context: ContextTypes.DEF
     
     max_distance = obj_data.get('max_distance_meters', 500)
     
-    # Форматируем время начала смены
+    # Форматируем время начала смены в часовой пояс объекта
     from core.utils.timezone_helper import timezone_helper
-    user_timezone = timezone_helper.get_user_timezone(user_id)
-    local_start_time = timezone_helper.format_local_time(shift_data['start_time'], user_timezone)
+    object_timezone = obj_data.get('timezone', 'Europe/Moscow')
+    local_start_time = timezone_helper.format_local_time(shift_data['start_time'], object_timezone)
     
     # Показываем сообщение с кнопкой для отправки геопозиции
     await query.edit_message_text(
