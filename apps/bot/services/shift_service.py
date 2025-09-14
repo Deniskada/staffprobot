@@ -102,8 +102,6 @@ class ShiftService:
                 # Создаем смену
                 # Получаем данные для смены
                 hourly_rate = obj.hourly_rate
-                planned_start = None
-                planned_end = None
                 
                 # Если это запланированная смена, получаем данные из расписания
                 if shift_type == "planned" and schedule_id:
@@ -113,8 +111,6 @@ class ShiftService:
                     
                     if schedule_data:
                         hourly_rate = schedule_data.get('hourly_rate', obj.hourly_rate)
-                        planned_start = schedule_data.get('planned_start')
-                        planned_end = schedule_data.get('planned_end')
                 
                 # Создаем новую смену
                 new_shift = Shift(
@@ -125,8 +121,8 @@ class ShiftService:
                     start_coordinates=coordinates,
                     hourly_rate=hourly_rate,
                     time_slot_id=timeslot_id if shift_type == "planned" else None,
-                    planned_start=planned_start,
-                    planned_end=planned_end
+                    schedule_id=schedule_id if shift_type == "planned" else None,
+                    is_planned=shift_type == "planned"
                 )
                 
                 session.add(new_shift)
