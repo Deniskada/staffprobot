@@ -267,46 +267,38 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Обработка рабочих дней - собираем маску
-    const workDaysCheckboxes = document.querySelectorAll('input[name="work_days"]');
-    workDaysCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            // Собираем все выбранные дни в маску
-            let mask = 0;
-            workDaysCheckboxes.forEach(cb => {
-                if (cb.checked) {
-                    mask |= parseInt(cb.value);
-                }
-            });
-            
-            // Удаляем старые скрытые поля для work_days_mask
-            const oldHidden = form.querySelector('input[name="work_days_mask"]');
-            if (oldHidden) {
-                oldHidden.remove();
-            }
-            
-            // Добавляем новое скрытое поле с маской
-            const hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'work_days_mask';
-            hiddenInput.value = mask.toString();
-            form.appendChild(hiddenInput);
-        });
-    });
+    const workDaysCheckboxes = document.querySelectorAll('.work-day-checkbox');
     
-    // Инициализация маски рабочих дней при загрузке страницы
-    let initialMask = 0;
-    workDaysCheckboxes.forEach(cb => {
-        if (cb.checked) {
-            initialMask |= parseInt(cb.value);
+    // Создаем функцию для обновления маски
+    function updateWorkDaysMask() {
+        let mask = 0;
+        workDaysCheckboxes.forEach(cb => {
+            if (cb.checked) {
+                mask |= parseInt(cb.value);
+            }
+        });
+        
+        // Удаляем старые скрытые поля для work_days_mask
+        const oldHidden = form.querySelector('input[name="work_days_mask"]');
+        if (oldHidden) {
+            oldHidden.remove();
         }
-    });
-    if (initialMask > 0) {
+        
+        // Добавляем новое скрытое поле с маской
         const hiddenInput = document.createElement('input');
         hiddenInput.type = 'hidden';
         hiddenInput.name = 'work_days_mask';
-        hiddenInput.value = initialMask.toString();
+        hiddenInput.value = mask.toString();
         form.appendChild(hiddenInput);
     }
+    
+    // Добавляем обработчики изменений
+    workDaysCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateWorkDaysMask);
+    });
+    
+    // Инициализируем маску при загрузке страницы
+    updateWorkDaysMask();
 });
 </script>
 {% endblock %}
