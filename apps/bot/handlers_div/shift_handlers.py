@@ -311,6 +311,30 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
             user_state_manager.clear_state(user_id)
             return
         
+        # Проверяем, есть ли свободные тайм-слоты на сегодня для этого объекта
+        from apps.bot.services.timeslot_service import TimeSlotService
+        from datetime import date, datetime
+        
+        timeslot_service = TimeSlotService()
+        today = date.today()
+        
+        # Получаем доступные тайм-слоты на сегодня
+        free_timeslots = await timeslot_service.get_available_timeslots_for_object(obj_data['id'], today)
+        
+        hourly_rate = obj_data['hourly_rate']  # По умолчанию ставка объекта
+        timeslot_info = ""
+        
+        if free_timeslots:
+            # Есть свободные тайм-слоты - берем ставку из первого (самого раннего)
+            first_timeslot = free_timeslots[0]
+            hourly_rate = first_timeslot.get('hourly_rate', obj_data['hourly_rate'])
+            
+            # Формируем информацию о доступных тайм-слотах
+            timeslot_count = len(free_timeslots)
+            timeslot_info = f"\n📅 <b>Доступно тайм-слотов:</b> {timeslot_count}\n"
+            
+            logger.info(f"Found {timeslot_count} free timeslots for object {obj_data['id']} on {today}, using hourly_rate: {hourly_rate}")
+        
         # Обновляем состояние - сохраняем выбранный объект и переходим к запросу геолокации
         user_state_manager.update_state(
             user_id=user_id,
@@ -323,7 +347,7 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
         await query.edit_message_text(
             text=f"⚡ <b>Внеплановая смена</b>\n\n"
                  f"🏢 <b>Объект:</b> {obj_data['name']}\n"
-                 f"💰 <b>Часовая ставка:</b> {obj_data['hourly_rate']}₽\n\n"
+                 f"💰 <b>Часовая ставка:</b> {hourly_rate}₽{timeslot_info}\n\n"
                  f"📍 <b>Отправьте геопозицию</b>",
             parse_mode='HTML'
         )
