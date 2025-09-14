@@ -51,14 +51,31 @@ chmod +x /usr/local/bin/docker-compose
 
 # Создание пользователя для деплоя
 echo "👤 Создание пользователя $USER..."
-useradd -m -s /bin/bash $USER
-usermod -aG docker $USER
-usermod -aG sudo $USER
+if ! id "$USER" &>/dev/null; then
+    echo "Создание нового пользователя $USER..."
+    useradd -m -s /bin/bash $USER
+    usermod -aG docker $USER
+    usermod -aG sudo $USER
+    echo "✅ Пользователь $USER создан"
+else
+    echo "Пользователь $USER уже существует, обновляем группы..."
+    usermod -aG docker $USER
+    usermod -aG sudo $USER
+    echo "✅ Группы пользователя $USER обновлены"
+fi
 
 # Создание директории проекта
 echo "📁 Создание директории проекта..."
-mkdir -p $PROJECT_DIR
-chown $USER:$USER $PROJECT_DIR
+if [ ! -d "$PROJECT_DIR" ]; then
+    echo "Создание директории $PROJECT_DIR..."
+    mkdir -p $PROJECT_DIR
+    chown $USER:$USER $PROJECT_DIR
+    echo "✅ Директория $PROJECT_DIR создана"
+else
+    echo "Директория $PROJECT_DIR уже существует, обновляем права..."
+    chown $USER:$USER $PROJECT_DIR
+    echo "✅ Права на директорию $PROJECT_DIR обновлены"
+fi
 
 # Настройка SSH
 echo "🔐 Настройка SSH..."
@@ -126,11 +143,28 @@ sysctl -p
 
 # Создание swap файла
 echo "💾 Создание swap файла..."
-fallocate -l 2G /swapfile
-chmod 600 /swapfile
-mkswap /swapfile
-swapon /swapfile
-echo '/swapfile none swap sw 0 0' >> /etc/fstab
+if [ ! -f /swapfile ]; then
+    echo "Создание нового swap файла..."
+    fallocate -l 2G /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    if ! grep -q '/swapfile' /etc/fstab; then
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        echo "✅ Запись добавлена в /etc/fstab"
+    else
+        echo "✅ Запись уже существует в /etc/fstab"
+    fi
+    echo "✅ Swap файл создан и активирован"
+else
+    echo "Swap файл уже существует, проверяем статус..."
+    if ! swapon --show | grep -q /swapfile; then
+        echo "Активируем существующий swap файл..."
+        swapon /swapfile
+    else
+        echo "✅ Swap файл уже активен"
+    fi
+fi
 
 # Настройка логирования
 echo "📝 Настройка логирования..."
