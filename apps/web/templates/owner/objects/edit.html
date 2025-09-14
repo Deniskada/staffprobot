@@ -272,12 +272,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Обработка рабочих дней - собираем маску
-    const workDaysCheckboxes = document.querySelectorAll('.work-day-checkbox');
+    const workDaysCheckboxesEdit = document.querySelectorAll('.work-day-checkbox');
     
     // Создаем функцию для обновления маски
     function updateWorkDaysMask() {
         let mask = 0;
-        workDaysCheckboxes.forEach(cb => {
+        workDaysCheckboxesEdit.forEach(cb => {
             if (cb.checked) {
                 mask |= parseInt(cb.value);
             }
@@ -298,7 +298,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Добавляем обработчики изменений
-    workDaysCheckboxes.forEach(checkbox => {
+    workDaysCheckboxesEdit.forEach(checkbox => {
         checkbox.addEventListener('change', updateWorkDaysMask);
     });
     
