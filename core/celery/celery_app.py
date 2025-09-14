@@ -1,6 +1,7 @@
 """Celery приложение для StaffProBot."""
 
 from celery import Celery
+from celery.schedules import crontab
 from core.config.settings import settings
 from core.logging.logger import logger
 
@@ -54,7 +55,7 @@ celery_app.conf.update(
         # Автоматическое закрытие смен в полночь
         'auto-close-shifts': {
             'task': 'core.celery.tasks.shift_tasks.auto_close_shifts',
-            'schedule': 60 * 60,  # каждый час
+            'schedule': crontab(hour=0, minute=0),  # каждый день в 00:00
         },
         # Очистка старых кэшей
         'cleanup-cache': {
@@ -64,13 +65,7 @@ celery_app.conf.update(
         # 1 декабря — планирование тайм-слотов на следующий год
         'plan-next-year-timeslots': {
             'task': 'core.celery.tasks.shift_tasks.plan_next_year_timeslots',
-            'schedule': {
-                'type': 'crontab',
-                'minute': 0,
-                'hour': 3,
-                'day_of_month': 1,
-                'month_of_year': 12,
-            },
+            'schedule': crontab(hour=3, minute=0, day_of_month=1, month_of_year=12),  # 1 декабря в 03:00
         },
     },
     
