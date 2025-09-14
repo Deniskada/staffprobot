@@ -157,7 +157,7 @@ class ShiftService:
                     'message': f'Смена успешно открыта! {location_validation["message"]}',
                     'start_time': local_start_time,
                     'object_name': obj.name,
-                    'hourly_rate': float(obj.hourly_rate)
+                    'hourly_rate': float(new_shift.hourly_rate)
                 }
                 
         except Exception as e:
