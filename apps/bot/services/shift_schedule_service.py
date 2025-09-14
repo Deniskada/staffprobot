@@ -113,12 +113,16 @@ class ShiftScheduleService:
                 object_result = await session.execute(object_query)
                 obj = object_result.scalar_one_or_none()
                 
+                logger.info(f"Found object: {obj.name if obj else 'None'}")
+                
                 # Получаем информацию о тайм-слоте
                 timeslot_query = select(TimeSlot).where(TimeSlot.id == shift.time_slot_id)
                 timeslot_result = await session.execute(timeslot_query)
                 timeslot = timeslot_result.scalar_one_or_none()
                 
-                return {
+                logger.info(f"Found timeslot: {timeslot.start_time if timeslot else 'None'}")
+                
+                result = {
                     'id': shift.id,
                     'user_id': shift.user_id,
                     'object_id': shift.object_id,
@@ -132,6 +136,9 @@ class ShiftScheduleService:
                     'timeslot_start': timeslot.start_time if timeslot else None,
                     'timeslot_end': timeslot.end_time if timeslot else None
                 }
+                
+                logger.info(f"Returning shift data: {result}")
+                return result
                 
         except Exception as e:
             logger.error(f"Error getting shift schedule {schedule_id}: {e}")
