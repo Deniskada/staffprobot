@@ -358,6 +358,7 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
         
         logger.info(f"Getting shift schedule data for schedule_id: {schedule_id}")
         shift_data = await shift_schedule_service.get_shift_schedule_by_id(schedule_id)
+        logger.info(f"Received shift_data: {shift_data}")
         if not shift_data:
             logger.warning(f"Shift schedule data not found for schedule_id: {schedule_id}")
             await query.edit_message_text(
