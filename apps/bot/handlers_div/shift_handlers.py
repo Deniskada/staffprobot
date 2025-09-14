@@ -1,6 +1,6 @@
 """Обработчики для управления сменами."""
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
 from core.logging.logger import logger
 from core.auth.user_manager import user_manager
@@ -11,7 +11,7 @@ from core.utils.timezone_helper import timezone_helper
 from domain.entities.object import Object
 from sqlalchemy import select
 from core.state import user_state_manager, UserAction, UserStep
-from .utils import get_location_keyboard
+# from .utils import get_location_keyboard  # Удалено, создаем клавиатуру прямо в коде
 
 # Создаем экземпляры сервисов
 shift_service = ShiftService()
@@ -222,7 +222,11 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
                     text="👇 Используйте кнопку для отправки геопозиции:",
-                    reply_markup=get_location_keyboard()
+                    reply_markup=ReplyKeyboardMarkup(
+                        [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
+                        resize_keyboard=True,
+                        one_time_keyboard=True
+                    )
                 )
         
         else:
@@ -307,28 +311,34 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
             user_state_manager.clear_state(user_id)
             return
         
-        # Обновляем состояние - сохраняем выбранный объект
+        # Обновляем состояние - сохраняем выбранный объект и переходим к запросу геолокации
         user_state_manager.update_state(
             user_id=user_id,
             selected_object_id=object_id,
-            step=UserStep.SHIFT_TYPE_SELECTION
+            step=UserStep.LOCATION_REQUEST,
+            shift_type="spontaneous"
         )
         
-        # Предлагаем выбор типа смены
-        keyboard = [
-            [InlineKeyboardButton("📅 Запланированная смена", callback_data=f"shift_type_planned:{object_id}")],
-            [InlineKeyboardButton("⚡ Внеплановая смена", callback_data=f"shift_type_spontaneous:{object_id}")],
-            [InlineKeyboardButton("❌ Отмена", callback_data="main_menu")]
-        ]
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
+        # Запрашиваем геопозицию для спонтанной смены
         await query.edit_message_text(
-            text=f"🔄 <b>Открытие смены</b>\n\n"
-                 f"🏢 <b>Объект:</b> {obj_data['name']}\n\n"
-                 f"Выберите тип смены:",
-            parse_mode='HTML',
-            reply_markup=reply_markup
+            text=f"⚡ <b>Внеплановая смена</b>\n\n"
+                 f"🏢 <b>Объект:</b> {obj_data['name']}\n"
+                 f"💰 <b>Часовая ставка:</b> {obj_data['hourly_rate']}₽\n\n"
+                 f"📍 <b>Отправьте геопозицию</b>",
+            parse_mode='HTML'
+        )
+        
+        # Отправляем сообщение с клавиатурой для геопозиции
+        location_keyboard = ReplyKeyboardMarkup(
+            [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
+        
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="👇 Используйте кнопку для отправки геопозиции:",
+            reply_markup=location_keyboard
         )
         
     except Exception as e:
@@ -399,7 +409,11 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
         await context.bot.send_message(
             chat_id=query.message.chat_id,
             text="👇 Используйте кнопку для отправки геопозиции:",
-            reply_markup=get_location_keyboard()
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
+                resize_keyboard=True,
+                one_time_keyboard=True
+            )
         )
         
     except Exception as e:
@@ -465,7 +479,11 @@ async def _handle_close_shift_selection(update: Update, context: ContextTypes.DE
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text="👇 Используйте кнопку для отправки геопозиции:",
-                reply_markup=get_location_keyboard()
+                reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
+                resize_keyboard=True,
+                one_time_keyboard=True
+            )
             )
             
     except Exception as e:
@@ -511,7 +529,11 @@ async def _handle_retry_location_open(update: Update, context: ContextTypes.DEFA
              f"📏 Максимальное расстояние: {max_distance}м\n\n"
              f"Нажмите кнопку ниже для отправки вашего местоположения:",
         parse_mode='HTML',
-        reply_markup=get_location_keyboard()
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
     )
 
 
@@ -566,7 +588,11 @@ async def _handle_retry_location_close(update: Update, context: ContextTypes.DEF
              f"📏 Максимальное расстояние: {max_distance}м\n\n"
              f"Нажмите кнопку ниже для отправки вашего местоположения:",
         parse_mode='HTML',
-        reply_markup=get_location_keyboard()
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
     )
 
 
