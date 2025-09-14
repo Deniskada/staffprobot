@@ -152,6 +152,9 @@ class ObjectService:
             obj.hourly_rate = object_data['hourly_rate']
             obj.max_distance_meters = object_data.get('max_distance', obj.max_distance_meters)
             obj.is_active = object_data.get('is_active', obj.is_active)
+            obj.available_for_applicants = object_data.get('available_for_applicants', obj.available_for_applicants)
+            obj.work_days_mask = object_data.get('work_days_mask', obj.work_days_mask)
+            obj.schedule_repeat_weeks = object_data.get('schedule_repeat_weeks', obj.schedule_repeat_weeks)
             
             # Обновляем координаты если нужно
             if 'coordinates' in object_data:

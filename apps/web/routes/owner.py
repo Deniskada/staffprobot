@@ -508,6 +508,22 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         available_for_applicants = to_bool(form_data.get("available_for_applicants"))
         is_active = to_bool(form_data.get("is_active"))
         
+        # Обработка графика работы
+        work_days_mask_str = form_data.get("work_days_mask", "0").strip()
+        schedule_repeat_weeks_str = form_data.get("schedule_repeat_weeks", "1").strip()
+        
+        try:
+            work_days_mask = int(work_days_mask_str) if work_days_mask_str else 0
+        except ValueError:
+            work_days_mask = 0
+            
+        try:
+            schedule_repeat_weeks = int(schedule_repeat_weeks_str) if schedule_repeat_weeks_str else 1
+        except ValueError:
+            schedule_repeat_weeks = 1
+        
+        logger.info(f"Work days mask: {work_days_mask}, Schedule repeat weeks: {schedule_repeat_weeks}")
+        
         # Обновление объекта в базе данных
         async with get_async_session() as session:
             object_service = ObjectService(session)
@@ -520,7 +536,9 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "max_distance": max_distance,
                 "available_for_applicants": available_for_applicants,
                 "is_active": is_active,
-                "coordinates": coordinates
+                "coordinates": coordinates,
+                "work_days_mask": work_days_mask,
+                "schedule_repeat_weeks": schedule_repeat_weeks
             }
             
             updated_object = await object_service.update_object(object_id, object_data, current_user["id"])
