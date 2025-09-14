@@ -357,6 +357,8 @@ async def owner_objects_detail(request: Request, object_id: int):
                 "available_for_applicants": obj.available_for_applicants,
                 "created_at": obj.created_at.strftime("%Y-%m-%d"),
                 "owner_id": obj.owner_id,
+                "work_days_mask": obj.work_days_mask,
+                "schedule_repeat_weeks": obj.schedule_repeat_weeks,
                 "timeslots": [
                     {
                         "id": slot.id,
@@ -413,7 +415,9 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "",
                 "max_distance": obj.max_distance_meters or 500,
                 "available_for_applicants": obj.available_for_applicants,
-                "is_active": obj.is_active
+                "is_active": obj.is_active,
+                "work_days_mask": obj.work_days_mask,
+                "schedule_repeat_weeks": obj.schedule_repeat_weeks
             }
             
             return templates.TemplateResponse("owner/objects/edit.html", {
