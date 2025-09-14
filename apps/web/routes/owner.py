@@ -26,6 +26,7 @@ from core.database.session import get_async_session, get_db_session
 from apps.web.middleware.auth_middleware import get_current_user
 from apps.web.dependencies import get_current_user_dependency, require_role
 from apps.web.services.object_service import ObjectService, TimeSlotService
+from apps.web.utils.timezone_utils import web_timezone_helper
 from domain.entities.user import User, UserRole
 from domain.entities.object import Object
 from domain.entities.shift import Shift
@@ -454,6 +455,7 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         hourly_rate_str = form_data.get("hourly_rate", "0").strip()
         opening_time = form_data.get("opening_time", "").strip()
         closing_time = form_data.get("closing_time", "").strip()
+        timezone = form_data.get("timezone", "Europe/Moscow").strip()
         max_distance_str = form_data.get("max_distance", "500").strip()
         latitude_str = form_data.get("latitude", "").strip()
         longitude_str = form_data.get("longitude", "").strip()
@@ -533,6 +535,7 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "hourly_rate": hourly_rate,
                 "opening_time": opening_time,
                 "closing_time": closing_time,
+                "timezone": timezone,
                 "max_distance": max_distance,
                 "available_for_applicants": available_for_applicants,
                 "is_active": is_active,
@@ -1438,8 +1441,8 @@ async def owner_calendar_api_timeslots_status(
                     "id": shift.id,
                     "user_id": shift.user_id,
                     "status": shift.status,
-                    "start_time": shift.planned_start.time().strftime("%H:%M"),
-                    "end_time": shift.planned_end.time().strftime("%H:%M"),
+                    "start_time": web_timezone_helper.format_time_with_timezone(shift.planned_start, shift.object.timezone if shift.object else 'Europe/Moscow'),
+                    "end_time": web_timezone_helper.format_time_with_timezone(shift.planned_end, shift.object.timezone if shift.object else 'Europe/Moscow'),
                     "notes": shift.notes
                 })
             # Индекс по объекту и дате
@@ -1458,8 +1461,8 @@ async def owner_calendar_api_timeslots_status(
                     "user_id": shift.user_id,
                     "user_name": f"{shift.user.first_name} {shift.user.last_name or ''}".strip(),
                     "status": shift.status,
-                    "start_time": shift.start_time.time().strftime("%H:%M"),
-                    "end_time": shift.end_time.time().strftime("%H:%M") if shift.end_time else None,
+                    "start_time": web_timezone_helper.format_time_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow'),
+                    "end_time": web_timezone_helper.format_time_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow') if shift.end_time else None,
                     "total_hours": float(shift.total_hours) if shift.total_hours else None,
                     "total_payment": float(shift.total_payment) if shift.total_payment else None,
                     "is_planned": shift.is_planned,
@@ -2495,6 +2498,10 @@ async def owner_shifts_list(
 ):
     """Список смен владельца."""
     try:
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
         # Получаем telegram_id из current_user
         telegram_id = current_user.get("id")
         user_role = current_user.get("role")
@@ -2553,8 +2560,8 @@ async def owner_shifts_list(
                 'type': 'shift',
                 'object_name': shift.object.name if shift.object else 'Неизвестный объект',
                 'user_name': f"{shift.user.first_name} {shift.user.last_name or ''}".strip() if shift.user else 'Неизвестный пользователь',
-                'start_time': shift.start_time.strftime('%Y-%m-%d %H:%M') if shift.start_time else '-',
-                'end_time': shift.end_time.strftime('%Y-%m-%d %H:%M') if shift.end_time else '-',
+                'start_time': web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.start_time else '-',
+                'end_time': web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.end_time else '-',
                 'status': shift.status,
                 'created_at': shift.created_at
             })
@@ -2566,8 +2573,8 @@ async def owner_shifts_list(
                 'type': 'schedule',
                 'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
                 'user_name': f"{schedule.user.first_name} {schedule.user.last_name or ''}".strip() if schedule.user else 'Неизвестный пользователь',
-                'start_time': schedule.planned_start.strftime('%Y-%m-%d %H:%M') if schedule.planned_start else '-',
-                'end_time': schedule.planned_end.strftime('%Y-%m-%d %H:%M') if schedule.planned_end else '-',
+                'start_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_start, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_start else '-',
+                'end_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_end, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_end else '-',
                 'status': schedule.status,
                 'created_at': schedule.created_at
             })
@@ -2624,6 +2631,10 @@ async def owner_shift_detail(
 ):
     """Детали смены владельца"""
     try:
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
         # Получаем роль пользователя
         user_role = current_user.get("role")
         
@@ -2664,11 +2675,16 @@ async def owner_shift_detail(
                     "current_user": current_user
                 })
         
+        # Получаем объект для передачи в шаблон
+        object = shift.object
+        
         return templates.TemplateResponse("owner/shifts/detail.html", {
             "request": request,
             "current_user": current_user,
             "shift": shift,
-            "shift_type": shift_type
+            "shift_type": shift_type,
+            "object": object,
+            "web_timezone_helper": web_timezone_helper
         })
         
     except Exception as e:
@@ -3020,8 +3036,8 @@ async def _generate_shifts_report(shifts: List[Shift], format: str, start_date: 
             "ID": shift.id,
             "Сотрудник": f"{shift.user.first_name} {shift.user.last_name or ''}".strip(),
             "Объект": shift.object.name,
-            "Дата начала": shift.start_time.strftime("%d.%m.%Y %H:%M"),
-            "Дата окончания": shift.end_time.strftime("%d.%m.%Y %H:%M") if shift.end_time else "Не завершена",
+            "Дата начала": web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow'),
+            "Дата окончания": web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow') if shift.end_time else "Не завершена",
             "Статус": shift.status,
             "Часов": shift.total_hours or 0,
             "Ставка": shift.hourly_rate or 0,
