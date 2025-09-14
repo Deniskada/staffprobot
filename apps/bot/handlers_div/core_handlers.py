@@ -176,13 +176,19 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         if user_state.action == UserAction.OPEN_SHIFT:
             # Открываем смену
+            shift_type = getattr(user_state, 'shift_type', 'spontaneous')
+            timeslot_id = getattr(user_state, 'selected_timeslot_id', None)
+            schedule_id = getattr(user_state, 'selected_schedule_id', None)
+            
+            logger.info(f"Opening shift with params: shift_type={shift_type}, timeslot_id={timeslot_id}, schedule_id={schedule_id}")
+            
             result = await shift_service.open_shift(
                 user_id=user_id,
                 object_id=user_state.selected_object_id,
                 coordinates=coordinates,
-                shift_type=getattr(user_state, 'shift_type', 'spontaneous'),
-                timeslot_id=getattr(user_state, 'selected_timeslot_id', None),
-                schedule_id=getattr(user_state, 'selected_schedule_id', None)
+                shift_type=shift_type,
+                timeslot_id=timeslot_id,
+                schedule_id=schedule_id
             )
             
             if result['success']:
