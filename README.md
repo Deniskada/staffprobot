@@ -186,16 +186,25 @@ python main.py
 
 ## 🧪 Тестирование
 
+### Текущий статус
+- **Общее покрытие**: 19% (112 passed, 57 failed, 38 errors)
+- **Unit тесты**: Частично покрыты основные сервисы
+- **Integration тесты**: Есть базовые тесты веб-интерфейса
+- **E2E тесты**: Требуют доработки
+- **Статус**: Требуется значительная работа над тестами
+
+### Запуск тестов
+
 ```bash
-# Запуск всех тестов
-pytest
+# В Docker контейнере
+docker compose -f docker-compose.dev.yml exec web python -m pytest tests/
 
 # Запуск с покрытием
-pytest --cov=apps --cov=core
+docker compose -f docker-compose.dev.yml exec web python -m pytest tests/ --cov=apps --cov=core
 
 # Запуск конкретных тестов
-pytest tests/unit/
-pytest tests/integration/
+docker compose -f docker-compose.dev.yml exec web python -m pytest tests/unit/
+docker compose -f docker-compose.dev.yml exec web python -m pytest tests/integration/
 ```
 
 ## 🌍 Система часовых поясов
