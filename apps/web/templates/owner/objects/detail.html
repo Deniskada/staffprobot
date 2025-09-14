@@ -110,7 +110,7 @@
                                         {% for mask, label in days %}
                                         <div class="form-check form-check-inline">
                                             <input class="form-check-input" type="checkbox" id="day_{{ mask }}" disabled 
-                                                   {% if object.work_days_mask and (object.work_days_mask & mask) %}checked{% endif %}>
+                                                   {% if object.work_days_mask and (object.work_days_mask | int & mask) %}checked{% endif %}>
                                             <label class="form-check-label" for="day_{{ mask }}">{{ label }}</label>
                                         </div>
                                         {% endfor %}
