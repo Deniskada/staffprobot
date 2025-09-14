@@ -7,9 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
 
 from apps.bot.bot import StaffProBot
-from apps.bot.handlers import (
-    start_command, help_command, status_command, 
-    handle_message, button_callback
+from apps.bot.handlers_div.core_handlers import (
+    start_command, button_callback
+)
+from apps.bot.handlers_div.utility_handlers import (
+    _handle_help_callback as help_command, 
+    _handle_status_callback as status_command
 )
 from core.auth.user_manager import UserManager
 

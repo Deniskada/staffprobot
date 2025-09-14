@@ -40,7 +40,7 @@ class TestOwnerInterfaceIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_owner_dashboard_integration(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_owner_dashboard_integration(self, mock_db, mock_auth, client, mock_db_session):
         """Тест интеграции дашборда владельца."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -54,7 +54,7 @@ class TestOwnerInterfaceIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_owner_objects_integration(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_owner_objects_integration(self, mock_db, mock_auth, client, mock_db_session):
         """Тест интеграции управления объектами."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -68,7 +68,7 @@ class TestOwnerInterfaceIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_owner_calendar_integration(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_owner_calendar_integration(self, mock_db, mock_auth, client, mock_db_session):
         """Тест интеграции календаря."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -82,7 +82,7 @@ class TestOwnerInterfaceIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_owner_employees_integration(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_owner_employees_integration(self, mock_db, mock_auth, client, mock_db_session):
         """Тест интеграции управления сотрудниками."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -96,7 +96,7 @@ class TestOwnerInterfaceIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_owner_shifts_integration(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_owner_shifts_integration(self, mock_db, mock_auth, client, mock_db_session):
         """Тест интеграции управления сменами."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -110,7 +110,7 @@ class TestOwnerInterfaceIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_owner_reports_integration(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_owner_reports_integration(self, mock_db, mock_auth, client, mock_db_session):
         """Тест интеграции отчетов."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -124,7 +124,7 @@ class TestOwnerInterfaceIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_owner_profile_integration(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_owner_profile_integration(self, mock_db, mock_auth, client, mock_db_session):
         """Тест интеграции профиля."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -142,7 +142,7 @@ class TestNavigationIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_navigation_menu_consistency(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_navigation_menu_consistency(self, mock_db, mock_auth, client, mock_db_session):
         """Тест консистентности навигационного меню."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -179,7 +179,7 @@ class TestErrorHandlingIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_timeslot_create_redirect_integration(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_timeslot_create_redirect_integration(self, mock_db, mock_auth, client, mock_db_session):
         """Тест интеграции редиректа при создании тайм-слотов."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -201,7 +201,7 @@ class TestErrorHandlingIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_timeslot_create_no_objects_integration(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_timeslot_create_no_objects_integration(self, mock_db, mock_auth, client, mock_db_session):
         """Тест интеграции создания тайм-слотов без объектов."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -221,7 +221,7 @@ class TestAPIIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_calendar_api_timeslots_status(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_calendar_api_timeslots_status(self, mock_db, mock_auth, client, mock_db_session):
         """Тест API статуса тайм-слотов."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session
@@ -238,7 +238,7 @@ class TestAPIIntegration:
     
     @patch('apps.web.middleware.auth_middleware.require_owner_or_superadmin')
     @patch('core.database.session.get_db_session')
-    def test_calendar_api_objects(self, mock_db, mock_auth, client, mock_auth, mock_db_session):
+    def test_calendar_api_objects(self, mock_db, mock_auth, client, mock_db_session):
         """Тест API объектов календаря."""
         mock_auth.return_value = mock_auth
         mock_db.return_value = mock_db_session

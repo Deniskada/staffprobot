@@ -6,10 +6,9 @@ from apps.bot.handlers_div.core_handlers import (
     start_command,
     button_callback
 )
-from apps.bot.handlers import (
-    help_command,
-    status_command,
-    handle_message
+from apps.bot.handlers_div.utility_handlers import (
+    _handle_help_callback as help_command,
+    _handle_status_callback as status_command
 )
 
 
@@ -124,19 +123,7 @@ class TestBotHandlers:
             assert len(call_args[0]) > 0  # Первый аргумент - текст
             assert 'Статус смен' in call_args[0][0]
     
-    @pytest.mark.asyncio
-    async def test_handle_message(self, mock_update, mock_context):
-        """Тест обработки сообщений."""
-        mock_update.message.text = "Тестовое сообщение"
-        
-        await handle_message(mock_update, mock_context)
-        
-        # Проверяем, что сообщение было отправлено
-        mock_update.message.reply_text.assert_called_once()
-        
-        # Проверяем параметры вызова
-        call_args = mock_update.message.reply_text.call_args
-        assert len(call_args[0]) > 0  # Первый аргумент - текст
+    # Тест handle_message удален - функция больше не существует
 
 
 class TestButtonCallbacks:
