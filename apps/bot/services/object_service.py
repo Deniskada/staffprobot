@@ -190,7 +190,8 @@ class ObjectService:
                     'closing_time': obj.closing_time.strftime('%H:%M') if obj.closing_time else None,
                     'is_active': obj.is_active,
                     'created_at': obj.created_at.isoformat() if obj.created_at else None,
-                    'max_distance_meters': obj.max_distance_meters or 500
+                    'max_distance_meters': obj.max_distance_meters or 500,
+                    'timezone': obj.timezone or 'Europe/Moscow'
                 }
                 
         except Exception as e:

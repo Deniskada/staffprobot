@@ -92,9 +92,9 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             shift = active_shifts[0]  # Берем первую активную смену
             obj_data = object_service.get_object_by_id(shift['object_id'])
             
-            # Конвертируем время в локальную зону
-            user_timezone = timezone_helper.get_user_timezone(user_id)
-            local_start_time = timezone_helper.format_local_time(shift['start_time'], user_timezone)
+            # Конвертируем время в часовой пояс объекта
+            object_timezone = obj_data.get('timezone', 'Europe/Moscow') if obj_data else 'Europe/Moscow'
+            local_start_time = timezone_helper.format_local_time(shift['start_time'], object_timezone)
             
             status_text = f"""
 📈 <b>Статус смен</b>

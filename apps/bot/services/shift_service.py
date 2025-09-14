@@ -168,9 +168,9 @@ class ShiftService:
                     f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}"
                 )
                 
-                # Форматируем время в локальной временной зоне пользователя
-                user_timezone = timezone_helper.get_user_timezone(user_id)
-                local_start_time = timezone_helper.format_local_time(new_shift.start_time, user_timezone)
+                # Форматируем время в часовом поясе объекта
+                object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
+                local_start_time = timezone_helper.format_local_time(new_shift.start_time, object_timezone)
                 
                 return {
                     'success': True,
@@ -300,9 +300,9 @@ class ShiftService:
                         f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={updated_shift.total_hours}, total_payment={updated_shift.total_payment}"
                     )
                     
-                    # Форматируем время в локальной временной зоне пользователя
-                    user_timezone = timezone_helper.get_user_timezone(user_id)
-                    local_end_time = timezone_helper.format_local_time(updated_shift.end_time, user_timezone) if updated_shift.end_time else None
+                    # Форматируем время в часовом поясе объекта
+                    object_timezone = getattr(shift.object, 'timezone', None) or 'Europe/Moscow'
+                    local_end_time = timezone_helper.format_local_time(updated_shift.end_time, object_timezone) if updated_shift.end_time else None
                     
                     return {
                         'success': True,
