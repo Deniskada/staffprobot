@@ -148,9 +148,39 @@
                             </div>
                         </div>
                         
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><i class="bi bi-calendar3"></i> График работы</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <label class="form-label d-block">Рабочие дни</label>
+                                        <div class="d-flex gap-3 flex-wrap">
+                                            {% set days = [
+                                                (1, 'Пн'), (2, 'Вт'), (4, 'Ср'), (8, 'Чт'), (16, 'Пт'), (32, 'Сб'), (64, 'Вс')
+                                            ] %}
+                                            {% for mask, label in days %}
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" id="day_{{ mask }}" name="work_days" value="{{ mask }}" 
+                                                       {% if object.work_days_mask and (object.work_days_mask & mask) %}checked{% endif %}>
+                                                <label class="form-check-label" for="day_{{ mask }}">{{ label }}</label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="schedule_repeat_weeks" class="form-label">Периодичность (недель)</label>
+                                        <input type="number" class="form-control" id="schedule_repeat_weeks" name="schedule_repeat_weeks" min="1" value="{{ object.schedule_repeat_weeks or 1 }}">
+                                        <div class="form-text">Например, 1 — каждую неделю; 2 — через неделю</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="alert alert-warning">
                             <i class="bi bi-exclamation-triangle"></i>
-                            <strong>Внимание:</strong> Изменение времени работы или ставки может повлиять 
+                            <strong>Внимание:</strong> Изменение времени работы, ставки или графика работы может повлиять 
                             на существующие тайм-слоты и запланированные смены.
                         </div>
                         
@@ -204,8 +234,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Обработка чекбоксов
-    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+    // Обработка чекбоксов (кроме рабочих дней)
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]:not([name="work_days"])');
     checkboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
             if (!this.checked) {
@@ -224,6 +254,48 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+    
+    // Обработка рабочих дней - собираем маску
+    const workDaysCheckboxes = document.querySelectorAll('input[name="work_days"]');
+    workDaysCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            // Собираем все выбранные дни в маску
+            let mask = 0;
+            workDaysCheckboxes.forEach(cb => {
+                if (cb.checked) {
+                    mask |= parseInt(cb.value);
+                }
+            });
+            
+            // Удаляем старые скрытые поля для work_days_mask
+            const oldHidden = form.querySelector('input[name="work_days_mask"]');
+            if (oldHidden) {
+                oldHidden.remove();
+            }
+            
+            // Добавляем новое скрытое поле с маской
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'work_days_mask';
+            hiddenInput.value = mask.toString();
+            form.appendChild(hiddenInput);
+        });
+    });
+    
+    // Инициализация маски рабочих дней при загрузке страницы
+    let initialMask = 0;
+    workDaysCheckboxes.forEach(cb => {
+        if (cb.checked) {
+            initialMask |= parseInt(cb.value);
+        }
+    });
+    if (initialMask > 0) {
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'work_days_mask';
+        hiddenInput.value = initialMask.toString();
+        form.appendChild(hiddenInput);
+    }
 });
 </script>
 {% endblock %}
