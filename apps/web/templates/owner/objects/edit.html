@@ -98,6 +98,23 @@
                                 </div>
                                 
                                 <div class="mb-3">
+                                    <label for="timezone" class="form-label">Часовой пояс *</label>
+                                    <select class="form-select" 
+                                            id="timezone" 
+                                            name="timezone" 
+                                            required>
+                                        <option value="Europe/Moscow" {% if object.timezone == 'Europe/Moscow' %}selected{% endif %}>Москва (UTC+3)</option>
+                                        <option value="Europe/London" {% if object.timezone == 'Europe/London' %}selected{% endif %}>Лондон (UTC+0/+1)</option>
+                                        <option value="America/New_York" {% if object.timezone == 'America/New_York' %}selected{% endif %}>Нью-Йорк (UTC-5/-4)</option>
+                                        <option value="America/Los_Angeles" {% if object.timezone == 'America/Los_Angeles' %}selected{% endif %}>Лос-Анджелес (UTC-8/-7)</option>
+                                        <option value="Asia/Tokyo" {% if object.timezone == 'Asia/Tokyo' %}selected{% endif %}>Токио (UTC+9)</option>
+                                        <option value="Asia/Shanghai" {% if object.timezone == 'Asia/Shanghai' %}selected{% endif %}>Шанхай (UTC+8)</option>
+                                        <option value="Australia/Sydney" {% if object.timezone == 'Australia/Sydney' %}selected{% endif %}>Сидней (UTC+10/+11)</option>
+                                    </select>
+                                    <div class="form-text">Часовой пояс для отображения времени смен</div>
+                                </div>
+                                
+                                <div class="mb-3">
                                     <label for="max_distance" class="form-label">Максимальное расстояние (м)</label>
                                     <input type="number" 
                                            class="form-control" 

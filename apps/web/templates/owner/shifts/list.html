@@ -178,11 +178,11 @@
                                     <td>
                                         <div>
                                             <div class="fw-bold">
-                                                {{ shift.start_time }}
+                                                {{ web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow') }}
                                             </div>
                                             {% if shift.end_time %}
                                             <small class="text-muted">
-                                                до {{ shift.end_time }}
+                                                до {{ web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow') }}
                                             </small>
                                             {% else %}
                                             <small class="text-warning">В процессе</small>

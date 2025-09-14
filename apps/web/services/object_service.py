@@ -149,6 +149,7 @@ class ObjectService:
             obj.address = object_data.get('address', obj.address)
             obj.opening_time = time.fromisoformat(object_data['opening_time'])
             obj.closing_time = time.fromisoformat(object_data['closing_time'])
+            obj.timezone = object_data.get('timezone', 'Europe/Moscow')
             obj.hourly_rate = object_data['hourly_rate']
             obj.max_distance_meters = object_data.get('max_distance', obj.max_distance_meters)
             obj.is_active = object_data.get('is_active', obj.is_active)

@@ -78,9 +78,9 @@
                                             <div>
                                                 <div class="fw-bold">
                                                     {% if shift_type == 'schedule' %}
-                                                        {{ shift.planned_start.strftime('%d.%m.%Y %H:%M') }}
+                                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.planned_start, object.timezone if object else 'Europe/Moscow') }}
                                                     {% else %}
-                                                        {{ shift.start_time.strftime('%d.%m.%Y %H:%M') }}
+                                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.start_time, object.timezone if object else 'Europe/Moscow') }}
                                                     {% endif %}
                                                 </div>
                                                 <small class="text-muted">Начало</small>
@@ -93,9 +93,9 @@
                                             <div>
                                                 <div class="fw-bold">
                                                     {% if shift_type == 'schedule' %}
-                                                        {{ shift.planned_end.strftime('%d.%m.%Y %H:%M') }}
+                                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.planned_end, object.timezone if object else 'Europe/Moscow') }}
                                                     {% elif shift.end_time %}
-                                                        {{ shift.end_time.strftime('%d.%m.%Y %H:%M') }}
+                                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.end_time, object.timezone if object else 'Europe/Moscow') }}
                                                     {% else %}
                                                         <span class="text-warning">В процессе</span>
                                                     {% endif %}

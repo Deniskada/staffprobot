@@ -30,6 +30,8 @@ class Object(Base):
     work_days_mask = Column(Integer, nullable=False, server_default="31")
     # Периодичность повторения недель: 1 = каждую неделю
     schedule_repeat_weeks = Column(Integer, nullable=False, server_default="1")
+    # Часовой пояс объекта (например: "Europe/Moscow", "America/New_York")
+    timezone = Column(String(50), nullable=True, default="Europe/Moscow")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
