@@ -104,13 +104,27 @@ class ShiftService:
                 hourly_rate = obj.hourly_rate
                 
                 # Если это запланированная смена, получаем данные из расписания
+                logger.info(f"Shift type: {shift_type}, schedule_id: {schedule_id}, timeslot_id: {timeslot_id}")
                 if shift_type == "planned" and schedule_id:
                     from apps.bot.services.shift_schedule_service import ShiftScheduleService
                     schedule_service = ShiftScheduleService()
                     schedule_data = await schedule_service.get_shift_schedule_by_id(schedule_id)
                     
                     if schedule_data:
-                        hourly_rate = schedule_data.get('hourly_rate', obj.hourly_rate)
+                        logger.info(f"Schedule data: {schedule_data}")
+                        # Приоритет: ставка из запланированной смены, если есть
+                        schedule_rate = schedule_data.get('hourly_rate')
+                        if schedule_rate:
+                            hourly_rate = schedule_rate
+                            logger.info(f"Using schedule rate: {hourly_rate}")
+                        else:
+                            # Fallback: ставка из объекта
+                            hourly_rate = obj.hourly_rate
+                            logger.info(f"Using object rate: {hourly_rate}")
+                    else:
+                        logger.warning(f"No schedule data found for schedule_id: {schedule_id}")
+                else:
+                    logger.info(f"Using object rate for spontaneous shift: {hourly_rate}")
                 
                 # Создаем новую смену
                 new_shift = Shift(
