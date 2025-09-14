@@ -388,9 +388,14 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
                  f"🏢 <b>Объект:</b> {shift_data['object_name']}\n"
                  f"📅 <b>Дата:</b> {planned_date}\n"
                  f"🕐 <b>Время:</b> {start_time}-{end_time}\n\n"
-                 f"📍 <b>Отправьте геопозицию</b>\n\n"
-                 f"Нажмите кнопку ниже для отправки вашего местоположения:",
-            parse_mode='HTML',
+                 f"📍 <b>Отправьте геопозицию</b>",
+            parse_mode='HTML'
+        )
+        
+        # Отправляем сообщение с клавиатурой для геопозиции
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="👇 Используйте кнопку для отправки геопозиции:",
             reply_markup=get_location_keyboard()
         )
         
