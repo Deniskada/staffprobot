@@ -18,10 +18,10 @@ class EmployeeObjectsService:
     
     async def get_employee_objects(self, telegram_id: int) -> List[Dict[str, Any]]:
         """
-        Получает объекты, доступные сотруднику по активным договорам.
+        Получает объекты, доступные пользователю (сотруднику по договорам или владельцу по собственности).
         
         Args:
-            telegram_id: Telegram ID сотрудника
+            telegram_id: Telegram ID пользователя
             
         Returns:
             Список объектов с информацией о договорах
@@ -36,6 +36,14 @@ class EmployeeObjectsService:
                 if not user:
                     logger.warning(f"User with telegram_id {telegram_id} not found")
                     return []
+                
+                # Проверяем роль пользователя
+                user_role = user.role if hasattr(user, 'role') else None
+                logger.info(f"User {telegram_id} role: {user_role}")
+                
+                # Если пользователь - владелец, получаем его объекты
+                if user_role == 'owner':
+                    return await self._get_owner_objects(session, user.id)
                 
                 # Получаем активные договоры пользователя
                 contracts_query = select(Contract).where(
@@ -149,10 +157,10 @@ class EmployeeObjectsService:
     
     async def has_access_to_object(self, telegram_id: int, object_id: int) -> bool:
         """
-        Проверяет, есть ли у сотрудника доступ к объекту.
+        Проверяет, есть ли у пользователя доступ к объекту (владелец или сотрудник по договору).
         
         Args:
-            telegram_id: Telegram ID сотрудника
+            telegram_id: Telegram ID пользователя
             object_id: ID объекта
             
         Returns:
@@ -168,7 +176,23 @@ class EmployeeObjectsService:
                 if not user:
                     return False
                 
-                # Проверяем наличие активного договора с доступом к этому объекту
+                # Проверяем роль пользователя
+                user_role = user.role if hasattr(user, 'role') else None
+                
+                # Если пользователь - владелец, проверяем, принадлежит ли ему объект
+                if user_role == 'owner':
+                    object_query = select(Object).where(
+                        and_(
+                            Object.id == object_id,
+                            Object.owner_id == user.id,
+                            Object.is_active == True
+                        )
+                    )
+                    object_result = await session.execute(object_query)
+                    obj = object_result.scalar_one_or_none()
+                    return obj is not None
+                
+                # Для сотрудников проверяем наличие активного договора с доступом к этому объекту
                 contracts_query = select(Contract).where(
                     and_(
                         Contract.employee_id == user.id,
@@ -250,4 +274,57 @@ class EmployeeObjectsService:
                 
         except Exception as e:
             logger.error(f"Error getting employee contracts for {telegram_id}: {e}")
+            return []
+    
+    async def _get_owner_objects(self, session, owner_id: int) -> List[Dict[str, Any]]:
+        """
+        Получает объекты владельца.
+        
+        Args:
+            session: Сессия БД
+            owner_id: ID владельца
+            
+        Returns:
+            Список объектов владельца
+        """
+        try:
+            # Получаем все активные объекты владельца
+            objects_query = select(Object).where(
+                and_(
+                    Object.owner_id == owner_id,
+                    Object.is_active == True
+                )
+            ).order_by(Object.name)
+            
+            objects_result = await session.execute(objects_query)
+            objects = objects_result.scalars().all()
+            
+            objects_list = []
+            for obj in objects:
+                objects_list.append({
+                    'id': obj.id,
+                    'name': obj.name,
+                    'address': obj.address,
+                    'coordinates': obj.coordinates,
+                    'hourly_rate': float(obj.hourly_rate) if obj.hourly_rate else 0.0,
+                    'opening_time': obj.opening_time.strftime('%H:%M') if obj.opening_time else None,
+                    'closing_time': obj.closing_time.strftime('%H:%M') if obj.closing_time else None,
+                    'is_active': obj.is_active,
+                    'created_at': obj.created_at.isoformat() if obj.created_at else None,
+                    'max_distance_meters': obj.max_distance_meters or 500,
+                    'contracts': [{
+                        'id': 'owner',
+                        'title': 'Собственность',
+                        'start_date': None,
+                        'end_date': None,
+                        'hourly_rate': float(obj.hourly_rate) if obj.hourly_rate else None,
+                        'status': 'owner'
+                    }]
+                })
+            
+            logger.info(f"Found {len(objects_list)} objects for owner {owner_id}")
+            return objects_list
+            
+        except Exception as e:
+            logger.error(f"Error getting owner objects for {owner_id}: {e}")
             return []
