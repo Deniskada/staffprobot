@@ -295,8 +295,11 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
             return
         
         # Получаем информацию об объекте
+        logger.info(f"Getting object data for user_id={user_id}, object_id={object_id}")
         obj_data = await employee_objects_service.get_employee_object_by_id(user_id, object_id)
+        logger.info(f"Object data: {obj_data}")
         if not obj_data:
+            logger.warning(f"No object data found for user_id={user_id}, object_id={object_id}")
             await query.edit_message_text(
                 text="❌ Объект не найден или недоступен.",
                 parse_mode='HTML'
