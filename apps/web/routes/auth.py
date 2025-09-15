@@ -170,20 +170,20 @@ async def register(
             res = await session.execute(q)
             existing = res.scalar_one_or_none()
         if existing:
-            return templates.TemplateResponse("auth/register.html", {
-                "request": request,
-                "title": "Регистрация собственника",
-                "error": "Пользователь с таким Telegram ID уже зарегистрирован",
-                "form_data": {
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "username": username,
-                    "telegram_id": telegram_id,
-                    "email": email,
-                    "phone": phone,
-                    "company_name": company_name
-                }
-            })
+            # Апгрейдим до owner, если не владелец
+            async with get_async_session() as session:
+                if UserRole.OWNER.value not in (existing.roles or [existing.role]):
+                    # Обновляем роль/роли
+                    existing.role = UserRole.OWNER.value
+                    existing.roles = list(set((existing.roles or []) + [UserRole.OWNER.value]))
+                    session.add(existing)
+                    await session.commit()
+            # Отправляем PIN и редиректим на логин
+            try:
+                await auth_service.generate_and_send_pin(telegram_id)
+            except Exception:
+                pass
+            return RedirectResponse(url=f"/auth/login?success=Пользователь%20обновлен.%20Проверьте%20Telegram%20для%20PIN&telegram_id={telegram_id}", status_code=status.HTTP_302_FOUND)
         
         # Создание пользователя в БД
         async with get_async_session() as session:

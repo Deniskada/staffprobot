@@ -53,7 +53,7 @@ class UserManager:
                 first_name=first_name,
                 last_name=last_name,
                 username=username,
-                role="owner",
+                role="applicant",
                 is_active=True,
             )
             session.add(new_user)
