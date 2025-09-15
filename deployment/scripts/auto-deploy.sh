@@ -45,12 +45,26 @@ log "5) Сборка локального образа с сетью host"
 cd "$PROJECT_DIR"
 su -s /bin/bash -c "docker build --network=host -t staffprobot:latest -f docker/Dockerfile ." staffprobot
 
-log "6) Поднятие сервисов docker-compose.prod.yml"
+log "6) Подготовка конфигов мониторинга (Prometheus/Grafana)"
+# Гарантируем наличие директории и файла Prometheus на хосте
+mkdir -p "$PROJECT_DIR/deployment/monitoring"
+if [ ! -f "$PROJECT_DIR/deployment/monitoring/prometheus.yml" ]; then
+  curl -fsSL -o "$PROJECT_DIR/deployment/monitoring/prometheus.yml" \
+    "https://raw.githubusercontent.com/Deniskada/staffprobot/main/deployment/monitoring/prometheus.yml" || \
+    fail "Не удалось скачать prometheus.yml"
+fi
+
+# Обновим маунт Prometheus на директорию, чтобы избежать ошибок file/dir
+if grep -q "deployment/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml" "$PROJECT_DIR/docker-compose.prod.yml"; then
+  sed -i "s#\./deployment/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro#\./deployment/monitoring:/etc/prometheus:ro#" "$PROJECT_DIR/docker-compose.prod.yml"
+fi
+
+log "7) Поднятие сервисов docker-compose.prod.yml"
 export IMAGE_NAME=staffprobot IMAGE_TAG=latest
 docker compose -f docker-compose.prod.yml build --no-cache
 docker compose -f docker-compose.prod.yml up -d
 
-log "7) Проверка здоровья"
+log "8) Проверка здоровья"
 sleep 10
 su -s /bin/bash -c "$PROJECT_DIR/scripts/health-check.sh" staffprobot || fail "Health-check не пройден"
 
