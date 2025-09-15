@@ -120,7 +120,10 @@ async def register_page(request: Request):
     """Страница регистрации собственника"""
     return templates.TemplateResponse("auth/register.html", {
         "request": request,
-        "title": "Регистрация собственника"
+        "title": "Регистрация собственника",
+        "form_data": {},
+        "error": None,
+        "success": None
     })
 
 
