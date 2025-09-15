@@ -116,29 +116,25 @@ async def require_role(required_role: str):
 # Главная страница
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    """Главная страница - перенаправление на дашборд или вход"""
+    """Главная страница - лендинг или перенаправление на дашборд"""
     # Проверяем, авторизован ли пользователь
-    # Получаем актуальные данные пользователя из middleware
     from apps.web.middleware.auth_middleware import get_current_user
     user_data = await get_current_user(request)
+    
     if user_data:
-        # Проверяем роль пользователя (актуальную из БД)
+        # Пользователь авторизован - перенаправляем в соответствующий раздел
         user_role = user_data.get("role", "employee")
         if user_role == "superadmin":
-            # Суперадмин идёт в админ-панель
             return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
         elif user_role == "owner":
-            # Владелец идёт в свой раздел
             return RedirectResponse(url="/owner", status_code=status.HTTP_302_FOUND)
         elif user_role == "employee":
-            # Сотрудник идёт в свой раздел
             return RedirectResponse(url="/employee", status_code=status.HTTP_302_FOUND)
         else:
-            # Остальные пользователи идут на дашборд
             return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
-    # Пользователь не авторизован, показываем страницу входа
-    return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    # Пользователь не авторизован - показываем лендинг
+    return templates.TemplateResponse("landing.html", {"request": request})
 
 
 # Включение роутов

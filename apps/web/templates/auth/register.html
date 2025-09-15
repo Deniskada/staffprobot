@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Регистрация собственника - StaffProBot{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-lg border-0">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <div class="mb-3">
+                        <i class="bi bi-building text-primary" style="font-size: 3rem;"></i>
+                    </div>
+                    <h2 class="card-title fw-bold text-primary">Регистрация собственника</h2>
+                    <p class="text-muted">Создайте аккаунт для управления объектами и персоналом</p>
+                </div>
+                
+                <form id="registerForm" method="POST" action="/auth/register">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="first_name" class="form-label">Имя *</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="first_name" 
+                                   name="first_name" 
+                                   value="{{ form_data.first_name or '' }}"
+                                   placeholder="Введите ваше имя"
+                                   required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="last_name" class="form-label">Фамилия *</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="last_name" 
+                                   name="last_name" 
+                                   value="{{ form_data.last_name or '' }}"
+                                   placeholder="Введите вашу фамилию"
+                                   required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Имя пользователя *</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="username" 
+                               name="username" 
+                               value="{{ form_data.username or '' }}"
+                               placeholder="Выберите имя пользователя"
+                               required>
+                        <div class="form-text">
+                            Будет использоваться для входа в систему
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="telegram_id" class="form-label">Telegram ID *</label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="telegram_id" 
+                               name="telegram_id" 
+                               value="{{ form_data.telegram_id or '' }}"
+                               placeholder="Введите ваш Telegram ID"
+                               required>
+                        <div class="form-text">
+                            Ваш Telegram ID можно узнать у бота @StaffProBot командой /start
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" 
+                               class="form-control" 
+                               id="email" 
+                               name="email" 
+                               value="{{ form_data.email or '' }}"
+                               placeholder="your@email.com">
+                        <div class="form-text">
+                            Необязательно, но рекомендуется для восстановления доступа
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">Телефон</label>
+                        <input type="tel" 
+                               class="form-control" 
+                               id="phone" 
+                               name="phone" 
+                               value="{{ form_data.phone or '' }}"
+                               placeholder="+7 (999) 123-45-67">
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="company_name" class="form-label">Название компании</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="company_name" 
+                               name="company_name" 
+                               value="{{ form_data.company_name or '' }}"
+                               placeholder="ООО 'Ваша компания'">
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="terms" 
+                                   name="terms" 
+                                   required>
+                            <label class="form-check-label" for="terms">
+                                Я согласен с <a href="#" class="text-primary">условиями использования</a> 
+                                и <a href="#" class="text-primary">политикой конфиденциальности</a> *
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-person-plus me-2"></i> 
+                            Зарегистрироваться
+                        </button>
+                        <a href="/auth/login" class="btn btn-outline-secondary">
+                            <i class="bi bi-box-arrow-in-right me-2"></i> 
+                            Уже есть аккаунт? Войти
+                        </a>
+                    </div>
+                </form>
+                
+                <hr class="my-4">
+                
+                <div class="text-center">
+                    <small class="text-muted">
+                        После регистрации вы получите PIN-код в Telegram для подтверждения аккаунта
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('registerForm');
+    const telegramIdInput = document.getElementById('telegram_id');
+    
+    // Валидация формы
+    form.addEventListener('submit', function(e) {
+        const telegramId = telegramIdInput.value;
+        if (!telegramId || telegramId.length < 9) {
+            e.preventDefault();
+            alert('Пожалуйста, введите корректный Telegram ID');
+            telegramIdInput.focus();
+            return;
+        }
+        
+        const terms = document.getElementById('terms');
+        if (!terms.checked) {
+            e.preventDefault();
+            alert('Необходимо согласиться с условиями использования');
+            terms.focus();
+            return;
+        }
+    });
+    
+    // Форматирование телефона
+    const phoneInput = document.getElementById('phone');
+    phoneInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length > 0) {
+            if (value[0] === '8') {
+                value = '7' + value.slice(1);
+            }
+            if (value[0] === '7') {
+                value = '+7 (' + value.slice(1, 4) + ') ' + value.slice(4, 7) + '-' + value.slice(7, 9) + '-' + value.slice(9, 11);
+            }
+        }
+        e.target.value = value;
+    });
+});
+</script>
+{% endblock %}
