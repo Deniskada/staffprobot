@@ -115,6 +115,132 @@ async def send_pin(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    """Страница регистрации собственника"""
+    return templates.TemplateResponse("auth/register.html", {
+        "request": request,
+        "title": "Регистрация собственника"
+    })
+
+
+@router.post("/register")
+async def register(
+    request: Request,
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    username: str = Form(...),
+    telegram_id: int = Form(...),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    company_name: Optional[str] = Form(None),
+    terms: bool = Form(False)
+):
+    """Обработка регистрации собственника"""
+    try:
+        # Проверка согласия с условиями
+        if not terms:
+            return templates.TemplateResponse("auth/register.html", {
+                "request": request,
+                "title": "Регистрация собственника",
+                "error": "Необходимо согласиться с условиями использования",
+                "form_data": {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "username": username,
+                    "telegram_id": telegram_id,
+                    "email": email,
+                    "phone": phone,
+                    "company_name": company_name
+                }
+            })
+        
+        # Проверка существования пользователя
+        existing_user = await user_manager.get_user_by_telegram_id(telegram_id)
+        if existing_user:
+            return templates.TemplateResponse("auth/register.html", {
+                "request": request,
+                "title": "Регистрация собственника",
+                "error": "Пользователь с таким Telegram ID уже зарегистрирован",
+                "form_data": {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "username": username,
+                    "telegram_id": telegram_id,
+                    "email": email,
+                    "phone": phone,
+                    "company_name": company_name
+                }
+            })
+        
+        # Создание пользователя
+        user_data = {
+            "telegram_id": telegram_id,
+            "username": username,
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "phone": phone,
+            "role": "owner",
+            "is_active": True
+        }
+        
+        # Добавляем название компании в дополнительные данные
+        if company_name:
+            user_data["company_name"] = company_name
+        
+        user = await user_manager.create_user(user_data)
+        
+        if not user:
+            return templates.TemplateResponse("auth/register.html", {
+                "request": request,
+                "title": "Регистрация собственника",
+                "error": "Ошибка создания пользователя",
+                "form_data": {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "username": username,
+                    "telegram_id": telegram_id,
+                    "email": email,
+                    "phone": phone,
+                    "company_name": company_name
+                }
+            })
+        
+        # Отправка PIN-кода для подтверждения
+        try:
+            pin_code = await auth_service.generate_and_send_pin(telegram_id)
+            logger.info(f"PIN code sent to user {telegram_id} for registration")
+        except Exception as e:
+            logger.error(f"Failed to send PIN code: {e}")
+            # Продолжаем без PIN-кода, пользователь может войти позже
+        
+        # Перенаправление на страницу входа с сообщением об успехе
+        return templates.TemplateResponse("auth/login.html", {
+            "request": request,
+            "title": "Вход в систему",
+            "success": "Регистрация успешна! Проверьте Telegram для получения PIN-кода",
+            "telegram_id": telegram_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        return templates.TemplateResponse("auth/register.html", {
+            "request": request,
+            "title": "Регистрация собственника",
+            "error": f"Ошибка регистрации: {str(e)}",
+            "form_data": {
+                "first_name": first_name,
+                "last_name": last_name,
+                "username": username,
+                "telegram_id": telegram_id,
+                "email": email,
+                "phone": phone,
+                "company_name": company_name
+            }
+        })
+
+
 @router.get("/profile", response_class=HTMLResponse)
 async def profile_page(request: Request):
     """Страница профиля пользователя"""

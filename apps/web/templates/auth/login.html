@@ -12,6 +12,14 @@
                     Вход в StaffProBot
                 </h3>
                 
+                {% if success %}
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle me-2"></i>
+                    {{ success }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endif %}
+                
                 <form id="loginForm" method="POST" action="/auth/login">
                     <div class="mb-3">
                         <label for="telegram_id" class="form-label">Telegram ID</label>
