@@ -218,7 +218,11 @@ docker-compose -f docker-compose.prod.yml up -d
 sleep 30
 
 # Проверка здоровья
-./scripts/health-check.sh
+if [ -x "$PROJECT_DIR/scripts/health-check.sh" ]; then
+    ./scripts/health-check.sh
+else
+    echo "⚠️ health-check.sh не найден, пропускаем проверку здоровья на первом запуске"
+fi
 
 echo "✅ Deployment completed!"
 EOF
@@ -228,6 +232,7 @@ chown $USER:$USER $PROJECT_DIR/deploy.sh
 
 # Создание скрипта проверки здоровья
 echo "🏥 Создание скрипта проверки здоровья..."
+mkdir -p $PROJECT_DIR/scripts
 cat > $PROJECT_DIR/scripts/health-check.sh << 'EOF'
 #!/bin/bash
 
