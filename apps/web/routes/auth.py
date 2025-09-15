@@ -12,6 +12,9 @@ import asyncio
 from core.auth.user_manager import UserManager
 from apps.web.services.auth_service import AuthService
 from core.logging.logger import logger
+from core.database.session import get_async_session
+from sqlalchemy import select
+from domain.entities.user import User, UserRole
 
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
@@ -23,9 +26,11 @@ auth_service = AuthService()
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Страница входа"""
+    success_msg = request.query_params.get("success")
     return templates.TemplateResponse("auth/login.html", {
         "request": request,
-        "title": "Вход в систему"
+        "title": "Вход в систему",
+        "success": success_msg
     })
 
 
@@ -137,12 +142,13 @@ async def register(
     email: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
     company_name: Optional[str] = Form(None),
-    terms: bool = Form(False)
+    terms: Optional[str] = Form(None)
 ):
     """Обработка регистрации собственника"""
     try:
         # Проверка согласия с условиями
-        if not terms:
+        # Чекбокс приходит как 'on' или не приходит вовсе
+        if terms not in (True, 'on', 'true', '1'):
             return templates.TemplateResponse("auth/register.html", {
                 "request": request,
                 "title": "Регистрация собственника",
@@ -159,8 +165,11 @@ async def register(
             })
         
         # Проверка существования пользователя
-        existing_user = await user_manager.get_user_by_telegram_id(telegram_id)
-        if existing_user:
+        async with get_async_session() as session:
+            q = select(User).where(User.telegram_id == telegram_id)
+            res = await session.execute(q)
+            existing = res.scalar_one_or_none()
+        if existing:
             return templates.TemplateResponse("auth/register.html", {
                 "request": request,
                 "title": "Регистрация собственника",
@@ -176,39 +185,20 @@ async def register(
                 }
             })
         
-        # Создание пользователя
-        user_data = {
-            "telegram_id": telegram_id,
-            "username": username,
-            "first_name": first_name,
-            "last_name": last_name,
-            "email": email,
-            "phone": phone,
-            "role": "owner",
-            "is_active": True
-        }
-        
-        # Добавляем название компании в дополнительные данные
-        if company_name:
-            user_data["company_name"] = company_name
-        
-        user = await user_manager.create_user(user_data)
-        
-        if not user:
-            return templates.TemplateResponse("auth/register.html", {
-                "request": request,
-                "title": "Регистрация собственника",
-                "error": "Ошибка создания пользователя",
-                "form_data": {
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "username": username,
-                    "telegram_id": telegram_id,
-                    "email": email,
-                    "phone": phone,
-                    "company_name": company_name
-                }
-            })
+        # Создание пользователя в БД
+        async with get_async_session() as session:
+            new_user = User(
+                telegram_id=telegram_id,
+                username=username,
+                first_name=first_name,
+                last_name=last_name,
+                phone=phone,
+                role=UserRole.OWNER.value,
+                roles=[UserRole.OWNER.value],
+                is_active=True,
+            )
+            session.add(new_user)
+            await session.commit()
         
         # Отправка PIN-кода для подтверждения
         try:
@@ -219,12 +209,7 @@ async def register(
             # Продолжаем без PIN-кода, пользователь может войти позже
         
         # Перенаправление на страницу входа с сообщением об успехе
-        return templates.TemplateResponse("auth/login.html", {
-            "request": request,
-            "title": "Вход в систему",
-            "success": "Регистрация успешна! Проверьте Telegram для получения PIN-кода",
-            "telegram_id": telegram_id
-        })
+        return RedirectResponse(url=f"/auth/login?success=Регистрация%20успешна!%20Проверьте%20Telegram%20для%20получения%20PIN-кода&telegram_id={telegram_id}", status_code=status.HTTP_302_FOUND)
         
     except Exception as e:
         logger.error(f"Registration error: {e}")
