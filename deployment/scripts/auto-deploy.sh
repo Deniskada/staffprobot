@@ -49,10 +49,23 @@ log "6) Подготовка конфигов мониторинга (Prometheus
 # Гарантируем наличие директории и файла Prometheus на хосте
 mkdir -p "$PROJECT_DIR/deployment/monitoring"
 if [ ! -f "$PROJECT_DIR/deployment/monitoring/prometheus.yml" ]; then
+  # 1) Пытаемся скачать из актуального пути репозитория (docker/monitoring)
   curl -fsSL -o "$PROJECT_DIR/deployment/monitoring/prometheus.yml" \
-    "https://raw.githubusercontent.com/Deniskada/staffprobot/main/deployment/monitoring/prometheus.yml" || \
-    fail "Не удалось скачать prometheus.yml"
+    "https://raw.githubusercontent.com/Deniskada/staffprobot/main/docker/monitoring/prometheus.yml" || true
 fi
+if [ ! -s "$PROJECT_DIR/deployment/monitoring/prometheus.yml" ]; then
+  # 2) Если не нашли в репо, создаём минимальную валидную конфигурацию
+  cat > "$PROJECT_DIR/deployment/monitoring/prometheus.yml" <<'EOF'
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+EOF
+fi
+chown -R staffprobot:staffprobot "$PROJECT_DIR/deployment/monitoring"
 
 # Обновим маунт Prometheus на директорию, чтобы избежать ошибок file/dir
 if grep -q "deployment/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml" "$PROJECT_DIR/docker-compose.prod.yml"; then
