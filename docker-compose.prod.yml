@@ -82,6 +82,7 @@ services:
   bot:
     image: ${IMAGE_NAME:-staffprobot}:${IMAGE_TAG:-latest}
     container_name: staffprobot_bot_prod
+    command: python scripts/start_bot.py
     environment:
       - ENVIRONMENT=production
       - DEBUG=false
@@ -89,7 +90,7 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_WEBHOOK_URL=https://bot.staffprobot.ru/webhook
+      - TELEGRAM_WEBHOOK_URL=https://bot.staffprobot.ru
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
     restart: unless-stopped
@@ -100,8 +101,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    ports:
+      - "8000:8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/webhook | grep -qE '200|405'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -306,6 +309,26 @@ services:
         reservations:
           memory: 64M
           cpus: '0.05'
+
+  migrator:
+    image: ${IMAGE_NAME:-staffprobot}:${IMAGE_TAG:-latest}
+    container_name: staffprobot_migrator_prod
+    command: alembic upgrade head
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-staffprobot_prod}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - staffprobot_network
 
 volumes:
   postgres_prod_data:

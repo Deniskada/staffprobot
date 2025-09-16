@@ -1,0 +1,38 @@
+{
+  "timestamp": "2025-09-15T20:20:53.732990",
+  "base_url": "https://staffprobot.ru",
+  "issues": [
+    "Конфигурация Nginx не найдена"
+  ],
+  "checks": {
+    "landing_page": {
+      "status": "OK",
+      "size": 20649,
+      "content_checks": {
+        "has_landing_title": true,
+        "has_bootstrap_css": true,
+        "has_bootstrap_icons": true,
+        "has_google_fonts": true,
+        "has_custom_css": true,
+        "has_hero_section": true,
+        "has_entry_cards": true,
+        "has_gradients": true
+      }
+    },
+    "static_/static/css/main.css": {
+      "status": "OK",
+      "size": 6221,
+      "content_type": "text/css"
+    },
+    "static_/static/js/main.js": {
+      "status": "OK",
+      "size": 9773,
+      "content_type": "application/javascript"
+    },
+    "docker_web": {
+      "status": "Up 10 hours",
+      "container_id": "5c361fe1da5b",
+      "state": "running"
+    }
+  }
+}

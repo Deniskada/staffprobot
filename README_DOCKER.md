@@ -92,15 +92,17 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 ## 🚀 Продакшен режим
 
-### Запуск продакшена
+### Запуск продакшена (с авто-миграциями)
 
 ```bash
 # Создание .env.prod
 cp env.example .env.prod
-# Редактирование с продакшен настройками
+# Заполните POSTGRES_DB/USER/PASSWORD, SECRET_KEY, TELEGRAM_BOT_TOKEN, REDIS_PASSWORD и т.д.
 
-# Запуск
-docker-compose -f docker-compose.prod.yml up -d
+# Сборка и запуск: база/брокеры → миграции → приложения
+docker compose -f docker-compose.prod.yml up -d postgres redis rabbitmq
+docker compose -f docker-compose.prod.yml run --rm migrator
+docker compose -f docker-compose.prod.yml up -d web bot celery_worker celery_beat prometheus grafana backup
 ```
 
 ### Особенности продакшена
@@ -109,6 +111,16 @@ docker-compose -f docker-compose.prod.yml up -d
 - **Оптимизация**: Минимальный размер образа
 - **Мониторинг**: Health checks и метрики
 - **Автоперезапуск**: `restart: unless-stopped`
+- **Авто-миграции**: отдельный сервис `migrator` выполняет `alembic upgrade head`
+### Полезные команды продакшена
+
+```bash
+# Прогнать миграции повторно
+docker compose -f docker-compose.prod.yml run --rm migrator
+
+# Проверить состояние Alembic
+docker compose -f docker-compose.prod.yml exec -T web alembic current | cat
+```
 
 ## 🛠️ Полезные команды
 

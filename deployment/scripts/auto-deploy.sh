@@ -75,7 +75,21 @@ fi
 log "7) Поднятие сервисов docker-compose.prod.yml"
 export IMAGE_NAME=staffprobot IMAGE_TAG=latest
 docker compose -f docker-compose.prod.yml build --no-cache
-docker compose -f docker-compose.prod.yml up -d
+# Поднимаем базы и брокеры
+docker compose -f docker-compose.prod.yml up -d postgres redis rabbitmq
+
+log "7.1) Ожидание готовности Postgres"
+sleep 8
+
+log "7.2) Прогон миграций через сервис migrator"
+set +e
+docker compose -f docker-compose.prod.yml run --rm migrator
+MIG_STATUS=$?
+set -e
+[ $MIG_STATUS -eq 0 ] || fail "Alembic миграции завершились с кодом $MIG_STATUS"
+
+log "7.3) Запуск приложений"
+docker compose -f docker-compose.prod.yml up -d web bot celery_worker celery_beat prometheus grafana backup
 
 log "8) Проверка здоровья"
 sleep 10

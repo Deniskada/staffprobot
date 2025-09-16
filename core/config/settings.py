@@ -71,7 +71,8 @@ class Settings(BaseSettings):
     api_reload: bool = True
     
     class Config:
-        env_file = ".env"
+        # В production читаем .env.prod, иначе .env
+        env_file = ".env.prod" if os.getenv("ENVIRONMENT") == "production" else ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
 
