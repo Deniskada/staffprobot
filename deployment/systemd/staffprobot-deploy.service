@@ -1,0 +1,17 @@
+[Unit]
+Description=StaffProBot auto-deploy
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/staffprobot
+User=staffprobot
+Group=staffprobot
+Environment=ENVIRONMENT=production
+ExecStart=/usr/bin/bash -lc 'git fetch --all && git reset --hard origin/main && /usr/bin/docker-compose -f docker-compose.prod.yml up -d postgres redis rabbitmq && /usr/bin/docker-compose -f docker-compose.prod.yml run --rm migrator && /usr/bin/docker-compose -f docker-compose.prod.yml -f docker-compose.prod.override.yml up -d web bot celery_worker celery_beat'
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target
+

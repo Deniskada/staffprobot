@@ -1,0 +1,11 @@
+[Unit]
+Description=Run StaffProBot auto-deploy periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Unit=staffprobot-deploy.service
+
+[Install]
+WantedBy=timers.target
+
