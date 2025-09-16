@@ -102,7 +102,25 @@ cp env.example .env.prod
 # Сборка и запуск: база/брокеры → миграции → приложения
 docker compose -f docker-compose.prod.yml up -d postgres redis rabbitmq
 docker compose -f docker-compose.prod.yml run --rm migrator
-docker compose -f docker-compose.prod.yml up -d web bot celery_worker celery_beat prometheus grafana backup
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.override.yml up -d web bot celery_worker celery_beat prometheus grafana backup
+```
+
+### Override для web (команда и порт)
+
+Чтобы не редактировать основной compose, используем `docker-compose.prod.override.yml`:
+
+```yaml
+services:
+  web:
+    command: python -m uvicorn apps.web.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:8000:8000"
+```
+
+Запуск с учётом override:
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.override.yml up -d web
 ```
 
 ### Особенности продакшена
@@ -112,6 +130,16 @@ docker compose -f docker-compose.prod.yml up -d web bot celery_worker celery_bea
 - **Мониторинг**: Health checks и метрики
 - **Автоперезапуск**: `restart: unless-stopped`
 - **Авто-миграции**: отдельный сервис `migrator` выполняет `alembic upgrade head`
+
+### Чек-лист продакшн-деплоя
+
+1. Обновить код: `git pull --ff-only` или `rsync` на сервер
+2. Проверить `.env.prod` (POSTGRES_*, SECRET_KEY, TELEGRAM_BOT_TOKEN, REDIS_PASSWORD)
+3. Поднять базы и брокеры: `docker compose -f docker-compose.prod.yml up -d postgres redis rabbitmq`
+4. Прогнать миграции: `docker compose -f docker-compose.prod.yml run --rm migrator`
+5. Запуск приложений: `docker compose -f docker-compose.prod.yml -f docker-compose.prod.override.yml up -d web bot celery_worker celery_beat`
+6. Проверить: `curl http://127.0.0.1:8000/health`
+7. Nginx (если используется): `sudo nginx -t && sudo systemctl reload nginx`
 ### Полезные команды продакшена
 
 ```bash
