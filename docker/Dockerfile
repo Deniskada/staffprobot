@@ -5,7 +5,6 @@ ENV DEBIAN_FRONTEND=noninteractive PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Установка системных зависимостей для PostGIS и геоданных
 RUN set -eux; \
-    sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list; \
     apt-get update -o Acquire::Retries=5; \
     apt-get install -y --no-install-recommends \
     gcc \
