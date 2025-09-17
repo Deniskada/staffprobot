@@ -133,7 +133,9 @@ class StaffProBot:
             
             await self.application.run_polling(
                 allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
+                drop_pending_updates=True,
+                close_loop=False,
+                stop_signals=None,
             )
         except Exception as e:
             logger.error(f"Error in polling mode: {e}")
@@ -161,7 +163,9 @@ class StaffProBot:
                 listen="0.0.0.0",
                 port=8000,
                 webhook_url=webhook_url,
-                drop_pending_updates=True
+                drop_pending_updates=True,
+                close_loop=False,
+                stop_signals=None,
             )
         except Exception as e:
             logger.error(f"Error in webhook mode: {e}")
