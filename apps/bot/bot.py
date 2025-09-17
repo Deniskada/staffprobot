@@ -120,23 +120,33 @@ class StaffProBot:
         )
     
     async def start_polling(self) -> None:
-        """Запуск бота в режиме polling."""
+        """Запуск бота в режиме polling без управления внешним event loop."""
         if not self.application:
             raise RuntimeError("Application not initialized")
-        
+
         try:
             logger.info("Starting bot in polling mode")
-            
-            # Запускаем планировщик напоминаний
+
+            # Инициализация и старт приложения
+            await self.application.initialize()
+
             if self.reminder_scheduler:
                 await self.reminder_scheduler.start()
-            
-            await self.application.run_polling(
+
+            await self.application.start()
+
+            # Старт polling через updater, без закрытия внешнего event loop
+            if self.application.updater is None:
+                raise RuntimeError("Application updater is not available")
+
+            await self.application.updater.start_polling(
                 allowed_updates=Update.ALL_TYPES,
                 drop_pending_updates=True,
-                close_loop=False,
-                stop_signals=None,
             )
+
+            # Ожидание остановки
+            await self.application.updater.wait_stopped()
+
         except Exception as e:
             logger.error(f"Error in polling mode: {e}")
             raise
