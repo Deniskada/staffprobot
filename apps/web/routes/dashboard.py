@@ -53,6 +53,9 @@ async def dashboard_index(request: Request):
     elif user_role == "owner":
         # Владельцы должны использовать новый интерфейс /owner
         return RedirectResponse(url="/owner", status_code=302)
+    elif user_role == "applicant":
+        # Соискатели видят доступные вакансии
+        return RedirectResponse(url="/applicant", status_code=302)
     else:
         # Остальные роли - отказываем в доступе
         return RedirectResponse(url="/auth/login", status_code=302)
