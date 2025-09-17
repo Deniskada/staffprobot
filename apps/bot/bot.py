@@ -2,6 +2,7 @@
 
 import logging
 from typing import Optional
+import asyncio
 
 from telegram import Update
 from telegram.ext import (
@@ -144,8 +145,9 @@ class StaffProBot:
                 drop_pending_updates=True,
             )
 
-            # Ожидание остановки
-            await self.application.updater.wait_stopped()
+            # Блокируемся, пока процесс не будет остановлен (без закрытия внешнего event loop)
+            stop_event = asyncio.Event()
+            await stop_event.wait()
 
         except Exception as e:
             logger.error(f"Error in polling mode: {e}")
