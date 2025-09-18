@@ -50,3 +50,4 @@ def downgrade() -> None:
     op.execute("ALTER TABLE users ALTER COLUMN roles SET DEFAULT '[]'")
     # Keep NOT NULL to preserve constraints
 
+
