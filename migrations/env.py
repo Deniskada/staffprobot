@@ -51,9 +51,20 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    # Всегда берём URL из окружения (или собираем из POSTGRES_*),
+    # и не полагаемся на alembic.ini
+    env_url = os.getenv("DATABASE_URL")
+    if not env_url:
+        pg_user = os.getenv("POSTGRES_USER", "postgres")
+        pg_pass = os.getenv("POSTGRES_PASSWORD", "password")
+        pg_db = os.getenv("POSTGRES_DB", os.getenv("POSTGRES_DATABASE", "staffprobot"))
+        pg_host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", "postgres"))
+        pg_port = os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", "5432"))
+        env_url = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+    config.set_main_option("sqlalchemy.url", env_url)
+
     context.configure(
-        url=url,
+        url=env_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -70,18 +81,17 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    # URL БД берём из переменной окружения DATABASE_URL, иначе собираем из POSTGRES_*
+    # Всегда берём URL только из окружения (или собираем из POSTGRES_*),
+    # игнорируя alembic.ini. Никаких дефолтов на localhost/postgres.
     env_url = os.getenv("DATABASE_URL")
-    if env_url:
-        config.set_main_option("sqlalchemy.url", env_url)
-    else:
+    if not env_url:
         pg_user = os.getenv("POSTGRES_USER", "postgres")
         pg_pass = os.getenv("POSTGRES_PASSWORD", "password")
-        pg_db = os.getenv("POSTGRES_DB", "staffprobot")
+        pg_db = os.getenv("POSTGRES_DB", os.getenv("POSTGRES_DATABASE", "staffprobot"))
         pg_host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", "postgres"))
-        pg_port = os.getenv("DB_PORT", "5432")
-        url = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
-        config.set_main_option("sqlalchemy.url", url)
+        pg_port = os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", "5432"))
+        env_url = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+    config.set_main_option("sqlalchemy.url", env_url)
     
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
