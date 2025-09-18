@@ -1,5 +1,5 @@
 # Основные зависимости
-sqlalchemy==1.4.41
+sqlalchemy==1.4.52
 alembic==1.12.1
 psycopg2-binary==2.9.9
 asyncpg==0.29.0
