@@ -80,9 +80,9 @@ services:
           cpus: '0.1'
 
   bot:
-    image: python:3.11-slim-bookworm
+    image: staffprobot:latest
     container_name: staffprobot_bot_prod
-    command: sh -c "pip install -r requirements.txt && python scripts/start_bot.py"
+    command: python scripts/start_bot.py
     volumes:
       - .:/app
     working_dir: /app
@@ -96,10 +96,6 @@ services:
       - TELEGRAM_WEBHOOK_URL=https://bot.staffprobot.ru
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
-      - PIP_INDEX_URL=https://pypi.org/simple
-      - PIP_EXTRA_INDEX_URL=https://mirror.yandex.ru/mirrors/pypi/simple
-      - PIP_DEFAULT_TIMEOUT=60
-      - PIP_RETRIES=5
     restart: unless-stopped
     depends_on:
       postgres:
@@ -125,9 +121,9 @@ services:
           cpus: '0.25'
 
   web:
-    image: python:3.11-slim-bookworm
+    image: staffprobot:latest
     container_name: staffprobot_web_prod
-    command: sh -c "pip install -r requirements.txt && python apps/web/main.py"
+    command: python apps/web/main.py
     volumes:
       - .:/app
     working_dir: /app
@@ -140,10 +136,6 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
-      - PIP_INDEX_URL=https://pypi.org/simple
-      - PIP_EXTRA_INDEX_URL=https://mirror.yandex.ru/mirrors/pypi/simple
-      - PIP_DEFAULT_TIMEOUT=60
-      - PIP_RETRIES=5
     restart: unless-stopped
     depends_on:
       postgres:
@@ -169,9 +161,9 @@ services:
           cpus: '0.1'
 
   celery_worker:
-    image: python:3.11-slim-bookworm
+    image: staffprobot:latest
     container_name: staffprobot_celery_worker_prod
-    command: sh -c "pip install -r requirements.txt && python scripts/start_celery_worker.py"
+    command: python scripts/start_celery_worker.py
     volumes:
       - .:/app
     working_dir: /app
@@ -184,10 +176,6 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
-      - PIP_INDEX_URL=https://pypi.org/simple
-      - PIP_EXTRA_INDEX_URL=https://mirror.yandex.ru/mirrors/pypi/simple
-      - PIP_DEFAULT_TIMEOUT=60
-      - PIP_RETRIES=5
     restart: unless-stopped
     depends_on:
       postgres:
@@ -208,9 +196,9 @@ services:
           cpus: '0.1'
 
   celery_beat:
-    image: python:3.11-slim-bookworm
+    image: staffprobot:latest
     container_name: staffprobot_celery_beat_prod
-    command: sh -c "pip install -r requirements.txt && python scripts/start_celery_beat.py"
+    command: python scripts/start_celery_beat.py
     volumes:
       - .:/app
       - celery_beat_prod_data:/tmp
@@ -224,10 +212,6 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
-      - PIP_INDEX_URL=https://pypi.org/simple
-      - PIP_EXTRA_INDEX_URL=https://mirror.yandex.ru/mirrors/pypi/simple
-      - PIP_DEFAULT_TIMEOUT=60
-      - PIP_RETRIES=5
     restart: unless-stopped
     depends_on:
       postgres:
@@ -336,9 +320,9 @@ services:
           cpus: '0.05'
 
   migrator:
-    image: python:3.11-slim-bookworm
+    image: staffprobot:latest
     container_name: staffprobot_migrator_prod
-    command: sh -c "pip install -r requirements.txt && alembic upgrade head"
+    command: alembic upgrade head
     volumes:
       - .:/app
     working_dir: /app
@@ -351,10 +335,6 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
-      - PIP_INDEX_URL=https://pypi.org/simple
-      - PIP_EXTRA_INDEX_URL=https://mirror.yandex.ru/mirrors/pypi/simple
-      - PIP_DEFAULT_TIMEOUT=60
-      - PIP_RETRIES=5
     depends_on:
       postgres:
         condition: service_healthy
