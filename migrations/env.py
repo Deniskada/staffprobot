@@ -81,7 +81,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    # Всегда берём URL только из окружения (или собираем из POSTGRES_*),
+    #  Всегда берём URL только из окружения (или собираем из POSTGRES_*),
     # игнорируя alembic.ini. Никаких дефолтов на localhost/postgres.
     env_url = os.getenv("DATABASE_URL")
     if not env_url:
