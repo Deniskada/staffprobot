@@ -80,9 +80,12 @@ services:
           cpus: '0.1'
 
   bot:
-    image: ${IMAGE_NAME:-staffprobot}:${IMAGE_TAG:-latest}
+    image: python:3.11-slim-bookworm
     container_name: staffprobot_bot_prod
-    command: python scripts/start_bot.py
+    command: sh -c "pip install -r requirements.txt && python scripts/start_bot.py"
+    volumes:
+      - .:/app
+    working_dir: /app
     environment:
       - ENVIRONMENT=production
       - DEBUG=false
@@ -118,9 +121,12 @@ services:
           cpus: '0.25'
 
   web:
-    image: ${IMAGE_NAME:-staffprobot}:${IMAGE_TAG:-latest}
+    image: python:3.11-slim-bookworm
     container_name: staffprobot_web_prod
-    command: python apps/web/main.py
+    command: sh -c "pip install -r requirements.txt && python apps/web/main.py"
+    volumes:
+      - .:/app
+    working_dir: /app
     environment:
       - ENVIRONMENT=production
       - DEBUG=false
@@ -155,9 +161,12 @@ services:
           cpus: '0.1'
 
   celery_worker:
-    image: ${IMAGE_NAME:-staffprobot}:${IMAGE_TAG:-latest}
+    image: python:3.11-slim-bookworm
     container_name: staffprobot_celery_worker_prod
-    command: python scripts/start_celery_worker.py
+    command: sh -c "pip install -r requirements.txt && python scripts/start_celery_worker.py"
+    volumes:
+      - .:/app
+    working_dir: /app
     environment:
       - ENVIRONMENT=production
       - DEBUG=false
@@ -187,9 +196,13 @@ services:
           cpus: '0.1'
 
   celery_beat:
-    image: ${IMAGE_NAME:-staffprobot}:${IMAGE_TAG:-latest}
+    image: python:3.11-slim-bookworm
     container_name: staffprobot_celery_beat_prod
-    command: python scripts/start_celery_beat.py
+    command: sh -c "pip install -r requirements.txt && python scripts/start_celery_beat.py"
+    volumes:
+      - .:/app
+      - celery_beat_prod_data:/tmp
+    working_dir: /app
     environment:
       - ENVIRONMENT=production
       - DEBUG=false
@@ -199,8 +212,6 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
-    volumes:
-      - celery_beat_prod_data:/tmp
     restart: unless-stopped
     depends_on:
       postgres:
@@ -309,9 +320,12 @@ services:
           cpus: '0.05'
 
   migrator:
-    image: ${IMAGE_NAME:-staffprobot}:${IMAGE_TAG:-latest}
+    image: python:3.11-slim-bookworm
     container_name: staffprobot_migrator_prod
-    command: alembic upgrade head
+    command: sh -c "pip install -r requirements.txt && alembic upgrade head"
+    volumes:
+      - .:/app
+    working_dir: /app
     environment:
       - ENVIRONMENT=production
       - DEBUG=false
