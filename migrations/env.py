@@ -85,11 +85,13 @@ def run_migrations_online() -> None:
     # игнорируя alembic.ini. Никаких дефолтов на localhost/postgres.
     env_url = os.getenv("DATABASE_URL")
     if not env_url:
-        pg_user = os.getenv("POSTGRES_USER", "postgres")
-        pg_pass = os.getenv("POSTGRES_PASSWORD", "password")
-        pg_db = os.getenv("POSTGRES_DB", os.getenv("POSTGRES_DATABASE", "staffprobot"))
+        pg_user = os.getenv("POSTGRES_USER")
+        pg_pass = os.getenv("POSTGRES_PASSWORD")
+        pg_db = os.getenv("POSTGRES_DB", os.getenv("POSTGRES_DATABASE"))
         pg_host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", "postgres"))
         pg_port = os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", "5432"))
+        if not all([pg_user, pg_pass, pg_db]):
+            raise ValueError("DATABASE_URL or POSTGRES_* variables must be set")
         env_url = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
     config.set_main_option("sqlalchemy.url", env_url)
     
