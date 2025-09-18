@@ -15,7 +15,7 @@ import sqlalchemy as sa
 revision: str = '90f267d839c9'
 down_revision: Union[str, Sequence[str], None] = '0157a54a5e7e'
 branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = '20250828_add_time_slots_table'
 
 
 def upgrade() -> None:

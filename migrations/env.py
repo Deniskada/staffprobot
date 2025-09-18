@@ -1,6 +1,7 @@
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
+import sqlalchemy as sa
 from sqlalchemy import pool
 
 from alembic import context
@@ -69,12 +70,17 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    # Для Docker используем правильный URL базы данных
-    url = config.get_main_option("sqlalchemy.url")
-    
-    # Если URL не указан или использует localhost, заменяем на Docker URL
-    if not url or "localhost" in url:
-        url = "postgresql://postgres:password@postgres:5432/staffprobot_dev"
+    # URL БД берём из переменной окружения DATABASE_URL, иначе собираем из POSTGRES_*
+    env_url = os.getenv("DATABASE_URL")
+    if env_url:
+        config.set_main_option("sqlalchemy.url", env_url)
+    else:
+        pg_user = os.getenv("POSTGRES_USER", "postgres")
+        pg_pass = os.getenv("POSTGRES_PASSWORD", "password")
+        pg_db = os.getenv("POSTGRES_DB", "staffprobot")
+        pg_host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", "postgres"))
+        pg_port = os.getenv("DB_PORT", "5432")
+        url = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
         config.set_main_option("sqlalchemy.url", url)
     
     connectable = engine_from_config(
@@ -84,6 +90,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Гарантируем search_path=public для всех миграций
+        try:
+            connection.execute(sa.text("SET search_path TO public"))
+        except Exception:
+            pass
         context.configure(
             connection=connection, target_metadata=target_metadata
         )
