@@ -5,8 +5,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DEFAULT_TIMEOUT=60 \
     PIP_RETRIES=5 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_INDEX_URL=https://mirror.yandex.ru/mirrors/pypi/simple \
-    PIP_TRUSTED_HOST=mirror.yandex.ru
+    PIP_INDEX_URL=https://pypi.org/simple \
+    PIP_EXTRA_INDEX_URL=https://mirror.yandex.ru/mirrors/pypi/simple
 
 # Источники deb822 (без дублей)
 RUN rm -f /etc/apt/sources.list && mkdir -p /etc/apt/sources.list.d
