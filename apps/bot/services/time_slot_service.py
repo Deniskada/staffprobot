@@ -49,7 +49,7 @@ class TimeSlotService:
                         slot_date=current_date,
                         start_time=obj.opening_time,
                         end_time=obj.closing_time,
-                        hourly_rate=obj.hourly_rate,
+                        hourly_rate=float(obj.hourly_rate) if obj.hourly_rate else 0,
                         max_employees=1,
                         is_additional=False,
                         is_active=True
