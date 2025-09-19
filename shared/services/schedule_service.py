@@ -88,7 +88,7 @@ class ScheduleService(BaseService):
                             'id': slot.id,
                             'start_time': slot.start_time.strftime('%H:%M'),
                             'end_time': slot.end_time.strftime('%H:%M'),
-                            'hourly_rate': float(slot.hourly_rate),
+                            'hourly_rate': float(slot.hourly_rate) if slot.hourly_rate else None,
                             'description': slot.notes or ''
                         })
                 
@@ -277,7 +277,7 @@ class ScheduleService(BaseService):
                         'date': shift.start_time.date().isoformat(),
                         'start_time': shift.start_time.strftime('%H:%M'),
                         'end_time': shift.end_time.strftime('%H:%M'),
-                        'hourly_rate': float(shift.hourly_rate),
+                        'hourly_rate': float(shift.hourly_rate) if shift.hourly_rate else None,
                         'status': shift.status,
                         'notes': shift.notes or '',
                         'time_slot_id': shift.time_slot_id
