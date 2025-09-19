@@ -3,7 +3,7 @@
 URL-префикс: /owner/*
 """
 
-from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query, Body
 from fastapi.responses import RedirectResponse
 from typing import List, Optional, Dict, Any
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -1638,6 +1638,119 @@ async def owner_calendar_api_objects(request: Request):
         raise HTTPException(status_code=500, detail="Ошибка загрузки объектов")
 
 
+@router.get("/api/employees")
+async def api_employees(request: Request):
+    """API: список сотрудников для drag&drop панели."""
+    current_user = await get_current_user(request)
+    if not current_user or current_user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    try:
+        async with get_async_session() as session:
+            from sqlalchemy import select
+            from domain.entities.user import User
+            from domain.entities.object import Object
+            from domain.entities.shift import Shift
+
+            # Получаем внутренний ID владельца
+            user_id = await get_user_id_from_current_user(current_user, session)
+            if not user_id:
+                raise HTTPException(status_code=404, detail="Владелец не найден")
+
+            # Получаем сотрудников, которые работали на объектах владельца
+            employees_q = select(User).distinct().join(Shift, User.id == Shift.user_id).join(Object, Shift.object_id == Object.id).where(
+                Object.owner_id == user_id,
+                User.role == "employee"
+            )
+            employees = (await session.execute(employees_q)).scalars().all()
+            
+            # Если нет сотрудников из смен, показываем всех сотрудников владельца
+            if not employees:
+                all_employees_q = select(User).where(User.role == "employee")
+                employees = (await session.execute(all_employees_q)).scalars().all()
+
+            return [
+                {
+                    "id": emp.id,
+                    "name": f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username,
+                    "username": emp.username,
+                    "role": emp.role,
+                    "is_active": emp.is_active,
+                    "telegram_id": emp.telegram_id
+                }
+                for emp in employees
+            ]
+
+    except Exception as e:
+        logger.error(f"Error getting employees: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
+
+
+@router.get("/api/employees/for-object/{object_id}")
+async def api_employees_for_object(object_id: int, request: Request):
+    """API: получение списка сотрудников с доступом к конкретному объекту."""
+    current_user = await get_current_user(request)
+    if not current_user or current_user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    try:
+        async with get_async_session() as session:
+            from sqlalchemy import select
+            from domain.entities.user import User
+            from domain.entities.contract import Contract
+            from domain.entities.object import Object
+            import json
+            
+            # Получаем внутренний ID владельца
+            user_id = await get_user_id_from_current_user(current_user, session)
+            if not user_id:
+                raise HTTPException(status_code=404, detail="Владелец не найден")
+            
+            # Проверяем, что объект принадлежит владельцу
+            object_query = select(Object).where(Object.id == object_id, Object.owner_id == user_id)
+            object_result = await session.execute(object_query)
+            if not object_result.scalar_one_or_none():
+                raise HTTPException(status_code=404, detail="Объект не найден")
+            
+            # Получаем сотрудников с доступом к объекту
+            employees_query = select(User).join(Contract, User.id == Contract.employee_id).where(
+                User.role == "employee",
+                Contract.owner_id == user_id,
+                Contract.status == "active"
+            )
+            employees_result = await session.execute(employees_query)
+            employees = employees_result.scalars().all()
+            
+            employees_with_access = []
+            for emp in employees:
+                # Получаем договор сотрудника
+                contract_query = select(Contract).where(
+                    Contract.employee_id == emp.id,
+                    Contract.owner_id == user_id,
+                    Contract.status == "active"
+                )
+                contract_result = await session.execute(contract_query)
+                contract = contract_result.scalar_one_or_none()
+                
+                if contract and contract.allowed_objects:
+                    allowed_objects = contract.allowed_objects if isinstance(contract.allowed_objects, list) else json.loads(contract.allowed_objects)
+                    if object_id in allowed_objects:
+                        employees_with_access.append({
+                            "id": emp.id,
+                            "name": f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username,
+                            "username": emp.username,
+                            "role": emp.role,
+                            "is_active": emp.is_active,
+                            "telegram_id": emp.telegram_id
+                        })
+            
+            return employees_with_access
+            
+    except Exception as e:
+        logger.error(f"Error fetching employees for object {object_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения списка сотрудников для объекта")
+
+
 @router.post("/calendar/api/quick-create-timeslot")
 async def owner_calendar_quick_create_timeslot(
     request: Request,
@@ -1714,6 +1827,108 @@ async def owner_calendar_quick_create_timeslot(
     except Exception as e:
         logger.error(f"Error creating quick timeslot: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слота: {str(e)}")
+
+
+@router.post("/api/calendar/plan-shift")
+async def api_calendar_plan_shift(
+    request: Request,
+    timeslot_id: int = Body(...),
+    employee_id: int = Body(...)
+):
+    """API: планирование смены для сотрудника в тайм-слот."""
+    current_user = await get_current_user(request)
+    if not current_user or current_user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    try:
+        async with get_async_session() as session:
+            from sqlalchemy import select
+            from domain.entities.user import User
+            from domain.entities.object import Object
+            from domain.entities.time_slot import TimeSlot
+            from domain.entities.shift_schedule import ShiftSchedule
+            from domain.entities.contract import Contract
+            from datetime import datetime
+            import json
+
+            # Получаем внутренний ID владельца
+            user_id = await get_user_id_from_current_user(current_user, session)
+            if not user_id:
+                raise HTTPException(status_code=404, detail="Владелец не найден")
+
+            # Проверяем, что тайм-слот существует и принадлежит владельцу
+            timeslot_query = select(TimeSlot).join(Object).where(
+                TimeSlot.id == timeslot_id,
+                Object.owner_id == user_id
+            )
+            timeslot = (await session.execute(timeslot_query)).scalar_one_or_none()
+            if not timeslot:
+                raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+
+            # Проверяем, что сотрудник существует
+            employee_query = select(User).where(User.id == employee_id, User.role == "employee")
+            employee = (await session.execute(employee_query)).scalar_one_or_none()
+            if not employee:
+                raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+            # Проверяем, что у сотрудника есть договор с владельцем
+            contract_query = select(Contract).where(
+                Contract.employee_id == employee_id,
+                Contract.owner_id == user_id,
+                Contract.status == "active"
+            )
+            contract = (await session.execute(contract_query)).scalar_one_or_none()
+            if not contract:
+                raise HTTPException(status_code=400, detail="У сотрудника нет активного договора с вами")
+            
+            # Проверяем, что сотрудник имеет доступ к объекту тайм-слота
+            allowed_objects = contract.allowed_objects if contract.allowed_objects else []
+            if timeslot.object_id not in allowed_objects:
+                raise HTTPException(status_code=400, detail=f"У сотрудника нет доступа к объекту ID {timeslot.object_id}")
+
+            # Создаем datetime объекты для planned_start и planned_end
+            from datetime import datetime, time, date
+            slot_datetime = datetime.combine(timeslot.slot_date, timeslot.start_time)
+            end_datetime = datetime.combine(timeslot.slot_date, timeslot.end_time)
+            
+            # Проверяем, что сотрудник не занят в это время
+            existing_schedule_query = select(ShiftSchedule).where(
+                ShiftSchedule.user_id == employee_id,
+                ShiftSchedule.planned_start == slot_datetime,
+                ShiftSchedule.planned_end == end_datetime,
+                ShiftSchedule.status.in_(["planned", "confirmed"])
+            )
+            existing_schedule = (await session.execute(existing_schedule_query)).scalar_one_or_none()
+            if existing_schedule:
+                raise HTTPException(status_code=400, detail="Сотрудник уже запланирован на это время")
+
+            # Создаем запланированную смену
+            new_schedule = ShiftSchedule(
+                user_id=employee_id,
+                object_id=timeslot.object_id,
+                time_slot_id=timeslot_id,
+                planned_start=slot_datetime,
+                planned_end=end_datetime,
+                status="planned",
+                hourly_rate=timeslot.hourly_rate,
+                notes="Запланировано через drag&drop"
+            )
+            session.add(new_schedule)
+            await session.commit()
+
+            return {
+                "success": True,
+                "message": f"Смена запланирована для {employee.first_name or employee.username}",
+                "schedule_id": new_schedule.id
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error planning shift: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
+
+
 @router.get("/calendar/api/timeslot/{timeslot_id}")
 async def owner_calendar_api_timeslot_detail(
     request: Request,
