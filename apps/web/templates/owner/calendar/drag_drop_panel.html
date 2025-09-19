@@ -10,6 +10,9 @@
         <button class="btn btn-sm btn-outline-secondary" onclick="togglePanel()">
             <i class="bi bi-chevron-up" id="panelToggleIcon"></i>
         </button>
+        <div class="collapsed-icon" style="display: none;">
+            <i class="bi bi-grid-3x3-gap"></i>
+        </div>
     </div>
     
     <div class="panel-content" id="panelContent">
@@ -113,7 +116,8 @@
 }
 
 .drag-drop-panel.collapsed {
-    width: 80px;
+    width: 60px;
+    height: 60px;
 }
 
 .drag-drop-panel.collapsed .panel-content {
@@ -121,24 +125,30 @@
 }
 
 .drag-drop-panel.collapsed .panel-header h6 {
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
-    margin: 0;
-    font-size: 0.9em;
-    white-space: nowrap;
+    display: none;
 }
 
 .drag-drop-panel.collapsed .panel-header {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    padding: 10px 5px;
-    height: 120px;
+    padding: 5px;
+    height: 60px;
+    width: 60px;
+    border-radius: 50%;
+    background: #007bff;
 }
 
 .drag-drop-panel.collapsed .panel-header button {
-    margin-top: 10px;
-    transform: rotate(90deg);
+    display: none;
+}
+
+.drag-drop-panel.collapsed .collapsed-icon {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5em;
 }
 
 .objects-count {
@@ -589,6 +599,19 @@ function togglePanel() {
     const message = isCollapsed ? 'Панель свернута' : 'Панель развернута';
     showNotification(message, 'info');
 }
+
+// Добавляем обработчик клика на заголовок панели для разворачивания
+document.addEventListener('DOMContentLoaded', function() {
+    const panel = document.getElementById('dragDropPanel');
+    const header = panel.querySelector('.panel-header');
+    
+    header.addEventListener('click', function(e) {
+        // Если панель свернута и клик не по кнопке
+        if (panel.classList.contains('collapsed') && !e.target.closest('button')) {
+            togglePanel();
+        }
+    });
+});
 
 function refreshObjects() {
     loadObjects();

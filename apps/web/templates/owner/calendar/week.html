@@ -80,6 +80,11 @@
     opacity: 1;
 }
 
+/* Скрываем надпись "Перетащите объект сюда" при перетаскивании сотрудника */
+.day-column.drop-zone.employee-drag-over::after {
+    display: none;
+}
+
 .day-header {
     background: #e9ecef;
     padding: 10px;
@@ -210,6 +215,9 @@
 {% block content %}
 <!-- Панель drag & drop -->
 {% include 'owner/calendar/drag_drop_panel.html' %}
+
+<!-- Панель сотрудников для drag & drop -->
+{% include 'owner/calendar/employees_drag_drop_panel.html' %}
 
 <div class="container-fluid">
     <!-- Заголовок и навигация -->
@@ -352,6 +360,7 @@
                     {% for slot in day.timeslots %}
                     <div class="timeslot-item" 
                          data-timeslot-id="{{ slot.id }}"
+                         data-object-id="{{ slot.object_id }}"
                          title="{{ slot.object_name }}: {{ slot.start_time }}-{{ slot.end_time }} ({{ slot.hourly_rate }}₽/час)"
                          onclick="showTimeslotDetails({{ slot.id }})">
                         <div class="fw-bold">{{ slot.start_time }}-{{ slot.end_time }}</div>
@@ -399,6 +408,9 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-success" id="addEmployeeBtn" style="display: none;">
+                    <i class="bi bi-person-plus"></i> Добавить сотрудника в план
+                </button>
                 <button type="button" class="btn btn-primary" id="editTimeslotBtn">Редактировать</button>
             </div>
         </div>
@@ -507,6 +519,11 @@ function showTimeslotDetails(timeslotId) {
                 <h6>Фактические</h6>
                 <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Время</th><th>Статус</th><th>Сотрудник</th><th>Часы</th><th>Оплата</th></tr></thead><tbody>${actualRows || '<tr><td colspan="5" class="text-muted">Нет</td></tr>'}</tbody></table></div>
             `;
+            
+            // Показываем кнопку добавления сотрудника
+            const addEmployeeBtn = document.getElementById('addEmployeeBtn');
+            addEmployeeBtn.dataset.timeslotId = slot.id;
+            addEmployeeBtn.style.display = 'inline-block';
         })
         .catch(() => {
             document.getElementById('timeslotDetails').innerHTML = `<div class="alert alert-danger">Ошибка загрузки деталей тайм-слота</div>`;
@@ -532,6 +549,190 @@ document.addEventListener('keydown', function(e) {
 // Инициализация статусов
 document.addEventListener('DOMContentLoaded', function() {
     loadTimeslotsStatusWeek();
+    
+    // Обработчик для кнопки добавления сотрудника в план
+    document.getElementById('addEmployeeBtn').addEventListener('click', function() {
+        const timeslotId = this.dataset.timeslotId;
+        if (timeslotId) {
+            showAddEmployeeModal(timeslotId);
+        }
+    });
+});
+
+// Функция для показа модального окна добавления сотрудника
+function showAddEmployeeModal(timeslotId) {
+    // Получаем объект тайм-слота для определения ID объекта
+    const timeslotElement = document.querySelector(`[data-timeslot-id="${timeslotId}"]`);
+    const objectId = timeslotElement ? timeslotElement.dataset.objectId : null;
+    
+    if (!objectId) {
+        showNotification('Ошибка: не удалось определить объект тайм-слота', 'error');
+        return;
+    }
+    
+    // Создаем модальное окно для выбора сотрудника
+    const modalHtml = `
+        <div class="modal fade" id="addEmployeeToTimeslotModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-person-plus"></i> Добавить сотрудника в план
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="employeeSelectModal" class="form-label">Выберите сотрудника *</label>
+                            <select class="form-select" id="employeeSelectModal" required>
+                                <option value="">Загрузка сотрудников...</option>
+                            </select>
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Совет:</strong> Вы также можете перетащить сотрудника из правой панели на тайм-слот!
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-success" onclick="addEmployeeToTimeslot(${timeslotId})">
+                            <i class="bi bi-check-lg"></i> Добавить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Удаляем существующее модальное окно, если есть
+    const existingModal = document.getElementById('addEmployeeToTimeslotModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Добавляем новое модальное окно
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Загружаем список сотрудников для конкретного объекта
+    loadEmployeesForModal(objectId);
+    
+    // Показываем модальное окно
+    const modal = new bootstrap.Modal(document.getElementById('addEmployeeToTimeslotModal'));
+    modal.show();
+}
+
+// Загрузка сотрудников для модального окна
+async function loadEmployeesForModal(objectId) {
+    try {
+        const response = await fetch(`/owner/api/employees/for-object/${objectId}`, {
+            credentials: 'include'
+        });
+        const employees = await response.json();
+        
+        const select = document.getElementById('employeeSelectModal');
+        if (employees.length === 0) {
+            select.innerHTML = '<option value="">Нет сотрудников с доступом к этому объекту</option>';
+        } else {
+            select.innerHTML = '<option value="">Выберите сотрудника</option>' + 
+                employees.map(emp => `<option value="${emp.id}">${emp.name}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки сотрудников:', error);
+        const select = document.getElementById('employeeSelectModal');
+        select.innerHTML = '<option value="">Ошибка загрузки сотрудников</option>';
+    }
+}
+
+// Добавление сотрудника в тайм-слот
+async function addEmployeeToTimeslot(timeslotId) {
+    const employeeId = document.getElementById('employeeSelectModal').value;
+    
+    if (!employeeId) {
+        showNotification('Выберите сотрудника', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/owner/api/calendar/plan-shift', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                timeslot_id: timeslotId,
+                employee_id: parseInt(employeeId)
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Закрываем модальное окно
+            bootstrap.Modal.getInstance(document.getElementById('addEmployeeToTimeslotModal')).hide();
+            
+            // Показываем уведомление
+            showNotification(result.message, 'success');
+            
+            // Обновляем страницу
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            // Показываем конкретное сообщение об ошибке
+            let errorMessage = result.message || 'Ошибка планирования смены';
+            if (result.detail) {
+                errorMessage = result.detail;
+            }
+            showNotification(errorMessage, 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка планирования смены:', error);
+        showNotification('Ошибка планирования смены', 'error');
+    }
+}
+
+// Функция для показа уведомлений
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 3000);
+}
+
+// Добавляем обработчики клика для разворачивания панелей
+document.addEventListener('DOMContentLoaded', function() {
+    // Обработчик для панели объектов
+    const objectsPanel = document.getElementById('dragDropPanel');
+    if (objectsPanel) {
+        const objectsHeader = objectsPanel.querySelector('.panel-header');
+        objectsHeader.addEventListener('click', function(e) {
+            if (objectsPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+                togglePanel();
+            }
+        });
+    }
+    
+    // Обработчик для панели сотрудников
+    const employeesPanel = document.getElementById('employeesDragDropPanel');
+    if (employeesPanel) {
+        const employeesHeader = employeesPanel.querySelector('.panel-header');
+        employeesHeader.addEventListener('click', function(e) {
+            if (employeesPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+                toggleEmployeesPanel();
+            }
+        });
+    }
 });
 </script>
 {% endblock %}
