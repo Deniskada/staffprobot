@@ -328,6 +328,7 @@ class ObjectService:
                         slot_date=current_date,
                         start_time=obj.opening_time,
                         end_time=obj.closing_time,
+                        hourly_rate=float(obj.hourly_rate) if obj.hourly_rate else 0,
                         is_active=True
                     )
                     self.db.add(timeslot)
