@@ -228,7 +228,7 @@ async def create_object(
                             "slot_date": d.isoformat(),
                             "start_time": f"{open_h:02d}:{open_m:02d}",
                             "end_time": f"{close_h:02d}:{close_m:02d}",
-                            "hourly_rate": hourly_rate,
+                            "hourly_rate": float(hourly_rate) if hourly_rate else 0,
                             "is_active": True
                         }, new_object.id, current_user["telegram_id"])
                         created += 1
