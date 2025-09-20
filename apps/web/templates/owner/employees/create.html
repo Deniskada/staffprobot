@@ -202,7 +202,8 @@
                                                            type="checkbox" 
                                                            id="can_edit" 
                                                            name="manager_permissions" 
-                                                           value="can_edit">
+                                                           value="can_edit"
+                                                           checked>
                                                     <label class="form-check-label" for="can_edit">
                                                         Редактирование объектов
                                                     </label>
@@ -224,7 +225,8 @@
                                                            type="checkbox" 
                                                            id="can_manage_employees" 
                                                            name="manager_permissions" 
-                                                           value="can_manage_employees">
+                                                           value="can_manage_employees"
+                                                           checked>
                                                     <label class="form-check-label" for="can_manage_employees">
                                                         Управление сотрудниками
                                                     </label>
@@ -234,7 +236,8 @@
                                                            type="checkbox" 
                                                            id="can_view_finances" 
                                                            name="manager_permissions" 
-                                                           value="can_view_finances">
+                                                           value="can_view_finances"
+                                                           checked>
                                                     <label class="form-check-label" for="can_view_finances">
                                                         Просмотр финансов
                                                     </label>
@@ -244,7 +247,8 @@
                                                            type="checkbox" 
                                                            id="can_edit_rates" 
                                                            name="manager_permissions" 
-                                                           value="can_edit_rates">
+                                                           value="can_edit_rates"
+                                                           checked>
                                                     <label class="form-check-label" for="can_edit_rates">
                                                         Редактирование ставок
                                                     </label>
@@ -254,7 +258,8 @@
                                                            type="checkbox" 
                                                            id="can_edit_schedule" 
                                                            name="manager_permissions" 
-                                                           value="can_edit_schedule">
+                                                           value="can_edit_schedule"
+                                                           checked>
                                                     <label class="form-check-label" for="can_edit_schedule">
                                                         Редактирование расписания
                                                     </label>
@@ -577,6 +582,14 @@ function toggleManagerPermissions() {
     
     if (isManagerCheckbox.checked) {
         managerPermissionsDiv.style.display = 'block';
+        // Устанавливаем права по умолчанию (все кроме удаления)
+        document.getElementById('can_view').checked = true;
+        document.getElementById('can_edit').checked = true;
+        document.getElementById('can_delete').checked = false;
+        document.getElementById('can_manage_employees').checked = true;
+        document.getElementById('can_view_finances').checked = true;
+        document.getElementById('can_edit_rates').checked = true;
+        document.getElementById('can_edit_schedule').checked = true;
     } else {
         managerPermissionsDiv.style.display = 'none';
         // Сбрасываем все права управляющего
@@ -584,8 +597,6 @@ function toggleManagerPermissions() {
         permissionCheckboxes.forEach(checkbox => {
             checkbox.checked = false;
         });
-        // Включаем только базовое право просмотра
-        document.getElementById('can_view').checked = true;
     }
 }
 </script>
