@@ -62,6 +62,39 @@
                 
                 <ul class="navbar-nav">
                     {% if current_user %}
+                        <!-- Переключатель ролей -->
+                        {% if available_interfaces and available_interfaces|length > 1 %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-arrow-left-right me-1"></i>
+                                Администратор
+                            </a>
+                            <ul class="dropdown-menu">
+                                {% for interface in available_interfaces %}
+                                <li>
+                                    <a class="dropdown-item {% if interface.title == 'Администратор' %}active{% endif %}" 
+                                       href="{{ interface.url }}">
+                                        {% if interface.title == 'Администратор' %}
+                                            <i class="bi bi-shield-fill-check me-2"></i>
+                                        {% elif interface.title == 'Владелец' %}
+                                            <i class="bi bi-person-badge me-2"></i>
+                                        {% elif interface.title == 'Управляющий' %}
+                                            <i class="bi bi-person-gear me-2"></i>
+                                        {% elif interface.title == 'Сотрудник' %}
+                                            <i class="bi bi-person me-2"></i>
+                                        {% elif interface.title == 'Соискатель' %}
+                                            <i class="bi bi-person-plus me-2"></i>
+                                        {% else %}
+                                            <i class="bi bi-person-circle me-2"></i>
+                                        {% endif %}
+                                        {{ interface.title }}
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                        {% endif %}
+                        
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                 <i class="bi bi-person-circle"></i> {{ current_user.first_name }}
