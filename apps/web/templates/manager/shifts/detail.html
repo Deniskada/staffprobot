@@ -11,7 +11,7 @@
                     <i class="bi bi-clock-history"></i> Детали смены
                 </h1>
                 <div class="d-flex gap-2">
-                    <a href="/owner/shifts" class="btn btn-outline-secondary">
+                    <a href="/manager/shifts" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-left"></i> Назад к списку
                     </a>
                     {% if shift_type == 'schedule' and shift.status == 'planned' %}
@@ -45,24 +45,19 @@
                                     <h6>Сотрудник</h6>
                                     <div class="d-flex align-items-center mb-3">
                                         <div class="avatar-lg bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3">
-                                            {{ shift.user.first_name[0] }}
+                                            {{ (shift.user_name or 'Н')[0] }}
                                         </div>
                                         <div>
-                                            <div class="fw-bold fs-5">{{ shift.user.first_name }} {{ shift.user.last_name or '' }}</div>
-                                            <div class="text-muted">@{{ shift.user.username or 'без username' }}</div>
-                                            <div class="text-muted">ID: {{ shift.user.telegram_id }}</div>
+                                            <div class="fw-bold fs-5">{{ shift.user_name or 'Неизвестный пользователь' }}</div>
+                                            <div class="text-muted">ID: {{ shift.id }}</div>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <h6>Объект</h6>
                                     <div class="mb-3">
-                                        <div class="fw-bold fs-5">{{ shift.object.name }}</div>
-                                        <div class="text-muted">{{ shift.object.address or 'Адрес не указан' }}</div>
-                                        <div class="text-muted">
-                                            <i class="bi bi-geo-alt"></i> 
-                                            {{ shift.object.coordinates or 'Координаты не указаны' }}
-                                        </div>
+                                        <div class="fw-bold fs-5">{{ shift.object_name or 'Неизвестный объект' }}</div>
+                                        <div class="text-muted">ID: {{ shift.id }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -78,9 +73,9 @@
                                             <div>
                                                 <div class="fw-bold">
                                                     {% if shift_type == 'schedule' %}
-                                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.planned_start, object.timezone if object else 'Europe/Moscow') }}
+                                                        {{ shift.start_time }}
                                                     {% else %}
-                                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.start_time, object.timezone if object else 'Europe/Moscow') }}
+                                                        {{ shift.start_time }}
                                                     {% endif %}
                                                 </div>
                                                 <small class="text-muted">Начало</small>
@@ -93,9 +88,9 @@
                                             <div>
                                                 <div class="fw-bold">
                                                     {% if shift_type == 'schedule' %}
-                                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.planned_end, object.timezone if object else 'Europe/Moscow') }}
+                                                        {{ shift.end_time }}
                                                     {% elif shift.end_time %}
-                                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.end_time, object.timezone if object else 'Europe/Moscow') }}
+                                                        {{ shift.end_time }}
                                                     {% else %}
                                                         <span class="text-warning">В процессе</span>
                                                     {% endif %}
@@ -129,18 +124,9 @@
                                         {% endif %}
                                     </div>
                                     
-                                    {% if shift_type == 'schedule' %}
                                     <div class="text-muted">
-                                        <small>Создана: {{ shift.created_at.strftime('%d.%m.%Y %H:%M') }}</small>
+                                        <small>Создана: {{ shift.created_at.strftime('%d.%m.%Y %H:%M') if shift.created_at else 'Не указана' }}</small>
                                     </div>
-                                    {% else %}
-                                    <div class="text-muted">
-                                        <small>Создана: {{ shift.created_at.strftime('%d.%m.%Y %H:%M') }}</small>
-                                        {% if shift.updated_at %}
-                                        <br><small>Обновлена: {{ shift.updated_at.strftime('%d.%m.%Y %H:%M') }}</small>
-                                        {% endif %}
-                                    </div>
-                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -208,7 +194,7 @@
                         </div>
                         <div class="card-body">
                             <div class="d-grid gap-2">
-                                <a href="/owner/shifts" class="btn btn-outline-secondary">
+                                <a href="/manager/shifts" class="btn btn-outline-secondary">
                                     <i class="bi bi-arrow-left"></i> Назад к списку
                                 </a>
                                 
@@ -222,7 +208,7 @@
                                 </button>
                                 {% endif %}
                                 
-                                <a href="/owner/reports" class="btn btn-outline-info">
+                                <a href="/manager/reports" class="btn btn-outline-info">
                                     <i class="bi bi-graph-up"></i> Отчеты
                                 </a>
                             </div>
@@ -261,14 +247,8 @@
                             {% endif %}
                             
                             <div class="mb-3">
-                                <strong>Создана:</strong> {{ shift.created_at.strftime('%d.%m.%Y %H:%M') }}
+                                <strong>Создана:</strong> {{ shift.created_at.strftime('%d.%m.%Y %H:%M') if shift.created_at else 'Не указана' }}
                             </div>
-                            
-                            {% if shift.updated_at %}
-                            <div class="mb-3">
-                                <strong>Обновлена:</strong> {{ shift.updated_at.strftime('%d.%m.%Y %H:%M') }}
-                            </div>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -308,7 +288,7 @@ function cancelShift() {
 
 document.getElementById('confirmCancel').addEventListener('click', async function() {
     try {
-        const response = await fetch(`/owner/shifts/{{ shift.id }}/cancel?shift_type={{ shift_type }}`, {
+        const response = await fetch(`/manager/shifts/{{ shift.id }}/cancel?shift_type={{ shift_type }}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
