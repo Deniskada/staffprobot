@@ -12,6 +12,7 @@ from shared.services.role_service import RoleService
 from shared.services.manager_permission_service import ManagerPermissionService
 from shared.services.role_based_login_service import RoleBasedLoginService
 from apps.web.middleware.role_middleware import require_manager_or_owner
+from apps.web.dependencies import get_current_user_dependency
 from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
@@ -1276,7 +1277,7 @@ async def get_timeslots_status_manager(
     year: int = Query(...),
     month: int = Query(...),
     object_id: Optional[int] = Query(None),
-    current_user: dict = Depends(require_manager_or_owner)
+    current_user: dict = Depends(get_current_user_dependency())
 ):
     """Получение статуса тайм-слотов для календаря управляющего"""
     try:
