@@ -554,20 +554,25 @@ async def manager_employees(
                 # Получаем всех сотрудников, работающих на доступных объектах
                 from sqlalchemy import func, or_, text, cast, String, JSON, any_, exists
                 
-                # Максимально простой подход - используем json_array_elements в FROM
+                # Используем простой SQL с text() для проверки пересечения массивов
                 employees_query = select(User).join(
                     Contract, User.id == Contract.employee_id
-                ).join(
-                    func.json_array_elements(Contract.allowed_objects).alias('obj')
                 ).where(
-                    func.json_array_elements(Contract.allowed_objects).in_(object_ids),
-                    Contract.is_active == True
+                    Contract.is_active == True,
+                    text("EXISTS (SELECT 1 FROM json_array_elements(contracts.allowed_objects) AS elem WHERE elem::text::int = ANY(ARRAY[{}]))".format(','.join(map(str, object_ids))))
                 ).distinct()
                 
                 logger.info(f"Executing query: {employees_query}")
+                logger.info(f"Query parameters: object_ids={object_ids}")
+                logger.info(f"SQL: {str(employees_query.compile(compile_kwargs={'literal_binds': True}))}")
+                
                 result = await db.execute(employees_query)
                 employees = result.scalars().all()
                 logger.info(f"Found {len(employees)} employees")
+                
+                # Логируем найденных сотрудников
+                for emp in employees:
+                    logger.info(f"Employee: {emp.id} - {emp.first_name} {emp.last_name}")
             else:
                 logger.info("No accessible objects, returning empty employee list")
             
