@@ -279,6 +279,7 @@ async def object_detail(
             "opening_time": obj.opening_time.strftime("%H:%M"),
             "closing_time": obj.closing_time.strftime("%H:%M"),
             "max_distance": obj.max_distance_meters,
+            "auto_close_minutes": obj.auto_close_minutes,
             "is_active": obj.is_active,
             "available_for_applicants": obj.available_for_applicants,
             "created_at": obj.created_at.strftime("%Y-%m-%d"),
@@ -334,6 +335,7 @@ async def edit_object_form(
             "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "",
             "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "",
             "max_distance": obj.max_distance_meters or 500,
+            "auto_close_minutes": obj.auto_close_minutes,
             "available_for_applicants": obj.available_for_applicants,
             "is_active": obj.is_active
         }
