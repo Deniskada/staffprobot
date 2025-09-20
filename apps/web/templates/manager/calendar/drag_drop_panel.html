@@ -632,6 +632,16 @@ function closeQuickCreateModal() {
     }
 }
 
+// Добавляем обработчик для кнопки "Отмена"
+document.addEventListener('DOMContentLoaded', function() {
+    const cancelButton = document.querySelector('[data-bs-dismiss="modal"]');
+    if (cancelButton) {
+        cancelButton.addEventListener('click', function() {
+            closeQuickCreateModal();
+        });
+    }
+});
+
 function showNotification(message, type = 'info') {
     // Создаем уведомление
     const notification = document.createElement('div');

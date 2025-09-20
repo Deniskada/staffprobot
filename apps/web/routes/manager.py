@@ -2071,4 +2071,4 @@ async def quick_create_timeslot_manager(
         raise
     except Exception as e:
         logger.error(f"Error creating timeslot: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Ошибка создания тайм-слота")
+        raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слота: {str(e)}")
