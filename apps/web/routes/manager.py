@@ -2164,6 +2164,113 @@ async def manager_shifts_list(
         raise HTTPException(status_code=500, detail="Ошибка загрузки смен")
 
 
+@router.get("/shifts/{shift_id}", response_class=HTMLResponse)
+async def manager_shift_detail(
+    request: Request, 
+    shift_id: int, 
+    shift_type: Optional[str] = Query("shift"),
+    current_user: dict = Depends(require_manager_or_owner),
+):
+    """Детали смены управляющего"""
+    try:
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            # Получаем внутренний ID пользователя
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем доступные объекты управляющего
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if not accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступа к объектам")
+            
+            shift_data = None
+            
+            if shift_type == "schedule":
+                # Запланированная смена
+                query = select(ShiftSchedule).options(
+                    selectinload(ShiftSchedule.object),
+                    selectinload(ShiftSchedule.user)
+                ).where(ShiftSchedule.id == shift_id)
+                
+                result = await db.execute(query)
+                schedule = result.scalar_one_or_none()
+                
+                if not schedule:
+                    raise HTTPException(status_code=404, detail="Запланированная смена не найдена")
+                
+                # Проверяем доступ к объекту
+                if schedule.object_id not in accessible_object_ids:
+                    raise HTTPException(status_code=403, detail="Нет доступа к объекту")
+                
+                shift_data = {
+                    'id': schedule.id,
+                    'type': 'schedule',
+                    'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
+                    'user_name': f"{schedule.user.first_name} {schedule.user.last_name or ''}".strip() if schedule.user else 'Неизвестный пользователь',
+                    'start_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_start, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_start else '-',
+                    'end_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_end, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_end else '-',
+                    'status': schedule.status,
+                    'hourly_rate': schedule.hourly_rate,
+                    'notes': schedule.notes,
+                    'created_at': schedule.created_at
+                }
+            else:
+                # Обычная смена
+                query = select(Shift).options(
+                    selectinload(Shift.object),
+                    selectinload(Shift.user)
+                ).where(Shift.id == shift_id)
+                
+                result = await db.execute(query)
+                shift = result.scalar_one_or_none()
+                
+                if not shift:
+                    raise HTTPException(status_code=404, detail="Смена не найдена")
+                
+                # Проверяем доступ к объекту
+                if shift.object_id not in accessible_object_ids:
+                    raise HTTPException(status_code=403, detail="Нет доступа к объекту")
+                
+                shift_data = {
+                    'id': shift.id,
+                    'type': 'shift',
+                    'object_name': shift.object.name if shift.object else 'Неизвестный объект',
+                    'user_name': f"{shift.user.first_name} {shift.user.last_name or ''}".strip() if shift.user else 'Неизвестный пользователь',
+                    'start_time': web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.start_time else '-',
+                    'end_time': web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.end_time else '-',
+                    'status': shift.status,
+                    'total_hours': shift.total_hours,
+                    'total_payment': shift.total_payment,
+                    'notes': shift.notes,
+                    'created_at': shift.created_at
+                }
+            
+            # Получаем данные для переключения интерфейсов
+            login_service = RoleBasedLoginService(db)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
+            return templates.TemplateResponse("manager/shifts/detail.html", {
+                "request": request,
+                "current_user": current_user,
+                "available_interfaces": available_interfaces,
+                "shift": shift_data
+            })
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading manager shift detail: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
+
+
 @router.post("/calendar/api/quick-create-timeslot")
 async def quick_create_timeslot_manager(
     request: Request,
