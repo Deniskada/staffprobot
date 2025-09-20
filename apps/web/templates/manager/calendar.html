@@ -59,32 +59,7 @@
     position: relative;
 }
 
-.calendar-day.drop-zone::after {
-    content: "Перетащите объект сюда";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 123, 255, 0.9);
-    color: white;
-    padding: 8px 12px;
-    border-radius: 4px;
-    font-size: 0.8em;
-    font-weight: bold;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-    z-index: 10;
-}
-
-.calendar-day.drop-zone.drag-over::after {
-    opacity: 1;
-}
-
-/* Скрываем надпись "Перетащите объект сюда" при перетаскивании сотрудника */
-.calendar-day.drop-zone.employee-drag-over::after {
-    display: none;
-}
+/* Убрано сообщение "Перетащите объект сюда" */
 
 .calendar-day-header {
     font-weight: bold;
@@ -241,32 +216,7 @@
     position: relative;
 }
 
-.calendar-day.drop-zone::after {
-    content: "Перетащите объект сюда";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 123, 255, 0.9);
-    color: white;
-    padding: 10px 15px;
-    border-radius: 8px;
-    font-size: 0.9rem;
-    font-weight: bold;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-    z-index: 10;
-}
-
-.calendar-day.drop-zone.drag-over::after {
-    opacity: 1;
-}
-
-/* Скрываем надпись "Перетащите объект сюда" при перетаскивании сотрудника */
-.calendar-day.drop-zone.employee-drag-over::after {
-    display: none;
-}
+/* Убрано сообщение "Перетащите объект сюда" */
 
 .calendar-day.drag-over {
     background: #e3f2fd;
@@ -1085,11 +1035,7 @@ function setupEmployeeDragAndDrop() {
         const timeslotElement = e.target.closest('.timeslot-item, .calendar-timeslot');
         if (timeslotElement) {
             timeslotElement.classList.add('drag-over');
-            // Скрываем надпись "Перетащите объект сюда" при перетаскивании сотрудника
-            const dropZone = timeslotElement.closest('.drop-zone');
-            if (dropZone) {
-                dropZone.classList.add('employee-drag-over');
-            }
+            // Убрано скрытие надписи "Перетащите объект сюда"
         }
     });
     
