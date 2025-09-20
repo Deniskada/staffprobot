@@ -1944,15 +1944,27 @@ async def plan_shift_manager(
         data = await request.json()
         logger.info(f"Planning shift with data: {data}")
         
+        timeslot_id = data.get('timeslot_id')
+        employee_id = data.get('employee_id')
+        
+        if not timeslot_id or not employee_id:
+            raise HTTPException(status_code=400, detail="Не указан тайм-слот или сотрудник")
+        
         async with get_async_session() as db:
             user_id = await get_user_id_from_current_user(current_user, db)
             if not user_id:
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
-            # Проверяем доступ к объекту
-            object_id = data.get('object_id')
-            if not object_id:
-                raise HTTPException(status_code=400, detail="Не указан объект")
+            # Получаем тайм-слот и проверяем доступ к объекту
+            from sqlalchemy import select
+            from domain.entities.time_slot import TimeSlot
+            
+            timeslot_query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
+            timeslot = (await db.execute(timeslot_query)).scalar_one_or_none()
+            if not timeslot:
+                raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+            
+            object_id = timeslot.object_id
             
             permission_service = ManagerPermissionService(db)
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
@@ -1963,36 +1975,18 @@ async def plan_shift_manager(
             
             # Создаем запланированную смену
             from domain.entities.shift_schedule import ShiftSchedule
-            from datetime import datetime
+            from datetime import datetime, time, date
             
-            # Получаем время начала и окончания
-            planned_start_str = data.get('planned_start')
-            planned_end_str = data.get('planned_end')
-            
-            if not planned_start_str or not planned_end_str:
-                raise HTTPException(status_code=400, detail="Не указано время начала или окончания смены")
-            
-            # Преобразуем строки в datetime объекты
-            try:
-                # Если передано только время (например, '09:00'), нужно добавить дату
-                if 'T' not in planned_start_str and ' ' not in planned_start_str:
-                    # Это только время, добавляем текущую дату
-                    from datetime import date
-                    today = date.today()
-                    planned_start_str = f"{today.isoformat()}T{planned_start_str}"
-                    planned_end_str = f"{today.isoformat()}T{planned_end_str}"
-                
-                planned_start = datetime.fromisoformat(planned_start_str.replace('Z', '+00:00'))
-                planned_end = datetime.fromisoformat(planned_end_str.replace('Z', '+00:00'))
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=f"Неверный формат времени: {e}")
+            # Создаем datetime объекты для planned_start и planned_end из тайм-слота
+            slot_datetime = datetime.combine(timeslot.slot_date, timeslot.start_time)
+            end_datetime = datetime.combine(timeslot.slot_date, timeslot.end_time)
             
             shift_schedule = ShiftSchedule(
-                user_id=int(data.get('employee_id')),
+                user_id=int(employee_id),
                 object_id=int(object_id),
-                time_slot_id=int(data.get('timeslot_id')),
-                planned_start=planned_start,
-                planned_end=planned_end,
+                time_slot_id=int(timeslot_id),
+                planned_start=slot_datetime,
+                planned_end=end_datetime,
                 status='planned',
                 hourly_rate=float(data.get('hourly_rate', 500)),
                 notes=data.get('notes', '')
