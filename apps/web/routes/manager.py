@@ -2061,11 +2061,14 @@ async def quick_create_timeslot_manager(
             
             logger.info(f"Timeslot created successfully with ID: {timeslot.id}")
             
-            return {
+            # Возвращаем результат до закрытия сессии
+            result = {
                 "success": True,
                 "message": "Тайм-слот успешно создан",
                 "timeslot_id": timeslot.id
             }
+            
+            return result
             
     except HTTPException:
         raise
