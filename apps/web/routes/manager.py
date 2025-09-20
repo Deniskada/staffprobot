@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
 from shared.services.role_service import RoleService
 from shared.services.manager_permission_service import ManagerPermissionService
