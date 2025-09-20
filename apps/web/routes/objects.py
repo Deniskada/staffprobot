@@ -122,6 +122,7 @@ async def create_object(
         opening_time = form_data.get("opening_time", "").strip()
         closing_time = form_data.get("closing_time", "").strip()
         max_distance_str = form_data.get("max_distance", "500").strip()
+        auto_close_minutes_str = form_data.get("auto_close_minutes", "60").strip()
         latitude_str = form_data.get("latitude", "").strip()
         longitude_str = form_data.get("longitude", "").strip()
         # График работы
@@ -192,6 +193,7 @@ async def create_object(
             "opening_time": opening_time,
             "closing_time": closing_time,
             "max_distance": max_distance,
+            "auto_close_minutes": auto_close_minutes,
             "available_for_applicants": available_for_applicants,
             "is_active": True,
             "coordinates": coordinates,
@@ -368,6 +370,7 @@ async def update_object(
         opening_time = form_data.get("opening_time", "").strip()
         closing_time = form_data.get("closing_time", "").strip()
         max_distance_str = form_data.get("max_distance", "500").strip()
+        auto_close_minutes_str = form_data.get("auto_close_minutes", "60").strip()
         latitude_str = form_data.get("latitude", "").strip()
         longitude_str = form_data.get("longitude", "").strip()
         
@@ -430,6 +433,7 @@ async def update_object(
             "opening_time": opening_time,
             "closing_time": closing_time,
             "max_distance": max_distance,
+            "auto_close_minutes": int(auto_close_minutes_str) if auto_close_minutes_str else 60,
             "available_for_applicants": available_for_applicants,
             "is_active": is_active,
             "coordinates": coordinates

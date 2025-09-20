@@ -106,6 +106,7 @@ class ObjectService:
                 closing_time=time.fromisoformat(object_data['closing_time']),
                 hourly_rate=object_data['hourly_rate'],
                 max_distance_meters=object_data.get('max_distance', 500),
+                auto_close_minutes=object_data.get('auto_close_minutes', 60),
                 available_for_applicants=object_data.get('available_for_applicants', False),
                 is_active=object_data.get('is_active', True),
                 work_days_mask=object_data.get('work_days_mask', 31),
@@ -155,6 +156,7 @@ class ObjectService:
             obj.timezone = object_data.get('timezone', 'Europe/Moscow')
             obj.hourly_rate = object_data['hourly_rate']
             obj.max_distance_meters = object_data.get('max_distance', obj.max_distance_meters)
+            obj.auto_close_minutes = object_data.get('auto_close_minutes', obj.auto_close_minutes)
             obj.is_active = object_data.get('is_active', obj.is_active)
             obj.available_for_applicants = object_data.get('available_for_applicants', obj.available_for_applicants)
             obj.work_days_mask = object_data.get('work_days_mask', obj.work_days_mask)
