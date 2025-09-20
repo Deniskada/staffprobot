@@ -4078,6 +4078,9 @@ async def owner_contract_edit_form(
         if not contract:
             raise HTTPException(status_code=404, detail="Договор не найден")
         
+        # Отладочная информация
+        logger.info(f"Contract {contract_id} manager_permissions: {contract.manager_permissions}, type: {type(contract.manager_permissions)}")
+        
         # Получаем доступные объекты
         objects = await contract_service.get_owner_objects(current_user["id"])
         
