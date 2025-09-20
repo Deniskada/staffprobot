@@ -44,7 +44,7 @@
                 <h5 class="modal-title">
                     <i class="bi bi-lightning"></i> Быстрое создание тайм-слота
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" onclick="closeQuickCreateModal()"></button>
             </div>
             <div class="modal-body">
                 <form id="quickCreateForm">
@@ -92,7 +92,7 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-secondary" onclick="closeQuickCreateModal()">Отмена</button>
                 <button type="button" class="btn btn-primary" onclick="createQuickTimeslot()">
                     <i class="bi bi-check-lg"></i> Создать
                 </button>
@@ -566,7 +566,7 @@ async function createQuickTimeslot() {
         
         if (result.success) {
             // Закрываем модальное окно
-            bootstrap.Modal.getInstance(document.getElementById('quickCreateModal')).hide();
+            closeQuickCreateModal();
             
             // Показываем уведомление
             showNotification('Тайм-слот успешно создан!', 'success');
@@ -576,7 +576,7 @@ async function createQuickTimeslot() {
                 location.reload();
             }, 1000);
         } else {
-            showNotification('Ошибка создания тайм-слота', 'error');
+            showNotification(result.message || 'Ошибка создания тайм-слота', 'error');
         }
     } catch (error) {
         console.error('Ошибка создания тайм-слота:', error);
@@ -617,6 +617,14 @@ document.addEventListener('DOMContentLoaded', function() {
 function refreshObjects() {
     loadObjects();
     showNotification('Объекты обновлены', 'info');
+}
+
+function closeQuickCreateModal() {
+    // Закрываем модальное окно
+    const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateModal'));
+    if (modal) {
+        modal.hide();
+    }
 }
 
 function showNotification(message, type = 'info') {
