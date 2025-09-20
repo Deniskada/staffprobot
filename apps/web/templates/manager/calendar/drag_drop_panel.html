@@ -402,12 +402,13 @@ function renderObjects() {
              data-object-id="${obj.id}"
              data-object-name="${obj.name}"
              data-hourly-rate="${obj.hourly_rate}"
-             data-opening-time="${obj.opening_time}"
-             data-closing-time="${obj.closing_time}">
+             data-opening-time="${obj.opening_time || ''}"
+             data-closing-time="${obj.closing_time || ''}"
+             data-working-hours="${obj.working_hours || 'Не указано'}">
             <div class="object-name">${obj.name}</div>
             <div class="object-details">
                 <span class="object-rate">${obj.hourly_rate}₽/час</span>
-                <span class="object-time">${obj.opening_time}-${obj.closing_time}</span>
+                <span class="object-time">${obj.working_hours || 'Не указано'}</span>
             </div>
         </div>
     `).join('');
@@ -428,7 +429,8 @@ function setupDragAndDrop() {
                 name: e.target.dataset.objectName,
                 hourlyRate: e.target.dataset.hourlyRate,
                 openingTime: e.target.dataset.openingTime,
-                closingTime: e.target.dataset.closingTime
+                closingTime: e.target.dataset.closingTime,
+                workingHours: e.target.dataset.workingHours
             };
             
             e.target.classList.add('dragging');
@@ -477,7 +479,8 @@ function setupDragAndDrop() {
                 name: item.dataset.objectName,
                 hourlyRate: item.dataset.hourlyRate,
                 openingTime: item.dataset.openingTime,
-                closingTime: item.dataset.closingTime
+                closingTime: item.dataset.closingTime,
+                workingHours: item.dataset.workingHours
             };
             showQuickCreateForm(object);
         }
