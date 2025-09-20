@@ -1,8 +1,8 @@
 """Роуты для интерфейса управляющего."""
 
 from typing import List, Dict, Any, Optional
-from datetime import date
-from fastapi import APIRouter, Request, Depends, HTTPException, Query
+from datetime import date, datetime, time
+from fastapi import APIRouter, Request, Depends, HTTPException, Query, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1993,6 +1993,11 @@ async def plan_shift_manager(
 @router.post("/calendar/api/quick-create-timeslot")
 async def quick_create_timeslot_manager(
     request: Request,
+    object_id: int = Form(...),
+    slot_date: str = Form(...),
+    start_time: str = Form(...),
+    end_time: str = Form(...),
+    hourly_rate: int = Form(...),
     current_user: dict = Depends(require_manager_or_owner)
 ):
     """Быстрое создание тайм-слота управляющим"""
@@ -2000,8 +2005,7 @@ async def quick_create_timeslot_manager(
         if isinstance(current_user, RedirectResponse):
             raise HTTPException(status_code=401, detail="Необходима авторизация")
         
-        form_data = await request.form()
-        logger.info(f"Quick create timeslot form data: {dict(form_data)}")
+        logger.info(f"Quick create timeslot: object_id={object_id}, date={slot_date}, start={start_time}, end={end_time}, rate={hourly_rate}")
         
         async with get_async_session() as db:
             user_id = await get_user_id_from_current_user(current_user, db)
@@ -2011,7 +2015,6 @@ async def quick_create_timeslot_manager(
             logger.info(f"User ID: {user_id}")
             
             # Проверяем доступ к объекту
-            object_id = int(form_data.get('object_id'))
             logger.info(f"Object ID: {object_id}")
             
             permission_service = ManagerPermissionService(db)
@@ -2022,27 +2025,34 @@ async def quick_create_timeslot_manager(
             if object_id not in accessible_object_ids:
                 raise HTTPException(status_code=403, detail="Нет доступа к объекту")
             
+            # Валидация данных
+            try:
+                slot_date_obj = datetime.strptime(slot_date, "%Y-%m-%d").date()
+                start_time_obj = time.fromisoformat(start_time)
+                end_time_obj = time.fromisoformat(end_time)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Неверный формат данных: {str(e)}")
+            
+            if start_time_obj >= end_time_obj:
+                raise HTTPException(status_code=400, detail="Время начала должно быть меньше времени окончания")
+            if hourly_rate <= 0:
+                raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+            
             # Создаем тайм-слот
             from domain.entities.time_slot import TimeSlot
-            from datetime import datetime, time
             
-            slot_date = datetime.fromisoformat(form_data.get('slot_date')).date()
-            start_time = time.fromisoformat(form_data.get('start_time'))
-            end_time = time.fromisoformat(form_data.get('end_time'))
-            hourly_rate = float(form_data.get('hourly_rate', 0))
-            
-            logger.info(f"Creating timeslot: object_id={object_id}, date={slot_date}, start={start_time}, end={end_time}, rate={hourly_rate}")
+            logger.info(f"Creating timeslot: object_id={object_id}, date={slot_date_obj}, start={start_time_obj}, end={end_time_obj}, rate={hourly_rate}")
             
             timeslot = TimeSlot(
                 object_id=object_id,
-                slot_date=slot_date,
-                start_time=start_time,
-                end_time=end_time,
-                hourly_rate=hourly_rate,
+                slot_date=slot_date_obj,
+                start_time=start_time_obj,
+                end_time=end_time_obj,
+                hourly_rate=float(hourly_rate),
                 max_employees=1,
                 is_additional=False,
                 is_active=True,
-                notes=form_data.get('notes', '')
+                notes=""
             )
             
             db.add(timeslot)
