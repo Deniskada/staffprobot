@@ -189,6 +189,9 @@ class ContractService:
             await session.commit()
             await session.refresh(contract)
             
+            # Обновляем роль сотрудника на "employee"
+            await self._update_employee_role(session, employee.id)
+            
             logger.info(f"Created contract: {contract.id} - {contract_number}")
             return contract
     
@@ -304,6 +307,9 @@ class ContractService:
             )
             
             await session.commit()
+            
+            # Проверяем, есть ли у сотрудника другие активные договоры
+            await self._check_and_update_employee_role(session, contract.employee_id)
             
             logger.info(f"Terminated contract: {contract.id}")
             return True
@@ -1118,6 +1124,9 @@ class ContractService:
             
             await session.commit()
             
+            # Проверяем, есть ли у сотрудника другие активные договоры
+            await self._check_and_update_employee_role(session, contract.employee_id)
+            
             logger.info(f"Terminated contract: {contract.id}")
             return True
 
@@ -1198,6 +1207,9 @@ class ContractService:
             
             await session.commit()
             
+            # Проверяем, есть ли у сотрудника другие активные договоры
+            await self._check_and_update_employee_role(session, contract.employee_id)
+            
             logger.info(f"Terminated contract: {contract.id} by owner telegram_id: {owner_telegram_id}")
             return True
     
@@ -1243,3 +1255,76 @@ class ContractService:
             logger.error(f"Error generating content from template: {e}")
             # Возвращаем исходный шаблон в случае ошибки
             return template_content
+    
+    async def _update_employee_role(self, session, employee_id: int) -> None:
+        """Обновление роли сотрудника на 'employee'."""
+        try:
+            # Получаем пользователя
+            user_query = select(User).where(User.id == employee_id)
+            user_result = await session.execute(user_query)
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                logger.error(f"User with id {employee_id} not found")
+                return
+            
+            # Обновляем роль
+            user.role = "employee"
+            
+            # Обновляем массив ролей, если он существует
+            if hasattr(user, 'roles') and user.roles:
+                if "employee" not in user.roles:
+                    user.roles.append("employee")
+            else:
+                # Если поле roles не существует, создаем его
+                user.roles = ["applicant", "employee"]
+            
+            await session.commit()
+            logger.info(f"Updated user {employee_id} role to employee")
+            
+        except Exception as e:
+            logger.error(f"Error updating employee role for user {employee_id}: {e}")
+            # Не поднимаем исключение, чтобы не сломать создание договора
+    
+    async def _check_and_update_employee_role(self, session, employee_id: int) -> None:
+        """Проверка и обновление роли сотрудника при расторжении договора."""
+        try:
+            # Проверяем, есть ли у сотрудника другие активные договоры
+            active_contracts_query = select(Contract).where(
+                and_(
+                    Contract.employee_id == employee_id,
+                    Contract.is_active == True,
+                    Contract.status == "active"
+                )
+            )
+            active_contracts_result = await session.execute(active_contracts_query)
+            active_contracts = active_contracts_result.scalars().all()
+            
+            # Получаем пользователя
+            user_query = select(User).where(User.id == employee_id)
+            user_result = await session.execute(user_query)
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                logger.error(f"User with id {employee_id} not found")
+                return
+            
+            # Если нет активных договоров, убираем роль employee
+            if not active_contracts:
+                if user.role == "employee":
+                    user.role = "applicant"
+                
+                # Обновляем массив ролей
+                if hasattr(user, 'roles') and user.roles and "employee" in user.roles:
+                    user.roles.remove("employee")
+                    if not user.roles:  # Если массив стал пустым
+                        user.roles = ["applicant"]
+                
+                await session.commit()
+                logger.info(f"Removed employee role from user {employee_id} - no active contracts")
+            else:
+                logger.info(f"User {employee_id} still has {len(active_contracts)} active contracts")
+            
+        except Exception as e:
+            logger.error(f"Error checking employee role for user {employee_id}: {e}")
+            # Не поднимаем исключение, чтобы не сломать расторжение договора

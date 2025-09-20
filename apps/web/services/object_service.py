@@ -128,6 +128,9 @@ class ObjectService:
                 logger.error(f"Error planning timeslots for object {new_object.id}: {e}")
                 # Не прерываем создание объекта из-за ошибки планирования
             
+            # Обновляем роль владельца на "owner"
+            await self._update_owner_role(telegram_id)
+            
             logger.info(f"Created object {new_object.id} for owner {telegram_id}")
             return new_object
             
@@ -210,6 +213,9 @@ class ObjectService:
                 if sh.status not in ("completed", "cancelled"):
                     sh.status = "cancelled"
             await self.db.commit()
+            
+            # Проверяем, есть ли у владельца другие активные объекты
+            await self._check_and_update_owner_role(owner_id)
             
             logger.info(f"Soft deleted object {object_id} for owner {owner_id}")
             return True
@@ -588,3 +594,81 @@ class TimeSlotService:
         except Exception as e:
             logger.error(f"Error getting timeslots by month: {e}")
             return []
+    
+    async def _update_owner_role(self, telegram_id: int) -> None:
+        """Обновление роли пользователя на 'owner' при создании объекта."""
+        try:
+            from domain.entities.user import User
+            from sqlalchemy import select
+            
+            # Получаем пользователя
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await self.db.execute(user_query)
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                logger.error(f"User with telegram_id {telegram_id} not found")
+                return
+            
+            # Обновляем роль
+            user.role = "owner"
+            
+            # Обновляем массив ролей, если он существует
+            if hasattr(user, 'roles') and user.roles:
+                if "owner" not in user.roles:
+                    user.roles.append("owner")
+            else:
+                # Если поле roles не существует, создаем его
+                user.roles = ["applicant", "owner"]
+            
+            await self.db.commit()
+            logger.info(f"Updated user {telegram_id} role to owner")
+            
+        except Exception as e:
+            logger.error(f"Error updating owner role for user {telegram_id}: {e}")
+            # Не поднимаем исключение, чтобы не сломать создание объекта
+    
+    async def _check_and_update_owner_role(self, owner_id: int) -> None:
+        """Проверка и обновление роли владельца при удалении объекта."""
+        try:
+            from domain.entities.user import User
+            from sqlalchemy import select, and_
+            
+            # Проверяем, есть ли у владельца другие активные объекты
+            active_objects_query = select(Object).where(
+                and_(
+                    Object.owner_id == owner_id,
+                    Object.is_active == True
+                )
+            )
+            active_objects_result = await self.db.execute(active_objects_query)
+            active_objects = active_objects_result.scalars().all()
+            
+            # Получаем пользователя
+            user_query = select(User).where(User.id == owner_id)
+            user_result = await self.db.execute(user_query)
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                logger.error(f"User with id {owner_id} not found")
+                return
+            
+            # Если нет активных объектов, убираем роль owner
+            if not active_objects:
+                if user.role == "owner":
+                    user.role = "applicant"
+                
+                # Обновляем массив ролей
+                if hasattr(user, 'roles') and user.roles and "owner" in user.roles:
+                    user.roles.remove("owner")
+                    if not user.roles:  # Если массив стал пустым
+                        user.roles = ["applicant"]
+                
+                await self.db.commit()
+                logger.info(f"Removed owner role from user {owner_id} - no active objects")
+            else:
+                logger.info(f"User {owner_id} still has {len(active_objects)} active objects")
+            
+        except Exception as e:
+            logger.error(f"Error checking owner role for user {owner_id}: {e}")
+            # Не поднимаем исключение, чтобы не сломать удаление объекта
