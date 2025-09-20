@@ -552,13 +552,13 @@ async def manager_employees(
                 from domain.entities.user import User
                 
                 # Получаем всех сотрудников, работающих на доступных объектах
-                from sqlalchemy import func, or_, text, cast, String, JSON
+                from sqlalchemy import func, or_, text, cast, String, JSON, any_
                 
-                # Используем простой подход - проверяем, что объект есть в массиве allowed_objects
+                # Простейший подход - проверяем, что любой из доступных объектов есть в allowed_objects
                 employees_query = select(User).join(
                     Contract, User.id == Contract.employee_id
                 ).where(
-                    Contract.allowed_objects.op('?|')(object_ids),  # Проверяем пересечение массивов
+                    func.jsonb_array_contains(Contract.allowed_objects, func.any_(object_ids)),
                     Contract.is_active == True
                 ).distinct()
                 
