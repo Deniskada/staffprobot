@@ -1941,6 +1941,7 @@ async def plan_shift_manager(
             raise HTTPException(status_code=401, detail="Необходима авторизация")
         
         data = await request.json()
+        logger.info(f"Planning shift with data: {data}")
         
         async with get_async_session() as db:
             user_id = await get_user_id_from_current_user(current_user, db)
@@ -2000,6 +2001,7 @@ async def plan_shift_manager(
             await db.commit()
             await db.refresh(shift_schedule)
             
+            logger.info(f"Successfully planned shift {shift_schedule.id}")
             return {
                 "success": True,
                 "message": "Смена успешно запланирована",
@@ -2008,7 +2010,7 @@ async def plan_shift_manager(
             
     except Exception as e:
         logger.error(f"Error planning shift: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Ошибка планирования смены")
+        raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
 
 
 @router.post("/calendar/api/quick-create-timeslot")
