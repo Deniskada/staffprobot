@@ -57,11 +57,16 @@
                                 <i class="bi bi-calendar3"></i> Календарь
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.url.path.startswith('/manager/reports') %}active{% endif %}" href="/manager/reports">
-                                <i class="bi bi-graph-up"></i> Отчеты
-                            </a>
-                        </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.url.path.startswith('/manager/shifts') %}active{% endif %}" href="/manager/shifts">
+                                    <i class="bi bi-clock-history"></i> Смены
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.url.path.startswith('/manager/reports') %}active{% endif %}" href="/manager/reports">
+                                    <i class="bi bi-graph-up"></i> Отчеты
+                                </a>
+                            </li>
                     {% endif %}
                 </ul>
                 
