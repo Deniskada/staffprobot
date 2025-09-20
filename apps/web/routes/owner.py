@@ -1902,9 +1902,12 @@ async def api_calendar_plan_shift(
                 Contract.owner_id == user_id,
                 Contract.status == "active"
             )
-            contract = (await session.execute(contract_query)).scalar_one_or_none()
-            if not contract:
+            contracts = (await session.execute(contract_query)).scalars().all()
+            if not contracts:
                 raise HTTPException(status_code=400, detail="У сотрудника нет активного договора с вами")
+            
+            # Берем первый договор (если их несколько)
+            contract = contracts[0]
             
             # Проверяем, что сотрудник имеет доступ к объекту тайм-слота
             allowed_objects = contract.allowed_objects if contract.allowed_objects else []
