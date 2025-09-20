@@ -153,7 +153,8 @@ async def require_owner_or_superadmin(request: Request) -> dict:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав доступа"
             )
-        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+        # Перенаправляем на страницу входа вместо дашборда
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
     return user
 
