@@ -79,11 +79,19 @@ async def admin_dashboard(request: Request):
             'recent_users': recent_users
         }
         
+        # Получаем данные для переключения интерфейсов
+        from shared.services.role_based_login_service import RoleBasedLoginService
+        async with get_async_session() as session:
+            user_id = current_user.get("id")  # Это telegram_id
+            login_service = RoleBasedLoginService(session)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+        
         return templates.TemplateResponse("admin/dashboard.html", {
             "request": request,
             "current_user": current_user,
             "stats": stats,
-            "title": "Панель администратора"
+            "title": "Панель администратора",
+            "available_interfaces": available_interfaces
         })
         
     except Exception as e:
@@ -134,6 +142,12 @@ async def admin_users_list(
             users = result.scalars().all()
             logger.info(f"Found {len(users)} users")
             
+            # Получаем данные для переключения интерфейсов
+            from shared.services.role_based_login_service import RoleBasedLoginService
+            login_service = RoleBasedLoginService(session)
+            user_id = current_user.get("id")  # Это telegram_id
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
             return templates.TemplateResponse("admin/users.html", {
                 "request": request,
                 "current_user": current_user,
@@ -141,7 +155,8 @@ async def admin_users_list(
                 "roles": list(UserRole),
                 "current_role_filter": role,
                 "current_search": search,
-                "title": "Управление пользователями"
+                "title": "Управление пользователями",
+                "available_interfaces": available_interfaces
             })
         
     except Exception as e:
@@ -245,11 +260,19 @@ async def admin_tariffs(
     if user_role != "superadmin":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = current_user.get("id")  # Это telegram_id
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
     return templates.TemplateResponse("admin/tariffs.html", {
         "request": request,
         "current_user": current_user,
         "title": "Тарифные планы",
-        "message": "Функция в разработке"
+        "message": "Функция в разработке",
+        "available_interfaces": available_interfaces
     })
 
 
@@ -264,12 +287,20 @@ async def admin_monitoring(
     if user_role != "superadmin":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = current_user.get("id")  # Это telegram_id
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
     return templates.TemplateResponse("admin/monitoring.html", {
         "request": request,
         "current_user": current_user,
         "title": "Мониторинг системы",
         "prometheus_url": "http://localhost:9090",
-        "grafana_url": "http://localhost:3000"
+        "grafana_url": "http://localhost:3000",
+        "available_interfaces": available_interfaces
     })
 
 
@@ -282,9 +313,17 @@ async def admin_reports(request: Request):
     if user_role != "superadmin":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = current_user.get("id")  # Это telegram_id
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
     return templates.TemplateResponse("admin/reports.html", {
         "request": request,
         "current_user": current_user,
         "title": "Административные отчеты",
-        "message": "Функция в разработке"
+        "message": "Функция в разработке",
+        "available_interfaces": available_interfaces
     })
