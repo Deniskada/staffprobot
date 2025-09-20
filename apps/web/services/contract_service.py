@@ -1115,9 +1115,40 @@ class ContractService:
                 contract.end_date = contract_data["end_date"]
             if "allowed_objects" in contract_data:
                 contract.allowed_objects = contract_data["allowed_objects"]
+            if "is_manager" in contract_data:
+                contract.is_manager = contract_data["is_manager"]
+            if "manager_permissions" in contract_data:
+                contract.manager_permissions = contract_data["manager_permissions"]
             
             contract.updated_at = datetime.now()
             await session.commit()
+            
+            # Обновляем роли сотрудника
+            role_service = RoleService(session)
+            await role_service.update_roles_from_contracts(contract.employee_id)
+            
+            # Если это договор управляющего, обновляем права на объекты
+            if contract.is_manager and contract.manager_permissions and contract.allowed_objects:
+                permission_service = ManagerPermissionService(session)
+                
+                # Удаляем старые права
+                old_permissions = await permission_service.get_contract_permissions(contract.id)
+                for permission in old_permissions:
+                    await permission_service.delete_permission(permission.id)
+                
+                # Создаем новые права
+                for object_id in contract.allowed_objects:
+                    await permission_service.create_permission(
+                        contract.id, 
+                        object_id, 
+                        contract.manager_permissions
+                    )
+            elif not contract.is_manager:
+                # Если договор больше не управляющий, удаляем права
+                permission_service = ManagerPermissionService(session)
+                old_permissions = await permission_service.get_contract_permissions(contract.id)
+                for permission in old_permissions:
+                    await permission_service.delete_permission(permission.id)
             
             logger.info(f"Updated contract: {contract.id}")
             return True
