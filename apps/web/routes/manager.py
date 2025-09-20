@@ -1824,12 +1824,24 @@ async def get_objects_for_manager_calendar(
             
             objects_data = []
             for obj in accessible_objects:
+                # Формируем время работы
+                working_hours = "Не указано"
+                if obj.opening_time and obj.closing_time:
+                    working_hours = f"{obj.opening_time.strftime('%H:%M')} - {obj.closing_time.strftime('%H:%M')}"
+                elif obj.opening_time:
+                    working_hours = f"с {obj.opening_time.strftime('%H:%M')}"
+                elif obj.closing_time:
+                    working_hours = f"до {obj.closing_time.strftime('%H:%M')}"
+                
                 objects_data.append({
                     "id": obj.id,
                     "name": obj.name,
                     "address": obj.address,
                     "hourly_rate": float(obj.hourly_rate) if obj.hourly_rate else 0,
-                    "is_active": obj.is_active
+                    "is_active": obj.is_active,
+                    "opening_time": obj.opening_time.strftime('%H:%M') if obj.opening_time else None,
+                    "closing_time": obj.closing_time.strftime('%H:%M') if obj.closing_time else None,
+                    "working_hours": working_hours
                 })
             
             return objects_data
