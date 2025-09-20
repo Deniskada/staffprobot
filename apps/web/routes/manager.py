@@ -676,8 +676,8 @@ async def manager_employee_add(
             from domain.entities.user import UserRole
             await role_service.add_role(user.id, UserRole(role))
             
-            # Создаем договор если указан шаблон
-            if contract_template_id and contract_objects:
+            # Создаем договор (обязательно для сотрудников)
+            if contract_objects:
                 # Парсим даты
                 start_date = None
                 end_date = None
