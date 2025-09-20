@@ -552,12 +552,12 @@ async def manager_employees(
                 from domain.entities.user import User
                 
                 # Получаем всех сотрудников, работающих на доступных объектах
-                from sqlalchemy import func, or_, text, cast, String
+                from sqlalchemy import func, or_, text, cast, String, JSON
                 
                 # Создаем условия для каждого объекта
                 object_conditions = []
                 for obj_id in object_ids:
-                    condition = Contract.allowed_objects.op('@>')(cast(f'[{obj_id}]', String))
+                    condition = Contract.allowed_objects.op('@>')(cast(f'[{obj_id}]', JSON))
                     object_conditions.append(condition)
                     logger.info(f"Created condition for object {obj_id}: {condition}")
                 
