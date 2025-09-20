@@ -166,12 +166,12 @@ async def owner_objects(
         async with get_async_session() as session:
             # Получение объектов владельца из базы данных
             object_service = ObjectService(session)
-            # Получаем внутренний ID пользователя
-            user_id = await get_user_id_from_current_user(current_user, session)
-            if not user_id:
+            # Получаем telegram_id пользователя
+            telegram_id = current_user.get("telegram_id") or current_user.get("id")
+            if not telegram_id:
                 raise HTTPException(status_code=400, detail="Пользователь не найден")
             
-            objects = await object_service.get_objects_by_owner(user_id, include_inactive=show_inactive)
+            objects = await object_service.get_objects_by_owner(telegram_id, include_inactive=show_inactive)
             
             # Преобразуем в формат для шаблона
             objects_data = []
@@ -348,17 +348,17 @@ async def owner_objects_detail(request: Request, object_id: int):
             object_service = ObjectService(session)
             timeslot_service = TimeSlotService(session)
             
-            # Получаем внутренний ID пользователя
-            user_id = await get_user_id_from_current_user(current_user, session)
-            if not user_id:
+            # Получаем telegram_id пользователя
+            telegram_id = current_user.get("telegram_id") or current_user.get("id")
+            if not telegram_id:
                 raise HTTPException(status_code=400, detail="Пользователь не найден")
             
-            obj = await object_service.get_object_by_id(object_id, user_id)
+            obj = await object_service.get_object_by_id(object_id, telegram_id)
             if not obj:
                 raise HTTPException(status_code=404, detail="Объект не найден")
             
             # Получаем тайм-слоты
-            timeslots = await timeslot_service.get_timeslots_by_object(object_id, user_id)
+            timeslots = await timeslot_service.get_timeslots_by_object(object_id, telegram_id)
             
             # Преобразуем в формат для шаблона
             object_data = {
@@ -416,12 +416,12 @@ async def owner_objects_edit(request: Request, object_id: int):
         async with get_async_session() as session:
             # Получение данных объекта из базы данных с проверкой владельца
             object_service = ObjectService(session)
-            # Получаем внутренний ID пользователя
-            user_id = await get_user_id_from_current_user(current_user, session)
-            if not user_id:
+            # Получаем telegram_id пользователя
+            telegram_id = current_user.get("telegram_id") or current_user.get("id")
+            if not telegram_id:
                 raise HTTPException(status_code=400, detail="Пользователь не найден")
             
-            obj = await object_service.get_object_by_id(object_id, user_id)
+            obj = await object_service.get_object_by_id(object_id, telegram_id)
             if not obj:
                 raise HTTPException(status_code=404, detail="Объект не найден")
             
@@ -4308,7 +4308,12 @@ async def owner_contract_pdf(
         from apps.web.services.pdf_service import PDFService
         
         contract_service = ContractService()
-        contract = await contract_service.get_contract_by_id_and_owner_telegram_id(contract_id, current_user["id"])
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Пользователь не найден")
+        
+        contract = await contract_service.get_contract_by_id_and_owner_telegram_id(contract_id, current_user.get("telegram_id") or current_user.get("id"))
         
         if not contract:
             raise HTTPException(status_code=404, detail="Договор не найден")
