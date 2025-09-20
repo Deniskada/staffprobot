@@ -1938,9 +1938,9 @@ async def plan_shift_manager(
                 raise HTTPException(status_code=400, detail=f"Неверный формат времени: {e}")
             
             shift_schedule = ShiftSchedule(
-                user_id=data.get('employee_id'),
-                object_id=object_id,
-                time_slot_id=data.get('timeslot_id'),
+                user_id=int(data.get('employee_id')),
+                object_id=int(object_id),
+                time_slot_id=int(data.get('timeslot_id')),
                 planned_start=planned_start,
                 planned_end=planned_end,
                 status='planned',
