@@ -17,6 +17,7 @@ from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
+from apps.web.utils.timezone_utils import web_timezone_helper
 from core.logging.logger import logger
 
 router = APIRouter(prefix="/manager", tags=["manager"])
