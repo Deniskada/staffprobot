@@ -1203,7 +1203,9 @@ function showQuickCreateTimeslotModal(object, date) {
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Создать тайм-слот</h5>
+                    <h5 class="modal-title">
+                        <i class="bi bi-lightning"></i> Быстрое создание тайм-слота
+                    </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -1212,44 +1214,46 @@ function showQuickCreateTimeslotModal(object, date) {
                         <input type="hidden" name="slot_date" value="${date}">
                         
                         <div class="mb-3">
-                            <label class="form-label">Объект</label>
+                            <label class="form-label">Объект *</label>
                             <input type="text" class="form-control" value="${object.name}" readonly>
                         </div>
                         
                         <div class="mb-3">
-                            <label class="form-label">Дата</label>
+                            <label class="form-label">Дата *</label>
                             <input type="date" class="form-control" value="${date}" readonly>
                         </div>
                         
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label class="form-label">Время начала</label>
+                                    <label class="form-label">Начало *</label>
                                     <input type="time" class="form-control" name="start_time" value="09:00" required>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label class="form-label">Время окончания</label>
+                                    <label class="form-label">Окончание *</label>
                                     <input type="time" class="form-control" name="end_time" value="21:00" required>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="mb-3">
-                            <label class="form-label">Ставка (₽/час)</label>
-                            <input type="number" class="form-control" name="hourly_rate" value="${object.hourlyRate}" required>
+                            <label class="form-label">Ставка (₽/час) *</label>
+                            <input type="number" class="form-control" name="hourly_rate" value="${object.hourlyRate}" min="1" required>
                         </div>
                         
-                        <div class="mb-3">
-                            <label class="form-label">Примечания</label>
-                            <textarea class="form-control" name="notes" rows="3"></textarea>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Совет:</strong> Перетащите объект из панели на календарь для еще более быстрого создания!
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="button" class="btn btn-primary" onclick="submitQuickCreateTimeslot()">Создать</button>
+                    <button type="button" class="btn btn-primary" onclick="submitQuickCreateTimeslot()">
+                        <i class="bi bi-check-lg"></i> Создать
+                    </button>
                 </div>
             </div>
         </div>
@@ -1278,17 +1282,22 @@ async function submitQuickCreateTimeslot() {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Тайм-слот успешно создан', 'success');
             // Закрываем модальное окно
             const modal = bootstrap.Modal.getInstance(document.querySelector('.modal'));
             modal.hide();
-            // Обновляем календарь
-            location.reload();
+            
+            // Показываем уведомление
+            showNotification('Тайм-слот успешно создан!', 'success');
+            
+            // Обновляем страницу
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
         } else {
-            showNotification(result.message || 'Ошибка создания тайм-слота', 'error');
+            showNotification('Ошибка создания тайм-слота', 'error');
         }
     } catch (error) {
-        console.error('Error creating timeslot:', error);
+        console.error('Ошибка создания тайм-слота:', error);
         showNotification('Ошибка создания тайм-слота', 'error');
     }
 }
