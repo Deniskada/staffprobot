@@ -1,13 +1,637 @@
-<!-- Панель сотрудников для drag & drop управляющего -->
-<div class="employees-panel" style="display: none;">
-    <div class="card">
-        <div class="card-header">
-            <h6 class="mb-0">Сотрудники</h6>
+<!-- Панель сотрудников для drag & drop -->
+<div class="employees-panel" id="employeesDragDropPanel">
+    <div class="panel-header">
+        <h6 class="mb-3">
+            <i class="bi bi-people"></i> Сотрудники для планирования
+        </h6>
+        <div class="employees-count" id="employeesCount" style="display: none;">
+            <span class="badge bg-success" id="employeesCountBadge">0</span>
         </div>
-        <div class="card-body">
-            <div class="row" id="employeesList">
-                <!-- Сотрудники будут загружены через JavaScript -->
+        <button class="btn btn-sm btn-outline-secondary" onclick="toggleEmployeesPanel()">
+            <i class="bi bi-chevron-up" id="employeesPanelToggleIcon"></i>
+        </button>
+        <div class="collapsed-icon" style="display: none;">
+            <i class="bi bi-people"></i>
+        </div>
+    </div>
+    
+    <div class="panel-content" id="employeesPanelContent">
+        <div class="employees-list" id="employeesList">
+            <div class="text-center text-muted">
+                <div class="spinner-border spinner-border-sm" role="status">
+                    <span class="visually-hidden">Загрузка...</span>
+                </div>
+                <div class="mt-2">Загрузка сотрудников...</div>
+            </div>
+        </div>
+        
+        <div class="panel-actions mt-3">
+            <button class="btn btn-success btn-sm w-100" onclick="showAddEmployeeForm()">
+                <i class="bi bi-person-plus"></i> Добавить сотрудника
+            </button>
+            <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="refreshEmployees()">
+                <i class="bi bi-arrow-clockwise"></i> Обновить
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для добавления сотрудника -->
+<div class="modal fade" id="addEmployeeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-person-plus"></i> Добавить сотрудника в план
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addEmployeeForm">
+                    <div class="mb-3">
+                        <label for="employeeSelect" class="form-label">Сотрудник *</label>
+                        <select class="form-select" id="employeeSelect" required>
+                            <option value="">Выберите сотрудника</option>
+                        </select>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Совет:</strong> Перетащите сотрудника из панели на тайм-слот для быстрого планирования!
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-success" onclick="addEmployeeToPlan()">
+                    <i class="bi bi-check-lg"></i> Добавить
+                </button>
             </div>
         </div>
     </div>
 </div>
+
+<style>
+.employees-panel {
+    position: fixed;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 280px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.employees-panel.collapsed {
+    width: 60px;
+    height: 60px;
+}
+
+.employees-panel.collapsed .panel-content {
+    display: none;
+}
+
+.employees-panel.collapsed .panel-header h6 {
+    display: none;
+}
+
+.employees-panel.collapsed .panel-header {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 5px;
+    height: 60px;
+    width: 60px;
+    border-radius: 50%;
+    background: #28a745;
+}
+
+.employees-panel.collapsed .panel-header button {
+    display: none;
+}
+
+.employees-panel.collapsed .collapsed-icon {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5em;
+}
+
+.employees-count {
+    margin: 5px 0;
+}
+
+.employees-panel.collapsed .employees-count {
+    margin: 5px 0;
+}
+
+.employees-panel.collapsed .employees-count .badge {
+    font-size: 0.8em;
+    padding: 4px 6px;
+}
+
+.employees-panel .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 10px 10px 0 0;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.employees-panel .panel-content {
+    padding: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.employees-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.employee-item {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.employee-item:hover {
+    background: #e8f5e8;
+    border-color: #28a745;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.2);
+}
+
+.employee-item:active {
+    cursor: grabbing;
+    transform: scale(0.95);
+}
+
+.employee-item.dragging {
+    opacity: 0.5;
+    transform: rotate(5deg);
+}
+
+.employee-name {
+    font-weight: bold;
+    color: #495057;
+    margin-bottom: 4px;
+}
+
+.employee-details {
+    font-size: 0.8em;
+    color: #6c757d;
+    display: flex;
+    justify-content: space-between;
+}
+
+.employee-role {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.employee-status {
+    color: #007bff;
+}
+
+.drop-zone {
+    border: 2px dashed #28a745;
+    background: rgba(40, 167, 69, 0.1);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    color: #28a745;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+.drop-zone.drag-over {
+    background: rgba(40, 167, 69, 0.2);
+    border-color: #1e7e34;
+    transform: scale(1.02);
+}
+
+.drop-zone.hidden {
+    display: none;
+}
+
+/* Скрываем надпись "Перетащите объект сюда" при перетаскивании сотрудника */
+.drop-zone.employee-drag-over::after {
+    display: none;
+}
+
+.employees-panel .panel-actions {
+    border-top: 1px solid #dee2e6;
+    padding-top: 15px;
+}
+
+.drag-preview {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    background: white;
+    border: 2px solid #28a745;
+    border-radius: 8px;
+    padding: 8px 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transform: translate(-50%, -50%);
+    opacity: 0.9;
+}
+
+.drag-preview .employee-name {
+    font-weight: bold;
+    color: #28a745;
+    margin: 0;
+}
+
+.drag-preview .employee-details {
+    font-size: 0.8em;
+    color: #6c757d;
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .employees-panel {
+        position: relative;
+        right: auto;
+        top: auto;
+        transform: none;
+        width: 100%;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .employees-panel.collapsed {
+        width: 100%;
+        height: 60px;
+    }
+    
+    .employees-panel.collapsed .panel-header {
+        height: 60px;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+    
+    .employees-panel.collapsed .panel-header h6 {
+        writing-mode: horizontal-tb;
+        text-orientation: mixed;
+        font-size: 1em;
+    }
+    
+    .employees-panel.collapsed .panel-header button {
+        transform: none;
+        margin-top: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .employees-panel {
+        margin: 0 -15px 20px -15px;
+        border-radius: 0;
+    }
+}
+</style>
+
+<script>
+let employeesData = [];
+let draggedEmployee = null;
+let employeeDragPreview = null;
+
+// Загрузка сотрудников при инициализации
+document.addEventListener('DOMContentLoaded', function() {
+    loadEmployees();
+    setupEmployeeDragAndDrop();
+    restoreEmployeesPanelState();
+});
+
+function restoreEmployeesPanelState() {
+    const isCollapsed = localStorage.getItem('employeesDragDropPanelCollapsed') === 'true';
+    const panel = document.getElementById('employeesDragDropPanel');
+    const icon = document.getElementById('employeesPanelToggleIcon');
+    
+    if (isCollapsed) {
+        panel.classList.add('collapsed');
+        icon.classList.remove('bi-chevron-up');
+        icon.classList.add('bi-chevron-down');
+    }
+}
+
+async function loadEmployees() {
+    try {
+        const response = await fetch('/manager/api/employees', {
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (Array.isArray(data)) {
+            employeesData = data;
+            renderEmployees();
+            populateEmployeeSelect();
+        } else {
+            throw new Error('Неверный формат данных');
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки сотрудников:', error);
+        document.getElementById('employeesList').innerHTML = `
+            <div class="text-center text-danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                <div class="mt-2">Ошибка загрузки сотрудников</div>
+            </div>
+        `;
+    }
+}
+
+function renderEmployees() {
+    const container = document.getElementById('employeesList');
+    const countBadge = document.getElementById('employeesCountBadge');
+    const countContainer = document.getElementById('employeesCount');
+    
+    // Обновляем счетчик
+    countBadge.textContent = employeesData.length;
+    countContainer.style.display = 'block';
+    
+    if (employeesData.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="bi bi-people"></i>
+                <div class="mt-2">Нет сотрудников</div>
+                <a href="/manager/employees" class="btn btn-sm btn-success mt-2">Управление сотрудниками</a>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = employeesData.map(emp => `
+        <div class="employee-item" 
+             draggable="true" 
+             data-employee-id="${emp.id}"
+             data-employee-name="${emp.name || emp.username}"
+             data-employee-role="${emp.role || 'employee'}"
+             data-employee-status="${emp.is_active ? 'Активен' : 'Неактивен'}">
+            <div class="employee-name">${emp.name || emp.username}</div>
+            <div class="employee-details">
+                <span class="employee-role">${emp.role || 'employee'}</span>
+                <span class="employee-status">${emp.is_active ? 'Активен' : 'Неактивен'}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function populateEmployeeSelect() {
+    const select = document.getElementById('employeeSelect');
+    select.innerHTML = '<option value="">Выберите сотрудника</option>' + 
+        employeesData.map(emp => `<option value="${emp.id}">${emp.name || emp.username}</option>`).join('');
+}
+
+function setupEmployeeDragAndDrop() {
+    // Обработчики для сотрудников
+    document.addEventListener('dragstart', function(e) {
+        if (e.target.classList.contains('employee-item')) {
+            draggedEmployee = {
+                id: e.target.dataset.employeeId,
+                name: e.target.dataset.employeeName,
+                role: e.target.dataset.employeeRole,
+                status: e.target.dataset.employeeStatus
+            };
+            
+            e.target.classList.add('dragging');
+            createEmployeeDragPreview(e);
+        }
+    });
+    
+    document.addEventListener('dragend', function(e) {
+        if (e.target.classList.contains('employee-item')) {
+            e.target.classList.remove('dragging');
+            removeEmployeeDragPreview();
+        }
+    });
+    
+    // Обработчики для тайм-слотов
+    document.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        const timeslotElement = e.target.closest('.timeslot-item, .calendar-timeslot');
+        if (timeslotElement) {
+            console.log('Dragover on timeslot:', timeslotElement);
+            timeslotElement.classList.add('drag-over');
+            // Скрываем надпись "Перетащите объект сюда" при перетаскивании сотрудника
+            const dropZone = timeslotElement.closest('.drop-zone');
+            if (dropZone) {
+                console.log('Adding employee-drag-over class to dropZone:', dropZone);
+                dropZone.classList.add('employee-drag-over');
+            }
+        }
+    });
+    
+    document.addEventListener('dragleave', function(e) {
+        const timeslotElement = e.target.closest('.timeslot-item, .calendar-timeslot');
+        if (timeslotElement) {
+            timeslotElement.classList.remove('drag-over');
+            // Показываем надпись обратно
+            const dropZone = timeslotElement.closest('.drop-zone');
+            if (dropZone) {
+                dropZone.classList.remove('employee-drag-over');
+            }
+        }
+    });
+    
+    document.addEventListener('drop', function(e) {
+        e.preventDefault();
+        console.log('Drop event triggered, draggedEmployee:', draggedEmployee);
+        const timeslotElement = e.target.closest('.timeslot-item, .calendar-timeslot');
+        if (timeslotElement && draggedEmployee) {
+            console.log('Dropping employee on timeslot:', timeslotElement);
+            timeslotElement.classList.remove('drag-over');
+            // Показываем надпись обратно
+            const dropZone = timeslotElement.closest('.drop-zone');
+            if (dropZone) {
+                console.log('Removing employee-drag-over class from dropZone:', dropZone);
+                dropZone.classList.remove('employee-drag-over');
+            }
+            handleEmployeeDropOnTimeslot(timeslotElement, draggedEmployee);
+        }
+    });
+
+    // Клик по сотруднику: открыть модальное окно
+    document.addEventListener('click', function(e) {
+        const item = e.target.closest('.employee-item');
+        if (item) {
+            const employee = {
+                id: item.dataset.employeeId,
+                name: item.dataset.employeeName,
+                role: item.dataset.employeeRole,
+                status: item.dataset.employeeStatus
+            };
+            showAddEmployeeForm(employee);
+        }
+    });
+}
+
+function createEmployeeDragPreview(e) {
+    employeeDragPreview = document.createElement('div');
+    employeeDragPreview.className = 'drag-preview';
+    employeeDragPreview.innerHTML = `
+        <div class="employee-name">${draggedEmployee.name}</div>
+        <div class="employee-details">${draggedEmployee.role}</div>
+    `;
+    document.body.appendChild(employeeDragPreview);
+    
+    document.addEventListener('dragover', updateEmployeeDragPreview);
+}
+
+function updateEmployeeDragPreview(e) {
+    if (employeeDragPreview) {
+        employeeDragPreview.style.left = e.clientX + 'px';
+        employeeDragPreview.style.top = e.clientY + 'px';
+    }
+}
+
+function removeEmployeeDragPreview() {
+    if (employeeDragPreview) {
+        employeeDragPreview.remove();
+        employeeDragPreview = null;
+    }
+    document.removeEventListener('dragover', updateEmployeeDragPreview);
+}
+
+function handleEmployeeDropOnTimeslot(timeslotElement, employee) {
+    console.log('handleEmployeeDropOnTimeslot called with:', timeslotElement, employee);
+    // Получаем ID тайм-слота
+    const timeslotId = timeslotElement.dataset.timeslotId;
+    console.log('Timeslot ID:', timeslotId);
+    
+    if (!timeslotId) {
+        console.error('No timeslot ID found');
+        showNotification('Ошибка: не удалось определить тайм-слот', 'error');
+        return;
+    }
+    
+    // Планируем смену для сотрудника
+    console.log('Planning shift for employee:', employee.id, 'on timeslot:', timeslotId);
+    planShiftForEmployee(timeslotId, employee.id);
+}
+
+async function planShiftForEmployee(timeslotId, employeeId) {
+    try {
+        const response = await fetch('/manager/api/calendar/plan-shift', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                timeslot_id: timeslotId,
+                employee_id: employeeId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('Смена успешно запланирована!', 'success');
+            // Обновляем календарь
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            // Показываем конкретное сообщение об ошибке
+            let errorMessage = result.message || 'Ошибка планирования смены';
+            if (result.detail) {
+                errorMessage = result.detail;
+            }
+            showNotification(errorMessage, 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка планирования смены:', error);
+        showNotification('Ошибка планирования смены', 'error');
+    }
+}
+
+function showAddEmployeeForm(employee = null) {
+    const modal = new bootstrap.Modal(document.getElementById('addEmployeeModal'));
+    
+    if (employee) {
+        document.getElementById('employeeSelect').value = employee.id;
+    }
+    
+    modal.show();
+}
+
+async function addEmployeeToPlan() {
+    const employeeId = document.getElementById('employeeSelect').value;
+    
+    if (!employeeId) {
+        showNotification('Выберите сотрудника', 'error');
+        return;
+    }
+    
+    // Закрываем модальное окно
+    bootstrap.Modal.getInstance(document.getElementById('addEmployeeModal')).hide();
+    
+    showNotification('Перетащите сотрудника на тайм-слот для планирования', 'info');
+}
+
+function toggleEmployeesPanel() {
+    const panel = document.getElementById('employeesDragDropPanel');
+    const icon = document.getElementById('employeesPanelToggleIcon');
+    
+    panel.classList.toggle('collapsed');
+    icon.classList.toggle('bi-chevron-up');
+    icon.classList.toggle('bi-chevron-down');
+    
+    // Сохраняем состояние в localStorage
+    const isCollapsed = panel.classList.contains('collapsed');
+    localStorage.setItem('employeesDragDropPanelCollapsed', isCollapsed);
+    
+    // Показываем уведомление о состоянии
+    const message = isCollapsed ? 'Панель сотрудников свернута' : 'Панель сотрудников развернута';
+    showNotification(message, 'info');
+}
+
+// Добавляем обработчик клика на заголовок панели для разворачивания
+document.addEventListener('DOMContentLoaded', function() {
+    const panel = document.getElementById('employeesDragDropPanel');
+    const header = panel.querySelector('.panel-header');
+    
+    header.addEventListener('click', function(e) {
+        // Если панель свернута и клик не по кнопке
+        if (panel.classList.contains('collapsed') && !e.target.closest('button')) {
+            toggleEmployeesPanel();
+        }
+    });
+});
+
+function refreshEmployees() {
+    loadEmployees();
+    showNotification('Сотрудники обновлены', 'info');
+}
+
+function showNotification(message, type = 'info') {
+    // Создаем уведомление
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Автоматически скрываем через 3 секунды
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 3000);
+}
+</script>
