@@ -240,10 +240,10 @@
 
 {% block manager_content %}
 <!-- Панель drag & drop -->
-{% include 'manager/calendar/drag_drop_panel.html' %}
+{% include 'owner/calendar/drag_drop_panel.html' %}
 
 <!-- Панель сотрудников для drag & drop -->
-{% include 'manager/calendar/employees_drag_drop_panel.html' %}
+{% include 'owner/calendar/employees_drag_drop_panel.html' %}
 
 <div class="container-fluid">
     <!-- Заголовок и навигация -->
@@ -882,21 +882,59 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-// Отладочная информация
-console.log('Всего тайм-слотов:', {{ timeslots | length }});
-console.log('Длина calendar_data:', {{ calendar_data | length if calendar_data else 0 }});
+// Функции для панелей drag & drop
+function togglePanel() {
+    const panel = document.getElementById('dragDropPanel');
+    const icon = document.getElementById('panelToggleIcon');
+    
+    if (panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+        icon.className = 'bi bi-chevron-up';
+    } else {
+        panel.classList.add('collapsed');
+        icon.className = 'bi bi-chevron-down';
+    }
+}
+
+function toggleEmployeesPanel() {
+    const panel = document.getElementById('employeesDragDropPanel');
+    const icon = document.getElementById('employeesPanelToggleIcon');
+    
+    if (panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+        icon.className = 'bi bi-chevron-up';
+    } else {
+        panel.classList.add('collapsed');
+        icon.className = 'bi bi-chevron-down';
+    }
+}
+
+// Инициализация панелей при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    // Обработчик для панели объектов
+    const objectsPanel = document.getElementById('dragDropPanel');
+    if (objectsPanel) {
+        const objectsHeader = objectsPanel.querySelector('.panel-header');
+        objectsHeader.addEventListener('click', function(e) {
+            if (objectsPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+                togglePanel();
+            }
+        });
+    }
+    
+    // Обработчик для панели сотрудников
+    const employeesPanel = document.getElementById('employeesDragDropPanel');
+    if (employeesPanel) {
+        const employeesHeader = employeesPanel.querySelector('.panel-header');
+        employeesHeader.addEventListener('click', function(e) {
+            if (employeesPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+                toggleEmployeesPanel();
+            }
+        });
+    }
+});
+
 </script>
 
-<!-- Отладочная информация -->
-<div class="mt-3">
-    <h6>Отладка календаря:</h6>
-    <p>Всего тайм-слотов: {{ timeslots | length }}</p>
-    <p>Тип calendar_data: {{ calendar_data.__class__.__name__ if calendar_data else 'None' }}</p>
-    <p>Длина calendar_data: {{ calendar_data | length if calendar_data else 0 }}</p>
-    <details>
-        <summary>Данные тайм-слотов</summary>
-        <pre>{{ timeslots | tojson(indent=2) }}</pre>
-    </details>
-</div>
 
 {% endblock %}
