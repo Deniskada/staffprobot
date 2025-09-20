@@ -515,9 +515,10 @@ async function loadTimeslotsStatus() {
         if (response.ok) {
             timeslotsStatus = await response.json();
             console.log('Загружен статус тайм-слотов:', timeslotsStatus);
+            console.log('Количество тайм-слотов:', timeslotsStatus.length);
             updateTimeslotsDisplay();
         } else {
-            console.error('Ошибка загрузки статуса тайм-слотов');
+            console.error('Ошибка загрузки статуса тайм-слотов:', response.status, response.statusText);
         }
     } catch (error) {
         console.error('Ошибка загрузки статуса тайм-слотов:', error);
@@ -527,6 +528,8 @@ async function loadTimeslotsStatus() {
 function updateTimeslotsDisplay() {
     // Обновляем отображение тайм-слотов с цветовым кодированием
     const timeslotElements = document.querySelectorAll('.timeslot-item');
+    console.log('Найдено элементов .timeslot-item:', timeslotElements.length);
+    console.log('Данные тайм-слотов:', timeslotsStatus);
     
     timeslotElements.forEach(element => {
         const timeslotId = element.dataset.timeslotId;
