@@ -1929,9 +1929,9 @@ async def api_calendar_plan_shift(
 
             # Создаем запланированную смену
             new_schedule = ShiftSchedule(
-                user_id=employee_id,
-                object_id=timeslot.object_id,
-                time_slot_id=timeslot_id,
+                user_id=int(employee_id),
+                object_id=int(timeslot.object_id),
+                time_slot_id=int(timeslot_id),
                 planned_start=slot_datetime,
                 planned_end=end_datetime,
                 status="planned",
