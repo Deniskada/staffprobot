@@ -1938,3 +1938,60 @@ async def plan_shift_manager(
     except Exception as e:
         logger.error(f"Error planning shift: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка планирования смены")
+
+
+@router.post("/calendar/api/quick-create-timeslot")
+async def quick_create_timeslot_manager(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Быстрое создание тайм-слота управляющим"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+        
+        form_data = await request.form()
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Проверяем доступ к объекту
+            object_id = int(form_data.get('object_id'))
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if object_id not in accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступа к объекту")
+            
+            # Создаем тайм-слот
+            from domain.entities.time_slot import TimeSlot
+            from datetime import datetime, time
+            
+            timeslot = TimeSlot(
+                object_id=object_id,
+                slot_date=datetime.fromisoformat(form_data.get('slot_date')).date(),
+                start_time=time.fromisoformat(form_data.get('start_time')),
+                end_time=time.fromisoformat(form_data.get('end_time')),
+                hourly_rate=float(form_data.get('hourly_rate', 0)),
+                max_employees=1,
+                is_additional=False,
+                is_active=True,
+                notes=form_data.get('notes', '')
+            )
+            
+            db.add(timeslot)
+            await db.commit()
+            await db.refresh(timeslot)
+            
+            return {
+                "success": True,
+                "message": "Тайм-слот успешно создан",
+                "timeslot_id": timeslot.id
+            }
+            
+    except Exception as e:
+        logger.error(f"Error creating timeslot: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка создания тайм-слота")
