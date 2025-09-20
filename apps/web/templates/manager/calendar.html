@@ -533,7 +533,9 @@ function updateTimeslotsDisplay() {
     
     timeslotElements.forEach(element => {
         const timeslotId = element.dataset.timeslotId;
+        console.log('Обрабатываем элемент с timeslotId:', timeslotId);
         const slotData = timeslotsStatus.find(slot => slot.slot_id == timeslotId);
+        console.log('Найденные данные для timeslotId', timeslotId, ':', slotData);
         
         if (slotData) {
             // Удаляем старые классы статуса
@@ -547,6 +549,9 @@ function updateTimeslotsDisplay() {
             if (statusInfo) {
                 statusInfo.innerHTML = getStatusInfo(slotData);
             }
+        } else {
+            console.log('Данные не найдены для timeslotId:', timeslotId);
+            console.log('Доступные slot_id в данных:', timeslotsStatus.map(slot => slot.slot_id));
         }
     });
 }
