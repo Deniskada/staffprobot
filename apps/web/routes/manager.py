@@ -166,6 +166,7 @@ async def manager_objects(
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
             permission_service = ManagerPermissionService(db)
+            login_service = RoleBasedLoginService(db)
             
             # Получаем доступные объекты
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
