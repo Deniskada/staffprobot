@@ -2001,17 +2001,23 @@ async def quick_create_timeslot_manager(
             raise HTTPException(status_code=401, detail="Необходима авторизация")
         
         form_data = await request.form()
+        logger.info(f"Quick create timeslot form data: {dict(form_data)}")
         
         async with get_async_session() as db:
             user_id = await get_user_id_from_current_user(current_user, db)
             if not user_id:
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
+            logger.info(f"User ID: {user_id}")
+            
             # Проверяем доступ к объекту
             object_id = int(form_data.get('object_id'))
+            logger.info(f"Object ID: {object_id}")
+            
             permission_service = ManagerPermissionService(db)
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
             accessible_object_ids = [obj.id for obj in accessible_objects]
+            logger.info(f"Accessible object IDs: {accessible_object_ids}")
             
             if object_id not in accessible_object_ids:
                 raise HTTPException(status_code=403, detail="Нет доступа к объекту")
@@ -2020,12 +2026,19 @@ async def quick_create_timeslot_manager(
             from domain.entities.time_slot import TimeSlot
             from datetime import datetime, time
             
+            slot_date = datetime.fromisoformat(form_data.get('slot_date')).date()
+            start_time = time.fromisoformat(form_data.get('start_time'))
+            end_time = time.fromisoformat(form_data.get('end_time'))
+            hourly_rate = float(form_data.get('hourly_rate', 0))
+            
+            logger.info(f"Creating timeslot: object_id={object_id}, date={slot_date}, start={start_time}, end={end_time}, rate={hourly_rate}")
+            
             timeslot = TimeSlot(
                 object_id=object_id,
-                slot_date=datetime.fromisoformat(form_data.get('slot_date')).date(),
-                start_time=time.fromisoformat(form_data.get('start_time')),
-                end_time=time.fromisoformat(form_data.get('end_time')),
-                hourly_rate=float(form_data.get('hourly_rate', 0)),
+                slot_date=slot_date,
+                start_time=start_time,
+                end_time=end_time,
+                hourly_rate=hourly_rate,
                 max_employees=1,
                 is_additional=False,
                 is_active=True,
@@ -2036,12 +2049,16 @@ async def quick_create_timeslot_manager(
             await db.commit()
             await db.refresh(timeslot)
             
+            logger.info(f"Timeslot created successfully with ID: {timeslot.id}")
+            
             return {
                 "success": True,
                 "message": "Тайм-слот успешно создан",
                 "timeslot_id": timeslot.id
             }
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating timeslot: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка создания тайм-слота")
