@@ -516,9 +516,13 @@ async function loadTimeslotsStatus() {
             timeslotsStatus = await response.json();
             console.log('Загружен статус тайм-слотов:', timeslotsStatus);
             console.log('Количество тайм-слотов:', timeslotsStatus.length);
+            console.log('Тип timeslotsStatus:', typeof timeslotsStatus);
+            console.log('Первые 3 тайм-слота:', timeslotsStatus.slice(0, 3));
             updateTimeslotsDisplay();
         } else {
             console.error('Ошибка загрузки статуса тайм-слотов:', response.status, response.statusText);
+            const errorText = await response.text();
+            console.error('Текст ошибки:', errorText);
         }
     } catch (error) {
         console.error('Ошибка загрузки статуса тайм-слотов:', error);
@@ -527,9 +531,11 @@ async function loadTimeslotsStatus() {
 
 function updateTimeslotsDisplay() {
     // Обновляем отображение тайм-слотов с цветовым кодированием
-    const timeslotElements = document.querySelectorAll('.timeslot-item');
-    console.log('Найдено элементов .timeslot-item:', timeslotElements.length);
+    const timeslotElements = document.querySelectorAll('.timeslot-item[data-timeslot-id]');
+    console.log('Найдено элементов .timeslot-item с data-timeslot-id:', timeslotElements.length);
     console.log('Данные тайм-слотов:', timeslotsStatus);
+    console.log('Тип timeslotsStatus в updateTimeslotsDisplay:', typeof timeslotsStatus);
+    console.log('Длина timeslotsStatus:', timeslotsStatus ? timeslotsStatus.length : 'undefined');
     
     timeslotElements.forEach(element => {
         const timeslotId = element.dataset.timeslotId;
