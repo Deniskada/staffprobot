@@ -558,9 +558,9 @@ async def manager_employees(
                 employees_query = select(User).join(
                     Contract, User.id == Contract.employee_id
                 ).join(
-                    func.json_array_elements(Contract.allowed_objects).alias('obj'),
-                    func.json_array_elements(Contract.allowed_objects).in_(object_ids)
+                    func.json_array_elements(Contract.allowed_objects).alias('obj')
                 ).where(
+                    func.json_array_elements(Contract.allowed_objects).in_(object_ids),
                     Contract.is_active == True
                 ).distinct()
                 
