@@ -1,0 +1,324 @@
+{% extends "manager/base_manager.html" %}
+
+{% block manager_content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex align-items-center">
+                <a href="/manager/employees" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left me-1"></i>
+                    Назад к списку
+                </a>
+                <h2><i class="bi bi-person me-2"></i>{{ employee.first_name }} {{ employee.last_name or '' }}</h2>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary" onclick="viewShifts({{ employee.id }})">
+                    <i class="bi bi-clock me-1"></i>
+                    Смены
+                </button>
+                <button class="btn btn-outline-success" onclick="editEmployee({{ employee.id }})">
+                    <i class="bi bi-pencil me-1"></i>
+                    Редактировать
+                </button>
+                {% if contract and contract.status != 'terminated' %}
+                <button class="btn btn-outline-danger" onclick="terminateContract({{ contract.id }})">
+                    <i class="bi bi-x-circle me-1"></i>
+                    Расторгнуть договор
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Информация о сотруднике -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Информация о сотруднике</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Имя</label>
+                            <p class="form-control-plaintext">{{ employee.first_name }}</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Фамилия</label>
+                            <p class="form-control-plaintext">{{ employee.last_name or 'Не указана' }}</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Username</label>
+                            <p class="form-control-plaintext">
+                                {% if employee.username %}
+                                    @{{ employee.username }}
+                                {% else %}
+                                    Не указан
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Телефон</label>
+                            <p class="form-control-plaintext">
+                                {% if employee.phone %}
+                                    <i class="bi bi-telephone me-1"></i>{{ employee.phone }}
+                                {% else %}
+                                    Не указан
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Статус</label>
+                            <p class="form-control-plaintext">
+                                {% if employee.is_active %}
+                                    <span class="badge bg-success">Активен</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Неактивен</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Дата регистрации</label>
+                            <p class="form-control-plaintext">
+                                <i class="bi bi-calendar3 me-1"></i>
+                                {{ employee.created_at.strftime('%d.%m.%Y %H:%M') if employee.created_at else 'Не указана' }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Роли</h5>
+            </div>
+            <div class="card-body">
+                {% if employee.roles %}
+                    {% for role in employee.roles %}
+                        <span class="badge bg-primary me-1 mb-2">{{ role }}</span>
+                    {% endfor %}
+                {% else %}
+                    <span class="badge bg-secondary">{{ employee.role }}</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">Статистика</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Всего смен:</span>
+                    <strong>{{ total_shifts or 0 }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Отработано часов:</span>
+                    <strong>{{ total_hours or 0 }}ч</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Заработано:</span>
+                    <strong>{{ total_earnings or 0 }}₽</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Информация о договоре -->
+{% if contract %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Информация о договоре</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Номер договора</label>
+                            <p class="form-control-plaintext">{{ contract.contract_number or 'Не указан' }}</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Название</label>
+                            <p class="form-control-plaintext">{{ contract.title or 'Не указано' }}</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Ставка</label>
+                            <p class="form-control-plaintext">{{ contract.hourly_rate or 0 }}₽/час</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Статус</label>
+                            <p class="form-control-plaintext">
+                                {% if contract.status == 'active' %}
+                                    <span class="badge bg-success">Активен</span>
+                                {% elif contract.status == 'terminated' %}
+                                    <span class="badge bg-danger">Расторгнут</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ contract.status }}</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Дата начала</label>
+                            <p class="form-control-plaintext">
+                                {{ contract.start_date.strftime('%d.%m.%Y') if contract.start_date else 'Не указана' }}
+                            </p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Дата окончания</label>
+                            <p class="form-control-plaintext">
+                                {{ contract.end_date.strftime('%d.%m.%Y') if contract.end_date else 'Бессрочный' }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if contract.is_manager %}
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6 class="fw-bold">Права управляющего:</h6>
+                        <div class="row">
+                            {% if contract.manager_permissions %}
+                                {% for permission, value in contract.manager_permissions.items() %}
+                                    {% if value %}
+                                    <div class="col-md-4">
+                                        <span class="badge bg-info me-1">{{ permission }}</span>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted">Права не назначены</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Последние смены -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Последние смены</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_shifts %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Дата</th>
+                                <th>Объект</th>
+                                <th>Время</th>
+                                <th>Статус</th>
+                                <th>Заработок</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for shift in recent_shifts %}
+                            <tr>
+                                <td>{{ shift.start_time.strftime('%d.%m.%Y') if shift.start_time else 'Не указана' }}</td>
+                                <td>{{ shift.object.name if shift.object else 'Не указан' }}</td>
+                                <td>
+                                    {% if shift.start_time and shift.end_time %}
+                                        {{ shift.start_time.strftime('%H:%M') }} - {{ shift.end_time.strftime('%H:%M') }}
+                                    {% else %}
+                                        Не указано
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if shift.status == 'active' %}
+                                        <span class="badge bg-success">Активна</span>
+                                    {% elif shift.status == 'completed' %}
+                                        <span class="badge bg-primary">Завершена</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ shift.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ shift.total_payment or 0 }}₽</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-clock text-muted" style="font-size: 2rem;"></i>
+                    <p class="text-muted mt-2">Нет смен</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal для расторжения договора -->
+{% if contract and contract.status != 'terminated' %}
+<div class="modal fade" id="terminateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Расторжение договора</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/manager/employees/{{ employee.id }}/terminate">
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Вы уверены, что хотите расторгнуть договор с {{ employee.first_name }} {{ employee.last_name or '' }}? Это действие нельзя отменить.
+                    </div>
+                    <div class="mb-3">
+                        <label for="reason" class="form-label">Причина расторжения</label>
+                        <textarea class="form-control" 
+                                  id="reason" 
+                                  name="reason" 
+                                  rows="3" 
+                                  required
+                                  placeholder="Укажите причину расторжения договора..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Отмена
+                    </button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-x-circle me-2"></i>Расторгнуть договор
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function editEmployee(employeeId) {
+    window.location.href = '/manager/employees/' + employeeId + '/edit';
+}
+
+function viewShifts(employeeId) {
+    window.location.href = '/manager/employees/' + employeeId + '/shifts';
+}
+
+function terminateContract(contractId) {
+    const modal = new bootstrap.Modal(document.getElementById('terminateModal'));
+    modal.show();
+}
+</script>
+{% endblock %}
