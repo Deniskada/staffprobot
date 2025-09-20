@@ -44,7 +44,7 @@
                 <h5 class="modal-title">
                     <i class="bi bi-lightning"></i> Быстрое создание тайм-слота
                 </h5>
-                <button type="button" class="btn-close" onclick="closeQuickCreateModal()"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="quickCreateForm">
@@ -92,7 +92,7 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeQuickCreateModal()">Отмена</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
                 <button type="button" class="btn btn-primary" onclick="createQuickTimeslot()">
                     <i class="bi bi-check-lg"></i> Создать
                 </button>
@@ -565,11 +565,11 @@ async function createQuickTimeslot() {
         const result = await response.json();
         
         if (result.success) {
-            // Закрываем модальное окно
-            closeQuickCreateModal();
-            
             // Показываем уведомление
             showNotification('Тайм-слот успешно создан!', 'success');
+            
+            // Закрываем модальное окно
+            closeQuickCreateModal();
             
             // Обновляем страницу
             setTimeout(() => {
@@ -621,9 +621,14 @@ function refreshObjects() {
 
 function closeQuickCreateModal() {
     // Закрываем модальное окно
-    const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateModal'));
+    const modalElement = document.getElementById('quickCreateModal');
+    const modal = bootstrap.Modal.getInstance(modalElement);
     if (modal) {
         modal.hide();
+    } else {
+        // Если экземпляр не найден, создаем новый и сразу закрываем
+        const newModal = new bootstrap.Modal(modalElement);
+        newModal.hide();
     }
 }
 
