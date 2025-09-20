@@ -4261,7 +4261,12 @@ async def owner_contract_terminate(
         from apps.web.services.contract_service import ContractService
         
         contract_service = ContractService()
-        success = await contract_service.terminate_contract(contract_id, current_user["id"], reason)
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Пользователь не найден")
+        
+        success = await contract_service.terminate_contract(contract_id, user_id, reason)
         
         if success:
             return RedirectResponse(url="/owner/employees", status_code=303)
