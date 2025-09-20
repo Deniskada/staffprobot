@@ -3969,6 +3969,8 @@ async def owner_employees_create_contract(
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
     allowed_objects: List[int] = Form(default=[]),
+    is_manager: bool = Form(False),
+    manager_permissions: List[str] = Form(default=[]),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -3992,6 +3994,12 @@ async def owner_employees_create_contract(
                 field_key = key[6:]  # Убираем префикс "field_"
                 dynamic_values[field_key] = value
         
+        # Обрабатываем права управляющего
+        manager_permissions_dict = {}
+        if is_manager and manager_permissions:
+            for permission in manager_permissions:
+                manager_permissions_dict[permission] = True
+        
         # Создаем договор
         contract_data = {
             "employee_telegram_id": employee_telegram_id,
@@ -4002,6 +4010,8 @@ async def owner_employees_create_contract(
             "end_date": end_date_obj,
             "template_id": template_id,
             "allowed_objects": allowed_objects,
+            "is_manager": is_manager,
+            "manager_permissions": manager_permissions_dict if manager_permissions_dict else None,
             "values": dynamic_values if dynamic_values else None
         }
         

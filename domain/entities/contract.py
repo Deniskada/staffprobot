@@ -53,6 +53,11 @@ class Contract(Base):
     
     # Доступ к объектам
     allowed_objects = Column(JSON, nullable=True)  # Список ID объектов, к которым есть доступ
+    
+    # Поля для управляющих
+    is_manager = Column(Boolean, default=False, nullable=False)  # Является ли управляющим
+    manager_permissions = Column(JSON, nullable=True)  # Общие права управляющего
+    
     # Динамические значения по схеме полей шаблона
     values = Column(JSON, nullable=True)  # {key: value}
     
@@ -66,6 +71,7 @@ class Contract(Base):
     owner = relationship("User", foreign_keys=[owner_id], backref="owned_contracts")
     employee = relationship("User", foreign_keys=[employee_id], backref="employee_contracts")
     template = relationship("ContractTemplate", back_populates="contracts")
+    object_permissions = relationship("ManagerObjectPermission", back_populates="contract")
     
     # Связанные смены (пока без внешних ключей)
     # shifts = relationship("Shift", backref="contract")

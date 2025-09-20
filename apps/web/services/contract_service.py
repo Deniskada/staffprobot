@@ -7,8 +7,10 @@ from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
 from domain.entities.contract import Contract, ContractTemplate, ContractVersion
-from domain.entities.user import User
+from domain.entities.user import User, UserRole
 from domain.entities.object import Object
+from shared.services.role_service import RoleService
+from shared.services.manager_permission_service import ManagerPermissionService
 from core.logging.logger import logger
 
 
@@ -182,12 +184,32 @@ class ContractService:
                 start_date=contract_data["start_date"],
                 end_date=contract_data.get("end_date"),
                 allowed_objects=contract_data.get("allowed_objects", []),
+                is_manager=contract_data.get("is_manager", False),
+                manager_permissions=contract_data.get("manager_permissions"),
                 status="active"  # Устанавливаем активный статус по умолчанию
             )
             
             session.add(contract)
             await session.commit()
             await session.refresh(contract)
+            
+            # Автоматически назначаем роли
+            role_service = RoleService(session)
+            await role_service.assign_employee_role(employee.id)
+            
+            # Если это договор управляющего, назначаем роль управляющего
+            if contract.is_manager:
+                await role_service.assign_manager_role(employee.id)
+                
+                # Создаем права на объекты, если указаны
+                if contract.manager_permissions and contract.allowed_objects:
+                    permission_service = ManagerPermissionService(session)
+                    for object_id in contract.allowed_objects:
+                        await permission_service.create_permission(
+                            contract.id, 
+                            object_id, 
+                            contract.manager_permissions
+                        )
             
             logger.info(f"Created contract: {contract.id} - {contract_number}")
             return contract
@@ -302,6 +324,17 @@ class ContractService:
                 f"Договор расторгнут. Причина: {reason or 'Не указана'}",
                 contract.owner_id
             )
+            
+            # Обновляем роли сотрудника
+            role_service = RoleService(session)
+            await role_service.update_roles_from_contracts(contract.employee_id)
+            
+            # Если это был договор управляющего, удаляем права на объекты
+            if contract.is_manager:
+                permission_service = ManagerPermissionService(session)
+                permissions = await permission_service.get_contract_permissions(contract.id)
+                for permission in permissions:
+                    await permission_service.delete_permission(permission.id)
             
             await session.commit()
             
