@@ -4258,23 +4258,40 @@ async def owner_contract_terminate(
 ):
     """Расторжение договора."""
     try:
+        logger.info(f"=== ROUTE: Starting contract termination ===")
+        logger.info(f"Route parameters: contract_id={contract_id}, reason='{reason}'")
+        logger.info(f"Current user: {current_user}")
+        
         from apps.web.services.contract_service import ContractService
         
         contract_service = ContractService()
+        logger.info(f"ContractService created successfully")
+        
         # Получаем внутренний ID пользователя
+        logger.info(f"Getting user_id from current_user")
         user_id = await get_user_id_from_current_user(current_user, db)
+        logger.info(f"User ID resolved: {user_id}")
+        
         if not user_id:
+            logger.error(f"User ID is None or empty")
             raise HTTPException(status_code=400, detail="Пользователь не найден")
         
+        logger.info(f"Calling contract_service.terminate_contract with: contract_id={contract_id}, user_id={user_id}, reason='{reason}'")
         success = await contract_service.terminate_contract(contract_id, user_id, reason)
+        logger.info(f"Contract termination result: {success}")
         
         if success:
+            logger.info(f"Contract terminated successfully, redirecting to /owner/employees")
             return RedirectResponse(url="/owner/employees", status_code=303)
         else:
+            logger.error(f"Contract termination returned False")
             raise HTTPException(status_code=400, detail="Ошибка расторжения договора")
             
     except Exception as e:
-        logger.error(f"Error terminating contract: {e}")
+        logger.error(f"=== ROUTE: Contract termination failed ===")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
+        logger.error(f"Full traceback:", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Ошибка расторжения договора: {str(e)}")
 
 
