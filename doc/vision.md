@@ -825,6 +825,7 @@ shifts_total = Counter('staffprobot_shifts_total')
 ```
 /admin/*    - суперадмин: управление системой
 /owner/*    - владелец: управление объектами и сотрудниками  
+/manager/*  - управляющий: управление по правам доступа
 /employee/* - сотрудник: поиск смен, календарь, заработок
 /auth/*     - общие: авторизация, доступна всем
 ```
@@ -840,12 +841,18 @@ templates/
 │   ├── base_owner.html
 │   ├── dashboard.html
 │   └── objects.html
+├── manager/         # Только для управляющих
+│   ├── base_manager.html
+│   ├── dashboard.html
+│   ├── objects.html
+│   └── employees.html
 ├── employee/        # Только для сотрудников
 │   ├── base_employee.html
 │   ├── dashboard.html
 │   └── shifts_map.html
 └── common/          # Общие компоненты
     ├── login.html
+    ├── role_switcher.html
     └── error.html
 ```
 
@@ -863,6 +870,16 @@ templates/
 - Сотрудники
 - Шаблоны договоров
 - Отчеты по объектам
+- Назначение управляющих
+
+**👨‍💼 Управляющий (`/manager/*`):**
+- Управление доступными объектами (по правам)
+- Создание новых объектов (если разрешено)
+- Управление сотрудниками (если разрешено)
+- Заключение договоров (если разрешено)
+- Планирование смен
+- Отчеты по доступным объектам
+- Управление другими управляющими (если разрешено)
 
 **👷 Сотрудник (`/employee/*`):**
 - Карта свободных смен
@@ -870,20 +887,27 @@ templates/
 - История работы
 - Заработок
 
-#### Middleware с проверкой роли
+#### Middleware с проверкой множественных ролей
 ```python
 class RoleBasedAccessMiddleware:
     async def __call__(self, request, call_next):
         path = request.url.path
-        user_role = get_user_role(request)
+        user_roles = get_user_roles(request)  # Список ролей пользователя
         
-        # Проверка доступа по роли и пути
-        if path.startswith('/admin/') and user_role != 'superadmin':
-            return redirect_to_role_dashboard(user_role)
-        elif path.startswith('/owner/') and user_role != 'owner':
-            return redirect_to_role_dashboard(user_role)
-        elif path.startswith('/employee/') and user_role != 'employee':
-            return redirect_to_role_dashboard(user_role)
+        # Проверка доступа по ролям и пути
+        if path.startswith('/admin/') and 'superadmin' not in user_roles:
+            return redirect_to_available_interface(user_roles)
+        elif path.startswith('/owner/') and 'owner' not in user_roles:
+            return redirect_to_available_interface(user_roles)
+        elif path.startswith('/manager/') and 'manager' not in user_roles:
+            return redirect_to_available_interface(user_roles)
+        elif path.startswith('/employee/') and 'employee' not in user_roles:
+            return redirect_to_available_interface(user_roles)
+        
+        # Дополнительная проверка прав управляющего на объекты
+        if path.startswith('/manager/') and 'manager' in user_roles:
+            if not await check_manager_object_permissions(request, path):
+                return redirect_to_manager_dashboard()
 ```
 
 #### Реализованные компоненты ✅
