@@ -383,16 +383,12 @@ async def manager_object_edit_post(
             available_for_applicants = form_data.get("available_for_applicants") == "true"
             is_active = form_data.get("is_active") == "true"
             
-            # Получение дней недели
-            work_days = form_data.getlist("work_days")
-            work_days_mask = [False] * 7
-            for day in work_days:
-                try:
-                    day_index = int(day)
-                    if 0 <= day_index < 7:
-                        work_days_mask[day_index] = True
-                except ValueError:
-                    pass
+            # Получение дней недели (битовая маска)
+            work_days_mask_str = form_data.get("work_days_mask", "0").strip()
+            try:
+                work_days_mask = int(work_days_mask_str)
+            except ValueError:
+                work_days_mask = 0
             
             schedule_repeat_weeks_str = form_data.get("schedule_repeat_weeks", "1").strip()
             
