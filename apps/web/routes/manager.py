@@ -191,12 +191,16 @@ async def manager_objects(
                 "can_edit_schedule": "Редактирование расписания"
             }
             
+            # Получаем данные для переключения интерфейсов
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
             return templates.TemplateResponse("manager/objects.html", {
                 "request": request,
                 "current_user": current_user,
                 "accessible_objects": accessible_objects,
                 "object_permissions": object_permissions,
-                "permission_names": permission_names
+                "permission_names": permission_names,
+                "available_interfaces": available_interfaces
             })
         
     except Exception as e:
@@ -246,11 +250,15 @@ async def manager_object_detail(
                     object_permission = permission
                     break
             
+            # Получаем данные для переключения интерфейсов
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
             return templates.TemplateResponse("manager/objects/detail.html", {
                 "request": request,
                 "current_user": current_user,
                 "object": obj,
-                "object_permission": object_permission
+                "object_permission": object_permission,
+                "available_interfaces": available_interfaces
             })
         
     except Exception as e:
@@ -314,12 +322,16 @@ async def manager_object_edit(
                 "schedule_repeat_weeks": obj.schedule_repeat_weeks
             }
             
+            # Получаем данные для переключения интерфейсов
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
             return templates.TemplateResponse("manager/objects/edit.html", {
                 "request": request,
                 "title": f"Редактирование: {object_data['name']}",
                 "object": object_data,
                 "current_user": current_user,
-                "object_permission": object_permission
+                "object_permission": object_permission,
+                "available_interfaces": available_interfaces
             })
             
     except HTTPException:
@@ -510,10 +522,15 @@ async def manager_employees(
             # Здесь будет логика получения сотрудников
             # Пока возвращаем заглушку
             
+            # Получаем данные для переключения интерфейсов
+            login_service = RoleBasedLoginService(db)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
             return templates.TemplateResponse("manager/employees.html", {
                 "request": request,
                 "current_user": current_user,
-                "employees": []
+                "employees": [],
+                "available_interfaces": available_interfaces
             })
         
     except Exception as e:
@@ -540,9 +557,14 @@ async def manager_calendar(
             # Здесь будет логика календаря
             # Пока возвращаем заглушку
             
+            # Получаем данные для переключения интерфейсов
+            login_service = RoleBasedLoginService(db)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
             return templates.TemplateResponse("manager/calendar.html", {
                 "request": request,
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             })
         
     except Exception as e:
@@ -569,9 +591,14 @@ async def manager_reports(
             # Здесь будет логика отчетов
             # Пока возвращаем заглушку
             
+            # Получаем данные для переключения интерфейсов
+            login_service = RoleBasedLoginService(db)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
             return templates.TemplateResponse("manager/reports.html", {
                 "request": request,
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             })
         
     except Exception as e:
