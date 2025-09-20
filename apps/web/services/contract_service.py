@@ -1156,6 +1156,7 @@ class ContractService:
                 
                 logger.info(f"Successfully terminated contract: {contract.id}")
                 return True
+        
                 
         except Exception as e:
             logger.error(f"Error in terminate_contract: {e}", exc_info=True)
