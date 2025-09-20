@@ -877,7 +877,6 @@ function showNotification(message, type = 'info') {
 }
 
 // Отладочная информация
-console.log('Данные календаря:', {{ calendar_data | tojson }});
 console.log('Всего тайм-слотов:', {{ timeslots | length }});
 console.log('Дни с тайм-слотами:', {{ calendar_data | selectattr('timeslots_count', '>', 0) | list | length }});
 </script>
@@ -888,8 +887,8 @@ console.log('Дни с тайм-слотами:', {{ calendar_data | selectattr(
     <p>Всего дней с тайм-слотами: {{ calendar_data | selectattr('timeslots_count', '>', 0) | list | length }}</p>
     <p>Всего тайм-слотов: {{ timeslots | length }}</p>
     <details>
-        <summary>Данные календаря</summary>
-        <pre>{{ calendar_data | tojson(indent=2) }}</pre>
+        <summary>Данные тайм-слотов</summary>
+        <pre>{{ timeslots | tojson(indent=2) }}</pre>
     </details>
 </div>
 
