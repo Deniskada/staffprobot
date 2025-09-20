@@ -1779,26 +1779,29 @@ async def api_employees_for_object(object_id: int, request: Request):
             
             employees_with_access = []
             for emp in employees:
-                # Получаем договор сотрудника
+                # Получаем договоры сотрудника
                 contract_query = select(Contract).where(
                     Contract.employee_id == emp.id,
                     Contract.owner_id == user_id,
                     Contract.status == "active"
                 )
                 contract_result = await session.execute(contract_query)
-                contract = contract_result.scalar_one_or_none()
+                contracts = contract_result.scalars().all()
                 
-                if contract and contract.allowed_objects:
-                    allowed_objects = contract.allowed_objects if isinstance(contract.allowed_objects, list) else json.loads(contract.allowed_objects)
-                    if object_id in allowed_objects:
-                        employees_with_access.append({
-                            "id": emp.id,
-                            "name": f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username,
-                            "username": emp.username,
-                            "role": emp.role,
-                            "is_active": emp.is_active,
-                            "telegram_id": emp.telegram_id
-                        })
+                # Проверяем все договоры сотрудника
+                for contract in contracts:
+                    if contract and contract.allowed_objects:
+                        allowed_objects = contract.allowed_objects if isinstance(contract.allowed_objects, list) else json.loads(contract.allowed_objects)
+                        if object_id in allowed_objects:
+                            employees_with_access.append({
+                                "id": emp.id,
+                                "name": f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username,
+                                "username": emp.username,
+                                "role": emp.role,
+                                "is_active": emp.is_active,
+                                "telegram_id": emp.telegram_id
+                            })
+                            break  # Если нашли доступ, выходим из цикла по договорам
             
             return employees_with_access
             
