@@ -473,8 +473,8 @@ async def manager_object_edit_post(
                 "schedule_repeat_weeks": schedule_repeat_weeks
             }
             
-            # Обновляем объект
-            updated_object = await object_service.update_object(object_id, update_data)
+            # Обновляем объект (используем метод для управляющих)
+            updated_object = await object_service.update_object_by_manager(object_id, update_data)
             
             if not updated_object:
                 raise HTTPException(status_code=500, detail="Ошибка обновления объекта")
