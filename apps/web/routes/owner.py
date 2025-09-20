@@ -1768,47 +1768,44 @@ async def api_employees_for_object(object_id: int, request: Request):
             if not object_result.scalar_one_or_none():
                 raise HTTPException(status_code=404, detail="Объект не найден")
             
-            # Получаем сотрудников с доступом к объекту
-            employees_query = select(User).join(Contract, User.id == Contract.employee_id).where(
-                User.role == "employee",
-                Contract.owner_id == user_id,
-                Contract.status == "active"
-            )
-            employees_result = await session.execute(employees_query)
-            employees = employees_result.scalars().all()
-            
+            # Получаем всех сотрудников с активными договорами, которые имеют доступ к объекту
             employees_with_access = []
             added_employee_ids = set()  # Для отслеживания уже добавленных сотрудников
             
-            for emp in employees:
-                # Пропускаем, если сотрудник уже добавлен
-                if emp.id in added_employee_ids:
-                    continue
+            # Получаем все активные договоры, которые содержат наш объект
+            contracts_query = select(Contract).where(
+                Contract.status == "active",
+                Contract.is_active == True
+            )
+            contracts_result = await session.execute(contracts_query)
+            all_contracts = contracts_result.scalars().all()
+            
+            # Фильтруем договоры, которые содержат наш объект
+            relevant_contracts = []
+            for contract in all_contracts:
+                if contract.allowed_objects:
+                    allowed_objects = contract.allowed_objects if isinstance(contract.allowed_objects, list) else json.loads(contract.allowed_objects)
+                    if object_id in allowed_objects:
+                        relevant_contracts.append(contract)
+            
+            # Получаем сотрудников из релевантных договоров
+            for contract in relevant_contracts:
+                if contract.employee_id not in added_employee_ids:
+                    # Получаем данные сотрудника
+                    employee_query = select(User).where(User.id == contract.employee_id)
+                    employee_result = await session.execute(employee_query)
+                    employee = employee_result.scalar_one_or_none()
                     
-                # Получаем договоры сотрудника
-                contract_query = select(Contract).where(
-                    Contract.employee_id == emp.id,
-                    Contract.owner_id == user_id,
-                    Contract.status == "active"
-                )
-                contract_result = await session.execute(contract_query)
-                contracts = contract_result.scalars().all()
-                
-                # Проверяем все договоры сотрудника
-                for contract in contracts:
-                    if contract and contract.allowed_objects:
-                        allowed_objects = contract.allowed_objects if isinstance(contract.allowed_objects, list) else json.loads(contract.allowed_objects)
-                        if object_id in allowed_objects:
-                            employees_with_access.append({
-                                "id": emp.id,
-                                "name": f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username,
-                                "username": emp.username,
-                                "role": emp.role,
-                                "is_active": emp.is_active,
-                                "telegram_id": emp.telegram_id
-                            })
-                            added_employee_ids.add(emp.id)  # Помечаем сотрудника как добавленного
-                            break  # Если нашли доступ, выходим из цикла по договорам
+                    if employee and employee.role == "employee":
+                        employees_with_access.append({
+                            "id": employee.id,
+                            "name": f"{employee.first_name or ''} {employee.last_name or ''}".strip() or employee.username,
+                            "username": employee.username,
+                            "role": employee.role,
+                            "is_active": employee.is_active,
+                            "telegram_id": employee.telegram_id
+                        })
+                        added_employee_ids.add(employee.id)
             
             return employees_with_access
             
