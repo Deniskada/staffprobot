@@ -1453,16 +1453,25 @@ async def owner_calendar_api_timeslots_status(
         
         logger.info(f"Found {len(actual_shifts)} actual shifts")
         
+        # Получаем информацию о пользователях для запланированных смен
+        user_ids = list(set(shift.user_id for shift in scheduled_shifts))
+        users_query = select(User).where(User.id.in_(user_ids))
+        users_result = await db.execute(users_query)
+        users = {user.id: user for user in users_result.scalars().all()}
+        
         # Создаем карту запланированных смен по time_slot_id
         scheduled_shifts_map = {}
         # Индекс для запланированных смен по объекту и дате (на случай отсутствия привязки к time_slot)
         scheduled_by_object_date = {}
         for shift in scheduled_shifts:
+            user = users.get(shift.user_id)
+            user_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {shift.user_id}"
             if shift.time_slot_id:
                 scheduled_shifts_map.setdefault(shift.time_slot_id, [])
                 scheduled_shifts_map[shift.time_slot_id].append({
                     "id": shift.id,
                     "user_id": shift.user_id,
+                    "user_name": user_name,
                     "status": shift.status,
                     "start_time": web_timezone_helper.format_time_with_timezone(shift.planned_start, shift.object.timezone if shift.object else 'Europe/Moscow'),
                     "end_time": web_timezone_helper.format_time_with_timezone(shift.planned_end, shift.object.timezone if shift.object else 'Europe/Moscow'),
@@ -1517,9 +1526,12 @@ async def owner_calendar_api_timeslots_status(
                         overlaps_sched.append(sh)
                 if overlaps_sched:
                     for sh in overlaps_sched:
+                        user = users.get(sh.user_id)
+                        user_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {sh.user_id}"
                         scheduled_shifts.append({
                             "id": sh.id,
                             "user_id": sh.user_id,
+                            "user_name": user_name,
                             "status": sh.status,
                             "start_time": sh.planned_start.time().strftime("%H:%M"),
                             "end_time": sh.planned_end.time().strftime("%H:%M"),
