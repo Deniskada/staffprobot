@@ -258,6 +258,243 @@ async def manager_object_detail(
         raise HTTPException(status_code=500, detail="Ошибка загрузки объекта")
 
 
+@router.get("/objects/{object_id}/edit", response_class=HTMLResponse)
+async def manager_object_edit(
+    request: Request,
+    object_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Форма редактирования объекта управляющим."""
+    try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем сервисы
+            permission_service = ManagerPermissionService(db)
+            
+            # Проверяем доступ к объекту
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            obj = next((o for o in accessible_objects if o.id == object_id), None)
+            
+            if not obj:
+                raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
+            
+            # Получаем права на объект
+            manager_contracts = await permission_service.get_manager_contracts_for_user(user_id)
+            object_permission = None
+            for contract in manager_contracts:
+                permission = await permission_service.get_permission(contract.id, object_id)
+                if permission:
+                    object_permission = permission
+                    break
+            
+            # Проверяем права на редактирование
+            if not object_permission or not object_permission.can_edit:
+                raise HTTPException(status_code=403, detail="Нет прав на редактирование объекта")
+            
+            # Преобразуем в формат для шаблона
+            object_data = {
+                "id": obj.id,
+                "name": obj.name,
+                "address": obj.address or "",
+                "coordinates": obj.coordinates or "",
+                "hourly_rate": obj.hourly_rate,
+                "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "",
+                "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "",
+                "max_distance": obj.max_distance_meters or 500,
+                "available_for_applicants": obj.available_for_applicants,
+                "is_active": obj.is_active,
+                "work_days_mask": obj.work_days_mask,
+                "schedule_repeat_weeks": obj.schedule_repeat_weeks
+            }
+            
+            return templates.TemplateResponse("manager/objects/edit.html", {
+                "request": request,
+                "title": f"Редактирование: {object_data['name']}",
+                "object": object_data,
+                "current_user": current_user,
+                "object_permission": object_permission
+            })
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in manager object edit: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки формы редактирования")
+
+
+@router.post("/objects/{object_id}/edit")
+async def manager_object_edit_post(
+    request: Request,
+    object_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Обновление объекта управляющим."""
+    try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем сервисы
+            permission_service = ManagerPermissionService(db)
+            
+            # Проверяем доступ к объекту
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            obj = next((o for o in accessible_objects if o.id == object_id), None)
+            
+            if not obj:
+                raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
+            
+            # Получаем права на объект
+            manager_contracts = await permission_service.get_manager_contracts_for_user(user_id)
+            object_permission = None
+            for contract in manager_contracts:
+                permission = await permission_service.get_permission(contract.id, object_id)
+                if permission:
+                    object_permission = permission
+                    break
+            
+            # Проверяем права на редактирование
+            if not object_permission or not object_permission.can_edit:
+                raise HTTPException(status_code=403, detail="Нет прав на редактирование объекта")
+            
+            # Получение данных формы
+            form_data = await request.form()
+            
+            name = form_data.get("name", "").strip()
+            address = form_data.get("address", "").strip()
+            hourly_rate_str = form_data.get("hourly_rate", "0").strip()
+            opening_time = form_data.get("opening_time", "").strip()
+            closing_time = form_data.get("closing_time", "").strip()
+            max_distance_str = form_data.get("max_distance", "500").strip()
+            latitude_str = form_data.get("latitude", "").strip()
+            longitude_str = form_data.get("longitude", "").strip()
+            available_for_applicants = form_data.get("available_for_applicants") == "true"
+            is_active = form_data.get("is_active") == "true"
+            
+            # Получение дней недели
+            work_days = form_data.getlist("work_days")
+            work_days_mask = [False] * 7
+            for day in work_days:
+                try:
+                    day_index = int(day)
+                    if 0 <= day_index < 7:
+                        work_days_mask[day_index] = True
+                except ValueError:
+                    pass
+            
+            schedule_repeat_weeks_str = form_data.get("schedule_repeat_weeks", "1").strip()
+            
+            logger.info(f"Updating object {object_id} for manager user {user_id}")
+            
+            # Валидация обязательных полей
+            if not name:
+                raise HTTPException(status_code=400, detail="Название объекта обязательно")
+            if not address:
+                raise HTTPException(status_code=400, detail="Адрес объекта обязателен")
+            
+            # Валидация и преобразование числовых полей
+            try:
+                # Поддержка запятой как десятичного разделителя ("500,00")
+                normalized_rate = hourly_rate_str.replace(",", ".") if hourly_rate_str else "0"
+                hourly_rate = int(float(normalized_rate)) if normalized_rate else 0
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат ставки")
+            
+            try:
+                max_distance = int(max_distance_str) if max_distance_str else 500
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат максимального расстояния")
+            
+            try:
+                schedule_repeat_weeks = int(schedule_repeat_weeks_str) if schedule_repeat_weeks_str else 1
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат повторения")
+            
+            if hourly_rate <= 0:
+                raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+            
+            if max_distance <= 0:
+                raise HTTPException(status_code=400, detail="Максимальное расстояние должно быть больше 0")
+            
+            if schedule_repeat_weeks <= 0:
+                raise HTTPException(status_code=400, detail="Повторение должно быть больше 0")
+            
+            # Обработка координат
+            coordinates = None
+            if latitude_str and longitude_str:
+                try:
+                    lat = float(latitude_str)
+                    lon = float(longitude_str)
+                    coordinates = f"{lat},{lon}"
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Неверный формат координат")
+            
+            # Обработка времени
+            from datetime import datetime, time
+            opening_time_obj = None
+            closing_time_obj = None
+            
+            if opening_time:
+                try:
+                    opening_time_obj = datetime.strptime(opening_time, "%H:%M").time()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Неверный формат времени открытия")
+            
+            if closing_time:
+                try:
+                    closing_time_obj = datetime.strptime(closing_time, "%H:%M").time()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Неверный формат времени закрытия")
+            
+            # Обновление объекта
+            from apps.web.services.object_service import ObjectService
+            object_service = ObjectService(db)
+            
+            # Подготавливаем данные для обновления
+            update_data = {
+                "name": name,
+                "address": address,
+                "hourly_rate": hourly_rate,
+                "opening_time": opening_time_obj,
+                "closing_time": closing_time_obj,
+                "max_distance_meters": max_distance,
+                "coordinates": coordinates,
+                "available_for_applicants": available_for_applicants,
+                "is_active": is_active,
+                "work_days_mask": work_days_mask,
+                "schedule_repeat_weeks": schedule_repeat_weeks
+            }
+            
+            # Обновляем объект
+            updated_object = await object_service.update_object(object_id, update_data)
+            
+            if not updated_object:
+                raise HTTPException(status_code=500, detail="Ошибка обновления объекта")
+            
+            logger.info(f"Object {object_id} updated successfully by manager {user_id}")
+            
+            # Перенаправляем на страницу объекта
+            return RedirectResponse(url=f"/manager/objects/{object_id}", status_code=302)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating object {object_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка обновления объекта")
+
+
 @router.get("/employees", response_class=HTMLResponse)
 async def manager_employees(
     request: Request,
