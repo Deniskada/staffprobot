@@ -128,6 +128,7 @@ async def manager_dashboard(
             }
             
             # Получаем данные для переключения интерфейсов
+            login_service = RoleBasedLoginService(db)
             available_interfaces = await login_service.get_available_interfaces(user_id)
             
             return templates.TemplateResponse("manager/dashboard.html", {
@@ -193,6 +194,7 @@ async def manager_objects(
             }
             
             # Получаем данные для переключения интерфейсов
+            login_service = RoleBasedLoginService(db)
             available_interfaces = await login_service.get_available_interfaces(user_id)
             
             return templates.TemplateResponse("manager/objects.html", {
@@ -252,6 +254,7 @@ async def manager_object_detail(
                     break
             
             # Получаем данные для переключения интерфейсов
+            login_service = RoleBasedLoginService(db)
             available_interfaces = await login_service.get_available_interfaces(user_id)
             
             return templates.TemplateResponse("manager/objects/detail.html", {
@@ -324,6 +327,7 @@ async def manager_object_edit(
             }
             
             # Получаем данные для переключения интерфейсов
+            login_service = RoleBasedLoginService(db)
             available_interfaces = await login_service.get_available_interfaces(user_id)
             
             return templates.TemplateResponse("manager/objects/edit.html", {
@@ -552,6 +556,7 @@ async def manager_employees(
                     employees = result.scalars().all()
             
             # Получаем данные для переключения интерфейсов
+            login_service = RoleBasedLoginService(db)
             available_interfaces = await login_service.get_available_interfaces(user_id)
             
             return templates.TemplateResponse("manager/employees.html", {
