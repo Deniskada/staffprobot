@@ -554,11 +554,11 @@ async def manager_employees(
                 # Получаем всех сотрудников, работающих на доступных объектах
                 from sqlalchemy import func, or_, text, cast, String, JSON, any_
                 
-                # Простейший подход - проверяем, что любой из доступных объектов есть в allowed_objects
+                # Максимально простой подход - используем IN с jsonb_array_elements
                 employees_query = select(User).join(
                     Contract, User.id == Contract.employee_id
                 ).where(
-                    func.jsonb_array_contains(Contract.allowed_objects, func.any_(object_ids)),
+                    func.jsonb_array_elements(Contract.allowed_objects).in_(object_ids),
                     Contract.is_active == True
                 ).distinct()
                 
