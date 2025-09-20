@@ -116,12 +116,49 @@ async def owner_dashboard(request: Request):
             )
             active_shifts = active_shifts_count.scalar()
             
-            # Последние объекты
-            recent_objects_result = await session.execute(
-                select(Object).where(Object.owner_id == user_id)
-                .order_by(desc(Object.created_at)).limit(5)
-            )
-            recent_objects = recent_objects_result.scalars().all()
+            # Получаем объекты с информацией о сменах за текущий день
+            from datetime import datetime, timezone, date
+            today = date.today()
+            
+            # Запрос для получения объектов с информацией о первой смене за сегодня
+            # Сначала получаем объекты
+            objects_query = select(Object).where(Object.owner_id == user_id).order_by(desc(Object.created_at)).limit(5)
+            objects_result = await session.execute(objects_query)
+            objects = objects_result.scalars().all()
+            
+            # Для каждого объекта получаем информацию о первой смене за сегодня
+            recent_objects = []
+            for obj in objects:
+                # Получаем первую смену за сегодня для этого объекта
+                first_shift_query = select(
+                    Shift.start_time,
+                    User.first_name,
+                    User.last_name
+                ).select_from(
+                    Shift
+                ).join(
+                    User, User.id == Shift.user_id
+                ).where(
+                    and_(
+                        Shift.object_id == obj.id,
+                        func.date(Shift.start_time) == today,
+                        Shift.status == 'active'
+                    )
+                ).order_by(Shift.start_time).limit(1)
+                
+                first_shift_result = await session.execute(first_shift_query)
+                first_shift = first_shift_result.first()
+                
+                # Создаем объект с информацией
+                object_data = {
+                    'id': obj.id,
+                    'name': obj.name,
+                    'address': obj.address,
+                    'first_shift_start': first_shift.start_time if first_shift else None,
+                    'first_name': first_shift.first_name if first_shift else None,
+                    'last_name': first_shift.last_name if first_shift else None
+                }
+                recent_objects.append(object_data)
         
         stats = {
             'total_objects': total_objects,
