@@ -532,28 +532,23 @@ async def manager_employees(
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
             object_ids = [obj.id for obj in accessible_objects]
             
-            # Получаем сотрудников, работающих на этих объектах
+            # Получаем сотрудников, работающих на доступных объектах
             employees = []
             if object_ids:
                 from sqlalchemy import select, distinct
                 from domain.entities.contract import Contract
                 from domain.entities.user import User
                 
-                # Получаем договоры управляющего
-                manager_contracts = await permission_service.get_manager_contracts_for_user(user_id)
-                manager_contract_ids = [contract.id for contract in manager_contracts]
+                # Получаем всех сотрудников, работающих на доступных объектах
+                employees_query = select(User).join(
+                    Contract, User.id == Contract.employee_id
+                ).where(
+                    Contract.allowed_objects.op('?|')(object_ids),  # JSONB оператор для проверки пересечения массивов
+                    Contract.is_active == True
+                ).distinct()
                 
-                if manager_contract_ids:
-                    # Получаем сотрудников из договоров
-                    employees_query = select(User).join(
-                        Contract, User.id == Contract.employee_id
-                    ).where(
-                        Contract.id.in_(manager_contract_ids),
-                        Contract.is_active == True
-                    ).distinct()
-                    
-                    result = await db.execute(employees_query)
-                    employees = result.scalars().all()
+                result = await db.execute(employees_query)
+                employees = result.scalars().all()
             
             # Получаем данные для переключения интерфейсов
             login_service = RoleBasedLoginService(db)
