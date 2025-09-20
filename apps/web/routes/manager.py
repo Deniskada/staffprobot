@@ -1936,6 +1936,7 @@ async def plan_shift_manager(
     current_user: dict = Depends(require_manager_or_owner)
 ):
     """Планирование смены управляющим"""
+    logger.info("=== STARTING plan_shift_manager ===")
     try:
         if isinstance(current_user, RedirectResponse):
             raise HTTPException(status_code=401, detail="Необходима авторизация")
