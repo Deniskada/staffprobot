@@ -193,13 +193,9 @@
                         Вы уверены, что хотите расторгнуть этот договор? Это действие нельзя отменить.
                     </div>
                     <div class="mb-3">
-                        <label for="reason" class="form-label">Причина расторжения</label>
-                        <textarea class="form-control" 
-                                  id="reason" 
-                                  name="reason" 
-                                  rows="3" 
-                                  required
-                                  placeholder="Укажите причину расторжения договора..."></textarea>
+                        <label for="terminateReason" class="form-label">Причина расторжения:</label>
+                        <textarea class="form-control" id="terminateReason" name="reason" rows="3" 
+                                  placeholder="Укажите причину расторжения договора..." required></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -267,33 +263,9 @@ function activateContract() {
 }
 
 function terminateContract() {
-    if (confirm('Вы уверены, что хотите расторгнуть этот договор?')) {
-        fetch(`/owner/employees/contract/{{ contract.id }}/terminate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reason: 'Расторжение по кнопке' }),
-            credentials: 'include'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const div = document.createElement('div');
-                div.className = 'alert alert-success position-fixed top-0 end-0 m-3';
-                div.innerText = data.message || 'Договор расторгнут';
-                document.body.appendChild(div);
-                // Перенаправляем на список сотрудников вместо перезагрузки
-                setTimeout(() => {
-                    window.location.href = '/owner/employees';
-                }, 800);
-            } else {
-                alert('Ошибка расторжения договора: ' + (data.detail || 'Неизвестная ошибка'));
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Ошибка расторжения договора');
-        });
-    }
+    // Показываем модальное окно для ввода причины
+    const modal = new bootstrap.Modal(document.getElementById('terminateModal'));
+    modal.show();
 }
 </script>
 {% endblock %}
