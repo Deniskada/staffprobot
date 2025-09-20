@@ -1874,33 +1874,53 @@ async def get_employees_for_object_manager(
             if object_id not in accessible_object_ids:
                 raise HTTPException(status_code=403, detail="Нет доступа к объекту")
             
-            # Получаем сотрудников для объекта
-            from sqlalchemy import select, text
+            # Получаем сотрудников для объекта (копируем логику из календаря владельца)
+            from sqlalchemy import select
             from domain.entities.contract import Contract
             from domain.entities.user import User
+            import json
             
-            employees_query = select(User).join(
-                Contract, User.id == Contract.employee_id
-            ).where(
-                Contract.is_active == True,
-                text("EXISTS (SELECT 1 FROM json_array_elements(contracts.allowed_objects) AS elem WHERE elem::text::int = :object_id)")
-            ).params(object_id=object_id)
+            # Получаем всех сотрудников с активными договорами
+            employees_query = select(User).join(Contract, User.id == Contract.employee_id).where(
+                User.role == "employee",
+                Contract.is_active == True
+            )
+            employees_result = await db.execute(employees_query)
+            employees = employees_result.scalars().all()
             
-            result = await db.execute(employees_query)
-            employees = result.scalars().all()
+            employees_with_access = []
+            added_employee_ids = set()  # Для отслеживания уже добавленных сотрудников
             
-            employees_data = []
             for emp in employees:
-                employees_data.append({
-                    "id": emp.id,
-                    "telegram_id": emp.telegram_id,
-                    "first_name": emp.first_name,
-                    "last_name": emp.last_name,
-                    "username": emp.username,
-                    "phone": emp.phone,
-                    "is_active": emp.is_active,
-                    "name": f"{emp.first_name} {emp.last_name or ''}".strip() or emp.username or f"ID {emp.id}"
-                })
+                # Пропускаем, если сотрудник уже добавлен
+                if emp.id in added_employee_ids:
+                    continue
+                    
+                # Получаем договоры сотрудника
+                contract_query = select(Contract).where(
+                    Contract.employee_id == emp.id,
+                    Contract.is_active == True
+                )
+                contract_result = await db.execute(contract_query)
+                contracts = contract_result.scalars().all()
+                
+                # Проверяем все договоры сотрудника
+                for contract in contracts:
+                    if contract and contract.allowed_objects:
+                        allowed_objects = contract.allowed_objects if isinstance(contract.allowed_objects, list) else json.loads(contract.allowed_objects)
+                        if object_id in allowed_objects:
+                            employees_with_access.append({
+                                "id": emp.id,
+                                "name": f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username,
+                                "username": emp.username,
+                                "role": emp.role,
+                                "is_active": emp.is_active,
+                                "telegram_id": emp.telegram_id
+                            })
+                            added_employee_ids.add(emp.id)  # Помечаем сотрудника как добавленного
+                            break  # Если нашли доступ, выходим из цикла по договорам
+            
+            employees_data = employees_with_access
             
             return employees_data
             
@@ -2068,6 +2088,7 @@ async def quick_create_timeslot_manager(
                 "timeslot_id": timeslot.id
             }
             
+            logger.info(f"Returning success result: {result}")
             return result
             
     except HTTPException:
