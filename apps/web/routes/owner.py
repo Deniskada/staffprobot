@@ -1807,21 +1807,24 @@ async def api_employees_for_object(object_id: int, request: Request):
                     
                     if employee and employee.role == "employee":
                         logger.info(f"Adding employee {employee.id} ({employee.username}) to list")
-                        employees_with_access.append({
-                            "id": employee.id,
-                            "name": f"{employee.first_name or ''} {employee.last_name or ''}".strip() or employee.username,
-                            "username": employee.username,
-                            "role": employee.role,
-                            "is_active": employee.is_active,
-                            "telegram_id": employee.telegram_id
-                        })
+                        employee_data = {
+                            "id": int(employee.id),
+                            "name": str(f"{employee.first_name or ''} {employee.last_name or ''}".strip() or employee.username or f"ID {employee.id}"),
+                            "username": str(employee.username or ""),
+                            "role": str(employee.role),
+                            "is_active": bool(employee.is_active),
+                            "telegram_id": int(employee.telegram_id) if employee.telegram_id else None
+                        }
+                        employees_with_access.append(employee_data)
                         added_employee_ids.add(employee.id)
+                        logger.info(f"Added employee data: {employee_data}")
                     else:
                         logger.info(f"Employee {contract.employee_id} not found or not an employee")
                 else:
                     logger.info(f"Employee {contract.employee_id} already added, skipping")
             
             logger.info(f"Final result: {len(employees_with_access)} employees for object {object_id}")
+            logger.info(f"Final employees list: {employees_with_access}")
             
             return employees_with_access
             
