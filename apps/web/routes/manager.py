@@ -16,6 +16,7 @@ from apps.web.dependencies import get_current_user_dependency
 from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
+from domain.entities.shift_schedule import ShiftSchedule
 from core.logging.logger import logger
 
 router = APIRouter(prefix="/manager", tags=["manager"])
@@ -2006,6 +2007,159 @@ async def plan_shift_manager(
     except Exception as e:
         logger.error(f"Error planning shift: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
+
+
+@router.get("/shifts", response_class=HTMLResponse, name="manager_shifts")
+async def manager_shifts_list(
+    request: Request,
+    status: Optional[str] = Query(None, description="Фильтр по статусу: active, planned, completed"),
+    date_from: Optional[str] = Query(None, description="Дата начала (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
+    object_id: Optional[str] = Query(None, description="ID объекта"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    per_page: int = Query(20, ge=1, le=100, description="Количество на странице"),
+    current_user: dict = Depends(require_manager_or_owner),
+):
+    """Список смен управляющего."""
+    try:
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            # Получаем внутренний ID пользователя
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем доступные объекты управляющего
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if not accessible_object_ids:
+                return templates.TemplateResponse("manager/shifts/list.html", {
+                    "request": request,
+                    "current_user": current_user,
+                    "available_interfaces": [],
+                    "shifts": [],
+                    "objects": [],
+                    "stats": {"total": 0, "active": 0, "planned": 0, "completed": 0},
+                    "filters": {"status": status, "date_from": date_from, "date_to": date_to, "object_id": object_id},
+                    "pagination": {"page": 1, "per_page": 20, "total": 0, "pages": 0}
+                })
+            
+            # Базовый запрос для смен
+            shifts_query = select(Shift).options(
+                selectinload(Shift.object),
+                selectinload(Shift.user)
+            ).where(Shift.object_id.in_(accessible_object_ids))
+            
+            # Базовый запрос для запланированных смен
+            schedules_query = select(ShiftSchedule).options(
+                selectinload(ShiftSchedule.object),
+                selectinload(ShiftSchedule.user)
+            ).where(ShiftSchedule.object_id.in_(accessible_object_ids))
+            
+            # Применение фильтров
+            if object_id:
+                if int(object_id) in accessible_object_ids:
+                    shifts_query = shifts_query.where(Shift.object_id == int(object_id))
+                    schedules_query = schedules_query.where(ShiftSchedule.object_id == int(object_id))
+                else:
+                    # Нет доступа к объекту
+                    return templates.TemplateResponse("manager/shifts/list.html", {
+                        "request": request,
+                        "current_user": current_user,
+                        "available_interfaces": [],
+                        "shifts": [],
+                        "objects": accessible_objects,
+                        "stats": {"total": 0, "active": 0, "planned": 0, "completed": 0},
+                        "filters": {"status": status, "date_from": date_from, "date_to": date_to, "object_id": object_id},
+                        "pagination": {"page": 1, "per_page": 20, "total": 0, "pages": 0}
+                    })
+            
+            # Получение данных
+            shifts_result = await db.execute(shifts_query.order_by(desc(Shift.created_at)))
+            shifts = shifts_result.scalars().all()
+            
+            schedules_result = await db.execute(schedules_query.order_by(desc(ShiftSchedule.created_at)))
+            schedules = schedules_result.scalars().all()
+            
+            # Объединение и форматирование данных
+            all_shifts = []
+            
+            # Добавляем обычные смены
+            for shift in shifts:
+                all_shifts.append({
+                    'id': shift.id,
+                    'type': 'shift',
+                    'object_name': shift.object.name if shift.object else 'Неизвестный объект',
+                    'user_name': f"{shift.user.first_name} {shift.user.last_name or ''}".strip() if shift.user else 'Неизвестный пользователь',
+                    'start_time': web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.start_time else '-',
+                    'end_time': web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.end_time else '-',
+                    'status': shift.status,
+                    'created_at': shift.created_at
+                })
+            
+            # Добавляем запланированные смены
+            for schedule in schedules:
+                all_shifts.append({
+                    'id': schedule.id,
+                    'type': 'schedule',
+                    'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
+                    'user_name': f"{schedule.user.first_name} {schedule.user.last_name or ''}".strip() if schedule.user else 'Неизвестный пользователь',
+                    'start_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_start, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_start else '-',
+                    'end_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_end, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_end else '-',
+                    'status': schedule.status,
+                    'created_at': schedule.created_at
+                })
+            
+            # Сортировка по дате создания
+            all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
+            
+            # Пагинация
+            total_shifts = len(all_shifts)
+            start_idx = (page - 1) * per_page
+            end_idx = start_idx + per_page
+            paginated_shifts = all_shifts[start_idx:end_idx]
+            
+            # Статистика
+            stats = {
+                'total': total_shifts,
+                'active': len([s for s in all_shifts if s['status'] == 'active']),
+                'planned': len([s for s in all_shifts if s['type'] == 'schedule']),
+                'completed': len([s for s in all_shifts if s['status'] == 'completed'])
+            }
+            
+            # Получаем данные для переключения интерфейсов
+            login_service = RoleBasedLoginService(db)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
+            return templates.TemplateResponse("manager/shifts/list.html", {
+                "request": request,
+                "current_user": current_user,
+                "available_interfaces": available_interfaces,
+                "shifts": paginated_shifts,
+                "objects": accessible_objects,
+                "stats": stats,
+                "filters": {
+                    "status": status,
+                    "date_from": date_from,
+                    "date_to": date_to,
+                    "object_id": object_id
+                },
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": total_shifts,
+                    "pages": (total_shifts + per_page - 1) // per_page
+                }
+            })
+            
+    except Exception as e:
+        logger.error(f"Error loading manager shifts: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки смен")
 
 
 @router.post("/calendar/api/quick-create-timeslot")
