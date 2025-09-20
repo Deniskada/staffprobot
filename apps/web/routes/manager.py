@@ -2193,6 +2193,9 @@ async def manager_shift_detail(
             
             shift_data = None
             
+            # Импортируем select для запросов
+            from sqlalchemy import select
+            
             if shift_type == "schedule":
                 # Запланированная смена
                 query = select(ShiftSchedule).options(
