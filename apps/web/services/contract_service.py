@@ -604,34 +604,55 @@ class ContractService:
         created_by: int
     ) -> ContractVersion:
         """Создание версии договора."""
-        async with get_async_session() as session:
-            # Получаем последнюю версию
-            query = select(ContractVersion).where(ContractVersion.contract_id == contract_id)
-            query = query.order_by(ContractVersion.created_at.desc())
-            result = await session.execute(query)
-            last_version = result.scalar_one_or_none()
+        try:
+            logger.info(f"=== CREATING CONTRACT VERSION ===")
+            logger.info(f"Parameters: contract_id={contract_id}, content_length={len(content) if content else 0}, changes_description='{changes_description}', created_by={created_by}")
             
-            # Генерируем номер версии
-            if last_version:
-                version_parts = last_version.version_number.split('.')
-                version_parts[-1] = str(int(version_parts[-1]) + 1)
-                version_number = '.'.join(version_parts)
-            else:
-                version_number = "1.0"
+            async with get_async_session() as session:
+                logger.info(f"Step 1: Getting last version for contract {contract_id}")
+                # Получаем последнюю версию
+                query = select(ContractVersion).where(ContractVersion.contract_id == contract_id)
+                query = query.order_by(ContractVersion.created_at.desc())
+                result = await session.execute(query)
+                last_version = result.scalar_one_or_none()
+                logger.info(f"Step 1 SUCCESS: Last version found: {last_version.version_number if last_version else 'None'}")
+                
+                logger.info(f"Step 2: Generating version number")
+                # Генерируем номер версии
+                if last_version:
+                    version_parts = last_version.version_number.split('.')
+                    version_parts[-1] = str(int(version_parts[-1]) + 1)
+                    version_number = '.'.join(version_parts)
+                else:
+                    version_number = "1.0"
+                logger.info(f"Step 2 SUCCESS: Generated version number: {version_number}")
+                
+                logger.info(f"Step 3: Creating ContractVersion object")
+                version = ContractVersion(
+                    contract_id=contract_id,
+                    version_number=version_number,
+                    content=content or "",
+                    changes_description=changes_description,
+                    created_by=created_by
+                )
+                logger.info(f"Step 3 SUCCESS: ContractVersion object created")
             
-            version = ContractVersion(
-                contract_id=contract_id,
-                version_number=version_number,
-                content=content or "",
-                changes_description=changes_description,
-                created_by=created_by
-            )
-            
-            session.add(version)
-            await session.commit()
-            await session.refresh(version)
-            
-            return version
+                logger.info(f"Step 4: Adding version to session and committing")
+                session.add(version)
+                await session.commit()
+                await session.refresh(version)
+                logger.info(f"Step 4 SUCCESS: Version committed to database")
+                
+                logger.info(f"=== CONTRACT VERSION CREATED SUCCESSFULLY ===")
+                logger.info(f"Version ID: {version.id}, Version Number: {version.version_number}")
+                return version
+                
+        except Exception as e:
+            logger.error(f"=== CONTRACT VERSION CREATION FAILED ===")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error(f"Full traceback:", exc_info=True)
+            raise e
     
     async def get_available_employees(self, owner_id: int) -> List[Dict[str, Any]]:
         """Получение доступных сотрудников для создания договора."""
@@ -1115,8 +1136,11 @@ class ContractService:
     async def terminate_contract(self, contract_id: int, owner_id: int, reason: str) -> bool:
         """Расторжение договора."""
         try:
-            logger.info(f"Starting contract termination: contract_id={contract_id}, owner_id={owner_id}, reason={reason}")
+            logger.info(f"=== STARTING CONTRACT TERMINATION ===")
+            logger.info(f"Parameters: contract_id={contract_id}, owner_id={owner_id}, reason='{reason}'")
+            
             async with get_async_session() as session:
+                logger.info(f"Step 1: Searching for contract {contract_id} for owner {owner_id}")
                 query = select(Contract).where(
                     and_(
                         Contract.id == contract_id,
@@ -1127,39 +1151,56 @@ class ContractService:
                 contract = result.scalar_one_or_none()
                 
                 if not contract:
-                    logger.error(f"Contract {contract_id} not found for owner {owner_id}")
+                    logger.error(f"Step 1 FAILED: Contract {contract_id} not found for owner {owner_id}")
                     return False
                 
-                logger.info(f"Found contract: {contract.id}, status: {contract.status}, is_active: {contract.is_active}")
+                logger.info(f"Step 1 SUCCESS: Found contract: id={contract.id}, status={contract.status}, is_active={contract.is_active}, employee_id={contract.employee_id}")
                 
+                logger.info(f"Step 2: Updating contract status to terminated")
                 contract.status = "terminated"
                 contract.is_active = False
                 contract.terminated_at = datetime.now()
+                logger.info(f"Step 2 SUCCESS: Contract status updated")
                 
-                logger.info(f"Updated contract status to terminated")
+                logger.info(f"Step 3: Creating contract version with reason: '{reason}'")
+                try:
+                    await self._create_contract_version(
+                        contract_id,
+                        contract.content,
+                        f"Договор расторгнут. Причина: {reason}",
+                        owner_id
+                    )
+                    logger.info(f"Step 3 SUCCESS: Contract version created")
+                except Exception as version_error:
+                    logger.error(f"Step 3 FAILED: Error creating contract version: {version_error}")
+                    raise version_error
                 
-                # Создаем версию с причиной расторжения
-                logger.info(f"Creating contract version")
-                await self._create_contract_version(
-                    contract_id,
-                    contract.content,
-                    f"Договор расторгнут. Причина: {reason}",
-                    owner_id
-                )
+                logger.info(f"Step 4: Committing contract changes to database")
+                try:
+                    await session.commit()
+                    logger.info(f"Step 4 SUCCESS: Contract changes committed")
+                except Exception as commit_error:
+                    logger.error(f"Step 4 FAILED: Error committing changes: {commit_error}")
+                    raise commit_error
                 
-                logger.info(f"Committing contract changes")
-                await session.commit()
+                logger.info(f"Step 5: Checking and updating employee role for user {contract.employee_id}")
+                try:
+                    await self._check_and_update_employee_role(session, contract.employee_id)
+                    logger.info(f"Step 5 SUCCESS: Employee role updated")
+                except Exception as role_error:
+                    logger.error(f"Step 5 FAILED: Error updating employee role: {role_error}")
+                    # Не прерываем выполнение, так как договор уже расторгнут
                 
-                # Проверяем, есть ли у сотрудника другие активные договоры
-                logger.info(f"Checking employee role for user {contract.employee_id}")
-                await self._check_and_update_employee_role(session, contract.employee_id)
-                
-                logger.info(f"Successfully terminated contract: {contract.id}")
+                logger.info(f"=== CONTRACT TERMINATION COMPLETED SUCCESSFULLY ===")
+                logger.info(f"Contract {contract.id} terminated successfully")
                 return True
         
                 
         except Exception as e:
-            logger.error(f"Error in terminate_contract: {e}", exc_info=True)
+            logger.error(f"=== CONTRACT TERMINATION FAILED ===")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error(f"Full traceback:", exc_info=True)
             return False
 
     async def activate_contract_by_telegram_id(self, contract_id: int, owner_telegram_id: int) -> bool:
