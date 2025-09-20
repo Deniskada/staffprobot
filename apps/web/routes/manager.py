@@ -540,13 +540,13 @@ async def manager_employees(
                 from domain.entities.user import User
                 
                 # Получаем всех сотрудников, работающих на доступных объектах
-                from sqlalchemy import func, or_, text
+                from sqlalchemy import func, or_, text, cast, String
                 
                 # Создаем условия для каждого объекта
                 object_conditions = []
                 for obj_id in object_ids:
                     object_conditions.append(
-                        Contract.allowed_objects.op('@>')(f'[{obj_id}]')  # JSON содержит массив с объектом
+                        Contract.allowed_objects.op('@>')(cast(f'[{obj_id}]', String))  # JSON содержит массив с объектом
                     )
                 
                 employees_query = select(User).join(
