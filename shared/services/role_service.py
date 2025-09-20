@@ -34,6 +34,9 @@ class RoleService:
             
             if role.value not in user.roles:
                 user.roles.append(role.value)
+                # Помечаем поле как измененное для SQLAlchemy
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(user, 'roles')
                 await self.session.commit()
                 logger.info(f"Added role {role.value} to user {user_id}")
                 return True
@@ -60,6 +63,9 @@ class RoleService:
             # Удаляем роль
             if user.roles and role.value in user.roles:
                 user.roles.remove(role.value)
+                # Помечаем поле как измененное для SQLAlchemy
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(user, 'roles')
                 await self.session.commit()
                 logger.info(f"Removed role {role.value} from user {user_id}")
                 return True
