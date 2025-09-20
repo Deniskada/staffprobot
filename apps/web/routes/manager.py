@@ -32,6 +32,12 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession) -> 
         return current_user.id
 
 
+@router.get("/", response_class=HTMLResponse)
+async def manager_index(request: Request):
+    """Главная страница управляющего - перенаправляет на дашборд."""
+    return RedirectResponse(url="/manager/dashboard", status_code=302)
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def manager_dashboard(
     request: Request,
