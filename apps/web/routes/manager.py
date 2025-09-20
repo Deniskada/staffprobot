@@ -552,13 +552,15 @@ async def manager_employees(
                 from domain.entities.user import User
                 
                 # Получаем всех сотрудников, работающих на доступных объектах
-                from sqlalchemy import func, or_, text, cast, String, JSON, any_
+                from sqlalchemy import func, or_, text, cast, String, JSON, any_, exists
                 
                 # Максимально простой подход - используем EXISTS с подзапросом
                 employees_query = select(User).join(
                     Contract, User.id == Contract.employee_id
                 ).where(
-                    Contract.allowed_objects.op('?|')(object_ids),  # Проверяем пересечение массивов
+                    exists().where(
+                        func.json_array_elements(Contract.allowed_objects).in_(object_ids)
+                    ),
                     Contract.is_active == True
                 ).distinct()
                 
