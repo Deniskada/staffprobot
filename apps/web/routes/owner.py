@@ -166,7 +166,12 @@ async def owner_objects(
         async with get_async_session() as session:
             # Получение объектов владельца из базы данных
             object_service = ObjectService(session)
-            objects = await object_service.get_objects_by_owner(current_user["id"], include_inactive=show_inactive)
+            # Получаем внутренний ID пользователя
+            user_id = await get_user_id_from_current_user(current_user, session)
+            if not user_id:
+                raise HTTPException(status_code=400, detail="Пользователь не найден")
+            
+            objects = await object_service.get_objects_by_owner(user_id, include_inactive=show_inactive)
             
             # Преобразуем в формат для шаблона
             objects_data = []
@@ -309,7 +314,12 @@ async def owner_objects_create_post(
             "schedule_repeat_weeks": schedule_repeat_weeks
         }
         
-        new_object = await object_service.create_object(object_data, int(current_user["id"]))
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, session)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Пользователь не найден")
+        
+        new_object = await object_service.create_object(object_data, user_id)
         logger.info(f"Object {new_object.id} created successfully")
             
         return RedirectResponse(url="/owner/objects", status_code=status.HTTP_302_FOUND)
@@ -338,12 +348,17 @@ async def owner_objects_detail(request: Request, object_id: int):
             object_service = ObjectService(session)
             timeslot_service = TimeSlotService(session)
             
-            obj = await object_service.get_object_by_id(object_id, current_user["id"])
+            # Получаем внутренний ID пользователя
+            user_id = await get_user_id_from_current_user(current_user, session)
+            if not user_id:
+                raise HTTPException(status_code=400, detail="Пользователь не найден")
+            
+            obj = await object_service.get_object_by_id(object_id, user_id)
             if not obj:
                 raise HTTPException(status_code=404, detail="Объект не найден")
             
             # Получаем тайм-слоты
-            timeslots = await timeslot_service.get_timeslots_by_object(object_id, current_user["id"])
+            timeslots = await timeslot_service.get_timeslots_by_object(object_id, user_id)
             
             # Преобразуем в формат для шаблона
             object_data = {
@@ -401,7 +416,12 @@ async def owner_objects_edit(request: Request, object_id: int):
         async with get_async_session() as session:
             # Получение данных объекта из базы данных с проверкой владельца
             object_service = ObjectService(session)
-            obj = await object_service.get_object_by_id(object_id, current_user["id"])
+            # Получаем внутренний ID пользователя
+            user_id = await get_user_id_from_current_user(current_user, session)
+            if not user_id:
+                raise HTTPException(status_code=400, detail="Пользователь не найден")
+            
+            obj = await object_service.get_object_by_id(object_id, user_id)
             if not obj:
                 raise HTTPException(status_code=404, detail="Объект не найден")
             
@@ -544,7 +564,12 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "schedule_repeat_weeks": schedule_repeat_weeks
             }
             
-            updated_object = await object_service.update_object(object_id, object_data, current_user["id"])
+            # Получаем внутренний ID пользователя
+            user_id = await get_user_id_from_current_user(current_user, session)
+            if not user_id:
+                raise HTTPException(status_code=400, detail="Пользователь не найден")
+            
+            updated_object = await object_service.update_object(object_id, object_data, user_id)
             if not updated_object:
                 raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
             
@@ -573,7 +598,12 @@ async def owner_objects_delete(
         logger.info(f"Hard deleting object {object_id} for user {current_user['id']}")
 
         object_service = ObjectService(db)
-        success = await object_service.hard_delete_object(object_id, int(current_user["id"]))
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Пользователь не найден")
+        
+        success = await object_service.hard_delete_object(object_id, user_id)
         if not success:
             raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
 
@@ -4172,7 +4202,12 @@ async def owner_contract_edit(
             "values": dynamic_values if dynamic_values else None
         }
         
-        success = await contract_service.update_contract(contract_id, current_user["id"], contract_data)
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Пользователь не найден")
+        
+        success = await contract_service.update_contract(contract_id, user_id, contract_data)
         
         if success:
             return RedirectResponse(url=f"/owner/employees/contract/{contract_id}", status_code=303)
@@ -4196,7 +4231,12 @@ async def owner_contract_activate(
         from apps.web.services.contract_service import ContractService
         
         contract_service = ContractService()
-        success = await contract_service.activate_contract(contract_id, current_user["id"])
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Пользователь не найден")
+        
+        success = await contract_service.activate_contract(contract_id, user_id)
         
         if success:
             return RedirectResponse(url=f"/owner/employees/contract/{contract_id}", status_code=303)
