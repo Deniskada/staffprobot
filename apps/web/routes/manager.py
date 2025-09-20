@@ -554,11 +554,11 @@ async def manager_employees(
                 # Получаем всех сотрудников, работающих на доступных объектах
                 from sqlalchemy import func, or_, text, cast, String, JSON, any_
                 
-                # Максимально простой подход - используем IN с jsonb_array_elements
+                # Максимально простой подход - используем IN с json_array_elements
                 employees_query = select(User).join(
                     Contract, User.id == Contract.employee_id
                 ).where(
-                    func.jsonb_array_elements(Contract.allowed_objects).in_(object_ids),
+                    func.json_array_elements(Contract.allowed_objects).in_(object_ids),
                     Contract.is_active == True
                 ).distinct()
                 
