@@ -8,6 +8,8 @@ from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
+from sqlalchemy import create_engine
+from contextlib import contextmanager
 
 from core.config.settings import settings
 from core.logging.logger import logger
@@ -110,3 +112,20 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
     finally:
         await session.close()
+
+
+# Синхронная сессия для Celery задач
+_sync_engine = None
+_sync_session_factory = None
+
+def get_sync_session():
+    """Синхронная сессия для Celery задач."""
+    global _sync_engine, _sync_session_factory
+    
+    if _sync_engine is None:
+        # Создаем синхронный engine
+        sync_url = settings.database_url.replace('postgresql+asyncpg://', 'postgresql://')
+        _sync_engine = create_engine(sync_url, poolclass=NullPool)
+        _sync_session_factory = sessionmaker(bind=_sync_engine)
+    
+    return _sync_session_factory()
