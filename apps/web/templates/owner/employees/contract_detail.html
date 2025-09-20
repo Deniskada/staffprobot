@@ -267,37 +267,9 @@ function activateContract() {
 }
 
 function terminateContract() {
-    const reason = prompt('Укажите причину расторжения договора:', 'Расторжение по инициативе работодателя');
-    if (reason === null) {
-        return; // Пользователь отменил
-    }
-    
-    if (reason.trim() === '') {
-        alert('Причина расторжения не может быть пустой');
-        return;
-    }
-    
-    // Создаем FormData для отправки
-    const formData = new FormData();
-    formData.append('reason', reason.trim());
-    
-    fetch(`/owner/employees/contract/{{ contract.id }}/terminate`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-    })
-    .then(response => {
-        if (response.ok) {
-            // Успешный ответ - перенаправляем
-            window.location.href = '/owner/employees';
-        } else {
-            throw new Error('Ошибка сервера: ' + response.status);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Ошибка расторжения договора: ' + error.message);
-    });
+    // Открываем модалку расторжения договора
+    const modal = new bootstrap.Modal(document.getElementById('terminateModal'));
+    modal.show();
 }
 </script>
 {% endblock %}
