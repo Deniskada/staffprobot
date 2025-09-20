@@ -747,20 +747,51 @@ document.addEventListener('DOMContentLoaded', function() {
     loadTimeslotsStatus();
     
     // Обработчик для кнопки редактирования в модальном окне
-    document.getElementById('editTimeslotBtn').addEventListener('click', function() {
-        const timeslotId = this.dataset.timeslotId;
-        if (timeslotId) {
-            window.location.href = `/manager/timeslots/${timeslotId}/edit`;
-        }
-    });
+    const editBtn = document.getElementById('editTimeslotBtn');
+    if (editBtn) {
+        editBtn.addEventListener('click', function() {
+            const timeslotId = this.dataset.timeslotId;
+            if (timeslotId) {
+                window.location.href = `/manager/timeslots/${timeslotId}/edit`;
+            }
+        });
+    }
     
     // Обработчик для кнопки добавления сотрудника в план
-    document.getElementById('addEmployeeBtn').addEventListener('click', function() {
-        const timeslotId = this.dataset.timeslotId;
-        if (timeslotId) {
-            showAddEmployeeModal(timeslotId);
-        }
-    });
+    const addEmployeeBtn = document.getElementById('addEmployeeBtn');
+    if (addEmployeeBtn) {
+        addEmployeeBtn.addEventListener('click', function() {
+            const timeslotId = this.dataset.timeslotId;
+            if (timeslotId) {
+                showAddEmployeeModal(timeslotId);
+            }
+        });
+    }
+    
+    // Инициализация панелей
+    const objectsPanel = document.getElementById('dragDropPanel');
+    if (objectsPanel) {
+        const objectsHeader = objectsPanel.querySelector('.panel-header');
+        objectsHeader.addEventListener('click', function(e) {
+            if (objectsPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+                togglePanel();
+            }
+        });
+    }
+    
+    const employeesPanel = document.getElementById('employeesDragDropPanel');
+    if (employeesPanel) {
+        const employeesHeader = employeesPanel.querySelector('.panel-header');
+        employeesHeader.addEventListener('click', function(e) {
+            if (employeesPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+                toggleEmployeesPanel();
+            }
+        });
+    }
+    
+    // Инициализация drag&drop
+    setupDragAndDrop();
+    setupEmployeeDragAndDrop();
 });
 
 // Обработка клавиатурных сокращений
@@ -957,34 +988,6 @@ function toggleEmployeesPanel() {
     }
 }
 
-// Инициализация панелей при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-    // Обработчик для панели объектов
-    const objectsPanel = document.getElementById('dragDropPanel');
-    if (objectsPanel) {
-        const objectsHeader = objectsPanel.querySelector('.panel-header');
-        objectsHeader.addEventListener('click', function(e) {
-            if (objectsPanel.classList.contains('collapsed') && !e.target.closest('button')) {
-                togglePanel();
-            }
-        });
-    }
-    
-    // Обработчик для панели сотрудников
-    const employeesPanel = document.getElementById('employeesDragDropPanel');
-    if (employeesPanel) {
-        const employeesHeader = employeesPanel.querySelector('.panel-header');
-        employeesHeader.addEventListener('click', function(e) {
-            if (employeesPanel.classList.contains('collapsed') && !e.target.closest('button')) {
-                toggleEmployeesPanel();
-            }
-        });
-    }
-    
-    // Инициализация drag&drop
-    setupDragAndDrop();
-    setupEmployeeDragAndDrop();
-});
 
 // Переменные для drag&drop
 let draggedObject = null;
