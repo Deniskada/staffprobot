@@ -765,7 +765,7 @@ async def manager_employee_detail(
             contract_query = select(Contract).where(
                 Contract.employee_id == employee_id,
                 Contract.is_active == True
-            )
+            ).limit(1)
             result = await db.execute(contract_query)
             contract_obj = result.scalar_one_or_none()
             
@@ -857,7 +857,7 @@ async def manager_employee_edit_form(
             contract_query = select(Contract).where(
                 Contract.employee_id == employee_id,
                 Contract.is_active == True
-            )
+            ).limit(1)
             result = await db.execute(contract_query)
             contract_obj = result.scalar_one_or_none()
             
