@@ -1915,14 +1915,36 @@ async def plan_shift_manager(
             from domain.entities.shift_schedule import ShiftSchedule
             from datetime import datetime
             
+            # Получаем время начала и окончания
+            planned_start_str = data.get('planned_start')
+            planned_end_str = data.get('planned_end')
+            
+            if not planned_start_str or not planned_end_str:
+                raise HTTPException(status_code=400, detail="Не указано время начала или окончания смены")
+            
+            # Преобразуем строки в datetime объекты
+            try:
+                # Если передано только время (например, '09:00'), нужно добавить дату
+                if 'T' not in planned_start_str and ' ' not in planned_start_str:
+                    # Это только время, добавляем текущую дату
+                    from datetime import date
+                    today = date.today()
+                    planned_start_str = f"{today.isoformat()}T{planned_start_str}"
+                    planned_end_str = f"{today.isoformat()}T{planned_end_str}"
+                
+                planned_start = datetime.fromisoformat(planned_start_str.replace('Z', '+00:00'))
+                planned_end = datetime.fromisoformat(planned_end_str.replace('Z', '+00:00'))
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Неверный формат времени: {e}")
+            
             shift_schedule = ShiftSchedule(
                 user_id=data.get('employee_id'),
                 object_id=object_id,
                 time_slot_id=data.get('timeslot_id'),
-                planned_start=datetime.fromisoformat(data.get('planned_start')),
-                planned_end=datetime.fromisoformat(data.get('planned_end')),
+                planned_start=planned_start,
+                planned_end=planned_end,
                 status='planned',
-                hourly_rate=float(data.get('hourly_rate', 0)),
+                hourly_rate=float(data.get('hourly_rate', 500)),
                 notes=data.get('notes', '')
             )
             

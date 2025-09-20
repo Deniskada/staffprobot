@@ -1200,6 +1200,13 @@ function handleEmployeeDropOnTimeslot(timeslotElement, employee) {
 
 async function planShiftForEmployee(timeslotId, employeeId) {
     try {
+        // Получаем object_id из данных тайм-слота
+        const slotData = timeslotsStatus.find(slot => slot.slot_id == timeslotId);
+        if (!slotData) {
+            showNotification('Ошибка: не удалось найти данные тайм-слота', 'error');
+            return;
+        }
+        
         const response = await fetch('/manager/api/calendar/plan-shift', {
             method: 'POST',
             headers: {
@@ -1207,7 +1214,11 @@ async function planShiftForEmployee(timeslotId, employeeId) {
             },
             body: JSON.stringify({
                 timeslot_id: timeslotId,
-                employee_id: employeeId
+                employee_id: employeeId,
+                object_id: slotData.object_id,
+                planned_start: slotData.start_time,
+                planned_end: slotData.end_time,
+                hourly_rate: slotData.hourly_rate || 500
             })
         });
         
