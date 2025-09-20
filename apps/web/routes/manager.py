@@ -1156,34 +1156,52 @@ async def manager_calendar(
                     raise HTTPException(status_code=404, detail="Объект не найден")
             
             # Получаем тайм-слоты для выбранного объекта или всех объектов
-            from apps.web.services.object_service import TimeSlotService
-            timeslot_service = TimeSlotService(db)
+            from sqlalchemy import select, and_
+            from sqlalchemy.orm import selectinload
+            from domain.entities.time_slot import TimeSlot
             
             timeslots_data = []
+            
+            # Определяем объекты для запроса
             if selected_object:
-                timeslots = await timeslot_service.get_timeslots_by_object(selected_object.id, user_id)
-                for slot in timeslots:
-                    timeslots_data.append({
-                        "id": slot.id,
-                        "object_id": slot.object_id,
-                        "object_name": selected_object.name,
-                        "date": slot.slot_date,
-                        "start_time": slot.start_time.strftime("%H:%M"),
-                        "end_time": slot.end_time.strftime("%H:%M"),
-                        "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(selected_object.hourly_rate),
-                        "is_active": slot.is_active,
-                        "notes": slot.notes or ""
-                    })
+                object_ids = [selected_object.id]
+                objects_map = {selected_object.id: selected_object}
             else:
-                # Получаем тайм-слоты для всех доступных объектов
-                for obj in accessible_objects:
-                    timeslots = await timeslot_service.get_timeslots_by_object(obj.id, user_id)
-                    for slot in timeslots:
+                object_ids = [obj.id for obj in accessible_objects]
+                objects_map = {obj.id: obj for obj in accessible_objects}
+            
+            if object_ids:
+                # Получаем тайм-слоты за месяц
+                start_date = date(year, month, 1)
+                if month == 12:
+                    end_date = date(year + 1, 1, 1)
+                else:
+                    end_date = date(year, month + 1, 1)
+                
+                timeslots_query = select(TimeSlot).options(
+                    selectinload(TimeSlot.object)
+                ).where(
+                    and_(
+                        TimeSlot.object_id.in_(object_ids),
+                        TimeSlot.slot_date >= start_date,
+                        TimeSlot.slot_date < end_date,
+                        TimeSlot.is_active == True
+                    )
+                ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
+                
+                timeslots_result = await db.execute(timeslots_query)
+                timeslots = timeslots_result.scalars().all()
+                
+                logger.info(f"Found {len(timeslots)} timeslots for manager calendar")
+                
+                for slot in timeslots:
+                    obj = objects_map.get(slot.object_id)
+                    if obj:
                         timeslots_data.append({
                             "id": slot.id,
                             "object_id": slot.object_id,
                             "object_name": obj.name,
-                            "date": slot.slot_date,
+                            "date": slot.slot_date.isoformat(),
                             "start_time": slot.start_time.strftime("%H:%M"),
                             "end_time": slot.end_time.strftime("%H:%M"),
                             "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
@@ -1192,9 +1210,8 @@ async def manager_calendar(
                         })
             
             # Создаем календарную сетку
-            from apps.web.routes.calendar import _create_calendar_grid
             logger.info(f"Creating calendar grid with {len(timeslots_data)} timeslots")
-            calendar_data = _create_calendar_grid(year, month, timeslots_data)
+            calendar_data = _create_calendar_grid_manager(year, month, timeslots_data)
             logger.info(f"Calendar grid created with {len(calendar_data)} weeks")
             logger.info(f"First week has {len(calendar_data[0]) if calendar_data else 0} days")
             
@@ -1666,3 +1683,51 @@ async def manager_reports(
     except Exception as e:
         logger.error(f"Error in manager reports: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки отчетов")
+
+
+def _create_calendar_grid_manager(year: int, month: int, timeslots: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    """Создает календарную сетку с тайм-слотами для управляющего"""
+    import calendar as py_calendar
+    from datetime import date, timedelta
+    
+    # Получаем первый день месяца и количество дней
+    first_day = date(year, month, 1)
+    last_day = date(year, month, py_calendar.monthrange(year, month)[1])
+    
+    # Находим первый понедельник для отображения
+    first_monday = first_day - timedelta(days=first_day.weekday())
+    
+    # Создаем сетку 6x7 (6 недель, 7 дней)
+    calendar_grid = []
+    current_date = first_monday
+    
+    for week in range(6):
+        week_data = []
+        for day in range(7):
+            # Преобразуем current_date в строку для сравнения
+            current_date_str = current_date.isoformat()
+            
+            day_timeslots = [
+                slot for slot in timeslots 
+                if slot["date"] == current_date_str and slot.get("is_active", True)
+            ]
+            if day_timeslots:
+                logger.info(f"Found {len(day_timeslots)} timeslots for {current_date}")
+            else:
+                # Отладка: проверим, какие даты есть в тайм-слотах
+                if current_date.month == month:  # Только для текущего месяца
+                    slot_dates = [slot["date"] for slot in timeslots if slot.get("is_active", True)]
+                    logger.info(f"No timeslots for {current_date}, available dates: {slot_dates[:5]}")  # Показываем первые 5
+            
+            week_data.append({
+                "date": current_date,
+                "is_current_month": current_date.month == month,
+                "is_today": current_date == date.today(),
+                "timeslots": day_timeslots,
+                "timeslots_count": len(day_timeslots)
+            })
+            current_date += timedelta(days=1)
+        
+        calendar_grid.append(week_data)
+    
+    return calendar_grid
