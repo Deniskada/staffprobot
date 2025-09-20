@@ -878,14 +878,15 @@ function showNotification(message, type = 'info') {
 
 // Отладочная информация
 console.log('Всего тайм-слотов:', {{ timeslots | length }});
-console.log('Дни с тайм-слотами:', {{ calendar_data | selectattr('timeslots_count', '>', 0) | list | length }});
+console.log('Структура calendar_data:', typeof {{ calendar_data }}, {{ calendar_data | length if calendar_data else 0 }});
 </script>
 
 <!-- Отладочная информация -->
 <div class="mt-3">
     <h6>Отладка календаря:</h6>
-    <p>Всего дней с тайм-слотами: {{ calendar_data | selectattr('timeslots_count', '>', 0) | list | length }}</p>
     <p>Всего тайм-слотов: {{ timeslots | length }}</p>
+    <p>Тип calendar_data: {{ calendar_data.__class__.__name__ if calendar_data else 'None' }}</p>
+    <p>Длина calendar_data: {{ calendar_data | length if calendar_data else 0 }}</p>
     <details>
         <summary>Данные тайм-слотов</summary>
         <pre>{{ timeslots | tojson(indent=2) }}</pre>
