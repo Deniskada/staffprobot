@@ -558,9 +558,12 @@ let timeslotsStatus = {};
 
 async function loadTimeslotsStatus() {
     try {
+        console.log('loadTimeslotsStatus: Starting');
         const year = {{ year }};
         const month = {{ month }};
         const objectId = {{ selected_object_id if selected_object_id else 'null' }};
+        
+        console.log('loadTimeslotsStatus: year=', year, 'month=', month, 'objectId=', objectId);
         
         const params = new URLSearchParams({
             year: year,
@@ -571,15 +574,22 @@ async function loadTimeslotsStatus() {
             params.append('object_id', objectId);
         }
         
-        const response = await fetch(`/manager/calendar/api/timeslots-status?${params}`, {
+        const url = `/manager/calendar/api/timeslots-status?${params}`;
+        console.log('loadTimeslotsStatus: Fetching URL:', url);
+        
+        const response = await fetch(url, {
             credentials: 'include'
         });
         
+        console.log('loadTimeslotsStatus: Response status:', response.status);
+        
         if (response.ok) {
             timeslotsStatus = await response.json();
+            console.log('loadTimeslotsStatus: Got timeslotsStatus:', timeslotsStatus);
             updateTimeslotsDisplay();
         } else {
-            console.error('Ошибка загрузки статуса тайм-слотов:', response.status, response.statusText);
+            const errorText = await response.text();
+            console.error('Ошибка загрузки статуса тайм-слотов:', response.status, response.statusText, errorText);
         }
     } catch (error) {
         console.error('Ошибка загрузки статуса тайм-слотов:', error);
@@ -744,6 +754,7 @@ function showTimeslotDetails(timeslotId) {
 
 // Загружаем статус при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded: Starting loadTimeslotsStatus');
     loadTimeslotsStatus();
     
     // Обработчик для кнопки редактирования в модальном окне
