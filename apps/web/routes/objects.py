@@ -271,6 +271,7 @@ async def object_detail(
         timeslots = await timeslot_service.get_timeslots_by_object(object_id, current_user["telegram_id"])
         
         # Преобразуем в формат для шаблона
+        logger.info(f"Object auto_close_minutes: {obj.auto_close_minutes}, type: {type(obj.auto_close_minutes)}")
         object_data = {
             "id": obj.id,
             "name": obj.name,

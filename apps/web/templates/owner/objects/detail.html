@@ -68,8 +68,9 @@
                                         <dt class="col-sm-4">Автозакрытие:</dt>
                                         <dd class="col-sm-8">
                                             <i class="bi bi-clock text-muted"></i>
-                                            {% if object.auto_close_minutes > 0 %}
-                                                {{ object.auto_close_minutes }} мин
+                                            <!-- Debug: {{ object }} -->
+                                            {% if object.get('auto_close_minutes', 60) and object.get('auto_close_minutes', 60) > 0 %}
+                                                {{ object.get('auto_close_minutes', 60) }} мин
                                             {% else %}
                                                 <span class="text-muted">Отключено</span>
                                             {% endif %}

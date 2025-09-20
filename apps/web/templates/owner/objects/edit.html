@@ -132,7 +132,7 @@
                                            id="auto_close_minutes" 
                                            name="auto_close_minutes" 
                                            min="0"
-                                           value="{{ object.auto_close_minutes }}">
+                                           value="{{ object.get('auto_close_minutes', 60) }}">
                                     <div class="form-text">Автоматически закрывать смену через N минут (0 = отключено)</div>
                                 </div>
                             </div>
