@@ -26,9 +26,12 @@ class ObjectService:
     async def _get_user_internal_id(self, telegram_id: int) -> Optional[int]:
         """Получить внутренний ID пользователя по Telegram ID"""
         try:
+            logger.info(f"_get_user_internal_id called with telegram_id={telegram_id} (type: {type(telegram_id)})")
             query = select(User.id).where(User.telegram_id == telegram_id)
             result = await self.db.execute(query)
-            return result.scalar_one_or_none()
+            internal_id = result.scalar_one_or_none()
+            logger.info(f"Found internal_id={internal_id} for telegram_id={telegram_id}")
+            return internal_id
         except Exception as e:
             logger.error(f"Error getting user internal ID for telegram_id {telegram_id}: {e}")
             return None
@@ -38,6 +41,7 @@ class ObjectService:
         include_inactive=True возвращает также неактивные объекты.
         """
         try:
+            logger.info(f"get_objects_by_owner called with telegram_id={telegram_id} (type: {type(telegram_id)})")
             # Получаем внутренний ID пользователя
             internal_id = await self._get_user_internal_id(telegram_id)
             if not internal_id:
@@ -143,8 +147,13 @@ class ObjectService:
     async def update_object(self, object_id: int, object_data: Dict[str, Any], owner_id: int) -> Optional[Object]:
         """Обновить объект"""
         try:
-            # Получаем объект
-            obj = await self.get_object_by_id(object_id, owner_id)
+            # Получаем объект по внутреннему ID владельца
+            query = select(Object).where(
+                Object.id == object_id,
+                Object.owner_id == owner_id
+            )
+            result = await self.db.execute(query)
+            obj = result.scalar_one_or_none()
             if not obj:
                 return None
             
@@ -186,7 +195,13 @@ class ObjectService:
     async def delete_object(self, object_id: int, owner_id: int) -> bool:
         """Удалить объект (мягкое удаление)"""
         try:
-            obj = await self.get_object_by_id(object_id, owner_id)
+            # Получаем объект по внутреннему ID владельца
+            query = select(Object).where(
+                Object.id == object_id,
+                Object.owner_id == owner_id
+            )
+            result = await self.db.execute(query)
+            obj = result.scalar_one_or_none()
             if not obj:
                 return False
             
@@ -230,7 +245,13 @@ class ObjectService:
     async def hard_delete_object(self, object_id: int, owner_id: int) -> bool:
         """Полное удаление объекта из базы данных"""
         try:
-            obj = await self.get_object_by_id(object_id, owner_id)
+            # Получаем объект по внутреннему ID владельца
+            query = select(Object).where(
+                Object.id == object_id,
+                Object.owner_id == owner_id
+            )
+            result = await self.db.execute(query)
+            obj = result.scalar_one_or_none()
             if not obj:
                 return False
             
