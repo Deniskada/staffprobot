@@ -1731,3 +1731,210 @@ def _create_calendar_grid_manager(year: int, month: int, timeslots: List[Dict[st
         calendar_grid.append(week_data)
     
     return calendar_grid
+
+
+@router.get("/api/employees")
+async def get_employees_for_manager(
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Получение списка сотрудников для управляющего"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем доступные объекты управляющего
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            object_ids = [obj.id for obj in accessible_objects]
+            
+            if not object_ids:
+                return []
+            
+            # Получаем сотрудников, работающих на доступных объектах
+            from sqlalchemy import select, distinct, text
+            from domain.entities.contract import Contract
+            from domain.entities.user import User
+            
+            employees_query = select(User).join(
+                Contract, User.id == Contract.employee_id
+            ).where(
+                Contract.is_active == True,
+                text("EXISTS (SELECT 1 FROM json_array_elements(contracts.allowed_objects) AS elem WHERE elem::text::int = ANY(ARRAY[{}]))".format(','.join(map(str, object_ids))))
+            ).distinct()
+            
+            result = await db.execute(employees_query)
+            employees = result.scalars().all()
+            
+            employees_data = []
+            for emp in employees:
+                employees_data.append({
+                    "id": emp.id,
+                    "telegram_id": emp.telegram_id,
+                    "first_name": emp.first_name,
+                    "last_name": emp.last_name,
+                    "username": emp.username,
+                    "phone": emp.phone,
+                    "is_active": emp.is_active
+                })
+            
+            return employees_data
+            
+    except Exception as e:
+        logger.error(f"Error getting employees for manager: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
+
+
+@router.get("/calendar/api/objects")
+async def get_objects_for_manager_calendar(
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Получение списка объектов для календаря управляющего"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем доступные объекты управляющего
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            
+            objects_data = []
+            for obj in accessible_objects:
+                objects_data.append({
+                    "id": obj.id,
+                    "name": obj.name,
+                    "address": obj.address,
+                    "hourly_rate": float(obj.hourly_rate) if obj.hourly_rate else 0,
+                    "is_active": obj.is_active
+                })
+            
+            return objects_data
+            
+    except Exception as e:
+        logger.error(f"Error getting objects for manager calendar: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка загрузки объектов")
+
+
+@router.get("/api/employees/for-object/{object_id}")
+async def get_employees_for_object_manager(
+    object_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Получение сотрудников для конкретного объекта управляющим"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Проверяем доступ к объекту
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if object_id not in accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступа к объекту")
+            
+            # Получаем сотрудников для объекта
+            from sqlalchemy import select, text
+            from domain.entities.contract import Contract
+            from domain.entities.user import User
+            
+            employees_query = select(User).join(
+                Contract, User.id == Contract.employee_id
+            ).where(
+                Contract.is_active == True,
+                text("EXISTS (SELECT 1 FROM json_array_elements(contracts.allowed_objects) AS elem WHERE elem::text::int = :object_id)")
+            ).params(object_id=object_id)
+            
+            result = await db.execute(employees_query)
+            employees = result.scalars().all()
+            
+            employees_data = []
+            for emp in employees:
+                employees_data.append({
+                    "id": emp.id,
+                    "telegram_id": emp.telegram_id,
+                    "first_name": emp.first_name,
+                    "last_name": emp.last_name,
+                    "username": emp.username,
+                    "phone": emp.phone,
+                    "is_active": emp.is_active
+                })
+            
+            return employees_data
+            
+    except Exception as e:
+        logger.error(f"Error getting employees for object {object_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников для объекта")
+
+
+@router.post("/api/calendar/plan-shift")
+async def plan_shift_manager(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Планирование смены управляющим"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+        
+        data = await request.json()
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Проверяем доступ к объекту
+            object_id = data.get('object_id')
+            if not object_id:
+                raise HTTPException(status_code=400, detail="Не указан объект")
+            
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if object_id not in accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступа к объекту")
+            
+            # Создаем запланированную смену
+            from domain.entities.shift_schedule import ShiftSchedule
+            from datetime import datetime
+            
+            shift_schedule = ShiftSchedule(
+                user_id=data.get('employee_id'),
+                object_id=object_id,
+                time_slot_id=data.get('timeslot_id'),
+                planned_start=datetime.fromisoformat(data.get('planned_start')),
+                planned_end=datetime.fromisoformat(data.get('planned_end')),
+                status='planned',
+                hourly_rate=float(data.get('hourly_rate', 0)),
+                notes=data.get('notes', '')
+            )
+            
+            db.add(shift_schedule)
+            await db.commit()
+            await db.refresh(shift_schedule)
+            
+            return {
+                "success": True,
+                "message": "Смена успешно запланирована",
+                "shift_id": shift_schedule.id
+            }
+            
+    except Exception as e:
+        logger.error(f"Error planning shift: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка планирования смены")
