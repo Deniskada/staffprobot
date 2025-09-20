@@ -51,11 +51,43 @@ def auto_close_shifts(self):
                 # Ищем активные смены, которые начались вчера и еще не закрыты
                 yesterday = midnight - timedelta(days=1)
                 
+                # Ищем активные смены, которые должны быть закрыты
+                # 1. Смены со вчерашнего дня
                 expired_shifts_query = select(Shift).join(Object).filter(
                     and_(
                         Shift.status == 'active',
                         Shift.start_time >= yesterday,
                         Shift.start_time < midnight
+                    )
+                )
+                
+                # 2. Смены, которые должны быть закрыты по настройке auto_close_minutes
+                now_minus_auto_close = now - timedelta(minutes=60)  # По умолчанию 60 минут
+                auto_close_query = select(Shift).join(Object).filter(
+                    and_(
+                        Shift.status == 'active',
+                        Shift.start_time < now_minus_auto_close,
+                        Object.auto_close_minutes > 0  # Только если включено авто-закрытие
+                    )
+                )
+                
+                # Объединяем запросы
+                from sqlalchemy import or_
+                expired_shifts_query = select(Shift).join(Object).filter(
+                    and_(
+                        Shift.status == 'active',
+                        or_(
+                            # Смены со вчерашнего дня
+                            and_(
+                                Shift.start_time >= yesterday,
+                                Shift.start_time < midnight
+                            ),
+                            # Смены, которые должны быть закрыты по настройке
+                            and_(
+                                Shift.start_time < now_minus_auto_close,
+                                Object.auto_close_minutes > 0
+                            )
+                        )
                     )
                 )
                 
@@ -70,7 +102,7 @@ def auto_close_shifts(self):
                         # Определяем время закрытия
                         end_time = None
                         
-                        # 1. Сначала пытаемся взять из тайм-слота
+                        # 1. Сначала пытаемся взять из тайм-слота (для запланированных смен)
                         if hasattr(shift, 'timeslot_id') and shift.timeslot_id:
                             timeslot_query = select(TimeSlot).filter(TimeSlot.id == shift.timeslot_id)
                             timeslot_result = session.execute(timeslot_query)
@@ -80,11 +112,16 @@ def auto_close_shifts(self):
                                 # Создаем datetime для времени закрытия
                                 end_time = datetime.combine(shift.start_time.date(), timeslot.end_time)
                         
-                        # 2. Если нет тайм-слота, берем из режима работы объекта
+                        # 2. Если нет тайм-слота, берем из режима работы объекта (для спонтанных смен)
                         if not end_time and hasattr(shift, 'object') and shift.object and hasattr(shift.object, 'closing_time') and shift.object.closing_time:
                             end_time = datetime.combine(shift.start_time.date(), shift.object.closing_time)
                         
-                        # 3. Если ничего нет, закрываем в полночь
+                        # 3. Если ничего нет, используем auto_close_minutes
+                        if not end_time and hasattr(shift, 'object') and shift.object and hasattr(shift.object, 'auto_close_minutes') and shift.object.auto_close_minutes > 0:
+                            # Закрываем смену через auto_close_minutes после начала
+                            end_time = shift.start_time + timedelta(minutes=shift.object.auto_close_minutes)
+                        
+                        # 4. Если ничего нет, закрываем в полночь
                         if not end_time:
                             end_time = midnight
                         

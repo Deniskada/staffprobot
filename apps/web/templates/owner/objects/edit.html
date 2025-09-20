@@ -124,6 +124,17 @@
                                            value="{{ object.max_distance }}">
                                     <div class="form-text">Максимальное расстояние для открытия смены</div>
                                 </div>
+                                
+                                <div class="mb-3">
+                                    <label for="auto_close_minutes" class="form-label">Автозакрытие смен (минуты)</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="auto_close_minutes" 
+                                           name="auto_close_minutes" 
+                                           min="0"
+                                           value="{{ object.auto_close_minutes }}">
+                                    <div class="form-text">Автоматически закрывать смену через N минут (0 = отключено)</div>
+                                </div>
                             </div>
                         </div>
                         
