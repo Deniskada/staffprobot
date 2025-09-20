@@ -35,7 +35,8 @@ async def require_any_role(roles: List[UserRole]):
         if isinstance(current_user, RedirectResponse):
             return current_user
         
-        async with get_db_session() as session:
+        from core.database.session import get_async_session
+        async with get_async_session() as session:
             user_id = await get_user_id_from_current_user(current_user, session)
             if not user_id:
                 return RedirectResponse(url="/auth/login", status_code=302)
@@ -58,7 +59,8 @@ async def require_all_roles(roles: List[UserRole]):
         if isinstance(current_user, RedirectResponse):
             return current_user
         
-        async with get_db_session() as session:
+        from core.database.session import get_async_session
+        async with get_async_session() as session:
             user_id = await get_user_id_from_current_user(current_user, session)
             if not user_id:
                 return RedirectResponse(url="/auth/login", status_code=302)
@@ -80,7 +82,8 @@ async def require_manager_or_owner(request: Request, current_user: dict = Depend
     if isinstance(current_user, RedirectResponse):
         return current_user
     
-    async with get_db_session() as session:
+    from core.database.session import get_async_session
+    async with get_async_session() as session:
         user_id = await get_user_id_from_current_user(current_user, session)
         if not user_id:
             return RedirectResponse(url="/auth/login", status_code=302)
@@ -101,7 +104,8 @@ async def require_manager_permission(permission: str):
         if isinstance(current_user, RedirectResponse):
             return current_user
         
-        async with get_db_session() as session:
+        from core.database.session import get_async_session
+        async with get_async_session() as session:
             user_id = await get_user_id_from_current_user(current_user, session)
             if not user_id:
                 return RedirectResponse(url="/auth/login", status_code=302)
@@ -137,7 +141,8 @@ async def require_object_access(object_id: int):
         if isinstance(current_user, RedirectResponse):
             return current_user
         
-        async with get_db_session() as session:
+        from core.database.session import get_async_session
+        async with get_async_session() as session:
             user_id = await get_user_id_from_current_user(current_user, session)
             if not user_id:
                 return RedirectResponse(url="/auth/login", status_code=302)
@@ -178,7 +183,8 @@ async def require_applicant_object_access(object_id: int):
         if isinstance(current_user, RedirectResponse):
             return current_user
         
-        async with get_db_session() as session:
+        from core.database.session import get_async_session
+        async with get_async_session() as session:
             from sqlalchemy import select
             from domain.entities.object import Object
             
