@@ -318,6 +318,20 @@ CREATE TABLE user_states (
 );
 ```
 
+#### UserRole (Роли пользователей)
+```sql
+CREATE TABLE user_roles (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL, -- 'applicant', 'owner', 'employee', 'manager', 'superadmin'
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user_id, role)
+);
+
+CREATE INDEX idx_user_roles_user_id ON user_roles(user_id);
+CREATE INDEX idx_user_roles_role ON user_roles(role);
+```
+
 #### Contract (Договоры)
 ```sql
 CREATE TABLE contracts (
@@ -331,9 +345,36 @@ CREATE TABLE contracts (
     end_date DATE,
     hourly_rate DECIMAL(10,2),
     objects JSONB, -- Список доступных объектов
+    is_manager BOOLEAN DEFAULT FALSE, -- Назначен ли управляющим
+    manager_permissions JSONB DEFAULT '{}', -- Общие права управляющего
+    can_create_objects BOOLEAN DEFAULT FALSE,
+    can_manage_contracts BOOLEAN DEFAULT FALSE,
+    can_view_all_reports BOOLEAN DEFAULT FALSE,
+    can_manage_managers BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+```
+
+#### ManagerObjectPermission (Права управляющего на объекты)
+```sql
+CREATE TABLE manager_object_permissions (
+    id BIGSERIAL PRIMARY KEY,
+    contract_id BIGINT REFERENCES contracts(id) ON DELETE CASCADE,
+    object_id BIGINT REFERENCES objects(id) ON DELETE CASCADE,
+    can_view BOOLEAN DEFAULT TRUE,
+    can_edit BOOLEAN DEFAULT FALSE,
+    can_delete BOOLEAN DEFAULT FALSE,
+    can_manage_employees BOOLEAN DEFAULT FALSE,
+    can_view_finances BOOLEAN DEFAULT FALSE,
+    can_edit_rates BOOLEAN DEFAULT FALSE,
+    can_edit_schedule BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(contract_id, object_id)
+);
+
+CREATE INDEX idx_manager_object_permissions_contract ON manager_object_permissions(contract_id);
+CREATE INDEX idx_manager_object_permissions_object ON manager_object_permissions(object_id);
 ```
 
 #### ContractTemplate (Шаблоны договоров)
@@ -629,11 +670,80 @@ class BotIntegrationService:
 ## 2.8. Система администрирования
 
 ### Роли пользователей
-Система поддерживает четыре основные роли:
-- **owner** - владелец объектов, может управлять сотрудниками и объектами
+Система поддерживает множественные роли пользователей:
+
+#### Базовые роли
+- **applicant** - соискатель (базовая роль при первом старте бота)
 - **employee** - сотрудник, может работать на объектах
-- **applicant** - соискатель, может подавать заявки на работу
+- **owner** - владелец объектов, может управлять сотрудниками и объектами
+- **manager** - управляющий, имеет детальные права доступа к объектам владельца
 - **superadmin** - системный администратор с полными правами
+
+#### Система множественных ролей
+Пользователи могут иметь несколько ролей одновременно:
+- **applicant + owner** - если пользователь создал объекты
+- **applicant + employee** - если с пользователем заключен договор
+- **applicant + owner + employee** - если пользователь и владелец, и сотрудник
+- **applicant + owner + manager** - если пользователь владелец и управляющий
+- **applicant + employee + manager** - если пользователь сотрудник и управляющий
+
+#### Логика назначения ролей
+- **applicant** - назначается при первом старте бота
+- **owner** - назначается при создании первого объекта, удаляется при удалении последнего
+- **employee** - назначается при заключении договора, удаляется при расторжении всех договоров
+- **manager** - назначается владельцем при создании договора с is_manager=True
+- **superadmin** - назначается вручную системным администратором
+
+#### Роль управляющего (Manager)
+Управляющий имеет детальные права доступа к объектам владельца:
+
+**Общие права:**
+- Создание новых объектов (если разрешено)
+- Управление договорами с сотрудниками (если разрешено)
+- Просмотр всех отчетов (если разрешено)
+- Управление другими управляющими (если разрешено)
+
+**Права на объекты:**
+- **can_view** - просмотр информации об объекте
+- **can_edit** - редактирование настроек объекта
+- **can_delete** - удаление объекта
+- **can_manage_employees** - управление сотрудниками на объекте
+- **can_view_finances** - просмотр финансовой информации
+- **can_edit_rates** - изменение ставок сотрудников
+- **can_edit_schedule** - изменение графика работы
+
+**Ограничения:**
+- Доступ только к объектам, разрешенным в договоре
+- Не может видеть объекты, к которым нет доступа
+- Не может управлять объектами других владельцев
+
+### Логика входа и переключения интерфейсов
+
+#### Точки входа в систему
+1. **Telegram Bot** - `/start` команда
+2. **Веб-сайт** - ввод Telegram ID + PIN-код
+3. **Прямые ссылки** - переход на конкретный интерфейс
+
+#### Система переключения интерфейсов
+При множественных ролях пользователь может переключаться между интерфейсами:
+
+**Доступные интерфейсы:**
+- `/admin/*` - административный интерфейс (superadmin)
+- `/owner/*` - интерфейс владельца (owner)
+- `/manager/*` - интерфейс управляющего (manager)
+- `/employee/*` - интерфейс сотрудника (employee)
+
+**Логика выбора интерфейса:**
+1. **Приоритет ролей**: superadmin > owner > manager > employee > applicant
+2. **Автоматический выбор**: система выбирает интерфейс с наивысшим приоритетом
+3. **Ручное переключение**: пользователь может переключиться на любой доступный интерфейс
+4. **Сохранение выбора**: система запоминает последний выбранный интерфейс
+
+**Компонент переключения ролей:**
+- Dropdown в навигации с доступными интерфейсами
+- Отображение текущей роли и доступных ролей
+- Быстрое переключение между интерфейсами
+- Визуальная индикация текущего интерфейса
 
 ### Административные функции
 
@@ -2996,9 +3106,283 @@ if timeslot.object_id not in allowed_objects:
 ---
 
 *Последнее обновление: 19 сентября 2025*
-*Версия документа: 2.9*
+*Версия документа: 2.10*
+
+## 2.19. Система множественных ролей и управляющих
+
+### 2.19.1. Архитектура множественных ролей
+
+#### Принципы системы ролей
+- **Множественность**: Пользователь может иметь несколько ролей одновременно
+- **Автоматическое назначение**: Роли назначаются автоматически на основе действий пользователя
+- **Гранулярные права**: Детальный контроль доступа к функциям системы
+- **Гибкость**: Легкое добавление новых ролей и прав
+
+#### Модель данных
+```python
+# domain/entities/user_role.py
+class UserRole(Base):
+    __tablename__ = "user_roles"
+    
+    id = Column(BigInteger, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"))
+    role = Column(String(50), nullable=False)  # applicant, owner, employee, manager, superadmin
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (
+        UniqueConstraint('user_id', 'role', name='uq_user_role'),
+        Index('idx_user_roles_user_id', 'user_id'),
+        Index('idx_user_roles_role', 'role')
+    )
+
+# domain/entities/manager_permission.py
+class ManagerObjectPermission(Base):
+    __tablename__ = "manager_object_permissions"
+    
+    id = Column(BigInteger, primary_key=True)
+    contract_id = Column(BigInteger, ForeignKey("contracts.id", ondelete="CASCADE"))
+    object_id = Column(BigInteger, ForeignKey("objects.id", ondelete="CASCADE"))
+    can_view = Column(Boolean, default=True)
+    can_edit = Column(Boolean, default=False)
+    can_delete = Column(Boolean, default=False)
+    can_manage_employees = Column(Boolean, default=False)
+    can_view_finances = Column(Boolean, default=False)
+    can_edit_rates = Column(Boolean, default=False)
+    can_edit_schedule = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (
+        UniqueConstraint('contract_id', 'object_id', name='uq_manager_object_permission'),
+        Index('idx_manager_object_permissions_contract', 'contract_id'),
+        Index('idx_manager_object_permissions_object', 'object_id')
+    )
+```
+
+### 2.19.2. Логика входа и переключения интерфейсов
+
+#### Точки входа в систему
+1. **Telegram Bot** (`/start`)
+   - Автоматическое определение ролей пользователя
+   - Показ доступных функций на основе ролей
+   - Переход к веб-интерфейсу при необходимости
+
+2. **Веб-сайт** (ввод Telegram ID + PIN-код)
+   - Авторизация через PIN-код от бота
+   - Определение доступных интерфейсов
+   - Автоматический редирект на подходящий интерфейс
+
+3. **Прямые ссылки** (например, `/owner/dashboard`)
+   - Проверка прав доступа к интерфейсу
+   - Редирект на доступный интерфейс при отсутствии прав
+
+#### Система переключения интерфейсов
+
+**Приоритет ролей:**
+1. **superadmin** - высший приоритет, доступ ко всем интерфейсам
+2. **owner** - доступ к `/owner/*` и `/manager/*` (если управляющий)
+3. **manager** - доступ к `/manager/*` и `/employee/*` (если сотрудник)
+4. **employee** - доступ к `/employee/*`
+5. **applicant** - доступ только к базовым функциям
+
+**Компонент переключения ролей:**
+```html
+<!-- Компонент переключения ролей в навигации -->
+<div class="role-switcher dropdown">
+    <button class="btn btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        <i class="bi bi-person-gear"></i> {{ current_role_display }}
+    </button>
+    <ul class="dropdown-menu">
+        {% for role in available_roles %}
+        <li>
+            <a class="dropdown-item" href="/{{ role.interface }}/dashboard">
+                <i class="bi bi-{{ role.icon }}"></i> {{ role.display_name }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+```
+
+**JavaScript для переключения:**
+```javascript
+// apps/web/static/js/role_switcher.js
+class RoleSwitcher {
+    constructor() {
+        this.currentRole = this.getCurrentRole();
+        this.availableRoles = this.getAvailableRoles();
+        this.init();
+    }
+    
+    init() {
+        this.renderRoleSwitcher();
+        this.bindEvents();
+    }
+    
+    getCurrentRole() {
+        const path = window.location.pathname;
+        if (path.startsWith('/admin/')) return 'superadmin';
+        if (path.startsWith('/owner/')) return 'owner';
+        if (path.startsWith('/manager/')) return 'manager';
+        if (path.startsWith('/employee/')) return 'employee';
+        return 'applicant';
+    }
+    
+    getAvailableRoles() {
+        // Получаем доступные роли от сервера
+        return window.availableRoles || [];
+    }
+    
+    switchRole(role) {
+        const roleInterfaces = {
+            'superadmin': '/admin/dashboard',
+            'owner': '/owner/dashboard',
+            'manager': '/manager/dashboard',
+            'employee': '/employee/dashboard'
+        };
+        
+        if (roleInterfaces[role]) {
+            window.location.href = roleInterfaces[role];
+        }
+    }
+}
+```
+
+### 2.19.3. Сервисы управления ролями
+
+#### RoleService
+```python
+class RoleService:
+    async def add_role(self, user_id: int, role: str) -> bool:
+        """Добавление роли пользователю"""
+        
+    async def remove_role(self, user_id: int, role: str) -> bool:
+        """Удаление роли у пользователя"""
+        
+    async def has_role(self, user_id: int, role: str) -> bool:
+        """Проверка наличия роли у пользователя"""
+        
+    async def get_user_roles(self, user_id: int) -> List[str]:
+        """Получение всех ролей пользователя"""
+        
+    async def get_available_interfaces(self, user_id: int) -> List[dict]:
+        """Получение доступных интерфейсов для пользователя"""
+        
+    async def update_roles_for_objects(self, user_id: int) -> None:
+        """Обновление ролей на основе объектов пользователя"""
+        
+    async def update_roles_for_contracts(self, user_id: int) -> None:
+        """Обновление ролей на основе договоров пользователя"""
+```
+
+#### ManagerPermissionService
+```python
+class ManagerPermissionService:
+    async def grant_object_permission(self, contract_id: int, object_id: int, permissions: dict):
+        """Предоставление прав на объект управляющему"""
+        
+    async def revoke_object_permission(self, contract_id: int, object_id: int):
+        """Отзыв прав на объект у управляющего"""
+        
+    async def get_accessible_objects(self, manager_id: int, owner_id: int) -> List[int]:
+        """Получение списка доступных объектов для управляющего"""
+        
+    async def can_manage_object(self, manager_id: int, object_id: int, action: str) -> bool:
+        """Проверка прав на выполнение действия с объектом"""
+        
+    async def can_create_objects(self, manager_id: int, owner_id: int) -> bool:
+        """Проверка права на создание объектов"""
+        
+    async def can_manage_contracts(self, manager_id: int, owner_id: int) -> bool:
+        """Проверка права на управление договорами"""
+```
+
+### 2.19.4. Middleware для множественных ролей
+
+#### Новые middleware
+```python
+async def require_any_role(request: Request, roles: List[str]):
+    """Проверка наличия любой из указанных ролей"""
+    
+async def require_all_roles(request: Request, roles: List[str]):
+    """Проверка наличия всех указанных ролей"""
+    
+async def require_manager_or_owner(request: Request):
+    """Проверка роли управляющего или владельца"""
+    
+async def require_object_access(request: Request, object_id: int):
+    """Проверка доступа к конкретному объекту"""
+    
+async def require_manager_permission(permission: str):
+    """Декоратор для проверки конкретного права управляющего"""
+```
+
+### 2.19.5. Интерфейс управляющего
+
+#### URL-структура
+- `/manager/dashboard` - дашборд управляющего
+- `/manager/objects` - управление доступными объектами
+- `/manager/objects/create` - создание нового объекта
+- `/manager/objects/{id}` - просмотр/редактирование объекта
+- `/manager/employees` - управление сотрудниками
+- `/manager/contracts` - управление договорами
+- `/manager/calendar` - планирование смен
+- `/manager/reports` - отчеты по доступным объектам
+
+#### Базовый шаблон управляющего
+```html
+<!-- apps/web/templates/manager/base_manager.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <title>{% block title %}StaffProBot - Управляющий{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-warning">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/manager/dashboard">
+                <i class="bi bi-person-gear"></i> StaffProBot - Управляющий
+            </a>
+            
+            <!-- Компонент переключения ролей -->
+            <div class="role-switcher dropdown">
+                <button class="btn btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-gear"></i> {{ current_role_display }}
+                </button>
+                <ul class="dropdown-menu">
+                    {% for role in available_roles %}
+                    <li>
+                        <a class="dropdown-item" href="/{{ role.interface }}/dashboard">
+                            <i class="bi bi-{{ role.icon }}"></i> {{ role.display_name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/manager/objects">Объекты</a>
+                <a class="nav-link" href="/manager/employees">Сотрудники</a>
+                <a class="nav-link" href="/manager/calendar">Календарь</a>
+                <a class="nav-link" href="/manager/reports">Отчеты</a>
+                <a class="nav-link" href="/auth/logout">Выход</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="/static/js/role_switcher.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+```
 
 ### История изменений
+- **v2.10** (19.09.2025): Добавлена система множественных ролей и управляющих - детальная система прав доступа, умное переключение интерфейсов, роль управляющего с гранулярными правами
 - **v2.9** (19.09.2025): Улучшена drag&drop функциональность - добавлена проверка доступа к объектам, фильтрация сотрудников по договорам, информативные сообщения об ошибках
 - **v2.8** (11.09.2025): Добавлена drag&drop функциональность для планирования смен - панели объектов и сотрудников, интерактивное планирование, улучшенный UX
 - **v2.7** (11.09.2025): Исправлена логика бота - доступ владельцев к своим объектам, улучшена логика открытия смен, исправлены проблемы с веб-интерфейсом (график работы)
