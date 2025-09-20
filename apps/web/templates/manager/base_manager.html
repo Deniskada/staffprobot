@@ -77,22 +77,22 @@
                             <ul class="dropdown-menu">
                                 {% for interface in available_interfaces %}
                                 <li>
-                                    <a class="dropdown-item {% if interface.name == 'Управляющий' %}active{% endif %}" 
+                                    <a class="dropdown-item {% if interface.title == 'Управляющий' %}active{% endif %}" 
                                        href="{{ interface.url }}">
-                                        {% if interface.name == 'Администратор' %}
+                                        {% if interface.title == 'Администратор' %}
                                             <i class="bi bi-shield-fill-check me-2"></i>
-                                        {% elif interface.name == 'Владелец' %}
+                                        {% elif interface.title == 'Владелец' %}
                                             <i class="bi bi-person-badge me-2"></i>
-                                        {% elif interface.name == 'Управляющий' %}
+                                        {% elif interface.title == 'Управляющий' %}
                                             <i class="bi bi-person-gear me-2"></i>
-                                        {% elif interface.name == 'Сотрудник' %}
+                                        {% elif interface.title == 'Сотрудник' %}
                                             <i class="bi bi-person me-2"></i>
-                                        {% elif interface.name == 'Соискатель' %}
+                                        {% elif interface.title == 'Соискатель' %}
                                             <i class="bi bi-person-plus me-2"></i>
                                         {% else %}
                                             <i class="bi bi-person-circle me-2"></i>
                                         {% endif %}
-                                        {{ interface.name }}
+                                        {{ interface.title }}
                                     </a>
                                 </li>
                                 {% endfor %}
