@@ -15,23 +15,13 @@ class ShiftTask(Task):
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Обработка ошибок задач."""
         logger.error(
-            f"Shift task failed: {self.name}",
-            extra={
-                'task_id': task_id,
-                'error': str(exc),
-                'args': args,
-                'kwargs': kwargs
-            }
+            f"Shift task failed: {self.name} (task_id: {task_id}, error: {str(exc)})"
         )
     
     def on_success(self, retval, task_id, args, kwargs):
         """Обработка успешного выполнения."""
         logger.info(
-            f"Shift task completed: {self.name}",
-            extra={
-                'task_id': task_id,
-                'result': retval
-            }
+            f"Shift task completed: {self.name} (task_id: {task_id})"
         )
 
 
@@ -39,6 +29,7 @@ class ShiftTask(Task):
 def auto_close_shifts(self):
     """Автоматическое закрытие просроченных смен в 00:00."""
     try:
+        import asyncio
         from core.database.session import get_async_session
         from apps.bot.services.time_slot_service import TimeSlotService
         from datetime import datetime, time, timedelta
@@ -47,24 +38,28 @@ def auto_close_shifts(self):
         from domain.entities.object import Object
         from domain.entities.time_slot import TimeSlot
         
-        async def _auto_close_shifts():
-            async with get_async_session() as session:
+        def _auto_close_shifts():
+            from core.database.session import get_sync_session
+            from domain.entities.shift import Shift
+            
+            with get_sync_session() as session:
                 # Получаем все активные смены, которые должны быть закрыты
-                now = datetime.now()
+                from datetime import timezone
+                now = datetime.now(timezone.utc)
                 midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
                 
-                # Ищем смены, которые начались вчера и еще не закрыты
+                # Ищем активные смены, которые начались вчера и еще не закрыты
                 yesterday = midnight - timedelta(days=1)
                 
-                expired_shifts_query = select(ShiftSchedule).join(Object).filter(
+                expired_shifts_query = select(Shift).join(Object).filter(
                     and_(
-                        ShiftSchedule.status == 'confirmed',
-                        ShiftSchedule.planned_start >= yesterday,
-                        ShiftSchedule.planned_start < midnight
+                        Shift.status == 'active',
+                        Shift.start_time >= yesterday,
+                        Shift.start_time < midnight
                     )
                 )
                 
-                result = await session.execute(expired_shifts_query)
+                result = session.execute(expired_shifts_query)
                 expired_shifts = result.scalars().all()
                 
                 closed_count = 0
@@ -78,16 +73,16 @@ def auto_close_shifts(self):
                         # 1. Сначала пытаемся взять из тайм-слота
                         if hasattr(shift, 'timeslot_id') and shift.timeslot_id:
                             timeslot_query = select(TimeSlot).filter(TimeSlot.id == shift.timeslot_id)
-                            timeslot_result = await session.execute(timeslot_query)
+                            timeslot_result = session.execute(timeslot_query)
                             timeslot = timeslot_result.scalar_one_or_none()
                             
                             if timeslot and timeslot.end_time:
                                 # Создаем datetime для времени закрытия
-                                end_time = datetime.combine(shift.planned_start.date(), timeslot.end_time)
+                                end_time = datetime.combine(shift.start_time.date(), timeslot.end_time)
                         
                         # 2. Если нет тайм-слота, берем из режима работы объекта
-                        if not end_time and hasattr(shift.object, 'closing_time') and shift.object.closing_time:
-                            end_time = datetime.combine(shift.planned_start.date(), shift.object.closing_time)
+                        if not end_time and hasattr(shift, 'object') and shift.object and hasattr(shift.object, 'closing_time') and shift.object.closing_time:
+                            end_time = datetime.combine(shift.start_time.date(), shift.object.closing_time)
                         
                         # 3. Если ничего нет, закрываем в полночь
                         if not end_time:
@@ -95,15 +90,16 @@ def auto_close_shifts(self):
                         
                         # Закрываем смену
                         shift.status = 'completed'
-                        shift.planned_end = end_time
+                        shift.end_time = end_time
                         shift.auto_closed = True
                         
                         # Вычисляем общее время и оплату
-                        duration = end_time - shift.planned_start
+                        duration = end_time - shift.start_time
                         total_hours = duration.total_seconds() / 3600
+                        shift.total_hours = total_hours
                         
                         if shift.hourly_rate:
-                            total_payment = total_hours * shift.hourly_rate
+                            shift.total_payment = total_hours * shift.hourly_rate
                         
                         closed_count += 1
                         logger.info(f"Auto-closed shift {shift.id} at {end_time}")
@@ -114,7 +110,7 @@ def auto_close_shifts(self):
                         errors.append(error_msg)
                 
                 # Сохраняем изменения
-                await session.commit()
+                session.commit()
                 
                 logger.info(f"Auto-closed {closed_count} shifts at midnight")
                 return {
@@ -123,22 +119,9 @@ def auto_close_shifts(self):
                     "errors": errors
                 }
                 
-        import asyncio
-        result = asyncio.run(_auto_close_shifts())
-        
-        if result.get('success'):
-            closed_count = result.get('closed_count', 0)
-            errors = result.get('errors', [])
-            
-            logger.info(f"Auto-close completed: {closed_count} shifts closed")
-            if errors:
-                for error in errors:
-                    logger.error(f"Auto-close error: {error}")
-            
-            return closed_count
-        else:
-            logger.error(f"Auto-close failed: {result.get('error')}")
-            return 0
+        # Запускаем функцию
+        result = _auto_close_shifts()
+        return result
         
     except Exception as e:
         logger.error(f"Error in auto_close_shifts task: {e}")
