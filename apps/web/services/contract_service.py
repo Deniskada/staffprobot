@@ -1075,6 +1075,10 @@ class ContractService:
                     owner_id
                 )
             
+            # Сохраняем старый статус для проверки изменений
+            old_status = contract.status
+            old_is_active = contract.is_active
+            
             # Обновляем поля
             if "title" in contract_data:
                 contract.title = contract_data["title"]
@@ -1088,9 +1092,22 @@ class ContractService:
                 contract.end_date = contract_data["end_date"]
             if "allowed_objects" in contract_data:
                 contract.allowed_objects = contract_data["allowed_objects"]
+            if "status" in contract_data:
+                contract.status = contract_data["status"]
+            if "is_active" in contract_data:
+                contract.is_active = contract_data["is_active"]
             
             contract.updated_at = datetime.now()
             await session.commit()
+            
+            # Обновляем роли сотрудника при изменении статуса договора
+            if (old_status != contract.status or old_is_active != contract.is_active):
+                if contract.status == "active" and contract.is_active:
+                    # Договор стал активным - добавляем роль employee
+                    await self._update_employee_role(session, contract.employee_id)
+                else:
+                    # Договор стал неактивным - проверяем, есть ли другие активные договоры
+                    await self._check_and_update_employee_role(session, contract.employee_id)
             
             logger.info(f"Updated contract: {contract.id}")
             return True
@@ -1162,6 +1179,9 @@ class ContractService:
             contract.signed_at = func.now()
             
             await session.commit()
+            
+            # Обновляем роли сотрудника при активации договора
+            await self._update_employee_role(session, contract.employee_id)
             
             logger.info(f"Activated contract: {contract.id}")
             return True
