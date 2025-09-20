@@ -15,19 +15,13 @@ class NotificationTask(Task):
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Обработка ошибок задач."""
         logger.error(
-            f"Notification task failed: {self.name}",
-            task_id=task_id,
-            error=str(exc),
-            args=args,
-            kwargs=kwargs
+            f"Notification task failed: {self.name} (task_id: {task_id}, error: {str(exc)})"
         )
     
     def on_success(self, retval, task_id, args, kwargs):
         """Обработка успешного выполнения."""
         logger.info(
-            f"Notification task completed: {self.name}",
-            task_id=task_id,
-            result=retval
+            f"Notification task completed: {self.name} (task_id: {task_id})"
         )
 
 
