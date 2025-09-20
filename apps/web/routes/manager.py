@@ -1193,7 +1193,20 @@ async def manager_calendar(
             
             # Создаем календарную сетку
             from apps.web.routes.calendar import _create_calendar_grid
+            logger.info(f"Creating calendar grid with {len(timeslots_data)} timeslots")
             calendar_data = _create_calendar_grid(year, month, timeslots_data)
+            logger.info(f"Calendar grid created with {len(calendar_data)} weeks")
+            logger.info(f"First week has {len(calendar_data[0]) if calendar_data else 0} days")
+            
+            # Проверяем структуру calendar_data
+            if calendar_data and len(calendar_data) > 0:
+                first_week = calendar_data[0]
+                if first_week and len(first_week) > 0:
+                    first_day = first_week[0]
+                    logger.info(f"First day structure: {first_day.keys() if hasattr(first_day, 'keys') else type(first_day)}")
+                    if hasattr(first_day, 'get'):
+                        logger.info(f"First day timeslots_count: {first_day.get('timeslots_count', 'N/A')}")
+                        logger.info(f"First day timeslots: {len(first_day.get('timeslots', []))}")
             
             # Подготавливаем данные для шаблона
             objects_list = [{"id": obj.id, "name": obj.name} for obj in accessible_objects]
