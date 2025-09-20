@@ -14,6 +14,7 @@ class UserRole(str, Enum):
     OWNER = "owner"
     EMPLOYEE = "employee" 
     APPLICANT = "applicant"
+    MANAGER = "manager"
     SUPERADMIN = "superadmin"
 
 
@@ -61,6 +62,12 @@ class User(Base):
         if hasattr(self, 'roles') and self.roles:
             return UserRole.APPLICANT.value in self.roles
         return self.role == UserRole.APPLICANT.value
+    
+    def is_manager(self) -> bool:
+        """Проверка, является ли пользователь управляющим."""
+        if hasattr(self, 'roles') and self.roles:
+            return UserRole.MANAGER.value in self.roles
+        return self.role == UserRole.MANAGER.value
     
     def is_superadmin(self) -> bool:
         """Проверка, является ли пользователь суперадмином."""
