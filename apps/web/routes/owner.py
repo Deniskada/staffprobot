@@ -1923,8 +1923,8 @@ async def api_calendar_plan_shift(
                 ShiftSchedule.planned_end == end_datetime,
                 ShiftSchedule.status.in_(["planned", "confirmed"])
             )
-            existing_schedule = (await session.execute(existing_schedule_query)).scalar_one_or_none()
-            if existing_schedule:
+            existing_schedules = (await session.execute(existing_schedule_query)).scalars().all()
+            if existing_schedules:
                 raise HTTPException(status_code=400, detail="Сотрудник уже запланирован на это время")
 
             # Создаем запланированную смену
