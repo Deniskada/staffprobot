@@ -1,0 +1,269 @@
+{% extends "manager/base_manager.html" %}
+
+{% block manager_content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex align-items-center">
+                <a href="/manager/employees" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left me-1"></i>
+                    Назад к списку
+                </a>
+                <h2><i class="bi bi-person-plus me-2"></i>Добавление сотрудника</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Информация о сотруднике</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/manager/employees/add">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="telegram_id" class="form-label">Telegram ID *</label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="telegram_id" 
+                                       name="telegram_id" 
+                                       required
+                                       placeholder="123456789">
+                                <div class="form-text">Уникальный идентификатор пользователя в Telegram</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Username</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="username" 
+                                       name="username" 
+                                       placeholder="@username">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="first_name" class="form-label">Имя *</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="first_name" 
+                                       name="first_name" 
+                                       required
+                                       placeholder="Иван">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="last_name" class="form-label">Фамилия</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="last_name" 
+                                       name="last_name" 
+                                       placeholder="Иванов">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">Телефон</label>
+                                <input type="tel" 
+                                       class="form-control" 
+                                       id="phone" 
+                                       name="phone" 
+                                       placeholder="+7 (999) 123-45-67">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="role" class="form-label">Роль</label>
+                                <select class="form-select" id="role" name="role">
+                                    <option value="employee">Сотрудник</option>
+                                    <option value="manager">Управляющий</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="is_active" 
+                                   name="is_active" 
+                                   value="true"
+                                   checked>
+                            <label class="form-check-label" for="is_active">
+                                Активен
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Шаблон договора -->
+                    <div class="mb-3">
+                        <label for="contract_template" class="form-label">Шаблон договора</label>
+                        <select class="form-select" id="contract_template" name="contract_template">
+                            <option value="">Выберите шаблон</option>
+                            {% for template in contract_templates %}
+                            <option value="{{ template.id }}">{{ template.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Объекты для договора -->
+                    <div class="mb-3">
+                        <label class="form-label">Объекты для договора</label>
+                        <div class="row">
+                            {% for object in accessible_objects %}
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="object_{{ object.id }}" 
+                                           name="contract_objects" 
+                                           value="{{ object.id }}">
+                                    <label class="form-check-label" for="object_{{ object.id }}">
+                                        {{ object.name }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% if not accessible_objects %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Нет доступных объектов для назначения
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Дополнительные параметры договора -->
+                    <div class="mb-3">
+                        <label for="hourly_rate" class="form-label">Ставка (₽/час)</label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="hourly_rate" 
+                               name="hourly_rate" 
+                               value="500"
+                               min="0" step="1">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="start_date" class="form-label">Дата начала договора</label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="start_date" 
+                                       name="start_date">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="end_date" class="form-label">Дата окончания договора</label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="end_date" 
+                                       name="end_date">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check me-1"></i>
+                            Создать сотрудника
+                        </button>
+                        <a href="/manager/employees" class="btn btn-outline-secondary">
+                            <i class="bi bi-x me-1"></i>
+                            Отмена
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Информация</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Как получить Telegram ID?</strong>
+                    <ol class="mt-2 mb-0">
+                        <li>Напишите боту @staffprobot</li>
+                        <li>Отправьте любое сообщение</li>
+                        <li>Скопируйте ID из ответа</li>
+                    </ol>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Важно!</strong>
+                    <p class="mt-2 mb-0">После создания сотрудника необходимо будет создать договор для назначения на объекты.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Форматирование телефона
+document.getElementById('phone').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 0) {
+        if (value[0] === '8') {
+            value = '7' + value.slice(1);
+        }
+        if (value[0] === '7' && value.length > 1) {
+            value = '+7 (' + value.slice(1, 4) + ') ' + value.slice(4, 7) + '-' + value.slice(7, 9) + '-' + value.slice(9, 11);
+        }
+    }
+    e.target.value = value;
+});
+
+// Форматирование username
+document.getElementById('username').addEventListener('input', function(e) {
+    let value = e.target.value;
+    if (value && !value.startsWith('@')) {
+        e.target.value = '@' + value;
+    }
+});
+
+// Устанавливаем текущую дату
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('start_date').value = today;
+});
+
+// Валидация формы
+document.querySelector('form').addEventListener('submit', function(e) {
+    const telegramId = document.getElementById('telegram_id').value;
+    const firstName = document.getElementById('first_name').value;
+    
+    if (!telegramId || !firstName) {
+        e.preventDefault();
+        alert('Пожалуйста, заполните все обязательные поля');
+        return;
+    }
+    
+    if (telegramId.length < 5) {
+        e.preventDefault();
+        alert('Telegram ID должен содержать минимум 5 цифр');
+        return;
+    }
+});
+</script>
+{% endblock %}

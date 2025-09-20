@@ -520,23 +520,525 @@ async def manager_employees(
             if not user_id:
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
-            # Здесь будет логика получения сотрудников
-            # Пока возвращаем заглушку
+            # Получаем сервисы
+            permission_service = ManagerPermissionService(db)
+            login_service = RoleBasedLoginService(db)
+            
+            # Получаем доступные объекты управляющего
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            object_ids = [obj.id for obj in accessible_objects]
+            
+            # Получаем сотрудников, работающих на этих объектах
+            employees = []
+            if object_ids:
+                from sqlalchemy import select, distinct
+                from domain.entities.contract import Contract
+                from domain.entities.user import User
+                
+                # Получаем договоры управляющего
+                manager_contracts = await permission_service.get_manager_contracts_for_user(user_id)
+                manager_contract_ids = [contract.id for contract in manager_contracts]
+                
+                if manager_contract_ids:
+                    # Получаем сотрудников из договоров
+                    employees_query = select(User).join(
+                        Contract, User.id == Contract.employee_id
+                    ).where(
+                        Contract.id.in_(manager_contract_ids),
+                        Contract.is_active == True
+                    ).distinct()
+                    
+                    result = await db.execute(employees_query)
+                    employees = result.scalars().all()
             
             # Получаем данные для переключения интерфейсов
-            login_service = RoleBasedLoginService(db)
             available_interfaces = await login_service.get_available_interfaces(user_id)
             
             return templates.TemplateResponse("manager/employees.html", {
                 "request": request,
                 "current_user": current_user,
-                "employees": [],
+                "employees": employees,
                 "available_interfaces": available_interfaces
             })
         
     except Exception as e:
         logger.error(f"Error in manager employees: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
+
+
+@router.get("/employees/add", response_class=HTMLResponse)
+async def manager_employee_add_form(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Форма добавления нового сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем шаблоны договоров
+            from sqlalchemy import select
+            from domain.entities.contract_template import ContractTemplate
+            
+            templates_query = select(ContractTemplate).where(ContractTemplate.is_active == True)
+            result = await db.execute(templates_query)
+            contract_templates = result.scalars().all()
+            
+            # Получаем доступные объекты
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            
+            login_service = RoleBasedLoginService(db)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
+            return templates.TemplateResponse("manager/employees/add.html", {
+                "request": request,
+                "current_user": current_user,
+                "contract_templates": contract_templates,
+                "accessible_objects": accessible_objects,
+                "available_interfaces": available_interfaces
+            })
+        
+    except Exception as e:
+        logger.error(f"Error in manager employee add form: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки формы")
+
+
+@router.post("/employees/add")
+async def manager_employee_add(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Создание нового сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            form_data = await request.form()
+            
+            # Получаем данные формы
+            telegram_id = int(form_data.get("telegram_id"))
+            first_name = form_data.get("first_name", "").strip()
+            last_name = form_data.get("last_name", "").strip()
+            username = form_data.get("username", "").strip()
+            phone = form_data.get("phone", "").strip()
+            role = form_data.get("role", "employee")
+            is_active = form_data.get("is_active") == "true"
+            
+            # Данные договора
+            contract_template_id = form_data.get("contract_template")
+            contract_objects = form_data.getlist("contract_objects")
+            hourly_rate = int(form_data.get("hourly_rate", 500))
+            start_date_str = form_data.get("start_date")
+            end_date_str = form_data.get("end_date")
+            
+            # Валидация
+            if not first_name:
+                raise HTTPException(status_code=400, detail="Имя обязательно")
+            
+            # Создаем пользователя
+            from domain.entities.user import User
+            from shared.services.role_service import RoleService
+            from apps.web.services.contract_service import ContractService
+            from datetime import datetime, date
+            
+            user = User(
+                telegram_id=telegram_id,
+                first_name=first_name,
+                last_name=last_name,
+                username=username,
+                phone=phone,
+                role=role,
+                is_active=is_active
+            )
+            
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+            
+            # Добавляем роль
+            role_service = RoleService(db)
+            from domain.entities.user import UserRole
+            await role_service.add_role(user.id, UserRole(role))
+            
+            # Создаем договор если указан шаблон
+            if contract_template_id and contract_objects:
+                contract_service = ContractService()
+                
+                # Парсим даты
+                start_date = None
+                end_date = None
+                if start_date_str:
+                    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                if end_date_str:
+                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                
+                # Создаем договор
+                contract_data = {
+                    "employee_id": user.id,
+                    "template_id": int(contract_template_id),
+                    "hourly_rate": hourly_rate,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "allowed_objects": [int(obj_id) for obj_id in contract_objects],
+                    "is_active": True
+                }
+                
+                contract = await contract_service.create_contract(contract_data, user_id)
+                logger.info(f"Created contract {contract.id} for employee {user.id}")
+            
+            logger.info(f"Created new employee {user.id} by manager {user_id}")
+            
+            return RedirectResponse(url=f"/manager/employees/{user.id}", status_code=302)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating employee: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка создания сотрудника")
+
+
+@router.get("/employees/{employee_id}", response_class=HTMLResponse)
+async def manager_employee_detail(
+    employee_id: int,
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Детальная информация о сотруднике."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем сотрудника
+            from sqlalchemy import select
+            from domain.entities.user import User
+            from domain.entities.contract import Contract
+            from domain.entities.shift import Shift
+            from domain.entities.object import Object
+            
+            employee_query = select(User).where(User.id == employee_id)
+            result = await db.execute(employee_query)
+            employee = result.scalar_one_or_none()
+            
+            if not employee:
+                raise HTTPException(status_code=404, detail="Сотрудник не найден")
+            
+            # Получаем договор с сотрудником
+            contract_query = select(Contract).where(
+                Contract.employee_id == employee_id,
+                Contract.is_active == True
+            )
+            result = await db.execute(contract_query)
+            contract_obj = result.scalar_one_or_none()
+            
+            # Преобразуем договор в словарь для шаблона
+            contract = None
+            if contract_obj:
+                contract = {
+                    "id": contract_obj.id,
+                    "contract_number": contract_obj.contract_number,
+                    "title": contract_obj.title,
+                    "hourly_rate": contract_obj.hourly_rate,
+                    "start_date": contract_obj.start_date,
+                    "end_date": contract_obj.end_date,
+                    "status": contract_obj.status,
+                    "is_manager": contract_obj.is_manager,
+                    "manager_permissions": contract_obj.manager_permissions,
+                    "is_active": contract_obj.is_active
+                }
+            
+            # Получаем последние смены
+            shifts_query = select(Shift).where(
+                Shift.user_id == employee_id
+            ).order_by(Shift.start_time.desc()).limit(10).options(
+                selectinload(Shift.object)
+            )
+            result = await db.execute(shifts_query)
+            recent_shifts = result.scalars().all()
+            
+            # Подсчитываем статистику
+            total_shifts_query = select(Shift).where(Shift.user_id == employee_id)
+            result = await db.execute(total_shifts_query)
+            all_shifts = result.scalars().all()
+            
+            total_shifts = len(all_shifts)
+            total_hours = sum(shift.duration_hours or 0 for shift in all_shifts)
+            total_earnings = sum(shift.total_payment or 0 for shift in all_shifts)
+            
+            login_service = RoleBasedLoginService(db)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
+            return templates.TemplateResponse("manager/employees/detail.html", {
+                "request": request,
+                "current_user": current_user,
+                "employee": employee,
+                "contract": contract,
+                "recent_shifts": recent_shifts,
+                "total_shifts": total_shifts,
+                "total_hours": total_hours,
+                "total_earnings": total_earnings,
+                "available_interfaces": available_interfaces
+            })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in manager employee detail: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудника")
+
+
+@router.get("/employees/{employee_id}/edit", response_class=HTMLResponse)
+async def manager_employee_edit_form(
+    employee_id: int,
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Форма редактирования сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем сотрудника
+            from sqlalchemy import select
+            from domain.entities.user import User
+            from domain.entities.contract import Contract
+            
+            employee_query = select(User).where(User.id == employee_id)
+            result = await db.execute(employee_query)
+            employee = result.scalar_one_or_none()
+            
+            if not employee:
+                raise HTTPException(status_code=404, detail="Сотрудник не найден")
+            
+            # Получаем договор с сотрудником
+            contract_query = select(Contract).where(
+                Contract.employee_id == employee_id,
+                Contract.is_active == True
+            )
+            result = await db.execute(contract_query)
+            contract_obj = result.scalar_one_or_none()
+            
+            # Преобразуем договор в словарь для шаблона
+            contract = None
+            if contract_obj:
+                contract = {
+                    "id": contract_obj.id,
+                    "contract_number": contract_obj.contract_number,
+                    "title": contract_obj.title,
+                    "hourly_rate": contract_obj.hourly_rate,
+                    "start_date": contract_obj.start_date,
+                    "end_date": contract_obj.end_date,
+                    "status": contract_obj.status,
+                    "is_manager": contract_obj.is_manager,
+                    "manager_permissions": contract_obj.manager_permissions,
+                    "is_active": contract_obj.is_active
+                }
+            
+            login_service = RoleBasedLoginService(db)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
+            return templates.TemplateResponse("manager/employees/edit.html", {
+                "request": request,
+                "current_user": current_user,
+                "employee": employee,
+                "contract": contract,
+                "available_interfaces": available_interfaces
+            })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in manager employee edit form: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки формы")
+
+
+@router.post("/employees/{employee_id}/edit")
+async def manager_employee_edit(
+    employee_id: int,
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Обновление сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            form_data = await request.form()
+            
+            # Получаем сотрудника
+            from sqlalchemy import select
+            from domain.entities.user import User
+            
+            employee_query = select(User).where(User.id == employee_id)
+            result = await db.execute(employee_query)
+            employee = result.scalar_one_or_none()
+            
+            if not employee:
+                raise HTTPException(status_code=404, detail="Сотрудник не найден")
+            
+            # Обновляем данные
+            employee.first_name = form_data.get("first_name", "").strip()
+            employee.last_name = form_data.get("last_name", "").strip()
+            employee.username = form_data.get("username", "").strip()
+            employee.phone = form_data.get("phone", "").strip()
+            employee.is_active = form_data.get("is_active") == "true"
+            
+            await db.commit()
+            await db.refresh(employee)
+            
+            logger.info(f"Updated employee {employee_id} by manager {user_id}")
+            
+            return RedirectResponse(url=f"/manager/employees/{employee_id}", status_code=302)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating employee: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка обновления сотрудника")
+
+
+@router.get("/employees/{employee_id}/shifts", response_class=HTMLResponse)
+async def manager_employee_shifts(
+    employee_id: int,
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Смены сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем сотрудника
+            from sqlalchemy import select
+            from domain.entities.user import User
+            from domain.entities.shift import Shift
+            from domain.entities.object import Object
+            
+            employee_query = select(User).where(User.id == employee_id)
+            result = await db.execute(employee_query)
+            employee = result.scalar_one_or_none()
+            
+            if not employee:
+                raise HTTPException(status_code=404, detail="Сотрудник не найден")
+            
+            # Получаем смены
+            shifts_query = select(Shift).where(
+                Shift.user_id == employee_id
+            ).order_by(Shift.start_time.desc()).options(
+                selectinload(Shift.object)
+            )
+            result = await db.execute(shifts_query)
+            shifts = result.scalars().all()
+            
+            # Получаем доступные объекты для фильтра
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            
+            # Подсчитываем статистику
+            total_hours = sum(shift.duration_hours or 0 for shift in shifts)
+            total_earnings = sum(shift.total_payment or 0 for shift in shifts)
+            
+            login_service = RoleBasedLoginService(db)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+            
+            return templates.TemplateResponse("manager/employees/shifts.html", {
+                "request": request,
+                "current_user": current_user,
+                "employee": employee,
+                "shifts": shifts,
+                "objects": accessible_objects,
+                "total_hours": total_hours,
+                "total_earnings": total_earnings,
+                "available_interfaces": available_interfaces
+            })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in manager employee shifts: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки смен")
+
+
+@router.post("/employees/{employee_id}/terminate")
+async def manager_employee_terminate(
+    employee_id: int,
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Расторжение договора с сотрудником."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            form_data = await request.form()
+            reason = form_data.get("reason", "").strip()
+            
+            if not reason:
+                raise HTTPException(status_code=400, detail="Причина расторжения обязательна")
+            
+            # Получаем активный договор
+            from sqlalchemy import select
+            from domain.entities.contract import Contract
+            from apps.web.services.contract_service import ContractService
+            
+            contract_query = select(Contract).where(
+                Contract.employee_id == employee_id,
+                Contract.is_active == True
+            )
+            result = await db.execute(contract_query)
+            contract = result.scalar_one_or_none()
+            
+            if not contract:
+                raise HTTPException(status_code=404, detail="Активный договор не найден")
+            
+            # Расторгаем договор
+            contract_service = ContractService()
+            await contract_service.terminate_contract(contract.id, user_id, reason)
+            
+            logger.info(f"Terminated contract {contract.id} for employee {employee_id} by manager {user_id}")
+            
+            return RedirectResponse(url=f"/manager/employees/{employee_id}", status_code=302)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error terminating employee contract: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка расторжения договора")
 
 
 @router.get("/calendar", response_class=HTMLResponse)

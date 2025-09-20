@@ -1,0 +1,342 @@
+{% extends "manager/base_manager.html" %}
+
+{% block manager_content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex align-items-center">
+                <a href="/manager/employees/{{ employee.id }}" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left me-1"></i>
+                    Назад
+                </a>
+                <h2><i class="bi bi-pencil me-2"></i>Редактирование сотрудника</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Информация о сотруднике</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/manager/employees/{{ employee.id }}/edit">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="first_name" class="form-label">Имя *</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="first_name" 
+                                       name="first_name" 
+                                       value="{{ employee.first_name or '' }}" 
+                                       required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="last_name" class="form-label">Фамилия</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="last_name" 
+                                       name="last_name" 
+                                       value="{{ employee.last_name or '' }}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">Телефон</label>
+                                <input type="tel" 
+                                       class="form-control" 
+                                       id="phone" 
+                                       name="phone" 
+                                       value="{{ employee.phone or '' }}"
+                                       placeholder="+7 (999) 123-45-67">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Username</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="username" 
+                                       name="username" 
+                                       value="{{ employee.username or '' }}"
+                                       placeholder="@username">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="is_active" 
+                                   name="is_active" 
+                                   value="true"
+                                   {% if employee.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="is_active">
+                                Активен
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check me-1"></i>
+                            Сохранить
+                        </button>
+                        <a href="/manager/employees/{{ employee.id }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x me-1"></i>
+                            Отмена
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Текущая информация</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">ID</label>
+                    <p class="form-control-plaintext">{{ employee.id }}</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Telegram ID</label>
+                    <p class="form-control-plaintext">{{ employee.telegram_id }}</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Дата регистрации</label>
+                    <p class="form-control-plaintext">
+                        {{ employee.created_at.strftime('%d.%m.%Y %H:%M') if employee.created_at else 'Не указана' }}
+                    </p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Роли</label>
+                    <div>
+                        {% if employee.roles %}
+                            {% for role in employee.roles %}
+                                <span class="badge bg-primary me-1 mb-1">{{ role }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="badge bg-secondary">{{ employee.role }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Информация о договоре -->
+{% if contract %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Редактирование договора</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/manager/employees/{{ employee.id }}/contract/{{ contract.id }}/edit">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="contract_title" class="form-label">Название договора</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="contract_title" 
+                                       name="title" 
+                                       value="{{ contract.title or '' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="hourly_rate" class="form-label">Ставка (₽/час)</label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="hourly_rate" 
+                                       name="hourly_rate" 
+                                       value="{{ contract.hourly_rate or 0 }}"
+                                       min="0" step="1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="start_date" class="form-label">Дата начала</label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="start_date" 
+                                       name="start_date" 
+                                       value="{{ contract.start_date.strftime('%Y-%m-%d') if contract.start_date else '' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="end_date" class="form-label">Дата окончания</label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="end_date" 
+                                       name="end_date" 
+                                       value="{{ contract.end_date.strftime('%Y-%m-%d') if contract.end_date else '' }}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="contract_is_active" 
+                                   name="is_active" 
+                                   value="true"
+                                   {% if contract.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="contract_is_active">
+                                Договор активен
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Права управляющего -->
+                    {% if contract.is_manager %}
+                    <div class="mb-4">
+                        <h6 class="fw-bold">Права управляющего</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="can_view" 
+                                           name="manager_permissions" 
+                                           value="can_view"
+                                           {% if contract.manager_permissions and contract.manager_permissions.get('can_view') %}checked{% endif %}>
+                                    <label class="form-check-label" for="can_view">
+                                        Просмотр объектов
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="can_edit" 
+                                           name="manager_permissions" 
+                                           value="can_edit"
+                                           {% if contract.manager_permissions and contract.manager_permissions.get('can_edit') %}checked{% endif %}>
+                                    <label class="form-check-label" for="can_edit">
+                                        Редактирование объектов
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="can_delete" 
+                                           name="manager_permissions" 
+                                           value="can_delete"
+                                           {% if contract.manager_permissions and contract.manager_permissions.get('can_delete') %}checked{% endif %}>
+                                    <label class="form-check-label" for="can_delete">
+                                        Удаление объектов
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="can_manage_employees" 
+                                           name="manager_permissions" 
+                                           value="can_manage_employees"
+                                           {% if contract.manager_permissions and contract.manager_permissions.get('can_manage_employees') %}checked{% endif %}>
+                                    <label class="form-check-label" for="can_manage_employees">
+                                        Управление сотрудниками
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="can_view_finances" 
+                                           name="manager_permissions" 
+                                           value="can_view_finances"
+                                           {% if contract.manager_permissions and contract.manager_permissions.get('can_view_finances') %}checked{% endif %}>
+                                    <label class="form-check-label" for="can_view_finances">
+                                        Просмотр финансов
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="can_edit_rates" 
+                                           name="manager_permissions" 
+                                           value="can_edit_rates"
+                                           {% if contract.manager_permissions and contract.manager_permissions.get('can_edit_rates') %}checked{% endif %}>
+                                    <label class="form-check-label" for="can_edit_rates">
+                                        Редактирование ставок
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="can_edit_schedule" 
+                                           name="manager_permissions" 
+                                           value="can_edit_schedule"
+                                           {% if contract.manager_permissions and contract.manager_permissions.get('can_edit_schedule') %}checked{% endif %}>
+                                    <label class="form-check-label" for="can_edit_schedule">
+                                        Редактирование расписания
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check me-1"></i>
+                            Сохранить договор
+                        </button>
+                        <a href="/manager/employees/{{ employee.id }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x me-1"></i>
+                            Отмена
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+// Форматирование телефона
+document.getElementById('phone').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 0) {
+        if (value[0] === '8') {
+            value = '7' + value.slice(1);
+        }
+        if (value[0] === '7' && value.length > 1) {
+            value = '+7 (' + value.slice(1, 4) + ') ' + value.slice(4, 7) + '-' + value.slice(7, 9) + '-' + value.slice(9, 11);
+        }
+    }
+    e.target.value = value;
+});
+
+// Форматирование username
+document.getElementById('username').addEventListener('input', function(e) {
+    let value = e.target.value;
+    if (value && !value.startsWith('@')) {
+        e.target.value = '@' + value;
+    }
+});
+</script>
+{% endblock %}
