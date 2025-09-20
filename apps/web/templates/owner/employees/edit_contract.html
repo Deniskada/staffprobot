@@ -263,6 +263,30 @@ function toggleManagerPermissions() {
     
     if (isManagerCheckbox.checked) {
         managerPermissionsDiv.style.display = 'block';
+        // Если права еще не установлены, устанавливаем по умолчанию (все кроме удаления)
+        const canView = document.getElementById('can_view');
+        const canEdit = document.getElementById('can_edit');
+        const canDelete = document.getElementById('can_delete');
+        const canManageEmployees = document.getElementById('can_manage_employees');
+        const canViewFinances = document.getElementById('can_view_finances');
+        const canEditRates = document.getElementById('can_edit_rates');
+        const canEditSchedule = document.getElementById('can_edit_schedule');
+        
+        // Проверяем, есть ли уже установленные права
+        const hasAnyPermission = canView.checked || canEdit.checked || canDelete.checked || 
+                                canManageEmployees.checked || canViewFinances.checked || 
+                                canEditRates.checked || canEditSchedule.checked;
+        
+        if (!hasAnyPermission) {
+            // Устанавливаем права по умолчанию (все кроме удаления)
+            canView.checked = true;
+            canEdit.checked = true;
+            canDelete.checked = false;
+            canManageEmployees.checked = true;
+            canViewFinances.checked = true;
+            canEditRates.checked = true;
+            canEditSchedule.checked = true;
+        }
     } else {
         managerPermissionsDiv.style.display = 'none';
         // Сбрасываем все права управляющего
@@ -270,8 +294,6 @@ function toggleManagerPermissions() {
         permissionCheckboxes.forEach(checkbox => {
             checkbox.checked = false;
         });
-        // Включаем только базовое право просмотра
-        document.getElementById('can_view').checked = true;
     }
 }
 </script>
