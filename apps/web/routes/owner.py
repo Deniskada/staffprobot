@@ -4252,12 +4252,22 @@ async def owner_contract_activate(
 async def owner_contract_terminate(
     contract_id: int,
     request: Request,
-    reason: str = Form(""),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Расторжение договора."""
     try:
+        # Получаем reason из запроса (может быть JSON или Form)
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            # JSON запрос от JavaScript
+            data = await request.json()
+            reason = data.get("reason", "Расторжение по кнопке")
+        else:
+            # Form запрос от HTML формы
+            form_data = await request.form()
+            reason = form_data.get("reason", "Расторжение по кнопке")
+        
         logger.info(f"=== ROUTE: Starting contract termination ===")
         logger.info(f"Route parameters: contract_id={contract_id}, reason='{reason}'")
         logger.info(f"Current user: {current_user}")
@@ -4281,18 +4291,33 @@ async def owner_contract_terminate(
         logger.info(f"Contract termination result: {success}")
         
         if success:
-            logger.info(f"Contract terminated successfully, redirecting to /owner/employees")
-            return RedirectResponse(url="/owner/employees", status_code=303)
+            logger.info(f"Contract terminated successfully")
+            # Проверяем тип запроса для правильного ответа
+            if "application/json" in content_type:
+                # JSON ответ для JavaScript
+                return {"success": True, "message": "Договор расторгнут"}
+            else:
+                # Redirect для HTML формы
+                return RedirectResponse(url="/owner/employees", status_code=303)
         else:
             logger.error(f"Contract termination returned False")
-            raise HTTPException(status_code=400, detail="Ошибка расторжения договора")
+            if "application/json" in content_type:
+                return {"success": False, "message": "Ошибка расторжения договора"}
+            else:
+                raise HTTPException(status_code=400, detail="Ошибка расторжения договора")
             
     except Exception as e:
         logger.error(f"=== ROUTE: Contract termination failed ===")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Error message: {str(e)}")
         logger.error(f"Full traceback:", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"Ошибка расторжения договора: {str(e)}")
+        
+        # Проверяем тип запроса для правильного ответа
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            return {"success": False, "message": f"Ошибка расторжения договора: {str(e)}"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Ошибка расторжения договора: {str(e)}")
 
 
 @router.get("/employees/contract/{contract_id}/pdf")
