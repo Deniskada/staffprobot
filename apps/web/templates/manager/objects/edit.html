@@ -146,17 +146,19 @@
                                 <div class="col-md-6">
                                     <h6>Дни недели:</h6>
                                     <div class="d-flex flex-wrap gap-2">
-                                        {% set days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] %}
-                                        {% for i in range(7) %}
+                                        {% set days = [
+                                            (1, 'Пн'), (2, 'Вт'), (4, 'Ср'), (8, 'Чт'), (16, 'Пт'), (32, 'Сб'), (64, 'Вс')
+                                        ] %}
+                                        {% for mask, label in days %}
                                         <div class="form-check form-check-inline">
-                                            <input class="form-check-input" 
+                                            <input class="form-check-input work-day-checkbox" 
                                                    type="checkbox" 
-                                                   id="work_day_{{ i }}" 
+                                                   id="day_{{ mask }}" 
                                                    name="work_days" 
-                                                   value="{{ i }}"
-                                                   {% if object.work_days_mask and object.work_days_mask[i] %}checked{% endif %}>
-                                            <label class="form-check-label" for="work_day_{{ i }}">
-                                                {{ days[i] }}
+                                                   value="{{ mask }}"
+                                                   data-mask="{{ mask }}">
+                                            <label class="form-check-label" for="day_{{ mask }}">
+                                                {{ label }}
                                             </label>
                                         </div>
                                         {% endfor %}
@@ -253,4 +255,93 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const openingTime = document.getElementById('opening_time');
+    const closingTime = document.getElementById('closing_time');
+    
+    // Обработка рабочих дней - инициализация
+    const workDaysMask = {{ object.work_days_mask or 0 }};
+    const workDaysCheckboxes = document.querySelectorAll('.work-day-checkbox');
+    
+    console.log('Work days mask:', workDaysMask);
+    console.log('Found checkboxes:', workDaysCheckboxes.length);
+    
+    workDaysCheckboxes.forEach(checkbox => {
+        const mask = parseInt(checkbox.value);
+        console.log('Checkbox mask:', mask, 'Value:', checkbox.value);
+        if (workDaysMask & mask) {
+            checkbox.checked = true;
+            console.log('Checked checkbox for mask:', mask);
+        }
+    });
+    
+    // Валидация времени
+    form.addEventListener('submit', function(e) {
+        if (openingTime.value >= closingTime.value) {
+            e.preventDefault();
+            alert('Время открытия должно быть раньше времени закрытия');
+            return;
+        }
+        
+        const hourlyRate = parseInt(document.getElementById('hourly_rate').value);
+        if (hourlyRate <= 0) {
+            e.preventDefault();
+            alert('Ставка должна быть больше 0');
+            return;
+        }
+        
+        const maxDistance = parseInt(document.getElementById('max_distance').value);
+        if (maxDistance <= 0) {
+            e.preventDefault();
+            alert('Максимальное расстояние должно быть больше 0');
+            return;
+        }
+    });
+    
+    // Обработка рабочих дней - собираем маску
+    const workDaysCheckboxesEdit = document.querySelectorAll('.work-day-checkbox');
+    
+    // Создаем функцию для обновления маски
+    function updateWorkDaysMask() {
+        let mask = 0;
+        workDaysCheckboxesEdit.forEach(checkbox => {
+            if (checkbox.checked) {
+                mask |= parseInt(checkbox.value);
+            }
+        });
+        return mask;
+    }
+    
+    // Добавляем обработчики для чекбоксов
+    workDaysCheckboxesEdit.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const mask = updateWorkDaysMask();
+            console.log('Updated work days mask:', mask);
+        });
+    });
+    
+    // Удаляем старые скрытые поля для work_days_mask
+    const oldHidden = form.querySelector('input[name="work_days_mask"]');
+    if (oldHidden) {
+        oldHidden.remove();
+    }
+    
+    // Добавляем скрытое поле для маски
+    const hiddenInput = document.createElement('input');
+    hiddenInput.type = 'hidden';
+    hiddenInput.name = 'work_days_mask';
+    hiddenInput.value = workDaysMask;
+    form.appendChild(hiddenInput);
+    
+    // Обновляем маску при отправке формы
+    form.addEventListener('submit', function() {
+        const mask = updateWorkDaysMask();
+        hiddenInput.value = mask;
+        console.log('Final work days mask:', mask);
+    });
+});
+</script>
 {% endblock %}
