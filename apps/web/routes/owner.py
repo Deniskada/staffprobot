@@ -37,6 +37,14 @@ router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
 
 
+async def get_available_interfaces_for_user(user_id: int):
+    """Получает доступные интерфейсы для пользователя"""
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        login_service = RoleBasedLoginService(session)
+        return await login_service.get_available_interfaces(user_id)
+
+
 def get_user_internal_id_from_current_user(current_user):
     """Получает внутренний ID пользователя из current_user (синхронно)"""
     if isinstance(current_user, dict):
@@ -129,12 +137,16 @@ async def owner_dashboard(request: Request):
             'active_shifts': active_shifts,
         }
 
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/dashboard.html", {
             "request": request,
             "current_user": current_user,
             "title": "Дашборд владельца",
             "stats": stats,
             "recent_objects": recent_objects,
+            "available_interfaces": available_interfaces,
         })
     except Exception as e:
         logger.error(f"Error loading owner dashboard: {e}")
@@ -185,11 +197,15 @@ async def owner_objects(
                     "owner_id": obj.owner_id
                 })
             
+            # Получаем данные для переключения интерфейсов
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
             return templates.TemplateResponse("owner/objects/list.html", {
                 "request": request,
                 "title": "Управление объектами",
                 "objects": objects_data,
                 "current_user": current_user,
+                "available_interfaces": available_interfaces,
                 "show_inactive": show_inactive,
                 "view_mode": view_mode
             })
@@ -208,10 +224,15 @@ async def owner_objects_create(request: Request):
     if user_role != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    user_id = get_user_internal_id_from_current_user(current_user)
+    available_interfaces = await get_available_interfaces_for_user(user_id)
+    
     return templates.TemplateResponse("owner/objects/create.html", {
         "request": request,
         "title": "Создание объекта",
-        "current_user": current_user
+        "current_user": current_user,
+        "available_interfaces": available_interfaces
     })
 
 
@@ -372,10 +393,14 @@ async def owner_objects_detail(request: Request, object_id: int):
                 ]
             }
             
+            # Получаем данные для переключения интерфейсов
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
             return templates.TemplateResponse("owner/objects/detail.html", {
                 "request": request,
                 "title": f"Объект: {object_data['name']}",
                 "object": object_data,
+                "available_interfaces": available_interfaces,
                 "current_user": current_user
             })
             
@@ -421,10 +446,14 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "schedule_repeat_weeks": obj.schedule_repeat_weeks
             }
             
+            # Получаем данные для переключения интерфейсов
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
             return templates.TemplateResponse("owner/objects/edit.html", {
                 "request": request,
                 "title": f"Редактирование: {object_data['name']}",
                 "object": object_data,
+                "available_interfaces": available_interfaces,
                 "current_user": current_user
             })
             
@@ -680,6 +709,9 @@ async def owner_calendar(
             next_month = month + 1 if month < 12 else 1
             next_year = year if month < 12 else year + 1
             
+            # Получаем данные для переключения интерфейсов
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
             return templates.TemplateResponse("owner/calendar/index.html", {
                 "request": request,
                 "title": "Календарное планирование",
@@ -688,6 +720,7 @@ async def owner_calendar(
                 "month": month,
                 "month_name": RU_MONTHS[month],
                 "calendar_data": calendar_data,
+                "available_interfaces": available_interfaces,
                 "objects": objects_list,
                 "selected_object_id": object_id,
                 "selected_object": selected_object,
@@ -809,6 +842,9 @@ async def owner_calendar_week(
         
         objects_list = [{"id": obj.id, "name": obj.name} for obj in objects]
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/calendar/week.html", {
             "request": request,
             "title": "Недельное планирование",
@@ -819,6 +855,7 @@ async def owner_calendar_week(
             "week_start": week_start,
             "week_end": week_days[-1],
             "objects": objects_list,
+            "available_interfaces": available_interfaces,
             "selected_object_id": object_id,
             "selected_object": selected_object,
             "prev_week": prev_week,
@@ -874,6 +911,9 @@ async def owner_calendar_analysis(
         
         objects_list = [{"id": obj.id, "name": obj.name} for obj in objects]
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(owner_telegram_id)
+        
         return templates.TemplateResponse("owner/calendar/analysis.html", {
             "request": request,
             "title": "Анализ пробелов в планировании",
@@ -882,6 +922,7 @@ async def owner_calendar_analysis(
             "selected_object_id": object_id,
             "selected_object": selected_object,
             "analysis_data": analysis_data,
+            "available_interfaces": available_interfaces,
             "days": days,
             "message": message,
             "created": created
@@ -2126,13 +2167,18 @@ async def owner_contract_templates(request: Request):
         contract_service = ContractService()
         templates_list = await contract_service.get_contract_templates()
         
+        # Получаем данные для переключения интерфейсов
+        user_id = get_user_internal_id_from_current_user(current_user)
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/templates/contracts/list.html",
             {
                 "request": request,
                 "templates": templates_list,
                 "title": "Шаблоны договоров",
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
         
@@ -2195,13 +2241,17 @@ async def owner_timeslots_list(
             "address": obj.address or ""
         }
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/timeslots/list.html", {
             "request": request,
             "title": f"Тайм-слоты: {object_data['name']}",
             "timeslots": timeslots_data,
             "object_id": object_id,
             "object": object_data,
-            "current_user": current_user
+            "current_user": current_user,
+            "available_interfaces": available_interfaces
         })
         
     except HTTPException:
@@ -2262,13 +2312,17 @@ async def owner_timeslot_edit_form(
             "max_distance": obj.max_distance_meters or 0
         }
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/timeslots/edit.html", {
             "request": request,
             "title": f"Редактирование тайм-слота: {object_data['name']}",
             "timeslot": timeslot_data,
             "object_id": timeslot.object_id,
             "object": object_data,
-            "current_user": current_user
+            "current_user": current_user,
+            "available_interfaces": available_interfaces
         })
         
     except HTTPException:
@@ -2437,12 +2491,16 @@ async def owner_timeslot_create_form(
             "address": obj.address or ""
         }
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(telegram_id)
+        
         return templates.TemplateResponse("owner/timeslots/create.html", {
             "request": request,
             "title": f"Создание тайм-слота: {object_data['name']}",
             "object_id": object_id,
             "object": object_data,
-            "current_user": current_user
+            "current_user": current_user,
+            "available_interfaces": available_interfaces
         })
         
     except HTTPException:
@@ -2811,9 +2869,13 @@ async def owner_shifts_list(
             'completed': len([s for s in all_shifts if s['status'] == 'completed'])
         }
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/shifts/list.html", {
             "request": request,
             "current_user": current_user,
+            "available_interfaces": available_interfaces,
             "shifts": paginated_shifts,
             "objects": objects,
             "stats": stats,
@@ -2893,11 +2955,15 @@ async def owner_shift_detail(
         # Получаем объект для передачи в шаблон
         object = shift.object
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/shifts/detail.html", {
             "request": request,
             "current_user": current_user,
             "shift": shift,
             "shift_type": shift_type,
+            "available_interfaces": available_interfaces,
             "object": object,
             "web_timezone_helper": web_timezone_helper
         })
@@ -3065,11 +3131,15 @@ async def owner_reports(
             "employees": len(employees)
         }
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/reports/index.html", {
             "request": request,
             "current_user": current_user,
             "objects": objects,
             "employees": employees,
+            "available_interfaces": available_interfaces,
             "stats": stats
         })
         
@@ -3423,9 +3493,13 @@ async def owner_profile(
             tags_by_category[tag.category].append(tag)
             tags_by_category_json[tag.category].append(tag.to_dict())
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/profile/index.html", {
             "request": request,
             "current_user": current_user,
+            "available_interfaces": available_interfaces,
             "profile": profile,
             "tags_by_category": tags_by_category,
             "tags_by_category_json": tags_by_category_json,
@@ -3561,11 +3635,16 @@ async def owner_settings(request: Request):
     if user_role != "owner":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    user_id = get_user_internal_id_from_current_user(current_user)
+    available_interfaces = await get_available_interfaces_for_user(user_id)
+    
     return templates.TemplateResponse("owner/settings.html", {
         "request": request,
         "current_user": current_user,
         "title": "Настройки владельца",
-        "message": "Настройки в разработке"
+        "message": "Настройки в разработке",
+        "available_interfaces": available_interfaces
     })
 
 
@@ -3584,6 +3663,10 @@ async def owner_planning_templates_list(request: Request):
             template_service = TemplateService(session)
             templates_list = await template_service.get_templates_by_owner(current_user["id"])
         
+        # Получаем данные для переключения интерфейсов
+        user_id = get_user_internal_id_from_current_user(current_user)
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/templates/planning/list.html",
             {
@@ -3591,7 +3674,8 @@ async def owner_planning_templates_list(request: Request):
                 "templates": templates_list,
                 "template_type": "planning",
                 "title": "Шаблоны планирования",
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
     except Exception as e:
@@ -3606,13 +3690,18 @@ async def owner_planning_template_create(request: Request):
     if current_user.get("role") != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    user_id = get_user_internal_id_from_current_user(current_user)
+    available_interfaces = await get_available_interfaces_for_user(user_id)
+    
     return templates.TemplateResponse(
         "owner/templates/planning/create.html",
         {
             "request": request,
             "template_type": "planning",
             "title": "Создание шаблона планирования",
-            "current_user": current_user
+            "current_user": current_user,
+            "available_interfaces": available_interfaces
         }
     )
 
@@ -3678,6 +3767,10 @@ async def owner_planning_template_detail(request: Request, template_id: int):
         if not template:
             raise HTTPException(status_code=404, detail="Шаблон планирования не найден")
         
+        # Получаем данные для переключения интерфейсов
+        user_id = get_user_internal_id_from_current_user(current_user)
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/templates/planning/detail.html",
             {
@@ -3685,7 +3778,8 @@ async def owner_planning_template_detail(request: Request, template_id: int):
                 "template": template,
                 "template_type": "planning",
                 "title": "Детали шаблона планирования",
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
     except HTTPException:
@@ -3711,6 +3805,10 @@ async def owner_planning_template_edit(request: Request, template_id: int):
         if not template:
             raise HTTPException(status_code=404, detail="Шаблон планирования не найден")
         
+        # Получаем данные для переключения интерфейсов
+        user_id = get_user_internal_id_from_current_user(current_user)
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/templates/planning/edit.html",
             {
@@ -3718,7 +3816,8 @@ async def owner_planning_template_edit(request: Request, template_id: int):
                 "template": template,
                 "template_type": "planning",
                 "title": "Редактирование шаблона планирования",
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
     except HTTPException:
@@ -3827,6 +3926,9 @@ async def owner_employees_list(
         else:
             employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/employees/list.html",
             {
@@ -3835,7 +3937,8 @@ async def owner_employees_list(
                 "title": "Управление сотрудниками",
                 "current_user": current_user,
                 "view_mode": view_mode,
-                "show_former": show_former
+                "show_former": show_former,
+                "available_interfaces": available_interfaces
             }
         )
     except Exception as e:
@@ -3902,6 +4005,9 @@ async def owner_employees_create_form(
                 'current_year': str(datetime.now().year)
             })
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(internal_user_id)
+        
         return templates.TemplateResponse(
             "owner/employees/create.html",
             {
@@ -3912,6 +4018,7 @@ async def owner_employees_create_form(
                 "objects": objects,
                 "templates": templates_list,
                 "templates_json": templates_json,
+                "available_interfaces": available_interfaces,
                 "owner_tags": owner_tags,
                 "current_date": current_date,
                 "employee_telegram_id": employee_telegram_id
@@ -3942,13 +4049,17 @@ async def owner_employee_detail(
         if not employee_info:
             raise HTTPException(status_code=404, detail="Сотрудник не найден")
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/employees/detail.html",
             {
                 "request": request,
                 "title": f"Сотрудник {employee_info.get('name', 'Неизвестно')}",
                 "current_user": current_user,
-                "employee": employee_info
+                "employee": employee_info,
+                "available_interfaces": available_interfaces
             }
         )
     except HTTPException:
@@ -4044,13 +4155,17 @@ async def owner_contract_detail(
         if not contract:
             raise HTTPException(status_code=404, detail="Договор не найден")
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(current_user["id"])
+        
         return templates.TemplateResponse(
             "owner/employees/contract_detail.html",
             {
                 "request": request,
                 "contract": contract,
                 "title": f"Договор {contract.get('title', 'Без названия')}",
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
     except HTTPException:
@@ -4116,6 +4231,9 @@ async def owner_contract_edit_form(
                 'current_year': str(datetime.now().year)
             })
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(internal_user_id)
+        
         return templates.TemplateResponse(
             "owner/employees/edit_contract.html",
             {
@@ -4124,6 +4242,7 @@ async def owner_contract_edit_form(
                 "objects": objects,
                 "templates": templates_list,
                 "templates_json": templates_json,
+                "available_interfaces": available_interfaces,
                 "owner_tags": owner_tags,
                 "title": f"Редактирование договора {contract.get('title', 'Без названия')}",
                 "current_user": current_user
