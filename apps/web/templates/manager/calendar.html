@@ -878,7 +878,7 @@ function showNotification(message, type = 'info') {
 
 // Отладочная информация
 console.log('Всего тайм-слотов:', {{ timeslots | length }});
-console.log('Структура calendar_data:', typeof {{ calendar_data }}, {{ calendar_data | length if calendar_data else 0 }});
+console.log('Длина calendar_data:', {{ calendar_data | length if calendar_data else 0 }});
 </script>
 
 <!-- Отладочная информация -->
