@@ -799,7 +799,18 @@ async function loadEmployeesForModal(objectId) {
         });
         const employees = await response.json();
         
+        console.log('API response:', employees);
+        console.log('Is array:', Array.isArray(employees));
+        
         const select = document.getElementById('employeeSelectModal');
+        
+        // Проверяем, что employees - это массив
+        if (!Array.isArray(employees)) {
+            console.error('Employees is not an array:', employees);
+            select.innerHTML = '<option value="">Ошибка: неверный формат данных</option>';
+            return;
+        }
+        
         if (employees.length === 0) {
             select.innerHTML = '<option value="">Нет сотрудников с доступом к этому объекту</option>';
         } else {

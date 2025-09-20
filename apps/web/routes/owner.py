@@ -1636,7 +1636,14 @@ async def owner_calendar_api_timeslots_status(
 async def owner_calendar_api_objects(request: Request):
     """API: список объектов владельца (массив для drag&drop-панели)."""
     current_user = await get_current_user(request)
-    if current_user.get("role") != "owner":
+    if not current_user:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    # Проверяем роли (поддержка множественных ролей)
+    user_roles = current_user.get("roles", [])
+    if isinstance(user_roles, str):
+        user_roles = [user_roles]
+    if "owner" not in user_roles and "superadmin" not in user_roles:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     try:
@@ -1677,7 +1684,14 @@ async def owner_calendar_api_objects(request: Request):
 async def api_employees(request: Request):
     """API: список сотрудников для drag&drop панели."""
     current_user = await get_current_user(request)
-    if not current_user or current_user.get("role") != "owner":
+    if not current_user:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    # Проверяем роли (поддержка множественных ролей)
+    user_roles = current_user.get("roles", [])
+    if isinstance(user_roles, str):
+        user_roles = [user_roles]
+    if "owner" not in user_roles and "superadmin" not in user_roles:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     try:
@@ -1725,7 +1739,14 @@ async def api_employees(request: Request):
 async def api_employees_for_object(object_id: int, request: Request):
     """API: получение списка сотрудников с доступом к конкретному объекту."""
     current_user = await get_current_user(request)
-    if not current_user or current_user.get("role") != "owner":
+    if not current_user:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    # Проверяем роли (поддержка множественных ролей)
+    user_roles = current_user.get("roles", [])
+    if isinstance(user_roles, str):
+        user_roles = [user_roles]
+    if "owner" not in user_roles and "superadmin" not in user_roles:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
     
     try:
@@ -1872,7 +1893,14 @@ async def api_calendar_plan_shift(
 ):
     """API: планирование смены для сотрудника в тайм-слот."""
     current_user = await get_current_user(request)
-    if not current_user or current_user.get("role") != "owner":
+    if not current_user:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    # Проверяем роли (поддержка множественных ролей)
+    user_roles = current_user.get("roles", [])
+    if isinstance(user_roles, str):
+        user_roles = [user_roles]
+    if "owner" not in user_roles and "superadmin" not in user_roles:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     try:
