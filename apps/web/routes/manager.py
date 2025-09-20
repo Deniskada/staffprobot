@@ -1,7 +1,8 @@
 """Роуты для интерфейса управляющего."""
 
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Request, Depends, HTTPException
+from datetime import date
+from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1099,34 +1100,144 @@ async def manager_employee_terminate(
 @router.get("/calendar", response_class=HTMLResponse)
 async def manager_calendar(
     request: Request,
+    year: int = Query(None),
+    month: int = Query(None),
+    object_id: int = Query(None),
     current_user: dict = Depends(require_manager_or_owner),
 ):
     """Календарь управляющего."""
     try:
+        logger.info("Starting manager_calendar function")
+        
         # Проверяем, что current_user не является RedirectResponse
         if isinstance(current_user, RedirectResponse):
+            logger.info("Current user is RedirectResponse, redirecting")
             return current_user
         
         async with get_async_session() as db:
+            logger.info("Got database session")
+            
             user_id = await get_user_id_from_current_user(current_user, db)
+            logger.info(f"User ID: {user_id}")
             if not user_id:
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
-            # Здесь будет логика календаря
-            # Пока возвращаем заглушку
+            # Получаем сервисы
+            logger.info("Creating services")
+            permission_service = ManagerPermissionService(db)
+            login_service = RoleBasedLoginService(db)
+            
+            # Получаем доступные объекты управляющего
+            logger.info("Getting accessible objects")
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            logger.info(f"Accessible objects count: {len(accessible_objects)}")
+            
+            # Определяем текущую дату или переданные параметры
+            today = date.today()
+            if year is None:
+                year = today.year
+            if month is None:
+                month = today.month
+            
+            # Валидация даты
+            if not (1 <= month <= 12):
+                month = today.month
+            if year < 2020 or year > 2030:
+                year = today.year
+            
+            # Если выбран конкретный объект, проверяем доступ
+            selected_object = None
+            if object_id:
+                for obj in accessible_objects:
+                    if obj.id == object_id:
+                        selected_object = obj
+                        break
+                if not selected_object:
+                    raise HTTPException(status_code=404, detail="Объект не найден")
+            
+            # Получаем тайм-слоты для выбранного объекта или всех объектов
+            from apps.web.services.object_service import TimeSlotService
+            timeslot_service = TimeSlotService(db)
+            
+            timeslots_data = []
+            if selected_object:
+                timeslots = await timeslot_service.get_timeslots_by_object(selected_object.id, user_id)
+                for slot in timeslots:
+                    timeslots_data.append({
+                        "id": slot.id,
+                        "object_id": slot.object_id,
+                        "object_name": selected_object.name,
+                        "date": slot.slot_date,
+                        "start_time": slot.start_time.strftime("%H:%M"),
+                        "end_time": slot.end_time.strftime("%H:%M"),
+                        "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(selected_object.hourly_rate),
+                        "is_active": slot.is_active,
+                        "notes": slot.notes or ""
+                    })
+            else:
+                # Получаем тайм-слоты для всех доступных объектов
+                for obj in accessible_objects:
+                    timeslots = await timeslot_service.get_timeslots_by_object(obj.id, user_id)
+                    for slot in timeslots:
+                        timeslots_data.append({
+                            "id": slot.id,
+                            "object_id": slot.object_id,
+                            "object_name": obj.name,
+                            "date": slot.slot_date,
+                            "start_time": slot.start_time.strftime("%H:%M"),
+                            "end_time": slot.end_time.strftime("%H:%M"),
+                            "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                            "is_active": slot.is_active,
+                            "notes": slot.notes or ""
+                        })
+            
+            # Создаем календарную сетку
+            from apps.web.routes.calendar import _create_calendar_grid
+            calendar_data = _create_calendar_grid(year, month, timeslots_data)
+            
+            # Подготавливаем данные для шаблона
+            objects_list = [{"id": obj.id, "name": obj.name} for obj in accessible_objects]
+            
+            # Навигация по месяцам
+            prev_month = month - 1 if month > 1 else 12
+            prev_year = year if month > 1 else year - 1
+            next_month = month + 1 if month < 12 else 1
+            next_year = year if month < 12 else year + 1
+            
+            # Русские названия месяцев
+            RU_MONTHS = [
+                "", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+                "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+            ]
             
             # Получаем данные для переключения интерфейсов
-            login_service = RoleBasedLoginService(db)
+            logger.info("Getting available interfaces")
             available_interfaces = await login_service.get_available_interfaces(user_id)
+            logger.info(f"Available interfaces: {available_interfaces}")
             
+            logger.info("Rendering template")
             return templates.TemplateResponse("manager/calendar.html", {
                 "request": request,
+                "title": "Календарное планирование",
                 "current_user": current_user,
+                "year": year,
+                "month": month,
+                "month_name": RU_MONTHS[month],
+                "calendar_data": calendar_data,
+                "accessible_objects": objects_list,
+                "selected_object_id": object_id,
+                "selected_object": selected_object,
+                "timeslots": timeslots_data,
+                "prev_month": prev_month,
+                "prev_year": prev_year,
+                "next_month": next_month,
+                "next_year": next_year,
+                "today": today,
                 "available_interfaces": available_interfaces
             })
         
     except Exception as e:
-        logger.error(f"Error in manager calendar: {e}")
+        logger.error(f"Error in manager calendar: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка загрузки календаря")
 
 
