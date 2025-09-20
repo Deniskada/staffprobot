@@ -150,11 +150,11 @@ async def dashboard_alerts(request: Request):
             if shift.end_time is None:
                 hours_worked = (datetime.now() - shift.start_time).total_seconds() / 3600
                 if hours_worked > 8:  # Более 8 часов
-                    alerts.append({
+            alerts.append({
                         "type": "warning",
                         "message": f"Смена на объекте {shift.object.name} длится более 8 часов",
                         "timestamp": shift.start_time
-                    })
+            })
         
         return {"alerts": alerts}
 

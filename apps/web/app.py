@@ -123,15 +123,8 @@ async def root(request: Request):
     
     if user_data:
         # Пользователь авторизован - перенаправляем в соответствующий раздел
-        user_role = user_data.get("role", "employee")
-        if user_role == "superadmin":
-            return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
-        elif user_role == "owner":
-            return RedirectResponse(url="/owner", status_code=status.HTTP_302_FOUND)
-        elif user_role == "employee":
-            return RedirectResponse(url="/employee", status_code=status.HTTP_302_FOUND)
-        else:
-            return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+        # Используем новую логику с множественными ролями
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
     # Пользователь не авторизован - показываем лендинг
     return templates.TemplateResponse("landing.html", {"request": request})
