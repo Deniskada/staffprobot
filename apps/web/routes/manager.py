@@ -583,7 +583,7 @@ async def manager_employee_add_form(
             
             # Получаем шаблоны договоров
             from sqlalchemy import select
-            from domain.entities.contract_template import ContractTemplate
+            from domain.entities.contract import ContractTemplate
             
             templates_query = select(ContractTemplate).where(ContractTemplate.is_active == True)
             result = await db.execute(templates_query)
@@ -673,8 +673,6 @@ async def manager_employee_add(
             
             # Создаем договор если указан шаблон
             if contract_template_id and contract_objects:
-                contract_service = ContractService()
-                
                 # Парсим даты
                 start_date = None
                 end_date = None
@@ -683,18 +681,43 @@ async def manager_employee_add(
                 if end_date_str:
                     end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
                 
-                # Создаем договор
-                contract_data = {
-                    "employee_id": user.id,
-                    "template_id": int(contract_template_id),
-                    "hourly_rate": hourly_rate,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "allowed_objects": [int(obj_id) for obj_id in contract_objects],
-                    "is_active": True
-                }
+                # Создаем договор напрямую
+                from domain.entities.contract import Contract
                 
-                contract = await contract_service.create_contract(contract_data, user_id)
+                contract = Contract(
+                    employee_id=user.id,
+                    owner_id=user_id,
+                    template_id=int(contract_template_id),
+                    hourly_rate=hourly_rate,
+                    start_date=start_date,
+                    end_date=end_date,
+                    allowed_objects=[int(obj_id) for obj_id in contract_objects],
+                    is_active=True,
+                    status="active"
+                )
+                
+                db.add(contract)
+                await db.commit()
+                await db.refresh(contract)
+                
+                # Создаем права управляющего на объекты если роль manager
+                if role == "manager":
+                    permission_service = ManagerPermissionService(db)
+                    for obj_id in contract_objects:
+                        await permission_service.create_permission(
+                            contract_id=contract.id,
+                            object_id=int(obj_id),
+                            permissions={
+                                "can_view": True,
+                                "can_edit": True,
+                                "can_delete": False,
+                                "can_manage_employees": True,
+                                "can_view_finances": True,
+                                "can_edit_rates": True,
+                                "can_edit_schedule": True
+                            }
+                        )
+                
                 logger.info(f"Created contract {contract.id} for employee {user.id}")
             
             logger.info(f"Created new employee {user.id} by manager {user_id}")
@@ -1027,8 +1050,12 @@ async def manager_employee_terminate(
                 raise HTTPException(status_code=404, detail="Активный договор не найден")
             
             # Расторгаем договор
-            contract_service = ContractService()
-            await contract_service.terminate_contract(contract.id, user_id, reason)
+            contract.status = "terminated"
+            contract.terminated_at = datetime.now()
+            contract.termination_reason = reason
+            
+            await db.commit()
+            await db.refresh(contract)
             
             logger.info(f"Terminated contract {contract.id} for employee {employee_id} by manager {user_id}")
             
