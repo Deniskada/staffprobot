@@ -65,7 +65,7 @@ async def dashboard_index(request: Request):
         elif "owner" in user_roles:
             return RedirectResponse(url="/owner", status_code=302)
         elif "manager" in user_roles:
-            return RedirectResponse(url="/manager/dashboard", status_code=302)
+            return RedirectResponse(url="/manager", status_code=302)
         elif "employee" in user_roles or "applicant" in user_roles:
             return RedirectResponse(url="/employee", status_code=302)
         else:
