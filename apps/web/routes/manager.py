@@ -93,7 +93,7 @@ async def manager_dashboard(
                         Shift.status == "active"
                     )
                 ).options(
-                    selectinload(Shift.employee),
+                    selectinload(Shift.user),
                     selectinload(Shift.object)
                 )
                 result = await db.execute(active_shifts_query)
@@ -106,7 +106,7 @@ async def manager_dashboard(
                         Shift.status == "scheduled"
                     )
                 ).options(
-                    selectinload(Shift.employee),
+                    selectinload(Shift.user),
                     selectinload(Shift.object)
                 )
                 result = await db.execute(scheduled_shifts_query)
@@ -137,7 +137,7 @@ async def manager_dashboard(
                 "accessible_objects_count": accessible_objects_count,
                 "active_shifts_count": len(active_shifts),
                 "scheduled_shifts_count": len(scheduled_shifts),
-                "employees_count": len(set(shift.employee_id for shift in recent_shifts)),
+                "employees_count": len(set(shift.user_id for shift in recent_shifts)),
                 "recent_shifts": recent_shifts,
                 "object_permissions": object_permissions,
                 "permission_names": permission_names,
