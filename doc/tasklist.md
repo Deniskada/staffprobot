@@ -61,9 +61,9 @@
   - Добавить поле is_manager (BOOLEAN)
   - Добавить поле manager_permissions (JSONB)
   - Добавить поля общих прав управляющего
-- [ ] **1.3. Обновить таблицу objects**
-  - Добавить поле available_for_applicants (BOOLEAN)
+- [ ] **1.3. Создать индекс для поля available_for_applicants**
   - Создать индекс для быстрого поиска доступных объектов
+  - Оптимизировать запросы фильтрации по соискателям
 - [ ] **1.4. Создать таблицу manager_object_permissions**
   - Детальные права управляющего на объекты
   - Поля: contract_id, object_id, can_view, can_edit, can_delete, etc.

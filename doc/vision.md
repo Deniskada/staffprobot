@@ -247,7 +247,7 @@ CREATE TABLE objects (
     max_distance_meters INTEGER DEFAULT 500,
     required_employees JSONB,
     is_active BOOLEAN DEFAULT TRUE,
-    available_for_applicants BOOLEAN DEFAULT FALSE, -- Доступен для соискателей
+    available_for_applicants BOOLEAN DEFAULT FALSE, -- Доступен для соискателей (уже реализовано)
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
