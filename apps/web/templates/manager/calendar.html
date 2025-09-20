@@ -1,0 +1,871 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.calendar-container {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.calendar-day {
+    background: white;
+    min-height: 120px;
+    padding: 8px;
+    position: relative;
+    border: 1px solid #dee2e6;
+}
+
+.calendar-day.other-month {
+    background: #f8f9fa;
+    color: #6c757d;
+}
+
+.calendar-day.today {
+    background: #e3f2fd;
+    border: 2px solid #2196f3;
+}
+
+.calendar-day.drag-over {
+    background: #e3f2fd;
+    border: 2px dashed #007bff;
+    transform: scale(1.02);
+}
+
+.calendar-day.drop-zone {
+    position: relative;
+}
+
+.calendar-day.drop-zone::after {
+    content: "Перетащите объект сюда";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 123, 255, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.calendar-day.drop-zone.drag-over::after {
+    opacity: 1;
+}
+
+/* Скрываем надпись "Перетащите объект сюда" при перетаскивании сотрудника */
+.calendar-day.drop-zone.employee-drag-over::after {
+    display: none;
+}
+
+.calendar-day-header {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 0.9em;
+}
+
+.day-number {
+    font-size: 1.1em;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.timeslot-item {
+    background: #007bff;
+    color: white;
+    padding: 2px 6px;
+    margin: 1px 0;
+    border-radius: 3px;
+    font-size: 0.75em;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.timeslot-item:hover {
+    background: #0056b3;
+    transform: scale(1.02);
+}
+
+/* Цветовое кодирование статусов */
+.timeslot-empty {
+    background: #f8f9fa !important;
+    color: #6c757d !important;
+    border: 1px solid #dee2e6;
+}
+
+.timeslot-planned {
+    background: #fff3cd !important;
+    color: #856404 !important;
+    border: 1px solid #ffeaa7;
+}
+
+.timeslot-confirmed {
+    background: #d1ecf1 !important;
+    color: #0c5460 !important;
+    border: 1px solid #bee5eb;
+}
+
+.timeslot-completed {
+    background: #d4edda !important;
+    color: #155724 !important;
+    border: 1px solid #c3e6cb;
+}
+
+.timeslot-active {
+    background: #cce5ff !important;
+    color: #004085 !important;
+    border: 1px solid #99d6ff;
+}
+
+.timeslot-cancelled {
+    background: #f8d7da !important;
+    color: #721c24 !important;
+    border: 1px solid #f5c6cb;
+}
+
+.timeslot-status-info {
+    margin-top: 2px;
+    font-size: 0.7rem;
+}
+
+.timeslot-count {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: #28a745;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7em;
+    font-weight: bold;
+}
+
+.no-timeslots {
+    color: #dc3545;
+    font-size: 0.8em;
+    font-style: italic;
+}
+
+.filters-panel {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.weekday-header {
+    background: #007bff;
+    color: white;
+    padding: 10px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.weekday-header:first-child {
+    border-top-left-radius: 8px;
+}
+
+.weekday-header:last-child {
+    border-top-right-radius: 8px;
+}
+
+.stats-card {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stats-number {
+    font-size: 2em;
+    font-weight: bold;
+    color: #007bff;
+}
+
+.quick-actions {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.quick-actions .btn {
+    margin: 5px;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+</style>
+{% endblock %}
+
+{% block manager_content %}
+<!-- Панель drag & drop -->
+{% include 'manager/calendar/drag_drop_panel.html' %}
+
+<!-- Панель сотрудников для drag & drop -->
+{% include 'manager/calendar/employees_drag_drop_panel.html' %}
+
+<div class="container-fluid">
+    <!-- Заголовок и навигация -->
+    <div class="calendar-header">
+        <div class="d-flex align-items-center">
+            <h1 class="h3 mb-0 me-3">
+                <i class="bi bi-calendar3"></i> {{ title }}
+            </h1>
+            <span class="badge bg-primary fs-6">{{ month_name }} {{ year }}</span>
+        </div>
+        
+        <div class="d-flex align-items-center gap-3">
+            <!-- Фильтр по объектам -->
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-building"></i>
+                    {% if selected_object %}
+                        {{ selected_object.name }}
+                    {% else %}
+                        Все объекты
+                    {% endif %}
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="?year={{ year }}&month={{ month }}">Все объекты</a></li>
+                    {% for obj in accessible_objects %}
+                    <li><a class="dropdown-item" href="?year={{ year }}&month={{ month }}&object_id={{ obj.id }}">{{ obj.name }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <!-- Переключение видов -->
+            <div class="btn-group" role="group">
+                <a href="/manager/calendar/week?year={{ year }}&week={{ today.isocalendar()[1] }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
+                   class="btn btn-outline-primary">
+                    <i class="bi bi-calendar-week"></i> Неделя
+                </a>
+                <a href="/manager/calendar/analysis{% if selected_object_id %}?object_id={{ selected_object_id }}{% endif %}" 
+                   class="btn btn-outline-info">
+                    <i class="bi bi-graph-up"></i> Анализ
+                </a>
+            </div>
+            
+            <!-- Навигация по месяцам -->
+            <div class="btn-group" role="group">
+                <a href="?year={{ prev_year }}&month={{ prev_month }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
+                   class="btn btn-outline-secondary">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+                <a href="?year={{ year }}&month={{ month }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
+                   class="btn btn-outline-secondary">
+                    {{ month_name }} {{ year }}
+                </a>
+                <a href="?year={{ next_year }}&month={{ next_month }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
+                   class="btn btn-outline-secondary">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Легенда статусов -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body py-2">
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <span class="text-muted small me-2">Статусы смен:</span>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-empty" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Пустой слот</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-planned" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Запланировано</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-confirmed" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Подтверждено</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-completed" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Отработано</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-active" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Активно</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="timeslot-item timeslot-cancelled" style="width: 20px; height: 20px; margin: 0;"></div>
+                            <span class="small">Отменено</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Статистика -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small">Всего тайм-слотов</div>
+                        <div class="stats-number">{{ timeslots|length }}</div>
+                    </div>
+                    <i class="bi bi-clock text-primary fs-1"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small">Доступных объектов</div>
+                        <div class="stats-number">{{ accessible_objects|length }}</div>
+                    </div>
+                    <i class="bi bi-building text-success fs-1"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small">Дней с планами</div>
+                        <div class="stats-number">
+                            {% set days_with_slots = [] %}
+                            {% for week in calendar_data %}
+                                {% for day in week %}
+                                    {% if day.timeslots_count > 0 and day.is_current_month %}
+                                        {% set _ = days_with_slots.append(day.date) %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                            {{ days_with_slots|length }}
+                        </div>
+                    </div>
+                    <i class="bi bi-calendar-check text-warning fs-1"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small">Средняя ставка</div>
+                        <div class="stats-number">
+                            {% if timeslots %}
+                                {{ "%.0f"|format((timeslots|map(attribute='hourly_rate')|sum) / timeslots|length) }}₽
+                            {% else %}
+                                0₽
+                            {% endif %}
+                        </div>
+                    </div>
+                    <i class="bi bi-currency-dollar text-info fs-1"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Календарная сетка -->
+    <div class="calendar-container">
+        <!-- Заголовки дней недели -->
+        <div class="calendar-grid">
+            <div class="weekday-header">Пн</div>
+            <div class="weekday-header">Вт</div>
+            <div class="weekday-header">Ср</div>
+            <div class="weekday-header">Чт</div>
+            <div class="weekday-header">Пт</div>
+            <div class="weekday-header">Сб</div>
+            <div class="weekday-header">Вс</div>
+        </div>
+        
+        <!-- Дни календаря -->
+        <div class="calendar-grid">
+            {% for week in calendar_data %}
+                {% for day in week %}
+                <div class="calendar-day drop-zone {% if not day.is_current_month %}other-month{% endif %} {% if day.is_today %}today{% endif %}" 
+                     data-date="{{ day.date.strftime('%Y-%m-%d') }}">
+                    <div class="day-number">{{ day.date.day }}</div>
+                    
+                    {% if day.timeslots_count > 0 %}
+                        <div class="timeslot-count">{{ day.timeslots_count }}</div>
+                        {% for slot in day.timeslots %}
+                        <div class="timeslot-item" 
+                             data-timeslot-id="{{ slot.id }}"
+                             data-object-id="{{ slot.object_id }}"
+                             title="{{ slot.object_name }}: {{ slot.start_time }}-{{ slot.end_time }} ({{ slot.hourly_rate }}₽/час)"
+                             onclick="showTimeslotDetails({{ slot.id }})">
+                            <div class="fw-bold">{{ slot.start_time }}-{{ slot.end_time }}</div>
+                            <div class="small">{{ slot.object_name }}</div>
+                            <div class="small">{{ slot.hourly_rate }}₽/час</div>
+                            <div class="timeslot-status-info">
+                                <span class="badge bg-light text-dark">Пустой слот</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% elif day.is_current_month %}
+                        <div class="no-timeslots">Нет планов</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Быстрые действия -->
+<div class="quick-actions">
+    <a href="/manager/objects/create" class="btn btn-primary" title="Создать объект">
+        <i class="bi bi-plus-lg"></i>
+    </a>
+    <a href="/manager/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create" 
+       class="btn btn-success" title="Создать тайм-слот">
+        <i class="bi bi-clock"></i>
+    </a>
+    <a href="/manager/calendar/analysis{% if selected_object_id %}?object_id={{ selected_object_id }}{% endif %}" 
+       class="btn btn-info" title="Анализ пробелов">
+        <i class="bi bi-graph-up"></i>
+    </a>
+</div>
+
+<!-- Модальное окно для деталей тайм-слота -->
+<div class="modal fade" id="timeslotModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали тайм-слота</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="timeslotDetails">
+                <!-- Детали будут загружены через JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-success" id="addEmployeeBtn" style="display: none;">
+                    <i class="bi bi-person-plus"></i> Добавить сотрудника в план
+                </button>
+                <button type="button" class="btn btn-primary" id="editTimeslotBtn">Редактировать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Загрузка статуса тайм-слотов
+let timeslotsStatus = {};
+
+async function loadTimeslotsStatus() {
+    try {
+        const year = {{ year }};
+        const month = {{ month }};
+        const objectId = {{ selected_object_id if selected_object_id else 'null' }};
+        
+        const params = new URLSearchParams({
+            year: year,
+            month: month
+        });
+        
+        if (objectId) {
+            params.append('object_id', objectId);
+        }
+        
+        const response = await fetch(`/manager/calendar/api/timeslots-status?${params}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            timeslotsStatus = await response.json();
+            console.log('Загружен статус тайм-слотов:', timeslotsStatus);
+            updateTimeslotsDisplay();
+        } else {
+            console.error('Ошибка загрузки статуса тайм-слотов');
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки статуса тайм-слотов:', error);
+    }
+}
+
+function updateTimeslotsDisplay() {
+    // Обновляем отображение тайм-слотов с цветовым кодированием
+    const timeslotElements = document.querySelectorAll('.timeslot-item');
+    
+    timeslotElements.forEach(element => {
+        const timeslotId = element.dataset.timeslotId;
+        const slotData = timeslotsStatus.find(slot => slot.slot_id == timeslotId);
+        
+        if (slotData) {
+            // Удаляем старые классы статуса
+            element.classList.remove('timeslot-empty', 'timeslot-planned', 'timeslot-confirmed', 'timeslot-completed', 'timeslot-active', 'timeslot-cancelled');
+            
+            // Добавляем новый класс статуса
+            element.classList.add(`timeslot-${slotData.status}`);
+            
+            // Обновляем информацию о сменах
+            const statusInfo = element.querySelector('.timeslot-status-info');
+            if (statusInfo) {
+                statusInfo.innerHTML = getStatusInfo(slotData);
+            }
+        }
+    });
+}
+
+function getStatusInfo(slotData) {
+    let info = '';
+    
+    if (slotData.status === 'empty') {
+        info = `<span class="badge bg-light text-dark">Пустой слот (${slotData.availability})</span>`;
+    } else if (slotData.status === 'planned') {
+        info = `<span class="badge bg-warning">Запланировано: ${slotData.availability}</span>`;
+    } else if (slotData.status === 'confirmed') {
+        info = `<span class="badge bg-info">Подтверждено: ${slotData.availability}</span>`;
+    } else if (slotData.status === 'completed') {
+        // Показываем информацию об отработанных сменах
+        let completedInfo = `<span class="badge bg-success">Отработано: ${slotData.actual_shifts.length}</span>`;
+        if (slotData.actual_shifts.length > 0) {
+            const shift = slotData.actual_shifts[0];
+            completedInfo += `<br><small class="text-muted">${shift.user_name}`;
+            if (shift.total_hours) {
+                completedInfo += ` (${shift.total_hours}ч)`;
+            }
+            if (shift.total_payment) {
+                completedInfo += ` - ${shift.total_payment}₽`;
+            }
+            completedInfo += `</small>`;
+        }
+        info = completedInfo;
+    } else if (slotData.status === 'active') {
+        // Показываем информацию об активных сменах
+        let activeInfo = `<span class="badge bg-primary">Активно: ${slotData.actual_shifts.length}</span>`;
+        if (slotData.actual_shifts.length > 0) {
+            const shift = slotData.actual_shifts[0];
+            activeInfo += `<br><small class="text-muted">${shift.user_name}`;
+            if (shift.is_planned) {
+                activeInfo += ` (из планирования)`;
+            } else {
+                activeInfo += ` (спонтанная)`;
+            }
+            activeInfo += `</small>`;
+        }
+        info = activeInfo;
+    } else if (slotData.status === 'cancelled') {
+        info = `<span class="badge bg-secondary">Отменено: ${slotData.availability}</span>`;
+    }
+    
+    return info;
+}
+
+function showTimeslotDetails(timeslotId) {
+    const detailsEl = document.getElementById('timeslotDetails');
+    detailsEl.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+        </div>
+    `;
+
+    const modal = new bootstrap.Modal(document.getElementById('timeslotModal'));
+    modal.show();
+
+    fetch(`/manager/calendar/api/timeslot/${timeslotId}`, { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.detail) {
+                detailsEl.innerHTML = `<div class="alert alert-danger">${data.detail}</div>`;
+                return;
+            }
+            const slot = data.slot;
+            const scheduled = data.scheduled || [];
+            const actual = data.actual || [];
+
+            const statusRu = (st) => ({
+                planned: 'Запланировано',
+                confirmed: 'Подтверждено',
+                cancelled: 'Отменено',
+                active: 'Активно',
+                completed: 'Отработано'
+            }[st] || st);
+
+            const schedRows = scheduled.map(s => `<tr>
+                <td>${slot.start_time} - ${slot.end_time}</td>
+                <td>${statusRu(s.status)}</td>
+                <td>${s.user_name || '-'}</td>
+                <td>${s.notes || ''}</td>
+            </tr>`).join('');
+
+            const actualRows = actual.map(a => `<tr>
+                <td>${slot.start_time} - ${slot.end_time}</td>
+                <td>${statusRu(a.status)}</td>
+                <td>${a.user_name || '-'}</td>
+                <td>${a.actual_hours || ''}</td>
+                <td>${a.payment || ''}</td>
+            </tr>`).join('');
+
+            detailsEl.innerHTML = `
+                <div class="mb-2"><strong>Объект:</strong> ${slot.object_name} (#${slot.object_id})</div>
+                <div class="mb-2"><strong>Дата:</strong> ${slot.date}</div>
+                <div class="mb-2"><strong>Время:</strong> ${slot.start_time} - ${slot.end_time}</div>
+                <div class="mb-2"><strong>Ставка:</strong> ${slot.hourly_rate ?? '-'} ₽/час</div>
+                <div class="mb-2"><strong>Лимит:</strong> ${slot.max_employees}</div>
+                <div class="mb-3"><strong>Заметки:</strong> ${slot.notes || ''}</div>
+
+                <h6>Запланированные</h6>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle">
+                    <thead><tr><th>Время</th><th>Статус</th><th>Сотрудник</th><th>Заметки</th></tr></thead>
+                    <tbody>${schedRows || '<tr><td colspan="4" class="text-muted">Нет</td></tr>'}</tbody>
+                  </table>
+                </div>
+
+                <h6>Фактические</h6>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle">
+                    <thead><tr><th>Время</th><th>Статус</th><th>Сотрудник</th><th>Часы</th><th>Оплата</th></tr></thead>
+                    <tbody>${actualRows || '<tr><td colspan="5" class="text-muted">Нет</td></tr>'}</tbody>
+                  </table>
+                </div>
+            `;
+            
+            // Устанавливаем timeslot_id для кнопки редактирования в footer
+            const editBtn = document.getElementById('editTimeslotBtn');
+            editBtn.dataset.timeslotId = slot.id;
+            
+            // Показываем кнопку добавления сотрудника
+            const addEmployeeBtn = document.getElementById('addEmployeeBtn');
+            addEmployeeBtn.dataset.timeslotId = slot.id;
+            addEmployeeBtn.style.display = 'inline-block';
+        })
+        .catch(err => {
+            detailsEl.innerHTML = `<div class="alert alert-danger">Ошибка загрузки деталей тайм-слота</div>`;
+            console.error(err);
+        });
+}
+
+// Загружаем статус при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadTimeslotsStatus();
+    
+    // Обработчик для кнопки редактирования в модальном окне
+    document.getElementById('editTimeslotBtn').addEventListener('click', function() {
+        const timeslotId = this.dataset.timeslotId;
+        if (timeslotId) {
+            window.location.href = `/manager/timeslots/${timeslotId}/edit`;
+        }
+    });
+    
+    // Обработчик для кнопки добавления сотрудника в план
+    document.getElementById('addEmployeeBtn').addEventListener('click', function() {
+        const timeslotId = this.dataset.timeslotId;
+        if (timeslotId) {
+            showAddEmployeeModal(timeslotId);
+        }
+    });
+});
+
+// Обработка клавиатурных сокращений
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey || e.metaKey) {
+        switch(e.key) {
+            case 'n': // Ctrl+N - новый тайм-слот
+                e.preventDefault();
+                window.location.href = '/manager/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create';
+                break;
+            case 'o': // Ctrl+O - новый объект
+                e.preventDefault();
+                window.location.href = '/manager/objects/create';
+                break;
+        }
+    }
+});
+
+// Функция для показа модального окна добавления сотрудника
+function showAddEmployeeModal(timeslotId) {
+    // Получаем объект тайм-слота для определения ID объекта
+    const timeslotElement = document.querySelector(`[data-timeslot-id="${timeslotId}"]`);
+    const objectId = timeslotElement ? timeslotElement.dataset.objectId : null;
+    
+    if (!objectId) {
+        showNotification('Ошибка: не удалось определить объект тайм-слота', 'error');
+        return;
+    }
+    
+    // Создаем модальное окно для выбора сотрудника
+    const modalHtml = `
+        <div class="modal fade" id="addEmployeeToTimeslotModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-person-plus"></i> Добавить сотрудника в план
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="employeeSelectModal" class="form-label">Выберите сотрудника *</label>
+                            <select class="form-select" id="employeeSelectModal" required>
+                                <option value="">Загрузка сотрудников...</option>
+                            </select>
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Совет:</strong> Вы также можете перетащить сотрудника из правой панели на тайм-слот!
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-success" onclick="addEmployeeToTimeslot(${timeslotId})">
+                            <i class="bi bi-check-lg"></i> Добавить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Удаляем существующее модальное окно, если есть
+    const existingModal = document.getElementById('addEmployeeToTimeslotModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Добавляем новое модальное окно
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Загружаем список сотрудников для конкретного объекта
+    loadEmployeesForModal(objectId);
+    
+    // Показываем модальное окно
+    const modal = new bootstrap.Modal(document.getElementById('addEmployeeToTimeslotModal'));
+    modal.show();
+}
+
+// Загрузка сотрудников для модального окна
+async function loadEmployeesForModal(objectId) {
+    try {
+        const response = await fetch(`/manager/api/employees/for-object/${objectId}`, {
+            credentials: 'include'
+        });
+        const employees = await response.json();
+        
+        const select = document.getElementById('employeeSelectModal');
+        if (employees.length === 0) {
+            select.innerHTML = '<option value="">Нет сотрудников с доступом к этому объекту</option>';
+        } else {
+            select.innerHTML = '<option value="">Выберите сотрудника</option>' + 
+                employees.map(emp => `<option value="${emp.id}">${emp.name}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки сотрудников:', error);
+        const select = document.getElementById('employeeSelectModal');
+        select.innerHTML = '<option value="">Ошибка загрузки сотрудников</option>';
+    }
+}
+
+// Добавление сотрудника в тайм-слот
+async function addEmployeeToTimeslot(timeslotId) {
+    const employeeId = document.getElementById('employeeSelectModal').value;
+    
+    if (!employeeId) {
+        showNotification('Выберите сотрудника', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/manager/api/calendar/plan-shift', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                timeslot_id: timeslotId,
+                employee_id: parseInt(employeeId)
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Закрываем модальное окно
+            bootstrap.Modal.getInstance(document.getElementById('addEmployeeToTimeslotModal')).hide();
+            
+            // Показываем уведомление
+            showNotification(result.message, 'success');
+            
+            // Обновляем страницу
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            // Показываем конкретное сообщение об ошибке
+            let errorMessage = result.message || 'Ошибка планирования смены';
+            if (result.detail) {
+                errorMessage = result.detail;
+            }
+            showNotification(errorMessage, 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка планирования смены:', error);
+        showNotification('Ошибка планирования смены', 'error');
+    }
+}
+
+// Функция для показа уведомлений
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 3000);
+}
+</script>
+{% endblock %}
