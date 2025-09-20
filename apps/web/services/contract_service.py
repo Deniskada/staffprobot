@@ -1114,38 +1114,52 @@ class ContractService:
     
     async def terminate_contract(self, contract_id: int, owner_id: int, reason: str) -> bool:
         """Расторжение договора."""
-        async with get_async_session() as session:
-            query = select(Contract).where(
-                and_(
-                    Contract.id == contract_id,
-                    Contract.owner_id == owner_id
+        try:
+            logger.info(f"Starting contract termination: contract_id={contract_id}, owner_id={owner_id}, reason={reason}")
+            async with get_async_session() as session:
+                query = select(Contract).where(
+                    and_(
+                        Contract.id == contract_id,
+                        Contract.owner_id == owner_id
+                    )
                 )
-            )
-            result = await session.execute(query)
-            contract = result.scalar_one_or_none()
-            
-            if not contract:
-                return False
-            
-            contract.status = "terminated"
-            contract.is_active = False
-            contract.terminated_at = datetime.now()
-            
-            # Создаем версию с причиной расторжения
-            await self._create_contract_version(
-                contract_id,
-                contract.content,
-                f"Договор расторгнут. Причина: {reason}",
-                owner_id
-            )
-            
-            await session.commit()
-            
-            # Проверяем, есть ли у сотрудника другие активные договоры
-            await self._check_and_update_employee_role(session, contract.employee_id)
-            
-            logger.info(f"Terminated contract: {contract.id}")
-            return True
+                result = await session.execute(query)
+                contract = result.scalar_one_or_none()
+                
+                if not contract:
+                    logger.error(f"Contract {contract_id} not found for owner {owner_id}")
+                    return False
+                
+                logger.info(f"Found contract: {contract.id}, status: {contract.status}, is_active: {contract.is_active}")
+                
+                contract.status = "terminated"
+                contract.is_active = False
+                contract.terminated_at = datetime.now()
+                
+                logger.info(f"Updated contract status to terminated")
+                
+                # Создаем версию с причиной расторжения
+                logger.info(f"Creating contract version")
+                await self._create_contract_version(
+                    contract_id,
+                    contract.content,
+                    f"Договор расторгнут. Причина: {reason}",
+                    owner_id
+                )
+                
+                logger.info(f"Committing contract changes")
+                await session.commit()
+                
+                # Проверяем, есть ли у сотрудника другие активные договоры
+                logger.info(f"Checking employee role for user {contract.employee_id}")
+                await self._check_and_update_employee_role(session, contract.employee_id)
+                
+                logger.info(f"Successfully terminated contract: {contract.id}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error in terminate_contract: {e}", exc_info=True)
+            return False
 
     async def activate_contract_by_telegram_id(self, contract_id: int, owner_telegram_id: int) -> bool:
         """Активация договора по telegram_id владельца."""
