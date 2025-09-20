@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database.session import get_db_session
@@ -40,6 +40,10 @@ async def manager_dashboard(
 ):
     """Дашборд управляющего."""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
@@ -146,6 +150,10 @@ async def manager_objects(
 ):
     """Список объектов управляющего."""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
@@ -198,6 +206,10 @@ async def manager_object_detail(
 ):
     """Детальная информация об объекте."""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
@@ -247,6 +259,10 @@ async def manager_employees(
 ):
     """Список сотрудников управляющего."""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
@@ -273,6 +289,10 @@ async def manager_calendar(
 ):
     """Календарь управляющего."""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
@@ -298,6 +318,10 @@ async def manager_reports(
 ):
     """Отчеты управляющего."""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
