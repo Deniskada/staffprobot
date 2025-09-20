@@ -1140,7 +1140,7 @@ function handleObjectDropOnDay(dayElement, object) {
     }
     
     // Показываем модальное окно для создания тайм-слота
-    showQuickCreateTimeslotModal(object, date);
+    showQuickCreateForm(object, date);
 }
 
 function handleEmployeeDropOnTimeslot(timeslotElement, employee) {
@@ -1195,83 +1195,34 @@ async function planShiftForEmployee(timeslotId, employeeId) {
     }
 }
 
-function showQuickCreateTimeslotModal(object, date) {
-    // Создаем модальное окно для быстрого создания тайм-слота
-    const modal = document.createElement('div');
-    modal.className = 'modal fade';
-    modal.innerHTML = `
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="bi bi-lightning"></i> Быстрое создание тайм-слота
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="quickCreateTimeslotForm">
-                        <input type="hidden" name="object_id" value="${object.id}">
-                        <input type="hidden" name="slot_date" value="${date}">
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Объект *</label>
-                            <input type="text" class="form-control" value="${object.name}" readonly>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Дата *</label>
-                            <input type="date" class="form-control" value="${date}" readonly>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Начало *</label>
-                                    <input type="time" class="form-control" name="start_time" value="09:00" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Окончание *</label>
-                                    <input type="time" class="form-control" name="end_time" value="21:00" required>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Ставка (₽/час) *</label>
-                            <input type="number" class="form-control" name="hourly_rate" value="${object.hourlyRate}" min="1" required>
-                        </div>
-                        
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle"></i>
-                            <strong>Совет:</strong> Перетащите объект из панели на календарь для еще более быстрого создания!
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="button" class="btn btn-primary" onclick="submitQuickCreateTimeslot()">
-                        <i class="bi bi-check-lg"></i> Создать
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
+function showQuickCreateForm(object = null, date = null) {
+    const modal = new bootstrap.Modal(document.getElementById('quickCreateModal'));
     
-    document.body.appendChild(modal);
-    const bsModal = new bootstrap.Modal(modal);
-    bsModal.show();
+    if (object) {
+        document.getElementById('quickObject').value = object.id;
+        document.getElementById('quickRate').value = object.hourlyRate;
+        document.getElementById('quickStartTime').value = object.openingTime;
+        document.getElementById('quickEndTime').value = object.closingTime;
+    }
     
-    // Удаляем модальное окно после закрытия
-    modal.addEventListener('hidden.bs.modal', function() {
-        modal.remove();
-    });
+    if (date) {
+        document.getElementById('quickDate').value = date;
+    } else {
+        document.getElementById('quickDate').value = new Date().toISOString().split('T')[0];
+    }
+    
+    modal.show();
 }
 
-async function submitQuickCreateTimeslot() {
-    const form = document.getElementById('quickCreateTimeslotForm');
-    const formData = new FormData(form);
+async function createQuickTimeslot() {
+    const form = document.getElementById('quickCreateForm');
+    const formData = new FormData();
+    
+    formData.append('object_id', document.getElementById('quickObject').value);
+    formData.append('slot_date', document.getElementById('quickDate').value);
+    formData.append('start_time', document.getElementById('quickStartTime').value);
+    formData.append('end_time', document.getElementById('quickEndTime').value);
+    formData.append('hourly_rate', document.getElementById('quickRate').value);
     
     try {
         const response = await fetch('/manager/calendar/api/quick-create-timeslot', {
@@ -1283,8 +1234,7 @@ async function submitQuickCreateTimeslot() {
         
         if (result.success) {
             // Закрываем модальное окно
-            const modal = bootstrap.Modal.getInstance(document.querySelector('.modal'));
-            modal.hide();
+            bootstrap.Modal.getInstance(document.getElementById('quickCreateModal')).hide();
             
             // Показываем уведомление
             showNotification('Тайм-слот успешно создан!', 'success');
