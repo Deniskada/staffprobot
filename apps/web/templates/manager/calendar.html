@@ -193,23 +193,6 @@
     color: #007bff;
 }
 
-.quick-actions {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 1000;
-}
-
-.quick-actions .btn {
-    margin: 5px;
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-}
 
 /* Drag & Drop стили */
 .calendar-day.drop-zone {
@@ -465,20 +448,6 @@
     </div>
 </div>
 
-<!-- Быстрые действия -->
-<div class="quick-actions">
-    <a href="/manager/objects/create" class="btn btn-primary" title="Создать объект">
-        <i class="bi bi-plus-lg"></i>
-    </a>
-    <a href="/manager/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create" 
-       class="btn btn-success" title="Создать тайм-слот">
-        <i class="bi bi-clock"></i>
-    </a>
-    <a href="/manager/calendar/analysis{% if selected_object_id %}?object_id={{ selected_object_id }}{% endif %}" 
-       class="btn btn-info" title="Анализ пробелов">
-        <i class="bi bi-graph-up"></i>
-    </a>
-</div>
 
 <!-- Модальное окно для деталей тайм-слота -->
 <div class="modal fade" id="timeslotModal" tabindex="-1">
