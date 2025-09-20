@@ -1772,6 +1772,8 @@ async def api_employees_for_object(object_id: int, request: Request):
             employees_with_access = []
             added_employee_ids = set()  # Для отслеживания уже добавленных сотрудников
             
+            logger.info(f"Getting employees for object {object_id}")
+            
             # Получаем все активные договоры, которые содержат наш объект
             contracts_query = select(Contract).where(
                 Contract.status == "active",
@@ -1780,16 +1782,23 @@ async def api_employees_for_object(object_id: int, request: Request):
             contracts_result = await session.execute(contracts_query)
             all_contracts = contracts_result.scalars().all()
             
+            logger.info(f"Found {len(all_contracts)} total active contracts")
+            
             # Фильтруем договоры, которые содержат наш объект
             relevant_contracts = []
             for contract in all_contracts:
                 if contract.allowed_objects:
                     allowed_objects = contract.allowed_objects if isinstance(contract.allowed_objects, list) else json.loads(contract.allowed_objects)
+                    logger.info(f"Contract {contract.id}: employee_id={contract.employee_id}, owner_id={contract.owner_id}, allowed_objects={allowed_objects}")
                     if object_id in allowed_objects:
                         relevant_contracts.append(contract)
+                        logger.info(f"Contract {contract.id} is relevant for object {object_id}")
+            
+            logger.info(f"Found {len(relevant_contracts)} relevant contracts for object {object_id}")
             
             # Получаем сотрудников из релевантных договоров
             for contract in relevant_contracts:
+                logger.info(f"Processing contract {contract.id} for employee {contract.employee_id}")
                 if contract.employee_id not in added_employee_ids:
                     # Получаем данные сотрудника
                     employee_query = select(User).where(User.id == contract.employee_id)
@@ -1797,6 +1806,7 @@ async def api_employees_for_object(object_id: int, request: Request):
                     employee = employee_result.scalar_one_or_none()
                     
                     if employee and employee.role == "employee":
+                        logger.info(f"Adding employee {employee.id} ({employee.username}) to list")
                         employees_with_access.append({
                             "id": employee.id,
                             "name": f"{employee.first_name or ''} {employee.last_name or ''}".strip() or employee.username,
@@ -1806,6 +1816,12 @@ async def api_employees_for_object(object_id: int, request: Request):
                             "telegram_id": employee.telegram_id
                         })
                         added_employee_ids.add(employee.id)
+                    else:
+                        logger.info(f"Employee {contract.employee_id} not found or not an employee")
+                else:
+                    logger.info(f"Employee {contract.employee_id} already added, skipping")
+            
+            logger.info(f"Final result: {len(employees_with_access)} employees for object {object_id}")
             
             return employees_with_access
             
