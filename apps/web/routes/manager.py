@@ -554,13 +554,13 @@ async def manager_employees(
                 # Получаем всех сотрудников, работающих на доступных объектах
                 from sqlalchemy import func, or_, text, cast, String, JSON, any_, exists
                 
-                # Максимально простой подход - используем EXISTS с подзапросом
+                # Максимально простой подход - используем json_array_elements в FROM
                 employees_query = select(User).join(
                     Contract, User.id == Contract.employee_id
+                ).join(
+                    func.json_array_elements(Contract.allowed_objects).alias('obj'),
+                    func.json_array_elements(Contract.allowed_objects).in_(object_ids)
                 ).where(
-                    exists().where(
-                        func.json_array_elements(Contract.allowed_objects).in_(object_ids)
-                    ),
                     Contract.is_active == True
                 ).distinct()
                 
