@@ -246,7 +246,7 @@ async def manager_object_detail(
                     object_permission = permission
                     break
             
-            return templates.TemplateResponse("manager/object_detail.html", {
+            return templates.TemplateResponse("manager/objects/detail.html", {
                 "request": request,
                 "current_user": current_user,
                 "object": obj,
