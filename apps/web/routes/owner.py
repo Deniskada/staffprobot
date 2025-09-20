@@ -1778,7 +1778,13 @@ async def api_employees_for_object(object_id: int, request: Request):
             employees = employees_result.scalars().all()
             
             employees_with_access = []
+            added_employee_ids = set()  # Для отслеживания уже добавленных сотрудников
+            
             for emp in employees:
+                # Пропускаем, если сотрудник уже добавлен
+                if emp.id in added_employee_ids:
+                    continue
+                    
                 # Получаем договоры сотрудника
                 contract_query = select(Contract).where(
                     Contract.employee_id == emp.id,
@@ -1801,6 +1807,7 @@ async def api_employees_for_object(object_id: int, request: Request):
                                 "is_active": emp.is_active,
                                 "telegram_id": emp.telegram_id
                             })
+                            added_employee_ids.add(emp.id)  # Помечаем сотрудника как добавленного
                             break  # Если нашли доступ, выходим из цикла по договорам
             
             return employees_with_access
