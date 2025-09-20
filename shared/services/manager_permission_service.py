@@ -247,6 +247,8 @@ class ManagerPermissionService:
     async def get_manager_contracts_for_user(self, user_id: int) -> List[Contract]:
         """Получение договоров управляющего для пользователя."""
         try:
+            logger.info(f"Getting manager contracts for user {user_id}")
+            
             query = select(Contract).where(
                 and_(
                     Contract.employee_id == user_id,
@@ -255,31 +257,41 @@ class ManagerPermissionService:
                 )
             )
             
+            logger.info(f"Executing query: {query}")
             result = await self.session.execute(query)
-            return result.scalars().all()
+            contracts = result.scalars().all()
+            logger.info(f"Found {len(contracts)} manager contracts for user {user_id}")
+            
+            return contracts
             
         except Exception as e:
-            logger.error(f"Failed to get manager contracts for user {user_id}: {e}")
+            logger.error(f"Failed to get manager contracts for user {user_id}: {e}", exc_info=True)
             return []
     
     async def get_user_accessible_objects(self, user_id: int) -> List[Object]:
         """Получение всех объектов, доступных пользователю как управляющему."""
         try:
+            logger.info(f"Getting accessible objects for user {user_id}")
+            
             # Получаем договоры управляющего
             manager_contracts = await self.get_manager_contracts_for_user(user_id)
+            logger.info(f"Found {len(manager_contracts)} manager contracts for user {user_id}")
             
             accessible_objects = []
             for contract in manager_contracts:
+                logger.info(f"Getting objects for contract {contract.id}")
                 objects = await self.get_accessible_objects(contract.id)
+                logger.info(f"Found {len(objects)} objects for contract {contract.id}")
                 accessible_objects.extend(objects)
             
             # Убираем дубликаты
             unique_objects = list({obj.id: obj for obj in accessible_objects}.values())
+            logger.info(f"Total unique accessible objects: {len(unique_objects)}")
             
             return unique_objects
             
         except Exception as e:
-            logger.error(f"Failed to get accessible objects for user {user_id}: {e}")
+            logger.error(f"Failed to get accessible objects for user {user_id}: {e}", exc_info=True)
             return []
     
     async def bulk_create_permissions(
