@@ -979,6 +979,8 @@ class ContractService:
                 "start_date": contract.start_date,
                 "end_date": contract.end_date,
                 "status": contract.status,
+                "is_manager": contract.is_manager,
+                "manager_permissions": contract.manager_permissions,
                 "allowed_objects": contract.allowed_objects or [],
                 "allowed_objects_info": allowed_objects_info,
                 "created_at": contract.created_at,
