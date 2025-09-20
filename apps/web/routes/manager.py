@@ -2050,6 +2050,7 @@ async def manager_shifts_list(
                 })
             
             # Базовый запрос для смен
+            from sqlalchemy import select
             shifts_query = select(Shift).options(
                 selectinload(Shift.object),
                 selectinload(Shift.user)
