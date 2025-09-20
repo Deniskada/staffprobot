@@ -515,26 +515,38 @@ async def manager_employees(
 ):
     """Список сотрудников управляющего."""
     try:
+        logger.info("Starting manager_employees function")
+        
         # Проверяем, что current_user не является RedirectResponse
         if isinstance(current_user, RedirectResponse):
+            logger.info("Current user is RedirectResponse, redirecting")
             return current_user
         
         async with get_async_session() as db:
+            logger.info("Got database session")
+            
             user_id = await get_user_id_from_current_user(current_user, db)
+            logger.info(f"User ID: {user_id}")
             if not user_id:
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
             # Получаем сервисы
+            logger.info("Creating services")
             permission_service = ManagerPermissionService(db)
             login_service = RoleBasedLoginService(db)
             
             # Получаем доступные объекты управляющего
+            logger.info("Getting accessible objects")
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            logger.info(f"Accessible objects count: {len(accessible_objects)}")
+            logger.info(f"Accessible objects: {[obj.id for obj in accessible_objects]}")
+            
             object_ids = [obj.id for obj in accessible_objects]
             
             # Получаем сотрудников, работающих на доступных объектах
             employees = []
             if object_ids:
+                logger.info(f"Getting employees for object IDs: {object_ids}")
                 from sqlalchemy import select, distinct
                 from domain.entities.contract import Contract
                 from domain.entities.user import User
@@ -545,9 +557,9 @@ async def manager_employees(
                 # Создаем условия для каждого объекта
                 object_conditions = []
                 for obj_id in object_ids:
-                    object_conditions.append(
-                        Contract.allowed_objects.op('@>')(cast(f'[{obj_id}]', String))  # JSON содержит массив с объектом
-                    )
+                    condition = Contract.allowed_objects.op('@>')(cast(f'[{obj_id}]', String))
+                    object_conditions.append(condition)
+                    logger.info(f"Created condition for object {obj_id}: {condition}")
                 
                 employees_query = select(User).join(
                     Contract, User.id == Contract.employee_id
@@ -556,13 +568,19 @@ async def manager_employees(
                     Contract.is_active == True
                 ).distinct()
                 
+                logger.info(f"Executing query: {employees_query}")
                 result = await db.execute(employees_query)
                 employees = result.scalars().all()
+                logger.info(f"Found {len(employees)} employees")
+            else:
+                logger.info("No accessible objects, returning empty employee list")
             
             # Получаем данные для переключения интерфейсов
-            login_service = RoleBasedLoginService(db)
+            logger.info("Getting available interfaces")
             available_interfaces = await login_service.get_available_interfaces(user_id)
+            logger.info(f"Available interfaces: {available_interfaces}")
             
+            logger.info("Rendering template")
             return templates.TemplateResponse("manager/employees.html", {
                 "request": request,
                 "current_user": current_user,
@@ -571,7 +589,7 @@ async def manager_employees(
             })
         
     except Exception as e:
-        logger.error(f"Error in manager employees: {e}")
+        logger.error(f"Error in manager employees: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
 
 
