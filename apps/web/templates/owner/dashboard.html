@@ -140,13 +140,58 @@
                     {% if recent_objects %}
                         <div class="list-group list-group-flush">
                             {% for object in recent_objects %}
-                            <div class="list-group-item d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="mb-1">{{ object.name }}</h6>
-                                    <small class="text-muted">{{ object.address }}</small>
-                                </div>
-                                <div class="text-end">
-                                    <span class="badge bg-success">{{ object.hourly_rate }}₽/час</span>
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">{{ object.name }}</h6>
+                                        <small class="text-muted">{{ object.address }}</small>
+                                        
+                                        {% if object.first_shift_start %}
+                                        <div class="mt-2">
+                                            <div class="row">
+                                                <div class="col-6">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-calendar-event"></i>
+                                                        Дата открытия:
+                                                    </small>
+                                                    <br>
+                                                    <small class="fw-bold">
+                                                        {{ object.first_shift_start.strftime('%d.%m.%Y') }}
+                                                    </small>
+                                                </div>
+                                                <div class="col-6">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-clock"></i>
+                                                        Начало смены:
+                                                    </small>
+                                                    <br>
+                                                    <small class="fw-bold">
+                                                        {{ object.first_shift_start.strftime('%H:%M') }}
+                                                    </small>
+                                                </div>
+                                            </div>
+                                            {% if object.first_name and object.last_name %}
+                                            <div class="mt-1">
+                                                <small class="text-muted">
+                                                    <i class="bi bi-person"></i>
+                                                    Сотрудник:
+                                                </small>
+                                                <br>
+                                                <small class="fw-bold">
+                                                    {{ object.first_name }} {{ object.last_name }}
+                                                </small>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        {% else %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">
+                                                <i class="bi bi-dash-circle"></i>
+                                                Смены сегодня нет
+                                            </small>
+                                        </div>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
                             {% endfor %}
