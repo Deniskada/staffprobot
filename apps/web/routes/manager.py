@@ -1909,14 +1909,15 @@ async def get_employees_for_object_manager(
                     if contract and contract.allowed_objects:
                         allowed_objects = contract.allowed_objects if isinstance(contract.allowed_objects, list) else json.loads(contract.allowed_objects)
                         if object_id in allowed_objects:
-                            employees_with_access.append({
-                                "id": emp.id,
-                                "name": f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username,
-                                "username": emp.username,
-                                "role": emp.role,
-                                "is_active": emp.is_active,
-                                "telegram_id": emp.telegram_id
-                            })
+                            employee_data = {
+                                "id": int(emp.id),
+                                "name": str(f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username or f"ID {emp.id}"),
+                                "username": str(emp.username or ""),
+                                "role": str(emp.role),
+                                "is_active": bool(emp.is_active),
+                                "telegram_id": int(emp.telegram_id) if emp.telegram_id else None
+                            }
+                            employees_with_access.append(employee_data)
                             added_employee_ids.add(emp.id)  # Помечаем сотрудника как добавленного
                             break  # Если нашли доступ, выходим из цикла по договорам
             
