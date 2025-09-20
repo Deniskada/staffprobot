@@ -1,0 +1,278 @@
+{% extends "manager/base_manager.html" %}
+
+{% block page_title %}Объекты{% endblock %}
+
+{% block manager_content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="h4 mb-0">
+                <i class="fas fa-building me-2"></i>
+                Управление объектами
+            </h2>
+            <div>
+                <button class="btn btn-outline-secondary" onclick="refreshObjects()">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    Обновить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Фильтры -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label">Поиск по названию</label>
+                        <input type="text" class="form-control" id="searchInput" placeholder="Введите название объекта...">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Статус</label>
+                        <select class="form-select" id="statusFilter">
+                            <option value="">Все объекты</option>
+                            <option value="active">Активные</option>
+                            <option value="inactive">Неактивные</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Права доступа</label>
+                        <select class="form-select" id="permissionFilter">
+                            <option value="">Все права</option>
+                            <option value="can_edit">Может редактировать</option>
+                            <option value="can_delete">Может удалять</option>
+                            <option value="can_manage_employees">Может управлять сотрудниками</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <button class="btn btn-primary" onclick="applyFilters()">
+                                <i class="fas fa-search me-1"></i>
+                                Применить
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="clearFilters()">
+                                <i class="fas fa-times me-1"></i>
+                                Очистить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список объектов -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Доступные объекты ({{ accessible_objects|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if accessible_objects %}
+                <div class="row" id="objectsList">
+                    {% for object in accessible_objects %}
+                    <div class="col-md-6 col-lg-4 mb-4 object-item" 
+                         data-name="{{ object.name|lower }}" 
+                         data-status="{{ 'active' if object.is_active else 'inactive' }}"
+                         data-permissions="{{ object_permissions[object.id]|tojson if object_permissions[object.id] else '{}' }}">
+                        <div class="object-card h-100">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <h6 class="mb-0">{{ object.name }}</h6>
+                                <div>
+                                    {% if object.is_active %}
+                                        <span class="badge bg-success">Активен</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Неактивен</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <p class="text-muted small mb-2">
+                                    <i class="fas fa-map-marker-alt me-1"></i>
+                                    {{ object.address or 'Адрес не указан' }}
+                                </p>
+                                <p class="text-muted small mb-2">
+                                    <i class="fas fa-clock me-1"></i>
+                                    {{ object.working_hours }}
+                                </p>
+                                <p class="text-muted small mb-2">
+                                    <i class="fas fa-ruble-sign me-1"></i>
+                                    {{ object.hourly_rate }} ₽/час
+                                </p>
+                                <p class="text-muted small mb-2">
+                                    <i class="fas fa-users me-1"></i>
+                                    Макс. расстояние: {{ object.max_distance_meters }}м
+                                </p>
+                            </div>
+                            
+                            <!-- Права на объект -->
+                            <div class="mb-3">
+                                <small class="text-muted fw-medium">Ваши права:</small>
+                                <div class="mt-1">
+                                    {% if object_permissions[object.id] %}
+                                        {% for permission, granted in object_permissions[object.id].items() %}
+                                        <span class="permission-badge {% if granted %}granted{% else %}denied{% endif %}">
+                                            {{ permission_names[permission] or permission }}
+                                        </span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted small">Права не определены</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <!-- Действия -->
+                            <div class="d-flex gap-2">
+                                <a href="/manager/objects/{{ object.id }}" class="btn btn-sm btn-outline-primary flex-fill">
+                                    <i class="fas fa-eye me-1"></i>
+                                    Подробнее
+                                </a>
+                                
+                                {% if object_permissions[object.id] and object_permissions[object.id].get('can_edit') %}
+                                <a href="/manager/objects/{{ object.id }}/edit" class="btn btn-sm btn-outline-success">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                {% endif %}
+                                
+                                {% if object_permissions[object.id] and object_permissions[object.id].get('can_delete') %}
+                                <button class="btn btn-sm btn-outline-danger" 
+                                        onclick="confirmDelete({{ object.id }}, '{{ object.name }}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-building fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">Нет доступных объектов</h5>
+                    <p class="text-muted">Обратитесь к владельцу для получения прав на объекты</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения удаления -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Подтверждение удаления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить объект <strong id="deleteObjectName"></strong>?</p>
+                <p class="text-danger small">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    Это действие нельзя отменить!
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Удалить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Фильтрация объектов
+    function applyFilters() {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const statusFilter = document.getElementById('statusFilter').value;
+        const permissionFilter = document.getElementById('permissionFilter').value;
+        
+        const objects = document.querySelectorAll('.object-item');
+        
+        objects.forEach(object => {
+            let show = true;
+            
+            // Поиск по названию
+            if (searchTerm && !object.dataset.name.includes(searchTerm)) {
+                show = false;
+            }
+            
+            // Фильтр по статусу
+            if (statusFilter && object.dataset.status !== statusFilter) {
+                show = false;
+            }
+            
+            // Фильтр по правам
+            if (permissionFilter) {
+                const permissions = JSON.parse(object.dataset.permissions);
+                if (!permissions[permissionFilter]) {
+                    show = false;
+                }
+            }
+            
+            object.style.display = show ? 'block' : 'none';
+        });
+    }
+    
+    function clearFilters() {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('statusFilter').value = '';
+        document.getElementById('permissionFilter').value = '';
+        
+        const objects = document.querySelectorAll('.object-item');
+        objects.forEach(object => {
+            object.style.display = 'block';
+        });
+    }
+    
+    function refreshObjects() {
+        location.reload();
+    }
+    
+    // Подтверждение удаления
+    function confirmDelete(objectId, objectName) {
+        document.getElementById('deleteObjectName').textContent = objectName;
+        document.getElementById('confirmDeleteBtn').onclick = function() {
+            deleteObject(objectId);
+        };
+        
+        const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        modal.show();
+    }
+    
+    function deleteObject(objectId) {
+        // Здесь будет AJAX запрос для удаления объекта
+        fetch(`/manager/objects/${objectId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Ошибка при удалении объекта');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка при удалении объекта');
+        });
+    }
+    
+    // Поиск в реальном времени
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('permissionFilter').addEventListener('change', applyFilters);
+</script>
+{% endblock %}

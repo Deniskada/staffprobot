@@ -38,6 +38,7 @@ class Object(Base):
     
     # Отношения
     owner = relationship("User", backref="owned_objects")
+    manager_permissions = relationship("ManagerObjectPermission", back_populates="object")
     # planning_templates = relationship("PlanningTemplate", back_populates="object")
     
     def __repr__(self) -> str:
