@@ -1176,19 +1176,26 @@ async function planShiftForEmployee(timeslotId, employeeId) {
             return;
         }
         
+        console.log('slotData:', slotData);
+        console.log('object_id:', slotData.object_id);
+        
+        const requestData = {
+            timeslot_id: timeslotId,
+            employee_id: employeeId,
+            object_id: slotData.object_id,
+            planned_start: slotData.start_time,
+            planned_end: slotData.end_time,
+            hourly_rate: slotData.hourly_rate || 500
+        };
+        
+        console.log('Sending request data:', requestData);
+        
         const response = await fetch('/manager/api/calendar/plan-shift', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                timeslot_id: timeslotId,
-                employee_id: employeeId,
-                object_id: slotData.object_id,
-                planned_start: slotData.start_time,
-                planned_end: slotData.end_time,
-                hourly_rate: slotData.hourly_rate || 500
-            })
+            body: JSON.stringify(requestData)
         });
         
         const result = await response.json();
