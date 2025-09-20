@@ -554,17 +554,11 @@ async def manager_employees(
                 # Получаем всех сотрудников, работающих на доступных объектах
                 from sqlalchemy import func, or_, text, cast, String, JSON
                 
-                # Создаем условия для каждого объекта
-                object_conditions = []
-                for obj_id in object_ids:
-                    condition = Contract.allowed_objects.op('@>')(cast(f'[{obj_id}]', JSON))
-                    object_conditions.append(condition)
-                    logger.info(f"Created condition for object {obj_id}: {condition}")
-                
+                # Используем простой подход - проверяем, что объект есть в массиве allowed_objects
                 employees_query = select(User).join(
                     Contract, User.id == Contract.employee_id
                 ).where(
-                    or_(*object_conditions),  # Любой из объектов должен быть в allowed_objects
+                    Contract.allowed_objects.op('?|')(object_ids),  # Проверяем пересечение массивов
                     Contract.is_active == True
                 ).distinct()
                 
