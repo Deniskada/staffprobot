@@ -576,9 +576,21 @@ function getStatusInfo(slotData) {
     if (slotData.status === 'empty') {
         info = `<span class="badge bg-light text-dark">Пустой слот (${slotData.availability})</span>`;
     } else if (slotData.status === 'planned') {
-        info = `<span class="badge bg-warning">Запланировано: ${slotData.availability}</span>`;
+        // Показываем информацию о запланированных сменах
+        let plannedInfo = `<span class="badge bg-warning">Запланировано: ${slotData.availability}</span>`;
+        if (slotData.scheduled_shifts && slotData.scheduled_shifts.length > 0) {
+            const shift = slotData.scheduled_shifts[0];
+            plannedInfo += `<br><small class="text-muted">${shift.user_name}</small>`;
+        }
+        info = plannedInfo;
     } else if (slotData.status === 'confirmed') {
-        info = `<span class="badge bg-info">Подтверждено: ${slotData.availability}</span>`;
+        // Показываем информацию о подтвержденных сменах
+        let confirmedInfo = `<span class="badge bg-info">Подтверждено: ${slotData.availability}</span>`;
+        if (slotData.scheduled_shifts && slotData.scheduled_shifts.length > 0) {
+            const shift = slotData.scheduled_shifts[0];
+            confirmedInfo += `<br><small class="text-muted">${shift.user_name}</small>`;
+        }
+        info = confirmedInfo;
     } else if (slotData.status === 'completed') {
         // Показываем информацию об отработанных сменах
         let completedInfo = `<span class="badge bg-success">Отработано: ${slotData.actual_shifts.length}</span>`;

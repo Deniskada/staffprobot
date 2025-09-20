@@ -1370,15 +1370,25 @@ async def get_timeslots_status_manager(
             
             logger.info(f"Found {len(actual_shifts)} actual shifts for manager")
             
+            # Получаем информацию о пользователях для запланированных смен
+            user_ids = list(set(shift.user_id for shift in scheduled_shifts))
+            users_query = select(User).where(User.id.in_(user_ids))
+            users_result = await db.execute(users_query)
+            users = {user.id: user for user in users_result.scalars().all()}
+            
             # Создаем карту запланированных смен по time_slot_id
             scheduled_shifts_map = {}
             scheduled_by_object_date = {}
             for shift in scheduled_shifts:
+                user = users.get(shift.user_id)
+                user_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {shift.user_id}"
+                
                 if shift.time_slot_id:
                     scheduled_shifts_map.setdefault(shift.time_slot_id, [])
                     scheduled_shifts_map[shift.time_slot_id].append({
                         "id": shift.id,
                         "user_id": shift.user_id,
+                        "user_name": user_name,
                         "status": shift.status,
                         "start_time": shift.planned_start.time().strftime("%H:%M"),
                         "end_time": shift.planned_end.time().strftime("%H:%M"),
@@ -1430,9 +1440,12 @@ async def get_timeslots_status_manager(
                             overlaps_sched.append(sh)
                     if overlaps_sched:
                         for sh in overlaps_sched:
+                            user = users.get(sh.user_id)
+                            user_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {sh.user_id}"
                             scheduled_shifts.append({
                                 "id": sh.id,
                                 "user_id": sh.user_id,
+                                "user_name": user_name,
                                 "status": sh.status,
                                 "start_time": sh.planned_start.time().strftime("%H:%M"),
                                 "end_time": sh.planned_end.time().strftime("%H:%M"),
@@ -1780,7 +1793,8 @@ async def get_employees_for_manager(
                     "last_name": emp.last_name,
                     "username": emp.username,
                     "phone": emp.phone,
-                    "is_active": emp.is_active
+                    "is_active": emp.is_active,
+                    "name": f"{emp.first_name} {emp.last_name or ''}".strip() or emp.username or f"ID {emp.id}"
                 })
             
             return employees_data
@@ -1872,7 +1886,8 @@ async def get_employees_for_object_manager(
                     "last_name": emp.last_name,
                     "username": emp.username,
                     "phone": emp.phone,
-                    "is_active": emp.is_active
+                    "is_active": emp.is_active,
+                    "name": f"{emp.first_name} {emp.last_name or ''}".strip() or emp.username or f"ID {emp.id}"
                 })
             
             return employees_data
