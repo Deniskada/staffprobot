@@ -569,7 +569,17 @@ async function createQuickTimeslot() {
             showNotification('Тайм-слот успешно создан!', 'success');
             
             // Закрываем модальное окно
-            closeQuickCreateModal();
+            const modalElement = document.getElementById('quickCreateModal');
+            if (modalElement) {
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) {
+                    modal.hide();
+                } else {
+                    // Если экземпляр не найден, создаем новый и сразу закрываем
+                    const newModal = new bootstrap.Modal(modalElement);
+                    newModal.hide();
+                }
+            }
             
             // Обновляем страницу
             setTimeout(() => {
@@ -632,11 +642,20 @@ function closeQuickCreateModal() {
     }
 }
 
-// Добавляем обработчик для кнопки "Отмена"
+// Добавляем обработчики для кнопок закрытия модального окна
 document.addEventListener('DOMContentLoaded', function() {
-    const cancelButton = document.querySelector('[data-bs-dismiss="modal"]');
+    // Обработчик для кнопки "Отмена"
+    const cancelButton = document.querySelector('.modal-footer [data-bs-dismiss="modal"]');
     if (cancelButton) {
         cancelButton.addEventListener('click', function() {
+            closeQuickCreateModal();
+        });
+    }
+    
+    // Обработчик для кнопки закрытия (крестик)
+    const closeButton = document.querySelector('.modal-header [data-bs-dismiss="modal"]');
+    if (closeButton) {
+        closeButton.addEventListener('click', function() {
             closeQuickCreateModal();
         });
     }
