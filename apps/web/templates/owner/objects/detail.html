@@ -65,6 +65,16 @@
                                             {{ object.max_distance }} м
                                         </dd>
                                         
+                                        <dt class="col-sm-4">Автозакрытие:</dt>
+                                        <dd class="col-sm-8">
+                                            <i class="bi bi-clock text-muted"></i>
+                                            {% if object.auto_close_minutes > 0 %}
+                                                {{ object.auto_close_minutes }} мин
+                                            {% else %}
+                                                <span class="text-muted">Отключено</span>
+                                            {% endif %}
+                                        </dd>
+                                        
                                         <dt class="col-sm-4">Статус:</dt>
                                         <dd class="col-sm-8">
                                             {% if object.is_active %}
