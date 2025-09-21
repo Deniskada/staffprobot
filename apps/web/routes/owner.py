@@ -705,9 +705,56 @@ async def owner_calendar(
                             "notes": slot.notes or ""
                         })
             
+            # Получаем смены для выбранного объекта или всех объектов
+            shifts_data = []
+            try:
+                from sqlalchemy import select, and_
+                from domain.entities.shift import Shift
+                from domain.entities.user import User
+                
+                # Получаем владельца по telegram_id
+                owner_q = select(User).where(User.telegram_id == owner_telegram_id)
+                owner = (await session.execute(owner_q)).scalar_one_or_none()
+                if owner:
+                    # Получаем смены за месяц
+                    start_date = date(year, month, 1)
+                    end_date = date(year, month, 28) + timedelta(days=4)  # До конца месяца
+                    
+                    shifts_query = select(Shift).where(
+                        and_(
+                            Shift.object_id.in_([obj.id for obj in objects]),
+                            Shift.start_time >= datetime.combine(start_date, time.min),
+                            Shift.start_time <= datetime.combine(end_date, time.max)
+                        )
+                    )
+                    shifts = (await session.execute(shifts_query)).scalars().all()
+                    
+                    for shift in shifts:
+                        # Находим объект для смены
+                        shift_object = next((obj for obj in objects if obj.id == shift.object_id), None)
+                        object_name = shift_object.name if shift_object else "Неизвестный объект"
+                        
+                        shifts_data.append({
+                            "id": shift.id,
+                            "object_id": shift.object_id,
+                            "object_name": object_name,
+                            "date": shift.start_time.date(),
+                            "start_time": shift.start_time.strftime("%H:%M"),
+                            "end_time": shift.end_time.strftime("%H:%M") if shift.end_time else "",
+                            "employee_name": shift.user.name if shift.user else "Неизвестно",
+                            "status": shift.status,
+                            "total_hours": float(shift.total_hours) if shift.total_hours else 0,
+                            "total_payment": float(shift.total_payment) if shift.total_payment else 0
+                        })
+                    
+                    logger.info(f"Loaded {len(shifts_data)} shifts for calendar")
+            except Exception as e:
+                logger.warning(f"Could not load shifts for calendar: {e}")
+                shifts_data = []
+            
             # Создаем календарную сетку
-            logger.info(f"Creating calendar grid with {len(timeslots_data)} timeslots")
-            calendar_data = _create_calendar_grid(year, month, timeslots_data)
+            logger.info(f"Creating calendar grid with {len(timeslots_data)} timeslots and {len(shifts_data)} shifts")
+            calendar_data = _create_calendar_grid(year, month, timeslots_data, shifts_data)
             logger.info(f"Calendar grid created with {len(calendar_data)} weeks")
             
             # Подготавливаем данные для шаблона
@@ -725,20 +772,19 @@ async def owner_calendar(
             
             # Получаем список сотрудников для drag&drop панели
             employees_list = []
-            # TODO: Реализовать загрузку сотрудников через ContractService
-            # try:
-            #     from apps.web.services.contract_service import ContractService
-            #     contract_service = ContractService(session)
-            #     employees = await contract_service.get_employees_by_owner(owner_telegram_id)
-            #     for emp in employees:
-            #         employees_list.append({
-            #             "id": emp.id,
-            #             "name": emp.name,
-            #             "role": "employee"
-            #         })
-            # except Exception as e:
-            #     logger.warning(f"Could not load employees for calendar: {e}")
-            #     employees_list = []
+            try:
+                from apps.web.services.contract_service import ContractService
+                contract_service = ContractService(session)
+                employees = await contract_service.get_employees_by_owner(owner_telegram_id)
+                for emp in employees:
+                    employees_list.append({
+                        "id": emp.id,
+                        "name": emp.name,
+                        "role": "employee"
+                    })
+            except Exception as e:
+                logger.warning(f"Could not load employees for calendar: {e}")
+                employees_list = []
             
             # Подготавливаем данные для shared компонентов календаря
             calendar_title = f"{RU_MONTHS[month]} {year}"
@@ -2216,9 +2262,12 @@ async def owner_calendar_api_timeslot_detail(
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
 
 
-def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
-    """Создает календарную сетку с тайм-слотами"""
+def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]], shifts: List[Dict[str, Any]] = None) -> List[List[Dict[str, Any]]]:
+    """Создает календарную сетку с тайм-слотами и сменами"""
     import calendar as py_calendar
+    if shifts is None:
+        shifts = []
+        
     # Получаем первый день месяца и количество дней
     first_day = date(year, month, 1)
     last_day = date(year, month, py_calendar.monthrange(year, month)[1])
@@ -2237,13 +2286,16 @@ def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]]
                 slot for slot in timeslots 
                 if slot["date"] == current_date and slot.get("is_active", True)
             ]
+            
+            day_shifts = [
+                shift for shift in shifts 
+                if shift["date"] == current_date
+            ]
+            
             if day_timeslots:
                 logger.info(f"Found {len(day_timeslots)} timeslots for {current_date}")
-            else:
-                # Отладка: проверим, какие даты есть в тайм-слотах
-                if current_date.month == month:  # Только для текущего месяца
-                    slot_dates = [slot["date"] for slot in timeslots if slot.get("is_active", True)]
-                    logger.info(f"No timeslots for {current_date}, available dates: {slot_dates[:5]}")  # Показываем первые 5
+            if day_shifts:
+                logger.info(f"Found {len(day_shifts)} shifts for {current_date}")
             
             week_data.append({
                 "date": current_date,
@@ -2252,7 +2304,9 @@ def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]]
                 "is_other_month": current_date.month != month,
                 "is_today": current_date == date.today(),
                 "timeslots": day_timeslots,
-                "timeslots_count": len(day_timeslots)
+                "timeslots_count": len(day_timeslots),
+                "shifts": day_shifts,
+                "shifts_count": len(day_shifts)
             })
             current_date += timedelta(days=1)
         
