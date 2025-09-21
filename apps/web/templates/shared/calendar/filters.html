@@ -20,7 +20,7 @@
                 <select id="employee-filter" class="form-select">
                     <option value="">Все сотрудники</option>
                     {% for employee in employees %}
-                    <option value="{{ employee.id }}">{{ employee.name }}</option>
+                    <option value="{{ employee.id }}" {% if selected_employee_id == employee.id %}selected{% endif %}>{{ employee.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -30,16 +30,16 @@
                 <label for="status-filter">Статус</label>
                 <select id="status-filter" class="form-select">
                     <option value="">Все статусы</option>
-                    <option value="available">Доступно</option>
-                    <option value="occupied">Занято</option>
-                    <option value="pending">Ожидает</option>
+                    <option value="available" {% if selected_status == 'available' %}selected{% endif %}>Доступно</option>
+                    <option value="occupied" {% if selected_status == 'occupied' %}selected{% endif %}>Занято</option>
+                    <option value="pending" {% if selected_status == 'pending' %}selected{% endif %}>Ожидает</option>
                 </select>
             </div>
         </div>
         <div class="col-md-3">
             <div class="filter-group">
                 <label for="date-filter">Дата</label>
-                <input type="date" id="date-filter" class="form-control">
+                <input type="date" id="date-filter" class="form-control" value="{{ selected_date or '' }}">
             </div>
         </div>
     </div>

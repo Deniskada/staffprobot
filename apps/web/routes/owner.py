@@ -632,7 +632,10 @@ async def owner_calendar(
     request: Request,
     year: int = Query(None),
     month: int = Query(None),
-    object_id: int = Query(None)
+    object_id: int = Query(None),
+    employee_id: int = Query(None),
+    status: str = Query(None),
+    date_filter: str = Query(None)
 ):
     """Календарный вид планирования"""
     current_user = await get_current_user(request)
@@ -782,6 +785,49 @@ async def owner_calendar(
                             "total_payment": 0
                         })
                     
+                    # Применяем фильтры
+                    if employee_id:
+                        # Фильтруем по сотруднику
+                        filtered_shifts = []
+                        for shift in shifts_data:
+                            # Получаем ID сотрудника из смены
+                            shift_employee_id = None
+                            if shift["id"].startswith("schedule_"):
+                                # Для запланированных смен нужно найти ID сотрудника
+                                schedule_id = int(shift["id"].replace("schedule_", ""))
+                                for schedule in schedules:
+                                    if schedule.id == schedule_id and schedule.user:
+                                        shift_employee_id = schedule.user.id
+                                        break
+                            else:
+                                # Для обычных смен
+                                for shift_obj in shifts:
+                                    if shift_obj.id == shift["id"] and shift_obj.user:
+                                        shift_employee_id = shift_obj.user.id
+                                        break
+                            
+                            if shift_employee_id == employee_id:
+                                filtered_shifts.append(shift)
+                        shifts_data = filtered_shifts
+                        logger.info(f"Filtered shifts by employee {employee_id}: {len(shifts_data)} shifts")
+                    
+                    if status:
+                        # Фильтруем по статусу
+                        if status == "available":
+                            # Показываем только свободные тайм-слоты (без смен)
+                            shifts_data = []
+                        elif status == "occupied":
+                            # Показываем только занятые слоты (со сменами)
+                            # Не фильтруем смены, но тайм-слоты будут скрыты в _create_calendar_grid
+                            pass
+                        elif status == "pending":
+                            # Показываем только запланированные смены
+                            shifts_data = [s for s in shifts_data if s["status"] == "planned"]
+                        else:
+                            # Фильтруем по конкретному статусу
+                            shifts_data = [s for s in shifts_data if s["status"] == status]
+                        logger.info(f"Filtered shifts by status {status}: {len(shifts_data)} shifts")
+                    
                     logger.info(f"Loaded {len(shifts_data)} total shifts (active + planned) for calendar")
             except Exception as e:
                 logger.warning(f"Could not load shifts for calendar: {e}")
@@ -883,6 +929,9 @@ async def owner_calendar(
                 "objects": objects_list,
                 "employees": employees_list,
                 "selected_object_id": object_id,
+                "selected_employee_id": employee_id,
+                "selected_status": status,
+                "selected_date": date_filter,
                 "selected_object": selected_object,
                 "timeslots": timeslots_data,
                 "prev_month": prev_month,
