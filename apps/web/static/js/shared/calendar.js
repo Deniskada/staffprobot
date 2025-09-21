@@ -61,7 +61,7 @@ class CalendarManager {
     }
     
     setupDragDrop() {
-        // Setup drag and drop for employee assignment
+        // Setup drag and drop for employee assignment and object creation
         const timeslots = document.querySelectorAll('.timeslot-item');
         timeslots.forEach(timeslot => {
             timeslot.addEventListener('dragover', (e) => {
@@ -77,10 +77,16 @@ class CalendarManager {
                 e.preventDefault();
                 timeslot.classList.remove('drag-over');
                 
-                const employeeId = e.dataTransfer.getData('text/plain');
+                const data = e.dataTransfer.getData('text/plain');
                 const timeslotId = timeslot.dataset.timeslotId;
                 
-                this.assignEmployeeToTimeslot(employeeId, timeslotId);
+                if (data.startsWith('employee:')) {
+                    const employeeId = data.replace('employee:', '');
+                    this.assignEmployeeToTimeslot(employeeId, timeslotId);
+                } else if (data.startsWith('object:')) {
+                    const objectId = data.replace('object:', '');
+                    this.createTimeslotFromObject(objectId, timeslotId);
+                }
             });
         });
     }
@@ -169,6 +175,11 @@ class CalendarManager {
     assignEmployeeToTimeslot(employeeId, timeslotId) {
         // This should be implemented by the parent template
         console.log('Assign employee:', employeeId, 'to timeslot:', timeslotId);
+    }
+    
+    createTimeslotFromObject(objectId, timeslotId) {
+        // This should be implemented by the parent template
+        console.log('Create timeslot from object:', objectId, 'timeslot:', timeslotId);
     }
     
     refresh() {

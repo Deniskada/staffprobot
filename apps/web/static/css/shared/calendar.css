@@ -262,6 +262,30 @@
     box-shadow: 0 4px 8px rgba(46, 125, 50, 0.4);
 }
 
+/* Drag and drop effects */
+.timeslot-item.drag-over {
+    background: #e3f2fd !important;
+    border-color: #2196f3 !important;
+    transform: scale(1.02);
+    box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+}
+
+.timeslot-item.drag-over::after {
+    content: "Отпустите для создания тайм-слота";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(33, 150, 243, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    z-index: 1000;
+    pointer-events: none;
+}
+
 .timeslot-available {
     background: #e8f5e8;
     border-color: #28a745;
