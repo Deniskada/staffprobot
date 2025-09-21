@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
 from shared.services.role_service import RoleService
 from shared.services.manager_permission_service import ManagerPermissionService
-from core.utils.timezone_helper import web_timezone_helper
+from apps.web.utils.timezone_utils import web_timezone_helper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from apps.web.middleware.role_middleware import require_manager_or_owner
 from apps.web.dependencies import get_current_user_dependency
