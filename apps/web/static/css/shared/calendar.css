@@ -211,6 +211,37 @@
     color: #155724;
 }
 
+/* New color indicators */
+.shift-planned {
+    background: #e3f2fd;
+    border-color: #2196f3;
+    color: #0d47a1;
+}
+
+/* Free timeslots - redish/negative tone */
+.timeslot-free {
+    background: #ffebee;
+    border-color: #f44336;
+    color: #c62828;
+}
+
+.timeslot-free:hover {
+    background: #ffcdd2;
+    border-color: #d32f2f;
+}
+
+/* Completed shifts - greenish/positive tone */
+.shift-completed-positive {
+    background: #e8f5e8;
+    border-color: #4caf50;
+    color: #1b5e20;
+}
+
+.shift-completed-positive:hover {
+    background: #c8e6c9;
+    border-color: #388e3c;
+}
+
 .timeslot-available {
     background: #e8f5e8;
     border-color: #28a745;
