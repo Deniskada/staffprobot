@@ -22,6 +22,11 @@
                     <i class="bi bi-funnel"></i> Фильтры
                 </button>
                 {% endif %}
+                {% if employees %}
+                <button type="button" class="btn btn-outline-success btn-sm" onclick="showEmployeesPanel()">
+                    <i class="bi bi-people"></i> Сотрудники
+                </button>
+                {% endif %}
                 {% if show_view_switcher %}
                 <div class="btn-group" role="group">
                     <button type="button" class="btn btn-outline-secondary btn-sm {% if view_type == 'month' %}active{% endif %}" onclick="switchView('month')">
@@ -39,6 +44,11 @@
     <!-- Calendar Filters -->
     {% if show_filters %}
     {% include 'shared/calendar/filters.html' %}
+    {% endif %}
+
+    <!-- Employees Panel -->
+    {% if employees %}
+    {% include 'shared/calendar/employees_panel.html' %}
     {% endif %}
 
     <div class="calendar-grid">
@@ -95,10 +105,6 @@
     </div>
 </div>
 
-<!-- Employees Panel -->
-{% if employees %}
-{% include 'shared/calendar/employees_panel.html' %}
-{% endif %}
 
 <!-- Calendar JavaScript -->
 <script>

@@ -720,13 +720,14 @@ async def owner_calendar(
                     start_date = date(year, month, 1)
                     end_date = date(year, month, 28) + timedelta(days=4)  # До конца месяца
                     
+                    from sqlalchemy.orm import selectinload
                     shifts_query = select(Shift).where(
                         and_(
                             Shift.object_id.in_([obj.id for obj in objects]),
                             Shift.start_time >= datetime.combine(start_date, time.min),
                             Shift.start_time <= datetime.combine(end_date, time.max)
                         )
-                    )
+                    ).options(selectinload(Shift.user))
                     shifts = (await session.execute(shifts_query)).scalars().all()
                     
                     for shift in shifts:
@@ -741,7 +742,7 @@ async def owner_calendar(
                             "date": shift.start_time.date(),
                             "start_time": shift.start_time.strftime("%H:%M"),
                             "end_time": shift.end_time.strftime("%H:%M") if shift.end_time else "",
-                            "employee_name": shift.user.name if shift.user else "Неизвестно",
+                            "employee_name": f"{shift.user.first_name} {shift.user.last_name}".strip() if shift.user else "Неизвестно",
                             "status": shift.status,
                             "total_hours": float(shift.total_hours) if shift.total_hours else 0,
                             "total_payment": float(shift.total_payment) if shift.total_payment else 0
@@ -774,12 +775,12 @@ async def owner_calendar(
             employees_list = []
             try:
                 from apps.web.services.contract_service import ContractService
-                contract_service = ContractService(session)
-                employees = await contract_service.get_employees_by_owner(owner_telegram_id)
+                contract_service = ContractService()
+                employees = await contract_service.get_contract_employees_by_telegram_id(owner_telegram_id)
                 for emp in employees:
                     employees_list.append({
-                        "id": emp.id,
-                        "name": emp.name,
+                        "id": emp["id"],
+                        "name": f"{emp['first_name']} {emp['last_name']}".strip(),
                         "role": "employee"
                     })
             except Exception as e:
