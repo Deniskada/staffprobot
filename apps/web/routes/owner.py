@@ -772,7 +772,6 @@ async def owner_calendar(
                         shifts_data.append({
                             "id": f"schedule_{schedule.id}",  # Префикс для отличия от обычных смен
                             "object_id": schedule.object_id,
-                            "time_slot_id": schedule.time_slot_id,  # ID тайм-слота для связи
                             "object_name": object_name,
                             "date": schedule.planned_start.date(),
                             "start_time": schedule.planned_start.strftime("%H:%M"),
@@ -2345,14 +2344,6 @@ def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]]
                             shift["status"] not in ['cancelled']):
                             has_related_shift = True
                             break
-                    
-                    # Дополнительно проверяем запланированные смены по time_slot_id
-                    if not has_related_shift:
-                        for shift in all_day_shifts:
-                            if (shift["status"] == "planned" and 
-                                shift.get("time_slot_id") == slot["id"]):
-                                has_related_shift = True
-                                break
                     
                     # Показываем тайм-слот только если нет связанных смен
                     if not has_related_shift:

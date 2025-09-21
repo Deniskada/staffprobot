@@ -1,0 +1,66 @@
+<!-- Модальное окно для быстрого создания -->
+<div class="modal fade" id="quickCreateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-lightning"></i> Быстрое создание тайм-слота
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateForm">
+                    <div class="mb-3">
+                        <label for="quickObject" class="form-label">Объект *</label>
+                        <select class="form-select" id="quickObject" required>
+                            <option value="">Выберите объект</option>
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quickDate" class="form-label">Дата *</label>
+                                <input type="date" class="form-control" id="quickDate" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quickRate" class="form-label">Ставка (₽/час) *</label>
+                                <input type="number" class="form-control" id="quickRate" min="1" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quickStartTime" class="form-label">Начало *</label>
+                                <input type="time" class="form-control" id="quickStartTime" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quickEndTime" class="form-label">Окончание *</label>
+                                <input type="time" class="form-control" id="quickEndTime" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="quickNotes" class="form-label">Примечания</label>
+                        <textarea class="form-control" id="quickNotes" rows="3" placeholder="Дополнительная информация..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg"></i> Отмена
+                </button>
+                <button type="button" class="btn btn-primary" onclick="createQuickTimeslot()">
+                    <i class="bi bi-check-lg"></i> Создать тайм-слот
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
