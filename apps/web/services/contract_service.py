@@ -1145,7 +1145,6 @@ class ContractService:
                 contract.end_date = contract_data["end_date"]
             if "allowed_objects" in contract_data:
                 contract.allowed_objects = contract_data["allowed_objects"]
-<<<<<<< HEAD
             if "status" in contract_data:
                 contract.status = contract_data["status"]
             if "is_active" in contract_data:
@@ -1157,8 +1156,6 @@ class ContractService:
             
             contract.updated_at = datetime.now()
             await session.commit()
-            
-<<<<<<< HEAD
             # Обновляем роли сотрудника при изменении статуса договора
             if (old_status != contract.status or old_is_active != contract.is_active):
                 if contract.status == "active" and contract.is_active:
@@ -1167,33 +1164,6 @@ class ContractService:
                 else:
                     # Договор стал неактивным - проверяем, есть ли другие активные договоры
                     await self._check_and_update_employee_role(session, contract.employee_id)
-=======
-            # Обновляем роли сотрудника
-            role_service = RoleService(session)
-            await role_service.update_roles_from_contracts(contract.employee_id)
-            
-            # Если это договор управляющего, обновляем права на объекты
-            if contract.is_manager and contract.manager_permissions and contract.allowed_objects:
-                permission_service = ManagerPermissionService(session)
-                
-                # Удаляем старые права
-                old_permissions = await permission_service.get_contract_permissions(contract.id)
-                for permission in old_permissions:
-                    await permission_service.delete_permission(permission.id)
-                
-                # Создаем новые права
-                for object_id in contract.allowed_objects:
-                    await permission_service.create_permission(
-                        contract.id, 
-                        object_id, 
-                        contract.manager_permissions
-                    )
-            elif not contract.is_manager:
-                # Если договор больше не управляющий, удаляем права
-                permission_service = ManagerPermissionService(session)
-                old_permissions = await permission_service.get_contract_permissions(contract.id)
-                for permission in old_permissions:
-                    await permission_service.delete_permission(permission.id)
             
             logger.info(f"Updated contract: {contract.id}")
             return True
