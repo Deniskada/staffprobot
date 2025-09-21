@@ -1683,22 +1683,198 @@ async def manager_reports(
             if not user_id:
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
-            # Здесь будет логика отчетов
-            # Пока возвращаем заглушку
+            # Получаем доступные объекты управляющего
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if not accessible_object_ids:
+                return templates.TemplateResponse("manager/reports/index.html", {
+                    "request": request,
+                    "current_user": current_user,
+                    "available_interfaces": [],
+                    "objects": [],
+                    "employees": [],
+                    "stats": {"total_shifts": 0, "total_hours": 0, "total_payment": 0, "active_objects": 0, "employees": 0}
+                })
+            
+            # Получаем всех пользователей, которые работали на доступных объектах
+            from sqlalchemy import select, and_
+            from domain.entities.shift import Shift
+            from domain.entities.user import User
+            from datetime import datetime, timedelta
+            
+            employees_query = select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.phone, User.role, User.is_active, User.created_at, User.updated_at).distinct().join(Shift, User.id == Shift.user_id).where(
+                Shift.object_id.in_(accessible_object_ids)
+            )
+            employees_result = await db.execute(employees_query)
+            employees = employees_result.all()
+            
+            # Если нет сотрудников из смен, показываем всех пользователей с ролью employee
+            if not employees:
+                all_employees_query = select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.phone, User.role, User.is_active, User.created_at, User.updated_at).where(User.role == "employee")
+                all_employees_result = await db.execute(all_employees_query)
+                employees = all_employees_result.all()
+            
+            # Статистика за последний месяц
+            month_ago = datetime.now() - timedelta(days=30)
+            
+            shifts_query = select(Shift).options(
+                selectinload(Shift.object),
+                selectinload(Shift.user)
+            ).where(
+                and_(
+                    Shift.object_id.in_(accessible_object_ids),
+                    Shift.start_time >= month_ago
+                )
+            )
+            shifts_result = await db.execute(shifts_query)
+            recent_shifts = shifts_result.scalars().all()
+            
+            stats = {
+                "total_shifts": len(recent_shifts),
+                "total_hours": sum(s.total_hours or 0 for s in recent_shifts if s.total_hours),
+                "total_payment": sum(s.total_payment or 0 for s in recent_shifts if s.total_payment),
+                "active_objects": len(accessible_objects),
+                "employees": len(employees)
+            }
             
             # Получаем данные для переключения интерфейсов
             login_service = RoleBasedLoginService(db)
             available_interfaces = await login_service.get_available_interfaces(user_id)
             
-            return templates.TemplateResponse("manager/reports.html", {
+            return templates.TemplateResponse("manager/reports/index.html", {
                 "request": request,
                 "current_user": current_user,
-                "available_interfaces": available_interfaces
+                "objects": accessible_objects,
+                "employees": employees,
+                "available_interfaces": available_interfaces,
+                "stats": stats
             })
         
     except Exception as e:
         logger.error(f"Error in manager reports: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки отчетов")
+
+
+@router.post("/reports/generate")
+async def manager_generate_report(
+    request: Request,
+    report_type: str = Form(...),
+    date_from: str = Form(...),
+    date_to: str = Form(...),
+    object_id: Optional[int] = Form(None),
+    employee_id: Optional[int] = Form(None),
+    format: str = Form("excel"),
+    current_user: dict = Depends(require_manager_or_owner),
+):
+    """Генерация отчета управляющего."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем доступные объекты управляющего
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if not accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступа к объектам")
+            
+            # Проверяем доступ к конкретному объекту, если указан
+            if object_id and object_id not in accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступа к указанному объекту")
+            
+            # Парсим даты
+            from datetime import datetime
+            try:
+                start_date = datetime.strptime(date_from, "%Y-%m-%d")
+                end_date = datetime.strptime(date_to, "%Y-%m-%d")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат даты")
+            
+            # Здесь будет логика генерации отчета
+            # Пока возвращаем заглушку
+            
+            return {"success": True, "message": "Отчет будет сгенерирован", "report_type": report_type}
+        
+    except Exception as e:
+        logger.error(f"Error generating manager report: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка генерации отчета")
+
+
+@router.get("/reports/stats/period")
+async def manager_reports_stats_period(
+    request: Request,
+    date_from: str = Query(...),
+    date_to: str = Query(...),
+    object_id: Optional[int] = Query(None),
+    current_user: dict = Depends(require_manager_or_owner),
+):
+    """Статистика за период для управляющего."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем доступные объекты управляющего
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if not accessible_object_ids:
+                return {"stats": {"total_shifts": 0, "total_hours": 0, "total_payment": 0}}
+            
+            # Проверяем доступ к конкретному объекту, если указан
+            if object_id and object_id not in accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступа к указанному объекту")
+            
+            # Парсим даты
+            from datetime import datetime
+            try:
+                start_date = datetime.strptime(date_from, "%Y-%m-%d")
+                end_date = datetime.strptime(date_to, "%Y-%m-%d")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат даты")
+            
+            # Получаем смены за период
+            from sqlalchemy import select, and_
+            from domain.entities.shift import Shift
+            
+            shifts_query = select(Shift).where(
+                and_(
+                    Shift.object_id.in_(accessible_object_ids),
+                    Shift.start_time >= start_date,
+                    Shift.start_time <= end_date
+                )
+            )
+            
+            if object_id:
+                shifts_query = shifts_query.where(Shift.object_id == object_id)
+            
+            shifts_result = await db.execute(shifts_query)
+            shifts = shifts_result.scalars().all()
+            
+            stats = {
+                "total_shifts": len(shifts),
+                "total_hours": sum(s.total_hours or 0 for s in shifts if s.total_hours),
+                "total_payment": sum(s.total_payment or 0 for s in shifts if s.total_payment)
+            }
+            
+            return {"stats": stats}
+        
+    except Exception as e:
+        logger.error(f"Error getting manager stats: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения статистики")
 
 
 def _create_calendar_grid_manager(year: int, month: int, timeslots: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
