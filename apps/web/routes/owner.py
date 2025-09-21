@@ -828,6 +828,32 @@ async def owner_calendar(
                             shifts_data = [s for s in shifts_data if s["status"] == status]
                         logger.info(f"Filtered shifts by status {status}: {len(shifts_data)} shifts")
                     
+                    # Применяем фильтры к тайм-слотам
+                    if employee_id or status:
+                        # Если есть фильтры, скрываем тайм-слоты, которые не соответствуют фильтрам
+                        filtered_timeslots = []
+                        for slot in timeslots_data:
+                            # Проверяем, есть ли смены для этого тайм-слота
+                            has_related_shift = False
+                            for shift in shifts_data:
+                                if (shift.get("object_id") == slot["object_id"] and 
+                                    shift["status"] not in ['cancelled']):
+                                    has_related_shift = True
+                                    break
+                            
+                            # Если фильтр "available" - показываем только свободные слоты
+                            if status == "available" and not has_related_shift:
+                                filtered_timeslots.append(slot)
+                            # Если фильтр "occupied" - показываем только занятые слоты
+                            elif status == "occupied" and has_related_shift:
+                                filtered_timeslots.append(slot)
+                            # Если нет фильтра по статусу или другие статусы - показываем все
+                            elif status not in ["available", "occupied"]:
+                                filtered_timeslots.append(slot)
+                        
+                        timeslots_data = filtered_timeslots
+                        logger.info(f"Filtered timeslots by filters: {len(timeslots_data)} timeslots")
+                    
                     logger.info(f"Loaded {len(shifts_data)} total shifts (active + planned) for calendar")
             except Exception as e:
                 logger.warning(f"Could not load shifts for calendar: {e}")
