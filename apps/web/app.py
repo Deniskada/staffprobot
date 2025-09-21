@@ -15,7 +15,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager
 from apps.web.services.auth_service import AuthService
 
 
@@ -123,15 +123,8 @@ async def root(request: Request):
     
     if user_data:
         # Пользователь авторизован - перенаправляем в соответствующий раздел
-        user_role = user_data.get("role", "employee")
-        if user_role == "superadmin":
-            return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
-        elif user_role == "owner":
-            return RedirectResponse(url="/owner", status_code=status.HTTP_302_FOUND)
-        elif user_role == "employee":
-            return RedirectResponse(url="/employee", status_code=status.HTTP_302_FOUND)
-        else:
-            return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+        # Используем новую логику с множественными ролями
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
     # Пользователь не авторизован - показываем лендинг
     return templates.TemplateResponse("landing.html", {"request": request})
@@ -153,6 +146,7 @@ app.include_router(contract_templates.router, prefix="/contract-templates", tags
 # app.include_router(profile.router, tags=["Профиль владельца"])  # Перенесено в owner.py
 app.include_router(admin.router, prefix="/admin", tags=["Администрирование"])
 app.include_router(owner.router, prefix="/owner", tags=["Владелец"])
+app.include_router(manager.router, tags=["Управляющий"])
 app.include_router(employee.router, prefix="/employee", tags=["Сотрудник"])
 
 

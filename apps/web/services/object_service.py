@@ -192,6 +192,63 @@ class ObjectService:
             logger.error(f"Error updating object {object_id} for owner {owner_id}: {e}")
             raise
     
+    async def update_object_by_manager(self, object_id: int, object_data: Dict[str, Any]) -> Optional[Object]:
+        """Обновить объект управляющим (без проверки владельца)"""
+        try:
+            # Получаем объект напрямую по ID
+            query = select(Object).where(Object.id == object_id)
+            result = await self.db.execute(query)
+            obj = result.scalar_one_or_none()
+            
+            if not obj:
+                return None
+            
+            # Обновляем поля
+            obj.name = object_data['name']
+            obj.address = object_data.get('address', obj.address)
+            
+            # Обработка времени
+            if object_data.get('opening_time'):
+                if isinstance(object_data['opening_time'], str):
+                    obj.opening_time = time.fromisoformat(object_data['opening_time'])
+                else:
+                    obj.opening_time = object_data['opening_time']
+            
+            if object_data.get('closing_time'):
+                if isinstance(object_data['closing_time'], str):
+                    obj.closing_time = time.fromisoformat(object_data['closing_time'])
+                else:
+                    obj.closing_time = object_data['closing_time']
+            
+            obj.timezone = object_data.get('timezone', 'Europe/Moscow')
+            obj.hourly_rate = object_data['hourly_rate']
+            obj.max_distance_meters = object_data.get('max_distance_meters', obj.max_distance_meters)
+            obj.is_active = object_data.get('is_active', obj.is_active)
+            obj.available_for_applicants = object_data.get('available_for_applicants', obj.available_for_applicants)
+            obj.work_days_mask = object_data.get('work_days_mask', obj.work_days_mask)
+            obj.schedule_repeat_weeks = object_data.get('schedule_repeat_weeks', obj.schedule_repeat_weeks)
+            
+            # Обновляем координаты если нужно
+            if 'coordinates' in object_data:
+                coordinates = object_data['coordinates']
+                if isinstance(coordinates, str):
+                    lat, lon = coordinates.split(',')
+                    lat, lon = float(lat.strip()), float(lon.strip())
+                else:
+                    lat, lon = coordinates.get('lat', 0.0), coordinates.get('lon', 0.0)
+                obj.coordinates = f"{lat},{lon}"
+            
+            await self.db.commit()
+            await self.db.refresh(obj)
+            
+            logger.info(f"Updated object {object_id} by manager")
+            return obj
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error updating object {object_id} by manager: {e}")
+            raise
+    
     async def delete_object(self, object_id: int, owner_id: int) -> bool:
         """Удалить объект (мягкое удаление)"""
         try:

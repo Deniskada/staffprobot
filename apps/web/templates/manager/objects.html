@@ -1,0 +1,378 @@
+{% extends "manager/base_manager.html" %}
+
+{% block page_title %}Объекты{% endblock %}
+
+{% block manager_content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="h4 mb-0">
+                <i class="bi bi-building me-2"></i>
+                Управление объектами
+            </h2>
+            <div class="d-flex gap-2">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-primary active" id="listViewBtn" onclick="switchView('list')">
+                        <i class="bi bi-list-ul me-1"></i>
+                        Список
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" id="cardViewBtn" onclick="switchView('cards')">
+                        <i class="bi bi-grid-3x3-gap me-1"></i>
+                        Карточки
+                    </button>
+                </div>
+                <button class="btn btn-outline-secondary" onclick="refreshObjects()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    Обновить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Фильтры -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label">Поиск по названию</label>
+                        <input type="text" class="form-control" id="searchInput" placeholder="Введите название объекта...">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Статус</label>
+                        <select class="form-select" id="statusFilter">
+                            <option value="">Все объекты</option>
+                            <option value="active">Активные</option>
+                            <option value="inactive">Неактивные</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Права доступа</label>
+                        <select class="form-select" id="permissionFilter">
+                            <option value="">Все права</option>
+                            <option value="can_edit">Может редактировать</option>
+                            <option value="can_delete">Может удалять</option>
+                            <option value="can_manage_employees">Может управлять сотрудниками</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <button class="btn btn-primary" onclick="applyFilters()">
+                                <i class="bi bi-search me-1"></i>
+                                Применить
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="clearFilters()">
+                                <i class="bi bi-x me-1"></i>
+                                Очистить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список объектов -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Доступные объекты ({{ accessible_objects|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if accessible_objects %}
+                <!-- Форма списка (по умолчанию) -->
+                <div id="listView" class="view-content">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Название</th>
+                                    <th>Адрес</th>
+                                    <th>Ставка</th>
+                                    <th>Время работы</th>
+                                    <th>Статус</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for object in accessible_objects %}
+                                <tr class="object-item" 
+                                    data-name="{{ object.name|lower }}" 
+                                    data-status="{{ 'active' if object.is_active else 'inactive' }}"
+                                    data-permissions="{{ object_permissions[object.id]|tojson if object_permissions[object.id] else '{}' }}">
+                                    <td>
+                                        <strong>{{ object.name }}</strong>
+                                    </td>
+                                    <td>
+                                        <i class="bi bi-geo-alt text-muted me-1"></i>
+                                        {{ object.address or 'Не указан' }}
+                                    </td>
+                                    <td>
+                                        <span class="text-success fw-medium">{{ object.hourly_rate }} ₽/час</span>
+                                    </td>
+                                    <td>
+                                        <i class="bi bi-clock text-muted me-1"></i>
+                                        {{ object.working_hours or 'Не указано' }}
+                                    </td>
+                                    <td>
+                                        {% if object.is_active %}
+                                            <span class="badge bg-success">Активен</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Неактивен</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="/manager/objects/{{ object.id }}" class="btn btn-outline-primary" title="Подробнее">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            {% if object_permissions[object.id] and object_permissions[object.id].get('can_edit') %}
+                                            <a href="/manager/objects/{{ object.id }}/edit" class="btn btn-outline-success" title="Редактировать">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            {% endif %}
+                                            {% if object_permissions[object.id] and object_permissions[object.id].get('can_delete') %}
+                                            <button class="btn btn-outline-danger" 
+                                                    onclick="confirmDelete({{ object.id }}, '{{ object.name }}')" title="Удалить">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Форма карточек -->
+                <div id="cardView" class="view-content" style="display: none;">
+                    <div class="row">
+                        {% for object in accessible_objects %}
+                        <div class="col-md-6 col-lg-4 mb-4 object-item" 
+                             data-name="{{ object.name|lower }}" 
+                             data-status="{{ 'active' if object.is_active else 'inactive' }}"
+                             data-permissions="{{ object_permissions[object.id]|tojson if object_permissions[object.id] else '{}' }}">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <h6 class="card-title mb-0">{{ object.name }}</h6>
+                                        <div>
+                                            {% if object.is_active %}
+                                                <span class="badge bg-success">Активен</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Неактивен</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <p class="text-muted small mb-2">
+                                            <i class="bi bi-geo-alt me-1"></i>
+                                            {{ object.address or 'Адрес не указан' }}
+                                        </p>
+                                        <p class="text-muted small mb-2">
+                                            <i class="bi bi-clock me-1"></i>
+                                            {{ object.working_hours or 'Время не указано' }}
+                                        </p>
+                                        <p class="text-muted small mb-2">
+                                            <i class="bi bi-currency-ruble me-1"></i>
+                                            {{ object.hourly_rate }} ₽/час
+                                        </p>
+                                        <p class="text-muted small mb-2">
+                                            <i class="bi bi-geo-alt-fill me-1"></i>
+                                            Макс. расстояние: {{ object.max_distance_meters }}м
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Действия -->
+                                    <div class="d-flex gap-2">
+                                        <a href="/manager/objects/{{ object.id }}" class="btn btn-sm btn-outline-primary flex-fill">
+                                            <i class="bi bi-eye me-1"></i>
+                                            Подробнее
+                                        </a>
+                                        
+                                        {% if object_permissions[object.id] and object_permissions[object.id].get('can_edit') %}
+                                        <a href="/manager/objects/{{ object.id }}/edit" class="btn btn-sm btn-outline-success">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        {% endif %}
+                                        
+                                        {% if object_permissions[object.id] and object_permissions[object.id].get('can_delete') %}
+                                        <button class="btn btn-sm btn-outline-danger" 
+                                                onclick="confirmDelete({{ object.id }}, '{{ object.name }}')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-building fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">Нет доступных объектов</h5>
+                    <p class="text-muted">Обратитесь к владельцу для получения прав на объекты</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения удаления -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Подтверждение удаления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить объект <strong id="deleteObjectName"></strong>?</p>
+                <p class="text-danger small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Это действие нельзя отменить!
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Удалить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Переключение между видами
+    function switchView(viewType) {
+        const listView = document.getElementById('listView');
+        const cardView = document.getElementById('cardView');
+        const listBtn = document.getElementById('listViewBtn');
+        const cardBtn = document.getElementById('cardViewBtn');
+        
+        if (viewType === 'list') {
+            listView.style.display = 'block';
+            cardView.style.display = 'none';
+            listBtn.classList.add('active');
+            cardBtn.classList.remove('active');
+        } else {
+            listView.style.display = 'none';
+            cardView.style.display = 'block';
+            listBtn.classList.remove('active');
+            cardBtn.classList.add('active');
+        }
+        
+        // Сохраняем выбор в localStorage
+        localStorage.setItem('managerObjectsView', viewType);
+    }
+    
+    // Восстановление выбранного вида при загрузке
+    document.addEventListener('DOMContentLoaded', function() {
+        const savedView = localStorage.getItem('managerObjectsView') || 'list';
+        switchView(savedView);
+    });
+    
+    // Фильтрация объектов
+    function applyFilters() {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const statusFilter = document.getElementById('statusFilter').value;
+        const permissionFilter = document.getElementById('permissionFilter').value;
+        
+        const objects = document.querySelectorAll('.object-item');
+        
+        objects.forEach(object => {
+            let show = true;
+            
+            // Поиск по названию
+            if (searchTerm && !object.dataset.name.includes(searchTerm)) {
+                show = false;
+            }
+            
+            // Фильтр по статусу
+            if (statusFilter && object.dataset.status !== statusFilter) {
+                show = false;
+            }
+            
+            // Фильтр по правам
+            if (permissionFilter) {
+                const permissions = JSON.parse(object.dataset.permissions);
+                if (!permissions[permissionFilter]) {
+                    show = false;
+                }
+            }
+            
+            // Показываем/скрываем в зависимости от текущего вида
+            const currentView = document.getElementById('listView').style.display !== 'none' ? 'list' : 'cards';
+            if (currentView === 'list') {
+                object.style.display = show ? 'table-row' : 'none';
+            } else {
+                object.style.display = show ? 'block' : 'none';
+            }
+        });
+    }
+    
+    function clearFilters() {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('statusFilter').value = '';
+        document.getElementById('permissionFilter').value = '';
+        
+        const objects = document.querySelectorAll('.object-item');
+        objects.forEach(object => {
+            object.style.display = 'block';
+        });
+    }
+    
+    function refreshObjects() {
+        location.reload();
+    }
+    
+    // Подтверждение удаления
+    function confirmDelete(objectId, objectName) {
+        document.getElementById('deleteObjectName').textContent = objectName;
+        document.getElementById('confirmDeleteBtn').onclick = function() {
+            deleteObject(objectId);
+        };
+        
+        const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        modal.show();
+    }
+    
+    function deleteObject(objectId) {
+        // Здесь будет AJAX запрос для удаления объекта
+        fetch(`/manager/objects/${objectId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Ошибка при удалении объекта');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка при удалении объекта');
+        });
+    }
+    
+    // Поиск в реальном времени
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('permissionFilter').addEventListener('change', applyFilters);
+</script>
+{% endblock %}

@@ -1,0 +1,649 @@
+<!-- Панель объектов для drag & drop -->
+<div class="drag-drop-panel" id="dragDropPanel">
+    <div class="panel-header">
+        <h6 class="mb-3">
+            <i class="bi bi-grip-vertical"></i> Объекты для планирования
+        </h6>
+        <div class="objects-count" id="objectsCount" style="display: none;">
+            <span class="badge bg-primary" id="objectsCountBadge">0</span>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" onclick="togglePanel()">
+            <i class="bi bi-chevron-up" id="panelToggleIcon"></i>
+        </button>
+        <div class="collapsed-icon" style="display: none;">
+            <i class="bi bi-grid-3x3-gap"></i>
+        </div>
+    </div>
+    
+    <div class="panel-content" id="panelContent">
+        <div class="objects-list" id="objectsList">
+            <div class="text-center text-muted">
+                <div class="spinner-border spinner-border-sm" role="status">
+                    <span class="visually-hidden">Загрузка...</span>
+                </div>
+                <div class="mt-2">Загрузка объектов...</div>
+            </div>
+        </div>
+        
+        <div class="panel-actions mt-3">
+            <button class="btn btn-primary btn-sm w-100" onclick="showQuickCreateForm()">
+                <i class="bi bi-plus-lg"></i> Быстрое создание
+            </button>
+            <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="refreshObjects()">
+                <i class="bi bi-arrow-clockwise"></i> Обновить
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для быстрого создания -->
+<div class="modal fade" id="quickCreateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-lightning"></i> Быстрое создание тайм-слота
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateForm">
+                    <div class="mb-3">
+                        <label for="quickObject" class="form-label">Объект *</label>
+                        <select class="form-select" id="quickObject" required>
+                            <option value="">Выберите объект</option>
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quickDate" class="form-label">Дата *</label>
+                                <input type="date" class="form-control" id="quickDate" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quickRate" class="form-label">Ставка (₽/час) *</label>
+                                <input type="number" class="form-control" id="quickRate" min="1" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quickStartTime" class="form-label">Начало *</label>
+                                <input type="time" class="form-control" id="quickStartTime" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quickEndTime" class="form-label">Окончание *</label>
+                                <input type="time" class="form-control" id="quickEndTime" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Совет:</strong> Перетащите объект из панели на календарь для еще более быстрого создания!
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="createQuickTimeslot()">
+                    <i class="bi bi-check-lg"></i> Создать
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.drag-drop-panel {
+    position: fixed;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 280px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.drag-drop-panel.collapsed {
+    width: 60px;
+    height: 60px;
+}
+
+.drag-drop-panel.collapsed .panel-content {
+    display: none;
+}
+
+.drag-drop-panel.collapsed .panel-header h6 {
+    display: none;
+}
+
+.drag-drop-panel.collapsed .panel-header {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 5px;
+    height: 60px;
+    width: 60px;
+    border-radius: 50%;
+    background: #007bff;
+}
+
+.drag-drop-panel.collapsed .panel-header button {
+    display: none;
+}
+
+.drag-drop-panel.collapsed .collapsed-icon {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5em;
+}
+
+.objects-count {
+    margin: 5px 0;
+}
+
+.drag-drop-panel.collapsed .objects-count {
+    margin: 5px 0;
+}
+
+.drag-drop-panel.collapsed .objects-count .badge {
+    font-size: 0.8em;
+    padding: 4px 6px;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 10px 10px 0 0;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.panel-content {
+    padding: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.objects-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.object-item {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.object-item:hover {
+    background: #e3f2fd;
+    border-color: #2196f3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(33, 150, 243, 0.2);
+}
+
+.object-item:active {
+    cursor: grabbing;
+    transform: scale(0.95);
+}
+
+.object-item.dragging {
+    opacity: 0.5;
+    transform: rotate(5deg);
+}
+
+.object-name {
+    font-weight: bold;
+    color: #495057;
+    margin-bottom: 4px;
+}
+
+.object-details {
+    font-size: 0.8em;
+    color: #6c757d;
+    display: flex;
+    justify-content: space-between;
+}
+
+.object-rate {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.object-time {
+    color: #007bff;
+}
+
+.drop-zone {
+    border: 2px dashed #007bff;
+    background: rgba(0, 123, 255, 0.1);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    color: #007bff;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+.drop-zone.drag-over {
+    background: rgba(0, 123, 255, 0.2);
+    border-color: #0056b3;
+    transform: scale(1.02);
+}
+
+.drop-zone.hidden {
+    display: none;
+}
+
+.panel-actions {
+    border-top: 1px solid #dee2e6;
+    padding-top: 15px;
+}
+
+.drag-preview {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    background: white;
+    border: 2px solid #007bff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transform: translate(-50%, -50%);
+    opacity: 0.9;
+}
+
+.drag-preview .object-name {
+    font-weight: bold;
+    color: #007bff;
+    margin: 0;
+}
+
+.drag-preview .object-details {
+    font-size: 0.8em;
+    color: #6c757d;
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .drag-drop-panel {
+        position: relative;
+        left: auto;
+        top: auto;
+        transform: none;
+        width: 100%;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .drag-drop-panel.collapsed {
+        width: 100%;
+        height: 60px;
+    }
+    
+    .drag-drop-panel.collapsed .panel-header {
+        height: 60px;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+    
+    .drag-drop-panel.collapsed .panel-header h6 {
+        writing-mode: horizontal-tb;
+        text-orientation: mixed;
+        font-size: 1em;
+    }
+    
+    .drag-drop-panel.collapsed .panel-header button {
+        transform: none;
+        margin-top: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .drag-drop-panel {
+        margin: 0 -15px 20px -15px;
+        border-radius: 0;
+    }
+}
+</style>
+
+<script>
+let objectsData = [];
+
+// Загрузка объектов при инициализации
+document.addEventListener('DOMContentLoaded', function() {
+    loadObjects();
+    setupDragAndDrop();
+    restorePanelState();
+});
+
+function restorePanelState() {
+    const isCollapsed = localStorage.getItem('dragDropPanelCollapsed') === 'true';
+    const panel = document.getElementById('dragDropPanel');
+    const icon = document.getElementById('panelToggleIcon');
+    
+    if (isCollapsed) {
+        panel.classList.add('collapsed');
+        icon.classList.remove('bi-chevron-up');
+        icon.classList.add('bi-chevron-down');
+    }
+}
+
+async function loadObjects() {
+    try {
+        const response = await fetch('/manager/calendar/api/objects', {
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        // API возвращает массив объектов напрямую
+        if (Array.isArray(data)) {
+            objectsData = data;
+            renderObjects();
+            populateQuickCreateForm();
+        } else {
+            throw new Error('Неверный формат данных');
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки объектов:', error);
+        document.getElementById('objectsList').innerHTML = `
+            <div class="text-center text-danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                <div class="mt-2">Ошибка загрузки объектов</div>
+            </div>
+        `;
+    }
+}
+
+function renderObjects() {
+    const container = document.getElementById('objectsList');
+    const countBadge = document.getElementById('objectsCountBadge');
+    const countContainer = document.getElementById('objectsCount');
+    
+    // Обновляем счетчик
+    countBadge.textContent = objectsData.length;
+    countContainer.style.display = 'block';
+    
+    if (objectsData.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="bi bi-inbox"></i>
+                <div class="mt-2">Нет объектов</div>
+                <a href="/owner/objects/create" class="btn btn-sm btn-primary mt-2">Создать объект</a>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = objectsData.map(obj => `
+        <div class="object-item" 
+             draggable="true" 
+             data-object-id="${obj.id}"
+             data-object-name="${obj.name}"
+             data-hourly-rate="${obj.hourly_rate}"
+             data-opening-time="${obj.opening_time || ''}"
+             data-closing-time="${obj.closing_time || ''}"
+             data-working-hours="${obj.working_hours || 'Не указано'}">
+            <div class="object-name">${obj.name}</div>
+            <div class="object-details">
+                <span class="object-rate">${obj.hourly_rate}₽/час</span>
+                <span class="object-time">${obj.working_hours || 'Не указано'}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function populateQuickCreateForm() {
+    const select = document.getElementById('quickObject');
+    select.innerHTML = '<option value="">Выберите объект</option>' + 
+        objectsData.map(obj => `<option value="${obj.id}" data-rate="${obj.hourly_rate}">${obj.name}</option>`).join('');
+}
+
+function setupDragAndDrop() {
+    // Обработчики для объектов
+    document.addEventListener('dragstart', function(e) {
+        if (e.target.classList.contains('object-item')) {
+            draggedObject = {
+                id: e.target.dataset.objectId,
+                name: e.target.dataset.objectName,
+                hourlyRate: e.target.dataset.hourlyRate,
+                openingTime: e.target.dataset.openingTime,
+                closingTime: e.target.dataset.closingTime,
+                workingHours: e.target.dataset.workingHours
+            };
+            
+            e.target.classList.add('dragging');
+            createDragPreview(e);
+        }
+    });
+    
+    document.addEventListener('dragend', function(e) {
+        if (e.target.classList.contains('object-item')) {
+            e.target.classList.remove('dragging');
+            removeDragPreview();
+        }
+    });
+    
+    // Обработчики для календарных дней (месячный и недельный вид)
+    document.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        const dayElement = e.target.closest('.calendar-day, .day-column');
+        if (dayElement) {
+            dayElement.classList.add('drag-over');
+        }
+    });
+    
+    document.addEventListener('dragleave', function(e) {
+        const dayElement = e.target.closest('.calendar-day, .day-column');
+        if (dayElement) {
+            dayElement.classList.remove('drag-over');
+        }
+    });
+    
+    document.addEventListener('drop', function(e) {
+        e.preventDefault();
+        const dayElement = e.target.closest('.calendar-day, .day-column');
+        if (dayElement && draggedObject) {
+            dayElement.classList.remove('drag-over');
+            handleDropOnDay(dayElement, draggedObject);
+        }
+    });
+
+    // Клик по объекту: открыть быстрое создание с предзаполнением
+    document.addEventListener('click', function(e) {
+        const item = e.target.closest('.object-item');
+        if (item) {
+            const object = {
+                id: item.dataset.objectId,
+                name: item.dataset.objectName,
+                hourlyRate: item.dataset.hourlyRate,
+                openingTime: item.dataset.openingTime,
+                closingTime: item.dataset.closingTime,
+                workingHours: item.dataset.workingHours
+            };
+            showQuickCreateForm(object);
+        }
+    });
+}
+
+function createDragPreview(e) {
+    dragPreview = document.createElement('div');
+    dragPreview.className = 'drag-preview';
+    dragPreview.innerHTML = `
+        <div class="object-name">${draggedObject.name}</div>
+        <div class="object-details">${draggedObject.hourlyRate}₽/час</div>
+    `;
+    document.body.appendChild(dragPreview);
+    
+    document.addEventListener('dragover', updateDragPreview);
+}
+
+function updateDragPreview(e) {
+    if (dragPreview) {
+        dragPreview.style.left = e.clientX + 'px';
+        dragPreview.style.top = e.clientY + 'px';
+    }
+}
+
+function removeDragPreview() {
+    if (dragPreview) {
+        dragPreview.remove();
+        dragPreview = null;
+    }
+    document.removeEventListener('dragover', updateDragPreview);
+}
+
+function handleDropOnDay(dayElement, object) {
+    // Получаем дату из data-date атрибута
+    const slotDate = dayElement.dataset.date;
+    
+    if (!slotDate) {
+        showNotification('Ошибка: не удалось определить дату', 'error');
+        return;
+    }
+    
+    // Показываем модальное окно с предзаполненными данными
+    showQuickCreateForm(object, slotDate);
+}
+
+function showQuickCreateForm(object = null, date = null) {
+    const modal = new bootstrap.Modal(document.getElementById('quickCreateModal'));
+    
+    if (object) {
+        document.getElementById('quickObject').value = object.id;
+        document.getElementById('quickRate').value = object.hourlyRate;
+        document.getElementById('quickStartTime').value = object.openingTime;
+        document.getElementById('quickEndTime').value = object.closingTime;
+    }
+    
+    if (date) {
+        document.getElementById('quickDate').value = date;
+    } else {
+        document.getElementById('quickDate').value = new Date().toISOString().split('T')[0];
+    }
+    
+    modal.show();
+}
+
+async function createQuickTimeslot() {
+    const form = document.getElementById('quickCreateForm');
+    const formData = new FormData();
+    
+    formData.append('object_id', document.getElementById('quickObject').value);
+    formData.append('slot_date', document.getElementById('quickDate').value);
+    formData.append('start_time', document.getElementById('quickStartTime').value);
+    formData.append('end_time', document.getElementById('quickEndTime').value);
+    formData.append('hourly_rate', document.getElementById('quickRate').value);
+    
+    try {
+        const response = await fetch('/manager/calendar/api/quick-create-timeslot', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Закрываем модальное окно
+            bootstrap.Modal.getInstance(document.getElementById('quickCreateModal')).hide();
+            
+            // Показываем уведомление
+            showNotification('Тайм-слот успешно создан!', 'success');
+            
+            // Обновляем страницу
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            showNotification('Ошибка создания тайм-слота', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка создания тайм-слота:', error);
+        showNotification('Ошибка создания тайм-слота', 'error');
+    }
+}
+
+function togglePanel() {
+    const panel = document.getElementById('dragDropPanel');
+    const icon = document.getElementById('panelToggleIcon');
+    
+    panel.classList.toggle('collapsed');
+    icon.classList.toggle('bi-chevron-up');
+    icon.classList.toggle('bi-chevron-down');
+    
+    // Сохраняем состояние в localStorage
+    const isCollapsed = panel.classList.contains('collapsed');
+    localStorage.setItem('dragDropPanelCollapsed', isCollapsed);
+    
+    // Показываем уведомление о состоянии
+    const message = isCollapsed ? 'Панель свернута' : 'Панель развернута';
+    showNotification(message, 'info');
+}
+
+// Добавляем обработчик клика на заголовок панели для разворачивания
+document.addEventListener('DOMContentLoaded', function() {
+    const panel = document.getElementById('dragDropPanel');
+    const header = panel.querySelector('.panel-header');
+    
+    header.addEventListener('click', function(e) {
+        // Если панель свернута и клик не по кнопке
+        if (panel.classList.contains('collapsed') && !e.target.closest('button')) {
+            togglePanel();
+        }
+    });
+});
+
+function refreshObjects() {
+    loadObjects();
+    showNotification('Объекты обновлены', 'info');
+}
+
+function showNotification(message, type = 'info') {
+    // Создаем уведомление
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Автоматически скрываем через 3 секунды
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 3000);
+}
+
+// Обработка изменения объекта в форме быстрого создания
+document.getElementById('quickObject').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    if (selectedOption.value) {
+        document.getElementById('quickRate').value = selectedOption.dataset.rate;
+    }
+});
+</script>

@@ -1,4 +1,4 @@
-{% extends "owner/base_owner.html" %}
+{% extends "manager/base_manager.html" %}
 
 {% block title %}{{ title }}{% endblock %}
 
@@ -59,32 +59,7 @@
     position: relative;
 }
 
-.calendar-day.drop-zone::after {
-    content: "Перетащите объект сюда";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 123, 255, 0.9);
-    color: white;
-    padding: 8px 12px;
-    border-radius: 4px;
-    font-size: 0.8em;
-    font-weight: bold;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-    z-index: 10;
-}
-
-.calendar-day.drop-zone.drag-over::after {
-    opacity: 1;
-}
-
-/* Скрываем надпись "Перетащите объект сюда" при перетаскивании сотрудника */
-.calendar-day.drop-zone.employee-drag-over::after {
-    display: none;
-}
+/* Убрано сообщение "Перетащите объект сюда" */
 
 .calendar-day-header {
     font-weight: bold;
@@ -218,32 +193,53 @@
     color: #007bff;
 }
 
-.quick-actions {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 1000;
+
+/* Drag & Drop стили */
+.calendar-day.drop-zone {
+    position: relative;
 }
 
-.quick-actions .btn {
-    margin: 5px;
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+/* Убрано сообщение "Перетащите объект сюда" */
+
+.calendar-day.drag-over {
+    background: #e3f2fd;
+    border: 2px dashed #007bff;
+    transform: scale(1.02);
+}
+
+.timeslot-item.drag-over {
+    background: #cce5ff;
+    border-color: #007bff;
+    transform: scale(1.05);
+}
+
+.drag-preview {
+    position: fixed;
+    background: white;
+    border: 2px solid #007bff;
+    border-radius: 8px;
+    padding: 10px 15px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    pointer-events: none;
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #007bff;
+}
+
+.dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
 }
 </style>
 {% endblock %}
 
-{% block content %}
+{% block manager_content %}
 <!-- Панель drag & drop -->
-{% include 'owner/calendar/drag_drop_panel.html' %}
+{% include 'manager/calendar/drag_drop_panel.html' %}
 
 <!-- Панель сотрудников для drag & drop -->
-{% include 'owner/calendar/employees_drag_drop_panel.html' %}
+{% include 'manager/calendar/employees_drag_drop_panel.html' %}
 
 <div class="container-fluid">
     <!-- Заголовок и навигация -->
@@ -268,7 +264,7 @@
                 </button>
                 <ul class="dropdown-menu">
                     <li><a class="dropdown-item" href="?year={{ year }}&month={{ month }}">Все объекты</a></li>
-                    {% for obj in objects %}
+                    {% for obj in accessible_objects %}
                     <li><a class="dropdown-item" href="?year={{ year }}&month={{ month }}&object_id={{ obj.id }}">{{ obj.name }}</a></li>
                     {% endfor %}
                 </ul>
@@ -276,13 +272,9 @@
             
             <!-- Переключение видов -->
             <div class="btn-group" role="group">
-                <a href="/owner/calendar/week?year={{ year }}&week={{ today.isocalendar()[1] }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
+                <a href="/manager/calendar/week?year={{ year }}&week={{ today.isocalendar()[1] }}{% if selected_object_id %}&object_id={{ selected_object_id }}{% endif %}" 
                    class="btn btn-outline-primary">
                     <i class="bi bi-calendar-week"></i> Неделя
-                </a>
-                <a href="/owner/calendar/analysis{% if selected_object_id %}?object_id={{ selected_object_id }}{% endif %}" 
-                   class="btn btn-outline-info">
-                    <i class="bi bi-graph-up"></i> Анализ
                 </a>
             </div>
             
@@ -358,8 +350,8 @@
             <div class="stats-card">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small">Активных объектов</div>
-                        <div class="stats-number">{{ objects|length }}</div>
+                        <div class="text-muted small">Доступных объектов</div>
+                        <div class="stats-number">{{ accessible_objects|length }}</div>
                     </div>
                     <i class="bi bi-building text-success fs-1"></i>
                 </div>
@@ -452,20 +444,6 @@
     </div>
 </div>
 
-<!-- Быстрые действия -->
-<div class="quick-actions">
-    <a href="/owner/objects/create" class="btn btn-primary" title="Создать объект">
-        <i class="bi bi-plus-lg"></i>
-    </a>
-    <a href="/owner/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create" 
-       class="btn btn-success" title="Создать тайм-слот">
-        <i class="bi bi-clock"></i>
-    </a>
-    <a href="/owner/calendar/analysis{% if selected_object_id %}?object_id={{ selected_object_id }}{% endif %}" 
-       class="btn btn-info" title="Анализ пробелов">
-        <i class="bi bi-graph-up"></i>
-    </a>
-</div>
 
 <!-- Модальное окно для деталей тайм-слота -->
 <div class="modal fade" id="timeslotModal" tabindex="-1">
@@ -495,9 +473,12 @@ let timeslotsStatus = {};
 
 async function loadTimeslotsStatus() {
     try {
+        console.log('loadTimeslotsStatus: Starting');
         const year = {{ year }};
         const month = {{ month }};
         const objectId = {{ selected_object_id if selected_object_id else 'null' }};
+        
+        console.log('loadTimeslotsStatus: year=', year, 'month=', month, 'objectId=', objectId);
         
         const params = new URLSearchParams({
             year: year,
@@ -508,16 +489,22 @@ async function loadTimeslotsStatus() {
             params.append('object_id', objectId);
         }
         
-        const response = await fetch(`/owner/calendar/api/timeslots-status?${params}`, {
+        const url = `/manager/calendar/api/timeslots-status?${params}`;
+        console.log('loadTimeslotsStatus: Fetching URL:', url);
+        
+        const response = await fetch(url, {
             credentials: 'include'
         });
         
+        console.log('loadTimeslotsStatus: Response status:', response.status);
+        
         if (response.ok) {
             timeslotsStatus = await response.json();
-            console.log('Загружен статус тайм-слотов:', timeslotsStatus);
+            console.log('loadTimeslotsStatus: Got timeslotsStatus:', timeslotsStatus);
             updateTimeslotsDisplay();
         } else {
-            console.error('Ошибка загрузки статуса тайм-слотов');
+            const errorText = await response.text();
+            console.error('Ошибка загрузки статуса тайм-слотов:', response.status, response.statusText, errorText);
         }
     } catch (error) {
         console.error('Ошибка загрузки статуса тайм-слотов:', error);
@@ -526,7 +513,7 @@ async function loadTimeslotsStatus() {
 
 function updateTimeslotsDisplay() {
     // Обновляем отображение тайм-слотов с цветовым кодированием
-    const timeslotElements = document.querySelectorAll('.timeslot-item');
+    const timeslotElements = document.querySelectorAll('.timeslot-item[data-timeslot-id]');
     
     timeslotElements.forEach(element => {
         const timeslotId = element.dataset.timeslotId;
@@ -618,7 +605,7 @@ function showTimeslotDetails(timeslotId) {
     const modal = new bootstrap.Modal(document.getElementById('timeslotModal'));
     modal.show();
 
-    fetch(`/owner/calendar/api/timeslot/${timeslotId}`, { credentials: 'include' })
+    fetch(`/manager/calendar/api/timeslot/${timeslotId}`, { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
             if (data.detail) {
@@ -694,23 +681,55 @@ function showTimeslotDetails(timeslotId) {
 
 // Загружаем статус при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded: Starting loadTimeslotsStatus');
     loadTimeslotsStatus();
     
     // Обработчик для кнопки редактирования в модальном окне
-    document.getElementById('editTimeslotBtn').addEventListener('click', function() {
-        const timeslotId = this.dataset.timeslotId;
-        if (timeslotId) {
-            window.location.href = `/owner/timeslots/${timeslotId}/edit`;
-        }
-    });
+    const editBtn = document.getElementById('editTimeslotBtn');
+    if (editBtn) {
+        editBtn.addEventListener('click', function() {
+            const timeslotId = this.dataset.timeslotId;
+            if (timeslotId) {
+                window.location.href = `/manager/timeslots/${timeslotId}/edit`;
+            }
+        });
+    }
     
     // Обработчик для кнопки добавления сотрудника в план
-    document.getElementById('addEmployeeBtn').addEventListener('click', function() {
-        const timeslotId = this.dataset.timeslotId;
-        if (timeslotId) {
-            showAddEmployeeModal(timeslotId);
-        }
-    });
+    const addEmployeeBtn = document.getElementById('addEmployeeBtn');
+    if (addEmployeeBtn) {
+        addEmployeeBtn.addEventListener('click', function() {
+            const timeslotId = this.dataset.timeslotId;
+            if (timeslotId) {
+                showAddEmployeeModal(timeslotId);
+            }
+        });
+    }
+    
+    // Инициализация панелей
+    const objectsPanel = document.getElementById('dragDropPanel');
+    if (objectsPanel) {
+        const objectsHeader = objectsPanel.querySelector('.panel-header');
+        objectsHeader.addEventListener('click', function(e) {
+            if (objectsPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+                togglePanel();
+            }
+        });
+    }
+    
+    const employeesPanel = document.getElementById('employeesDragDropPanel');
+    if (employeesPanel) {
+        const employeesHeader = employeesPanel.querySelector('.panel-header');
+        employeesHeader.addEventListener('click', function(e) {
+            if (employeesPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+                toggleEmployeesPanel();
+            }
+        });
+    }
+    
+    // Инициализация drag&drop
+    setupDragAndDrop();
+    setupEmployeeDragAndDrop();
 });
 
 // Обработка клавиатурных сокращений
@@ -719,11 +738,11 @@ document.addEventListener('keydown', function(e) {
         switch(e.key) {
             case 'n': // Ctrl+N - новый тайм-слот
                 e.preventDefault();
-                window.location.href = '/owner/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create';
+                window.location.href = '/manager/timeslots/object/{% if selected_object_id %}{{ selected_object_id }}{% else %}1{% endif %}/create';
                 break;
             case 'o': // Ctrl+O - новый объект
                 e.preventDefault();
-                window.location.href = '/owner/objects/create';
+                window.location.href = '/manager/objects/create';
                 break;
         }
     }
@@ -794,11 +813,13 @@ function showAddEmployeeModal(timeslotId) {
 // Загрузка сотрудников для модального окна
 async function loadEmployeesForModal(objectId) {
     try {
-        const response = await fetch(`/owner/api/employees/for-object/${objectId}`, {
+        const response = await fetch(`/manager/api/employees/for-object/${objectId}`, {
             credentials: 'include'
         });
         const employees = await response.json();
         
+        console.log('API response:', employees);
+        console.log('Is array:', Array.isArray(employees));
         
         const select = document.getElementById('employeeSelectModal');
         
@@ -832,7 +853,7 @@ async function addEmployeeToTimeslot(timeslotId) {
     }
     
     try {
-        const response = await fetch('/owner/api/calendar/plan-shift', {
+        const response = await fetch('/manager/api/calendar/plan-shift', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -888,5 +909,349 @@ function showNotification(message, type = 'info') {
         }
     }, 3000);
 }
+
+// Функции для панелей drag & drop
+function togglePanel() {
+    const panel = document.getElementById('dragDropPanel');
+    const icon = document.getElementById('panelToggleIcon');
+    
+    if (panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+        icon.className = 'bi bi-chevron-up';
+    } else {
+        panel.classList.add('collapsed');
+        icon.className = 'bi bi-chevron-down';
+    }
+}
+
+function toggleEmployeesPanel() {
+    const panel = document.getElementById('employeesDragDropPanel');
+    const icon = document.getElementById('employeesPanelToggleIcon');
+    
+    if (panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+        icon.className = 'bi bi-chevron-up';
+    } else {
+        panel.classList.add('collapsed');
+        icon.className = 'bi bi-chevron-down';
+    }
+}
+
+
+// Переменные для drag&drop
+let draggedObject = null;
+let draggedEmployee = null;
+let dragPreview = null;
+let employeeDragPreview = null;
+
+function setupDragAndDrop() {
+    // Обработчики для объектов
+    document.addEventListener('dragstart', function(e) {
+        if (e.target.classList.contains('object-item')) {
+            draggedObject = {
+                id: e.target.dataset.objectId,
+                name: e.target.dataset.objectName,
+                hourlyRate: e.target.dataset.hourlyRate,
+                openingTime: e.target.dataset.openingTime,
+                closingTime: e.target.dataset.closingTime
+            };
+            
+            e.target.classList.add('dragging');
+            createDragPreview(e);
+        }
+    });
+    
+    document.addEventListener('dragend', function(e) {
+        if (e.target.classList.contains('object-item')) {
+            e.target.classList.remove('dragging');
+            removeDragPreview();
+        }
+    });
+    
+    // Обработчики для календарных дней
+    document.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        const dayElement = e.target.closest('.calendar-day');
+        if (dayElement) {
+            dayElement.classList.add('drag-over');
+        }
+    });
+    
+    document.addEventListener('dragleave', function(e) {
+        const dayElement = e.target.closest('.calendar-day');
+        if (dayElement) {
+            dayElement.classList.remove('drag-over');
+        }
+    });
+    
+    document.addEventListener('drop', function(e) {
+        e.preventDefault();
+        const dayElement = e.target.closest('.calendar-day');
+        if (dayElement && draggedObject) {
+            dayElement.classList.remove('drag-over');
+            handleObjectDropOnDay(dayElement, draggedObject);
+        }
+    });
+}
+
+function setupEmployeeDragAndDrop() {
+    // Обработчики для сотрудников
+    document.addEventListener('dragstart', function(e) {
+        if (e.target.classList.contains('employee-item')) {
+            draggedEmployee = {
+                id: e.target.dataset.employeeId,
+                name: e.target.dataset.employeeName,
+                role: e.target.dataset.employeeRole,
+                status: e.target.dataset.employeeStatus
+            };
+            
+            e.target.classList.add('dragging');
+            createEmployeeDragPreview(e);
+        }
+    });
+    
+    document.addEventListener('dragend', function(e) {
+        if (e.target.classList.contains('employee-item')) {
+            e.target.classList.remove('dragging');
+            removeEmployeeDragPreview();
+        }
+    });
+    
+    // Обработчики для тайм-слотов
+    document.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        const timeslotElement = e.target.closest('.timeslot-item, .calendar-timeslot');
+        if (timeslotElement) {
+            timeslotElement.classList.add('drag-over');
+            // Убрано скрытие надписи "Перетащите объект сюда"
+        }
+    });
+    
+    document.addEventListener('dragleave', function(e) {
+        const timeslotElement = e.target.closest('.timeslot-item, .calendar-timeslot');
+        if (timeslotElement) {
+            timeslotElement.classList.remove('drag-over');
+            // Показываем надпись обратно
+            const dropZone = timeslotElement.closest('.drop-zone');
+            if (dropZone) {
+                dropZone.classList.remove('employee-drag-over');
+            }
+        }
+    });
+    
+    document.addEventListener('drop', function(e) {
+        e.preventDefault();
+        const timeslotElement = e.target.closest('.timeslot-item, .calendar-timeslot');
+        if (timeslotElement && draggedEmployee) {
+            timeslotElement.classList.remove('drag-over');
+            // Показываем надпись обратно
+            const dropZone = timeslotElement.closest('.drop-zone');
+            if (dropZone) {
+                dropZone.classList.remove('employee-drag-over');
+            }
+            handleEmployeeDropOnTimeslot(timeslotElement, draggedEmployee);
+        }
+    });
+}
+
+function createDragPreview(e) {
+    dragPreview = document.createElement('div');
+    dragPreview.className = 'drag-preview';
+    dragPreview.innerHTML = `
+        <div class="object-name">${draggedObject.name}</div>
+        <div class="object-details">${draggedObject.hourlyRate}₽/час</div>
+    `;
+    document.body.appendChild(dragPreview);
+    
+    document.addEventListener('dragover', updateDragPreview);
+}
+
+function updateDragPreview(e) {
+    if (dragPreview) {
+        dragPreview.style.left = e.clientX + 'px';
+        dragPreview.style.top = e.clientY + 'px';
+    }
+}
+
+function removeDragPreview() {
+    if (dragPreview) {
+        dragPreview.remove();
+        dragPreview = null;
+    }
+    document.removeEventListener('dragover', updateDragPreview);
+}
+
+function createEmployeeDragPreview(e) {
+    employeeDragPreview = document.createElement('div');
+    employeeDragPreview.className = 'drag-preview';
+    employeeDragPreview.innerHTML = `
+        <div class="employee-name">${draggedEmployee.name}</div>
+        <div class="employee-details">${draggedEmployee.role}</div>
+    `;
+    document.body.appendChild(employeeDragPreview);
+    
+    document.addEventListener('dragover', updateEmployeeDragPreview);
+}
+
+function updateEmployeeDragPreview(e) {
+    if (employeeDragPreview) {
+        employeeDragPreview.style.left = e.clientX + 'px';
+        employeeDragPreview.style.top = e.clientY + 'px';
+    }
+}
+
+function removeEmployeeDragPreview() {
+    if (employeeDragPreview) {
+        employeeDragPreview.remove();
+        employeeDragPreview = null;
+    }
+    document.removeEventListener('dragover', updateEmployeeDragPreview);
+}
+
+function handleObjectDropOnDay(dayElement, object) {
+    const date = dayElement.dataset.date;
+    if (!date) {
+        showNotification('Ошибка: не удалось определить дату', 'error');
+        return;
+    }
+    
+    // Показываем модальное окно для создания тайм-слота
+    showQuickCreateForm(object, date);
+}
+
+function handleEmployeeDropOnTimeslot(timeslotElement, employee) {
+    // Получаем ID тайм-слота
+    const timeslotId = timeslotElement.dataset.timeslotId;
+    
+    if (!timeslotId) {
+        showNotification('Ошибка: не удалось определить тайм-слот', 'error');
+        return;
+    }
+    
+    // Планируем смену для сотрудника
+    planShiftForEmployee(timeslotId, employee.id);
+}
+
+async function planShiftForEmployee(timeslotId, employeeId) {
+    try {
+        // Получаем object_id из данных тайм-слота
+        const slotData = timeslotsStatus.find(slot => slot.slot_id == timeslotId);
+        if (!slotData) {
+            showNotification('Ошибка: не удалось найти данные тайм-слота', 'error');
+            return;
+        }
+        
+        const requestData = {
+            timeslot_id: timeslotId,
+            employee_id: employeeId,
+            hourly_rate: slotData.hourly_rate || 500
+        };
+        
+        const response = await fetch('/manager/api/calendar/plan-shift', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('Смена успешно запланирована', 'success');
+            // Обновляем отображение календаря
+            loadTimeslotsStatus();
+        } else {
+            showNotification(result.message || 'Ошибка планирования смены', 'error');
+        }
+    } catch (error) {
+        console.error('Error planning shift:', error);
+        showNotification('Ошибка планирования смены', 'error');
+    }
+}
+
+function showQuickCreateForm(object = null, date = null) {
+    const modal = new bootstrap.Modal(document.getElementById('quickCreateModal'));
+    
+    if (object) {
+        document.getElementById('quickObject').value = object.id;
+        document.getElementById('quickRate').value = object.hourlyRate;
+        document.getElementById('quickStartTime').value = object.openingTime;
+        document.getElementById('quickEndTime').value = object.closingTime;
+    }
+    
+    if (date) {
+        document.getElementById('quickDate').value = date;
+    } else {
+        document.getElementById('quickDate').value = new Date().toISOString().split('T')[0];
+    }
+    
+    modal.show();
+}
+
+async function createQuickTimeslot() {
+    const form = document.getElementById('quickCreateForm');
+    const formData = new FormData();
+    
+    formData.append('object_id', document.getElementById('quickObject').value);
+    formData.append('slot_date', document.getElementById('quickDate').value);
+    formData.append('start_time', document.getElementById('quickStartTime').value);
+    formData.append('end_time', document.getElementById('quickEndTime').value);
+    formData.append('hourly_rate', document.getElementById('quickRate').value);
+    
+    try {
+        const response = await fetch('/manager/calendar/api/quick-create-timeslot', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Закрываем модальное окно
+            bootstrap.Modal.getInstance(document.getElementById('quickCreateModal')).hide();
+            
+            // Показываем уведомление
+            showNotification('Тайм-слот успешно создан!', 'success');
+            
+            // Обновляем страницу
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            showNotification('Ошибка создания тайм-слота', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка создания тайм-слота:', error);
+        showNotification('Ошибка создания тайм-слота', 'error');
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Создаем уведомление
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show`;
+    notification.style.position = 'fixed';
+    notification.style.top = '20px';
+    notification.style.right = '20px';
+    notification.style.zIndex = '9999';
+    notification.style.minWidth = '300px';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Автоматически удаляем через 5 секунд
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
 </script>
+
+
 {% endblock %}

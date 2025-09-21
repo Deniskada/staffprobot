@@ -37,28 +37,12 @@ router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
 
 
-def get_user_internal_id_from_current_user(current_user):
-    """Получает внутренний ID пользователя из current_user (синхронно)"""
-    if isinstance(current_user, dict):
-        telegram_id = current_user.get("telegram_id") or current_user.get("id")
-        # Хардкод маппинг telegram_id -> internal_id из БД запроса
-        telegram_to_internal = {
-            1220971779: 1,  # owner
-            1657453440: 2,  # owner  
-            1170536174: 3,  # owner
-            6562516971: 4,  # owner
-            12345: 5,       # owner
-            1821645654: 7,  # superadmin
-        }
-        internal_id = telegram_to_internal.get(telegram_id)
-        if internal_id:
-            logger.info(f"DEBUG: telegram_id {telegram_id} -> internal_id {internal_id}")
-            return internal_id
-        else:
-            logger.error(f"Unknown telegram_id: {telegram_id}")
-            return None
-    else:
-        return current_user.id
+async def get_available_interfaces_for_user(user_id: int):
+    """Получает доступные интерфейсы для пользователя"""
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        login_service = RoleBasedLoginService(session)
+        return await login_service.get_available_interfaces(user_id)
 
 
 async def get_user_id_from_current_user(current_user, session):
@@ -116,62 +100,29 @@ async def owner_dashboard(request: Request):
             )
             active_shifts = active_shifts_count.scalar()
             
-            # Получаем объекты с информацией о сменах за текущий день
-            from datetime import datetime, timezone, date
-            today = date.today()
+            # Последние объекты
+            recent_objects_result = await session.execute(
+                select(Object).where(Object.owner_id == user_id)
+                .order_by(desc(Object.created_at)).limit(5)
+            )
+            recent_objects = recent_objects_result.scalars().all()
             
-            # Запрос для получения объектов с информацией о первой смене за сегодня
-            # Сначала получаем объекты
-            objects_query = select(Object).where(Object.owner_id == user_id).order_by(desc(Object.created_at)).limit(5)
-            objects_result = await session.execute(objects_query)
-            objects = objects_result.scalars().all()
-            
-            # Для каждого объекта получаем информацию о первой смене за сегодня
-            recent_objects = []
-            for obj in objects:
-                # Получаем первую смену за сегодня для этого объекта
-                first_shift_query = select(
-                    Shift.start_time,
-                    User.first_name,
-                    User.last_name
-                ).select_from(
-                    Shift
-                ).join(
-                    User, User.id == Shift.user_id
-                ).where(
-                    and_(
-                        Shift.object_id == obj.id,
-                        func.date(Shift.start_time) == today,
-                        Shift.status == 'active'
-                    )
-                ).order_by(Shift.start_time).limit(1)
-                
-                first_shift_result = await session.execute(first_shift_query)
-                first_shift = first_shift_result.first()
-                
-                # Создаем объект с информацией
-                object_data = {
-                    'id': obj.id,
-                    'name': obj.name,
-                    'address': obj.address,
-                    'first_shift_start': first_shift.start_time if first_shift else None,
-                    'first_name': first_shift.first_name if first_shift else None,
-                    'last_name': first_shift.last_name if first_shift else None
-                }
-                recent_objects.append(object_data)
+            # Получаем данные для переключения интерфейсов
+            available_interfaces = await get_available_interfaces_for_user(user_id)
         
         stats = {
             'total_objects': total_objects,
             'total_shifts': total_shifts,
             'active_shifts': active_shifts,
         }
-
+        
         return templates.TemplateResponse("owner/dashboard.html", {
             "request": request,
             "current_user": current_user,
             "title": "Дашборд владельца",
             "stats": stats,
             "recent_objects": recent_objects,
+            "available_interfaces": available_interfaces,
         })
     except Exception as e:
         logger.error(f"Error loading owner dashboard: {e}")
@@ -227,11 +178,16 @@ async def owner_objects(
                     "owner_id": obj.owner_id
                 })
             
+            # Получаем данные для переключения интерфейсов
+            user_id = await get_user_id_from_current_user(current_user, session)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
             return templates.TemplateResponse("owner/objects/list.html", {
                 "request": request,
                 "title": "Управление объектами",
                 "objects": objects_data,
                 "current_user": current_user,
+                "available_interfaces": available_interfaces,
                 "show_inactive": show_inactive,
                 "view_mode": view_mode
             })
@@ -250,10 +206,16 @@ async def owner_objects_create(request: Request):
     if user_role != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+    
     return templates.TemplateResponse("owner/objects/create.html", {
         "request": request,
         "title": "Создание объекта",
-        "current_user": current_user
+        "current_user": current_user,
+        "available_interfaces": available_interfaces
     })
 
 
@@ -424,10 +386,15 @@ async def owner_objects_detail(request: Request, object_id: int):
                 ]
             }
             
+            # Получаем данные для переключения интерфейсов
+            user_id = await get_user_id_from_current_user(current_user, session)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
             return templates.TemplateResponse("owner/objects/detail.html", {
                 "request": request,
                 "title": f"Объект: {object_data['name']}",
                 "object": object_data,
+                "available_interfaces": available_interfaces,
                 "current_user": current_user
             })
             
@@ -478,10 +445,15 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "schedule_repeat_weeks": obj.schedule_repeat_weeks
             }
             
+            # Получаем данные для переключения интерфейсов
+            user_id = await get_user_id_from_current_user(current_user, session)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
             return templates.TemplateResponse("owner/objects/edit.html", {
                 "request": request,
                 "title": f"Редактирование: {object_data['name']}",
                 "object": object_data,
+                "available_interfaces": available_interfaces,
                 "current_user": current_user
             })
             
@@ -747,6 +719,10 @@ async def owner_calendar(
             next_month = month + 1 if month < 12 else 1
             next_year = year if month < 12 else year + 1
             
+            # Получаем данные для переключения интерфейсов
+            user_id = await get_user_id_from_current_user(current_user, session)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
             return templates.TemplateResponse("owner/calendar/index.html", {
                 "request": request,
                 "title": "Календарное планирование",
@@ -755,6 +731,7 @@ async def owner_calendar(
                 "month": month,
                 "month_name": RU_MONTHS[month],
                 "calendar_data": calendar_data,
+                "available_interfaces": available_interfaces,
                 "objects": objects_list,
                 "selected_object_id": object_id,
                 "selected_object": selected_object,
@@ -779,8 +756,7 @@ async def owner_calendar_week(
     year: int = Query(None),
     week: int = Query(None),
     object_id: int = Query(None),
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
+    current_user: dict = Depends(require_owner_or_superadmin)
 ):
     """Недельный вид календаря владельца"""
     try:
@@ -804,96 +780,102 @@ async def owner_calendar_week(
             week_days.append(current_date)
         
         # Получаем объекты и тайм-слоты (как в месячном календаре)
-        object_service = ObjectService(db)
-        timeslot_service = TimeSlotService(db)
-        
-        # ОРИГИНАЛ: используем telegram_id владельца (как в месячном календаре)
-        owner_telegram_id = current_user.get("telegram_id") or current_user.get("id")
-        objects = await object_service.get_objects_by_owner(owner_telegram_id)
-        
-        selected_object = None
-        if object_id:
-            for obj in objects:
-                if obj.id == object_id:
-                    selected_object = obj
-                    break
-            if not selected_object:
-                raise HTTPException(status_code=404, detail="Объект не найден")
-        
-        # Получаем тайм-слоты для недели (как в месячном календаре)
-        timeslots_data = []
-        if selected_object:
-            timeslots = await timeslot_service.get_timeslots_by_object(selected_object.id, owner_telegram_id)
-            for slot in timeslots:
-                if week_start <= slot.slot_date <= week_days[-1]:
-                    timeslots_data.append({
-                        "id": slot.id,
-                        "object_id": slot.object_id,
-                        "object_name": selected_object.name,
-                        "date": slot.slot_date,
-                        "start_time": slot.start_time.strftime("%H:%M"),
-                        "end_time": slot.end_time.strftime("%H:%M"),
-                        "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(selected_object.hourly_rate),
-                        "is_active": slot.is_active,
-                        "notes": slot.notes or ""
-                    })
-        else:
-            for obj in objects:
-                timeslots = await timeslot_service.get_timeslots_by_object(obj.id, owner_telegram_id)
+        async with get_async_session() as db:
+            object_service = ObjectService(db)
+            timeslot_service = TimeSlotService(db)
+            
+            # ОРИГИНАЛ: используем telegram_id владельца (как в месячном календаре)
+            owner_telegram_id = current_user.get("telegram_id") or current_user.get("id")
+            objects = await object_service.get_objects_by_owner(owner_telegram_id)
+            
+            selected_object = None
+            if object_id:
+                for obj in objects:
+                    if obj.id == object_id:
+                        selected_object = obj
+                        break
+                if not selected_object:
+                    raise HTTPException(status_code=404, detail="Объект не найден")
+            
+            # Получаем тайм-слоты для недели (как в месячном календаре)
+            timeslots_data = []
+            if selected_object:
+                timeslots = await timeslot_service.get_timeslots_by_object(selected_object.id, owner_telegram_id)
                 for slot in timeslots:
                     if week_start <= slot.slot_date <= week_days[-1]:
                         timeslots_data.append({
                             "id": slot.id,
                             "object_id": slot.object_id,
-                            "object_name": obj.name,
+                            "object_name": selected_object.name,
                             "date": slot.slot_date,
                             "start_time": slot.start_time.strftime("%H:%M"),
                             "end_time": slot.end_time.strftime("%H:%M"),
-                            "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                            "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(selected_object.hourly_rate),
                             "is_active": slot.is_active,
                             "notes": slot.notes or ""
                         })
-        
-        # Группируем тайм-слоты по дням
-        week_data = []
-        for day_date in week_days:
-            day_timeslots = [
-                slot for slot in timeslots_data 
-                if slot["date"] == day_date and slot["is_active"]
-            ]
-            week_data.append({
-                "date": day_date,
-                "is_today": day_date == today,
-                "timeslots": day_timeslots,
-                "timeslots_count": len(day_timeslots)
+            else:
+                for obj in objects:
+                    timeslots = await timeslot_service.get_timeslots_by_object(obj.id, owner_telegram_id)
+                    for slot in timeslots:
+                        if week_start <= slot.slot_date <= week_days[-1]:
+                            timeslots_data.append({
+                                "id": slot.id,
+                                "object_id": slot.object_id,
+                                "object_name": obj.name,
+                                "date": slot.slot_date,
+                                "start_time": slot.start_time.strftime("%H:%M"),
+                                "end_time": slot.end_time.strftime("%H:%M"),
+                                "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                                "is_active": slot.is_active,
+                                "notes": slot.notes or ""
+                            })
+            
+            # Группируем тайм-слоты по дням
+            week_data = []
+            for day_date in week_days:
+                day_timeslots = [
+                    slot for slot in timeslots_data 
+                    if slot["date"] == day_date and slot["is_active"]
+                ]
+                week_data.append({
+                    "date": day_date,
+                    "is_today": day_date == today,
+                    "timeslots": day_timeslots,
+                    "timeslots_count": len(day_timeslots)
+                })
+            
+            # Навигация по неделям
+            prev_week = week - 1 if week > 1 else 52
+            prev_year = year if week > 1 else year - 1
+            next_week = week + 1 if week < 52 else 1
+            next_year = year if week < 52 else year + 1
+            
+            objects_list = [{"id": obj.id, "name": obj.name} for obj in objects]
+            
+            # Получаем данные для переключения интерфейсов
+            user_id = await get_user_id_from_current_user(current_user, db)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
+            return templates.TemplateResponse("owner/calendar/week.html", {
+                "request": request,
+                "title": "Недельное планирование",
+                "current_user": current_user,
+                "year": year,
+                "week": week,
+                "week_data": week_data,
+                "week_start": week_start,
+                "week_end": week_days[-1],
+                "objects": objects_list,
+                "available_interfaces": available_interfaces,
+                "selected_object_id": object_id,
+                "selected_object": selected_object,
+                "prev_week": prev_week,
+                "prev_year": prev_year,
+                "next_week": next_week,
+                "next_year": next_year,
+                "today": today
             })
-        
-        # Навигация по неделям
-        prev_week = week - 1 if week > 1 else 52
-        prev_year = year if week > 1 else year - 1
-        next_week = week + 1 if week < 52 else 1
-        next_year = year if week < 52 else year + 1
-        
-        objects_list = [{"id": obj.id, "name": obj.name} for obj in objects]
-        
-        return templates.TemplateResponse("owner/calendar/week.html", {
-            "request": request,
-            "title": "Недельное планирование",
-            "current_user": current_user,
-            "year": year,
-            "week": week,
-            "week_data": week_data,
-            "week_start": week_start,
-            "week_end": week_days[-1],
-            "objects": objects_list,
-            "selected_object_id": object_id,
-            "selected_object": selected_object,
-            "prev_week": prev_week,
-            "prev_year": prev_year,
-            "next_week": next_week,
-            "next_year": next_year,
-            "today": today
-        })
         
     except HTTPException:
         raise
@@ -941,6 +923,9 @@ async def owner_calendar_analysis(
         
         objects_list = [{"id": obj.id, "name": obj.name} for obj in objects]
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(owner_telegram_id)
+        
         return templates.TemplateResponse("owner/calendar/analysis.html", {
             "request": request,
             "title": "Анализ пробелов в планировании",
@@ -949,6 +934,7 @@ async def owner_calendar_analysis(
             "selected_object_id": object_id,
             "selected_object": selected_object,
             "analysis_data": analysis_data,
+            "available_interfaces": available_interfaces,
             "days": days,
             "message": message,
             "created": created
@@ -1497,16 +1483,25 @@ async def owner_calendar_api_timeslots_status(
         
         logger.info(f"Found {len(actual_shifts)} actual shifts")
         
+        # Получаем информацию о пользователях для запланированных смен
+        user_ids = list(set(shift.user_id for shift in scheduled_shifts))
+        users_query = select(User).where(User.id.in_(user_ids))
+        users_result = await db.execute(users_query)
+        users = {user.id: user for user in users_result.scalars().all()}
+        
         # Создаем карту запланированных смен по time_slot_id
         scheduled_shifts_map = {}
         # Индекс для запланированных смен по объекту и дате (на случай отсутствия привязки к time_slot)
         scheduled_by_object_date = {}
         for shift in scheduled_shifts:
+            user = users.get(shift.user_id)
+            user_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {shift.user_id}"
             if shift.time_slot_id:
                 scheduled_shifts_map.setdefault(shift.time_slot_id, [])
                 scheduled_shifts_map[shift.time_slot_id].append({
                     "id": shift.id,
                     "user_id": shift.user_id,
+                    "user_name": user_name,
                     "status": shift.status,
                     "start_time": web_timezone_helper.format_time_with_timezone(shift.planned_start, shift.object.timezone if shift.object else 'Europe/Moscow'),
                     "end_time": web_timezone_helper.format_time_with_timezone(shift.planned_end, shift.object.timezone if shift.object else 'Europe/Moscow'),
@@ -1561,9 +1556,12 @@ async def owner_calendar_api_timeslots_status(
                         overlaps_sched.append(sh)
                 if overlaps_sched:
                     for sh in overlaps_sched:
+                        user = users.get(sh.user_id)
+                        user_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {sh.user_id}"
                         scheduled_shifts.append({
                             "id": sh.id,
                             "user_id": sh.user_id,
+                            "user_name": user_name,
                             "status": sh.status,
                             "start_time": sh.planned_start.time().strftime("%H:%M"),
                             "end_time": sh.planned_end.time().strftime("%H:%M"),
@@ -1668,7 +1666,14 @@ async def owner_calendar_api_timeslots_status(
 async def owner_calendar_api_objects(request: Request):
     """API: список объектов владельца (массив для drag&drop-панели)."""
     current_user = await get_current_user(request)
-    if current_user.get("role") != "owner":
+    if not current_user:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    # Проверяем роли (поддержка множественных ролей)
+    user_roles = current_user.get("roles", [])
+    if isinstance(user_roles, str):
+        user_roles = [user_roles]
+    if "owner" not in user_roles and "superadmin" not in user_roles:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     try:
@@ -1709,7 +1714,14 @@ async def owner_calendar_api_objects(request: Request):
 async def api_employees(request: Request):
     """API: список сотрудников для drag&drop панели."""
     current_user = await get_current_user(request)
-    if not current_user or current_user.get("role") != "owner":
+    if not current_user:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    # Проверяем роли (поддержка множественных ролей)
+    user_roles = current_user.get("roles", [])
+    if isinstance(user_roles, str):
+        user_roles = [user_roles]
+    if "owner" not in user_roles and "superadmin" not in user_roles:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     try:
@@ -1724,17 +1736,20 @@ async def api_employees(request: Request):
             if not user_id:
                 raise HTTPException(status_code=404, detail="Владелец не найден")
 
-            # Получаем сотрудников, которые работали на объектах владельца
-            employees_q = select(User).distinct().join(Shift, User.id == Shift.user_id).join(Object, Shift.object_id == Object.id).where(
-                Object.owner_id == user_id,
-                User.role == "employee"
+            # Получаем всех сотрудников с активными договорами (без ограничений по владельцу или объектам)
+            from domain.entities.contract import Contract
+            employees_q = select(User).distinct().join(Contract, User.id == Contract.employee_id).where(
+                Contract.status == "active",
+                Contract.is_active == True
             )
-            employees = (await session.execute(employees_q)).scalars().all()
+            all_employees = (await session.execute(employees_q)).scalars().all()
             
-            # Если нет сотрудников из смен, показываем всех сотрудников владельца
-            if not employees:
-                all_employees_q = select(User).where(User.role == "employee")
-                employees = (await session.execute(all_employees_q)).scalars().all()
+            # Фильтруем только тех, кто имеет роль employee
+            employees = []
+            for emp in all_employees:
+                employee_roles = emp.roles if isinstance(emp.roles, list) else [emp.role]
+                if "employee" in employee_roles:
+                    employees.append(emp)
 
             return [
                 {
@@ -1757,7 +1772,14 @@ async def api_employees(request: Request):
 async def api_employees_for_object(object_id: int, request: Request):
     """API: получение списка сотрудников с доступом к конкретному объекту."""
     current_user = await get_current_user(request)
-    if not current_user or current_user.get("role") != "owner":
+    if not current_user:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    # Проверяем роли (поддержка множественных ролей)
+    user_roles = current_user.get("roles", [])
+    if isinstance(user_roles, str):
+        user_roles = [user_roles]
+    if "owner" not in user_roles and "superadmin" not in user_roles:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
     
     try:
@@ -1779,37 +1801,35 @@ async def api_employees_for_object(object_id: int, request: Request):
             if not object_result.scalar_one_or_none():
                 raise HTTPException(status_code=404, detail="Объект не найден")
             
-            # Получаем сотрудников с доступом к объекту
-            employees_query = select(User).join(Contract, User.id == Contract.employee_id).where(
-                User.role == "employee",
-                Contract.owner_id == user_id,
-                Contract.status == "active"
+            # Получаем всех сотрудников с активными договорами (без ограничений по владельцу или объектам)
+            employees_with_access = []
+            added_employee_ids = set()  # Для отслеживания уже добавленных сотрудников
+            
+            # Получаем всех сотрудников с активными договорами
+            employees_query = select(User).distinct().join(Contract, User.id == Contract.employee_id).where(
+                Contract.status == "active",
+                Contract.is_active == True
             )
             employees_result = await session.execute(employees_query)
-            employees = employees_result.scalars().all()
+            all_employees = employees_result.scalars().all()
             
-            employees_with_access = []
-            for emp in employees:
-                # Получаем договор сотрудника
-                contract_query = select(Contract).where(
-                    Contract.employee_id == emp.id,
-                    Contract.owner_id == user_id,
-                    Contract.status == "active"
-                )
-                contract_result = await session.execute(contract_query)
-                contract = contract_result.scalar_one_or_none()
+            # Детальное логирование каждого сотрудника
+            for employee in all_employees:
+                # Проверяем роль employee
+                employee_roles = employee.roles if isinstance(employee.roles, list) else [employee.role]
+                has_employee_role = "employee" in employee_roles
                 
-                if contract and contract.allowed_objects:
-                    allowed_objects = contract.allowed_objects if isinstance(contract.allowed_objects, list) else json.loads(contract.allowed_objects)
-                    if object_id in allowed_objects:
-                        employees_with_access.append({
-                            "id": emp.id,
-                            "name": f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username,
-                            "username": emp.username,
-                            "role": emp.role,
-                            "is_active": emp.is_active,
-                            "telegram_id": emp.telegram_id
-                        })
+                if employee.id not in added_employee_ids and has_employee_role:
+                    employee_data = {
+                        "id": int(employee.id),
+                        "name": str(f"{employee.first_name or ''} {employee.last_name or ''}".strip() or employee.username or f"ID {employee.id}"),
+                        "username": str(employee.username or ""),
+                        "role": str(employee.role),
+                        "is_active": bool(employee.is_active),
+                        "telegram_id": int(employee.telegram_id) if employee.telegram_id else None
+                    }
+                    employees_with_access.append(employee_data)
+                    added_employee_ids.add(employee.id)
             
             return employees_with_access
             
@@ -1904,7 +1924,14 @@ async def api_calendar_plan_shift(
 ):
     """API: планирование смены для сотрудника в тайм-слот."""
     current_user = await get_current_user(request)
-    if not current_user or current_user.get("role") != "owner":
+    if not current_user:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    # Проверяем роли (поддержка множественных ролей)
+    user_roles = current_user.get("roles", [])
+    if isinstance(user_roles, str):
+        user_roles = [user_roles]
+    if "owner" not in user_roles and "superadmin" not in user_roles:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     try:
@@ -1922,6 +1949,8 @@ async def api_calendar_plan_shift(
             user_id = await get_user_id_from_current_user(current_user, session)
             if not user_id:
                 raise HTTPException(status_code=404, detail="Владелец не найден")
+            
+            logger.info(f"Planning shift for user_id: {user_id}, timeslot_id: {timeslot_id}, employee_id: {employee_id}")
 
             # Проверяем, что тайм-слот существует и принадлежит владельцу
             timeslot_query = select(TimeSlot).join(Object).where(
@@ -1944,9 +1973,12 @@ async def api_calendar_plan_shift(
                 Contract.owner_id == user_id,
                 Contract.status == "active"
             )
-            contract = (await session.execute(contract_query)).scalar_one_or_none()
-            if not contract:
+            contracts = (await session.execute(contract_query)).scalars().all()
+            if not contracts:
                 raise HTTPException(status_code=400, detail="У сотрудника нет активного договора с вами")
+            
+            # Берем первый договор (если их несколько)
+            contract = contracts[0]
             
             # Проверяем, что сотрудник имеет доступ к объекту тайм-слота
             allowed_objects = contract.allowed_objects if contract.allowed_objects else []
@@ -1965,15 +1997,15 @@ async def api_calendar_plan_shift(
                 ShiftSchedule.planned_end == end_datetime,
                 ShiftSchedule.status.in_(["planned", "confirmed"])
             )
-            existing_schedule = (await session.execute(existing_schedule_query)).scalar_one_or_none()
-            if existing_schedule:
+            existing_schedules = (await session.execute(existing_schedule_query)).scalars().all()
+            if existing_schedules:
                 raise HTTPException(status_code=400, detail="Сотрудник уже запланирован на это время")
 
             # Создаем запланированную смену
             new_schedule = ShiftSchedule(
-                user_id=employee_id,
-                object_id=timeslot.object_id,
-                time_slot_id=timeslot_id,
+                user_id=int(employee_id),
+                object_id=int(timeslot.object_id),
+                time_slot_id=int(timeslot_id),
                 planned_start=slot_datetime,
                 planned_end=end_datetime,
                 status="planned",
@@ -2193,13 +2225,19 @@ async def owner_contract_templates(request: Request):
         contract_service = ContractService()
         templates_list = await contract_service.get_contract_templates()
         
+        # Получаем данные для переключения интерфейсов
+        async with get_async_session() as session:
+            user_id = await get_user_id_from_current_user(current_user, session)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/templates/contracts/list.html",
             {
                 "request": request,
                 "templates": templates_list,
                 "title": "Шаблоны договоров",
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
         
@@ -2217,8 +2255,7 @@ async def owner_timeslots_list(
     request: Request,
     object_id: int,
     current_user: dict = Depends(get_current_user_dependency()),
-    _: None = Depends(require_role(["owner", "superadmin"])),
-    db: AsyncSession = Depends(get_db_session)
+    _: None = Depends(require_role(["owner", "superadmin"]))
 ):
     """Список тайм-слотов объекта владельца."""
     try:
@@ -2229,47 +2266,53 @@ async def owner_timeslots_list(
             telegram_id = current_user.telegram_id
         
         # Получение информации об объекте и тайм-слотов из базы данных
-        object_service = ObjectService(db)
-        timeslot_service = TimeSlotService(db)
-        
-        # Получаем объект
-        obj = await object_service.get_object_by_id(object_id, telegram_id)
-        if not obj:
-            raise HTTPException(status_code=404, detail="Объект не найден")
-        
-        # Получаем тайм-слоты
-        timeslots = await timeslot_service.get_timeslots_by_object(object_id, telegram_id)
-        
-        # Преобразуем в формат для шаблона
-        timeslots_data = []
-        for slot in timeslots:
-            timeslots_data.append({
-                "id": slot.id,
-                "object_id": slot.object_id,
-                "slot_date": slot.slot_date.strftime("%Y-%m-%d"),
-                "start_time": slot.start_time.strftime("%H:%M"),
-                "end_time": slot.end_time.strftime("%H:%M"),
-                "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
-                "max_employees": slot.max_employees or 1,
-                "is_active": slot.is_active,
-                "created_at": slot.created_at.strftime("%Y-%m-%d")
+        async with get_async_session() as db:
+            object_service = ObjectService(db)
+            timeslot_service = TimeSlotService(db)
+            
+            # Получаем объект
+            obj = await object_service.get_object_by_id(object_id, telegram_id)
+            if not obj:
+                raise HTTPException(status_code=404, detail="Объект не найден")
+            
+            # Получаем тайм-слоты
+            timeslots = await timeslot_service.get_timeslots_by_object(object_id, telegram_id)
+            
+            # Преобразуем в формат для шаблона
+            timeslots_data = []
+            for slot in timeslots:
+                timeslots_data.append({
+                    "id": slot.id,
+                    "object_id": slot.object_id,
+                    "slot_date": slot.slot_date.strftime("%Y-%m-%d"),
+                    "start_time": slot.start_time.strftime("%H:%M"),
+                    "end_time": slot.end_time.strftime("%H:%M"),
+                    "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                    "max_employees": slot.max_employees or 1,
+                    "is_active": slot.is_active,
+                    "created_at": slot.created_at.strftime("%Y-%m-%d")
+                })
+            
+            # Информация об объекте
+            object_data = {
+                "id": obj.id,
+                "name": obj.name,
+                "address": obj.address or ""
+            }
+            
+            # Получаем данные для переключения интерфейсов
+            user_id = await get_user_id_from_current_user(current_user, db)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
+            return templates.TemplateResponse("owner/timeslots/list.html", {
+                "request": request,
+                "title": f"Тайм-слоты: {object_data['name']}",
+                "timeslots": timeslots_data,
+                "object_id": object_id,
+                "object": object_data,
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             })
-        
-        # Информация об объекте
-        object_data = {
-            "id": obj.id,
-            "name": obj.name,
-            "address": obj.address or ""
-        }
-        
-        return templates.TemplateResponse("owner/timeslots/list.html", {
-            "request": request,
-            "title": f"Тайм-слоты: {object_data['name']}",
-            "timeslots": timeslots_data,
-            "object_id": object_id,
-            "object": object_data,
-            "current_user": current_user
-        })
         
     except HTTPException:
         raise
@@ -2283,8 +2326,7 @@ async def owner_timeslot_edit_form(
     request: Request,
     timeslot_id: int,
     current_user: dict = Depends(get_current_user_dependency()),
-    _: None = Depends(require_role(["owner", "superadmin"])),
-    db: AsyncSession = Depends(get_db_session)
+    _: None = Depends(require_role(["owner", "superadmin"]))
 ):
     """Форма редактирования тайм-слота владельца."""
     try:
@@ -2295,48 +2337,54 @@ async def owner_timeslot_edit_form(
             telegram_id = current_user.telegram_id
         
         # Получение тайм-слота из базы данных
-        timeslot_service = TimeSlotService(db)
-        object_service = ObjectService(db)
-        
-        # Получаем тайм-слот с проверкой владельца
-        timeslot = await timeslot_service.get_timeslot_by_id(timeslot_id, telegram_id)
-        if not timeslot:
-            raise HTTPException(status_code=404, detail="Тайм-слот не найден")
-        
-        # Получаем объект
-        obj = await object_service.get_object_by_id(timeslot.object_id, telegram_id)
-        if not obj:
-            raise HTTPException(status_code=404, detail="Объект не найден")
-        
-        timeslot_data = {
-            "id": timeslot.id,
-            "object_id": timeslot.object_id,
-            "slot_date": timeslot.slot_date.strftime("%Y-%m-%d"),
-            "start_time": timeslot.start_time.strftime("%H:%M"),
-            "end_time": timeslot.end_time.strftime("%H:%M"),
-            "hourly_rate": float(timeslot.hourly_rate) if timeslot.hourly_rate else float(obj.hourly_rate),
-            "max_employees": timeslot.max_employees or 1,
-            "is_active": timeslot.is_active
-        }
-        
-        object_data = {
-            "id": obj.id,
-            "name": obj.name,
-            "address": obj.address or "",
-            "hourly_rate": float(obj.hourly_rate) if obj.hourly_rate else 0,
-            "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "00:00",
-            "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "23:59",
-            "max_distance": obj.max_distance_meters or 0
-        }
-        
-        return templates.TemplateResponse("owner/timeslots/edit.html", {
-            "request": request,
-            "title": f"Редактирование тайм-слота: {object_data['name']}",
-            "timeslot": timeslot_data,
-            "object_id": timeslot.object_id,
-            "object": object_data,
-            "current_user": current_user
-        })
+        async with get_async_session() as db:
+            timeslot_service = TimeSlotService(db)
+            object_service = ObjectService(db)
+            
+            # Получаем тайм-слот с проверкой владельца
+            timeslot = await timeslot_service.get_timeslot_by_id(timeslot_id, telegram_id)
+            if not timeslot:
+                raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+            
+            # Получаем объект
+            obj = await object_service.get_object_by_id(timeslot.object_id, telegram_id)
+            if not obj:
+                raise HTTPException(status_code=404, detail="Объект не найден")
+            
+            timeslot_data = {
+                "id": timeslot.id,
+                "object_id": timeslot.object_id,
+                "slot_date": timeslot.slot_date.strftime("%Y-%m-%d"),
+                "start_time": timeslot.start_time.strftime("%H:%M"),
+                "end_time": timeslot.end_time.strftime("%H:%M"),
+                "hourly_rate": float(timeslot.hourly_rate) if timeslot.hourly_rate else float(obj.hourly_rate),
+                "max_employees": timeslot.max_employees or 1,
+                "is_active": timeslot.is_active
+            }
+            
+            object_data = {
+                "id": obj.id,
+                "name": obj.name,
+                "address": obj.address or "",
+                "hourly_rate": float(obj.hourly_rate) if obj.hourly_rate else 0,
+                "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "00:00",
+                "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "23:59",
+                "max_distance": obj.max_distance_meters or 0
+            }
+            
+            # Получаем данные для переключения интерфейсов
+            user_id = await get_user_id_from_current_user(current_user, db)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+            
+            return templates.TemplateResponse("owner/timeslots/edit.html", {
+                "request": request,
+                "title": f"Редактирование тайм-слота: {object_data['name']}",
+                "timeslot": timeslot_data,
+                "object_id": timeslot.object_id,
+                "object": object_data,
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
+            })
         
     except HTTPException:
         raise
@@ -2504,12 +2552,16 @@ async def owner_timeslot_create_form(
             "address": obj.address or ""
         }
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(telegram_id)
+        
         return templates.TemplateResponse("owner/timeslots/create.html", {
             "request": request,
             "title": f"Создание тайм-слота: {object_data['name']}",
             "object_id": object_id,
             "object": object_data,
-            "current_user": current_user
+            "current_user": current_user,
+            "available_interfaces": available_interfaces
         })
         
     except HTTPException:
@@ -2878,9 +2930,13 @@ async def owner_shifts_list(
             'completed': len([s for s in all_shifts if s['status'] == 'completed'])
         }
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/shifts/list.html", {
             "request": request,
             "current_user": current_user,
+            "available_interfaces": available_interfaces,
             "shifts": paginated_shifts,
             "objects": objects,
             "stats": stats,
@@ -2960,11 +3016,15 @@ async def owner_shift_detail(
         # Получаем объект для передачи в шаблон
         object = shift.object
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/shifts/detail.html", {
             "request": request,
             "current_user": current_user,
             "shift": shift,
             "shift_type": shift_type,
+            "available_interfaces": available_interfaces,
             "object": object,
             "web_timezone_helper": web_timezone_helper
         })
@@ -3132,11 +3192,15 @@ async def owner_reports(
             "employees": len(employees)
         }
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/reports/index.html", {
             "request": request,
             "current_user": current_user,
             "objects": objects,
             "employees": employees,
+            "available_interfaces": available_interfaces,
             "stats": stats
         })
         
@@ -3490,9 +3554,13 @@ async def owner_profile(
             tags_by_category[tag.category].append(tag)
             tags_by_category_json[tag.category].append(tag.to_dict())
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/profile/index.html", {
             "request": request,
             "current_user": current_user,
+            "available_interfaces": available_interfaces,
             "profile": profile,
             "tags_by_category": tags_by_category,
             "tags_by_category_json": tags_by_category_json,
@@ -3628,11 +3696,17 @@ async def owner_settings(request: Request):
     if user_role != "owner":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+    
     return templates.TemplateResponse("owner/settings.html", {
         "request": request,
         "current_user": current_user,
         "title": "Настройки владельца",
-        "message": "Настройки в разработке"
+        "message": "Настройки в разработке",
+        "available_interfaces": available_interfaces
     })
 
 
@@ -3651,6 +3725,11 @@ async def owner_planning_templates_list(request: Request):
             template_service = TemplateService(session)
             templates_list = await template_service.get_templates_by_owner(current_user["id"])
         
+        # Получаем данные для переключения интерфейсов
+        async with get_async_session() as session:
+            user_id = await get_user_id_from_current_user(current_user, session)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/templates/planning/list.html",
             {
@@ -3658,7 +3737,8 @@ async def owner_planning_templates_list(request: Request):
                 "templates": templates_list,
                 "template_type": "planning",
                 "title": "Шаблоны планирования",
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
     except Exception as e:
@@ -3673,13 +3753,19 @@ async def owner_planning_template_create(request: Request):
     if current_user.get("role") != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+    
     return templates.TemplateResponse(
         "owner/templates/planning/create.html",
         {
             "request": request,
             "template_type": "planning",
             "title": "Создание шаблона планирования",
-            "current_user": current_user
+            "current_user": current_user,
+            "available_interfaces": available_interfaces
         }
     )
 
@@ -3745,6 +3831,11 @@ async def owner_planning_template_detail(request: Request, template_id: int):
         if not template:
             raise HTTPException(status_code=404, detail="Шаблон планирования не найден")
         
+        # Получаем данные для переключения интерфейсов
+        async with get_async_session() as session:
+            user_id = await get_user_id_from_current_user(current_user, session)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/templates/planning/detail.html",
             {
@@ -3752,7 +3843,8 @@ async def owner_planning_template_detail(request: Request, template_id: int):
                 "template": template,
                 "template_type": "planning",
                 "title": "Детали шаблона планирования",
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
     except HTTPException:
@@ -3778,6 +3870,11 @@ async def owner_planning_template_edit(request: Request, template_id: int):
         if not template:
             raise HTTPException(status_code=404, detail="Шаблон планирования не найден")
         
+        # Получаем данные для переключения интерфейсов
+        async with get_async_session() as session:
+            user_id = await get_user_id_from_current_user(current_user, session)
+            available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/templates/planning/edit.html",
             {
@@ -3785,7 +3882,8 @@ async def owner_planning_template_edit(request: Request, template_id: int):
                 "template": template,
                 "template_type": "planning",
                 "title": "Редактирование шаблона планирования",
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
     except HTTPException:
@@ -3894,6 +3992,9 @@ async def owner_employees_list(
         else:
             employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/employees/list.html",
             {
@@ -3902,7 +4003,8 @@ async def owner_employees_list(
                 "title": "Управление сотрудниками",
                 "current_user": current_user,
                 "view_mode": view_mode,
-                "show_former": show_former
+                "show_former": show_former,
+                "available_interfaces": available_interfaces
             }
         )
     except Exception as e:
@@ -3969,6 +4071,9 @@ async def owner_employees_create_form(
                 'current_year': str(datetime.now().year)
             })
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(internal_user_id)
+        
         return templates.TemplateResponse(
             "owner/employees/create.html",
             {
@@ -3979,6 +4084,7 @@ async def owner_employees_create_form(
                 "objects": objects,
                 "templates": templates_list,
                 "templates_json": templates_json,
+                "available_interfaces": available_interfaces,
                 "owner_tags": owner_tags,
                 "current_date": current_date,
                 "employee_telegram_id": employee_telegram_id
@@ -4009,13 +4115,17 @@ async def owner_employee_detail(
         if not employee_info:
             raise HTTPException(status_code=404, detail="Сотрудник не найден")
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse(
             "owner/employees/detail.html",
             {
                 "request": request,
                 "title": f"Сотрудник {employee_info.get('name', 'Неизвестно')}",
                 "current_user": current_user,
-                "employee": employee_info
+                "employee": employee_info,
+                "available_interfaces": available_interfaces
             }
         )
     except HTTPException:
@@ -4036,6 +4146,8 @@ async def owner_employees_create_contract(
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
     allowed_objects: List[int] = Form(default=[]),
+    is_manager: bool = Form(False),
+    manager_permissions: List[str] = Form(default=[]),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -4059,6 +4171,12 @@ async def owner_employees_create_contract(
                 field_key = key[6:]  # Убираем префикс "field_"
                 dynamic_values[field_key] = value
         
+        # Обрабатываем права управляющего
+        manager_permissions_dict = {}
+        if is_manager and manager_permissions:
+            for permission in manager_permissions:
+                manager_permissions_dict[permission] = True
+        
         # Создаем договор
         contract_data = {
             "employee_telegram_id": employee_telegram_id,
@@ -4069,6 +4187,8 @@ async def owner_employees_create_contract(
             "end_date": end_date_obj,
             "template_id": template_id,
             "allowed_objects": allowed_objects,
+            "is_manager": is_manager,
+            "manager_permissions": manager_permissions_dict if manager_permissions_dict else None,
             "values": dynamic_values if dynamic_values else None
         }
         
@@ -4101,13 +4221,17 @@ async def owner_contract_detail(
         if not contract:
             raise HTTPException(status_code=404, detail="Договор не найден")
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(current_user["id"])
+        
         return templates.TemplateResponse(
             "owner/employees/contract_detail.html",
             {
                 "request": request,
                 "contract": contract,
                 "title": f"Договор {contract.get('title', 'Без названия')}",
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
     except HTTPException:
@@ -4173,6 +4297,9 @@ async def owner_contract_edit_form(
                 'current_year': str(datetime.now().year)
             })
         
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(internal_user_id)
+        
         return templates.TemplateResponse(
             "owner/employees/edit_contract.html",
             {
@@ -4181,6 +4308,7 @@ async def owner_contract_edit_form(
                 "objects": objects,
                 "templates": templates_list,
                 "templates_json": templates_json,
+                "available_interfaces": available_interfaces,
                 "owner_tags": owner_tags,
                 "title": f"Редактирование договора {contract.get('title', 'Без названия')}",
                 "current_user": current_user
@@ -4204,6 +4332,8 @@ async def owner_contract_edit(
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
     allowed_objects: List[int] = Form(default=[]),
+    is_manager: bool = Form(False),
+    manager_permissions: List[str] = Form(default=[]),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -4227,6 +4357,12 @@ async def owner_contract_edit(
                 field_key = key[6:]  # Убираем префикс "field_"
                 dynamic_values[field_key] = value
         
+        # Обрабатываем права управляющего
+        manager_permissions_dict = {}
+        if is_manager and manager_permissions:
+            for permission in manager_permissions:
+                manager_permissions_dict[permission] = True
+        
         # Обновляем договор
         contract_data = {
             "title": title,
@@ -4236,6 +4372,8 @@ async def owner_contract_edit(
             "end_date": end_date_obj,
             "template_id": template_id,
             "allowed_objects": allowed_objects,
+            "is_manager": is_manager,
+            "manager_permissions": manager_permissions_dict if manager_permissions_dict else None,
             "values": dynamic_values if dynamic_values else None
         }
         
@@ -4311,21 +4449,13 @@ async def owner_contract_terminate(
         
         from apps.web.services.contract_service import ContractService
         
-        contract_service = ContractService()
-        logger.info(f"ContractService created successfully")
-        
         # Получаем внутренний ID пользователя
-        logger.info(f"Getting user_id from current_user")
         user_id = await get_user_id_from_current_user(current_user, db)
-        logger.info(f"User ID resolved: {user_id}")
-        
         if not user_id:
-            logger.error(f"User ID is None or empty")
-            raise HTTPException(status_code=400, detail="Пользователь не найден")
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
         
-        logger.info(f"Calling contract_service.terminate_contract with: contract_id={contract_id}, user_id={user_id}, reason='{reason}'")
+        contract_service = ContractService()
         success = await contract_service.terminate_contract(contract_id, user_id, reason)
-        logger.info(f"Contract termination result: {success}")
         
         if success:
             logger.info(f"Contract terminated successfully")
