@@ -799,16 +799,6 @@ async function loadEmployeesForModal(objectId) {
         });
         const employees = await response.json();
         
-        console.log('=== EMPLOYEES API RESPONSE ===');
-        console.log('API response:', employees);
-        console.log('Is array:', Array.isArray(employees));
-        console.log('Number of employees:', employees ? employees.length : 0);
-        if (Array.isArray(employees)) {
-            employees.forEach((emp, index) => {
-                console.log(`Employee ${index + 1}:`, emp);
-            });
-        }
-        console.log('=== END EMPLOYEES API RESPONSE ===');
         
         const select = document.getElementById('employeeSelectModal');
         
