@@ -1784,9 +1784,18 @@ async def api_employees_for_object(object_id: int, request: Request):
             
             logger.info(f"Found {len(all_employees)} employees with active contracts")
             
-            # Добавляем всех сотрудников с ролью employee
-            for employee in all_employees:
-                if employee.id not in added_employee_ids and ("employee" in (employee.roles if isinstance(employee.roles, list) else [employee.role])):
+            # Детальное логирование каждого сотрудника
+            for i, employee in enumerate(all_employees):
+                logger.info(f"Employee {i+1}: ID={employee.id}, telegram_id={employee.telegram_id}, username={employee.username}, first_name={employee.first_name}, last_name={employee.last_name}")
+                logger.info(f"Employee {i+1}: role={employee.role}, roles={employee.roles}, is_active={employee.is_active}")
+                logger.info(f"Employee {i+1}: already_added={employee.id in added_employee_ids}")
+                
+                # Проверяем роль employee
+                employee_roles = employee.roles if isinstance(employee.roles, list) else [employee.role]
+                has_employee_role = "employee" in employee_roles
+                logger.info(f"Employee {i+1}: employee_roles={employee_roles}, has_employee_role={has_employee_role}")
+                
+                if employee.id not in added_employee_ids and has_employee_role:
                     logger.info(f"Adding employee {employee.id} ({employee.username}) to list")
                     employee_data = {
                         "id": int(employee.id),
@@ -1800,7 +1809,7 @@ async def api_employees_for_object(object_id: int, request: Request):
                     added_employee_ids.add(employee.id)
                     logger.info(f"Added employee data: {employee_data}")
                 else:
-                    logger.info(f"Employee {employee.id} already added or not an employee, skipping")
+                    logger.info(f"Employee {employee.id} skipped - already_added: {employee.id in added_employee_ids}, has_employee_role: {has_employee_role}")
             
             logger.info(f"Final result: {len(employees_with_access)} employees for object {object_id}")
             logger.info(f"Final employees list: {employees_with_access}")
