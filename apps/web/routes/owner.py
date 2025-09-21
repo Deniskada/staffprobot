@@ -710,6 +710,7 @@ async def owner_calendar(
             try:
                 from sqlalchemy import select, and_
                 from domain.entities.shift import Shift
+                from domain.entities.shift_schedule import ShiftSchedule
                 from domain.entities.user import User
                 
                 # Получаем владельца по telegram_id
@@ -721,6 +722,8 @@ async def owner_calendar(
                     end_date = date(year, month, 28) + timedelta(days=4)  # До конца месяца
                     
                     from sqlalchemy.orm import selectinload
+                    
+                    # Загружаем активные и завершенные смены
                     shifts_query = select(Shift).where(
                         and_(
                             Shift.object_id.in_([obj.id for obj in objects]),
@@ -729,6 +732,7 @@ async def owner_calendar(
                         )
                     ).options(selectinload(Shift.user))
                     shifts = (await session.execute(shifts_query)).scalars().all()
+                    logger.info(f"Found {len(shifts)} active/completed shifts in database for objects: {[obj.id for obj in objects]}")
                     
                     for shift in shifts:
                         # Находим объект для смены
@@ -748,7 +752,36 @@ async def owner_calendar(
                             "total_payment": float(shift.total_payment) if shift.total_payment else 0
                         })
                     
-                    logger.info(f"Loaded {len(shifts_data)} shifts for calendar")
+                    # Загружаем запланированные смены
+                    schedules_query = select(ShiftSchedule).where(
+                        and_(
+                            ShiftSchedule.object_id.in_([obj.id for obj in objects]),
+                            ShiftSchedule.planned_start >= datetime.combine(start_date, time.min),
+                            ShiftSchedule.planned_start <= datetime.combine(end_date, time.max)
+                        )
+                    ).options(selectinload(ShiftSchedule.user))
+                    schedules = (await session.execute(schedules_query)).scalars().all()
+                    logger.info(f"Found {len(schedules)} planned shifts in database for objects: {[obj.id for obj in objects]}")
+                    
+                    for schedule in schedules:
+                        # Находим объект для запланированной смены
+                        schedule_object = next((obj for obj in objects if obj.id == schedule.object_id), None)
+                        object_name = schedule_object.name if schedule_object else "Неизвестный объект"
+                        
+                        shifts_data.append({
+                            "id": f"schedule_{schedule.id}",  # Префикс для отличия от обычных смен
+                            "object_id": schedule.object_id,
+                            "object_name": object_name,
+                            "date": schedule.planned_start.date(),
+                            "start_time": schedule.planned_start.strftime("%H:%M"),
+                            "end_time": schedule.planned_end.strftime("%H:%M") if schedule.planned_end else "",
+                            "employee_name": f"{schedule.user.first_name} {schedule.user.last_name}".strip() if schedule.user else "Неизвестно",
+                            "status": schedule.status or "planned",
+                            "total_hours": 0,
+                            "total_payment": 0
+                        })
+                    
+                    logger.info(f"Loaded {len(shifts_data)} total shifts (active + planned) for calendar")
             except Exception as e:
                 logger.warning(f"Could not load shifts for calendar: {e}")
                 shifts_data = []
