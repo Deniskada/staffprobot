@@ -52,10 +52,10 @@ celery_app.conf.update(
             'task': 'core.celery.tasks.notification_tasks.process_reminders',
             'schedule': 30 * 60,  # 30 минут
         },
-        # Автоматическое закрытие смен в полночь
+        # Автоматическое закрытие смен каждые 30 минут
         'auto-close-shifts': {
             'task': 'core.celery.tasks.shift_tasks.auto_close_shifts',
-            'schedule': crontab(hour=0, minute=0),  # каждый день в 00:00
+            'schedule': 30 * 60,  # каждые 30 минут
         },
         # Очистка старых кэшей
         'cleanup-cache': {
