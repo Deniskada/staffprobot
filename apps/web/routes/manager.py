@@ -1884,7 +1884,6 @@ async def get_employees_for_object_manager(
             
             # Получаем всех сотрудников с активными договорами
             employees_query = select(User).join(Contract, User.id == Contract.employee_id).where(
-                User.role == "employee",
                 Contract.is_active == True
             )
             employees_result = await db.execute(employees_query)
@@ -1896,6 +1895,10 @@ async def get_employees_for_object_manager(
             for emp in employees:
                 # Пропускаем, если сотрудник уже добавлен
                 if emp.id in added_employee_ids:
+                    continue
+                
+                # Проверяем, что пользователь имеет роль employee
+                if "employee" not in (emp.roles if isinstance(emp.roles, list) else [emp.role]):
                     continue
                     
                 # Получаем договоры сотрудника
