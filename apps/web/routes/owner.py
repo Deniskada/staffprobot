@@ -1706,17 +1706,29 @@ async def api_employees(request: Request):
             if not user_id:
                 raise HTTPException(status_code=404, detail="Владелец не найден")
 
-            # Получаем сотрудников, которые работали на объектах владельца
-            employees_q = select(User).distinct().join(Shift, User.id == Shift.user_id).join(Object, Shift.object_id == Object.id).where(
-                Object.owner_id == user_id,
-                User.role == "employee"
+            # Получаем всех сотрудников с активными договорами (без ограничений по владельцу или объектам)
+            from domain.entities.contract import Contract
+            employees_q = select(User).distinct().join(Contract, User.id == Contract.employee_id).where(
+                Contract.status == "active",
+                Contract.is_active == True
             )
-            employees = (await session.execute(employees_q)).scalars().all()
+            all_employees = (await session.execute(employees_q)).scalars().all()
             
-            # Если нет сотрудников из смен, показываем всех сотрудников владельца
-            if not employees:
-                all_employees_q = select(User).where(User.role == "employee")
-                employees = (await session.execute(all_employees_q)).scalars().all()
+            logger.info(f"=== DRAG&DROP EMPLOYEES API ===")
+            logger.info(f"Found {len(all_employees)} employees with active contracts")
+            
+            # Фильтруем только тех, кто имеет роль employee
+            employees = []
+            for i, emp in enumerate(all_employees):
+                employee_roles = emp.roles if isinstance(emp.roles, list) else [emp.role]
+                has_employee_role = "employee" in employee_roles
+                logger.info(f"Employee {i+1}: ID={emp.id}, username={emp.username}, roles={emp.roles}, has_employee_role={has_employee_role}")
+                if has_employee_role:
+                    employees.append(emp)
+                    logger.info(f"Added employee {emp.id} to drag&drop list")
+            
+            logger.info(f"Final drag&drop employees count: {len(employees)}")
+            logger.info(f"=== END DRAG&DROP EMPLOYEES API ===")
 
             return [
                 {
