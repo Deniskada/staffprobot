@@ -74,7 +74,7 @@
     top: 50%;
     transform: translateY(-50%);
     width: 280px;
-    max-height: 80vh;
+    max-height: 400px;
     background: white;
     border-radius: 10px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -343,6 +343,33 @@ async function loadObjects() {
             objectItem.addEventListener('dragstart', function(e) {
                 e.dataTransfer.setData('text/plain', `object:${object.id}`);
                 this.style.opacity = '0.5';
+                
+                // Создаем drag preview
+                const dragPreview = document.createElement('div');
+                dragPreview.style.cssText = `
+                    position: absolute;
+                    top: -1000px;
+                    left: -1000px;
+                    padding: 10px;
+                    background: white;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    font-size: 14px;
+                    z-index: 9999;
+                `;
+                dragPreview.innerHTML = `
+                    <div style="font-weight: 600; color: #2c3e50;">${object.name}</div>
+                    <div style="font-size: 12px; color: #6c757d;">${object.hourly_rate || 0}₽/час</div>
+                `;
+                document.body.appendChild(dragPreview);
+                e.dataTransfer.setDragImage(dragPreview, 10, 10);
+                
+                setTimeout(() => {
+                    if (dragPreview.parentNode) {
+                        dragPreview.remove();
+                    }
+                }, 0);
             });
             
             objectItem.addEventListener('dragend', function() {
@@ -406,6 +433,33 @@ async function loadEmployees() {
             employeeItem.addEventListener('dragstart', function(e) {
                 e.dataTransfer.setData('text/plain', `employee:${employee.id}`);
                 this.style.opacity = '0.5';
+                
+                // Создаем drag preview
+                const dragPreview = document.createElement('div');
+                dragPreview.style.cssText = `
+                    position: absolute;
+                    top: -1000px;
+                    left: -1000px;
+                    padding: 10px;
+                    background: white;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    font-size: 14px;
+                    z-index: 9999;
+                `;
+                dragPreview.innerHTML = `
+                    <div style="font-weight: 600; color: #2c3e50;">${employee.name}</div>
+                    <div style="font-size: 12px; color: #6c757d;">${employee.role || 'Сотрудник'}</div>
+                `;
+                document.body.appendChild(dragPreview);
+                e.dataTransfer.setDragImage(dragPreview, 10, 10);
+                
+                setTimeout(() => {
+                    if (dragPreview.parentNode) {
+                        dragPreview.remove();
+                    }
+                }, 0);
             });
             
             employeeItem.addEventListener('dragend', function() {
