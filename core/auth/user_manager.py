@@ -54,6 +54,7 @@ class UserManager:
                 last_name=last_name,
                 username=username,
                 role="applicant",
+                roles=["applicant"],
                 is_active=True,
             )
             session.add(new_user)
@@ -364,6 +365,7 @@ class UserManager:
                         last_name=user_data.get("last_name"),
                         username=user_data.get("username"),
                         role="owner",  # Пользователи, создающие объекты - владельцы
+                        roles=["owner"],
                         is_active=user_data["is_active"]
                     )
                     session.add(new_user)
