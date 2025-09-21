@@ -267,10 +267,22 @@ const calendarPanels = new CalendarPanels('owner');
 // Override calendar manager methods for drag&drop
 calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId) {
     try {
+        console.log('Starting employee assignment:', employeeId, timeslotId);
+        
         // Get employee details
+        console.log('Fetching employees...');
         const employeeResponse = await fetch(`/owner/api/employees`);
+        console.log('Employee response:', employeeResponse.status);
+        
+        if (!employeeResponse.ok) {
+            throw new Error(`HTTP ${employeeResponse.status}: ${employeeResponse.statusText}`);
+        }
+        
         const employees = await employeeResponse.json();
+        console.log('Employees data:', employees);
+        
         const employee = employees.find(emp => emp.id == employeeId);
+        console.log('Found employee:', employee);
         
         if (!employee) {
             calendarPanels.showNotification('Сотрудник не найден', 'error');
@@ -278,8 +290,16 @@ calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId
         }
         
         // Get timeslot details
+        console.log('Fetching timeslot...');
         const timeslotResponse = await fetch(`/owner/calendar/api/timeslot/${timeslotId}`);
+        console.log('Timeslot response:', timeslotResponse.status);
+        
+        if (!timeslotResponse.ok) {
+            throw new Error(`HTTP ${timeslotResponse.status}: ${timeslotResponse.statusText}`);
+        }
+        
         const timeslot = await timeslotResponse.json();
+        console.log('Found timeslot:', timeslot);
         
         if (!timeslot) {
             calendarPanels.showNotification('Тайм-слот не найден', 'error');
@@ -294,7 +314,7 @@ calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId
         
     } catch (error) {
         console.error('Error assigning employee:', error);
-        calendarPanels.showNotification('Ошибка назначения сотрудника', 'error');
+        calendarPanels.showNotification(`Ошибка назначения сотрудника: ${error.message}`, 'error');
     }
 };
 
@@ -367,6 +387,12 @@ function showDateDetails(date) {
 // Initialize panels on page load
 document.addEventListener('DOMContentLoaded', function() {
     calendarPanels.init();
+    
+    // Re-setup drag&drop after calendar is fully loaded
+    setTimeout(() => {
+        console.log('Re-setting up drag&drop after calendar load');
+        calendarManager.setupDragDrop();
+    }, 500);
 });
 
 </script>

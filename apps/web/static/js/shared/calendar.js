@@ -14,7 +14,10 @@ class CalendarManager {
     
     init() {
         this.bindEvents();
-        this.setupDragDrop();
+        // Delay setupDragDrop to ensure calendar elements are loaded
+        setTimeout(() => {
+            this.setupDragDrop();
+        }, 100);
     }
     
     bindEvents() {
@@ -63,6 +66,8 @@ class CalendarManager {
     setupDragDrop() {
         // Setup drag and drop for employee assignment and object creation
         const timeslots = document.querySelectorAll('.timeslot-item');
+        console.log('Setting up drag&drop for', timeslots.length, 'timeslots');
+        
         timeslots.forEach(timeslot => {
             timeslot.addEventListener('dragover', (e) => {
                 e.preventDefault();
