@@ -17,39 +17,10 @@
                     <i class="bi bi-calendar-today"></i> Сегодня
                 </button>
                 {% endif %}
-                {% if show_filters %}
-                <button type="button" class="btn btn-outline-info btn-sm" onclick="toggleFilters()">
-                    <i class="bi bi-funnel"></i> Фильтры
-                </button>
-                {% endif %}
-                {% if employees %}
-                <button type="button" class="btn btn-outline-success btn-sm" onclick="showEmployeesPanel()">
-                    <i class="bi bi-people"></i> Сотрудники
-                </button>
-                {% endif %}
-                {% if show_view_switcher %}
-                <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-outline-secondary btn-sm {% if view_type == 'month' %}active{% endif %}" onclick="switchView('month')">
-                        Месяц
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm {% if view_type == 'week' %}active{% endif %}" onclick="switchView('week')">
-                        Неделя
-                    </button>
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Calendar Filters -->
-    {% if show_filters %}
-    {% include 'shared/calendar/filters.html' %}
-    {% endif %}
-
-    <!-- Employees Panel -->
-    {% if employees %}
-    {% include 'shared/calendar/employees_panel.html' %}
-    {% endif %}
 
     <div class="calendar-grid">
         <!-- Day headers -->
@@ -144,12 +115,6 @@ function goToToday() {
     loadCalendar(today);
 }
 
-function switchView(viewType) {
-    // Update view type and reload
-    const params = new URLSearchParams(window.location.search);
-    params.set('view', viewType);
-    window.location.search = params.toString();
-}
 
 function loadCalendar(date) {
     const params = new URLSearchParams(window.location.search);
@@ -173,56 +138,4 @@ function showTimeslotDetails(timeslotId) {
     }
 }
 
-// Filter functions
-function toggleFilters() {
-    const filtersPanel = document.getElementById('calendar-filters');
-    if (filtersPanel) {
-        filtersPanel.style.display = filtersPanel.style.display === 'none' ? 'block' : 'none';
-    }
-}
-
-function applyFilters() {
-    const objectId = document.getElementById('object-filter')?.value;
-    const employeeId = document.getElementById('employee-filter')?.value;
-    const status = document.getElementById('status-filter')?.value;
-    const date = document.getElementById('date-filter')?.value;
-    
-    const params = new URLSearchParams(window.location.search);
-    if (objectId) params.set('object_id', objectId);
-    if (employeeId) params.set('employee_id', employeeId);
-    if (status) params.set('status', status);
-    if (date) params.set('date', date);
-    
-    window.location.search = params.toString();
-}
-
-function clearFilters() {
-    const filters = ['object-filter', 'employee-filter', 'status-filter', 'date-filter'];
-    filters.forEach(id => {
-        const element = document.getElementById(id);
-        if (element) element.value = '';
-    });
-    
-    const params = new URLSearchParams(window.location.search);
-    ['object_id', 'employee_id', 'status', 'date'].forEach(param => {
-        params.delete(param);
-    });
-    
-    window.location.search = params.toString();
-}
-
-// Employee panel functions
-function showEmployeesPanel() {
-    const panel = document.getElementById('employees-panel');
-    if (panel) {
-        panel.classList.add('open');
-    }
-}
-
-function hideEmployeesPanel() {
-    const panel = document.getElementById('employees-panel');
-    if (panel) {
-        panel.classList.remove('open');
-    }
-}
 </script>
