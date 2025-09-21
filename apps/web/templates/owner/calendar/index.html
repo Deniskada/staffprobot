@@ -388,11 +388,11 @@ function showDateDetails(date) {
 document.addEventListener('DOMContentLoaded', function() {
     calendarPanels.init();
     
-    // Re-setup drag&drop after calendar is fully loaded
+    // Re-setup drag&drop after calendar is fully loaded (only once)
     setTimeout(() => {
         console.log('Re-setting up drag&drop after calendar load');
         calendarManager.setupDragDrop();
-    }, 500);
+    }, 1000);
 });
 
 </script>

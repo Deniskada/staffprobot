@@ -68,36 +68,53 @@ class CalendarManager {
         const timeslots = document.querySelectorAll('.timeslot-item');
         console.log('Setting up drag&drop for', timeslots.length, 'timeslots');
         
+        // Remove existing event listeners to prevent duplicates
         timeslots.forEach(timeslot => {
-            timeslot.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                timeslot.classList.add('drag-over');
-            });
-            
-            timeslot.addEventListener('dragleave', () => {
-                timeslot.classList.remove('drag-over');
-            });
-            
-            timeslot.addEventListener('drop', (e) => {
-                e.preventDefault();
-                timeslot.classList.remove('drag-over');
-                
-                const data = e.dataTransfer.getData('text/plain');
-                const timeslotId = timeslot.dataset.timeslotId;
-                
-                console.log('Drop event:', data, 'on timeslot:', timeslotId);
-                
-                if (data.startsWith('employee:')) {
-                    const employeeId = data.replace('employee:', '');
-                    console.log('Assigning employee:', employeeId);
-                    this.assignEmployeeToTimeslot(employeeId, timeslotId);
-                } else if (data.startsWith('object:')) {
-                    const objectId = data.replace('object:', '');
-                    console.log('Creating timeslot from object:', objectId);
-                    this.createTimeslotFromObject(objectId, timeslotId);
-                }
-            });
+            timeslot.removeEventListener('dragover', this.handleDragOver);
+            timeslot.removeEventListener('dragleave', this.handleDragLeave);
+            timeslot.removeEventListener('drop', this.handleDrop);
         });
+        
+        // Bind methods to this context
+        this.handleDragOver = this.handleDragOver.bind(this);
+        this.handleDragLeave = this.handleDragLeave.bind(this);
+        this.handleDrop = this.handleDrop.bind(this);
+        
+        timeslots.forEach(timeslot => {
+            timeslot.addEventListener('dragover', this.handleDragOver);
+            timeslot.addEventListener('dragleave', this.handleDragLeave);
+            timeslot.addEventListener('drop', this.handleDrop);
+        });
+    }
+    
+    handleDragOver(e) {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+    }
+    
+    handleDragLeave(e) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+    
+    handleDrop(e) {
+        e.preventDefault();
+        const timeslot = e.currentTarget;
+        timeslot.classList.remove('drag-over');
+        
+        const data = e.dataTransfer.getData('text/plain');
+        const timeslotId = timeslot.dataset.timeslotId;
+        
+        console.log('Drop event:', data, 'on timeslot:', timeslotId);
+        
+        if (data.startsWith('employee:')) {
+            const employeeId = data.replace('employee:', '');
+            console.log('Assigning employee:', employeeId);
+            this.assignEmployeeToTimeslot(employeeId, timeslotId);
+        } else if (data.startsWith('object:')) {
+            const objectId = data.replace('object:', '');
+            console.log('Creating timeslot from object:', objectId);
+            this.createTimeslotFromObject(objectId, timeslotId);
+        }
     }
     
     navigate(direction) {

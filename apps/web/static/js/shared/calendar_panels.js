@@ -65,6 +65,7 @@ class CalendarPanels {
                 `;
                 
                 objectItem.addEventListener('dragstart', function(e) {
+                    console.log('Starting drag for object:', object.id, object.name);
                     e.dataTransfer.setData('text/plain', `object:${object.id}`);
                     this.style.opacity = '0.5';
                     
