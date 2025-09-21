@@ -230,16 +230,36 @@
     border-color: #d32f2f;
 }
 
-/* Completed shifts - greenish/positive tone */
+/* Completed shifts - bold green positive tone */
 .shift-completed-positive {
-    background: #e8f5e8;
-    border-color: #4caf50;
+    background: #c8e6c9;
+    border: 2px solid #2e7d32;
     color: #1b5e20;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(46, 125, 50, 0.3);
 }
 
 .shift-completed-positive:hover {
+    background: #a5d6a7;
+    border-color: #1b5e20;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(46, 125, 50, 0.4);
+}
+
+/* Active shifts - bold green positive tone */
+.shift-active-positive {
     background: #c8e6c9;
-    border-color: #388e3c;
+    border: 2px solid #2e7d32;
+    color: #1b5e20;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(46, 125, 50, 0.3);
+}
+
+.shift-active-positive:hover {
+    background: #a5d6a7;
+    border-color: #1b5e20;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(46, 125, 50, 0.4);
 }
 
 .timeslot-available {

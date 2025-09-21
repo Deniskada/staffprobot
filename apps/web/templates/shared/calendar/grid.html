@@ -76,6 +76,8 @@
                                 {% set shift_class = "shift-item" %}
                                 {% if shift.status == "completed" %}
                                     {% set shift_class = shift_class + " shift-completed-positive" %}
+                                {% elif shift.status == "active" %}
+                                    {% set shift_class = shift_class + " shift-active-positive" %}
                                 {% elif shift.status == "planned" %}
                                     {% set shift_class = shift_class + " shift-planned" %}
                                 {% else %}
