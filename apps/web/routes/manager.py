@@ -3,13 +3,14 @@
 from typing import List, Dict, Any, Optional
 from datetime import date, datetime, time
 from fastapi import APIRouter, Request, Depends, HTTPException, Query, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
 from shared.services.role_service import RoleService
 from shared.services.manager_permission_service import ManagerPermissionService
+from core.utils.timezone_helper import web_timezone_helper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from apps.web.middleware.role_middleware import require_manager_or_owner
 from apps.web.dependencies import get_current_user_dependency
@@ -1798,10 +1799,41 @@ async def manager_generate_report(
             except ValueError:
                 raise HTTPException(status_code=400, detail="Неверный формат даты")
             
-            # Здесь будет логика генерации отчета
-            # Пока возвращаем заглушку
+            # Получаем смены за период
+            from sqlalchemy import select, and_, desc
+            from domain.entities.shift import Shift
             
-            return {"success": True, "message": "Отчет будет сгенерирован", "report_type": report_type}
+            shifts_query = select(Shift).options(
+                selectinload(Shift.object),
+                selectinload(Shift.user)
+            ).where(
+                and_(
+                    Shift.object_id.in_(accessible_object_ids),
+                    Shift.start_time >= start_date,
+                    Shift.start_time <= end_date + timedelta(days=1)
+                )
+            )
+            
+            # Применение фильтров
+            if object_id and object_id in accessible_object_ids:
+                shifts_query = shifts_query.where(Shift.object_id == object_id)
+            
+            if employee_id:
+                shifts_query = shifts_query.where(Shift.user_id == employee_id)
+            
+            # Выполнение запроса
+            shifts_result = await db.execute(shifts_query.order_by(desc(Shift.start_time)))
+            shifts = shifts_result.scalars().all()
+            
+            # Генерация отчета в зависимости от типа
+            if report_type == "shifts":
+                return await _generate_shifts_report_manager(shifts, format, start_date, end_date)
+            elif report_type == "employees":
+                return await _generate_employees_report_manager(shifts, format, start_date, end_date)
+            elif report_type == "objects":
+                return await _generate_objects_report_manager(shifts, format, start_date, end_date)
+            else:
+                return {"error": "Неизвестный тип отчета"}
         
     except Exception as e:
         logger.error(f"Error generating manager report: {e}")
@@ -1875,6 +1907,168 @@ async def manager_reports_stats_period(
     except Exception as e:
         logger.error(f"Error getting manager stats: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения статистики")
+
+
+async def _generate_shifts_report_manager(shifts: List[Shift], format: str, start_date: datetime, end_date: datetime):
+    """Генерация отчета по сменам для управляющего"""
+    data = []
+    
+    for shift in shifts:
+        data.append({
+            "ID": shift.id,
+            "Сотрудник": f"{shift.user.first_name} {shift.user.last_name or ''}".strip(),
+            "Объект": shift.object.name,
+            "Дата начала": web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow'),
+            "Дата окончания": web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow') if shift.end_time else "Не завершена",
+            "Статус": shift.status,
+            "Часов": shift.total_hours or 0,
+            "Ставка": shift.hourly_rate or 0,
+            "Сумма": shift.total_payment or 0,
+            "Заметки": shift.notes or ""
+        })
+    
+    if format == "excel":
+        return await _create_excel_file_manager(data, f"manager_shifts_report_{start_date.strftime('%Y-%m-%d')}_{end_date.strftime('%Y-%m-%d')}")
+    else:
+        return {"data": data, "total": len(data)}
+
+
+async def _generate_employees_report_manager(shifts: List[Shift], format: str, start_date: datetime, end_date: datetime):
+    """Генерация отчета по сотрудникам для управляющего"""
+    # Группировка по сотрудникам
+    employees_data = {}
+    
+    for shift in shifts:
+        employee_id = shift.user_id
+        if employee_id not in employees_data:
+            employees_data[employee_id] = {
+                "employee": shift.user,
+                "shifts": [],
+                "total_hours": 0,
+                "total_payment": 0
+            }
+        
+        employees_data[employee_id]["shifts"].append(shift)
+        employees_data[employee_id]["total_hours"] += shift.total_hours or 0
+        employees_data[employee_id]["total_payment"] += shift.total_payment or 0
+    
+    data = []
+    for emp_data in employees_data.values():
+        data.append({
+            "Сотрудник": f"{emp_data['employee'].first_name} {emp_data['employee'].last_name or ''}".strip(),
+            "Количество смен": len(emp_data["shifts"]),
+            "Общее время": emp_data["total_hours"],
+            "Общая сумма": emp_data["total_payment"],
+            "Средняя ставка": emp_data["total_payment"] / emp_data["total_hours"] if emp_data["total_hours"] > 0 else 0
+        })
+    
+    if format == "excel":
+        return await _create_excel_file_manager(data, f"manager_employees_report_{start_date.strftime('%Y-%m-%d')}_{end_date.strftime('%Y-%m-%d')}")
+    else:
+        return {"data": data, "total": len(data)}
+
+
+async def _generate_objects_report_manager(shifts: List[Shift], format: str, start_date: datetime, end_date: datetime):
+    """Генерация отчета по объектам для управляющего"""
+    # Группировка по объектам
+    objects_data = {}
+    
+    for shift in shifts:
+        object_id = shift.object_id
+        if object_id not in objects_data:
+            objects_data[object_id] = {
+                "object": shift.object,
+                "shifts": [],
+                "total_hours": 0,
+                "total_payment": 0,
+                "employees": set()
+            }
+        
+        objects_data[object_id]["shifts"].append(shift)
+        objects_data[object_id]["total_hours"] += shift.total_hours or 0
+        objects_data[object_id]["total_payment"] += shift.total_payment or 0
+        objects_data[object_id]["employees"].add(shift.user_id)
+    
+    data = []
+    for obj_data in objects_data.values():
+        data.append({
+            "Объект": obj_data["object"].name,
+            "Адрес": obj_data["object"].address or "",
+            "Количество смен": len(obj_data["shifts"]),
+            "Количество сотрудников": len(obj_data["employees"]),
+            "Общее время": obj_data["total_hours"],
+            "Общая сумма": obj_data["total_payment"],
+            "Средняя ставка": obj_data["total_payment"] / obj_data["total_hours"] if obj_data["total_hours"] > 0 else 0
+        })
+    
+    if format == "excel":
+        return await _create_excel_file_manager(data, f"manager_objects_report_{start_date.strftime('%Y-%m-%d')}_{end_date.strftime('%Y-%m-%d')}")
+    else:
+        return {"data": data, "total": len(data)}
+
+
+async def _create_excel_file_manager(data: List[dict], filename: str):
+    """Создание Excel файла для управляющего"""
+    if not data:
+        return {"error": "Нет данных для отчета"}
+    
+    try:
+        import pandas as pd
+        from openpyxl import Workbook
+        from openpyxl.utils.dataframe import dataframe_to_rows
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from fastapi.responses import StreamingResponse
+        import io
+        
+        # Создание DataFrame
+        df = pd.DataFrame(data)
+        
+        # Создание Excel файла
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Отчет управляющего"
+        
+        # Добавление данных
+        for r in dataframe_to_rows(df, index=False, header=True):
+            ws.append(r)
+        
+        # Стилизация
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+        
+        for cell in ws[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+        
+        # Автоширина колонок
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Сохранение в байты
+        excel_buffer = io.BytesIO()
+        wb.save(excel_buffer)
+        excel_buffer.seek(0)
+        
+        # Возврат файла
+        return StreamingResponse(
+            io.BytesIO(excel_buffer.getvalue()),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error creating Excel file for manager: {e}")
+        return {"error": f"Ошибка создания Excel файла: {str(e)}"}
 
 
 def _create_calendar_grid_manager(year: int, month: int, timeslots: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
