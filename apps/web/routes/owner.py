@@ -2502,6 +2502,82 @@ async def owner_timeslots_list(
         raise HTTPException(status_code=500, detail="Ошибка загрузки тайм-слотов")
 
 
+@router.get("/timeslots/{timeslot_id}", response_class=HTMLResponse)
+async def owner_timeslot_detail(
+    request: Request,
+    timeslot_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Детали тайм-слота владельца"""
+    try:
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        # Получаем внутренний ID пользователя
+        telegram_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == telegram_id)
+        user_result = await db.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        user_id = user_obj.id if user_obj else None
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Пользователь не найден")
+        
+        # Получаем тайм-слот
+        from domain.entities.time_slot import TimeSlot
+        from domain.entities.object import Object
+        
+        timeslot_query = select(TimeSlot).options(
+            selectinload(TimeSlot.object)
+        ).where(TimeSlot.id == timeslot_id)
+        
+        timeslot_result = await db.execute(timeslot_query)
+        timeslot = timeslot_result.scalar_one_or_none()
+        
+        if not timeslot:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+        
+        # Проверяем права доступа
+        if timeslot.object.owner_id != user_id:
+            raise HTTPException(status_code=403, detail="Нет доступа к этому тайм-слоту")
+        
+        # Получаем связанные смены
+        from domain.entities.shift import Shift
+        from domain.entities.shift_schedule import ShiftSchedule
+        
+        shifts_query = select(Shift).options(
+            selectinload(Shift.user)
+        ).where(Shift.time_slot_id == timeslot_id)
+        
+        shifts_result = await db.execute(shifts_query)
+        shifts = shifts_result.scalars().all()
+        
+        # Получаем запланированные смены
+        schedules_query = select(ShiftSchedule).options(
+            selectinload(ShiftSchedule.user)
+        ).where(ShiftSchedule.time_slot_id == timeslot_id)
+        
+        schedules_result = await db.execute(schedules_query)
+        schedules = schedules_result.scalars().all()
+        
+        return templates.TemplateResponse("owner/timeslots/detail.html", {
+            "request": request,
+            "title": f"Детали тайм-слота {timeslot.start_time.strftime('%H:%M')} - {timeslot.end_time.strftime('%H:%M')}",
+            "current_user": current_user,
+            "timeslot": timeslot,
+            "shifts": shifts,
+            "schedules": schedules
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading timeslot details: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
+
+
 @router.get("/timeslots/{timeslot_id}/edit", response_class=HTMLResponse)
 async def owner_timeslot_edit_form(
     request: Request,
