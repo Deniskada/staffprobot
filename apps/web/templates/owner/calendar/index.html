@@ -264,6 +264,68 @@ const calendarManager = new CalendarManager({
 // Initialize calendar panels for owner role
 const calendarPanels = new CalendarPanels('owner');
 
+// Override calendar manager methods for drag&drop
+calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId) {
+    try {
+        const formData = new FormData();
+        formData.append('employee_id', employeeId);
+        formData.append('timeslot_id', timeslotId);
+        
+        const response = await fetch('/owner/calendar/api/assign-employee', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            calendarPanels.showNotification('Сотрудник назначен на смену', 'success');
+            // Reload calendar
+            window.location.reload();
+        } else {
+            const error = await response.json();
+            calendarPanels.showNotification(`Ошибка: ${error.detail}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error assigning employee:', error);
+        calendarPanels.showNotification('Ошибка назначения сотрудника', 'error');
+    }
+};
+
+calendarManager.createTimeslotFromObject = async function(objectId, timeslotId) {
+    try {
+        // Get object details
+        const objectResponse = await fetch(`/owner/calendar/api/objects`);
+        const objects = await objectResponse.json();
+        const object = objects.find(obj => obj.id == objectId);
+        
+        if (!object) {
+            calendarPanels.showNotification('Объект не найден', 'error');
+            return;
+        }
+        
+        // Get timeslot details
+        const timeslotResponse = await fetch(`/owner/calendar/api/timeslot/${timeslotId}`);
+        const timeslot = await timeslotResponse.json();
+        
+        if (!timeslot) {
+            calendarPanels.showNotification('Тайм-слот не найден', 'error');
+            return;
+        }
+        
+        // Show quick create form with pre-filled data
+        await calendarPanels.showQuickCreateForm({
+            id: objectId,
+            name: object.name,
+            hourlyRate: object.hourly_rate || 0,
+            openingTime: object.opening_time || '09:00',
+            closingTime: object.closing_time || '18:00'
+        }, timeslot.slot_date);
+        
+    } catch (error) {
+        console.error('Error creating timeslot from object:', error);
+        calendarPanels.showNotification('Ошибка создания тайм-слота', 'error');
+    }
+};
+
 function showShiftDetails(shiftId) {
     // Handle planned shifts (schedule_ prefix)
     if (shiftId.toString().startsWith('schedule_')) {
