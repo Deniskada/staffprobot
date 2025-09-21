@@ -636,7 +636,7 @@ async def owner_calendar(
 ):
     """Календарный вид планирования"""
     current_user = await get_current_user(request)
-    if current_user.get("role") != "owner":
+    if not current_user or current_user.get("role") != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
     try:
