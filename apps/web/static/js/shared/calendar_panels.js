@@ -2,7 +2,7 @@
 class CalendarPanels {
     constructor(role) {
         this.role = role;
-        this.baseUrl = `/${role}/calendar/api`;
+        this.baseUrl = `/${role}/api`;
     }
 
     // Panel toggle functions
@@ -40,7 +40,7 @@ class CalendarPanels {
         if (!objectsList) return;
         
         try {
-            const response = await fetch(`${this.baseUrl}/objects`);
+            const response = await fetch(`/${this.role}/calendar/api/objects`);
             const objects = await response.json();
             
             objectsList.innerHTML = '';
@@ -234,7 +234,7 @@ class CalendarPanels {
         if (!quickObjectSelect) return;
         
         try {
-            const response = await fetch(`${this.baseUrl}/objects`);
+            const response = await fetch(`/${this.role}/calendar/api/objects`);
             const objects = await response.json();
             
             // Clear and populate list
@@ -263,7 +263,7 @@ class CalendarPanels {
         formData.append('hourly_rate', parseInt(document.getElementById('quickRate').value));
         
         try {
-            const response = await fetch(`${this.baseUrl}/quick-create-timeslot`, {
+            const response = await fetch(`/${this.role}/calendar/api/quick-create-timeslot`, {
                 method: 'POST',
                 body: formData
             });
