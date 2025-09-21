@@ -23,6 +23,7 @@
     justify-content: space-between;
     align-items: center;
     width: 100%;
+    gap: 20px;
 }
 
 .nav-group {
@@ -54,12 +55,13 @@
 }
 
 .calendar-day-header {
-    background: #6c757d;
+    background: #495057;
     color: white;
     padding: 12px 8px;
     text-align: center;
     font-weight: 600;
     font-size: 0.9rem;
+    border: 1px solid #495057;
 }
 
 .calendar-day {
@@ -222,6 +224,114 @@
 .timeslot-pending {
     background: #fff3cd;
     border-color: #ffc107;
+}
+
+/* Calendar Filters */
+.calendar-filters {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.filter-group {
+    margin-bottom: 15px;
+}
+
+.filter-group label {
+    font-weight: 600;
+    margin-bottom: 5px;
+    display: block;
+    color: #495057;
+}
+
+.filter-group .form-select,
+.filter-group .form-control {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 8px 12px;
+}
+
+.filter-group .form-select:focus,
+.filter-group .form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+/* Employees Panel */
+.employees-panel {
+    position: fixed;
+    right: -350px;
+    top: 0;
+    width: 350px;
+    height: 100vh;
+    background: white;
+    box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+    transition: right 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.employees-panel.open {
+    right: 0;
+}
+
+.employees-panel-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+}
+
+.employees-panel-header h5 {
+    margin: 0;
+    color: #495057;
+}
+
+.employees-panel-content {
+    padding: 20px;
+}
+
+.employee-item {
+    padding: 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.employee-item:hover {
+    background: #f8f9fa;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.employee-item:active {
+    cursor: grabbing;
+    transform: scale(0.98);
+}
+
+.employee-name {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.employee-role {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+/* Drag and Drop States */
+.drag-over {
+    background: #e3f2fd !important;
+    border-color: #2196f3 !important;
+    transform: scale(1.02);
 }
 
 /* Responsive Design */

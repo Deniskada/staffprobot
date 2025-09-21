@@ -1278,13 +1278,37 @@ async def manager_calendar(
             for week in calendar_data:
                 week_data = []
                 for day in week:
+                    # Обрабатываем смены
+                    shifts = []
+                    for shift in day.get("shifts", []):
+                        shifts.append({
+                            "id": shift.get("id"),
+                            "start_time": shift.get("start_time", ""),
+                            "end_time": shift.get("end_time", ""),
+                            "employee_name": shift.get("employee_name", "Неизвестно"),
+                            "object_name": shift.get("object_name", ""),
+                            "status": shift.get("status", "pending")
+                        })
+                    
+                    # Обрабатываем тайм-слоты
+                    timeslots = []
+                    for timeslot in day.get("timeslots", []):
+                        timeslots.append({
+                            "id": timeslot.get("id"),
+                            "start_time": timeslot.get("start_time", ""),
+                            "end_time": timeslot.get("end_time", ""),
+                            "object_name": timeslot.get("object_name", ""),
+                            "employee_count": timeslot.get("employee_count", 0),
+                            "status": timeslot.get("status", "available")
+                        })
+                    
                     week_data.append({
                         "date": day["date"].strftime("%Y-%m-%d"),
                         "day": day["day"],
                         "is_other_month": day["is_other_month"],
                         "is_today": day["is_today"],
-                        "shifts": day.get("shifts", []),
-                        "timeslots": day.get("timeslots", [])
+                        "shifts": shifts,
+                        "timeslots": timeslots
                     })
                 calendar_weeks.append(week_data)
             
