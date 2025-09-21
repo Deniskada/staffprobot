@@ -1,0 +1,318 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/shared/calendar.css') }}">
+<style>
+/* Manager-specific calendar styles */
+.manager-calendar-actions {
+    margin-bottom: 20px;
+}
+
+.manager-calendar-actions .btn {
+    margin-right: 10px;
+}
+
+.calendar-filters {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.filter-group {
+    margin-bottom: 15px;
+}
+
+.filter-group label {
+    font-weight: 600;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.filter-group select,
+.filter-group input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.employee-panel {
+    position: fixed;
+    right: -300px;
+    top: 0;
+    width: 300px;
+    height: 100vh;
+    background: white;
+    box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+    transition: right 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.employee-panel.open {
+    right: 0;
+}
+
+.employee-panel-header {
+    padding: 15px;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.employee-panel-content {
+    padding: 15px;
+}
+
+.employee-item {
+    padding: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    cursor: grab;
+    transition: all 0.2s ease;
+}
+
+.employee-item:hover {
+    background: #f8f9fa;
+    transform: translateY(-1px);
+}
+
+.employee-item:active {
+    cursor: grabbing;
+}
+
+.employee-name {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.employee-role {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-calendar3"></i> Календарь смен</h2>
+                <div class="manager-calendar-actions">
+                    <button type="button" class="btn btn-primary" onclick="showEmployeePanel()">
+                        <i class="bi bi-people"></i> Сотрудники
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" onclick="createTimeslot()">
+                        <i class="bi bi-plus-circle"></i> Создать слот
+                    </button>
+                    <button type="button" class="btn btn-outline-info" onclick="toggleFilters()">
+                        <i class="bi bi-funnel"></i> Фильтры
+                    </button>
+                </div>
+            </div>
+
+            <!-- Calendar Filters -->
+            <div id="calendar-filters" class="calendar-filters" style="display: none;">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="filter-group">
+                            <label>Объект</label>
+                            <select id="object-filter">
+                                <option value="">Все объекты</option>
+                                {% for object in accessible_objects %}
+                                <option value="{{ object.id }}">{{ object.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="filter-group">
+                            <label>Сотрудник</label>
+                            <select id="employee-filter">
+                                <option value="">Все сотрудники</option>
+                                {% for employee in employees %}
+                                <option value="{{ employee.id }}">{{ employee.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="filter-group">
+                            <label>Статус</label>
+                            <select id="status-filter">
+                                <option value="">Все статусы</option>
+                                <option value="available">Доступно</option>
+                                <option value="occupied">Занято</option>
+                                <option value="pending">Ожидает</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="filter-group">
+                            <label>Дата</label>
+                            <input type="date" id="date-filter">
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <button type="button" class="btn btn-primary" onclick="applyFilters()">
+                            <i class="bi bi-check"></i> Применить
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
+                            <i class="bi bi-x"></i> Очистить
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shared Calendar Grid -->
+            {% include 'shared/calendar/grid.html' %}
+        </div>
+    </div>
+</div>
+
+<!-- Employee Panel -->
+<div id="employee-panel" class="employee-panel">
+    <div class="employee-panel-header">
+        <h5><i class="bi bi-people"></i> Сотрудники</h5>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="hideEmployeePanel()">
+            <i class="bi bi-x"></i>
+        </button>
+    </div>
+    <div class="employee-panel-content">
+        {% for employee in employees %}
+        <div class="employee-item" draggable="true" data-employee-id="{{ employee.id }}">
+            <div class="employee-name">{{ employee.name }}</div>
+            <div class="employee-role">{{ employee.role }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/shared/calendar.js') }}"></script>
+<script>
+// Initialize calendar manager
+const calendarManager = new CalendarManager({
+    currentDate: new Date('{{ current_date }}'),
+    viewType: '{{ view_type }}',
+    baseUrl: '{{ request.url.path }}',
+    onShiftClick: showShiftDetails,
+    onTimeslotClick: showTimeslotDetails,
+    onDateClick: showDateDetails
+});
+
+// Manager-specific functions
+function showEmployeePanel() {
+    document.getElementById('employee-panel').classList.add('open');
+}
+
+function hideEmployeePanel() {
+    document.getElementById('employee-panel').classList.remove('open');
+}
+
+function createTimeslot() {
+    // Redirect to timeslot creation page
+    window.location.href = '/manager/timeslots/create';
+}
+
+function toggleFilters() {
+    calendarManager.toggleFilters();
+}
+
+function applyFilters() {
+    const objectId = document.getElementById('object-filter').value;
+    const employeeId = document.getElementById('employee-filter').value;
+    const status = document.getElementById('status-filter').value;
+    const date = document.getElementById('date-filter').value;
+    
+    const params = new URLSearchParams(window.location.search);
+    if (objectId) params.set('object_id', objectId);
+    if (employeeId) params.set('employee_id', employeeId);
+    if (status) params.set('status', status);
+    if (date) params.set('date', date);
+    
+    window.location.search = params.toString();
+}
+
+function clearFilters() {
+    document.getElementById('object-filter').value = '';
+    document.getElementById('employee-filter').value = '';
+    document.getElementById('status-filter').value = '';
+    document.getElementById('date-filter').value = '';
+    
+    const params = new URLSearchParams(window.location.search);
+    params.delete('object_id');
+    params.delete('employee_id');
+    params.delete('status');
+    params.delete('date');
+    
+    window.location.search = params.toString();
+}
+
+function showShiftDetails(shiftId) {
+    // Redirect to shift details page
+    window.location.href = `/manager/shifts/${shiftId}`;
+}
+
+function showTimeslotDetails(timeslotId) {
+    // Redirect to timeslot details page
+    window.location.href = `/manager/timeslots/${timeslotId}`;
+}
+
+function showDateDetails(date) {
+    // Show date details modal or redirect
+    console.log('Show date details for:', date);
+}
+
+// Drag and drop functionality
+document.addEventListener('dragstart', (e) => {
+    if (e.target.classList.contains('employee-item')) {
+        e.dataTransfer.setData('text/plain', e.target.dataset.employeeId);
+        e.target.style.opacity = '0.5';
+    }
+});
+
+document.addEventListener('dragend', (e) => {
+    if (e.target.classList.contains('employee-item')) {
+        e.target.style.opacity = '1';
+    }
+});
+
+// Override calendar manager methods
+calendarManager.assignEmployeeToTimeslot = function(employeeId, timeslotId) {
+    // Make API call to assign employee to timeslot
+    fetch(`/manager/api/timeslots/${timeslotId}/assign`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            employee_id: employeeId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Refresh calendar
+            calendarManager.refresh();
+        } else {
+            alert('Ошибка при назначении сотрудника: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Произошла ошибка при назначении сотрудника');
+    });
+};
+</script>
+{% endblock %}

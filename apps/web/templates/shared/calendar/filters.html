@@ -1,0 +1,56 @@
+<!-- Shared Calendar Filters Component -->
+<div id="calendar-filters" class="calendar-filters" style="display: none;">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="filter-group">
+                <label for="object-filter">Объект</label>
+                <select id="object-filter" class="form-select">
+                    <option value="">Все объекты</option>
+                    {% for object in objects %}
+                    <option value="{{ object.id }}" {% if selected_object_id == object.id %}selected{% endif %}>
+                        {{ object.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="filter-group">
+                <label for="employee-filter">Сотрудник</label>
+                <select id="employee-filter" class="form-select">
+                    <option value="">Все сотрудники</option>
+                    {% for employee in employees %}
+                    <option value="{{ employee.id }}">{{ employee.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="filter-group">
+                <label for="status-filter">Статус</label>
+                <select id="status-filter" class="form-select">
+                    <option value="">Все статусы</option>
+                    <option value="available">Доступно</option>
+                    <option value="occupied">Занято</option>
+                    <option value="pending">Ожидает</option>
+                </select>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="filter-group">
+                <label for="date-filter">Дата</label>
+                <input type="date" id="date-filter" class="form-control">
+            </div>
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-12">
+            <button type="button" class="btn btn-primary" onclick="applyFilters()">
+                <i class="bi bi-check"></i> Применить
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
+                <i class="bi bi-x"></i> Очистить
+            </button>
+        </div>
+    </div>
+</div>
