@@ -36,21 +36,30 @@ class CalendarPanels {
 
     // Load objects for drag&drop panel
     async loadObjects() {
+        console.log('Loading objects for role:', this.role);
         const objectsList = document.getElementById('objectsList');
-        if (!objectsList) return;
+        if (!objectsList) {
+            console.log('Objects list element not found');
+            return;
+        }
         
         try {
+            console.log('Fetching objects from:', `/${this.role}/calendar/api/objects`);
             const response = await fetch(`/${this.role}/calendar/api/objects`);
+            console.log('Objects response status:', response.status);
             const objects = await response.json();
+            console.log('Loaded objects:', objects);
             
             objectsList.innerHTML = '';
             
             if (objects.length === 0) {
+                console.log('No objects found');
                 objectsList.innerHTML = '<div class="text-center text-muted">Нет объектов</div>';
                 return;
             }
             
             objects.forEach(object => {
+                console.log('Creating object item for:', object.id, object.name);
                 const objectItem = document.createElement('div');
                 objectItem.className = 'object-item';
                 objectItem.draggable = true;
@@ -304,6 +313,7 @@ class CalendarPanels {
 
     // Initialize panels
     init() {
+        console.log('Initializing CalendarPanels for role:', this.role);
         // Load initial data
         this.loadObjects();
         this.loadEmployees();
