@@ -1,0 +1,89 @@
+<!-- Shared Timeslot Component -->
+<div class="timeslot-item timeslot-{{ timeslot.status }}" 
+     data-timeslot-id="{{ timeslot.id }}"
+     data-date="{{ timeslot.date }}"
+     data-start-time="{{ timeslot.start_time }}"
+     data-end-time="{{ timeslot.end_time }}">
+    
+    <div class="timeslot-header">
+        <div class="timeslot-time">
+            <i class="bi bi-clock"></i>
+            {{ timeslot.start_time }} - {{ timeslot.end_time }}
+        </div>
+        <div class="timeslot-status">
+            <span class="badge badge-{{ timeslot.status_class }}">{{ timeslot.status_text }}</span>
+        </div>
+    </div>
+    
+    <div class="timeslot-content">
+        <div class="timeslot-object">
+            <i class="bi bi-geo-alt"></i>
+            {{ timeslot.object_name }}
+        </div>
+        
+        {% if timeslot.work_conditions %}
+        <div class="timeslot-conditions">
+            <i class="bi bi-info-circle"></i>
+            {{ timeslot.work_conditions }}
+        </div>
+        {% endif %}
+        
+        {% if timeslot.shift_tasks %}
+        <div class="timeslot-tasks">
+            <i class="bi bi-list-task"></i>
+            <span class="task-count">{{ timeslot.shift_tasks|length }} задач</span>
+        </div>
+        {% endif %}
+        
+        {% if timeslot.employee_count %}
+        <div class="timeslot-employees">
+            <i class="bi bi-people"></i>
+            {{ timeslot.employee_count }} сотрудников
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="timeslot-actions">
+        {% if timeslot.can_edit %}
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="editTimeslot({{ timeslot.id }})">
+            <i class="bi bi-pencil"></i> Редактировать
+        </button>
+        {% endif %}
+        
+        {% if timeslot.can_assign %}
+        <button type="button" class="btn btn-sm btn-outline-success" onclick="assignEmployee({{ timeslot.id }})">
+            <i class="bi bi-person-plus"></i> Назначить
+        </button>
+        {% endif %}
+        
+        {% if timeslot.can_view %}
+        <button type="button" class="btn btn-sm btn-outline-info" onclick="viewTimeslot({{ timeslot.id }})">
+            <i class="bi bi-eye"></i> Подробнее
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Timeslot JavaScript -->
+<script>
+function editTimeslot(timeslotId) {
+    // This will be implemented by the parent template
+    if (typeof window.editTimeslot === 'function') {
+        window.editTimeslot(timeslotId);
+    }
+}
+
+function assignEmployee(timeslotId) {
+    // This will be implemented by the parent template
+    if (typeof window.assignEmployee === 'function') {
+        window.assignEmployee(timeslotId);
+    }
+}
+
+function viewTimeslot(timeslotId) {
+    // This will be implemented by the parent template
+    if (typeof window.viewTimeslot === 'function') {
+        window.viewTimeslot(timeslotId);
+    }
+}
+</script>

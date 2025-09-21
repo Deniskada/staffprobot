@@ -1,0 +1,136 @@
+<!-- Shared Calendar Grid Component -->
+<div class="calendar-container">
+    <div class="calendar-header">
+        <div class="calendar-navigation">
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="navigateCalendar('prev')">
+                <i class="bi bi-chevron-left"></i> Предыдущий
+            </button>
+            <h4 class="calendar-title mb-0">{{ calendar_title }}</h4>
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="navigateCalendar('next')">
+                Следующий <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+        <div class="calendar-actions">
+            {% if show_today_button %}
+            <button type="button" class="btn btn-primary btn-sm" onclick="goToToday()">
+                <i class="bi bi-calendar-today"></i> Сегодня
+            </button>
+            {% endif %}
+            {% if show_view_switcher %}
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-secondary btn-sm {% if view_type == 'month' %}active{% endif %}" onclick="switchView('month')">
+                    Месяц
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm {% if view_type == 'week' %}active{% endif %}" onclick="switchView('week')">
+                    Неделя
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="calendar-grid">
+        <!-- Day headers -->
+        <div class="calendar-day-header">Пн</div>
+        <div class="calendar-day-header">Вт</div>
+        <div class="calendar-day-header">Ср</div>
+        <div class="calendar-day-header">Чт</div>
+        <div class="calendar-day-header">Пт</div>
+        <div class="calendar-day-header">Сб</div>
+        <div class="calendar-day-header">Вс</div>
+
+        <!-- Calendar days -->
+        {% for week in calendar_weeks %}
+            {% for day in week %}
+                <div class="calendar-day {% if day.is_other_month %}other-month{% endif %} {% if day.is_today %}today{% endif %}" 
+                     data-date="{{ day.date }}" 
+                     data-day="{{ day.day }}">
+                    <div class="day-number">{{ day.day }}</div>
+                    
+                    <!-- Day content -->
+                    <div class="day-content">
+                        {% if day.shifts %}
+                            {% for shift in day.shifts %}
+                                <div class="shift-item shift-{{ shift.status }}" 
+                                     data-shift-id="{{ shift.id }}"
+                                     onclick="showShiftDetails({{ shift.id }})">
+                                    <div class="shift-time">{{ shift.start_time }} - {{ shift.end_time }}</div>
+                                    <div class="shift-employee">{{ shift.employee_name }}</div>
+                                    {% if shift.object_name %}
+                                    <div class="shift-object">{{ shift.object_name }}</div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                        
+                        {% if day.timeslots %}
+                            {% for timeslot in day.timeslots %}
+                                <div class="timeslot-item timeslot-{{ timeslot.status }}" 
+                                     data-timeslot-id="{{ timeslot.id }}"
+                                     onclick="showTimeslotDetails({{ timeslot.id }})">
+                                    <div class="timeslot-time">{{ timeslot.start_time }} - {{ timeslot.end_time }}</div>
+                                    <div class="timeslot-object">{{ timeslot.object_name }}</div>
+                                    {% if timeslot.employee_count %}
+                                    <div class="timeslot-employees">{{ timeslot.employee_count }} сотрудников</div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Calendar JavaScript -->
+<script>
+// Calendar navigation
+function navigateCalendar(direction) {
+    const currentDate = new Date('{{ current_date }}');
+    const newDate = new Date(currentDate);
+    
+    if (direction === 'prev') {
+        newDate.setMonth(newDate.getMonth() - 1);
+    } else {
+        newDate.setMonth(newDate.getMonth() + 1);
+    }
+    
+    // Reload calendar with new date
+    loadCalendar(newDate);
+}
+
+function goToToday() {
+    const today = new Date();
+    loadCalendar(today);
+}
+
+function switchView(viewType) {
+    // Update view type and reload
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', viewType);
+    window.location.search = params.toString();
+}
+
+function loadCalendar(date) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('year', date.getFullYear());
+    params.set('month', date.getMonth() + 1);
+    window.location.search = params.toString();
+}
+
+// Shift and timeslot details
+function showShiftDetails(shiftId) {
+    // This will be implemented by the parent template
+    if (typeof window.showShiftDetails === 'function') {
+        window.showShiftDetails(shiftId);
+    }
+}
+
+function showTimeslotDetails(timeslotId) {
+    // This will be implemented by the parent template
+    if (typeof window.showTimeslotDetails === 'function') {
+        window.showTimeslotDetails(timeslotId);
+    }
+}
+</script>

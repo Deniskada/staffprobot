@@ -1,0 +1,283 @@
+/* Shared Calendar Styles */
+
+.calendar-container {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.calendar-navigation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.nav-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.calendar-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.calendar-day-header {
+    background: #6c757d;
+    color: white;
+    padding: 12px 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.calendar-day {
+    background: white;
+    min-height: 120px;
+    padding: 8px;
+    position: relative;
+    border: 1px solid #dee2e6;
+    transition: all 0.2s ease;
+}
+
+.calendar-day:hover {
+    background: #f8f9fa;
+    cursor: pointer;
+}
+
+.calendar-day.other-month {
+    background: #f8f9fa;
+    color: #6c757d;
+}
+
+.calendar-day.today {
+    background: #e3f2fd;
+    border: 2px solid #2196f3;
+}
+
+.day-number {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.day-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Timeslot Styles */
+.timeslot-item {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+
+.timeslot-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+}
+
+.timeslot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.timeslot-time {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 0.9rem;
+}
+
+.timeslot-status .badge {
+    font-size: 0.75rem;
+}
+
+.timeslot-content {
+    margin-bottom: 8px;
+}
+
+.timeslot-object,
+.timeslot-conditions,
+.timeslot-tasks,
+.timeslot-employees {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-bottom: 4px;
+}
+
+.timeslot-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.timeslot-actions .btn {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+}
+
+/* Shift Styles */
+.shift-item {
+    background: #e8f5e8;
+    border: 1px solid #28a745;
+    border-radius: 4px;
+    padding: 6px;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.shift-item:hover {
+    background: #d4edda;
+    transform: translateX(2px);
+}
+
+.shift-time {
+    font-weight: 600;
+    color: #155724;
+}
+
+.shift-employee {
+    color: #155724;
+    font-size: 0.75rem;
+}
+
+.shift-object {
+    color: #6c757d;
+    font-size: 0.7rem;
+}
+
+/* Status Classes */
+.shift-pending {
+    background: #fff3cd;
+    border-color: #ffc107;
+    color: #856404;
+}
+
+.shift-active {
+    background: #d1ecf1;
+    border-color: #17a2b8;
+    color: #0c5460;
+}
+
+.shift-completed {
+    background: #d4edda;
+    border-color: #28a745;
+    color: #155724;
+}
+
+.timeslot-available {
+    background: #e8f5e8;
+    border-color: #28a745;
+}
+
+.timeslot-occupied {
+    background: #f8d7da;
+    border-color: #dc3545;
+}
+
+.timeslot-pending {
+    background: #fff3cd;
+    border-color: #ffc107;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .calendar-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .calendar-navigation {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .nav-group,
+    .nav-actions {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .calendar-day {
+        min-height: 80px;
+        padding: 4px;
+    }
+    
+    .timeslot-item {
+        padding: 8px;
+    }
+    
+    .timeslot-actions {
+        flex-direction: column;
+    }
+    
+    .timeslot-actions .btn {
+        width: 100%;
+        margin-bottom: 4px;
+    }
+}
+
+@media (max-width: 576px) {
+    .calendar-container {
+        padding: 10px;
+    }
+    
+    .calendar-day {
+        min-height: 60px;
+        padding: 2px;
+    }
+    
+    .day-number {
+        font-size: 0.8rem;
+    }
+    
+    .shift-item,
+    .timeslot-item {
+        font-size: 0.7rem;
+        padding: 4px;
+    }
+}
