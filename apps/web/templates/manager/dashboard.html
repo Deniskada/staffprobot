@@ -1,0 +1,288 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}Дашборд - StaffProBot - Управляющий{% endblock %}
+
+{% block manager_content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="h4 mb-4">
+            <i class="bi bi-speedometer2 me-2"></i>
+            Дашборд управляющего
+        </h2>
+    </div>
+</div>
+
+<!-- Статистика -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Доступные объекты</h6>
+                        <h3 class="mb-0">{{ accessible_objects_count or 0 }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-building fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Активные смены</h6>
+                        <h3 class="mb-0">{{ active_shifts_count or 0 }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-clock fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Сотрудники</h6>
+                        <h3 class="mb-0">{{ employees_count or 0 }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-people fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Запланированные смены</h6>
+                        <h3 class="mb-0">{{ scheduled_shifts_count or 0 }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-calendar3 fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Доступные объекты -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-building me-2"></i>
+                    Доступные объекты
+                </h5>
+                <a href="/manager/objects" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye me-1"></i>
+                    Все объекты
+                </a>
+            </div>
+            <div class="card-body">
+                {% if accessible_objects %}
+                <div class="row">
+                    {% for object in accessible_objects[:6] %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="object-card">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0">{{ object.name }}</h6>
+                                <span class="badge bg-success">Доступен</span>
+                            </div>
+                            <p class="text-muted small mb-2">
+                                <i class="bi bi-geo-alt me-1"></i>
+                                {{ object.address or 'Адрес не указан' }}
+                            </p>
+                            <p class="text-muted small mb-2">
+                                <i class="bi bi-clock me-1"></i>
+                                {{ object.working_hours }}
+                            </p>
+                            <p class="text-muted small mb-2">
+                                <i class="bi bi-currency-ruble me-1"></i>
+                                {{ object.hourly_rate }} ₽/час
+                            </p>
+                            
+                            <!-- Права на объект -->
+                            <div class="mt-2">
+                                <small class="text-muted">Ваши права:</small>
+                                <div class="mt-1">
+                                    {% if object_permissions[object.id] %}
+                                        {% for permission, granted in object_permissions[object.id].items() %}
+                                        <span class="permission-badge {% if granted %}granted{% else %}denied{% endif %}">
+                                            {{ permission_names[permission] or permission }}
+                                        </span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted small">Права не определены</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <a href="/manager/objects/{{ object.id }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye me-1"></i>
+                                    Подробнее
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-building fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Нет доступных объектов</h5>
+                    <p class="text-muted">Обратитесь к владельцу для получения прав на объекты</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Последние смены -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-clock me-2"></i>
+                    Последние смены
+                </h5>
+                <a href="/manager/calendar" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-calendar3 me-1"></i>
+                    Календарь
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_shifts %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Сотрудник</th>
+                                <th>Объект</th>
+                                <th>Дата</th>
+                                <th>Время</th>
+                                <th>Статус</th>
+                                <th>Сумма</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for shift in recent_shifts %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
+                                            {{ shift.user.first_name[0] }}
+                                        </div>
+                                        <div>
+                                            <div class="fw-medium">{{ shift.user.first_name }} {{ shift.user.last_name or '' }}</div>
+                                            <small class="text-muted">{{ shift.user.username or 'Нет username' }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{{ shift.object.name }}</td>
+                                <td>{{ shift.start_time.strftime('%d.%m.%Y') }}</td>
+                                <td>{{ shift.start_time.strftime('%H:%M') }} - {{ shift.end_time.strftime('%H:%M') if shift.end_time else 'Активна' }}</td>
+                                <td>
+                                    {% if shift.status == 'active' %}
+                                        <span class="badge bg-success">Активна</span>
+                                    {% elif shift.status == 'completed' %}
+                                        <span class="badge bg-primary">Завершена</span>
+                                    {% elif shift.status == 'scheduled' %}
+                                        <span class="badge bg-warning">Запланирована</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ shift.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if shift.total_payment %}
+                                        {{ "%.2f"|format(shift.total_payment) }} ₽
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-clock fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Нет смен</h5>
+                    <p class="text-muted">Смены по вашим объектам будут отображаться здесь</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Быстрые действия -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightning me-2"></i>
+                    Быстрые действия
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="/manager/objects" class="btn btn-outline-primary w-100">
+                            <i class="bi bi-building me-2"></i>
+                            Управление объектами
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/manager/employees" class="btn btn-outline-success w-100">
+                            <i class="bi bi-people me-2"></i>
+                            Управление сотрудниками
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/manager/calendar" class="btn btn-outline-info w-100">
+                            <i class="bi bi-calendar3 me-2"></i>
+                            Планирование смен
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/manager/reports" class="btn btn-outline-warning w-100">
+                            <i class="bi bi-graph-up me-2"></i>
+                            Отчеты
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Обновление статистики каждые 30 секунд
+    setInterval(function() {
+        // Здесь можно добавить AJAX запрос для обновления статистики
+        console.log('Обновление статистики...');
+    }, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,216 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}{{ object.name }} - StaffProBot - Управляющий{% endblock %}
+
+{% block manager_content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="bi bi-building text-primary"></i>
+                {{ object.name }}
+            </h1>
+            <div class="btn-group">
+                {% if object_permission and object_permission.can_edit %}
+                <a href="/manager/objects/{{ object.id }}/edit" class="btn btn-outline-primary">
+                    <i class="bi bi-pencil"></i> Редактировать
+                </a>
+                {% endif %}
+                <a href="/manager/objects" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Назад к списку
+                </a>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Информация об объекте</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <dl class="row">
+                                    <dt class="col-sm-4">Название:</dt>
+                                    <dd class="col-sm-8">
+                                        <strong>{{ object.name }}</strong>
+                                    </dd>
+                                    
+                                    <dt class="col-sm-4">Адрес:</dt>
+                                    <dd class="col-sm-8">
+                                        <i class="bi bi-geo-alt text-muted"></i>
+                                        {{ object.address }}
+                                    </dd>
+                                    
+                                    <dt class="col-sm-4">Ставка:</dt>
+                                    <dd class="col-sm-8">
+                                        <strong class="text-success">{{ object.hourly_rate }} ₽/час</strong>
+                                    </dd>
+                                    
+                                    <dt class="col-sm-4">Время работы:</dt>
+                                    <dd class="col-sm-8">
+                                        <i class="bi bi-clock text-muted"></i>
+                                        {{ object.opening_time }} - {{ object.closing_time }}
+                                    </dd>
+                                </dl>
+                            </div>
+                            <div class="col-md-6">
+                                <dl class="row">
+                                    <dt class="col-sm-4">Макс. расстояние:</dt>
+                                    <dd class="col-sm-8">
+                                        <i class="bi bi-geo-alt-fill text-muted"></i>
+                                        {{ object.max_distance_meters }} м
+                                    </dd>
+                                    
+                                    <dt class="col-sm-4">Статус:</dt>
+                                    <dd class="col-sm-8">
+                                        {% if object.is_active %}
+                                        <span class="badge bg-success">Активен</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Неактивен</span>
+                                        {% endif %}
+                                    </dd>
+                                    
+                                    <dt class="col-sm-4">Для соискателей:</dt>
+                                    <dd class="col-sm-8">
+                                        {% if object.available_for_applicants %}
+                                        <span class="badge bg-info">Доступен</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">Недоступен</span>
+                                        {% endif %}
+                                    </dd>
+                                    
+                                    <dt class="col-sm-4">Создан:</dt>
+                                    <dd class="col-sm-8">
+                                        <i class="bi bi-calendar text-muted"></i>
+                                        {{ object.created_at.strftime('%d.%m.%Y %H:%M') if object.created_at else 'Не указано' }}
+                                    </dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- График работы -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-calendar3"></i> График работы</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Дни недели:</h6>
+                                <div class="d-flex flex-wrap gap-2">
+                                    {% set days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] %}
+                                    {% for i in range(7) %}
+                                    <span class="badge {% if object.work_days_mask and object.work_days_mask[i] %}bg-primary{% else %}bg-secondary{% endif %}">
+                                        {{ days[i] }}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Повторение:</h6>
+                                <p class="text-muted">
+                                    {% if object.schedule_repeat_weeks %}
+                                        Каждые {{ object.schedule_repeat_weeks }} недель
+                                    {% else %}
+                                        Не повторяется
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <!-- Права управляющего -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-shield-check"></i> Ваши права
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if object_permission %}
+                        <div class="d-grid gap-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Просмотр</span>
+                                <span class="badge {% if object_permission.can_view %}bg-success{% else %}bg-danger{% endif %}">
+                                    {% if object_permission.can_view %}Разрешено{% else %}Запрещено{% endif %}
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Редактирование</span>
+                                <span class="badge {% if object_permission.can_edit %}bg-success{% else %}bg-danger{% endif %}">
+                                    {% if object_permission.can_edit %}Разрешено{% else %}Запрещено{% endif %}
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Удаление</span>
+                                <span class="badge {% if object_permission.can_delete %}bg-success{% else %}bg-danger{% endif %}">
+                                    {% if object_permission.can_delete %}Разрешено{% else %}Запрещено{% endif %}
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Управление сотрудниками</span>
+                                <span class="badge {% if object_permission.can_manage_employees %}bg-success{% else %}bg-danger{% endif %}">
+                                    {% if object_permission.can_manage_employees %}Разрешено{% else %}Запрещено{% endif %}
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Просмотр финансов</span>
+                                <span class="badge {% if object_permission.can_view_finances %}bg-success{% else %}bg-danger{% endif %}">
+                                    {% if object_permission.can_view_finances %}Разрешено{% else %}Запрещено{% endif %}
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Редактирование ставок</span>
+                                <span class="badge {% if object_permission.can_edit_rates %}bg-success{% else %}bg-danger{% endif %}">
+                                    {% if object_permission.can_edit_rates %}Разрешено{% else %}Запрещено{% endif %}
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Редактирование расписания</span>
+                                <span class="badge {% if object_permission.can_edit_schedule %}bg-success{% else %}bg-danger{% endif %}">
+                                    {% if object_permission.can_edit_schedule %}Разрешено{% else %}Запрещено{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="text-center text-muted">
+                            <i class="bi bi-exclamation-triangle fa-2x mb-2"></i>
+                            <p>Права не определены</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Быстрые действия -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-lightning"></i> Быстрые действия
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="/manager/calendar?object={{ object.id }}" class="btn btn-outline-primary">
+                                <i class="bi bi-calendar3"></i> Календарь смен
+                            </a>
+                            <a href="/manager/employees?object={{ object.id }}" class="btn btn-outline-success">
+                                <i class="bi bi-people"></i> Сотрудники объекта
+                            </a>
+                            <a href="/manager/reports?object={{ object.id }}" class="btn btn-outline-info">
+                                <i class="bi bi-graph-up"></i> Отчеты по объекту
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

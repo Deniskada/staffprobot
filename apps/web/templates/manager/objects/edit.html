@@ -1,0 +1,347 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}{{ title }} - StaffProBot - Управляющий{% endblock %}
+
+{% block manager_content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0">
+                    <i class="bi bi-pencil text-primary"></i>
+                    {{ title }}
+                </h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/manager/objects/{{ object.id }}/edit">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Название объекта *</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="name" 
+                                       name="name" 
+                                       value="{{ object.name }}"
+                                       required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="address" class="form-label">Адрес *</label>
+                                <textarea class="form-control" 
+                                          id="address" 
+                                          name="address" 
+                                          rows="3"
+                                          required>{{ object.address }}</textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="coordinates" class="form-label">Координаты</label>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="latitude" 
+                                               name="latitude" 
+                                               value="{{ object.coordinates.split(',')[0] if object.coordinates else '' }}"
+                                               placeholder="55.7558"
+                                               pattern="^-?[0-9]+\.?[0-9]*$">
+                                        <div class="form-text">Широта (latitude)</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="longitude" 
+                                               name="longitude" 
+                                               value="{{ object.coordinates.split(',')[1] if object.coordinates and ',' in object.coordinates else '' }}"
+                                               placeholder="37.6176"
+                                               pattern="^-?[0-9]+\.?[0-9]*$">
+                                        <div class="form-text">Долгота (longitude)</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="hourly_rate" class="form-label">Ставка за час (₽) *</label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="hourly_rate" 
+                                       name="hourly_rate" 
+                                       value="{{ object.hourly_rate }}"
+                                       min="0"
+                                       step="0.01"
+                                       required>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="opening_time" class="form-label">Время открытия</label>
+                                <input type="time" 
+                                       class="form-control" 
+                                       id="opening_time" 
+                                       name="opening_time" 
+                                       value="{{ object.opening_time }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="closing_time" class="form-label">Время закрытия</label>
+                                <input type="time" 
+                                       class="form-control" 
+                                       id="closing_time" 
+                                       name="closing_time" 
+                                       value="{{ object.closing_time }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="max_distance" class="form-label">Максимальное расстояние (м)</label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="max_distance" 
+                                       name="max_distance" 
+                                       value="{{ object.max_distance }}"
+                                       min="0"
+                                       step="1">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="available_for_applicants" 
+                                           name="available_for_applicants" 
+                                           value="true"
+                                           {% if object.available_for_applicants %}checked{% endif %}>
+                                    <label class="form-check-label" for="available_for_applicants">
+                                        Доступен для соискателей
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="is_active" 
+                                           name="is_active" 
+                                           value="true"
+                                           {% if object.is_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_active">
+                                        Объект активен
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- График работы -->
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-calendar3"></i> График работы
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Дни недели:</h6>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        {% set days = [
+                                            (1, 'Пн'), (2, 'Вт'), (4, 'Ср'), (8, 'Чт'), (16, 'Пт'), (32, 'Сб'), (64, 'Вс')
+                                        ] %}
+                                        {% for mask, label in days %}
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input work-day-checkbox" 
+                                                   type="checkbox" 
+                                                   id="day_{{ mask }}" 
+                                                   name="work_days" 
+                                                   value="{{ mask }}"
+                                                   data-mask="{{ mask }}">
+                                            <label class="form-check-label" for="day_{{ mask }}">
+                                                {{ label }}
+                                            </label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="schedule_repeat_weeks" class="form-label">Повторение (недель)</label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               id="schedule_repeat_weeks" 
+                                               name="schedule_repeat_weeks" 
+                                               value="{{ object.schedule_repeat_weeks or 1 }}"
+                                               min="1"
+                                               step="1">
+                                        <div class="form-text">1 = каждую неделю, 2 = каждые 2 недели и т.д.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Права управляющего -->
+                    {% if object_permission %}
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-shield-check"></i> Ваши права на объект
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Просмотр</span>
+                                        <span class="badge {% if object_permission.can_view %}bg-success{% else %}bg-danger{% endif %}">
+                                            {% if object_permission.can_view %}Разрешено{% else %}Запрещено{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Редактирование</span>
+                                        <span class="badge {% if object_permission.can_edit %}bg-success{% else %}bg-danger{% endif %}">
+                                            {% if object_permission.can_edit %}Разрешено{% else %}Запрещено{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Удаление</span>
+                                        <span class="badge {% if object_permission.can_delete %}bg-success{% else %}bg-danger{% endif %}">
+                                            {% if object_permission.can_delete %}Разрешено{% else %}Запрещено{% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Управление сотрудниками</span>
+                                        <span class="badge {% if object_permission.can_manage_employees %}bg-success{% else %}bg-danger{% endif %}">
+                                            {% if object_permission.can_manage_employees %}Разрешено{% else %}Запрещено{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Просмотр финансов</span>
+                                        <span class="badge {% if object_permission.can_view_finances %}bg-success{% else %}bg-danger{% endif %}">
+                                            {% if object_permission.can_view_finances %}Разрешено{% else %}Запрещено{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Редактирование ставок</span>
+                                        <span class="badge {% if object_permission.can_edit_rates %}bg-success{% else %}bg-danger{% endif %}">
+                                            {% if object_permission.can_edit_rates %}Разрешено{% else %}Запрещено{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Редактирование расписания</span>
+                                        <span class="badge {% if object_permission.can_edit_schedule %}bg-success{% else %}bg-danger{% endif %}">
+                                            {% if object_permission.can_edit_schedule %}Разрешено{% else %}Запрещено{% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="/manager/objects/{{ object.id }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Отмена
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check"></i> Сохранить изменения
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const openingTime = document.getElementById('opening_time');
+    const closingTime = document.getElementById('closing_time');
+    
+    // Обработка рабочих дней - инициализация
+    const workDaysMask = {{ object.work_days_mask or 0 }};
+    const workDaysCheckboxes = document.querySelectorAll('.work-day-checkbox');
+    
+    console.log('Work days mask:', workDaysMask);
+    console.log('Found checkboxes:', workDaysCheckboxes.length);
+    
+    workDaysCheckboxes.forEach(checkbox => {
+        const mask = parseInt(checkbox.value);
+        console.log('Checkbox mask:', mask, 'Value:', checkbox.value);
+        if (workDaysMask & mask) {
+            checkbox.checked = true;
+            console.log('Checked checkbox for mask:', mask);
+        }
+    });
+    
+    // Валидация времени
+    form.addEventListener('submit', function(e) {
+        if (openingTime.value >= closingTime.value) {
+            e.preventDefault();
+            alert('Время открытия должно быть раньше времени закрытия');
+            return;
+        }
+        
+        const hourlyRate = parseInt(document.getElementById('hourly_rate').value);
+        if (hourlyRate <= 0) {
+            e.preventDefault();
+            alert('Ставка должна быть больше 0');
+            return;
+        }
+        
+        const maxDistance = parseInt(document.getElementById('max_distance').value);
+        if (maxDistance <= 0) {
+            e.preventDefault();
+            alert('Максимальное расстояние должно быть больше 0');
+            return;
+        }
+    });
+    
+    // Обработка рабочих дней - собираем маску
+    const workDaysCheckboxesEdit = document.querySelectorAll('.work-day-checkbox');
+    
+    // Создаем функцию для обновления маски
+    function updateWorkDaysMask() {
+        let mask = 0;
+        workDaysCheckboxesEdit.forEach(checkbox => {
+            if (checkbox.checked) {
+                mask |= parseInt(checkbox.value);
+            }
+        });
+        return mask;
+    }
+    
+    // Добавляем обработчики для чекбоксов
+    workDaysCheckboxesEdit.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const mask = updateWorkDaysMask();
+            console.log('Updated work days mask:', mask);
+        });
+    });
+    
+    // Удаляем старые скрытые поля для work_days_mask
+    const oldHidden = form.querySelector('input[name="work_days_mask"]');
+    if (oldHidden) {
+        oldHidden.remove();
+    }
+    
+    // Добавляем скрытое поле для маски
+    const hiddenInput = document.createElement('input');
+    hiddenInput.type = 'hidden';
+    hiddenInput.name = 'work_days_mask';
+    hiddenInput.value = workDaysMask;
+    form.appendChild(hiddenInput);
+    
+    // Обновляем маску при отправке формы
+    form.addEventListener('submit', function() {
+        const mask = updateWorkDaysMask();
+        hiddenInput.value = mask;
+        console.log('Final work days mask:', mask);
+    });
+});
+</script>
+{% endblock %}

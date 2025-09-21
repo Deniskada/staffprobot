@@ -98,12 +98,19 @@ async def employee_dashboard(request: Request):
             'monthly_earnings': float(monthly_earnings),
         }
 
+        # Получаем данные для переключения интерфейсов
+        from shared.services.role_based_login_service import RoleBasedLoginService
+        async with get_async_session() as session:
+            login_service = RoleBasedLoginService(session)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+        
         return templates.TemplateResponse("employee/dashboard.html", {
             "request": request,
             "current_user": current_user,
             "title": "Дашборд сотрудника",
             "stats": stats,
             "recent_shifts": recent_shifts,
+            "available_interfaces": available_interfaces,
         })
     except Exception as e:
         logger.error(f"Error loading employee dashboard: {e}")
@@ -127,11 +134,19 @@ async def employee_shifts_map(request: Request):
     if user_role != "employee":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
     return templates.TemplateResponse("employee/shifts_map.html", {
         "request": request,
         "current_user": current_user,
         "title": "Карта смен",
-        "message": "Карта смен в разработке"
+        "message": "Карта смен в разработке",
+        "available_interfaces": available_interfaces
     })
 
 
@@ -146,11 +161,19 @@ async def employee_calendar(request: Request):
     if user_role != "employee":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
     return templates.TemplateResponse("employee/calendar.html", {
         "request": request,
         "current_user": current_user,
         "title": "Мой календарь",
-        "message": "Календарь сотрудника в разработке"
+        "message": "Календарь сотрудника в разработке",
+        "available_interfaces": available_interfaces
     })
 
 
@@ -165,11 +188,19 @@ async def employee_history(request: Request):
     if user_role != "employee":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
     return templates.TemplateResponse("employee/history.html", {
         "request": request,
         "current_user": current_user,
         "title": "История работы",
-        "message": "История работы в разработке"
+        "message": "История работы в разработке",
+        "available_interfaces": available_interfaces
     })
 
 
@@ -184,11 +215,19 @@ async def employee_earnings(request: Request):
     if user_role != "employee":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
     return templates.TemplateResponse("employee/earnings.html", {
         "request": request,
         "current_user": current_user,
         "title": "Мой заработок",
-        "message": "Статистика заработка в разработке"
+        "message": "Статистика заработка в разработке",
+        "available_interfaces": available_interfaces
     })
 
 
@@ -203,11 +242,19 @@ async def employee_applications(request: Request):
     if user_role != "employee":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
     return templates.TemplateResponse("employee/applications.html", {
         "request": request,
         "current_user": current_user,
         "title": "Мои заявки",
-        "message": "Управление заявками в разработке"
+        "message": "Управление заявками в разработке",
+        "available_interfaces": available_interfaces
     })
 
 
@@ -222,11 +269,19 @@ async def employee_profile(request: Request):
     if user_role != "employee":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
     return templates.TemplateResponse("employee/profile.html", {
         "request": request,
         "current_user": current_user,
         "title": "Профиль сотрудника",
-        "message": "Профиль в разработке"
+        "message": "Профиль в разработке",
+        "available_interfaces": available_interfaces
     })
 
 
@@ -241,9 +296,17 @@ async def employee_settings(request: Request):
     if user_role != "employee":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
     return templates.TemplateResponse("employee/settings.html", {
         "request": request,
         "current_user": current_user,
         "title": "Настройки сотрудника",
-        "message": "Настройки в разработке"
+        "message": "Настройки в разработке",
+        "available_interfaces": available_interfaces
     })

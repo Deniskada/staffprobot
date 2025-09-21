@@ -156,6 +156,121 @@
                             {% endif %}
                         </div>
 
+                        <!-- Назначение управляющим -->
+                        <div class="mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-user-tie me-2"></i>
+                                        Права управляющего
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" 
+                                               type="checkbox" 
+                                               id="is_manager" 
+                                               name="is_manager" 
+                                               value="true"
+                                               onchange="toggleManagerPermissions()">
+                                        <label class="form-check-label" for="is_manager">
+                                            <strong>Назначить управляющим</strong>
+                                        </label>
+                                        <div class="form-text">
+                                            Управляющий сможет управлять объектами в соответствии с назначенными правами
+                                        </div>
+                                    </div>
+
+                                    <!-- Права управляющего (скрыты по умолчанию) -->
+                                    <div id="manager-permissions" style="display: none;">
+                                        <h6 class="mb-3">Права управляющего</h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="can_view" 
+                                                           name="manager_permissions" 
+                                                           value="can_view" 
+                                                           checked>
+                                                    <label class="form-check-label" for="can_view">
+                                                        Просмотр объектов
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="can_edit" 
+                                                           name="manager_permissions" 
+                                                           value="can_edit"
+                                                           checked>
+                                                    <label class="form-check-label" for="can_edit">
+                                                        Редактирование объектов
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="can_delete" 
+                                                           name="manager_permissions" 
+                                                           value="can_delete">
+                                                    <label class="form-check-label" for="can_delete">
+                                                        Удаление объектов
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="can_manage_employees" 
+                                                           name="manager_permissions" 
+                                                           value="can_manage_employees"
+                                                           checked>
+                                                    <label class="form-check-label" for="can_manage_employees">
+                                                        Управление сотрудниками
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="can_view_finances" 
+                                                           name="manager_permissions" 
+                                                           value="can_view_finances"
+                                                           checked>
+                                                    <label class="form-check-label" for="can_view_finances">
+                                                        Просмотр финансов
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="can_edit_rates" 
+                                                           name="manager_permissions" 
+                                                           value="can_edit_rates"
+                                                           checked>
+                                                    <label class="form-check-label" for="can_edit_rates">
+                                                        Редактирование ставок
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="can_edit_schedule" 
+                                                           name="manager_permissions" 
+                                                           value="can_edit_schedule"
+                                                           checked>
+                                                    <label class="form-check-label" for="can_edit_schedule">
+                                                        Редактирование расписания
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Динамические поля шаблона -->
                         <div id="dynamic-fields" style="display: none;">
                             <h5 class="mb-3">Дополнительные поля</h5>
@@ -459,5 +574,30 @@ function createDynamicField(field) {
 
 
 }); // Конец DOMContentLoaded
+
+// Функция для переключения прав управляющего
+function toggleManagerPermissions() {
+    const isManagerCheckbox = document.getElementById('is_manager');
+    const managerPermissionsDiv = document.getElementById('manager-permissions');
+    
+    if (isManagerCheckbox.checked) {
+        managerPermissionsDiv.style.display = 'block';
+        // Устанавливаем права по умолчанию (все кроме удаления)
+        document.getElementById('can_view').checked = true;
+        document.getElementById('can_edit').checked = true;
+        document.getElementById('can_delete').checked = false;
+        document.getElementById('can_manage_employees').checked = true;
+        document.getElementById('can_view_finances').checked = true;
+        document.getElementById('can_edit_rates').checked = true;
+        document.getElementById('can_edit_schedule').checked = true;
+    } else {
+        managerPermissionsDiv.style.display = 'none';
+        // Сбрасываем все права управляющего
+        const permissionCheckboxes = managerPermissionsDiv.querySelectorAll('input[type="checkbox"]');
+        permissionCheckboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+    }
+}
 </script>
 {% endblock %}

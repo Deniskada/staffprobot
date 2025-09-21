@@ -146,14 +146,15 @@ async def require_owner_or_superadmin(request: Request) -> dict:
     if user_role == "superadmin":
         return user
     
-    # Проверяем права для владельцев и суперадминов
-    if user_role not in ["owner", "superadmin"] and not any(role in ["owner", "superadmin"] for role in user_roles):
+    # Проверяем права для владельцев, управляющих и суперадминов
+    if user_role not in ["owner", "superadmin", "manager"] and not any(role in ["owner", "superadmin", "manager"] for role in user_roles):
         if request.url.path.startswith("/api/"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав доступа"
             )
-        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+        # Перенаправляем на страницу входа вместо дашборда
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
     return user
 

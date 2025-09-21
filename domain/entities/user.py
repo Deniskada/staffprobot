@@ -14,6 +14,7 @@ class UserRole(str, Enum):
     OWNER = "owner"
     EMPLOYEE = "employee" 
     APPLICANT = "applicant"
+    MANAGER = "manager"
     SUPERADMIN = "superadmin"
 
 
@@ -28,8 +29,8 @@ class User(Base):
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)
-    role = Column(String(50), nullable=False, default=UserRole.APPLICANT)  # Оставляем для обратной совместимости
-    roles = Column(JSON, nullable=False, default=lambda: [UserRole.APPLICANT.value])  # Новое поле для множественных ролей
+    role = Column(String(50), nullable=False)  # Оставляем для обратной совместимости
+    roles = Column(JSON, nullable=False)  # Новое поле для множественных ролей
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -61,6 +62,12 @@ class User(Base):
         if hasattr(self, 'roles') and self.roles:
             return UserRole.APPLICANT.value in self.roles
         return self.role == UserRole.APPLICANT.value
+    
+    def is_manager(self) -> bool:
+        """Проверка, является ли пользователь управляющим."""
+        if hasattr(self, 'roles') and self.roles:
+            return UserRole.MANAGER.value in self.roles
+        return self.role == UserRole.MANAGER.value
     
     def is_superadmin(self) -> bool:
         """Проверка, является ли пользователь суперадмином."""

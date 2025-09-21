@@ -305,8 +305,6 @@
 
 <script>
 let employeesData = [];
-let draggedEmployee = null;
-let employeeDragPreview = null;
 
 // Загрузка сотрудников при инициализации
 document.addEventListener('DOMContentLoaded', function() {
@@ -329,11 +327,10 @@ function restoreEmployeesPanelState() {
 
 async function loadEmployees() {
     try {
-        const response = await fetch('/owner/api/employees', {
+        const response = await fetch('/manager/api/employees', {
             credentials: 'include'
         });
         const data = await response.json();
-        
         
         if (Array.isArray(data)) {
             employeesData = data;
@@ -367,7 +364,7 @@ function renderEmployees() {
             <div class="text-center text-muted">
                 <i class="bi bi-people"></i>
                 <div class="mt-2">Нет сотрудников</div>
-                <a href="/owner/employees" class="btn btn-sm btn-success mt-2">Управление сотрудниками</a>
+                <a href="/manager/employees" class="btn btn-sm btn-success mt-2">Управление сотрудниками</a>
             </div>
         `;
         return;
@@ -524,7 +521,7 @@ function handleEmployeeDropOnTimeslot(timeslotElement, employee) {
 
 async function planShiftForEmployee(timeslotId, employeeId) {
     try {
-        const response = await fetch('/owner/api/calendar/plan-shift', {
+        const response = await fetch('/manager/api/calendar/plan-shift', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
