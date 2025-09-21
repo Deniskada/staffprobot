@@ -1775,31 +1775,31 @@ async def api_employees_for_object(object_id: int, request: Request):
             employees_with_access = []
             added_employee_ids = set()  # Для отслеживания уже добавленных сотрудников
             
-                # Получаем всех сотрудников с активными договорами
-                employees_query = select(User).distinct().join(Contract, User.id == Contract.employee_id).where(
-                    Contract.status == "active",
-                    Contract.is_active == True
-                )
-                employees_result = await session.execute(employees_query)
-                all_employees = employees_result.scalars().all()
+            # Получаем всех сотрудников с активными договорами
+            employees_query = select(User).distinct().join(Contract, User.id == Contract.employee_id).where(
+                Contract.status == "active",
+                Contract.is_active == True
+            )
+            employees_result = await session.execute(employees_query)
+            all_employees = employees_result.scalars().all()
+            
+            # Детальное логирование каждого сотрудника
+            for employee in all_employees:
+                # Проверяем роль employee
+                employee_roles = employee.roles if isinstance(employee.roles, list) else [employee.role]
+                has_employee_role = "employee" in employee_roles
                 
-                # Детальное логирование каждого сотрудника
-                for employee in all_employees:
-                    # Проверяем роль employee
-                    employee_roles = employee.roles if isinstance(employee.roles, list) else [employee.role]
-                    has_employee_role = "employee" in employee_roles
-                    
-                    if employee.id not in added_employee_ids and has_employee_role:
-                        employee_data = {
-                            "id": int(employee.id),
-                            "name": str(f"{employee.first_name or ''} {employee.last_name or ''}".strip() or employee.username or f"ID {employee.id}"),
-                            "username": str(employee.username or ""),
-                            "role": str(employee.role),
-                            "is_active": bool(employee.is_active),
-                            "telegram_id": int(employee.telegram_id) if employee.telegram_id else None
-                        }
-                        employees_with_access.append(employee_data)
-                        added_employee_ids.add(employee.id)
+                if employee.id not in added_employee_ids and has_employee_role:
+                    employee_data = {
+                        "id": int(employee.id),
+                        "name": str(f"{employee.first_name or ''} {employee.last_name or ''}".strip() or employee.username or f"ID {employee.id}"),
+                        "username": str(employee.username or ""),
+                        "role": str(employee.role),
+                        "is_active": bool(employee.is_active),
+                        "telegram_id": int(employee.telegram_id) if employee.telegram_id else None
+                    }
+                    employees_with_access.append(employee_data)
+                    added_employee_ids.add(employee.id)
             
             return employees_with_access
             
