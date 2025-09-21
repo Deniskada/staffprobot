@@ -2317,10 +2317,35 @@ def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]]
     for week in range(6):
         week_data = []
         for day in range(7):
-            day_shifts = [
+            # Фильтруем смены: скрываем запланированные, если есть активные для того же объекта
+            day_shifts = []
+            active_shifts_by_object = {}
+            
+            # Сначала собираем все смены за день
+            all_day_shifts = [
                 shift for shift in shifts 
                 if shift["date"] == current_date
             ]
+            
+            # Группируем активные смены по объектам
+            for shift in all_day_shifts:
+                if shift["status"] == "active":
+                    object_id = shift.get("object_id")
+                    if object_id:
+                        active_shifts_by_object[object_id] = shift
+            
+            # Фильтруем смены: показываем только если нет активной смены для того же объекта
+            for shift in all_day_shifts:
+                object_id = shift.get("object_id")
+                
+                # Если смена запланированная и есть активная для того же объекта - скрываем
+                if (shift["status"] == "planned" and 
+                    object_id and 
+                    object_id in active_shifts_by_object):
+                    continue
+                
+                # Показываем все остальные смены
+                day_shifts.append(shift)
             
             # Фильтруем тайм-слоты: показываем только те, у которых нет связанных смен
             day_timeslots = []
