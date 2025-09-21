@@ -71,3 +71,16 @@ temp/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Backup files and archives
+*.tar
+*.tar.gz
+*.sql
+*.backup
+.env.backup
+.env.dev_backup
+dev_backup_*.sql
+staffprobot_*.tar
+staffprobot_*.tar.gz
+dev_config_backup_*.tar.gz
+deployment/backup/*.sql
