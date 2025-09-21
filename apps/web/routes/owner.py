@@ -1714,21 +1714,12 @@ async def api_employees(request: Request):
             )
             all_employees = (await session.execute(employees_q)).scalars().all()
             
-            logger.info(f"=== DRAG&DROP EMPLOYEES API ===")
-            logger.info(f"Found {len(all_employees)} employees with active contracts")
-            
             # Фильтруем только тех, кто имеет роль employee
             employees = []
-            for i, emp in enumerate(all_employees):
+            for emp in all_employees:
                 employee_roles = emp.roles if isinstance(emp.roles, list) else [emp.role]
-                has_employee_role = "employee" in employee_roles
-                logger.info(f"Employee {i+1}: ID={emp.id}, username={emp.username}, roles={emp.roles}, has_employee_role={has_employee_role}")
-                if has_employee_role:
+                if "employee" in employee_roles:
                     employees.append(emp)
-                    logger.info(f"Added employee {emp.id} to drag&drop list")
-            
-            logger.info(f"Final drag&drop employees count: {len(employees)}")
-            logger.info(f"=== END DRAG&DROP EMPLOYEES API ===")
 
             return [
                 {
@@ -1784,47 +1775,31 @@ async def api_employees_for_object(object_id: int, request: Request):
             employees_with_access = []
             added_employee_ids = set()  # Для отслеживания уже добавленных сотрудников
             
-            logger.info(f"Getting all employees with active contracts for object {object_id}")
-            
-            # Получаем всех сотрудников с активными договорами
-            employees_query = select(User).distinct().join(Contract, User.id == Contract.employee_id).where(
-                Contract.status == "active",
-                Contract.is_active == True
-            )
-            employees_result = await session.execute(employees_query)
-            all_employees = employees_result.scalars().all()
-            
-            logger.info(f"Found {len(all_employees)} employees with active contracts")
-            
-            # Детальное логирование каждого сотрудника
-            for i, employee in enumerate(all_employees):
-                logger.info(f"Employee {i+1}: ID={employee.id}, telegram_id={employee.telegram_id}, username={employee.username}, first_name={employee.first_name}, last_name={employee.last_name}")
-                logger.info(f"Employee {i+1}: role={employee.role}, roles={employee.roles}, is_active={employee.is_active}")
-                logger.info(f"Employee {i+1}: already_added={employee.id in added_employee_ids}")
+                # Получаем всех сотрудников с активными договорами
+                employees_query = select(User).distinct().join(Contract, User.id == Contract.employee_id).where(
+                    Contract.status == "active",
+                    Contract.is_active == True
+                )
+                employees_result = await session.execute(employees_query)
+                all_employees = employees_result.scalars().all()
                 
-                # Проверяем роль employee
-                employee_roles = employee.roles if isinstance(employee.roles, list) else [employee.role]
-                has_employee_role = "employee" in employee_roles
-                logger.info(f"Employee {i+1}: employee_roles={employee_roles}, has_employee_role={has_employee_role}")
-                
-                if employee.id not in added_employee_ids and has_employee_role:
-                    logger.info(f"Adding employee {employee.id} ({employee.username}) to list")
-                    employee_data = {
-                        "id": int(employee.id),
-                        "name": str(f"{employee.first_name or ''} {employee.last_name or ''}".strip() or employee.username or f"ID {employee.id}"),
-                        "username": str(employee.username or ""),
-                        "role": str(employee.role),
-                        "is_active": bool(employee.is_active),
-                        "telegram_id": int(employee.telegram_id) if employee.telegram_id else None
-                    }
-                    employees_with_access.append(employee_data)
-                    added_employee_ids.add(employee.id)
-                    logger.info(f"Added employee data: {employee_data}")
-                else:
-                    logger.info(f"Employee {employee.id} skipped - already_added: {employee.id in added_employee_ids}, has_employee_role: {has_employee_role}")
-            
-            logger.info(f"Final result: {len(employees_with_access)} employees for object {object_id}")
-            logger.info(f"Final employees list: {employees_with_access}")
+                # Детальное логирование каждого сотрудника
+                for employee in all_employees:
+                    # Проверяем роль employee
+                    employee_roles = employee.roles if isinstance(employee.roles, list) else [employee.role]
+                    has_employee_role = "employee" in employee_roles
+                    
+                    if employee.id not in added_employee_ids and has_employee_role:
+                        employee_data = {
+                            "id": int(employee.id),
+                            "name": str(f"{employee.first_name or ''} {employee.last_name or ''}".strip() or employee.username or f"ID {employee.id}"),
+                            "username": str(employee.username or ""),
+                            "role": str(employee.role),
+                            "is_active": bool(employee.is_active),
+                            "telegram_id": int(employee.telegram_id) if employee.telegram_id else None
+                        }
+                        employees_with_access.append(employee_data)
+                        added_employee_ids.add(employee.id)
             
             return employees_with_access
             
