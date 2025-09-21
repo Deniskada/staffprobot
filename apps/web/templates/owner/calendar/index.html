@@ -482,10 +482,10 @@ async function createQuickTimeslot() {
     formData.append('slot_date', document.getElementById('quickDate').value);
     formData.append('start_time', document.getElementById('quickStartTime').value);
     formData.append('end_time', document.getElementById('quickEndTime').value);
-    formData.append('hourly_rate', document.getElementById('quickRate').value);
+    formData.append('hourly_rate', parseInt(document.getElementById('quickRate').value));
     
     try {
-        const response = await fetch('/owner/timeslots/create', {
+        const response = await fetch('/owner/calendar/api/quick-create-timeslot', {
             method: 'POST',
             body: formData
         });
