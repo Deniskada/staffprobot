@@ -752,12 +752,13 @@ async def owner_calendar(
                             "total_payment": float(shift.total_payment) if shift.total_payment else 0
                         })
                     
-                    # Загружаем запланированные смены
+                    # Загружаем запланированные смены (исключаем отмененные)
                     schedules_query = select(ShiftSchedule).where(
                         and_(
                             ShiftSchedule.object_id.in_([obj.id for obj in objects]),
                             ShiftSchedule.planned_start >= datetime.combine(start_date, time.min),
-                            ShiftSchedule.planned_start <= datetime.combine(end_date, time.max)
+                            ShiftSchedule.planned_start <= datetime.combine(end_date, time.max),
+                            ShiftSchedule.status != 'cancelled'  # Исключаем отмененные
                         )
                     ).options(selectinload(ShiftSchedule.user))
                     schedules = (await session.execute(schedules_query)).scalars().all()
@@ -2316,15 +2317,27 @@ def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]]
     for week in range(6):
         week_data = []
         for day in range(7):
-            day_timeslots = [
-                slot for slot in timeslots 
-                if slot["date"] == current_date and slot.get("is_active", True)
-            ]
-            
             day_shifts = [
                 shift for shift in shifts 
                 if shift["date"] == current_date
             ]
+            
+            # Фильтруем тайм-слоты: показываем только те, у которых нет связанных смен
+            day_timeslots = []
+            for slot in timeslots:
+                if slot["date"] == current_date and slot.get("is_active", True):
+                    # Проверяем, есть ли смены для этого тайм-слота
+                    has_related_shift = False
+                    for shift in day_shifts:
+                        # Проверяем, что смена не отменена и относится к тому же объекту
+                        if (shift["object_id"] == slot["object_id"] and 
+                            shift["status"] not in ['cancelled']):
+                            has_related_shift = True
+                            break
+                    
+                    # Показываем тайм-слот только если нет связанных смен
+                    if not has_related_shift:
+                        day_timeslots.append(slot)
             
             if day_timeslots:
                 logger.info(f"Found {len(day_timeslots)} timeslots for {current_date}")
