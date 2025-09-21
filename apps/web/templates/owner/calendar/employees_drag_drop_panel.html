@@ -334,6 +334,17 @@ async function loadEmployees() {
         });
         const data = await response.json();
         
+        console.log('=== DRAG&DROP EMPLOYEES API RESPONSE ===');
+        console.log('API response:', data);
+        console.log('Is array:', Array.isArray(data));
+        console.log('Number of employees:', data ? data.length : 0);
+        if (Array.isArray(data)) {
+            data.forEach((emp, index) => {
+                console.log(`Drag&drop Employee ${index + 1}:`, emp);
+            });
+        }
+        console.log('=== END DRAG&DROP EMPLOYEES API RESPONSE ===');
+        
         if (Array.isArray(data)) {
             employeesData = data;
             renderEmployees();
