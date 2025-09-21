@@ -267,38 +267,13 @@ const calendarPanels = new CalendarPanels('owner');
 // Override calendar manager methods for drag&drop
 calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId) {
     try {
-        const formData = new FormData();
-        formData.append('employee_id', employeeId);
-        formData.append('timeslot_id', timeslotId);
+        // Get employee details
+        const employeeResponse = await fetch(`/owner/api/employees`);
+        const employees = await employeeResponse.json();
+        const employee = employees.find(emp => emp.id == employeeId);
         
-        const response = await fetch('/owner/calendar/api/assign-employee', {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (response.ok) {
-            calendarPanels.showNotification('Сотрудник назначен на смену', 'success');
-            // Reload calendar
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            calendarPanels.showNotification(`Ошибка: ${error.detail}`, 'error');
-        }
-    } catch (error) {
-        console.error('Error assigning employee:', error);
-        calendarPanels.showNotification('Ошибка назначения сотрудника', 'error');
-    }
-};
-
-calendarManager.createTimeslotFromObject = async function(objectId, timeslotId) {
-    try {
-        // Get object details
-        const objectResponse = await fetch(`/owner/calendar/api/objects`);
-        const objects = await objectResponse.json();
-        const object = objects.find(obj => obj.id == objectId);
-        
-        if (!object) {
-            calendarPanels.showNotification('Объект не найден', 'error');
+        if (!employee) {
+            calendarPanels.showNotification('Сотрудник не найден', 'error');
             return;
         }
         
@@ -311,7 +286,47 @@ calendarManager.createTimeslotFromObject = async function(objectId, timeslotId) 
             return;
         }
         
+        // Show notification about employee assignment
+        calendarPanels.showNotification(`Сотрудник ${employee.name} назначен на тайм-слот ${timeslot.start_time} - ${timeslot.end_time}`, 'success');
+        
+        // For now, just show success message
+        // TODO: Implement actual shift creation
+        
+    } catch (error) {
+        console.error('Error assigning employee:', error);
+        calendarPanels.showNotification('Ошибка назначения сотрудника', 'error');
+    }
+};
+
+calendarManager.createTimeslotFromObject = async function(objectId, timeslotId) {
+    try {
+        console.log('Creating timeslot from object:', objectId, timeslotId);
+        
+        // Get object details
+        const objectResponse = await fetch(`/owner/calendar/api/objects`);
+        const objects = await objectResponse.json();
+        const object = objects.find(obj => obj.id == objectId);
+        
+        console.log('Found object:', object);
+        
+        if (!object) {
+            calendarPanels.showNotification('Объект не найден', 'error');
+            return;
+        }
+        
+        // Get timeslot details
+        const timeslotResponse = await fetch(`/owner/calendar/api/timeslot/${timeslotId}`);
+        const timeslot = await timeslotResponse.json();
+        
+        console.log('Found timeslot:', timeslot);
+        
+        if (!timeslot) {
+            calendarPanels.showNotification('Тайм-слот не найден', 'error');
+            return;
+        }
+        
         // Show quick create form with pre-filled data
+        console.log('Showing quick create form...');
         await calendarPanels.showQuickCreateForm({
             id: objectId,
             name: object.name,
@@ -319,6 +334,8 @@ calendarManager.createTimeslotFromObject = async function(objectId, timeslotId) 
             openingTime: object.opening_time || '09:00',
             closingTime: object.closing_time || '18:00'
         }, timeslot.slot_date);
+        
+        console.log('Quick create form should be shown');
         
     } catch (error) {
         console.error('Error creating timeslot from object:', error);

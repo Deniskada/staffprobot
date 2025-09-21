@@ -80,11 +80,15 @@ class CalendarManager {
                 const data = e.dataTransfer.getData('text/plain');
                 const timeslotId = timeslot.dataset.timeslotId;
                 
+                console.log('Drop event:', data, 'on timeslot:', timeslotId);
+                
                 if (data.startsWith('employee:')) {
                     const employeeId = data.replace('employee:', '');
+                    console.log('Assigning employee:', employeeId);
                     this.assignEmployeeToTimeslot(employeeId, timeslotId);
                 } else if (data.startsWith('object:')) {
                     const objectId = data.replace('object:', '');
+                    console.log('Creating timeslot from object:', objectId);
                     this.createTimeslotFromObject(objectId, timeslotId);
                 }
             });
