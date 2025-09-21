@@ -1251,22 +1251,23 @@ async def manager_calendar(
             
             # Получаем список сотрудников для drag&drop панели
             employees_list = []
-            try:
-                from apps.web.services.user_service import UserService
-                user_service = UserService(session)
-                # Получаем сотрудников для всех доступных объектов
-                for obj in objects_list:
-                    employees = await user_service.get_employees_by_object(obj["id"])
-                    for emp in employees:
-                        if not any(e["id"] == emp.id for e in employees_list):
-                            employees_list.append({
-                                "id": emp.id,
-                                "name": emp.name,
-                                "role": "employee"
-                            })
-            except Exception as e:
-                logger.warning(f"Could not load employees for manager calendar: {e}")
-                employees_list = []
+            # TODO: Реализовать загрузку сотрудников через ContractService
+            # try:
+            #     from apps.web.services.contract_service import ContractService
+            #     contract_service = ContractService(session)
+            #     # Получаем сотрудников для всех доступных объектов
+            #     for obj in objects_list:
+            #         employees = await contract_service.get_employees_by_object(obj["id"])
+            #         for emp in employees:
+            #             if not any(e["id"] == emp.id for e in employees_list):
+            #                 employees_list.append({
+            #                     "id": emp.id,
+            #                     "name": emp.name,
+            #                     "role": "employee"
+            #                 })
+            # except Exception as e:
+            #     logger.warning(f"Could not load employees for manager calendar: {e}")
+            #     employees_list = []
             
             # Подготавливаем данные для shared компонентов календаря
             calendar_title = f"{RU_MONTHS[month]} {year}"
@@ -2153,7 +2154,9 @@ def _create_calendar_grid_manager(year: int, month: int, timeslots: List[Dict[st
             
             week_data.append({
                 "date": current_date,
+                "day": current_date.day,
                 "is_current_month": current_date.month == month,
+                "is_other_month": current_date.month != month,
                 "is_today": current_date == date.today(),
                 "timeslots": day_timeslots,
                 "timeslots_count": len(day_timeslots)
