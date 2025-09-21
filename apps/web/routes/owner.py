@@ -1805,7 +1805,7 @@ async def api_employees_for_object(object_id: int, request: Request):
                     employee_result = await session.execute(employee_query)
                     employee = employee_result.scalar_one_or_none()
                     
-                    if employee and employee.role == "employee":
+                    if employee and ("employee" in (employee.roles if isinstance(employee.roles, list) else [employee.role])):
                         logger.info(f"Adding employee {employee.id} ({employee.username}) to list")
                         employee_data = {
                             "id": int(employee.id),
