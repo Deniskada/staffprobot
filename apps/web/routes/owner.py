@@ -632,10 +632,7 @@ async def owner_calendar(
     request: Request,
     year: int = Query(None),
     month: int = Query(None),
-    object_id: int = Query(None),
-    employee_id: int = Query(None),
-    status: str = Query(None),
-    date_filter: str = Query(None)
+    object_id: int = Query(None)
 ):
     """Календарный вид планирования"""
     current_user = await get_current_user(request)
@@ -785,67 +782,6 @@ async def owner_calendar(
                             "total_payment": 0
                         })
                     
-                    # Применяем фильтры
-                    if employee_id:
-                        # Фильтруем по сотруднику - показываем только смены этого сотрудника
-                        filtered_shifts = []
-                        for shift in shifts_data:
-                            # Получаем ID сотрудника из смены
-                            shift_employee_id = None
-                            if shift["id"].startswith("schedule_"):
-                                # Для запланированных смен нужно найти ID сотрудника
-                                schedule_id = int(shift["id"].replace("schedule_", ""))
-                                for schedule in schedules:
-                                    if schedule.id == schedule_id and schedule.user:
-                                        shift_employee_id = schedule.user.id
-                                        break
-                            else:
-                                # Для обычных смен
-                                for shift_obj in shifts:
-                                    if shift_obj.id == shift["id"] and shift_obj.user:
-                                        shift_employee_id = shift_obj.user.id
-                                        break
-                            
-                            if shift_employee_id == employee_id:
-                                filtered_shifts.append(shift)
-                        shifts_data = filtered_shifts
-                        
-                        # При фильтре по сотруднику скрываем все тайм-слоты
-                        timeslots_data = []
-                        logger.info(f"Filtered by employee {employee_id}: {len(shifts_data)} shifts, 0 timeslots")
-                    
-                    elif status:
-                        # Фильтруем по статусу
-                        if status == "available":
-                            # Показываем только свободные тайм-слоты (без смен)
-                            shifts_data = []
-                            # Оставляем только тайм-слоты, для которых нет смен
-                            filtered_timeslots = []
-                            for slot in timeslots_data:
-                                has_related_shift = False
-                                # Проверяем, есть ли смены для этого тайм-слота
-                                for shift in shifts_data:
-                                    if (shift.get("object_id") == slot["object_id"] and 
-                                        shift["status"] not in ['cancelled']):
-                                        has_related_shift = True
-                                        break
-                                
-                                if not has_related_shift:
-                                    filtered_timeslots.append(slot)
-                            timeslots_data = filtered_timeslots
-                            logger.info(f"Filtered by status 'available': 0 shifts, {len(timeslots_data)} timeslots")
-                            
-                        elif status == "occupied":
-                            # Показываем только запланированные смены
-                            shifts_data = [s for s in shifts_data if s["status"] == "planned"]
-                            # Скрываем все тайм-слоты
-                            timeslots_data = []
-                            logger.info(f"Filtered by status 'occupied': {len(shifts_data)} planned shifts, 0 timeslots")
-                        
-                        else:
-                            # Для других статусов фильтруем смены
-                            shifts_data = [s for s in shifts_data if s["status"] == status]
-                            logger.info(f"Filtered by status '{status}': {len(shifts_data)} shifts")
                     
                     logger.info(f"Loaded {len(shifts_data)} total shifts (active + planned) for calendar")
             except Exception as e:
@@ -870,21 +806,6 @@ async def owner_calendar(
             user_id = await get_user_id_from_current_user(current_user, session)
             available_interfaces = await get_available_interfaces_for_user(user_id)
             
-            # Получаем список сотрудников для drag&drop панели
-            employees_list = []
-            try:
-                from apps.web.services.contract_service import ContractService
-                contract_service = ContractService()
-                employees = await contract_service.get_contract_employees_by_telegram_id(owner_telegram_id)
-                for emp in employees:
-                    employees_list.append({
-                        "id": emp["id"],
-                        "name": f"{emp['first_name']} {emp['last_name']}".strip(),
-                        "role": "employee"
-                    })
-            except Exception as e:
-                logger.warning(f"Could not load employees for calendar: {e}")
-                employees_list = []
             
             # Подготавливаем данные для shared компонентов календаря
             calendar_title = f"{RU_MONTHS[month]} {year}"
@@ -940,17 +861,10 @@ async def owner_calendar(
                 "current_date": current_date,
                 "view_type": "month",
                 "show_today_button": True,
-                "show_view_switcher": True,
-                "show_filters": True,
-                "show_refresh": True,
                 "calendar_weeks": calendar_weeks,
                 "available_interfaces": available_interfaces,
                 "objects": objects_list,
-                "employees": employees_list,
                 "selected_object_id": object_id,
-                "selected_employee_id": employee_id,
-                "selected_status": status,
-                "selected_date": date_filter,
                 "selected_object": selected_object,
                 "timeslots": timeslots_data,
                 "prev_month": prev_month,
