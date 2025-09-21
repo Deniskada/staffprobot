@@ -331,6 +331,10 @@ async function loadObjects() {
             objectItem.className = 'object-item';
             objectItem.draggable = true;
             objectItem.dataset.objectId = object.id;
+            objectItem.dataset.objectName = object.name;
+            objectItem.dataset.hourlyRate = object.hourly_rate || 0;
+            objectItem.dataset.openingTime = object.opening_time || '09:00';
+            objectItem.dataset.closingTime = object.closing_time || '18:00';
             objectItem.innerHTML = `
                 <div class="object-name">${object.name}</div>
                 <div class="object-address">${object.address || ''}</div>
@@ -343,6 +347,18 @@ async function loadObjects() {
             
             objectItem.addEventListener('dragend', function() {
                 this.style.opacity = '1';
+            });
+            
+            // Добавляем обработчик клика для быстрого создания
+            objectItem.addEventListener('click', function() {
+                const object = {
+                    id: this.dataset.objectId,
+                    name: this.dataset.objectName,
+                    hourlyRate: this.dataset.hourlyRate,
+                    openingTime: this.dataset.openingTime,
+                    closingTime: this.dataset.closingTime
+                };
+                showQuickCreateForm(object);
             });
             
             objectsList.appendChild(objectItem);
@@ -412,11 +428,117 @@ async function loadEmployees() {
     }
 }
 
+// Quick create form functions
+async function showQuickCreateForm(object = null, date = null) {
+    const modal = new bootstrap.Modal(document.getElementById('quickCreateModal'));
+    
+    // Заполняем список объектов в форме
+    await populateQuickCreateObjects();
+    
+    if (object) {
+        document.getElementById('quickObject').value = object.id;
+        document.getElementById('quickRate').value = object.hourlyRate;
+        document.getElementById('quickStartTime').value = object.openingTime;
+        document.getElementById('quickEndTime').value = object.closingTime;
+    }
+    
+    if (date) {
+        document.getElementById('quickDate').value = date;
+    } else {
+        document.getElementById('quickDate').value = new Date().toISOString().split('T')[0];
+    }
+    
+    modal.show();
+}
+
+async function populateQuickCreateObjects() {
+    const quickObjectSelect = document.getElementById('quickObject');
+    if (!quickObjectSelect) return;
+    
+    try {
+        const response = await fetch('/owner/calendar/api/objects');
+        const objects = await response.json();
+        
+        // Очищаем и заполняем список
+        quickObjectSelect.innerHTML = '<option value="">Выберите объект</option>';
+        
+        objects.forEach(object => {
+            const option = document.createElement('option');
+            option.value = object.id;
+            option.dataset.rate = object.hourly_rate || 0;
+            option.textContent = object.name;
+            quickObjectSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading objects for quick create:', error);
+    }
+}
+
+async function createQuickTimeslot() {
+    const form = document.getElementById('quickCreateForm');
+    const formData = new FormData();
+    
+    formData.append('object_id', document.getElementById('quickObject').value);
+    formData.append('slot_date', document.getElementById('quickDate').value);
+    formData.append('start_time', document.getElementById('quickStartTime').value);
+    formData.append('end_time', document.getElementById('quickEndTime').value);
+    formData.append('hourly_rate', document.getElementById('quickRate').value);
+    
+    try {
+        const response = await fetch('/owner/timeslots/create', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            showNotification('Тайм-слот создан успешно', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('quickCreateModal')).hide();
+            // Перезагружаем календарь
+            window.location.reload();
+        } else {
+            const error = await response.json();
+            showNotification(`Ошибка: ${error.detail}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error creating timeslot:', error);
+        showNotification('Ошибка создания тайм-слота', 'error');
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 3000);
+}
+
 // Initialize panels on page load
 document.addEventListener('DOMContentLoaded', function() {
     // Load initial data
     loadObjects();
     loadEmployees();
+    
+    // Обработка изменения объекта в форме быстрого создания
+    const quickObjectSelect = document.getElementById('quickObject');
+    if (quickObjectSelect) {
+        quickObjectSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.value) {
+                document.getElementById('quickRate').value = selectedOption.dataset.rate || '';
+            }
+        });
+    }
     
     // Add click handlers for collapsed panels
     const objectsPanel = document.getElementById('dragDropPanel');
