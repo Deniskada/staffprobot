@@ -787,7 +787,7 @@ async def owner_calendar(
                     
                     # Применяем фильтры
                     if employee_id:
-                        # Фильтруем по сотруднику
+                        # Фильтруем по сотруднику - показываем только смены этого сотрудника
                         filtered_shifts = []
                         for shift in shifts_data:
                             # Получаем ID сотрудника из смены
@@ -809,50 +809,43 @@ async def owner_calendar(
                             if shift_employee_id == employee_id:
                                 filtered_shifts.append(shift)
                         shifts_data = filtered_shifts
-                        logger.info(f"Filtered shifts by employee {employee_id}: {len(shifts_data)} shifts")
+                        
+                        # При фильтре по сотруднику скрываем все тайм-слоты
+                        timeslots_data = []
+                        logger.info(f"Filtered by employee {employee_id}: {len(shifts_data)} shifts, 0 timeslots")
                     
-                    if status:
+                    elif status:
                         # Фильтруем по статусу
                         if status == "available":
                             # Показываем только свободные тайм-слоты (без смен)
                             shifts_data = []
+                            # Оставляем только тайм-слоты, для которых нет смен
+                            filtered_timeslots = []
+                            for slot in timeslots_data:
+                                has_related_shift = False
+                                # Проверяем, есть ли смены для этого тайм-слота
+                                for shift in shifts_data:
+                                    if (shift.get("object_id") == slot["object_id"] and 
+                                        shift["status"] not in ['cancelled']):
+                                        has_related_shift = True
+                                        break
+                                
+                                if not has_related_shift:
+                                    filtered_timeslots.append(slot)
+                            timeslots_data = filtered_timeslots
+                            logger.info(f"Filtered by status 'available': 0 shifts, {len(timeslots_data)} timeslots")
+                            
                         elif status == "occupied":
-                            # Показываем только занятые слоты (со сменами)
-                            # Не фильтруем смены, но тайм-слоты будут скрыты в _create_calendar_grid
-                            pass
-                        elif status == "pending":
                             # Показываем только запланированные смены
                             shifts_data = [s for s in shifts_data if s["status"] == "planned"]
-                        else:
-                            # Фильтруем по конкретному статусу
-                            shifts_data = [s for s in shifts_data if s["status"] == status]
-                        logger.info(f"Filtered shifts by status {status}: {len(shifts_data)} shifts")
-                    
-                    # Применяем фильтры к тайм-слотам
-                    if employee_id or status:
-                        # Если есть фильтры, скрываем тайм-слоты, которые не соответствуют фильтрам
-                        filtered_timeslots = []
-                        for slot in timeslots_data:
-                            # Проверяем, есть ли смены для этого тайм-слота
-                            has_related_shift = False
-                            for shift in shifts_data:
-                                if (shift.get("object_id") == slot["object_id"] and 
-                                    shift["status"] not in ['cancelled']):
-                                    has_related_shift = True
-                                    break
-                            
-                            # Если фильтр "available" - показываем только свободные слоты
-                            if status == "available" and not has_related_shift:
-                                filtered_timeslots.append(slot)
-                            # Если фильтр "occupied" - показываем только занятые слоты
-                            elif status == "occupied" and has_related_shift:
-                                filtered_timeslots.append(slot)
-                            # Если нет фильтра по статусу или другие статусы - показываем все
-                            elif status not in ["available", "occupied"]:
-                                filtered_timeslots.append(slot)
+                            # Скрываем все тайм-слоты
+                            timeslots_data = []
+                            logger.info(f"Filtered by status 'occupied': {len(shifts_data)} planned shifts, 0 timeslots")
                         
-                        timeslots_data = filtered_timeslots
-                        logger.info(f"Filtered timeslots by filters: {len(timeslots_data)} timeslots")
+                        else:
+                            # Для других статусов фильтруем смены
+                            shifts_data = [s for s in shifts_data if s["status"] == status]
+                            logger.info(f"Filtered by status '{status}': {len(shifts_data)} shifts")
                     
                     logger.info(f"Loaded {len(shifts_data)} total shifts (active + planned) for calendar")
             except Exception as e:
