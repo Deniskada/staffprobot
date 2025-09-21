@@ -74,11 +74,14 @@
     top: 50%;
     transform: translateY(-50%);
     width: 280px;
+    max-height: 80vh;
     background: white;
     border-radius: 10px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     z-index: 1000;
     transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
 }
 
 .employees-panel.collapsed {
@@ -140,8 +143,9 @@
 
 .panel-content {
     padding: 15px;
-    max-height: 400px;
+    max-height: 300px;
     overflow-y: auto;
+    flex: 1;
 }
 
 .panel-actions {
@@ -312,7 +316,7 @@ async function loadObjects() {
     if (!objectsList) return;
     
     try {
-        const response = await fetch('/owner/api/objects');
+        const response = await fetch('/owner/calendar/api/objects');
         const objects = await response.json();
         
         objectsList.innerHTML = '';
