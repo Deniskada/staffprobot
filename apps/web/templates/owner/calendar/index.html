@@ -6,6 +6,220 @@
 <link rel="stylesheet" href="{{ url_for('static', path='css/shared/calendar.css') }}">
 <style>
 /* Owner-specific calendar styles */
+
+/* Drag & Drop Panels */
+.drag-drop-panel {
+    position: fixed;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 280px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.drag-drop-panel.collapsed {
+    width: 60px;
+    height: 60px;
+}
+
+.drag-drop-panel.collapsed .panel-content {
+    display: none;
+}
+
+.drag-drop-panel.collapsed .panel-header h6 {
+    display: none;
+}
+
+.drag-drop-panel.collapsed .panel-header {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 5px;
+    height: 60px;
+    width: 60px;
+    border-radius: 50%;
+    background: #007bff;
+}
+
+.drag-drop-panel.collapsed .panel-header button {
+    display: none;
+}
+
+.drag-drop-panel.collapsed .collapsed-icon {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+}
+
+.drag-drop-panel.collapsed .objects-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+}
+
+.drag-drop-panel.collapsed .objects-count .badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.4rem;
+}
+
+.employees-panel {
+    position: fixed;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 280px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.employees-panel.collapsed {
+    width: 60px;
+    height: 60px;
+}
+
+.employees-panel.collapsed .panel-content {
+    display: none;
+}
+
+.employees-panel.collapsed .panel-header h6 {
+    display: none;
+}
+
+.employees-panel.collapsed .panel-header {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 5px;
+    height: 60px;
+    width: 60px;
+    border-radius: 50%;
+    background: #28a745;
+}
+
+.employees-panel.collapsed .panel-header button {
+    display: none;
+}
+
+.employees-panel.collapsed .collapsed-icon {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+}
+
+.employees-panel.collapsed .employees-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+}
+
+.employees-panel.collapsed .employees-count .badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.4rem;
+}
+
+.panel-header {
+    padding: 15px;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+    border-radius: 10px 10px 0 0;
+}
+
+.panel-content {
+    padding: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.panel-actions {
+    border-top: 1px solid #dee2e6;
+    padding-top: 15px;
+}
+
+.object-item, .employee-item {
+    padding: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.object-item:hover, .employee-item:hover {
+    background: #f8f9fa;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.object-item:active, .employee-item:active {
+    cursor: grabbing;
+    transform: scale(0.98);
+}
+
+.object-name, .employee-name {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.object-address, .employee-role {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .drag-drop-panel, .employees-panel {
+        position: relative;
+        left: auto;
+        right: auto;
+        top: auto;
+        transform: none;
+        width: 100%;
+        margin-bottom: 20px;
+    }
+    
+    .drag-drop-panel.collapsed, .employees-panel.collapsed {
+        width: 100%;
+        height: auto;
+    }
+    
+    .drag-drop-panel.collapsed .panel-header, .employees-panel.collapsed .panel-header {
+        flex-direction: row;
+        justify-content: space-between;
+        padding: 15px;
+        height: auto;
+        width: 100%;
+        border-radius: 10px 10px 0 0;
+        background: #f8f9fa;
+    }
+    
+    .drag-drop-panel.collapsed .panel-header h6, .employees-panel.collapsed .panel-header h6 {
+        display: block;
+    }
+    
+    .drag-drop-panel.collapsed .panel-header button, .employees-panel.collapsed .panel-header button {
+        display: block;
+    }
+    
+    .drag-drop-panel.collapsed .collapsed-icon, .employees-panel.collapsed .collapsed-icon {
+        display: none !important;
+    }
+}
 </style>
 {% endblock %}
 
@@ -14,6 +228,12 @@
     <div class="row">
         <div class="col-12">
 
+
+            <!-- Панель объектов для drag & drop -->
+            {% include 'owner/calendar/drag_drop_panel.html' %}
+
+            <!-- Панель сотрудников для drag & drop -->
+            {% include 'owner/calendar/employees_drag_drop_panel.html' %}
 
             <!-- Shared Calendar Grid -->
             {% include 'shared/calendar/grid.html' %}
@@ -36,7 +256,6 @@ const calendarManager = new CalendarManager({
     onDateClick: showDateDetails
 });
 
-
 function showShiftDetails(shiftId) {
     // Handle planned shifts (schedule_ prefix)
     if (shiftId.toString().startsWith('schedule_')) {
@@ -57,6 +276,166 @@ function showDateDetails(date) {
     // Show date details modal or redirect
     console.log('Show date details for:', date);
 }
+
+// Panel functions
+function togglePanel() {
+    const panel = document.getElementById('dragDropPanel');
+    const icon = document.getElementById('panelToggleIcon');
+    
+    if (panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+        icon.className = 'bi bi-chevron-up';
+        loadObjects();
+    } else {
+        panel.classList.add('collapsed');
+        icon.className = 'bi bi-chevron-down';
+    }
+}
+
+function toggleEmployeesPanel() {
+    const panel = document.getElementById('employeesDragDropPanel');
+    const icon = document.getElementById('employeesPanelToggleIcon');
+    
+    if (panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+        icon.className = 'bi bi-chevron-up';
+        loadEmployees();
+    } else {
+        panel.classList.add('collapsed');
+        icon.className = 'bi bi-chevron-down';
+    }
+}
+
+// Load objects for drag&drop panel
+async function loadObjects() {
+    const objectsList = document.getElementById('objectsList');
+    if (!objectsList) return;
+    
+    try {
+        const response = await fetch('/owner/api/objects');
+        const objects = await response.json();
+        
+        objectsList.innerHTML = '';
+        
+        if (objects.length === 0) {
+            objectsList.innerHTML = '<div class="text-center text-muted">Нет объектов</div>';
+            return;
+        }
+        
+        objects.forEach(object => {
+            const objectItem = document.createElement('div');
+            objectItem.className = 'object-item';
+            objectItem.draggable = true;
+            objectItem.dataset.objectId = object.id;
+            objectItem.innerHTML = `
+                <div class="object-name">${object.name}</div>
+                <div class="object-address">${object.address || ''}</div>
+            `;
+            
+            objectItem.addEventListener('dragstart', function(e) {
+                e.dataTransfer.setData('text/plain', `object:${object.id}`);
+                this.style.opacity = '0.5';
+            });
+            
+            objectItem.addEventListener('dragend', function() {
+                this.style.opacity = '1';
+            });
+            
+            objectsList.appendChild(objectItem);
+        });
+        
+        // Update objects count
+        const objectsCount = document.getElementById('objectsCountBadge');
+        if (objectsCount) {
+            objectsCount.textContent = objects.length;
+            document.getElementById('objectsCount').style.display = 'block';
+        }
+        
+    } catch (error) {
+        console.error('Error loading objects:', error);
+        objectsList.innerHTML = '<div class="text-center text-danger">Ошибка загрузки объектов</div>';
+    }
+}
+
+// Load employees for drag&drop panel
+async function loadEmployees() {
+    const employeesList = document.getElementById('employeesList');
+    if (!employeesList) return;
+    
+    try {
+        const response = await fetch('/owner/api/employees');
+        const employees = await response.json();
+        
+        employeesList.innerHTML = '';
+        
+        if (employees.length === 0) {
+            employeesList.innerHTML = '<div class="text-center text-muted">Нет сотрудников</div>';
+            return;
+        }
+        
+        employees.forEach(employee => {
+            const employeeItem = document.createElement('div');
+            employeeItem.className = 'employee-item';
+            employeeItem.draggable = true;
+            employeeItem.dataset.employeeId = employee.id;
+            employeeItem.innerHTML = `
+                <div class="employee-name">${employee.name}</div>
+                <div class="employee-role">${employee.role || 'Сотрудник'}</div>
+            `;
+            
+            employeeItem.addEventListener('dragstart', function(e) {
+                e.dataTransfer.setData('text/plain', `employee:${employee.id}`);
+                this.style.opacity = '0.5';
+            });
+            
+            employeeItem.addEventListener('dragend', function() {
+                this.style.opacity = '1';
+            });
+            
+            employeesList.appendChild(employeeItem);
+        });
+        
+        // Update employees count
+        const employeesCount = document.getElementById('employeesCountBadge');
+        if (employeesCount) {
+            employeesCount.textContent = employees.length;
+            document.getElementById('employeesCount').style.display = 'block';
+        }
+        
+    } catch (error) {
+        console.error('Error loading employees:', error);
+        employeesList.innerHTML = '<div class="text-center text-danger">Ошибка загрузки сотрудников</div>';
+    }
+}
+
+// Initialize panels on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Load initial data
+    loadObjects();
+    loadEmployees();
+    
+    // Add click handlers for collapsed panels
+    const objectsPanel = document.getElementById('dragDropPanel');
+    const employeesPanel = document.getElementById('employeesDragDropPanel');
+    
+    if (objectsPanel) {
+        const objectsHeader = objectsPanel.querySelector('.panel-header');
+        objectsHeader.addEventListener('click', function(e) {
+            if (objectsPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+                togglePanel();
+            }
+        });
+    }
+    
+    if (employeesPanel) {
+        const employeesHeader = employeesPanel.querySelector('.panel-header');
+        employeesHeader.addEventListener('click', function(e) {
+            if (employeesPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+                toggleEmployeesPanel();
+            }
+        });
+    }
+});
 
 </script>
 {% endblock %}
