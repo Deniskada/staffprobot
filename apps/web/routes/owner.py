@@ -723,6 +723,41 @@ async def owner_calendar(
             user_id = await get_user_id_from_current_user(current_user, session)
             available_interfaces = await get_available_interfaces_for_user(user_id)
             
+            # Получаем список сотрудников для drag&drop панели
+            employees_list = []
+            try:
+                from apps.web.services.user_service import UserService
+                user_service = UserService(session)
+                employees = await user_service.get_employees_by_owner(owner_telegram_id)
+                for emp in employees:
+                    employees_list.append({
+                        "id": emp.id,
+                        "name": emp.name,
+                        "role": "employee"
+                    })
+            except Exception as e:
+                logger.warning(f"Could not load employees for calendar: {e}")
+                employees_list = []
+            
+            # Подготавливаем данные для shared компонентов календаря
+            calendar_title = f"{RU_MONTHS[month]} {year}"
+            current_date = f"{year}-{month:02d}-01"
+            
+            # Преобразуем calendar_data в формат, ожидаемый shared компонентами
+            calendar_weeks = []
+            for week in calendar_data:
+                week_data = []
+                for day in week:
+                    week_data.append({
+                        "date": day["date"].strftime("%Y-%m-%d"),
+                        "day": day["day"],
+                        "is_other_month": day["is_other_month"],
+                        "is_today": day["is_today"],
+                        "shifts": day.get("shifts", []),
+                        "timeslots": day.get("timeslots", [])
+                    })
+                calendar_weeks.append(week_data)
+            
             return templates.TemplateResponse("owner/calendar/index.html", {
                 "request": request,
                 "title": "Календарное планирование",
@@ -730,9 +765,17 @@ async def owner_calendar(
                 "year": year,
                 "month": month,
                 "month_name": RU_MONTHS[month],
-                "calendar_data": calendar_data,
+                "calendar_title": calendar_title,
+                "current_date": current_date,
+                "view_type": "month",
+                "show_today_button": True,
+                "show_view_switcher": True,
+                "show_filters": True,
+                "show_refresh": True,
+                "calendar_weeks": calendar_weeks,
                 "available_interfaces": available_interfaces,
                 "objects": objects_list,
+                "employees": employees_list,
                 "selected_object_id": object_id,
                 "selected_object": selected_object,
                 "timeslots": timeslots_data,
