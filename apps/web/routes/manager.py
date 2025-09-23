@@ -666,8 +666,19 @@ async def manager_employee_add(
             last_name = form_data.get("last_name", "").strip()
             username = form_data.get("username", "").strip()
             phone = form_data.get("phone", "").strip()
+            email = form_data.get("email", "").strip()
+            birth_date_str = form_data.get("birth_date", "").strip()
             role = form_data.get("role", "employee")
             is_active = form_data.get("is_active") == "true"
+            
+            # Дополнительные поля профиля (только для сотрудников)
+            work_experience = form_data.get("work_experience", "").strip() if role == "employee" else None
+            education = form_data.get("education", "").strip() if role == "employee" else None
+            skills = form_data.get("skills", "").strip() if role == "employee" else None
+            about = form_data.get("about", "").strip() if role == "employee" else None
+            preferred_schedule = form_data.get("preferred_schedule", "").strip() if role == "employee" else None
+            min_salary_str = form_data.get("min_salary", "").strip() if role == "employee" else None
+            availability_notes = form_data.get("availability_notes", "").strip() if role == "employee" else None
             
             # Данные договора
             contract_template_id = form_data.get("contract_template")
@@ -686,13 +697,36 @@ async def manager_employee_add(
             from apps.web.services.contract_service import ContractService
             from datetime import datetime, date
             
+            # Обработка даты рождения
+            birth_date = None
+            if birth_date_str:
+                try:
+                    birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
+                except ValueError:
+                    birth_date = None
+            
+            # Обработка минимальной зарплаты
+            min_salary = None
+            if min_salary_str and min_salary_str.isdigit():
+                min_salary = int(min_salary_str)
+            
             user = User(
                 telegram_id=telegram_id,
                 first_name=first_name,
                 last_name=last_name,
                 username=username,
                 phone=phone,
+                email=email if email else None,
+                birth_date=birth_date,
+                work_experience=work_experience if work_experience else None,
+                education=education if education else None,
+                skills=skills if skills else None,
+                about=about if about else None,
+                preferred_schedule=preferred_schedule if preferred_schedule else None,
+                min_salary=min_salary,
+                availability_notes=availability_notes if availability_notes else None,
                 role=role,
+                roles=[role],
                 is_active=is_active
             )
             
@@ -963,7 +997,34 @@ async def manager_employee_edit(
             employee.last_name = form_data.get("last_name", "").strip()
             employee.username = form_data.get("username", "").strip()
             employee.phone = form_data.get("phone", "").strip()
+            employee.email = form_data.get("email", "").strip() or None
             employee.is_active = form_data.get("is_active") == "true"
+            
+            # Обработка даты рождения
+            birth_date_str = form_data.get("birth_date", "").strip()
+            if birth_date_str:
+                try:
+                    employee.birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
+                except ValueError:
+                    pass
+            else:
+                employee.birth_date = None
+            
+            # Дополнительные поля профиля (только для сотрудников)
+            if employee.role == "employee" or (hasattr(employee, 'roles') and employee.roles and "employee" in employee.roles):
+                employee.work_experience = form_data.get("work_experience", "").strip() or None
+                employee.education = form_data.get("education", "").strip() or None
+                employee.skills = form_data.get("skills", "").strip() or None
+                employee.about = form_data.get("about", "").strip() or None
+                employee.preferred_schedule = form_data.get("preferred_schedule", "").strip() or None
+                employee.availability_notes = form_data.get("availability_notes", "").strip() or None
+                
+                # Обработка минимальной зарплаты
+                min_salary_str = form_data.get("min_salary", "").strip()
+                if min_salary_str and min_salary_str.isdigit():
+                    employee.min_salary = int(min_salary_str)
+                else:
+                    employee.min_salary = None
             
             await db.commit()
             await db.refresh(employee)

@@ -85,12 +85,125 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" 
+                                       class="form-control" 
+                                       id="email" 
+                                       name="email" 
+                                       placeholder="user@example.com">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="birth_date" class="form-label">Дата рождения</label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="birth_date" 
+                                       name="birth_date">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
                                 <label for="role" class="form-label">Роль</label>
                                 <select class="form-select" id="role" name="role">
                                     <option value="employee">Сотрудник</option>
                                     <option value="manager">Управляющий</option>
                                 </select>
                             </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Дополнительные поля профиля (только для сотрудников) -->
+                    <div id="profile-fields" style="display: none;">
+                        <hr>
+                        <h6 class="text-muted mb-3">Дополнительная информация (необязательно)</h6>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="work_experience" class="form-label">Опыт работы</label>
+                                    <select class="form-select" id="work_experience" name="work_experience">
+                                        <option value="">Выберите опыт</option>
+                                        <option value="no_experience">Без опыта</option>
+                                        <option value="less_than_year">Менее года</option>
+                                        <option value="1-3_years">1-3 года</option>
+                                        <option value="3-5_years">3-5 лет</option>
+                                        <option value="5-10_years">5-10 лет</option>
+                                        <option value="more_than_10_years">Более 10 лет</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="education" class="form-label">Образование</label>
+                                    <select class="form-select" id="education" name="education">
+                                        <option value="">Выберите образование</option>
+                                        <option value="secondary">Среднее</option>
+                                        <option value="secondary_special">Среднее специальное</option>
+                                        <option value="incomplete_higher">Неоконченное высшее</option>
+                                        <option value="higher">Высшее</option>
+                                        <option value="postgraduate">Послевузовское</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="preferred_schedule" class="form-label">Предпочитаемый график</label>
+                                    <select class="form-select" id="preferred_schedule" name="preferred_schedule">
+                                        <option value="">Выберите график</option>
+                                        <option value="full_time">Полный день</option>
+                                        <option value="part_time">Неполный день</option>
+                                        <option value="flexible">Гибкий график</option>
+                                        <option value="shift_work">Сменная работа</option>
+                                        <option value="weekends">Выходные</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="min_salary" class="form-label">Минимальная зарплата (₽/час)</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="min_salary" 
+                                           name="min_salary" 
+                                           min="0" 
+                                           step="1"
+                                           placeholder="500">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="skills" class="form-label">Навыки и умения</label>
+                            <textarea class="form-control" 
+                                      id="skills" 
+                                      name="skills" 
+                                      rows="3" 
+                                      placeholder="Опишите ваши навыки и умения..."></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="about" class="form-label">О себе</label>
+                            <textarea class="form-control" 
+                                      id="about" 
+                                      name="about" 
+                                      rows="3" 
+                                      placeholder="Расскажите о себе..."></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="availability_notes" class="form-label">Примечания о доступности</label>
+                            <textarea class="form-control" 
+                                      id="availability_notes" 
+                                      name="availability_notes" 
+                                      rows="2" 
+                                      placeholder="Когда вы доступны для работы..."></textarea>
                         </div>
                     </div>
                     
@@ -246,6 +359,16 @@ document.getElementById('username').addEventListener('input', function(e) {
 document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('start_date').value = today;
+});
+
+// Показ/скрытие дополнительных полей профиля
+document.getElementById('role').addEventListener('change', function() {
+    const profileFields = document.getElementById('profile-fields');
+    if (this.value === 'employee') {
+        profileFields.style.display = 'block';
+    } else {
+        profileFields.style.display = 'none';
+    }
 });
 
 // Валидация формы
