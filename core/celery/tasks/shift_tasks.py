@@ -48,7 +48,7 @@ def auto_close_shifts(self):
                 active_shifts_query = select(Shift).join(Object).filter(
                     and_(
                         Shift.status == 'active',
-                        Shift.start_time < now  # Смена уже началась
+                        Shift.start_time < now
                     )
                 )
                 
@@ -57,30 +57,23 @@ def auto_close_shifts(self):
                 
                 for shift in active_shifts:
                     try:
-                        # Определяем время закрытия для спонтанной смены
                         end_time = None
-                        
-                        # Берем время закрытия объекта
+                        # Время закрытия по режиму объекта в день начала смены
                         if shift.object and shift.object.closing_time:
-                            # Создаем datetime для времени закрытия в день начала смены
                             end_time = datetime.combine(shift.start_time.date(), shift.object.closing_time)
-                            
-                            # Если время закрытия уже прошло сегодня, закрываем смену
-                            if now >= end_time:
-                                # Вычисляем общее время и оплату
-                                duration = end_time - shift.start_time
-                                total_hours = duration.total_seconds() / 3600
-                                total_payment = total_hours * shift.hourly_rate if shift.hourly_rate else None
-                                
-                                # Закрываем смену
-                                shift.end_time = end_time
-                                shift.status = 'completed'
-                                shift.total_hours = total_hours
-                                shift.total_payment = total_payment
-                                
-                                closed_count += 1
-                                logger.info(f"Auto-closed spontaneous shift {shift.id} at {end_time} (object closing time)")
                         
+                        if end_time and now >= end_time:
+                            duration = end_time - shift.start_time
+                            total_hours = duration.total_seconds() / 3600
+                            total_payment = total_hours * shift.hourly_rate if shift.hourly_rate else None
+                            
+                            shift.end_time = end_time
+                            shift.status = 'completed'
+                            shift.total_hours = total_hours
+                            shift.total_payment = total_payment
+                            
+                            closed_count += 1
+                            logger.info(f"Auto-closed spontaneous shift {shift.id} at {end_time} (object closing time)")
                     except Exception as e:
                         error_msg = f"Error auto-closing spontaneous shift {shift.id}: {e}"
                         logger.error(error_msg)
@@ -90,8 +83,8 @@ def auto_close_shifts(self):
                 confirmed_schedules_query = select(ShiftSchedule).join(Object).filter(
                     and_(
                         ShiftSchedule.status == 'confirmed',
-                        ShiftSchedule.planned_start < now,  # Смена уже должна была начаться
-                        ShiftSchedule.auto_closed == False  # Еще не закрыта автоматически
+                        ShiftSchedule.planned_start < now,
+                        ShiftSchedule.auto_closed == False
                     )
                 )
                 
@@ -100,55 +93,40 @@ def auto_close_shifts(self):
                 
                 for schedule in confirmed_schedules:
                     try:
-                        # Определяем время закрытия для запланированной смены
                         end_time = None
-                        
-                        # 1. Сначала пытаемся взять из тайм-слота
+                        # 1) Конец тайм-слота
                         if schedule.time_slot_id:
                             timeslot_query = select(TimeSlot).filter(TimeSlot.id == schedule.time_slot_id)
                             timeslot_result = await session.execute(timeslot_query)
                             timeslot = timeslot_result.scalar_one_or_none()
-                            
                             if timeslot and timeslot.end_time:
-                                # Создаем datetime для времени закрытия
                                 end_time = datetime.combine(schedule.planned_start.date(), timeslot.end_time)
-                        
-                        # 2. Если нет тайм-слота, берем из режима работы объекта
+                        # 2) Режим работы объекта
                         if not end_time and schedule.object and schedule.object.closing_time:
                             end_time = datetime.combine(schedule.planned_start.date(), schedule.object.closing_time)
+                        # 3) Если указан auto_close_minutes у объекта
+                        if not end_time and schedule.object and getattr(schedule.object, 'auto_close_minutes', 0) > 0:
+                            end_time = schedule.planned_start + timedelta(minutes=schedule.object.auto_close_minutes)
                         
-                        # 3. Если ничего нет, используем auto_close_minutes
-                        if not end_time and hasattr(shift, 'object') and shift.object and hasattr(shift.object, 'auto_close_minutes') and shift.object.auto_close_minutes > 0:
-                            # Закрываем смену через auto_close_minutes после начала
-                            end_time = shift.start_time + timedelta(minutes=shift.object.auto_close_minutes)
-                        
-                        # 4. Если ничего нет, закрываем в полночь
-                        if not end_time:
-                            midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                            end_time = midnight
-                        
-                        # Если время закрытия уже прошло, закрываем смену
-                        if now >= end_time:
-                            # Вычисляем общее время и оплату
+                        # Без fallback на полночь — не закрываем в 00:00
+                        if end_time and now >= end_time:
                             duration = end_time - schedule.planned_start
                             total_hours = duration.total_seconds() / 3600
                             total_payment = total_hours * schedule.hourly_rate if schedule.hourly_rate else None
                             
-                            # Закрываем запланированную смену
                             schedule.status = 'completed'
                             schedule.planned_end = end_time
                             schedule.auto_closed = True
                             
                             closed_count += 1
                             logger.info(f"Auto-closed planned shift {schedule.id} at {end_time} (timeslot/object closing time)")
-                        
                     except Exception as e:
                         error_msg = f"Error auto-closing planned shift {schedule.id}: {e}"
                         logger.error(error_msg)
                         errors.append(error_msg)
                 
-                # Сохраняем изменения
-                session.commit()
+                # Сохраняем изменения (async)
+                await session.commit()
                 
                 logger.info(f"Auto-closed {closed_count} shifts")
                 return {
@@ -157,8 +135,8 @@ def auto_close_shifts(self):
                     "errors": errors
                 }
                 
-        # Запускаем функцию
-        result = _auto_close_shifts()
+        # Запускаем async-функцию корректно
+        result = asyncio.run(_auto_close_shifts())
         return result
         
     except Exception as e:
