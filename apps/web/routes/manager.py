@@ -1102,7 +1102,7 @@ async def manager_employee_terminate(
         raise HTTPException(status_code=500, detail="Ошибка расторжения договора")
 
 
-@router.get("/calendar", response_class=HTMLResponse, name="manager_calendar")
+@router.get("/calendar", response_class=HTMLResponse)
 async def manager_calendar(
     request: Request,
     year: int = Query(None),
@@ -1112,7 +1112,6 @@ async def manager_calendar(
 ):
     """Календарь управляющего."""
     try:
-        logger.info("=== MAIN MANAGER CALENDAR ROUTE CALLED ===")
         logger.info("Starting manager_calendar function")
         
         # Проверяем, что current_user не является RedirectResponse
@@ -1217,6 +1216,7 @@ async def manager_calendar(
             
             # Получаем данные о сменах за месяц
             shifts_data = []
+            logger.info(f"Getting shifts for object_ids: {object_ids}, period: {start_date} to {end_date}")
             if object_ids:
                 # Получаем запланированные смены
                 from domain.entities.shift_schedule import ShiftSchedule
@@ -1230,6 +1230,7 @@ async def manager_calendar(
                 
                 scheduled_shifts_result = await db.execute(scheduled_shifts_query)
                 scheduled_shifts = scheduled_shifts_result.scalars().all()
+                logger.info(f"Found {len(scheduled_shifts)} scheduled shifts")
                 
                 # Получаем отработанные смены
                 from domain.entities.shift import Shift
