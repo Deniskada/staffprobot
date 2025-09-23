@@ -7,7 +7,7 @@
         <div class="employees-count" id="employeesCount" style="display: none;">
             <span class="badge bg-success" id="employeesCountBadge">0</span>
         </div>
-        <button class="btn btn-sm btn-outline-secondary" onclick="toggleEmployeesPanel()">
+        <button class="btn btn-sm btn-outline-secondary" onclick="calendarPanels.toggleEmployeesPanel()">
             <i class="bi bi-chevron-up" id="employeesPanelToggleIcon"></i>
         </button>
         <div class="collapsed-icon" style="display: none;">
@@ -15,7 +15,7 @@
         </div>
     </div>
     
-    <div class="panel-content" id="employeesPanelContent">
+    <div class="panel-content" id="employeesPanelContent" style="max-height: none; overflow-y: visible;">
         <div class="employees-list" id="employeesList">
             <div class="text-center text-muted">
                 <div class="spinner-border spinner-border-sm" role="status">
@@ -26,7 +26,7 @@
         </div>
         
         <div class="panel-actions mt-3">
-            <button class="btn btn-outline-secondary btn-sm w-100" onclick="refreshEmployees()">
+            <button class="btn btn-outline-secondary btn-sm w-100" onclick="calendarPanels.refreshEmployees()">
                 <i class="bi bi-arrow-clockwise"></i> Обновить
             </button>
         </div>

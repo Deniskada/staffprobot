@@ -36,30 +36,23 @@ class CalendarPanels {
 
     // Load objects for drag&drop panel
     async loadObjects() {
-        console.log('Loading objects for role:', this.role);
         const objectsList = document.getElementById('objectsList');
         if (!objectsList) {
-            console.log('Objects list element not found');
             return;
         }
         
         try {
-            console.log('Fetching objects from:', `/${this.role}/calendar/api/objects`);
             const response = await fetch(`/${this.role}/calendar/api/objects`);
-            console.log('Objects response status:', response.status);
             const objects = await response.json();
-            console.log('Loaded objects:', objects);
             
             objectsList.innerHTML = '';
             
             if (objects.length === 0) {
-                console.log('No objects found');
                 objectsList.innerHTML = '<div class="text-center text-muted">Нет объектов</div>';
                 return;
             }
             
             objects.forEach(object => {
-                console.log('Creating object item for:', object.id, object.name);
                 const objectItem = document.createElement('div');
                 objectItem.className = 'object-item';
                 objectItem.draggable = true;
@@ -74,7 +67,6 @@ class CalendarPanels {
                 `;
                 
                 objectItem.addEventListener('dragstart', function(e) {
-                    console.log('Starting drag for object:', object.id, object.name);
                     e.dataTransfer.setData('text/plain', `object:${object.id}`);
                     this.style.opacity = '0.5';
                     
@@ -110,7 +102,19 @@ class CalendarPanels {
                     this.style.opacity = '1';
                 });
                 
-                // Add click handler for quick create
+                // Click to open quick form prefilled
+                objectItem.addEventListener('click', function() {
+                    const object = {
+                        id: this.dataset.objectId,
+                        name: this.dataset.objectName,
+                        hourlyRate: this.dataset.hourlyRate,
+                        openingTime: this.dataset.openingTime,
+                        closingTime: this.dataset.closingTime
+                    };
+                    this.closest('body');
+                }.bind(this));
+                
+                // Attach quick form via shared panels
                 objectItem.addEventListener('click', function() {
                     const object = {
                         id: this.dataset.objectId,
@@ -129,12 +133,13 @@ class CalendarPanels {
             const objectsCount = document.getElementById('objectsCountBadge');
             if (objectsCount) {
                 objectsCount.textContent = objects.length;
-                document.getElementById('objectsCount').style.display = 'block';
+                document.getElementById('objectsCount').style.display = 'inline-block';
             }
-            
         } catch (error) {
-            console.error('Error loading objects:', error);
-            objectsList.innerHTML = '<div class="text-center text-danger">Ошибка загрузки объектов</div>';
+            const objectsList = document.getElementById('objectsList');
+            if (objectsList) {
+                objectsList.innerHTML = '<div class="text-danger">Ошибка загрузки объектов</div>';
+            }
         }
     }
 
@@ -313,7 +318,6 @@ class CalendarPanels {
 
     // Initialize panels
     init() {
-        console.log('Initializing CalendarPanels for role:', this.role);
         // Load initial data
         this.loadObjects();
         this.loadEmployees();
@@ -323,22 +327,26 @@ class CalendarPanels {
         const employeesPanel = document.getElementById('employeesDragDropPanel');
         
         if (objectsPanel) {
-            const objectsHeader = objectsPanel.querySelector('.panel-header');
-            objectsHeader.addEventListener('click', function(e) {
-                if (objectsPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+            objectsPanel.addEventListener('click', (e) => {
+                if (objectsPanel.classList.contains('collapsed')) {
                     this.togglePanel();
                 }
-            }.bind(this));
+            });
         }
         
         if (employeesPanel) {
-            const employeesHeader = employeesPanel.querySelector('.panel-header');
-            employeesHeader.addEventListener('click', function(e) {
-                if (employeesPanel.classList.contains('collapsed') && !e.target.closest('button')) {
+            employeesPanel.addEventListener('click', (e) => {
+                if (employeesPanel.classList.contains('collapsed')) {
                     this.toggleEmployeesPanel();
                 }
-            }.bind(this));
+            });
         }
+        
+        // Auto refresh counts occasionally
+        setInterval(() => {
+            this.refreshObjects();
+            this.refreshEmployees();
+        }, 3000);
         
         // Handle object select change
         const quickObjectSelect = document.getElementById('quickObject');
