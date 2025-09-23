@@ -1260,7 +1260,7 @@ async def manager_calendar(
                         user = users.get(shift.user_id)
                         employee_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {shift.user_id}"
                         
-                        shifts_data.append({
+                        shift_data = {
                             "id": f"schedule_{shift.id}",
                             "object_id": shift.object_id,
                             "object_name": obj.name,
@@ -1270,7 +1270,12 @@ async def manager_calendar(
                             "status": shift.status,
                             "employee_name": employee_name,
                             "notes": shift.notes or ""
-                        })
+                        }
+                        shifts_data.append(shift_data)
+                        
+                        # Логируем смену на 23 сентября
+                        if shift.planned_start.date().isoformat() == "2025-09-23":
+                            logger.info(f"Found shift on 23.09: {shift_data}")
                 
                 # Преобразуем отработанные смены в формат для календаря
                 for shift in actual_shifts:
@@ -2212,7 +2217,18 @@ def _create_calendar_grid_manager(
             current_date_str = current_date.isoformat()
             
             # Смены за день
-            all_day_shifts = [s for s in shifts if s.get("date") == current_date]
+            all_day_shifts = [s for s in shifts if s.get("date") == current_date_str]
+            
+            # Логируем для отладки 23 сентября
+            if current_date_str == "2025-09-23":
+                logger.info(f"DEBUG 23.09: Found {len(all_day_shifts)} shifts for this day")
+                logger.info(f"DEBUG 23.09: current_date_str={current_date_str}")
+                logger.info(f"DEBUG 23.09: Total shifts in data: {len(shifts)}")
+                for i, s in enumerate(shifts):
+                    if s.get("date") == "2025-09-23":
+                        logger.info(f"DEBUG 23.09: Shift {i}: {s}")
+                for s in all_day_shifts:
+                    logger.info(f"DEBUG 23.09 shift: {s}")
             active_by_object: Dict[int, Dict[str, Any]] = {}
             completed_by_object: Dict[int, Dict[str, Any]] = {}
             for s in all_day_shifts:
@@ -2225,9 +2241,14 @@ def _create_calendar_grid_manager(
                     completed_by_object[oid] = s
 
             # Скрываем planned, если есть active/completed по тому же объекту
+            # Исключаем отмененные смены
             day_shifts = []
             for s in all_day_shifts:
                 oid = s.get("object_id")
+                # Исключаем отмененные смены
+                if s.get("status") == "cancelled":
+                    continue
+                # Скрываем planned, если есть active/completed по тому же объекту
                 if s.get("status") == "planned" and oid and (oid in active_by_object or oid in completed_by_object):
                     continue
                 day_shifts.append(s)

@@ -83,6 +83,10 @@ async def require_manager_or_owner(request: Request, current_user: dict = Depend
     if isinstance(current_user, RedirectResponse):
         return current_user
     
+    # Если пользователь не аутентифицирован
+    if current_user is None:
+        return RedirectResponse(url="/auth/login", status_code=302)
+    
     from core.database.session import get_async_session
     async with get_async_session() as session:
         user_id = await get_user_id_from_current_user(current_user, session)
