@@ -55,12 +55,10 @@ async def employee_index(
         if isinstance(current_user, RedirectResponse):
             return current_user
             
-        
-        # Проверяем, что current_user не является RedirectResponse
-        if isinstance(current_user, RedirectResponse):
-            return current_user
-            
         user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
         available_interfaces = await get_available_interfaces_for_user(current_user, db)
         
         # Получаем статистику
@@ -364,12 +362,14 @@ async def employee_profile(
         )
         in_progress_count = in_progress_count.scalar() or 0
         
+        logger.info(f"Creating profile_stats with applications_count: {applications_count}")
         profile_stats = {
             'applications': applications_count,
             'interviews': interviews_count,
             'successful': successful_count,
             'in_progress': in_progress_count
         }
+        logger.info(f"Profile stats created: {profile_stats}")
         
         # Категории работы
         work_categories = [
@@ -388,6 +388,8 @@ async def employee_profile(
             "current_user": user,
             "user": user,
             "profile_stats": profile_stats,
+            "applications_count": applications_count,
+            "interviews_count": interviews_count,
             "work_categories": work_categories,
             "available_interfaces": available_interfaces
         })
