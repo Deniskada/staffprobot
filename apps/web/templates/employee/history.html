@@ -1,39 +1,215 @@
 {% extends "employee/base_employee.html" %}
 
-{% block title %}{{ title }}{% endblock %}
-
-{% block extra_css %}
-<style>
-.coming-soon {
-    background: linear-gradient(135deg, #17a2b8 0%, #007bff 100%);
-    color: white;
-    padding: 60px;
-    border-radius: 20px;
-    text-align: center;
-    margin: 40px 0;
-}
-</style>
-{% endblock %}
+{% block title %}StaffProBot - История{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2>🕐 История работы</h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item">
-                        <a href="/employee">Дашборд</a>
-                    </li>
-                    <li class="breadcrumb-item active">История</li>
-                </ol>
-            </nav>
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="bi bi-clock-history text-primary"></i>
+                История активности
+            </h1>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary active" id="view-timeline">
+                    <i class="bi bi-list-ul"></i> Временная шкала
+                </button>
+                <button type="button" class="btn btn-outline-primary" id="view-stats">
+                    <i class="bi bi-graph-up"></i> Статистика
+                </button>
+            </div>
         </div>
     </div>
+</div>
 
-    <div class="coming-soon">
-        <h1>🚧 В разработке</h1>
-        <p>История всех выполненных смен и статистика</p>
+<!-- Фильтры -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="filter-panel">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Тип события</label>
+                    <select class="form-select" id="event-type-filter">
+                        <option value="">Все события</option>
+                        <option value="application">Заявки</option>
+                        <option value="interview">Собеседования</option>
+                        <option value="profile">Профиль</option>
+                        <option value="system">Система</option>
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Статус</label>
+                    <select class="form-select" id="status-filter">
+                        <option value="">Все статусы</option>
+                        <option value="success">Успешно</option>
+                        <option value="pending">В процессе</option>
+                        <option value="cancelled">Отменено</option>
+                        <option value="rejected">Отклонено</option>
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Период</label>
+                    <select class="form-select" id="period-filter">
+                        <option value="">Весь период</option>
+                        <option value="week">За неделю</option>
+                        <option value="month">За месяц</option>
+                        <option value="quarter">За квартал</option>
+                        <option value="year">За год</option>
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3 d-flex align-items-end">
+                    <button type="button" class="btn btn-primary w-100" id="apply-filters">
+                        <i class="bi bi-funnel"></i> Применить фильтры
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Временная шкала -->
+<div class="row" id="timeline-view">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-ul"></i> Временная шкала событий
+                </h5>
+                <span class="badge bg-primary" id="events-count">{{ history_events|length }} событий</span>
+            </div>
+            <div class="card-body">
+                {% if history_events %}
+                    <div class="timeline">
+                        {% for event in history_events %}
+                        <div class="history-item status-{{ event.status }}" data-event-type="{{ event.type }}">
+                            <div class="row">
+                                <div class="col-md-2">
+                                    <div class="event-date">
+                                        <div class="date-day">{{ event.created_at.strftime('%d') }}</div>
+                                        <div class="date-month">{{ event.created_at.strftime('%b') }}</div>
+                                        <div class="date-year">{{ event.created_at.strftime('%Y') }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-1">
+                                    <div class="event-icon">
+                                        {% if event.type == 'application' %}
+                                            <i class="bi bi-file-text text-primary"></i>
+                                        {% elif event.type == 'interview' %}
+                                            <i class="bi bi-calendar-event text-info"></i>
+                                        {% elif event.type == 'profile' %}
+                                            <i class="bi bi-person text-success"></i>
+                                        {% else %}
+                                            <i class="bi bi-gear text-secondary"></i>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-7">
+                                    <div class="event-content">
+                                        <h6 class="event-title">{{ event.title }}</h6>
+                                        <p class="event-description">{{ event.description }}</p>
+                                        {% if event.object_name %}
+                                        <p class="event-object">
+                                            <i class="bi bi-geo-alt"></i> {{ event.object_name }}
+                                        </p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-2 text-end">
+                                    <div class="event-status">
+                                        {% if event.status == 'success' %}
+                                            <span class="badge bg-success">Успешно</span>
+                                        {% elif event.status == 'pending' %}
+                                            <span class="badge bg-warning">В процессе</span>
+                                        {% elif event.status == 'cancelled' %}
+                                            <span class="badge bg-secondary">Отменено</span>
+                                        {% elif event.status == 'rejected' %}
+                                            <span class="badge bg-danger">Отклонено</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="event-time">
+                                        <small class="text-muted">{{ event.created_at.strftime('%H:%M') }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-clock-history text-muted" style="font-size: 4rem;"></i>
+                        <h5 class="text-muted mt-3">История пуста</h5>
+                        <p class="text-muted">Начните активность в системе, и здесь появится история ваших действий.</p>
+                        <a href="/employee/objects" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Найти работу
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Статистика -->
+<div class="row d-none" id="stats-view">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-pie-chart"></i> Статистика по типам событий
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="events-chart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-bar-chart"></i> Активность по месяцам
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="activity-chart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Детальная статистика -->
+<div class="row mt-4 d-none" id="detailed-stats">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-file-text text-primary fs-1"></i>
+                <h5 class="card-title mt-2">Всего заявок</h5>
+                <h3 class="text-primary" id="total-applications">{{ stats.total_applications }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-calendar-event text-info fs-1"></i>
+                <h5 class="card-title mt-2">Собеседований</h5>
+                <h3 class="text-info" id="total-interviews">{{ stats.total_interviews }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-check-circle text-success fs-1"></i>
+                <h5 class="card-title mt-2">Успешных</h5>
+                <h3 class="text-success" id="success-rate">{{ stats.success_rate }}%</h3>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/static/js/employee/history.js"></script>
 {% endblock %}

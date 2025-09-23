@@ -1,0 +1,220 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}StaffProBot - Главная{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="bi bi-house-door text-primary"></i>
+                Добро пожаловать, {{ current_user.first_name or 'Сотрудник' }}!
+            </h1>
+            <div class="text-muted">
+                <i class="bi bi-calendar3"></i> {{ current_date.strftime('%d.%m.%Y') }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Статистика -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-file-text text-primary fs-1"></i>
+                <h5 class="card-title mt-2">Мои заявки</h5>
+                <h3 class="text-primary">{{ applications_count }}</h3>
+                <small class="text-muted">Активных заявок</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-calendar-check text-success fs-1"></i>
+                <h5 class="card-title mt-2">Собеседования</h5>
+                <h3 class="text-success">{{ interviews_count }}</h3>
+                <small class="text-muted">Запланировано</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-geo-alt text-info fs-1"></i>
+                <h5 class="card-title mt-2">Доступные объекты</h5>
+                <h3 class="text-info">{{ available_objects_count }}</h3>
+                <small class="text-muted">Для подачи заявок</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-clock-history text-warning fs-1"></i>
+                <h5 class="card-title mt-2">История</h5>
+                <h3 class="text-warning">{{ history_count }}</h3>
+                <small class="text-muted">Всего событий</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Быстрые действия -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightning"></i> Быстрые действия
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="/employee/objects" class="btn btn-primary btn-action w-100">
+                            <i class="bi bi-search"></i> Найти работу
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/employee/applications" class="btn btn-success btn-action w-100">
+                            <i class="bi bi-file-text"></i> Мои заявки
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/employee/calendar" class="btn btn-info btn-action w-100">
+                            <i class="bi bi-calendar3"></i> Календарь
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/employee/profile" class="btn btn-warning btn-action w-100">
+                            <i class="bi bi-person"></i> Профиль
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Последние заявки -->
+{% if recent_applications %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-clock"></i> Последние заявки
+                </h5>
+                <a href="/employee/applications" class="btn btn-sm btn-outline-primary">
+                    Все заявки
+                </a>
+            </div>
+            <div class="card-body">
+                {% for application in recent_applications %}
+                <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                    <div>
+                        <strong>{{ application.object_name }}</strong>
+                        <br>
+                        <small class="text-muted">
+                            {{ application.created_at.strftime('%d.%m.%Y %H:%M') }}
+                        </small>
+                    </div>
+                    <div>
+                        {% if application.status == 'pending' %}
+                            <span class="badge bg-warning">На рассмотрении</span>
+                        {% elif application.status == 'approved' %}
+                            <span class="badge bg-success">Одобрена</span>
+                        {% elif application.status == 'rejected' %}
+                            <span class="badge bg-danger">Отклонена</span>
+                        {% elif application.status == 'interview' %}
+                            <span class="badge bg-info">Собеседование</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Ближайшие собеседования -->
+{% if upcoming_interviews %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-calendar-event"></i> Ближайшие собеседования
+                </h5>
+                <a href="/employee/calendar" class="btn btn-sm btn-outline-primary">
+                    Весь календарь
+                </a>
+            </div>
+            <div class="card-body">
+                {% for interview in upcoming_interviews %}
+                <div class="interview-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ interview.object_name }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                <i class="bi bi-calendar"></i> {{ interview.scheduled_at.strftime('%d.%m.%Y %H:%M') }}
+                            </small>
+                        </div>
+                        <div>
+                            {% if interview.type == 'online' %}
+                                <span class="badge bg-info">Онлайн</span>
+                            {% else %}
+                                <span class="badge bg-primary">Очно</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Советы -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightbulb"></i> Советы для успешного поиска работы
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="text-center">
+                            <i class="bi bi-person-check text-primary fs-1"></i>
+                            <h6 class="mt-2">Заполните профиль</h6>
+                            <small class="text-muted">Добавьте фото и подробную информацию о себе</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="text-center">
+                            <i class="bi bi-geo-alt text-success fs-1"></i>
+                            <h6 class="mt-2">Используйте фильтры</h6>
+                            <small class="text-muted">Найдите работу, которая подходит именно вам</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="text-center">
+                            <i class="bi bi-chat-dots text-info fs-1"></i>
+                            <h6 class="mt-2">Будьте активны</h6>
+                            <small class="text-muted">Подавайте заявки и не пропускайте собеседования</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

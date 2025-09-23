@@ -1,39 +1,271 @@
 {% extends "employee/base_employee.html" %}
 
-{% block title %}{{ title }}{% endblock %}
-
-{% block extra_css %}
-<style>
-.coming-soon {
-    background: linear-gradient(135deg, #17a2b8 0%, #007bff 100%);
-    color: white;
-    padding: 60px;
-    border-radius: 20px;
-    text-align: center;
-    margin: 40px 0;
-}
-</style>
-{% endblock %}
+{% block title %}StaffProBot - Профиль сотрудника{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2>👤 Профиль сотрудника</h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item">
-                        <a href="/employee">Дашборд</a>
-                    </li>
-                    <li class="breadcrumb-item active">Профиль</li>
-                </ol>
-            </nav>
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="bi bi-person text-primary"></i>
+                Мой профиль
+            </h1>
+            <button type="button" class="btn btn-primary" id="edit-profile-btn">
+                <i class="bi bi-pencil"></i> Редактировать
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Левая колонка - основная информация -->
+    <div class="col-md-8">
+        <!-- Личная информация -->
+        <div class="profile-section">
+            <h5 class="mb-3">
+                <i class="bi bi-person-circle"></i> Личная информация
+            </h5>
+            <div class="row">
+                <div class="col-md-4 text-center mb-3">
+                    <img src="{{ current_user.avatar_url or '/static/images/default-avatar.png' }}" 
+                         alt="Аватар" class="profile-avatar" id="profile-avatar">
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="change-avatar-btn">
+                            <i class="bi bi-camera"></i> Изменить фото
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Имя</label>
+                            <input type="text" class="form-control" id="first-name" 
+                                   value="{{ current_user.first_name or '' }}" readonly>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Фамилия</label>
+                            <input type="text" class="form-control" id="last-name" 
+                                   value="{{ current_user.last_name or '' }}" readonly>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Телефон</label>
+                            <input type="tel" class="form-control" id="phone" 
+                                   value="{{ current_user.phone or '' }}" readonly>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" 
+                                   value="{{ current_user.email or '' }}" readonly>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Дата рождения</label>
+                        <input type="date" class="form-control" id="birth-date" 
+                               value="{{ current_user.birth_date.strftime('%Y-%m-%d') if current_user.birth_date else '' }}" readonly>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Профессиональная информация -->
+        <div class="profile-section">
+            <h5 class="mb-3">
+                <i class="bi bi-briefcase"></i> Профессиональная информация
+            </h5>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Опыт работы</label>
+                    <select class="form-select" id="experience" disabled>
+                        <option value="">Выберите опыт</option>
+                        <option value="no-experience" {{ 'selected' if current_user.experience == 'no-experience' else '' }}>Без опыта</option>
+                        <option value="1-year" {{ 'selected' if current_user.experience == '1-year' else '' }}>До 1 года</option>
+                        <option value="1-3-years" {{ 'selected' if current_user.experience == '1-3-years' else '' }}>1-3 года</option>
+                        <option value="3-years" {{ 'selected' if current_user.experience == '3-years' else '' }}>Более 3 лет</option>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Образование</label>
+                    <select class="form-select" id="education" disabled>
+                        <option value="">Выберите образование</option>
+                        <option value="school" {{ 'selected' if current_user.education == 'school' else '' }}>Среднее</option>
+                        <option value="college" {{ 'selected' if current_user.education == 'college' else '' }}>Среднее специальное</option>
+                        <option value="university" {{ 'selected' if current_user.education == 'university' else '' }}>Высшее</option>
+                        <option value="postgraduate" {{ 'selected' if current_user.education == 'postgraduate' else '' }}>Послевузовское</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Навыки и умения</label>
+                <textarea class="form-control" id="skills" rows="3" readonly 
+                          placeholder="Опишите свои навыки и умения...">{{ current_user.skills or '' }}</textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">О себе</label>
+                <textarea class="form-control" id="about" rows="4" readonly 
+                          placeholder="Расскажите о себе...">{{ current_user.about or '' }}</textarea>
+            </div>
+        </div>
+
+        <!-- Предпочтения по работе -->
+        <div class="profile-section">
+            <h5 class="mb-3">
+                <i class="bi bi-gear"></i> Предпочтения по работе
+            </h5>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Предпочитаемый график</label>
+                    <select class="form-select" id="preferred-schedule" disabled>
+                        <option value="">Выберите график</option>
+                        <option value="full-time" {{ 'selected' if current_user.preferred_schedule == 'full-time' else '' }}>Полный день</option>
+                        <option value="part-time" {{ 'selected' if current_user.preferred_schedule == 'part-time' else '' }}>Неполный день</option>
+                        <option value="shift" {{ 'selected' if current_user.preferred_schedule == 'shift' else '' }}>Сменный график</option>
+                        <option value="flexible" {{ 'selected' if current_user.preferred_schedule == 'flexible' else '' }}>Гибкий график</option>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Минимальная зарплата</label>
+                    <input type="number" class="form-control" id="min-salary" 
+                           value="{{ current_user.min_salary or '' }}" readonly placeholder="₽/час">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Типы работы</label>
+                <div class="row">
+                    {% for category in work_categories %}
+                    <div class="col-md-6 mb-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" 
+                                   id="work-category-{{ loop.index }}" 
+                                   value="{{ category }}" 
+                                   {{ 'checked' if category in (current_user.preferred_work_types or []) else '' }}
+                                   disabled>
+                            <label class="form-check-label" for="work-category-{{ loop.index }}">
+                                {{ category }}
+                            </label>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="coming-soon">
-        <h1>🚧 В разработке</h1>
-        <p>Управление профилем и личными данными</p>
+    <!-- Правая колонка - статистика и действия -->
+    <div class="col-md-4">
+        <!-- Статистика -->
+        <div class="profile-section">
+            <h5 class="mb-3">
+                <i class="bi bi-graph-up"></i> Статистика
+            </h5>
+            <div class="row text-center">
+                <div class="col-6 mb-3">
+                    <div class="border rounded p-3">
+                        <i class="bi bi-file-text text-primary fs-3"></i>
+                        <h6 class="mt-2">Заявки</h6>
+                        <h4 class="text-primary">{{ profile_stats.applications }}</h4>
+                    </div>
+                </div>
+                <div class="col-6 mb-3">
+                    <div class="border rounded p-3">
+                        <i class="bi bi-calendar-event text-success fs-3"></i>
+                        <h6 class="mt-2">Собеседования</h6>
+                        <h4 class="text-success">{{ profile_stats.interviews }}</h4>
+                    </div>
+                </div>
+                <div class="col-6 mb-3">
+                    <div class="border rounded p-3">
+                        <i class="bi bi-check-circle text-info fs-3"></i>
+                        <h6 class="mt-2">Успешные</h6>
+                        <h4 class="text-info">{{ profile_stats.successful }}</h4>
+                    </div>
+                </div>
+                <div class="col-6 mb-3">
+                    <div class="border rounded p-3">
+                        <i class="bi bi-clock text-warning fs-3"></i>
+                        <h6 class="mt-2">В процессе</h6>
+                        <h4 class="text-warning">{{ profile_stats.in_progress }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Быстрые действия -->
+        <div class="profile-section">
+            <h5 class="mb-3">
+                <i class="bi bi-lightning"></i> Быстрые действия
+            </h5>
+            <div class="d-grid gap-2">
+                <a href="/employee/objects" class="btn btn-primary">
+                    <i class="bi bi-search"></i> Найти работу
+                </a>
+                <a href="/employee/applications" class="btn btn-outline-primary">
+                    <i class="bi bi-file-text"></i> Мои заявки
+                </a>
+                <a href="/employee/calendar" class="btn btn-outline-primary">
+                    <i class="bi bi-calendar3"></i> Календарь
+                </a>
+                <a href="/employee/history" class="btn btn-outline-primary">
+                    <i class="bi bi-clock-history"></i> История
+                </a>
+            </div>
+        </div>
+
+        <!-- Советы -->
+        <div class="profile-section">
+            <h5 class="mb-3">
+                <i class="bi bi-lightbulb"></i> Советы
+            </h5>
+            <div class="alert alert-info">
+                <small>
+                    <strong>Заполните профиль полностью!</strong><br>
+                    Работодатели чаще выбирают кандидатов с полной информацией в профиле.
+                </small>
+            </div>
+            <div class="alert alert-warning">
+                <small>
+                    <strong>Добавьте фото!</strong><br>
+                    Профиль с фотографией получает в 3 раза больше откликов.
+                </small>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Модальное окно изменения аватара -->
+<div class="modal fade" id="avatarModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-camera"></i> Изменить фото профиля
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="avatar-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Выберите фото</label>
+                        <input type="file" class="form-control" id="avatar-input" accept="image/*">
+                    </div>
+                    <div class="text-center">
+                        <img id="avatar-preview" src="" alt="Предпросмотр" 
+                             class="img-thumbnail" style="max-width: 200px; display: none;">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="save-avatar">
+                    <i class="bi bi-save"></i> Сохранить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/employee/profile.js"></script>
 {% endblock %}
