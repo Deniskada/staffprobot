@@ -151,6 +151,7 @@
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" 
                                    id="work-category-{{ loop.index }}" 
+                                   name="preferred_work_types"
                                    value="{{ category }}" 
                                    {{ 'checked' if category in (current_user.preferred_work_types or []) else '' }}
                                    disabled>

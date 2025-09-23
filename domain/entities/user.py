@@ -37,6 +37,7 @@ class User(Base):
     skills = Column(String(1000), nullable=True)
     about = Column(String(2000), nullable=True)
     preferred_schedule = Column(String(50), nullable=True)
+    preferred_work_types = Column(JSONB, nullable=True)  # Предпочитаемые типы работы
     min_salary = Column(Integer, nullable=True)
     availability_notes = Column(String(1000), nullable=True)
     role = Column(String(50), nullable=False)  # Оставляем для обратной совместимости
