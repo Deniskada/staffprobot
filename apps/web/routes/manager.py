@@ -2991,3 +2991,121 @@ async def quick_create_timeslot_manager(
     except Exception as e:
         logger.error(f"Error creating timeslot: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слота: {str(e)}")
+
+
+@router.get("/profile", response_class=HTMLResponse)
+async def manager_profile(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница профиля управляющего"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем данные пользователя
+        user_query = select(User).where(User.id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        # Получаем доступные объекты для статистики
+        permission_service = ManagerPermissionService(db)
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        
+        # Получаем данные для переключения интерфейсов
+        login_service = RoleBasedLoginService(db)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
+        # Статистика профиля
+        profile_stats = {
+            'accessible_objects_count': len(accessible_objects),
+            'total_contracts': 0,  # TODO: Добавить подсчет договоров
+            'active_shifts_count': 0,  # TODO: Добавить подсчет активных смен
+            'total_employees_count': 0  # TODO: Добавить подсчет сотрудников
+        }
+        
+        return templates.TemplateResponse("manager/profile.html", {
+            "request": request,
+            "current_user": current_user,
+            "user": user,
+            "profile_stats": profile_stats,
+            "accessible_objects": accessible_objects,
+            "available_interfaces": available_interfaces
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in manager profile: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки профиля")
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def manager_settings(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница настроек управляющего"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем данные пользователя
+        user_query = select(User).where(User.id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        # Получаем данные для переключения интерфейсов
+        login_service = RoleBasedLoginService(db)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
+        # Настройки по умолчанию
+        settings = {
+            'notifications': {
+                'email_notifications': True,
+                'shift_reminders': True,
+                'object_updates': True,
+                'employee_changes': False
+            },
+            'display': {
+                'theme': 'light',
+                'language': 'ru',
+                'timezone': 'Europe/Moscow'
+            },
+            'calendar': {
+                'default_view': 'month',
+                'show_weekends': True,
+                'working_hours_start': '09:00',
+                'working_hours_end': '21:00'
+            }
+        }
+        
+        return templates.TemplateResponse("manager/settings.html", {
+            "request": request,
+            "current_user": current_user,
+            "user": user,
+            "settings": settings,
+            "available_interfaces": available_interfaces
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in manager settings: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки настроек")

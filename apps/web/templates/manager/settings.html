@@ -1,0 +1,341 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}Настройки - StaffProBot - Управляющий{% endblock %}
+
+{% block manager_content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="h4 mb-4">
+            <i class="bi bi-gear me-2"></i>
+            Настройки
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Уведомления -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-bell me-2"></i>
+                    Уведомления
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="notificationsForm">
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="emailNotifications" 
+                                   {% if settings.notifications.email_notifications %}checked{% endif %}>
+                            <label class="form-check-label" for="emailNotifications">
+                                Email уведомления
+                            </label>
+                        </div>
+                        <small class="text-muted">Получать уведомления на email о важных событиях</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="shiftReminders" 
+                                   {% if settings.notifications.shift_reminders %}checked{% endif %}>
+                            <label class="form-check-label" for="shiftReminders">
+                                Напоминания о сменах
+                            </label>
+                        </div>
+                        <small class="text-muted">Уведомления о предстоящих сменах</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="objectUpdates" 
+                                   {% if settings.notifications.object_updates %}checked{% endif %}>
+                            <label class="form-check-label" for="objectUpdates">
+                                Обновления объектов
+                            </label>
+                        </div>
+                        <small class="text-muted">Уведомления об изменениях в объектах</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="employeeChanges" 
+                                   {% if settings.notifications.employee_changes %}checked{% endif %}>
+                            <label class="form-check-label" for="employeeChanges">
+                                Изменения сотрудников
+                            </label>
+                        </div>
+                        <small class="text-muted">Уведомления о изменениях в составе сотрудников</small>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Отображение -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-palette me-2"></i>
+                    Отображение
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="displayForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="theme" class="form-label">Тема</label>
+                                <select class="form-select" id="theme">
+                                    <option value="light" {% if settings.display.theme == 'light' %}selected{% endif %}>Светлая</option>
+                                    <option value="dark" {% if settings.display.theme == 'dark' %}selected{% endif %}>Темная</option>
+                                    <option value="auto" {% if settings.display.theme == 'auto' %}selected{% endif %}>Автоматически</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="language" class="form-label">Язык</label>
+                                <select class="form-select" id="language">
+                                    <option value="ru" {% if settings.display.language == 'ru' %}selected{% endif %}>Русский</option>
+                                    <option value="en" {% if settings.display.language == 'en' %}selected{% endif %}>English</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="timezone" class="form-label">Часовой пояс</label>
+                        <select class="form-select" id="timezone">
+                            <option value="Europe/Moscow" {% if settings.display.timezone == 'Europe/Moscow' %}selected{% endif %}>Москва (UTC+3)</option>
+                            <option value="Europe/Kiev" {% if settings.display.timezone == 'Europe/Kiev' %}selected{% endif %}>Киев (UTC+2)</option>
+                            <option value="Asia/Yekaterinburg" {% if settings.display.timezone == 'Asia/Yekaterinburg' %}selected{% endif %}>Екатеринбург (UTC+5)</option>
+                            <option value="Asia/Vladivostok" {% if settings.display.timezone == 'Asia/Vladivostok' %}selected{% endif %}>Владивосток (UTC+10)</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Календарь -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-calendar3 me-2"></i>
+                    Календарь
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="calendarForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="defaultView" class="form-label">Вид по умолчанию</label>
+                                <select class="form-select" id="defaultView">
+                                    <option value="month" {% if settings.calendar.default_view == 'month' %}selected{% endif %}>Месяц</option>
+                                    <option value="week" {% if settings.calendar.default_view == 'week' %}selected{% endif %}>Неделя</option>
+                                    <option value="day" {% if settings.calendar.default_view == 'day' %}selected{% endif %}>День</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="showWeekends" 
+                                           {% if settings.calendar.show_weekends %}checked{% endif %}>
+                                    <label class="form-check-label" for="showWeekends">
+                                        Показывать выходные
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="workingHoursStart" class="form-label">Начало рабочего дня</label>
+                                <input type="time" class="form-control" id="workingHoursStart" 
+                                       value="{{ settings.calendar.working_hours_start }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="workingHoursEnd" class="form-label">Конец рабочего дня</label>
+                                <input type="time" class="form-control" id="workingHoursEnd" 
+                                       value="{{ settings.calendar.working_hours_end }}">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Кнопки действий -->
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-primary" onclick="saveSettings()">
+                        <i class="bi bi-check-lg me-2"></i>
+                        Сохранить настройки
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="resetSettings()">
+                        <i class="bi bi-arrow-clockwise me-2"></i>
+                        Сбросить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Информация о пользователе -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-person-circle me-2"></i>
+                    Информация о пользователе
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <div class="avatar-lg bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3">
+                        {{ user.first_name[0] if user.first_name else 'U' }}
+                    </div>
+                    <h6 class="mb-1">{{ user.first_name }} {{ user.last_name or '' }}</h6>
+                    <small class="text-muted">{{ user.username or 'Без username' }}</small>
+                </div>
+                
+                <div class="mb-3">
+                    <small class="text-muted">Telegram ID:</small>
+                    <div class="fw-medium">{{ user.telegram_id }}</div>
+                </div>
+                
+                <div class="mb-3">
+                    <small class="text-muted">Роли:</small>
+                    <div class="mt-1">
+                        {% for role in user.roles %}
+                            {% if role == 'manager' %}
+                                <span class="badge bg-primary me-1">
+                                    <i class="bi bi-person-gear me-1"></i>Управляющий
+                                </span>
+                            {% elif role == 'employee' %}
+                                <span class="badge bg-info me-1">
+                                    <i class="bi bi-person me-1"></i>Сотрудник
+                                </span>
+                            {% elif role == 'applicant' %}
+                                <span class="badge bg-warning me-1">
+                                    <i class="bi bi-person-plus me-1"></i>Соискатель
+                                </span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <small class="text-muted">Статус:</small>
+                    <div>
+                        <span class="badge {% if user.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                            {% if user.is_active %}Активен{% else %}Неактивен{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Быстрые действия -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightning me-2"></i>
+                    Быстрые действия
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/manager/profile" class="btn btn-outline-primary">
+                        <i class="bi bi-person me-2"></i>
+                        Профиль
+                    </a>
+                    <a href="/manager/dashboard" class="btn btn-outline-success">
+                        <i class="bi bi-speedometer2 me-2"></i>
+                        Дашборд
+                    </a>
+                    <a href="/manager/objects" class="btn btn-outline-info">
+                        <i class="bi bi-building me-2"></i>
+                        Объекты
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function saveSettings() {
+    // Собираем данные из форм
+    const notifications = {
+        email_notifications: document.getElementById('emailNotifications').checked,
+        shift_reminders: document.getElementById('shiftReminders').checked,
+        object_updates: document.getElementById('objectUpdates').checked,
+        employee_changes: document.getElementById('employeeChanges').checked
+    };
+    
+    const display = {
+        theme: document.getElementById('theme').value,
+        language: document.getElementById('language').value,
+        timezone: document.getElementById('timezone').value
+    };
+    
+    const calendar = {
+        default_view: document.getElementById('defaultView').value,
+        show_weekends: document.getElementById('showWeekends').checked,
+        working_hours_start: document.getElementById('workingHoursStart').value,
+        working_hours_end: document.getElementById('workingHoursEnd').value
+    };
+    
+    const settings = {
+        notifications: notifications,
+        display: display,
+        calendar: calendar
+    };
+    
+    // TODO: Отправить настройки на сервер
+    console.log('Saving settings:', settings);
+    
+    // Показать уведомление об успехе
+    showNotification('Настройки сохранены', 'success');
+}
+
+function resetSettings() {
+    // Сброс к значениям по умолчанию
+    if (confirm('Вы уверены, что хотите сбросить все настройки?')) {
+        // TODO: Сброс настроек
+        console.log('Resetting settings');
+        showNotification('Настройки сброшены', 'info');
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Простое уведомление
+    const alertClass = type === 'success' ? 'alert-success' : 
+                     type === 'error' ? 'alert-danger' : 'alert-info';
+    
+    const notification = document.createElement('div');
+    notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Автоматически скрыть через 3 секунды
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 3000);
+}
+</script>
+{% endblock %}
