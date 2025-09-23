@@ -1,39 +1,197 @@
 {% extends "employee/base_employee.html" %}
 
-{% block title %}{{ title }}{% endblock %}
-
-{% block extra_css %}
-<style>
-.coming-soon {
-    background: linear-gradient(135deg, #17a2b8 0%, #007bff 100%);
-    color: white;
-    padding: 60px;
-    border-radius: 20px;
-    text-align: center;
-    margin: 40px 0;
-}
-</style>
-{% endblock %}
+{% block title %}StaffProBot - Календарь собеседований{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2>📅 Мой календарь</h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item">
-                        <a href="/employee">Дашборд</a>
-                    </li>
-                    <li class="breadcrumb-item active">Календарь</li>
-                </ol>
-            </nav>
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="bi bi-calendar3 text-primary"></i>
+                Календарь собеседований
+            </h1>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary" id="prev-month">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <button type="button" class="btn btn-outline-primary" id="current-month">
+                    <span id="current-month-text">{{ current_date.strftime('%B %Y') }}</span>
+                </button>
+                <button type="button" class="btn btn-outline-primary" id="next-month">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
         </div>
     </div>
+</div>
 
-    <div class="coming-soon">
-        <h1>🚧 В разработке</h1>
-        <p>Календарь для планирования и управления сменами</p>
+<!-- Статистика собеседований -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-calendar-event text-info fs-1"></i>
+                <h5 class="card-title mt-2">Запланировано</h5>
+                <h3 class="text-info" id="scheduled-count">{{ interviews_stats.scheduled }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-check-circle text-success fs-1"></i>
+                <h5 class="card-title mt-2">Пройдено</h5>
+                <h3 class="text-success" id="completed-count">{{ interviews_stats.completed }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-clock text-warning fs-1"></i>
+                <h5 class="card-title mt-2">Сегодня</h5>
+                <h3 class="text-warning" id="today-count">{{ interviews_stats.today }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-x-circle text-danger fs-1"></i>
+                <h5 class="card-title mt-2">Отменено</h5>
+                <h3 class="text-danger" id="cancelled-count">{{ interviews_stats.cancelled }}</h3>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Календарь -->
+<div class="row">
+    <div class="col-12">
+        <div class="interview-calendar">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-calendar3"></i> Календарь собеседований
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Легенда цветов -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="me-2" style="width: 20px; height: 20px; background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 4px;"></div>
+                                    <small>Запланировано</small>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <div class="me-2" style="width: 20px; height: 20px; background: #fff3e0; border: 1px solid #ffcc02; border-radius: 4px;"></div>
+                                    <small>Сегодня</small>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <div class="me-2" style="width: 20px; height: 20px; background: #e8f5e8; border: 1px solid #4caf50; border-radius: 4px;"></div>
+                                    <small>Пройдено</small>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <div class="me-2" style="width: 20px; height: 20px; background: #ffebee; border: 1px solid #f44336; border-radius: 4px;"></div>
+                                    <small>Отменено</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Сетка календаря -->
+                    <div id="calendar-grid">
+                        <!-- Календарь будет загружен динамически -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ближайшие собеседования -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-clock"></i> Ближайшие собеседования
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="upcoming-interviews">
+                    {% if upcoming_interviews %}
+                        {% for interview in upcoming_interviews %}
+                        <div class="interview-item interview-scheduled mb-3">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <h6 class="mb-1">
+                                        <i class="bi bi-geo-alt"></i> {{ interview.object_name }}
+                                    </h6>
+                                    <p class="mb-1">
+                                        <i class="bi bi-calendar-event"></i> 
+                                        {{ interview.scheduled_at.strftime('%d.%m.%Y %H:%M') }}
+                                    </p>
+                                    {% if interview.location %}
+                                    <p class="mb-1">
+                                        <i class="bi bi-geo-alt"></i> {{ interview.location }}
+                                    </p>
+                                    {% endif %}
+                                    {% if interview.contact_person %}
+                                    <p class="mb-0">
+                                        <i class="bi bi-person"></i> {{ interview.contact_person }}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <div class="btn-group-vertical">
+                                        {% if interview.type == 'online' %}
+                                            <span class="badge bg-info mb-2">Онлайн</span>
+                                        {% else %}
+                                            <span class="badge bg-primary mb-2">Очно</span>
+                                        {% endif %}
+                                        <button class="btn btn-outline-primary btn-sm" onclick="viewInterviewDetails({{ interview.id }})">
+                                            <i class="bi bi-eye"></i> Подробнее
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center py-3">
+                            <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
+                            <p class="text-muted mt-2">Нет запланированных собеседований</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно деталей собеседования -->
+<div class="modal fade" id="interviewDetailsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-calendar-event"></i> Детали собеседования
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="interview-details-content">
+                <!-- Контент загружается динамически -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/employee/calendar.js"></script>
 {% endblock %}

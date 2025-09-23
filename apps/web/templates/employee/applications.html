@@ -1,39 +1,253 @@
 {% extends "employee/base_employee.html" %}
 
-{% block title %}{{ title }}{% endblock %}
-
-{% block extra_css %}
-<style>
-.coming-soon {
-    background: linear-gradient(135deg, #17a2b8 0%, #007bff 100%);
-    color: white;
-    padding: 60px;
-    border-radius: 20px;
-    text-align: center;
-    margin: 40px 0;
-}
-</style>
-{% endblock %}
+{% block title %}StaffProBot - Мои заявки{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2>📝 Мои заявки</h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item">
-                        <a href="/employee">Дашборд</a>
-                    </li>
-                    <li class="breadcrumb-item active">Заявки</li>
-                </ol>
-            </nav>
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="bi bi-file-text text-primary"></i>
+                Мои заявки
+            </h1>
+            <a href="/employee/objects" class="btn btn-primary">
+                <i class="bi bi-plus"></i> Подать новую заявку
+            </a>
         </div>
     </div>
+</div>
 
-    <div class="coming-soon">
-        <h1>🚧 В разработке</h1>
-        <p>Управление заявками на смены и отслеживание их статуса</p>
+<!-- Фильтры заявок -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="filter-panel">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Статус заявки</label>
+                    <select class="form-select" id="status-filter">
+                        <option value="">Все статусы</option>
+                        <option value="pending">На рассмотрении</option>
+                        <option value="approved">Одобрена</option>
+                        <option value="rejected">Отклонена</option>
+                        <option value="interview">Собеседование</option>
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Объект</label>
+                    <select class="form-select" id="object-filter">
+                        <option value="">Все объекты</option>
+                        {% for object in objects %}
+                        <option value="{{ object.id }}">{{ object.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Дата подачи</label>
+                    <select class="form-select" id="date-filter">
+                        <option value="">Все даты</option>
+                        <option value="today">Сегодня</option>
+                        <option value="week">За неделю</option>
+                        <option value="month">За месяц</option>
+                        <option value="older">Старые</option>
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3 d-flex align-items-end">
+                    <button type="button" class="btn btn-primary w-100" id="apply-filters">
+                        <i class="bi bi-funnel"></i> Применить фильтры
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Статистика заявок -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-clock text-warning fs-1"></i>
+                <h5 class="card-title mt-2">На рассмотрении</h5>
+                <h3 class="text-warning">{{ applications_stats.pending }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-check-circle text-success fs-1"></i>
+                <h5 class="card-title mt-2">Одобрены</h5>
+                <h3 class="text-success">{{ applications_stats.approved }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-calendar-event text-info fs-1"></i>
+                <h5 class="card-title mt-2">Собеседования</h5>
+                <h3 class="text-info">{{ applications_stats.interview }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-x-circle text-danger fs-1"></i>
+                <h5 class="card-title mt-2">Отклонены</h5>
+                <h3 class="text-danger">{{ applications_stats.rejected }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список заявок -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-list"></i> Список заявок
+                </h5>
+                <span class="badge bg-primary" id="applications-count">{{ applications|length }} заявок</span>
+            </div>
+            <div class="card-body">
+                {% if applications %}
+                    {% for application in applications %}
+                    <div class="application-card card mb-3 status-{{ application.status }}">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="mb-0">
+                                            <i class="bi bi-geo-alt"></i> {{ application.object_name }}
+                                        </h6>
+                                        <span class="badge bg-{{ 'warning' if application.status == 'pending' else 'success' if application.status == 'approved' else 'danger' if application.status == 'rejected' else 'info' }}">
+                                            {% if application.status == 'pending' %}
+                                                На рассмотрении
+                                            {% elif application.status == 'approved' %}
+                                                Одобрена
+                                            {% elif application.status == 'rejected' %}
+                                                Отклонена
+                                            {% elif application.status == 'interview' %}
+                                                Собеседование
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    
+                                    <p class="text-muted mb-2">
+                                        <i class="bi bi-calendar"></i> Подана: {{ application.created_at.strftime('%d.%m.%Y %H:%M') }}
+                                    </p>
+                                    
+                                    {% if application.message %}
+                                    <p class="mb-2">
+                                        <strong>Ваше сообщение:</strong><br>
+                                        <small class="text-muted">{{ application.message }}</small>
+                                    </p>
+                                    {% endif %}
+                                    
+                                    {% if application.preferred_schedule %}
+                                    <p class="mb-2">
+                                        <strong>Предпочитаемый график:</strong>
+                                        <span class="badge bg-secondary">{{ application.preferred_schedule }}</span>
+                                    </p>
+                                    {% endif %}
+                                    
+                                    {% if application.interview_scheduled_at %}
+                                    <p class="mb-2">
+                                        <strong>Собеседование запланировано:</strong><br>
+                                        <i class="bi bi-calendar-event"></i> {{ application.interview_scheduled_at.strftime('%d.%m.%Y %H:%M') }}
+                                        {% if application.interview_type %}
+                                            <span class="badge bg-info ms-2">{{ 'Онлайн' if application.interview_type == 'online' else 'Очно' }}</span>
+                                        {% endif %}
+                                    </p>
+                                    {% endif %}
+                                    
+                                    {% if application.interview_result %}
+                                    <p class="mb-2">
+                                        <strong>Результат собеседования:</strong><br>
+                                        <small class="text-muted">{{ application.interview_result }}</small>
+                                    </p>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="col-md-4 text-end">
+                                    <div class="btn-group-vertical w-100">
+                                        {% if application.status == 'pending' %}
+                                            <button class="btn btn-warning btn-sm mb-2" onclick="cancelApplication({{ application.id }})">
+                                                <i class="bi bi-x-circle"></i> Отозвать заявку
+                                            </button>
+                                        {% elif application.status == 'interview' %}
+                                            <button class="btn btn-info btn-sm mb-2" onclick="viewInterviewDetails({{ application.id }})">
+                                                <i class="bi bi-calendar-event"></i> Детали собеседования
+                                            </button>
+                                        {% endif %}
+                                        
+                                        <button class="btn btn-outline-primary btn-sm" onclick="viewApplicationDetails({{ application.id }})">
+                                            <i class="bi bi-eye"></i> Подробнее
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-file-text text-muted" style="font-size: 4rem;"></i>
+                        <h5 class="text-muted mt-3">У вас пока нет заявок</h5>
+                        <p class="text-muted">Начните поиск работы и подайте свою первую заявку!</p>
+                        <a href="/employee/objects" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Найти работу
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно деталей заявки -->
+<div class="modal fade" id="applicationDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-file-text"></i> Детали заявки
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="application-details-content">
+                <!-- Контент загружается динамически -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно деталей собеседования -->
+<div class="modal fade" id="interviewDetailsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-calendar-event"></i> Детали собеседования
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="interview-details-content">
+                <!-- Контент загружается динамически -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/employee/applications.js"></script>
 {% endblock %}
