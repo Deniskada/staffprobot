@@ -2172,14 +2172,38 @@ def _create_calendar_grid_manager(
             # Преобразуем current_date в строку для сравнения
             current_date_str = current_date.isoformat()
             
-            day_timeslots = [
-                slot for slot in timeslots 
-                if slot["date"] == current_date_str and slot.get("is_active", True)
-            ]
-            day_shifts = [
-                s for s in shifts
-                if s.get("date") == current_date
-            ]
+            # Смены за день
+            all_day_shifts = [s for s in shifts if s.get("date") == current_date]
+            active_by_object: Dict[int, Dict[str, Any]] = {}
+            completed_by_object: Dict[int, Dict[str, Any]] = {}
+            for s in all_day_shifts:
+                oid = s.get("object_id")
+                if not oid:
+                    continue
+                if s.get("status") == "active":
+                    active_by_object[oid] = s
+                elif s.get("status") == "completed":
+                    completed_by_object[oid] = s
+
+            # Скрываем planned, если есть active/completed по тому же объекту
+            day_shifts = []
+            for s in all_day_shifts:
+                oid = s.get("object_id")
+                if s.get("status") == "planned" and oid and (oid in active_by_object or oid in completed_by_object):
+                    continue
+                day_shifts.append(s)
+
+            # Тайм-слоты за день: показывать только если нет связанных смен (не cancelled)
+            day_timeslots = []
+            for slot in timeslots:
+                if slot.get("date") == current_date_str and slot.get("is_active", True):
+                    has_related = False
+                    for s in day_shifts:
+                        if s.get("object_id") == slot.get("object_id") and s.get("status") != "cancelled":
+                            has_related = True
+                            break
+                    if not has_related:
+                        day_timeslots.append(slot)
             
             week_data.append({
                 "date": current_date,
