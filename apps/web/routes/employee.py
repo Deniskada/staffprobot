@@ -15,6 +15,7 @@ from core.database.session import get_db_session
 from apps.web.middleware.role_middleware import require_employee_or_applicant
 from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift
 from apps.web.utils.timezone_utils import WebTimezoneHelper
+from shared.services.role_based_login_service import RoleBasedLoginService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -36,6 +37,12 @@ async def get_user_id_from_current_user(current_user, session):
         # current_user - это объект User
         return current_user.id
 
+async def get_available_interfaces_for_user(current_user, db):
+    """Получает доступные интерфейсы для пользователя"""
+    user_id = await get_user_id_from_current_user(current_user, db)
+    login_service = RoleBasedLoginService(db)
+    return await login_service.get_available_interfaces(user_id)
+
 @router.get("/", response_class=HTMLResponse)
 async def employee_index(
     request: Request,
@@ -54,6 +61,7 @@ async def employee_index(
             return current_user
             
         user_id = await get_user_id_from_current_user(current_user, db)
+        available_interfaces = await get_available_interfaces_for_user(current_user, db)
         
         # Получаем статистику
         applications_count = await db.execute(
@@ -128,7 +136,8 @@ async def employee_index(
             "available_objects_count": available_objects_count,
             "history_count": history_count,
             "recent_applications": recent_applications,
-            "upcoming_interviews": upcoming_interviews
+            "upcoming_interviews": upcoming_interviews,
+            "available_interfaces": available_interfaces
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки дашборда: {e}")
@@ -146,6 +155,8 @@ async def employee_objects(
         if isinstance(current_user, RedirectResponse):
             return current_user
             
+        user_id = await get_user_id_from_current_user(current_user, db)
+        available_interfaces = await get_available_interfaces_for_user(current_user, db)
         
         # Получаем доступные объекты
         objects_query = select(Object).where(Object.available_for_applicants == True)
@@ -169,7 +180,8 @@ async def employee_objects(
         return templates.TemplateResponse("employee/objects.html", {
             "request": request,
             "current_user": current_user,
-            "objects": objects
+            "objects": objects,
+            "available_interfaces": available_interfaces
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки объектов: {e}")
@@ -189,6 +201,7 @@ async def employee_applications(
             
         
         user_id = await get_user_id_from_current_user(current_user, db)
+        available_interfaces = await get_available_interfaces_for_user(current_user, db)
         
         # Получаем заявки
         applications_query = select(Application, Object.name.label('object_name')).join(
@@ -229,7 +242,8 @@ async def employee_applications(
             "current_user": current_user,
             "applications": applications,
             "applications_stats": applications_stats,
-            "objects": objects
+            "objects": objects,
+            "available_interfaces": available_interfaces
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки заявок: {e}")
@@ -249,6 +263,7 @@ async def employee_calendar(
             
         
         user_id = await get_user_id_from_current_user(current_user, db)
+        available_interfaces = await get_available_interfaces_for_user(current_user, db)
         
         # Получаем собеседования
         interviews_query = select(Interview, Object.name.label('object_name')).join(
@@ -288,7 +303,8 @@ async def employee_calendar(
             "request": request,
             "current_user": current_user,
             "interviews_stats": interviews_stats,
-            "upcoming_interviews": upcoming_interviews
+            "upcoming_interviews": upcoming_interviews,
+            "available_interfaces": available_interfaces
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки календаря: {e}")
@@ -308,6 +324,7 @@ async def employee_profile(
             
         
         user_id = await get_user_id_from_current_user(current_user, db)
+        available_interfaces = await get_available_interfaces_for_user(current_user, db)
         
         # Получаем данные пользователя
         user_query = select(User).where(User.id == user_id)
@@ -365,7 +382,8 @@ async def employee_profile(
             "request": request,
             "current_user": user,
             "profile_stats": profile_stats,
-            "work_categories": work_categories
+            "work_categories": work_categories,
+            "available_interfaces": available_interfaces
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки профиля: {e}")
@@ -385,6 +403,7 @@ async def employee_history(
             
         
         user_id = await get_user_id_from_current_user(current_user, db)
+        available_interfaces = await get_available_interfaces_for_user(current_user, db)
         
         # Получаем историю событий
         history_events = []
@@ -441,7 +460,8 @@ async def employee_history(
             "request": request,
             "current_user": current_user,
             "history_events": history_events,
-            "stats": stats
+            "stats": stats,
+            "available_interfaces": available_interfaces
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки истории: {e}")
