@@ -78,7 +78,7 @@ async def require_all_roles(roles: List[UserRole]):
     return role_checker
 
 
-async def require_manager_or_owner(request: Request, current_user: dict = Depends(get_current_user_dependency())):
+async def require_manager_or_owner(request: Request, current_user = Depends(get_current_user_dependency())):
     """Проверка роли управляющего или владельца."""
     if isinstance(current_user, RedirectResponse):
         return current_user
@@ -87,20 +87,25 @@ async def require_manager_or_owner(request: Request, current_user: dict = Depend
     if current_user is None:
         return RedirectResponse(url="/auth/login", status_code=302)
     
+    # current_user теперь объект User, проверяем роли напрямую
     from core.database.session import get_async_session
     async with get_async_session() as session:
-        user_id = await get_user_id_from_current_user(current_user, session)
-        if not user_id:
-            return RedirectResponse(url="/auth/login", status_code=302)
-        
         role_service = RoleService(session)
-        has_role = await role_service.has_any_role(user_id, [UserRole.MANAGER, UserRole.OWNER, UserRole.SUPERADMIN])
+        has_role = await role_service.has_any_role(current_user.id, [UserRole.MANAGER, UserRole.OWNER, UserRole.SUPERADMIN])
         
         if not has_role:
-            logger.warning(f"User {user_id} is not a manager or owner")
+            logger.warning(f"User {current_user.id} is not a manager or owner")
             raise HTTPException(status_code=403, detail="Недостаточно прав доступа")
         
-        return current_user
+        # Возвращаем словарь с данными пользователя для совместимости
+        return {
+            "id": current_user.telegram_id,
+            "username": current_user.username,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "role": current_user.role,
+            "roles": current_user.roles
+        }
 
 
 async def require_manager_permission(permission: str):

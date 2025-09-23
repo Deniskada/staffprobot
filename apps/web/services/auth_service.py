@@ -46,7 +46,7 @@ class AuthService:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
             return {
                 "id": int(payload["sub"]),
-                "telegram_id": payload["telegram_id"],
+                "telegram_id": payload.get("telegram_id", payload.get("id")),
                 "username": payload.get("username"),
                 "first_name": payload["first_name"],
                 "last_name": payload.get("last_name"),
