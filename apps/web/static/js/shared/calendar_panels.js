@@ -26,11 +26,11 @@ class CalendarPanels {
         
         if (panel.classList.contains('collapsed')) {
             panel.classList.remove('collapsed');
-            icon.className = 'bi bi-chevron-up';
+            if (icon) icon.className = 'bi bi-chevron-up';
             this.loadEmployees();
         } else {
             panel.classList.add('collapsed');
-            icon.className = 'bi bi-chevron-down';
+            if (icon) icon.className = 'bi bi-chevron-down';
         }
     }
 
@@ -335,12 +335,22 @@ class CalendarPanels {
         }
         
         if (employeesPanel) {
+            // Ensure collapsed by default
+            employeesPanel.classList.add('collapsed');
+            const icon = document.getElementById('employeesPanelToggleIcon');
+            if (icon) icon.className = 'bi bi-chevron-down';
+            
             employeesPanel.addEventListener('click', (e) => {
+                // Ignore clicks on inner controls to prevent accidental toggles
+                if (e.target.closest('button')) return;
                 if (employeesPanel.classList.contains('collapsed')) {
                     this.toggleEmployeesPanel();
                 }
             });
         }
+        
+        // Expose toggle for templates if needed
+        window.toggleEmployeesPanel = () => this.toggleEmployeesPanel();
         
         // Auto refresh counts occasionally
         setInterval(() => {
@@ -361,7 +371,6 @@ class CalendarPanels {
         
         // Make methods globally available
         window.togglePanel = () => this.togglePanel();
-        window.toggleEmployeesPanel = () => this.toggleEmployeesPanel();
         window.refreshObjects = () => this.loadObjects();
         window.refreshEmployees = () => this.loadEmployees();
         window.showQuickCreateForm = (object, date) => this.showQuickCreateForm(object, date);
