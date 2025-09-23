@@ -476,6 +476,16 @@ async def employee_profile_update(
                 user.min_salary = None
         if 'availability_notes' in form_data:
             user.availability_notes = form_data['availability_notes']
+        if 'preferred_work_types' in form_data:
+            # Для чекбоксов form_data может быть списком или строкой
+            work_types = form_data.get('preferred_work_types')
+            if isinstance(work_types, list):
+                user.preferred_work_types = work_types
+            elif isinstance(work_types, str):
+                user.preferred_work_types = [work_types]
+            else:
+                user.preferred_work_types = []
+            logger.info(f"Updated preferred_work_types: {user.preferred_work_types}")
         
         # Сохраняем изменения
         await db.commit()
