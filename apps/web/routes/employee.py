@@ -4,6 +4,7 @@
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from datetime import datetime, date, timedelta
@@ -17,6 +18,7 @@ from apps.web.utils.timezone_utils import WebTimezoneHelper
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+templates = Jinja2Templates(directory="apps/web/templates")
 
 # Инициализируем помощник для работы с временными зонами
 web_timezone_helper = WebTimezoneHelper()
@@ -63,7 +65,7 @@ async def employee_index(
             select(func.count(Interview.id)).where(
                 and_(
                     Interview.applicant_id == user_id,
-                    Interview.status.in_(['scheduled', 'pending'])
+                    Interview.status.in_(['SCHEDULED', 'PENDING'])
                 )
             )
         )
@@ -103,7 +105,7 @@ async def employee_index(
             and_(
                 Interview.applicant_id == user_id,
                 Interview.scheduled_at >= datetime.now(),
-                Interview.status.in_(['scheduled', 'pending'])
+                Interview.status.in_(['SCHEDULED', 'PENDING'])
             )
         ).order_by(Interview.scheduled_at.asc()).limit(5)
         
@@ -117,19 +119,17 @@ async def employee_index(
                 'type': row.Interview.type
             })
         
-        return HTMLResponse(
-            content=request.app.state.templates.get_template("employee/index.html").render(
-                request=request,
-                current_user=current_user,
-                current_date=datetime.now(),
-                applications_count=applications_count,
-                interviews_count=interviews_count,
-                available_objects_count=available_objects_count,
-                history_count=history_count,
-                recent_applications=recent_applications,
-                upcoming_interviews=upcoming_interviews
-            )
-        )
+        return templates.TemplateResponse("employee/index.html", {
+            "request": request,
+            "current_user": current_user,
+            "current_date": datetime.now(),
+            "applications_count": applications_count,
+            "interviews_count": interviews_count,
+            "available_objects_count": available_objects_count,
+            "history_count": history_count,
+            "recent_applications": recent_applications,
+            "upcoming_interviews": upcoming_interviews
+        })
     except Exception as e:
         logger.error(f"Ошибка загрузки дашборда: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки дашборда: {e}")
@@ -166,13 +166,11 @@ async def employee_objects(
                 'shift_tasks': obj.shift_tasks or []
             })
         
-        return HTMLResponse(
-            content=request.app.state.templates.get_template("employee/objects.html").render(
-                request=request,
-                current_user=current_user,
-                objects=objects
-            )
-        )
+        return templates.TemplateResponse("employee/objects.html", {
+            "request": request,
+            "current_user": current_user,
+            "objects": objects
+        })
     except Exception as e:
         logger.error(f"Ошибка загрузки объектов: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки объектов: {e}")
@@ -215,10 +213,10 @@ async def employee_applications(
         
         # Статистика заявок
         applications_stats = {
-            'pending': len([a for a in applications if a['status'] == 'pending']),
-            'approved': len([a for a in applications if a['status'] == 'approved']),
-            'rejected': len([a for a in applications if a['status'] == 'rejected']),
-            'interview': len([a for a in applications if a['status'] == 'interview'])
+            'pending': len([a for a in applications if a['status'] == 'PENDING']),
+            'approved': len([a for a in applications if a['status'] == 'APPROVED']),
+            'rejected': len([a for a in applications if a['status'] == 'REJECTED']),
+            'interview': len([a for a in applications if a['status'] == 'INTERVIEW'])
         }
         
         # Получаем объекты для фильтра
@@ -226,15 +224,13 @@ async def employee_applications(
         objects_result = await db.execute(objects_query)
         objects = [{'id': obj.id, 'name': obj.name} for obj in objects_result.scalars()]
         
-        return HTMLResponse(
-            content=request.app.state.templates.get_template("employee/applications.html").render(
-                request=request,
-                current_user=current_user,
-                applications=applications,
-                applications_stats=applications_stats,
-                objects=objects
-            )
-        )
+        return templates.TemplateResponse("employee/applications.html", {
+            "request": request,
+            "current_user": current_user,
+            "applications": applications,
+            "applications_stats": applications_stats,
+            "objects": objects
+        })
     except Exception as e:
         logger.error(f"Ошибка загрузки заявок: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки заявок: {e}")
@@ -279,23 +275,21 @@ async def employee_calendar(
         # Статистика собеседований
         today = datetime.now().date()
         interviews_stats = {
-            'scheduled': len([i for i in interviews if i['status'] == 'scheduled']),
-            'completed': len([i for i in interviews if i['status'] == 'completed']),
+            'scheduled': len([i for i in interviews if i['status'] == 'SCHEDULED']),
+            'completed': len([i for i in interviews if i['status'] == 'COMPLETED']),
             'today': len([i for i in interviews if i['scheduled_at'].date() == today]),
-            'cancelled': len([i for i in interviews if i['status'] == 'cancelled'])
+            'cancelled': len([i for i in interviews if i['status'] == 'CANCELLED'])
         }
         
         # Ближайшие собеседования
         upcoming_interviews = [i for i in interviews if i['scheduled_at'] >= datetime.now()][:5]
         
-        return HTMLResponse(
-            content=request.app.state.templates.get_template("employee/calendar.html").render(
-                request=request,
-                current_user=current_user,
-                interviews_stats=interviews_stats,
-                upcoming_interviews=upcoming_interviews
-            )
-        )
+        return templates.TemplateResponse("employee/calendar.html", {
+            "request": request,
+            "current_user": current_user,
+            "interviews_stats": interviews_stats,
+            "upcoming_interviews": upcoming_interviews
+        })
     except Exception as e:
         logger.error(f"Ошибка загрузки календаря: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки календаря: {e}")
@@ -336,7 +330,7 @@ async def employee_profile(
         
         successful_count = await db.execute(
             select(func.count(Application.id)).where(
-                and_(Application.applicant_id == user_id, Application.status == 'approved')
+                and_(Application.applicant_id == user_id, Application.status == 'APPROVED')
             )
         )
         successful_count = successful_count.scalar() or 0
@@ -367,14 +361,12 @@ async def employee_profile(
             "Специализированные задачи"
         ]
         
-        return HTMLResponse(
-            content=request.app.state.templates.get_template("employee/profile.html").render(
-                request=request,
-                current_user=user,
-                profile_stats=profile_stats,
-                work_categories=work_categories
-            )
-        )
+        return templates.TemplateResponse("employee/profile.html", {
+            "request": request,
+            "current_user": user,
+            "profile_stats": profile_stats,
+            "work_categories": work_categories
+        })
     except Exception as e:
         logger.error(f"Ошибка загрузки профиля: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки профиля: {e}")
@@ -441,18 +433,16 @@ async def employee_history(
             'success_rate': 0
         }
         
-        successful_applications = len([e for e in history_events if e['type'] == 'application' and e['status'] == 'approved'])
+        successful_applications = len([e for e in history_events if e['type'] == 'application' and e['status'] == 'APPROVED'])
         if stats['total_applications'] > 0:
             stats['success_rate'] = round((successful_applications / stats['total_applications']) * 100)
         
-        return HTMLResponse(
-            content=request.app.state.templates.get_template("employee/history.html").render(
-                request=request,
-                current_user=current_user,
-                history_events=history_events,
-                stats=stats
-            )
-        )
+        return templates.TemplateResponse("employee/history.html", {
+            "request": request,
+            "current_user": current_user,
+            "history_events": history_events,
+            "stats": stats
+        })
     except Exception as e:
         logger.error(f"Ошибка загрузки истории: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки истории: {e}")
