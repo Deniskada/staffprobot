@@ -102,7 +102,16 @@ class EmployeeProfileManager {
         // Конвертируем FormData в JSON для правильной кодировки
         const jsonData = {};
         for (let [key, value] of formData.entries()) {
-            jsonData[key] = value;
+            if (jsonData[key]) {
+                // Если ключ уже существует, создаем массив
+                if (Array.isArray(jsonData[key])) {
+                    jsonData[key].push(value);
+                } else {
+                    jsonData[key] = [jsonData[key], value];
+                }
+            } else {
+                jsonData[key] = value;
+            }
         }
         
         console.log('Sending data:', jsonData);
