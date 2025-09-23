@@ -306,11 +306,34 @@ calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId
             return;
         }
         
-        // Show notification about employee assignment
-        calendarPanels.showNotification(`Сотрудник ${employee.name} назначен на тайм-слот ${timeslot.start_time} - ${timeslot.end_time}`, 'success');
+        // Show notification about employee assignment (preview)
+        console.log('Timeslot structure:', timeslot);
+        console.log('Timeslot slot:', timeslot.slot);
+        const timeStr = timeslot.slot ? `${timeslot.slot.start_time} - ${timeslot.slot.end_time}` : 'время не определено';
+        console.log('Time string:', timeStr);
         
-        // For now, just show success message
-        // TODO: Implement actual shift creation
+        // Call backend to actually plan the shift
+        console.log('Planning shift via API...');
+        const planResp = await fetch('/owner/api/calendar/plan-shift', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timeslot_id: Number(timeslotId), employee_id: Number(employeeId) })
+        });
+        
+        const planData = await planResp.json().catch(() => ({}));
+        console.log('Plan shift response:', planResp.status, planData);
+        
+        if (!planResp.ok || planData.success === false) {
+            const detail = planData && (planData.detail || planData.message);
+            throw new Error(detail || `Не удалось запланировать смену (HTTP ${planResp.status})`);
+        }
+        
+        calendarPanels.showNotification(`Сотрудник ${employee.name} назначен на тайм-слот ${timeStr}`, 'success');
+        
+        // Refresh calendar to reflect changes
+        setTimeout(() => {
+            calendarManager.refresh();
+        }, 500);
         
     } catch (error) {
         console.error('Error assigning employee:', error);
@@ -318,9 +341,9 @@ calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId
     }
 };
 
-calendarManager.createTimeslotFromObject = async function(objectId, timeslotId) {
+calendarManager.createTimeslotFromObject = async function(objectId, date) {
     try {
-        console.log('Creating timeslot from object:', objectId, timeslotId);
+        console.log('Creating timeslot from object:', objectId, 'on date:', date);
         
         // Get object details
         const objectResponse = await fetch(`/owner/calendar/api/objects`);
@@ -334,17 +357,6 @@ calendarManager.createTimeslotFromObject = async function(objectId, timeslotId) 
             return;
         }
         
-        // Get timeslot details
-        const timeslotResponse = await fetch(`/owner/calendar/api/timeslot/${timeslotId}`);
-        const timeslot = await timeslotResponse.json();
-        
-        console.log('Found timeslot:', timeslot);
-        
-        if (!timeslot) {
-            calendarPanels.showNotification('Тайм-слот не найден', 'error');
-            return;
-        }
-        
         // Show quick create form with pre-filled data
         console.log('Showing quick create form...');
         await calendarPanels.showQuickCreateForm({
@@ -353,7 +365,7 @@ calendarManager.createTimeslotFromObject = async function(objectId, timeslotId) 
             hourlyRate: object.hourly_rate || 0,
             openingTime: object.opening_time || '09:00',
             closingTime: object.closing_time || '18:00'
-        }, timeslot.slot_date);
+        }, date);
         
         console.log('Quick create form should be shown');
         
