@@ -63,7 +63,7 @@ class RoleBasedLoginService:
                 "title": "Сотрудник",
                 "description": "Работа на объектах",
                 "icon": "👷",
-                "url": "/employee/dashboard",
+                "url": "/employee/",
                 "priority": 4
             }
         }
