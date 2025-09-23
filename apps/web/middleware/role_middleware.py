@@ -212,7 +212,7 @@ async def require_applicant_object_access(object_id: int):
     return access_checker
 
 
-async def require_employee_or_applicant(request: Request, current_user: dict = Depends(get_current_user_dependency())):
+async def require_employee_or_applicant(request: Request, current_user = Depends(get_current_user_dependency())):
     """Проверка роли сотрудника или соискателя."""
     if isinstance(current_user, RedirectResponse):
         return current_user
@@ -221,19 +221,24 @@ async def require_employee_or_applicant(request: Request, current_user: dict = D
     if current_user is None:
         return RedirectResponse(url="/auth/login", status_code=302)
     
+    # current_user теперь объект User, проверяем роли напрямую
     from core.database.session import get_async_session
     async with get_async_session() as session:
-        user_id = await get_user_id_from_current_user(current_user, session)
-        if not user_id:
-            return RedirectResponse(url="/auth/login", status_code=302)
-        
         role_service = RoleService(session)
-        has_role = await role_service.has_any_role(user_id, [UserRole.EMPLOYEE, UserRole.APPLICANT, UserRole.SUPERADMIN])
+        has_role = await role_service.has_any_role(current_user.id, [UserRole.EMPLOYEE, UserRole.APPLICANT, UserRole.SUPERADMIN])
         
         if not has_role:
-            logger.warning(f"User {user_id} is not an employee or applicant")
+            logger.warning(f"User {current_user.id} is not an employee or applicant")
             raise HTTPException(status_code=403, detail="Недостаточно прав доступа")
         
-        return current_user
+        # Возвращаем словарь с данными пользователя для совместимости
+        return {
+            "id": current_user.telegram_id,
+            "username": current_user.username,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "role": current_user.role,
+            "roles": current_user.roles
+        }
 
 

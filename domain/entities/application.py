@@ -11,10 +11,10 @@ import enum
 
 class ApplicationStatus(enum.Enum):
     """Статусы заявки на работу"""
-    PENDING = "pending"  # На рассмотрении
-    APPROVED = "approved"  # Одобрена
-    REJECTED = "rejected"  # Отклонена
-    INTERVIEW = "interview"  # Собеседование
+    PENDING = "PENDING"  # На рассмотрении
+    APPROVED = "APPROVED"  # Одобрена
+    REJECTED = "REJECTED"  # Отклонена
+    INTERVIEW = "INTERVIEW"  # Собеседование
 
 
 class Application(Base):

@@ -17,10 +17,10 @@ class InterviewType(enum.Enum):
 
 class InterviewStatus(enum.Enum):
     """Статусы собеседования"""
-    SCHEDULED = "scheduled"  # Запланировано
-    COMPLETED = "completed"  # Завершено
-    CANCELLED = "cancelled"  # Отменено
-    PENDING = "pending"  # В ожидании
+    SCHEDULED = "SCHEDULED"  # Запланировано
+    COMPLETED = "COMPLETED"  # Завершено
+    CANCELLED = "CANCELLED"  # Отменено
+    PENDING = "PENDING"  # В ожидании
 
 
 class Interview(Base):
