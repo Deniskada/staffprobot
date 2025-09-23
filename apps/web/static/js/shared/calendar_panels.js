@@ -328,6 +328,8 @@ class CalendarPanels {
         
         if (objectsPanel) {
             objectsPanel.addEventListener('click', (e) => {
+                // Ignore clicks on the toggle button to avoid re-expanding immediately
+                if (e.target.closest('button')) return;
                 if (objectsPanel.classList.contains('collapsed')) {
                     this.togglePanel();
                 }
