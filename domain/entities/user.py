@@ -1,6 +1,7 @@
 """Модель пользователя."""
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .base import Base
@@ -30,7 +31,7 @@ class User(Base):
     last_name = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)
     role = Column(String(50), nullable=False)  # Оставляем для обратной совместимости
-    roles = Column(JSON, nullable=False)  # Новое поле для множественных ролей
+    roles = Column(JSONB, nullable=False)  # Новое поле для множественных ролей
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
