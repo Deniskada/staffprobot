@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, date
 from typing import Dict, Any, List
 from celery import Task
+from decimal import Decimal, ROUND_HALF_UP
 
 from core.celery.celery_app import celery_app
 from core.logging.logger import logger
@@ -37,6 +38,7 @@ def auto_close_shifts(self):
         from domain.entities.shift_schedule import ShiftSchedule
         from domain.entities.object import Object
         from domain.entities.time_slot import TimeSlot
+        from sqlalchemy.orm import selectinload
         
         async def _auto_close_shifts():
             async with get_async_session() as session:
@@ -44,11 +46,16 @@ def auto_close_shifts(self):
                 closed_count = 0
                 errors = []
                 
-                # 1. Обрабатываем СПОНТАННЫЕ смены (Shift) - закрываем по времени работы объекта
-                active_shifts_query = select(Shift).join(Object).filter(
-                    and_(
-                        Shift.status == 'active',
-                        Shift.start_time < now
+                # 1. Спонтанные смены: eager-load object
+                active_shifts_query = (
+                    select(Shift)
+                    .options(selectinload(Shift.object))
+                    .join(Object)
+                    .filter(
+                        and_(
+                            Shift.status == 'active',
+                            Shift.start_time < now
+                        )
                     )
                 )
                 
@@ -58,19 +65,25 @@ def auto_close_shifts(self):
                 for shift in active_shifts:
                     try:
                         end_time = None
-                        # Время закрытия по режиму объекта в день начала смены
                         if shift.object and shift.object.closing_time:
                             end_time = datetime.combine(shift.start_time.date(), shift.object.closing_time)
+                            # Align tzinfo with start_time if needed
+                            if getattr(shift.start_time, 'tzinfo', None) and end_time.tzinfo is None:
+                                end_time = end_time.replace(tzinfo=shift.start_time.tzinfo)
                         
-                        if end_time and now >= end_time:
+                        if end_time and now >= end_time if end_time.tzinfo is None else now.replace(tzinfo=end_time.tzinfo) >= end_time:
                             duration = end_time - shift.start_time
-                            total_hours = duration.total_seconds() / 3600
-                            total_payment = total_hours * shift.hourly_rate if shift.hourly_rate else None
+                            total_hours = Decimal(duration.total_seconds()) / Decimal(3600)
+                            total_hours = total_hours.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                            total_payment = None
+                            if shift.hourly_rate is not None:
+                                rate_decimal = Decimal(shift.hourly_rate)
+                                total_payment = (total_hours * rate_decimal).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                             
                             shift.end_time = end_time
                             shift.status = 'completed'
-                            shift.total_hours = total_hours
-                            shift.total_payment = total_payment
+                            shift.total_hours = float(total_hours)
+                            shift.total_payment = float(total_payment) if total_payment is not None else None
                             
                             closed_count += 1
                             logger.info(f"Auto-closed spontaneous shift {shift.id} at {end_time} (object closing time)")
@@ -79,12 +92,17 @@ def auto_close_shifts(self):
                         logger.error(error_msg)
                         errors.append(error_msg)
                 
-                # 2. Обрабатываем ЗАПЛАНИРОВАННЫЕ смены (ShiftSchedule) - закрываем по времени окончания тайм-слота
-                confirmed_schedules_query = select(ShiftSchedule).join(Object).filter(
-                    and_(
-                        ShiftSchedule.status == 'confirmed',
-                        ShiftSchedule.planned_start < now,
-                        ShiftSchedule.auto_closed == False
+                # 2. Запланированные: eager-load object
+                confirmed_schedules_query = (
+                    select(ShiftSchedule)
+                    .options(selectinload(ShiftSchedule.object))
+                    .join(Object)
+                    .filter(
+                        and_(
+                            ShiftSchedule.status == 'confirmed',
+                            ShiftSchedule.planned_start < now,
+                            ShiftSchedule.auto_closed == False
+                        )
                     )
                 )
                 
@@ -104,19 +122,27 @@ def auto_close_shifts(self):
                         # 2) Режим работы объекта
                         if not end_time and schedule.object and schedule.object.closing_time:
                             end_time = datetime.combine(schedule.planned_start.date(), schedule.object.closing_time)
-                        # 3) Если указан auto_close_minutes у объекта
+                        # 3) auto_close_minutes
                         if not end_time and schedule.object and getattr(schedule.object, 'auto_close_minutes', 0) > 0:
                             end_time = schedule.planned_start + timedelta(minutes=schedule.object.auto_close_minutes)
                         
-                        # Без fallback на полночь — не закрываем в 00:00
-                        if end_time and now >= end_time:
+                        # Align tzinfo with planned_start where applicable
+                        if end_time and isinstance(end_time, datetime) and getattr(schedule.planned_start, 'tzinfo', None) and end_time.tzinfo is None:
+                            end_time = end_time.replace(tzinfo=schedule.planned_start.tzinfo)
+                        
+                        if end_time and now >= end_time if end_time.tzinfo is None else now.replace(tzinfo=end_time.tzinfo) >= end_time:
                             duration = end_time - schedule.planned_start
-                            total_hours = duration.total_seconds() / 3600
-                            total_payment = total_hours * schedule.hourly_rate if schedule.hourly_rate else None
+                            total_hours = Decimal(duration.total_seconds()) / Decimal(3600)
+                            total_hours = total_hours.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                            total_payment = None
+                            if schedule.hourly_rate is not None:
+                                rate_decimal = Decimal(schedule.hourly_rate)
+                                total_payment = (total_hours * rate_decimal).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                             
                             schedule.status = 'completed'
                             schedule.planned_end = end_time
                             schedule.auto_closed = True
+                            # Note: schedule doesn't store totals; actual totals are on real Shift. Kept here if needed elsewhere.
                             
                             closed_count += 1
                             logger.info(f"Auto-closed planned shift {schedule.id} at {end_time} (timeslot/object closing time)")
