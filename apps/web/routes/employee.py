@@ -324,6 +324,9 @@ async def employee_profile(
             
         
         user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
         available_interfaces = await get_available_interfaces_for_user(current_user, db)
         
         # Получаем данные пользователя
@@ -335,10 +338,12 @@ async def employee_profile(
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
         # Статистика профиля
+        logger.info(f"Getting applications count for user_id: {user_id}")
         applications_count = await db.execute(
             select(func.count(Application.id)).where(Application.applicant_id == user_id)
         )
         applications_count = applications_count.scalar() or 0
+        logger.info(f"Applications count: {applications_count}")
         
         interviews_count = await db.execute(
             select(func.count(Interview.id)).where(Interview.applicant_id == user_id)
@@ -354,7 +359,7 @@ async def employee_profile(
         
         in_progress_count = await db.execute(
             select(func.count(Application.id)).where(
-                and_(Application.applicant_id == user_id, Application.status == 'pending')
+                and_(Application.applicant_id == user_id, Application.status == 'PENDING')
             )
         )
         in_progress_count = in_progress_count.scalar() or 0
@@ -381,6 +386,7 @@ async def employee_profile(
         return templates.TemplateResponse("employee/profile.html", {
             "request": request,
             "current_user": user,
+            "user": user,
             "profile_stats": profile_stats,
             "work_categories": work_categories,
             "available_interfaces": available_interfaces
@@ -388,6 +394,65 @@ async def employee_profile(
     except Exception as e:
         logger.error(f"Ошибка загрузки профиля: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки профиля: {e}")
+
+
+@router.post("/profile")
+async def employee_profile_update(
+    request: Request,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Обновление профиля сотрудника"""
+    try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем данные из формы
+        form_data = await request.form()
+        
+        # Получаем пользователя
+        user_query = select(User).where(User.id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        # Обновляем поля
+        if 'first_name' in form_data:
+            user.first_name = form_data['first_name']
+        if 'last_name' in form_data:
+            user.last_name = form_data['last_name']
+        if 'phone' in form_data:
+            user.phone = form_data['phone']
+        if 'work_experience' in form_data:
+            user.work_experience = form_data['work_experience']
+        if 'skills' in form_data:
+            user.skills = form_data['skills']
+        if 'preferred_schedule' in form_data:
+            user.preferred_schedule = form_data['preferred_schedule']
+        if 'availability_notes' in form_data:
+            user.availability_notes = form_data['availability_notes']
+        
+        # Сохраняем изменения
+        await db.commit()
+        await db.refresh(user)
+        
+        logger.info(f"Profile updated for user {user_id}")
+        
+        return {"success": True, "message": "Профиль успешно обновлен"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating profile: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка обновления профиля")
+
 
 @router.get("/history", response_class=HTMLResponse)
 async def employee_history(

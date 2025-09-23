@@ -16,6 +16,16 @@ class EmployeeProfileManager {
             this.toggleEditMode();
         });
 
+        // Кнопка сохранения профиля
+        document.getElementById('save-profile-btn').addEventListener('click', () => {
+            this.saveProfile();
+        });
+
+        // Кнопка отмены редактирования
+        document.getElementById('cancel-edit-btn').addEventListener('click', () => {
+            this.cancelEdit();
+        });
+
         // Кнопка изменения аватара
         document.getElementById('change-avatar-btn').addEventListener('click', () => {
             this.showAvatarModal();
@@ -30,67 +40,42 @@ class EmployeeProfileManager {
         document.getElementById('save-avatar').addEventListener('click', () => {
             this.saveAvatar();
         });
-
-        // Сохранение профиля
-        document.addEventListener('click', (e) => {
-            if (e.target.id === 'save-profile-btn') {
-                this.saveProfile();
-            }
-        });
     }
 
     toggleEditMode() {
-        this.isEditing = !this.isEditing;
+        this.isEditing = true;
         
         const editBtn = document.getElementById('edit-profile-btn');
+        const saveBtn = document.getElementById('save-profile-btn');
+        const cancelBtn = document.getElementById('cancel-edit-btn');
         const inputs = document.querySelectorAll('input, select, textarea');
         
-        if (this.isEditing) {
-            // Включаем режим редактирования
-            editBtn.innerHTML = '<i class="bi bi-check"></i> Сохранить';
-            editBtn.className = 'btn btn-success';
-            
-            // Делаем поля редактируемыми
-            inputs.forEach(input => {
-                if (input.id !== 'avatar-input') {
-                    input.readOnly = false;
-                    input.disabled = false;
-                }
-            });
-            
-            // Добавляем кнопку отмены
-            if (!document.getElementById('cancel-profile-btn')) {
-                const cancelBtn = document.createElement('button');
-                cancelBtn.type = 'button';
-                cancelBtn.className = 'btn btn-outline-secondary ms-2';
-                cancelBtn.id = 'cancel-profile-btn';
-                cancelBtn.innerHTML = '<i class="bi bi-x"></i> Отмена';
-                cancelBtn.addEventListener('click', () => {
-                    this.cancelEdit();
-                });
-                editBtn.parentNode.appendChild(cancelBtn);
+        // Скрываем кнопку редактирования, показываем кнопки сохранения и отмены
+        editBtn.style.display = 'none';
+        saveBtn.style.display = 'inline-block';
+        cancelBtn.style.display = 'inline-block';
+        
+        // Делаем поля редактируемыми
+        inputs.forEach(input => {
+            if (input.id !== 'avatar-input') {
+                input.readOnly = false;
+                input.disabled = false;
             }
-        } else {
-            // Сохраняем изменения
-            this.saveProfile();
-        }
+        });
     }
 
     cancelEdit() {
         this.isEditing = false;
         
         const editBtn = document.getElementById('edit-profile-btn');
-        const cancelBtn = document.getElementById('cancel-profile-btn');
+        const saveBtn = document.getElementById('save-profile-btn');
+        const cancelBtn = document.getElementById('cancel-edit-btn');
         const inputs = document.querySelectorAll('input, select, textarea');
         
-        // Возвращаем кнопку в исходное состояние
-        editBtn.innerHTML = '<i class="bi bi-pencil"></i> Редактировать';
-        editBtn.className = 'btn btn-primary';
-        
-        // Убираем кнопку отмены
-        if (cancelBtn) {
-            cancelBtn.remove();
-        }
+        // Показываем кнопку редактирования, скрываем кнопки сохранения и отмены
+        editBtn.style.display = 'inline-block';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
         
         // Делаем поля только для чтения
         inputs.forEach(input => {
@@ -105,29 +90,13 @@ class EmployeeProfileManager {
     }
 
     async saveProfile() {
-        const formData = {
-            first_name: document.getElementById('first-name').value,
-            last_name: document.getElementById('last-name').value,
-            phone: document.getElementById('phone').value,
-            email: document.getElementById('email').value,
-            birth_date: document.getElementById('birth-date').value,
-            experience: document.getElementById('experience').value,
-            education: document.getElementById('education').value,
-            skills: document.getElementById('skills').value,
-            about: document.getElementById('about').value,
-            preferred_schedule: document.getElementById('preferred-schedule').value,
-            min_salary: document.getElementById('min-salary').value,
-            preferred_work_types: Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
-                .map(checkbox => checkbox.value)
-        };
+        const form = document.getElementById('profile-form');
+        const formData = new FormData(form);
 
         try {
-            const response = await fetch('/employee/api/profile', {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData)
+            const response = await fetch('/employee/profile', {
+                method: 'POST',
+                body: formData
             });
 
             if (response.ok) {
@@ -147,17 +116,14 @@ class EmployeeProfileManager {
         this.isEditing = false;
         
         const editBtn = document.getElementById('edit-profile-btn');
-        const cancelBtn = document.getElementById('cancel-profile-btn');
+        const saveBtn = document.getElementById('save-profile-btn');
+        const cancelBtn = document.getElementById('cancel-edit-btn');
         const inputs = document.querySelectorAll('input, select, textarea');
         
-        // Возвращаем кнопку в исходное состояние
-        editBtn.innerHTML = '<i class="bi bi-pencil"></i> Редактировать';
-        editBtn.className = 'btn btn-primary';
-        
-        // Убираем кнопку отмены
-        if (cancelBtn) {
-            cancelBtn.remove();
-        }
+        // Показываем кнопку редактирования, скрываем кнопки сохранения и отмены
+        editBtn.style.display = 'inline-block';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
         
         // Делаем поля только для чтения
         inputs.forEach(input => {
