@@ -351,6 +351,7 @@ class CalendarPanels {
         
         // Expose toggle for templates if needed
         window.toggleEmployeesPanel = () => this.toggleEmployeesPanel();
+        window.toggleObjectsPanel = () => this.togglePanel();
         
         // Auto refresh counts occasionally
         setInterval(() => {
