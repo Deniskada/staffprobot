@@ -1,5 +1,5 @@
 <!-- Панель объектов для drag & drop -->
-<div class="drag-drop-panel" id="dragDropPanel">
+<div class="drag-drop-panel collapsed" id="dragDropPanel">
     <div class="panel-header">
         <h6 class="mb-3">
             <i class="bi bi-grip-vertical"></i> Объекты для планирования
@@ -7,15 +7,15 @@
         <div class="objects-count" id="objectsCount" style="display: none;">
             <span class="badge bg-primary" id="objectsCountBadge">0</span>
         </div>
-        <button class="btn btn-sm btn-outline-secondary" onclick="togglePanel()">
-            <i class="bi bi-chevron-up" id="panelToggleIcon"></i>
+        <button class="btn btn-sm btn-outline-secondary" onclick="calendarPanels.togglePanel()">
+            <i class="bi bi-chevron-down" id="panelToggleIcon"></i>
         </button>
         <div class="collapsed-icon" style="display: none;">
             <i class="bi bi-grid-3x3-gap"></i>
         </div>
     </div>
     
-    <div class="panel-content" id="panelContent">
+    <div class="panel-content" id="panelContent" style="max-height: 260px; overflow-y: auto;">
         <div class="objects-list" id="objectsList">
             <div class="text-center text-muted">
                 <div class="spinner-border spinner-border-sm" role="status">
@@ -26,7 +26,7 @@
         </div>
         
         <div class="panel-actions mt-3">
-            <button class="btn btn-outline-secondary btn-sm w-100" onclick="refreshObjects()">
+            <button class="btn btn-outline-secondary btn-sm w-100" onclick="calendarPanels.refreshObjects()">
                 <i class="bi bi-arrow-clockwise"></i> Обновить
             </button>
         </div>
