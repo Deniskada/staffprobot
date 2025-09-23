@@ -9,7 +9,8 @@ from sqlalchemy import select, func, and_, or_
 from datetime import datetime, date, timedelta
 import logging
 
-from apps.web.dependencies import get_db_session, get_current_user_dependency
+from apps.web.dependencies import get_current_user_dependency
+from core.database.session import get_db_session
 from apps.web.middleware.role_middleware import require_employee_or_applicant
 from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift
 from apps.web.utils.timezone_utils import WebTimezoneHelper
@@ -41,6 +42,15 @@ async def employee_index(
 ):
     """Главная страница сотрудника"""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
         user_id = await get_user_id_from_current_user(current_user, db)
         
         # Получаем статистику
@@ -132,6 +142,11 @@ async def employee_objects(
 ):
     """Страница поиска работы"""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        
         # Получаем доступные объекты
         objects_query = select(Object).where(Object.available_for_applicants == True)
         objects_result = await db.execute(objects_query)
@@ -170,6 +185,11 @@ async def employee_applications(
 ):
     """Страница заявок сотрудника"""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        
         user_id = await get_user_id_from_current_user(current_user, db)
         
         # Получаем заявки
@@ -227,6 +247,11 @@ async def employee_calendar(
 ):
     """Страница календаря собеседований"""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        
         user_id = await get_user_id_from_current_user(current_user, db)
         
         # Получаем собеседования
@@ -283,6 +308,11 @@ async def employee_profile(
 ):
     """Страница профиля сотрудника"""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        
         user_id = await get_user_id_from_current_user(current_user, db)
         
         # Получаем данные пользователя
@@ -357,6 +387,11 @@ async def employee_history(
 ):
     """Страница истории активности"""
     try:
+        # Проверяем, что current_user не является RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        
         user_id = await get_user_id_from_current_user(current_user, db)
         
         # Получаем историю событий
