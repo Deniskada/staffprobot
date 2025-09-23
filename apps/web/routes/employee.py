@@ -415,7 +415,15 @@ async def employee_profile_update(
             raise HTTPException(status_code=401, detail="Пользователь не найден")
         
         # Получаем данные из формы
-        form_data = await request.form()
+        try:
+            # Попробуем получить JSON данные
+            json_data = await request.json()
+            logger.info(f"Received JSON data: {json_data}")
+            form_data = json_data
+        except:
+            # Если не JSON, то form data
+            form_data = await request.form()
+            logger.info(f"Received form data: {dict(form_data)}")
         
         # Получаем пользователя
         user_query = select(User).where(User.id == user_id)
@@ -425,13 +433,16 @@ async def employee_profile_update(
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
-        # Обновляем поля
+        # Обновляем поля с правильной кодировкой
         if 'first_name' in form_data:
             user.first_name = form_data['first_name']
+            logger.info(f"Updated first_name: {user.first_name}")
         if 'last_name' in form_data:
             user.last_name = form_data['last_name']
+            logger.info(f"Updated last_name: {user.last_name}")
         if 'phone' in form_data:
             user.phone = form_data['phone']
+            logger.info(f"Updated phone: {user.phone}")
         if 'work_experience' in form_data:
             user.work_experience = form_data['work_experience']
         if 'skills' in form_data:

@@ -92,11 +92,20 @@ class EmployeeProfileManager {
     async saveProfile() {
         const form = document.getElementById('profile-form');
         const formData = new FormData(form);
+        
+        // Конвертируем FormData в JSON для правильной кодировки
+        const jsonData = {};
+        for (let [key, value] of formData.entries()) {
+            jsonData[key] = value;
+        }
 
         try {
             const response = await fetch('/employee/profile', {
                 method: 'POST',
-                body: formData
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(jsonData)
             });
 
             if (response.ok) {
