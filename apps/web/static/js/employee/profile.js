@@ -43,6 +43,7 @@ class EmployeeProfileManager {
     }
 
     toggleEditMode() {
+        console.log('toggleEditMode called');
         this.isEditing = true;
         
         const editBtn = document.getElementById('edit-profile-btn');
@@ -50,10 +51,14 @@ class EmployeeProfileManager {
         const cancelBtn = document.getElementById('cancel-edit-btn');
         const inputs = document.querySelectorAll('input, select, textarea');
         
+        console.log('Buttons found:', { editBtn, saveBtn, cancelBtn });
+        
         // Скрываем кнопку редактирования, показываем кнопки сохранения и отмены
         editBtn.style.display = 'none';
         saveBtn.style.display = 'inline-block';
         cancelBtn.style.display = 'inline-block';
+        
+        console.log('Buttons visibility updated');
         
         // Делаем поля редактируемыми
         inputs.forEach(input => {
@@ -90,6 +95,7 @@ class EmployeeProfileManager {
     }
 
     async saveProfile() {
+        console.log('Starting saveProfile...');
         const form = document.getElementById('profile-form');
         const formData = new FormData(form);
         
@@ -98,6 +104,8 @@ class EmployeeProfileManager {
         for (let [key, value] of formData.entries()) {
             jsonData[key] = value;
         }
+        
+        console.log('Sending data:', jsonData);
 
         try {
             const response = await fetch('/employee/profile', {
@@ -107,6 +115,8 @@ class EmployeeProfileManager {
                 },
                 body: JSON.stringify(jsonData)
             });
+            
+            console.log('Response status:', response.status);
 
             if (response.ok) {
                 this.showNotification('Профиль успешно обновлен!', 'success');

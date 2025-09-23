@@ -458,12 +458,14 @@ async def employee_profile_update(
         
         logger.info(f"Profile updated for user {user_id}")
         
-        return {"success": True, "message": "Профиль успешно обновлен"}
+        result = {"success": True, "message": "Профиль успешно обновлен"}
+        logger.info(f"Returning result: {result}")
+        return result
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating profile: {e}")
+        logger.error(f"Error updating profile: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка обновления профиля")
 
 
