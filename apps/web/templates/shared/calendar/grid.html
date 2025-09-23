@@ -1,6 +1,24 @@
 <!-- Shared Calendar Grid Component -->
 <div class="calendar-container">
     <div class="calendar-header">
+        <div class="calendar-legend mb-2" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#e3f2fd; border:1px solid #2196f3;"></span>
+                <small>Запланированная смена</small>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#ccff90; border:1px solid #43a047;"></span>
+                <small>Текущая смена</small>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#c8e6c9; border:2px solid #2e7d32;"></span>
+                <small>Завершённая смена</small>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#ffebee; border:1px solid #f44336;"></span>
+                <small>Свободный тайм‑слот</small>
+            </div>
+        </div>
         <div class="calendar-navigation">
             <div class="nav-group">
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="navigateCalendar('prev')">
