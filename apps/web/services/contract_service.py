@@ -295,6 +295,23 @@ class ContractService:
                 contract.end_date = end_date
             if allowed_objects is not None:
                 contract.allowed_objects = allowed_objects
+                
+                # Если это договор управляющего, обновляем права на объекты
+                if contract.is_manager:
+                    permission_service = ManagerPermissionService(session)
+                    # Удаляем старые права
+                    old_permissions = await permission_service.get_contract_permissions(contract.id)
+                    for permission in old_permissions:
+                        await permission_service.delete_permission(permission.id)
+                    
+                    # Создаем новые права
+                    if contract.manager_permissions and allowed_objects:
+                        for object_id in allowed_objects:
+                            await permission_service.create_permission(
+                                contract.id, 
+                                object_id, 
+                                contract.manager_permissions
+                            )
             
             contract.updated_at = datetime.now()
             await session.commit()
@@ -1099,6 +1116,29 @@ class ContractService:
             contract.template_id = contract_data.get("template_id")
             contract.allowed_objects = contract_data.get("allowed_objects", [])
             
+            # Обновляем поля управляющего, если они переданы
+            if "is_manager" in contract_data:
+                contract.is_manager = contract_data["is_manager"]
+            if "manager_permissions" in contract_data:
+                contract.manager_permissions = contract_data["manager_permissions"]
+            
+            # Если это договор управляющего, обновляем права на объекты
+            if contract.is_manager:
+                permission_service = ManagerPermissionService(session)
+                # Удаляем старые права
+                old_permissions = await permission_service.get_contract_permissions(contract.id)
+                for permission in old_permissions:
+                    await permission_service.delete_permission(permission.id)
+                
+                # Создаем новые права
+                if contract.manager_permissions and contract.allowed_objects:
+                    for object_id in contract.allowed_objects:
+                        await permission_service.create_permission(
+                            contract.id, 
+                            object_id, 
+                            contract.manager_permissions
+                        )
+            
             await session.commit()
             
             logger.info(f"Updated contract: {contract.id}")
@@ -1145,6 +1185,23 @@ class ContractService:
                 contract.end_date = contract_data["end_date"]
             if "allowed_objects" in contract_data:
                 contract.allowed_objects = contract_data["allowed_objects"]
+                
+                # Если это договор управляющего, обновляем права на объекты
+                if contract.is_manager:
+                    permission_service = ManagerPermissionService(session)
+                    # Удаляем старые права
+                    old_permissions = await permission_service.get_contract_permissions(contract.id)
+                    for permission in old_permissions:
+                        await permission_service.delete_permission(permission.id)
+                    
+                    # Создаем новые права
+                    if contract.manager_permissions and contract.allowed_objects:
+                        for object_id in contract.allowed_objects:
+                            await permission_service.create_permission(
+                                contract.id, 
+                                object_id, 
+                                contract.manager_permissions
+                            )
             if "status" in contract_data:
                 contract.status = contract_data["status"]
             if "is_active" in contract_data:
@@ -1153,6 +1210,22 @@ class ContractService:
                 contract.is_manager = contract_data["is_manager"]
             if "manager_permissions" in contract_data:
                 contract.manager_permissions = contract_data["manager_permissions"]
+                
+                # Если изменились права управляющего, обновляем права на объекты
+                if contract.is_manager and contract.allowed_objects:
+                    permission_service = ManagerPermissionService(session)
+                    # Удаляем старые права
+                    old_permissions = await permission_service.get_contract_permissions(contract.id)
+                    for permission in old_permissions:
+                        await permission_service.delete_permission(permission.id)
+                    
+                    # Создаем новые права
+                    for object_id in contract.allowed_objects:
+                        await permission_service.create_permission(
+                            contract.id, 
+                            object_id, 
+                            contract.manager_permissions
+                        )
             
             contract.updated_at = datetime.now()
             await session.commit()
