@@ -2256,6 +2256,11 @@ async def get_employees_for_manager(
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
 
 
+@router.get("/")
+async def manager_root_redirect():
+    """Редирект с /manager на календарь управляющего."""
+    return RedirectResponse(url="/manager/calendar")
+
 @router.get("/calendar")
 async def manager_calendar(
     request: Request,
