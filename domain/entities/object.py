@@ -66,6 +66,10 @@ class Object(Base):
     def set_coordinates(self, lat: float, lon: float) -> None:
         """Установка координат."""
         self.coordinates = f"{lat},{lon}"
+    
+    # Связи с заявками и собеседованиями
+    applications = relationship("Application", back_populates="object", cascade="all, delete-orphan")
+    interviews = relationship("Interview", back_populates="object", cascade="all, delete-orphan")
 
 
 
