@@ -30,6 +30,15 @@ class User(Base):
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)
+    email = Column(String(255), nullable=True)
+    birth_date = Column(DateTime(timezone=True), nullable=True)
+    work_experience = Column(String(50), nullable=True)
+    education = Column(String(50), nullable=True)
+    skills = Column(String(1000), nullable=True)
+    about = Column(String(2000), nullable=True)
+    preferred_schedule = Column(String(50), nullable=True)
+    min_salary = Column(Integer, nullable=True)
+    availability_notes = Column(String(1000), nullable=True)
     role = Column(String(50), nullable=False)  # Оставляем для обратной совместимости
     roles = Column(JSONB, nullable=False)  # Новое поле для множественных ролей
     is_active = Column(Boolean, default=True)
