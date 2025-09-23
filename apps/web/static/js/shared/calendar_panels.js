@@ -143,6 +143,11 @@ class CalendarPanels {
         }
     }
 
+    // Simple proxy methods for buttons
+    refreshObjects() {
+        return this.loadObjects();
+    }
+
     // Load employees for drag&drop panel
     async loadEmployees() {
         const employeesList = document.getElementById('employeesList');
@@ -219,6 +224,10 @@ class CalendarPanels {
             console.error('Error loading employees:', error);
             employeesList.innerHTML = '<div class="text-center text-danger">Ошибка загрузки сотрудников</div>';
         }
+    }
+
+    refreshEmployees() {
+        return this.loadEmployees();
     }
 
     // Quick create form functions
