@@ -12,11 +12,11 @@ class CalendarPanels {
         
         if (panel.classList.contains('collapsed')) {
             panel.classList.remove('collapsed');
-            icon.className = 'bi bi-chevron-up';
+            if (icon) icon.className = 'bi bi-chevron-up';
             this.loadObjects();
         } else {
             panel.classList.add('collapsed');
-            icon.className = 'bi bi-chevron-down';
+            if (icon) icon.className = 'bi bi-chevron-down';
         }
     }
 
@@ -355,8 +355,8 @@ class CalendarPanels {
         
         // Auto refresh counts occasionally
         setInterval(() => {
-            this.refreshObjects();
-            this.refreshEmployees();
+            this.loadObjects();
+            this.loadEmployees();
         }, 3000);
         
         // Handle object select change
