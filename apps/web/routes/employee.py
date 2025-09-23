@@ -445,10 +445,21 @@ async def employee_profile_update(
             logger.info(f"Updated phone: {user.phone}")
         if 'work_experience' in form_data:
             user.work_experience = form_data['work_experience']
+        if 'education' in form_data:
+            user.education = form_data['education']
         if 'skills' in form_data:
             user.skills = form_data['skills']
+        if 'about' in form_data:
+            user.about = form_data['about']
         if 'preferred_schedule' in form_data:
             user.preferred_schedule = form_data['preferred_schedule']
+        if 'min_salary' in form_data:
+            min_salary_str = form_data['min_salary']
+            if min_salary_str and min_salary_str.isdigit():
+                user.min_salary = int(min_salary_str)
+                logger.info(f"Updated min_salary: {user.min_salary}")
+            else:
+                user.min_salary = None
         if 'availability_notes' in form_data:
             user.availability_notes = form_data['availability_notes']
         
