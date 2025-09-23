@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from core.database.session import get_async_session
+from core.database.session import get_async_session, get_db_session
 from shared.services.role_service import RoleService
 from shared.services.manager_permission_service import ManagerPermissionService
 from apps.web.utils.timezone_utils import web_timezone_helper
@@ -1783,6 +1783,89 @@ async def get_timeslot_details_manager(
         raise
     except Exception as e:
         logger.error(f"Error getting timeslot details for manager: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
+
+
+@router.get("/timeslots/{timeslot_id}", response_class=HTMLResponse)
+async def manager_timeslot_detail(
+    request: Request,
+    timeslot_id: int,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Детали тайм-слота управляющего"""
+    try:
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Пользователь не найден")
+        
+        # Получаем доступные объекты управляющего
+        permission_service = ManagerPermissionService(db)
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        accessible_object_ids = [obj.id for obj in accessible_objects]
+        
+        if not accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступных объектов")
+        
+        # Получаем тайм-слот
+        from domain.entities.time_slot import TimeSlot
+        from domain.entities.object import Object
+        
+        timeslot_query = select(TimeSlot).options(
+            selectinload(TimeSlot.object)
+        ).where(TimeSlot.id == timeslot_id)
+        
+        timeslot_result = await db.execute(timeslot_query)
+        timeslot = timeslot_result.scalar_one_or_none()
+        
+        if not timeslot:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+        
+        # Проверяем доступ к объекту
+        if timeslot.object_id not in accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступа к тайм-слоту")
+        
+        # Получаем связанные смены и расписания
+        from domain.entities.shift_schedule import ShiftSchedule
+        from domain.entities.shift import Shift
+        
+        # Запланированные смены
+        scheduled_query = select(ShiftSchedule).options(
+            selectinload(ShiftSchedule.user)
+        ).where(ShiftSchedule.time_slot_id == timeslot_id).order_by(ShiftSchedule.planned_start)
+        
+        scheduled_result = await db.execute(scheduled_query)
+        scheduled_shifts = scheduled_result.scalars().all()
+        
+        # Фактические смены
+        actual_query = select(Shift).options(
+            selectinload(Shift.user)
+        ).where(Shift.time_slot_id == timeslot_id).order_by(Shift.start_time)
+        
+        actual_result = await db.execute(actual_query)
+        actual_shifts = actual_result.scalars().all()
+        
+        return templates.TemplateResponse(
+            "manager/timeslot_detail.html",
+            {
+                "request": request,
+                "title": f"Тайм-слот {timeslot.object.name if timeslot.object else 'Неизвестный объект'}",
+                "timeslot": timeslot,
+                "scheduled_shifts": scheduled_shifts,
+                "actual_shifts": actual_shifts,
+                "current_user": current_user
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting timeslot detail for manager: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
 
 

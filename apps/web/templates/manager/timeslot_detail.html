@@ -1,0 +1,191 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block manager_content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-clock"></i> Детали тайм-слота</h2>
+                <a href="/manager/calendar" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Назад к календарю
+                </a>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-building"></i> {{ timeslot.object.name }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Время работы</h6>
+                            <p class="text-muted">
+                                <i class="bi bi-clock"></i> 
+                                {{ timeslot.start_time.strftime('%H:%M') }} - {{ timeslot.end_time.strftime('%H:%M') }}
+                            </p>
+                            
+                            <h6>Дата</h6>
+                            <p class="text-muted">
+                                <i class="bi bi-calendar"></i> 
+                                {{ timeslot.slot_date.strftime('%d.%m.%Y') }}
+                            </p>
+                            
+                            <h6>Часовая ставка</h6>
+                            <p class="text-muted">
+                                <i class="bi bi-currency-dollar"></i> 
+                                {{ timeslot.object.hourly_rate }} руб/час
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Адрес</h6>
+                            <p class="text-muted">
+                                <i class="bi bi-geo-alt"></i> 
+                                {{ timeslot.object.address or 'Не указан' }}
+                            </p>
+                            
+                            <h6>Статус</h6>
+                            <p class="text-muted">
+                                {% if scheduled_shifts %}
+                                    <span class="badge bg-warning">Запланирован</span>
+                                {% elif actual_shifts %}
+                                    <span class="badge bg-success">Активен</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Свободен</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    {% if timeslot.notes %}
+                    <div class="mt-3">
+                        <h6>Примечания</h6>
+                        <p class="text-muted">{{ timeslot.notes }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Запланированные смены -->
+            {% if scheduled_shifts %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-calendar-check"></i> Запланированные смены
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Сотрудник</th>
+                                    <th>Время начала</th>
+                                    <th>Время окончания</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for shift in scheduled_shifts %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ shift.user.first_name }} {{ shift.user.last_name or '' }}</strong>
+                                        {% if shift.user.username %}
+                                            <br><small class="text-muted">@{{ shift.user.username }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ shift.planned_start.strftime('%H:%M') }}</td>
+                                    <td>{{ shift.planned_end.strftime('%H:%M') }}</td>
+                                    <td>
+                                        {% if shift.status == 'planned' %}
+                                            <span class="badge bg-warning">Запланирована</span>
+                                        {% elif shift.status == 'confirmed' %}
+                                            <span class="badge bg-info">Подтверждена</span>
+                                        {% elif shift.status == 'cancelled' %}
+                                            <span class="badge bg-danger">Отменена</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ shift.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Фактические смены -->
+            {% if actual_shifts %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history"></i> Фактические смены
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Сотрудник</th>
+                                    <th>Время начала</th>
+                                    <th>Время окончания</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for shift in actual_shifts %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ shift.user.first_name }} {{ shift.user.last_name or '' }}</strong>
+                                        {% if shift.user.username %}
+                                            <br><small class="text-muted">@{{ shift.user.username }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ shift.start_time.strftime('%H:%M') }}</td>
+                                    <td>
+                                        {% if shift.end_time %}
+                                            {{ shift.end_time.strftime('%H:%M') }}
+                                        {% else %}
+                                            <span class="text-muted">Не завершена</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if shift.status == 'active' %}
+                                            <span class="badge bg-success">Активна</span>
+                                        {% elif shift.status == 'completed' %}
+                                            <span class="badge bg-primary">Завершена</span>
+                                        {% elif shift.status == 'cancelled' %}
+                                            <span class="badge bg-danger">Отменена</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ shift.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Если нет смен -->
+            {% if not scheduled_shifts and not actual_shifts %}
+            <div class="card mt-4">
+                <div class="card-body text-center">
+                    <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3 text-muted">Нет запланированных смен</h5>
+                    <p class="text-muted">Этот тайм-слот свободен для планирования</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
