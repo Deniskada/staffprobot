@@ -1214,9 +1214,81 @@ async def manager_calendar(
                             "notes": slot.notes or ""
                         })
             
+            # Получаем данные о сменах за месяц
+            shifts_data = []
+            if object_ids:
+                # Получаем запланированные смены
+                from domain.entities.shift_schedule import ShiftSchedule
+                scheduled_shifts_query = select(ShiftSchedule).where(
+                    and_(
+                        ShiftSchedule.object_id.in_(object_ids),
+                        ShiftSchedule.planned_start >= start_date,
+                        ShiftSchedule.planned_start < end_date
+                    )
+                ).order_by(ShiftSchedule.planned_start)
+                
+                scheduled_shifts_result = await db.execute(scheduled_shifts_query)
+                scheduled_shifts = scheduled_shifts_result.scalars().all()
+                
+                # Получаем отработанные смены
+                from domain.entities.shift import Shift
+                actual_shifts_query = select(Shift).options(
+                    selectinload(Shift.user)
+                ).where(
+                    and_(
+                        Shift.object_id.in_(object_ids),
+                        Shift.start_time >= start_date,
+                        Shift.start_time < end_date
+                    )
+                ).order_by(Shift.start_time)
+                
+                actual_shifts_result = await db.execute(actual_shifts_query)
+                actual_shifts = actual_shifts_result.scalars().all()
+                
+                # Получаем информацию о пользователях для запланированных смен
+                user_ids = list(set(shift.user_id for shift in scheduled_shifts))
+                users_query = select(User).where(User.id.in_(user_ids))
+                users_result = await db.execute(users_query)
+                users = {user.id: user for user in users_result.scalars().all()}
+                
+                # Преобразуем запланированные смены в формат для календаря
+                for shift in scheduled_shifts:
+                    obj = objects_map.get(shift.object_id)
+                    if obj:
+                        user = users.get(shift.user_id)
+                        employee_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {shift.user_id}"
+                        
+                        shifts_data.append({
+                            "id": f"schedule_{shift.id}",
+                            "object_id": shift.object_id,
+                            "object_name": obj.name,
+                            "date": shift.planned_start.date().isoformat(),
+                            "start_time": shift.planned_start.time().strftime("%H:%M"),
+                            "end_time": shift.planned_end.time().strftime("%H:%M"),
+                            "status": shift.status,
+                            "employee_name": employee_name,
+                            "notes": shift.notes or ""
+                        })
+                
+                # Преобразуем отработанные смены в формат для календаря
+                for shift in actual_shifts:
+                    obj = objects_map.get(shift.object_id)
+                    if obj:
+                        shifts_data.append({
+                            "id": shift.id,
+                            "object_id": shift.object_id,
+                            "object_name": obj.name,
+                            "date": shift.start_time.date().isoformat(),
+                            "start_time": shift.start_time.time().strftime("%H:%M"),
+                            "end_time": shift.end_time.time().strftime("%H:%M") if shift.end_time else None,
+                            "status": shift.status,
+                            "employee_name": f"{shift.user.first_name} {shift.user.last_name or ''}".strip(),
+                            "notes": shift.notes or ""
+                        })
+            
             # Создаем календарную сетку
-            logger.info(f"Creating calendar grid with {len(timeslots_data)} timeslots")
-            calendar_data = _create_calendar_grid_manager(year, month, timeslots_data)
+            logger.info(f"Creating calendar grid with {len(timeslots_data)} timeslots and {len(shifts_data)} shifts")
+            calendar_data = _create_calendar_grid_manager(year, month, timeslots_data, shifts_data)
             logger.info(f"Calendar grid created with {len(calendar_data)} weeks")
             logger.info(f"First week has {len(calendar_data[0]) if calendar_data else 0} days")
             
@@ -1274,44 +1346,8 @@ async def manager_calendar(
             calendar_title = f"{RU_MONTHS[month]} {year}"
             current_date = f"{year}-{month:02d}-01"
             
-            # Преобразуем calendar_data в формат, ожидаемый shared компонентами
-            calendar_weeks = []
-            for week in calendar_data:
-                week_data = []
-                for day in week:
-                    # Обрабатываем смены
-                    shifts = []
-                    for shift in day.get("shifts", []):
-                        shifts.append({
-                            "id": shift.get("id"),
-                            "start_time": shift.get("start_time", ""),
-                            "end_time": shift.get("end_time", ""),
-                            "employee_name": shift.get("employee_name", "Неизвестно"),
-                            "object_name": shift.get("object_name", ""),
-                            "status": shift.get("status", "pending")
-                        })
-                    
-                    # Обрабатываем тайм-слоты
-                    timeslots = []
-                    for timeslot in day.get("timeslots", []):
-                        timeslots.append({
-                            "id": timeslot.get("id"),
-                            "start_time": timeslot.get("start_time", ""),
-                            "end_time": timeslot.get("end_time", ""),
-                            "object_name": timeslot.get("object_name", ""),
-                            "employee_count": timeslot.get("employee_count", 0),
-                            "status": timeslot.get("status", "available")
-                        })
-                    
-                    week_data.append({
-                        "date": day["date"].strftime("%Y-%m-%d"),
-                        "day": day["day"],
-                        "is_other_month": day["is_other_month"],
-                        "is_today": day["is_today"],
-                        "shifts": shifts,
-                        "timeslots": timeslots
-                    })
-                calendar_weeks.append(week_data)
+            # Используем calendar_data напрямую как calendar_weeks
+            calendar_weeks = calendar_data
             
             logger.info("Rendering template")
             return templates.TemplateResponse("manager/calendar.html", {
@@ -2203,7 +2239,10 @@ def _create_calendar_grid_manager(
                             has_related = True
                             break
                     if not has_related:
-                        day_timeslots.append(slot)
+                        # Добавляем поле status для тайм-слота
+                        slot_with_status = slot.copy()
+                        slot_with_status["status"] = "available"
+                        day_timeslots.append(slot_with_status)
             
             week_data.append({
                 "date": current_date,
