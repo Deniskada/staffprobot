@@ -443,6 +443,20 @@ async def employee_profile_update(
         if 'phone' in form_data:
             user.phone = form_data['phone']
             logger.info(f"Updated phone: {user.phone}")
+        if 'email' in form_data:
+            user.email = form_data['email'] or None
+            logger.info(f"Updated email: {user.email}")
+        if 'birth_date' in form_data:
+            birth_date_str = form_data['birth_date']
+            if birth_date_str:
+                try:
+                    from datetime import datetime
+                    user.birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
+                    logger.info(f"Updated birth_date: {user.birth_date}")
+                except ValueError:
+                    logger.error(f"Invalid birth_date format: {birth_date_str}")
+            else:
+                user.birth_date = None
         if 'work_experience' in form_data:
             user.work_experience = form_data['work_experience']
         if 'education' in form_data:
