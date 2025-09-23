@@ -10,6 +10,7 @@ from shared.services.manager_permission_service import ManagerPermissionService
 from domain.entities.user import UserRole
 from core.logging.logger import logger
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from apps.web.dependencies import get_current_user_dependency
 
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:
@@ -77,7 +78,7 @@ async def require_all_roles(roles: List[UserRole]):
     return role_checker
 
 
-async def require_manager_or_owner(request: Request, current_user: dict = Depends(require_owner_or_superadmin)):
+async def require_manager_or_owner(request: Request, current_user: dict = Depends(get_current_user_dependency())):
     """Проверка роли управляющего или владельца."""
     if isinstance(current_user, RedirectResponse):
         return current_user
