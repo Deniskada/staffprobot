@@ -128,6 +128,10 @@ class User(Base):
     
     # Связи
     owner_profile = relationship("OwnerProfile", back_populates="user", uselist=False)
+    
+    # Связи с заявками и собеседованиями
+    applications = relationship("Application", back_populates="applicant", cascade="all, delete-orphan")
+    interviews = relationship("Interview", back_populates="applicant", cascade="all, delete-orphan")
 
 
 

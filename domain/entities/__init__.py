@@ -13,5 +13,7 @@ from .tag_reference import TagReference
 from .owner_profile import OwnerProfile
 from .contract import Contract
 from .manager_object_permission import ManagerObjectPermission
+from .application import Application, ApplicationStatus
+from .interview import Interview, InterviewType, InterviewStatus
 
-__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission"]
+__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus"]
