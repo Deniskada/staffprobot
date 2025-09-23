@@ -88,19 +88,22 @@
                     <label class="form-label">Опыт работы</label>
                     <select class="form-select" id="experience" name="work_experience" disabled>
                         <option value="">Выберите опыт</option>
-                        <option value="no-experience" {{ 'selected' if current_user.work_experience == 'no-experience' else '' }}>Без опыта</option>
-                        <option value="1-year" {{ 'selected' if current_user.work_experience == '1-year' else '' }}>До 1 года</option>
-                        <option value="1-3-years" {{ 'selected' if current_user.work_experience == '1-3-years' else '' }}>1-3 года</option>
-                        <option value="3-years" {{ 'selected' if current_user.work_experience == '3-years' else '' }}>Более 3 лет</option>
+                        <option value="no_experience" {{ 'selected' if current_user.work_experience == 'no_experience' else '' }}>Без опыта</option>
+                        <option value="less_than_year" {{ 'selected' if current_user.work_experience == 'less_than_year' else '' }}>Менее года</option>
+                        <option value="1-3_years" {{ 'selected' if current_user.work_experience == '1-3_years' else '' }}>1-3 года</option>
+                        <option value="3-5_years" {{ 'selected' if current_user.work_experience == '3-5_years' else '' }}>3-5 лет</option>
+                        <option value="5-10_years" {{ 'selected' if current_user.work_experience == '5-10_years' else '' }}>5-10 лет</option>
+                        <option value="more_than_10_years" {{ 'selected' if current_user.work_experience == 'more_than_10_years' else '' }}>Более 10 лет</option>
                     </select>
                 </div>
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Образование</label>
                     <select class="form-select" id="education" name="education" disabled>
                         <option value="">Выберите образование</option>
-                        <option value="school" {{ 'selected' if current_user.education == 'school' else '' }}>Среднее</option>
-                        <option value="college" {{ 'selected' if current_user.education == 'college' else '' }}>Среднее специальное</option>
-                        <option value="university" {{ 'selected' if current_user.education == 'university' else '' }}>Высшее</option>
+                        <option value="secondary" {{ 'selected' if current_user.education == 'secondary' else '' }}>Среднее</option>
+                        <option value="secondary_special" {{ 'selected' if current_user.education == 'secondary_special' else '' }}>Среднее специальное</option>
+                        <option value="incomplete_higher" {{ 'selected' if current_user.education == 'incomplete_higher' else '' }}>Неоконченное высшее</option>
+                        <option value="higher" {{ 'selected' if current_user.education == 'higher' else '' }}>Высшее</option>
                         <option value="postgraduate" {{ 'selected' if current_user.education == 'postgraduate' else '' }}>Послевузовское</option>
                     </select>
                 </div>
@@ -127,10 +130,11 @@
                     <label class="form-label">Предпочитаемый график</label>
                     <select class="form-select" id="preferred-schedule" name="preferred_schedule" disabled>
                         <option value="">Выберите график</option>
-                        <option value="full-time" {{ 'selected' if current_user.preferred_schedule == 'full-time' else '' }}>Полный день</option>
-                        <option value="part-time" {{ 'selected' if current_user.preferred_schedule == 'part-time' else '' }}>Неполный день</option>
-                        <option value="shift" {{ 'selected' if current_user.preferred_schedule == 'shift' else '' }}>Сменный график</option>
+                        <option value="full_time" {{ 'selected' if current_user.preferred_schedule == 'full_time' else '' }}>Полный день</option>
+                        <option value="part_time" {{ 'selected' if current_user.preferred_schedule == 'part_time' else '' }}>Неполный день</option>
+                        <option value="shift_work" {{ 'selected' if current_user.preferred_schedule == 'shift_work' else '' }}>Сменная работа</option>
                         <option value="flexible" {{ 'selected' if current_user.preferred_schedule == 'flexible' else '' }}>Гибкий график</option>
+                        <option value="weekends" {{ 'selected' if current_user.preferred_schedule == 'weekends' else '' }}>Выходные</option>
                     </select>
                 </div>
                 <div class="col-md-6 mb-3">
