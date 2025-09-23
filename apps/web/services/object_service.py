@@ -84,6 +84,7 @@ class ObjectService:
         """Создать новый объект"""
         try:
             logger.info(f"Creating object for telegram_id {telegram_id} (type: {type(telegram_id)})")
+            logger.info("About to call _get_user_internal_id")
             # Получаем внутренний ID пользователя
             internal_id = await self._get_user_internal_id(telegram_id)
             if not internal_id:

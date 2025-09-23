@@ -246,7 +246,9 @@ async def create_object(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
         logger.error(f"Error creating object: {e}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Ошибка создания объекта: {str(e)}")
 
 

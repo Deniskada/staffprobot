@@ -90,7 +90,9 @@ class UserManager:
     async def get_user_by_telegram_id(self, telegram_id: int) -> Optional[dict]:
         """Получение пользователя по Telegram ID."""
         try:
+            logger.info(f"Getting user by telegram_id: {telegram_id}")
             async with get_async_session() as session:
+                logger.info("Got async session")
                 query = select(User).where(User.telegram_id == telegram_id)
                 result = await session.execute(query)
                 user = result.scalar_one_or_none()

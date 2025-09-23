@@ -129,7 +129,9 @@ async def require_auth(request: Request) -> dict:
 
 async def require_owner_or_superadmin(request: Request) -> dict:
     """Требует роль владельца или суперадмина."""
+    logger.info("require_owner_or_superadmin called")
     user = await auth_middleware.get_current_user(request)
+    logger.info(f"Got user: {user}")
     if not user:
         if request.url.path.startswith("/api/"):
             raise HTTPException(
