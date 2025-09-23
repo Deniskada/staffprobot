@@ -28,8 +28,8 @@ def get_current_user_dependency():
             
             # Получаем пользователя из базы данных
             async with get_async_session() as session:
-                # Используем telegram_id для поиска пользователя
-                telegram_id = user_data.get("telegram_id")
+                # Используем telegram_id для поиска пользователя (в токене это поле 'id')
+                telegram_id = user_data.get("telegram_id") or user_data.get("id")
                 if not telegram_id:
                     return None
                     

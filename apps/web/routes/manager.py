@@ -7,11 +7,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy import select
 from core.database.session import get_async_session, get_db_session
 from shared.services.role_service import RoleService
 from shared.services.manager_permission_service import ManagerPermissionService
 from apps.web.utils.timezone_utils import web_timezone_helper
-from sqlalchemy.orm import selectinload
 from shared.services.role_based_login_service import RoleBasedLoginService
 from apps.web.middleware.role_middleware import require_manager_or_owner
 from apps.web.dependencies import get_current_user_dependency
@@ -19,7 +19,7 @@ from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
-from apps.web.utils.timezone_utils import web_timezone_helper
+from domain.entities.time_slot import TimeSlot
 from core.logging.logger import logger
 
 router = APIRouter(prefix="/manager", tags=["manager"])
@@ -1813,9 +1813,6 @@ async def manager_timeslot_detail(
             raise HTTPException(status_code=403, detail="Нет доступных объектов")
         
         # Получаем тайм-слот
-        from domain.entities.time_slot import TimeSlot
-        from domain.entities.object import Object
-        
         timeslot_query = select(TimeSlot).options(
             selectinload(TimeSlot.object)
         ).where(TimeSlot.id == timeslot_id)
@@ -1831,9 +1828,6 @@ async def manager_timeslot_detail(
             raise HTTPException(status_code=403, detail="Нет доступа к тайм-слоту")
         
         # Получаем связанные смены и расписания
-        from domain.entities.shift_schedule import ShiftSchedule
-        from domain.entities.shift import Shift
-        
         # Запланированные смены
         scheduled_query = select(ShiftSchedule).options(
             selectinload(ShiftSchedule.user)
