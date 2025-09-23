@@ -313,12 +313,10 @@ async def owner_objects_create_post(
             "schedule_repeat_weeks": schedule_repeat_weeks
         }
         
-        # Получаем внутренний ID пользователя
-        user_id = await get_user_id_from_current_user(current_user, db)
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Пользователь не найден")
+        # Передаем telegram_id в create_object (метод ожидает telegram_id)
+        telegram_id = current_user['id']  # Это telegram_id из JWT payload
         
-        new_object = await object_service.create_object(object_data, user_id)
+        new_object = await object_service.create_object(object_data, telegram_id)
         logger.info(f"Object {new_object.id} created successfully")
             
         return RedirectResponse(url="/owner/objects", status_code=status.HTTP_302_FOUND)
