@@ -334,73 +334,78 @@
     box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
 }
 
-/* Employees Panel */
+/* Drag & Drop Panels - shared */
+.drag-drop-panel {
+    position: fixed;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 280px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+.drag-drop-panel.collapsed {
+    width: 60px;
+    height: 60px;
+}
+.drag-drop-panel.collapsed .panel-content { display: none; }
+.drag-drop-panel.collapsed .panel-header h6 { display: none; }
+.drag-drop-panel.collapsed .panel-header {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 5px;
+    height: 60px;
+    width: 60px;
+    border-radius: 50%;
+    background: #007bff;
+}
+.drag-drop-panel.collapsed .panel-header button { display: none; }
+.drag-drop-panel .collapsed-icon { display: none; }
+.drag-drop-panel.collapsed .collapsed-icon { display: flex !important; align-items: center; justify-content: center; color: white; font-size: 1.2rem; }
+.drag-drop-panel.collapsed .objects-count { position: absolute; top: -5px; right: -5px; }
+.drag-drop-panel.collapsed .objects-count .badge { font-size: 0.7rem; padding: 0.25rem 0.4rem; }
+
 .employees-panel {
     position: fixed;
-    right: -350px;
-    top: 0;
-    width: 350px;
-    height: 100vh;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 280px;
+    max-height: 400px;
     background: white;
-    box-shadow: -2px 0 10px rgba(0,0,0,0.1);
-    transition: right 0.3s ease;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     z-index: 1000;
-    overflow-y: auto;
-}
-
-.employees-panel.open {
-    right: 0;
-}
-
-.employees-panel-header {
-    padding: 15px 20px;
-    border-bottom: 1px solid #dee2e6;
+    transition: all 0.3s ease;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #f8f9fa;
+    flex-direction: column;
 }
+.employees-panel.collapsed { width: 60px; height: 60px; }
+.employees-panel.collapsed .panel-content { display: none; }
+.employees-panel.collapsed .panel-header h6 { display: none; }
+.employees-panel.collapsed .panel-header {
+    flex-direction: column; justify-content: center; align-items: center; padding: 5px; height: 60px; width: 60px; border-radius: 50%; background: #28a745;
+}
+.employees-panel.collapsed .panel-header button { display: none; }
+.employees-panel .collapsed-icon { display: none; }
+.employees-panel.collapsed .collapsed-icon { display: flex !important; align-items: center; justify-content: center; color: white; font-size: 1.2rem; }
+.employees-panel.collapsed .employees-count { position: absolute; top: -5px; right: -5px; }
+.employees-panel.collapsed .employees-count .badge { font-size: 0.7rem; padding: 0.25rem 0.4rem; }
 
-.employees-panel-header h5 {
-    margin: 0;
-    color: #495057;
-}
+.panel-header { padding: 15px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; border-radius: 10px 10px 0 0; }
+.panel-content { padding: 15px; max-height: 250px; overflow-y: auto; flex: 1; min-height: 0; }
+.panel-actions { border-top: 1px solid #dee2e6; padding-top: 15px; }
 
-.employees-panel-content {
-    padding: 20px;
-}
-
-.employee-item {
-    padding: 12px;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    margin-bottom: 10px;
-    cursor: grab;
-    transition: all 0.2s ease;
-    background: white;
-}
-
-.employee-item:hover {
-    background: #f8f9fa;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.employee-item:active {
-    cursor: grabbing;
-    transform: scale(0.98);
-}
-
-.employee-name {
-    font-weight: 600;
-    color: #2c3e50;
-    margin-bottom: 4px;
-}
-
-.employee-role {
-    font-size: 0.8rem;
-    color: #6c757d;
-}
+/* Items */
+.object-item, .employee-item { padding: 10px; border: 1px solid #dee2e6; border-radius: 6px; margin-bottom: 8px; cursor: grab; transition: all 0.2s ease; background: white; }
+.object-item:hover, .employee-item:hover { background: #f8f9fa; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.object-item:active, .employee-item:active { cursor: grabbing; transform: scale(0.98); }
+.object-name, .employee-name { font-weight: 600; color: #2c3e50; margin-bottom: 4px; }
+.object-address, .employee-role { font-size: 0.8rem; color: #6c757d; }
 
 /* Drag and Drop States */
 .drag-over {
@@ -444,6 +449,12 @@
         width: 100%;
         margin-bottom: 4px;
     }
+    .drag-drop-panel, .employees-panel { position: relative; left: auto; right: auto; top: auto; transform: none; width: 100%; margin-bottom: 20px; }
+    .drag-drop-panel.collapsed, .employees-panel.collapsed { width: 100%; height: auto; }
+    .drag-drop-panel.collapsed .panel-header, .employees-panel.collapsed .panel-header { flex-direction: row; justify-content: space-between; padding: 15px; height: auto; width: 100%; border-radius: 10px 10px 0 0; background: #f8f9fa; }
+    .drag-drop-panel.collapsed .panel-header h6, .employees-panel.collapsed .panel-header h6 { display: block; }
+    .drag-drop-panel.collapsed .panel-header button, .employees-panel.collapsed .panel-header button { display: block; }
+    .drag-drop-panel.collapsed .collapsed-icon, .employees-panel.collapsed .collapsed-icon { display: none !important; }
 }
 
 @media (max-width: 576px) {

@@ -6,16 +6,13 @@
 <link rel="stylesheet" href="{{ url_for('static', path='css/shared/calendar.css') }}">
 {% endblock %}
 
-{% block content %}
+{% block manager_content %}
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            <!-- Shared panels -->
             {% include 'shared/calendar/objects_panel.html' %}
             {% include 'shared/calendar/employees_panel.html' %}
             {% include 'shared/calendar/quick_create_form.html' %}
-
-            <!-- Shared Calendar Grid -->
             {% include 'shared/calendar/grid.html' %}
         </div>
     </div>
@@ -26,7 +23,6 @@
 <script src="{{ url_for('static', path='js/shared/calendar.js') }}"></script>
 <script src="{{ url_for('static', path='js/shared/calendar_panels.js') }}"></script>
 <script>
-// Initialize calendar manager
 const calendarManager = new CalendarManager({
     currentDate: new Date('{{ current_date }}'),
     viewType: '{{ view_type }}',
@@ -35,35 +31,24 @@ const calendarManager = new CalendarManager({
     onTimeslotClick: showTimeslotDetails,
     onDateClick: showDateDetails
 });
-
-// Initialize calendar panels for manager role
 const calendarPanels = new CalendarPanels('manager');
 
-// DnD overrides
 calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId) {
     try {
-        // Load employees
         const employeeResponse = await fetch(`/manager/api/employees`);
         if (!employeeResponse.ok) throw new Error(`HTTP ${employeeResponse.status}`);
         const employees = await employeeResponse.json();
         const employee = employees.find(e => e.id == employeeId);
-        if (!employee) {
-            calendarPanels.showNotification('Сотрудник не найден', 'error');
-            return;
-        }
-        // Load timeslot
+        if (!employee) return calendarPanels.showNotification('Сотрудник не найден', 'error');
+
         const tsResp = await fetch(`/manager/calendar/api/timeslot/${timeslotId}`);
         if (!tsResp.ok) throw new Error(`HTTP ${tsResp.status}`);
         const timeslot = await tsResp.json();
-        if (!timeslot || !timeslot.slot) {
-            calendarPanels.showNotification('Тайм-слот не найден', 'error');
-            return;
-        }
+        if (!timeslot || !timeslot.slot) return calendarPanels.showNotification('Тайм-слот не найден', 'error');
         const timeStr = `${timeslot.slot.start_time} - ${timeslot.slot.end_time}`;
-        // Plan shift
+
         const planResp = await fetch('/manager/api/calendar/plan-shift', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ timeslot_id: Number(timeslotId), employee_id: Number(employeeId) })
         });
         const planData = await planResp.json().catch(() => ({}));
@@ -84,13 +69,9 @@ calendarManager.createTimeslotFromObject = async function(objectId, date) {
         const objResp = await fetch(`/manager/calendar/api/objects`);
         const objects = await objResp.json();
         const object = objects.find(o => o.id == objectId);
-        if (!object) {
-            calendarPanels.showNotification('Объект не найден', 'error');
-            return;
-        }
+        if (!object) return calendarPanels.showNotification('Объект не найден', 'error');
         await calendarPanels.showQuickCreateForm({
-            id: objectId,
-            name: object.name,
+            id: objectId, name: object.name,
             hourlyRate: object.hourly_rate || 0,
             openingTime: object.opening_time || '09:00',
             closingTime: object.closing_time || '18:00'
@@ -109,19 +90,12 @@ function showShiftDetails(shiftId) {
         window.location.href = `/manager/shifts/${shiftId}`;
     }
 }
-
-function showTimeslotDetails(timeslotId) {
-    window.location.href = `/manager/timeslots/${timeslotId}`;
-}
-
+function showTimeslotDetails(timeslotId) { window.location.href = `/manager/timeslots/${timeslotId}`; }
 function showDateDetails(date) {}
 
-// Initialize panels on page load
 document.addEventListener('DOMContentLoaded', function() {
     calendarPanels.init();
-    setTimeout(() => {
-        calendarManager.setupDragDrop();
-    }, 1000);
+    setTimeout(() => { calendarManager.setupDragDrop(); }, 1000);
 });
 </script>
 {% endblock %}
