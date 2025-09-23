@@ -1102,7 +1102,7 @@ async def manager_employee_terminate(
         raise HTTPException(status_code=500, detail="Ошибка расторжения договора")
 
 
-@router.get("/calendar", response_class=HTMLResponse)
+@router.get("/calendar", response_class=HTMLResponse, name="manager_calendar")
 async def manager_calendar(
     request: Request,
     year: int = Query(None),
@@ -1112,6 +1112,7 @@ async def manager_calendar(
 ):
     """Календарь управляющего."""
     try:
+        logger.info("=== MAIN MANAGER CALENDAR ROUTE CALLED ===")
         logger.info("Starting manager_calendar function")
         
         # Проверяем, что current_user не является RedirectResponse
@@ -1288,6 +1289,7 @@ async def manager_calendar(
             
             # Создаем календарную сетку
             logger.info(f"Creating calendar grid with {len(timeslots_data)} timeslots and {len(shifts_data)} shifts")
+            logger.info(f"Sample shifts_data: {shifts_data[:3] if shifts_data else 'No shifts'}")
             calendar_data = _create_calendar_grid_manager(year, month, timeslots_data, shifts_data)
             logger.info(f"Calendar grid created with {len(calendar_data)} weeks")
             logger.info(f"First week has {len(calendar_data[0]) if calendar_data else 0} days")
@@ -2228,6 +2230,12 @@ def _create_calendar_grid_manager(
                 if s.get("status") == "planned" and oid and (oid in active_by_object or oid in completed_by_object):
                     continue
                 day_shifts.append(s)
+            
+            # Логируем для отладки 23 сентября
+            if current_date_str == "2025-09-23":
+                logger.info(f"DEBUG 23.09: all_day_shifts={len(all_day_shifts)}, day_shifts={len(day_shifts)}")
+                for s in day_shifts:
+                    logger.info(f"DEBUG 23.09 shift: {s}")
 
             # Тайм-слоты за день: показывать только если нет связанных смен (не cancelled)
             day_timeslots = []
@@ -2324,154 +2332,6 @@ async def manager_root_redirect():
     """Редирект с /manager на календарь управляющего."""
     return RedirectResponse(url="/manager/calendar")
 
-@router.get("/calendar")
-async def manager_calendar(
-    request: Request,
-    year: int | None = None,
-    month: int | None = None,
-    current_user: dict = Depends(require_manager_or_owner)
-):
-    """Страница календаря управляющего с shared компонентами."""
-    try:
-        if isinstance(current_user, RedirectResponse):
-            return current_user
-        async with get_async_session() as db:
-            # Дата
-            today = datetime.now().date()
-            y = year or today.year
-            m = month or today.month
-
-            # Доступные объекты
-            permission_service = ManagerPermissionService(db)
-            accessible_objects = await permission_service.get_user_accessible_objects(
-                await get_user_id_from_current_user(current_user, db)
-            )
-            object_ids = [o.id for o in accessible_objects]
-            logger.info(f"[manager_calendar] objects: ids={object_ids}, names={[o.name for o in accessible_objects]}")
-
-            # Тайм‑слоты за месяц
-            from domain.entities.time_slot import TimeSlot
-            from datetime import date as dt_date
-            import calendar as py_calendar
-            start_date = dt_date(y, m, 1)
-            last_day = py_calendar.monthrange(y, m)[1]
-            end_date = dt_date(y, m, last_day)
-            logger.info(f"[manager_calendar] period: {start_date}..{end_date}")
-
-            ts_q = select(TimeSlot).where(
-                TimeSlot.object_id.in_(object_ids),
-                TimeSlot.slot_date >= start_date,
-                TimeSlot.slot_date <= end_date,
-                TimeSlot.is_active == True,
-            )
-            ts_res = await db.execute(ts_q)
-            timeslots = ts_res.scalars().all()
-            logger.info(f"[manager_calendar] timeslots count: {len(timeslots)}")
-
-            # map object id -> name for display
-            obj_names = {o.id: o.name for o in accessible_objects}
-            timeslots_data = []
-            for ts in timeslots:
-                timeslots_data.append({
-                    "id": ts.id,
-                    "object_id": ts.object_id,
-                    "object_name": obj_names.get(ts.object_id, ""),
-                    "date": ts.slot_date.isoformat(),
-                    "start_time": ts.start_time.strftime('%H:%M'),
-                    "end_time": ts.end_time.strftime('%H:%M'),
-                    "status": "available" if ts.is_active else "inactive",
-                    "is_active": ts.is_active,
-                })
-
-            # Смены (активные/завершенные) + запланированные для объектов
-            from domain.entities.shift import Shift
-            from domain.entities.shift_schedule import ShiftSchedule
-
-            from sqlalchemy import func
-            shift_q = (
-                select(Shift)
-                .options(selectinload(Shift.object), selectinload(Shift.user))
-                .where(
-                    Shift.object_id.in_(object_ids),
-                    func.date(Shift.start_time) >= start_date,
-                    func.date(Shift.start_time) <= end_date,
-                    Shift.status.in_(["active", "completed"])  # показываем только актуальные фактические
-                )
-            )
-            shift_res = await db.execute(shift_q)
-            shifts = shift_res.scalars().all()
-            logger.info(f"[manager_calendar] shifts (active/completed) count: {len(shifts)}")
-
-            sched_q = (
-                select(ShiftSchedule)
-                .options(selectinload(ShiftSchedule.object), selectinload(ShiftSchedule.user))
-                .where(
-                    ShiftSchedule.object_id.in_(object_ids),
-                    func.date(ShiftSchedule.planned_start) >= start_date,
-                    func.date(ShiftSchedule.planned_start) <= end_date,
-                    ShiftSchedule.status.in_(["planned", "confirmed"])  # исключаем отменённые
-                )
-            )
-            sched_res = await db.execute(sched_q)
-            schedules = sched_res.scalars().all()
-            logger.info(f"[manager_calendar] schedules (planned/confirmed) count: {len(schedules)}")
-
-            # Приведение смен к формату shared календаря
-            def fmt_name(u):
-                return f"{u.first_name} {u.last_name or ''}".strip() if u else ""
-
-            shifts_data = []
-            for s in shifts:
-                d = s.start_time.date()
-                shifts_data.append({
-                    "id": s.id,
-                    "status": s.status,
-                    "start_time": s.start_time.strftime('%H:%M'),
-                    "end_time": s.end_time.strftime('%H:%M') if s.end_time else '-',
-                    "employee_name": fmt_name(s.user),
-                    "object_name": s.object.name if s.object else '',
-                    "object_id": s.object_id,
-                    "date": d,
-                })
-            for sc in schedules:
-                d = sc.planned_start.date()
-                shifts_data.append({
-                    "id": f"schedule_{sc.id}",
-                    "status": "planned",
-                    "start_time": sc.planned_start.strftime('%H:%M'),
-                    "end_time": sc.planned_end.strftime('%H:%M') if sc.planned_end else '-',
-                    "employee_name": fmt_name(sc.user),
-                    "object_name": sc.object.name if sc.object else '',
-                    "object_id": sc.object_id,
-                    "date": d,
-                })
-
-            # Диагностика по сегодняшней дате и объекту "Уланская"
-            try:
-                today = datetime.now().date()
-                ul_ids = [o.id for o in accessible_objects if (o.name or '').lower().find('уланск') >= 0]
-                day_shifts = [s for s in shifts_data if s.get('date') == today and (not ul_ids or s.get('object_id') in ul_ids)]
-                day_slots = [t for t in timeslots_data if t.get('date') == today.isoformat() and (not ul_ids or t.get('object_id') in ul_ids)]
-                logger.info(f"[manager_calendar] today={today} Ulan: object_ids={ul_ids} day_shifts={len(day_shifts)} day_slots={len(day_slots)} sample_shifts={day_shifts[:2]}")
-            except Exception as diag_err:
-                logger.error(f"[manager_calendar] diag error: {diag_err}")
-
-            calendar_weeks = _create_calendar_grid_manager(y, m, timeslots_data, shifts_data)
-
-            return templates.TemplateResponse("manager/calendar.html", {
-                "request": request,
-                "title": "Календарь смен",
-                "calendar_title": f"{y}-{m:02d}",
-                "current_date": datetime(y, m, 1).isoformat(),
-                "view_type": "month",
-                "calendar_weeks": calendar_weeks,
-                "show_today_button": True,
-            })
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error loading manager calendar: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Ошибка загрузки календаря")
 
 @router.get("/calendar/api/objects")
 async def get_objects_for_manager_calendar(
