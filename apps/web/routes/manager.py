@@ -1265,8 +1265,8 @@ async def manager_calendar(
                             "object_id": shift.object_id,
                             "object_name": obj.name,
                             "date": shift.planned_start.date().isoformat(),
-                            "start_time": shift.planned_start.time().strftime("%H:%M"),
-                            "end_time": shift.planned_end.time().strftime("%H:%M"),
+                            "start_time": web_timezone_helper.format_time_with_timezone(shift.planned_start, obj.timezone if obj else 'Europe/Moscow'),
+                            "end_time": web_timezone_helper.format_time_with_timezone(shift.planned_end, obj.timezone if obj else 'Europe/Moscow'),
                             "status": shift.status,
                             "employee_name": employee_name,
                             "notes": shift.notes or ""
@@ -1286,8 +1286,8 @@ async def manager_calendar(
                             "object_id": shift.object_id,
                             "object_name": obj.name,
                             "date": shift.start_time.date().isoformat(),
-                            "start_time": shift.start_time.time().strftime("%H:%M"),
-                            "end_time": shift.end_time.time().strftime("%H:%M") if shift.end_time else None,
+                            "start_time": web_timezone_helper.format_time_with_timezone(shift.start_time, obj.timezone if obj else 'Europe/Moscow'),
+                            "end_time": web_timezone_helper.format_time_with_timezone(shift.end_time, obj.timezone if obj else 'Europe/Moscow') if shift.end_time else None,
                             "status": shift.status,
                             "employee_name": f"{shift.user.first_name} {shift.user.last_name or ''}".strip(),
                             "notes": shift.notes or ""
@@ -1504,13 +1504,14 @@ async def get_timeslots_status_manager(
                 
                 if shift.time_slot_id:
                     scheduled_shifts_map.setdefault(shift.time_slot_id, [])
+                    obj = objects_map.get(shift.object_id)
                     scheduled_shifts_map[shift.time_slot_id].append({
                         "id": shift.id,
                         "user_id": shift.user_id,
                         "user_name": user_name,
                         "status": shift.status,
-                        "start_time": shift.planned_start.time().strftime("%H:%M"),
-                        "end_time": shift.planned_end.time().strftime("%H:%M"),
+                        "start_time": web_timezone_helper.format_time_with_timezone(shift.planned_start, obj.timezone if obj else 'Europe/Moscow'),
+                        "end_time": web_timezone_helper.format_time_with_timezone(shift.planned_end, obj.timezone if obj else 'Europe/Moscow'),
                         "notes": shift.notes
                     })
                 key = (shift.object_id, shift.planned_start.date())
@@ -1522,13 +1523,14 @@ async def get_timeslots_status_manager(
             for shift in actual_shifts:
                 if shift.time_slot_id:
                     actual_shifts_map.setdefault(shift.time_slot_id, [])
+                    obj = objects_map.get(shift.object_id)
                     actual_shifts_map[shift.time_slot_id].append({
                         "id": shift.id,
                         "user_id": shift.user_id,
                         "user_name": f"{shift.user.first_name} {shift.user.last_name or ''}".strip(),
                         "status": shift.status,
-                        "start_time": shift.start_time.time().strftime("%H:%M"),
-                        "end_time": shift.end_time.time().strftime("%H:%M") if shift.end_time else None,
+                        "start_time": web_timezone_helper.format_time_with_timezone(shift.start_time, obj.timezone if obj else 'Europe/Moscow'),
+                        "end_time": web_timezone_helper.format_time_with_timezone(shift.end_time, obj.timezone if obj else 'Europe/Moscow') if shift.end_time else None,
                         "total_hours": float(shift.total_hours) if shift.total_hours else None,
                         "total_payment": float(shift.total_payment) if shift.total_payment else None,
                         "is_planned": shift.is_planned,
@@ -1566,8 +1568,8 @@ async def get_timeslots_status_manager(
                                 "user_id": sh.user_id,
                                 "user_name": user_name,
                                 "status": sh.status,
-                                "start_time": sh.planned_start.time().strftime("%H:%M"),
-                                "end_time": sh.planned_end.time().strftime("%H:%M"),
+                                "start_time": web_timezone_helper.format_time_with_timezone(sh.planned_start, slot.object.timezone if slot.object else 'Europe/Moscow'),
+                                "end_time": web_timezone_helper.format_time_with_timezone(sh.planned_end, slot.object.timezone if slot.object else 'Europe/Moscow'),
                                 "notes": sh.notes
                             })
                 
@@ -1594,8 +1596,8 @@ async def get_timeslots_status_manager(
                                 "user_id": sh.user_id,
                                 "user_name": f"{sh.user.first_name} {sh.user.last_name or ''}".strip(),
                                 "status": sh.status,
-                                "start_time": sh.start_time.time().strftime("%H:%M"),
-                                "end_time": sh.end_time.time().strftime("%H:%M") if sh.end_time else None,
+                                "start_time": web_timezone_helper.format_time_with_timezone(sh.start_time, slot.object.timezone if slot.object else 'Europe/Moscow'),
+                                "end_time": web_timezone_helper.format_time_with_timezone(sh.end_time, slot.object.timezone if slot.object else 'Europe/Moscow') if sh.end_time else None,
                                 "total_hours": float(sh.total_hours) if sh.total_hours else None,
                                 "total_payment": float(sh.total_payment) if sh.total_payment else None,
                                 "is_planned": sh.is_planned,
