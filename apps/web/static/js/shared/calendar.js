@@ -66,37 +66,55 @@ class CalendarManager {
     setupDragDrop() {
         // Setup drag and drop for employee assignment and object creation
         const timeslots = document.querySelectorAll('.timeslot-item');
-        console.log('Setting up drag&drop for', timeslots.length, 'timeslots');
+        const calendarDays = document.querySelectorAll('.calendar-day');
         
         // Remove existing event listeners to prevent duplicates
         timeslots.forEach(timeslot => {
-            timeslot.removeEventListener('dragover', this.handleDragOver);
-            timeslot.removeEventListener('dragleave', this.handleDragLeave);
-            timeslot.removeEventListener('drop', this.handleDrop);
+            timeslot.removeEventListener('dragover', this.handleTimeslotDragOver);
+            timeslot.removeEventListener('dragleave', this.handleTimeslotDragLeave);
+            timeslot.removeEventListener('drop', this.handleTimeslotDrop);
+        });
+        
+        calendarDays.forEach(day => {
+            day.removeEventListener('dragover', this.handleDayDragOver);
+            day.removeEventListener('dragleave', this.handleDayDragLeave);
+            day.removeEventListener('drop', this.handleDayDrop);
         });
         
         // Bind methods to this context
-        this.handleDragOver = this.handleDragOver.bind(this);
-        this.handleDragLeave = this.handleDragLeave.bind(this);
-        this.handleDrop = this.handleDrop.bind(this);
+        this.handleTimeslotDragOver = this.handleTimeslotDragOver.bind(this);
+        this.handleTimeslotDragLeave = this.handleTimeslotDragLeave.bind(this);
+        this.handleTimeslotDrop = this.handleTimeslotDrop.bind(this);
+        this.handleDayDragOver = this.handleDayDragOver.bind(this);
+        this.handleDayDragLeave = this.handleDayDragLeave.bind(this);
+        this.handleDayDrop = this.handleDayDrop.bind(this);
         
+        // Timeslots - for employee assignment
         timeslots.forEach(timeslot => {
-            timeslot.addEventListener('dragover', this.handleDragOver);
-            timeslot.addEventListener('dragleave', this.handleDragLeave);
-            timeslot.addEventListener('drop', this.handleDrop);
+            timeslot.addEventListener('dragover', this.handleTimeslotDragOver);
+            timeslot.addEventListener('dragleave', this.handleTimeslotDragLeave);
+            timeslot.addEventListener('drop', this.handleTimeslotDrop);
+        });
+        
+        // Calendar days - for object timeslot creation
+        calendarDays.forEach(day => {
+            day.addEventListener('dragover', this.handleDayDragOver);
+            day.addEventListener('dragleave', this.handleDayDragLeave);
+            day.addEventListener('drop', this.handleDayDrop);
         });
     }
     
-    handleDragOver(e) {
+    // Timeslot handlers - for employee assignment
+    handleTimeslotDragOver(e) {
         e.preventDefault();
         e.currentTarget.classList.add('drag-over');
     }
     
-    handleDragLeave(e) {
+    handleTimeslotDragLeave(e) {
         e.currentTarget.classList.remove('drag-over');
     }
     
-    handleDrop(e) {
+    handleTimeslotDrop(e) {
         e.preventDefault();
         const timeslot = e.currentTarget;
         timeslot.classList.remove('drag-over');
@@ -104,16 +122,33 @@ class CalendarManager {
         const data = e.dataTransfer.getData('text/plain');
         const timeslotId = timeslot.dataset.timeslotId;
         
-        console.log('Drop event:', data, 'on timeslot:', timeslotId);
-        
         if (data.startsWith('employee:')) {
             const employeeId = data.replace('employee:', '');
-            console.log('Assigning employee:', employeeId);
             this.assignEmployeeToTimeslot(employeeId, timeslotId);
-        } else if (data.startsWith('object:')) {
+        }
+    }
+    
+    // Day handlers - for object timeslot creation
+    handleDayDragOver(e) {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+    }
+    
+    handleDayDragLeave(e) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+    
+    handleDayDrop(e) {
+        e.preventDefault();
+        const day = e.currentTarget;
+        day.classList.remove('drag-over');
+        
+        const data = e.dataTransfer.getData('text/plain');
+        const dayDate = day.dataset.date;
+        
+        if (data.startsWith('object:')) {
             const objectId = data.replace('object:', '');
-            console.log('Creating timeslot from object:', objectId);
-            this.createTimeslotFromObject(objectId, timeslotId);
+            this.createTimeslotFromObject(objectId, dayDate);
         }
     }
     
@@ -203,9 +238,9 @@ class CalendarManager {
         console.log('Assign employee:', employeeId, 'to timeslot:', timeslotId);
     }
     
-    createTimeslotFromObject(objectId, timeslotId) {
+    createTimeslotFromObject(objectId, date) {
         // This should be implemented by the parent template
-        console.log('Create timeslot from object:', objectId, 'timeslot:', timeslotId);
+        console.log('Create timeslot from object:', objectId, 'date:', date);
     }
     
     refresh() {
