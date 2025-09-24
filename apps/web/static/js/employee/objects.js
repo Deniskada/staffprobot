@@ -60,30 +60,34 @@ class EmployeeObjectsManager {
     }
 
     initMap() {
-        // Инициализация карты Mapbox
-        mapboxgl.accessToken = 'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw';
+        // Инициализация карты Leaflet
+        this.map = L.map('map').setView([47.2000, 39.7000], 12); // Ростов-на-Дону
         
-        this.map = new mapboxgl.Map({
-            container: 'map',
-            style: 'mapbox://styles/mapbox/streets-v11',
-            center: [39.7000, 47.2000], // Ростов-на-Дону
-            zoom: 12
-        });
+        // Добавляем слой OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(this.map);
 
-        this.map.on('load', () => {
-            this.addObjectsToMap();
-        });
+        // Добавляем объекты на карту после загрузки
+        this.addObjectsToMap();
     }
 
     addObjectsToMap() {
         if (!this.map) return;
 
+        // Очищаем существующие маркеры
+        this.map.eachLayer(layer => {
+            if (layer instanceof L.Marker) {
+                this.map.removeLayer(layer);
+            }
+        });
+
         // Добавляем маркеры для каждого объекта
         this.filteredObjects.forEach(object => {
-            if (object.latitude && object.longitude) {
-                const marker = new mapboxgl.Marker()
-                    .setLngLat([object.longitude, object.latitude])
-                    .setPopup(new mapboxgl.Popup().setHTML(`
+            if (object.latitude && object.longitude && object.latitude !== 0 && object.longitude !== 0) {
+                const marker = L.marker([object.latitude, object.longitude])
+                    .addTo(this.map)
+                    .bindPopup(`
                         <div class="map-popup">
                             <h6>${object.name}</h6>
                             <p><i class="bi bi-geo-alt"></i> ${object.address}</p>
@@ -93,8 +97,7 @@ class EmployeeObjectsManager {
                                 <i class="bi bi-file-text"></i> Подать заявку
                             </button>
                         </div>
-                    `))
-                    .addTo(this.map);
+                    `);
             }
         });
     }
@@ -192,10 +195,7 @@ class EmployeeObjectsManager {
     updateMapMarkers() {
         if (!this.map) return;
 
-        // Очищаем существующие маркеры
-        document.querySelectorAll('.mapboxgl-marker').forEach(marker => marker.remove());
-        
-        // Добавляем новые маркеры
+        // Добавляем новые маркеры (очистка уже в addObjectsToMap)
         this.addObjectsToMap();
     }
 
