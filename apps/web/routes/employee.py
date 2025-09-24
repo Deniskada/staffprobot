@@ -154,7 +154,16 @@ async def employee_objects(
             return current_user
             
         user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
         available_interfaces = await get_available_interfaces_for_user(current_user, db)
+        
+        # Получаем статистику для навигации
+        applications_count = await db.execute(
+            select(func.count(Application.id)).where(Application.applicant_id == user_id)
+        )
+        applications_count = applications_count.scalar() or 0
         
         # Получаем доступные объекты
         objects_query = select(Object).where(Object.available_for_applicants == True)
@@ -165,21 +174,22 @@ async def employee_objects(
             objects.append({
                 'id': obj.id,
                 'name': obj.name,
-                'address': obj.address,
-                'latitude': obj.latitude,
-                'longitude': obj.longitude,
-                'opening_time': obj.opening_time.strftime('%H:%M'),
-                'closing_time': obj.closing_time.strftime('%H:%M'),
-                'hourly_rate': obj.hourly_rate,
-                'work_conditions': obj.work_conditions,
-                'shift_tasks': obj.shift_tasks or []
+                'address': obj.address or '',
+                'latitude': 0.0,
+                'longitude': 0.0,
+                'opening_time': '09:00',
+                'closing_time': '21:00',
+                'hourly_rate': float(obj.hourly_rate),
+                'work_conditions': 'Стандартные условия работы',
+                'shift_tasks': ['Выполнение основных обязанностей']
             })
         
         return templates.TemplateResponse("employee/objects.html", {
             "request": request,
             "current_user": current_user,
             "objects": objects,
-            "available_interfaces": available_interfaces
+            "available_interfaces": available_interfaces,
+            "applications_count": applications_count
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки объектов: {e}")
@@ -199,7 +209,16 @@ async def employee_applications(
             
         
         user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
         available_interfaces = await get_available_interfaces_for_user(current_user, db)
+        
+        # Получаем статистику для навигации
+        applications_count = await db.execute(
+            select(func.count(Application.id)).where(Application.applicant_id == user_id)
+        )
+        applications_count = applications_count.scalar() or 0
         
         # Получаем заявки
         applications_query = select(Application, Object.name.label('object_name')).join(
@@ -241,6 +260,7 @@ async def employee_applications(
             "applications": applications,
             "applications_stats": applications_stats,
             "objects": objects,
+            "applications_count": applications_count,
             "available_interfaces": available_interfaces
         })
     except Exception as e:
@@ -261,7 +281,16 @@ async def employee_calendar(
             
         
         user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
         available_interfaces = await get_available_interfaces_for_user(current_user, db)
+        
+        # Получаем статистику для навигации
+        applications_count = await db.execute(
+            select(func.count(Application.id)).where(Application.applicant_id == user_id)
+        )
+        applications_count = applications_count.scalar() or 0
         
         # Получаем собеседования
         interviews_query = select(Interview, Object.name.label('object_name')).join(
@@ -302,7 +331,9 @@ async def employee_calendar(
             "current_user": current_user,
             "interviews_stats": interviews_stats,
             "upcoming_interviews": upcoming_interviews,
-            "available_interfaces": available_interfaces
+            "available_interfaces": available_interfaces,
+            "applications_count": applications_count,
+            "current_date": datetime.now()
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки календаря: {e}")
@@ -518,7 +549,16 @@ async def employee_history(
             
         
         user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
         available_interfaces = await get_available_interfaces_for_user(current_user, db)
+        
+        # Получаем статистику для навигации
+        applications_count = await db.execute(
+            select(func.count(Application.id)).where(Application.applicant_id == user_id)
+        )
+        applications_count = applications_count.scalar() or 0
         
         # Получаем историю событий
         history_events = []
@@ -576,7 +616,8 @@ async def employee_history(
             "current_user": current_user,
             "history_events": history_events,
             "stats": stats,
-            "available_interfaces": available_interfaces
+            "available_interfaces": available_interfaces,
+            "applications_count": applications_count
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки истории: {e}")
