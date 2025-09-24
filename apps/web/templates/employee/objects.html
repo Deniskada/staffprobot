@@ -3,7 +3,7 @@
 {% block title %}StaffProBot - Поиск работы{% endblock %}
 
 {% block extra_css %}
-<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 .map-container {
     height: 500px;
@@ -254,6 +254,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="/static/js/employee/objects.js"></script>
 {% endblock %}
