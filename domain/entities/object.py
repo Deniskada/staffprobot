@@ -1,6 +1,7 @@
 """Модель объекта."""
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Time, Numeric, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from .base import Base
 from sqlalchemy.orm import relationship
@@ -26,6 +27,8 @@ class Object(Base):
     max_distance_meters = Column(Integer, nullable=False, default=500)  # Максимальное расстояние для геолокации
     auto_close_minutes = Column(Integer, nullable=False, default=60)  # Автоматическое закрытие смен через N минут
     available_for_applicants = Column(Boolean, default=False)  # Доступен для соискателей
+    work_conditions = Column(Text, nullable=True)  # Условия работы
+    shift_tasks = Column(JSONB, nullable=True)  # Список задач на смене
     # График работы: битовая маска дней (1=Пн ... 64=Вс), по умолчанию Пн-Пт (31)
     work_days_mask = Column(Integer, nullable=False, server_default="31")
     # Периодичность повторения недель: 1 = каждую неделю

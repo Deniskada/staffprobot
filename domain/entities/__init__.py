@@ -15,5 +15,7 @@ from .contract import Contract
 from .manager_object_permission import ManagerObjectPermission
 from .application import Application, ApplicationStatus
 from .interview import Interview, InterviewType, InterviewStatus
+from .task_category import TaskCategory
+from .task_template import TaskTemplate
 
-__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus"]
+__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate"]
