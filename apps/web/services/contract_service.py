@@ -1184,10 +1184,12 @@ class ContractService:
             if "end_date" in contract_data:
                 contract.end_date = contract_data["end_date"]
             if "allowed_objects" in contract_data:
+                logger.info(f"Updating contract {contract.id} allowed_objects from {contract.allowed_objects} to {contract_data['allowed_objects']}")
                 contract.allowed_objects = contract_data["allowed_objects"]
                 
-                # Если это договор управляющего, обновляем права на объекты
+                # Обновляем права на объекты для всех типов договоров
                 if contract.is_manager:
+                    # Для управляющих используем ManagerPermissionService
                     permission_service = ManagerPermissionService(session)
                     # Удаляем старые права
                     old_permissions = await permission_service.get_contract_permissions(contract.id)
@@ -1202,6 +1204,10 @@ class ContractService:
                                 object_id, 
                                 contract.manager_permissions
                             )
+                else:
+                    # Для обычных сотрудников права на объекты хранятся в allowed_objects
+                    # Дополнительных действий не требуется, так как права проверяются по allowed_objects
+                    pass
             if "status" in contract_data:
                 contract.status = contract_data["status"]
             if "is_active" in contract_data:
