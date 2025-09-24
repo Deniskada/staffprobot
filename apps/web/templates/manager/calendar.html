@@ -23,6 +23,22 @@
 <script src="{{ url_for('static', path='js/shared/calendar.js') }}"></script>
 <script src="{{ url_for('static', path='js/shared/calendar_panels.js') }}"></script>
 <script>
+// Define callback functions before using them
+function showShiftDetails(shiftId) {
+    if (shiftId.toString().startsWith('schedule_')) {
+        const scheduleId = shiftId.toString().replace('schedule_', '');
+        window.location.href = `/manager/shifts/${scheduleId}?shift_type=schedule`;
+    } else {
+        window.location.href = `/manager/shifts/${shiftId}`;
+    }
+}
+
+function showTimeslotDetails(timeslotId) {
+    window.location.href = `/manager/timeslots/${timeslotId}`;
+}
+
+function showDateDetails(date) {}
+
 const calendarManager = new CalendarManager({
     currentDate: new Date('{{ current_date }}'),
     viewType: '{{ view_type }}',
@@ -82,16 +98,6 @@ calendarManager.createTimeslotFromObject = async function(objectId, date) {
     }
 };
 
-function showShiftDetails(shiftId) {
-    if (shiftId.toString().startsWith('schedule_')) {
-        const scheduleId = shiftId.toString().replace('schedule_', '');
-        window.location.href = `/manager/shifts/${scheduleId}?shift_type=schedule`;
-    } else {
-        window.location.href = `/manager/shifts/${shiftId}`;
-    }
-}
-function showTimeslotDetails(timeslotId) { window.location.href = `/manager/timeslots/${timeslotId}`; }
-function showDateDetails(date) {}
 
 document.addEventListener('DOMContentLoaded', function() {
     calendarPanels.init();
