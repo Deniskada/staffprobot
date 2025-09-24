@@ -651,6 +651,7 @@ async def owner_objects_delete(
 # КАЛЕНДАРЬ
 # ===============================
 
+
 @router.get("/calendar", response_class=HTMLResponse, name="owner_calendar")
 async def owner_calendar(
     request: Request,
@@ -698,36 +699,47 @@ async def owner_calendar(
             
             # Получаем тайм-слоты для выбранного объекта или всех объектов
             timeslots_data = []
-            if selected_object:
-                timeslots = await timeslot_service.get_timeslots_by_object(selected_object.id, owner_telegram_id)
+            logger.info(f"Selected object: {selected_object}, Objects count: {len(objects)}")
+            
+            # Всегда загружаем тайм-слоты для всех объектов
+            from sqlalchemy import select
+            from domain.entities.time_slot import TimeSlot
+            
+            for obj in objects:
+                query = select(TimeSlot).where(
+                    TimeSlot.object_id == obj.id,
+                    TimeSlot.is_active == True
+                ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
+                
+                result = await session.execute(query)
+                timeslots = result.scalars().all()
+                logger.info(f"Found {len(timeslots)} timeslots for object {obj.id} ({obj.name})")
+                
                 for slot in timeslots:
                     timeslots_data.append({
                         "id": slot.id,
                         "object_id": slot.object_id,
-                        "object_name": selected_object.name,
+                        "object_name": obj.name,
                         "date": slot.slot_date,
                         "start_time": slot.start_time.strftime("%H:%M"),
                         "end_time": slot.end_time.strftime("%H:%M"),
-                        "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(selected_object.hourly_rate),
+                        "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                        "max_employees": slot.max_employees if slot.max_employees is not None else 1,
                         "is_active": slot.is_active,
                         "notes": slot.notes or ""
                     })
+                    # Debug для тайм-слота 508
+                    if slot.id == 508:
+                        logger.info(f"Found timeslot 508: object_id={slot.object_id}, max_employees={slot.max_employees}, is_active={slot.is_active}")
+            
+            logger.info(f"Total timeslots_data: {len(timeslots_data)}")
+            
+            # Debug: проверим, есть ли тайм-слот 508 в данных
+            timeslot_508 = next((ts for ts in timeslots_data if ts["id"] == 508), None)
+            if timeslot_508:
+                logger.info(f"Timeslot 508 in data: {timeslot_508}")
             else:
-                # Получаем тайм-слоты для всех объектов
-                for obj in objects:
-                    timeslots = await timeslot_service.get_timeslots_by_object(obj.id, owner_telegram_id)
-                    for slot in timeslots:
-                        timeslots_data.append({
-                            "id": slot.id,
-                            "object_id": slot.object_id,
-                            "object_name": obj.name,
-                            "date": slot.slot_date,
-                            "start_time": slot.start_time.strftime("%H:%M"),
-                            "end_time": slot.end_time.strftime("%H:%M"),
-                            "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
-                            "is_active": slot.is_active,
-                            "notes": slot.notes or ""
-                        })
+                logger.warning("Timeslot 508 NOT found in timeslots_data")
             
             # Получаем смены для выбранного объекта или всех объектов
             shifts_data = []
@@ -766,6 +778,7 @@ async def owner_calendar(
                         shifts_data.append({
                             "id": shift.id,
                             "object_id": shift.object_id,
+                            "time_slot_id": getattr(shift, "time_slot_id", None),
                             "object_name": object_name,
                             "date": shift.start_time.date(),
                             "start_time": web_timezone_helper.format_time_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow'),
@@ -796,6 +809,7 @@ async def owner_calendar(
                         shifts_data.append({
                             "id": f"schedule_{schedule.id}",  # Префикс для отличия от обычных смен
                             "object_id": schedule.object_id,
+                            "time_slot_id": getattr(schedule, "time_slot_id", None),
                             "object_name": object_name,
                             "date": schedule.planned_start.date(),
                             "start_time": web_timezone_helper.format_time_with_timezone(schedule.planned_start, schedule_object.timezone if schedule_object else 'Europe/Moscow'),
@@ -845,6 +859,8 @@ async def owner_calendar(
                     for shift in day.get("shifts", []):
                         shifts.append({
                             "id": shift.get("id"),
+                            "object_id": shift.get("object_id"),
+                            "time_slot_id": shift.get("time_slot_id"),
                             "start_time": shift.get("start_time", ""),
                             "end_time": shift.get("end_time", ""),
                             "employee_name": shift.get("employee_name", "Неизвестно"),
@@ -857,9 +873,11 @@ async def owner_calendar(
                     for timeslot in day.get("timeslots", []):
                         timeslots.append({
                             "id": timeslot.get("id"),
+                            "object_id": timeslot.get("object_id"),
                             "start_time": timeslot.get("start_time", ""),
                             "end_time": timeslot.get("end_time", ""),
                             "object_name": timeslot.get("object_name", ""),
+                            "max_employees": timeslot.get("max_employees", 1),
                             "employee_count": timeslot.get("employee_count", 0),
                             "status": timeslot.get("status", "available")
                         })
@@ -966,6 +984,7 @@ async def owner_calendar_week(
                             "start_time": slot.start_time.strftime("%H:%M"),
                             "end_time": slot.end_time.strftime("%H:%M"),
                             "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(selected_object.hourly_rate),
+                            "max_employees": slot.max_employees if slot.max_employees is not None else 1,
                             "is_active": slot.is_active,
                             "notes": slot.notes or ""
                         })
@@ -982,6 +1001,7 @@ async def owner_calendar_week(
                                 "start_time": slot.start_time.strftime("%H:%M"),
                                 "end_time": slot.end_time.strftime("%H:%M"),
                                 "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                                "max_employees": slot.max_employees if slot.max_employees is not None else 1,
                                 "is_active": slot.is_active,
                                 "notes": slot.notes or ""
                             })
@@ -1777,7 +1797,7 @@ async def owner_calendar_api_timeslots_status(
                 status = "cancelled"
             
             # Подсчитываем занятость с учётом правил
-            max_slots = slot.max_employees or 1
+            max_slots = slot.max_employees if slot.max_employees is not None else 1
             # Плановые для счётчика: только planned/confirmed, ограничиваем лимитом
             scheduled_effective = [s for s in scheduled_shifts if s.get("status") in ("planned", "confirmed")]
             planned_count = min(len(scheduled_effective), max_slots)
@@ -1806,7 +1826,8 @@ async def owner_calendar_api_timeslots_status(
                 "actual_shifts": actual_shifts,
                 "availability": availability,
                 "occupied_slots": total_shifts,
-                "max_slots": max_slots
+                "max_slots": max_slots,
+                "max_employees": max_slots
             })
         
         logger.info(f"Returning {len(test_data)} test timeslots")
@@ -2140,12 +2161,22 @@ async def api_calendar_plan_shift(
             
             # Берем первый договор (если их несколько)
             contract = contracts[0]
+            logger.info(f"Found contract {contract.id} for employee {employee_id}")
+            logger.info(f"Contract allowed_objects type: {type(contract.allowed_objects)}")
+            logger.info(f"Contract allowed_objects value: {contract.allowed_objects}")
             
             # Проверяем, что сотрудник имеет доступ к объекту тайм-слота
             allowed_objects = contract.allowed_objects if contract.allowed_objects else []
             logger.info(f"Contract {contract.id} allowed_objects: {allowed_objects}")
             logger.info(f"Timeslot object_id: {timeslot.object_id}")
+            logger.info(f"Timeslot object_id type: {type(timeslot.object_id)}")
             logger.info(f"Timeslot object_id in allowed_objects: {timeslot.object_id in allowed_objects}")
+            
+            # Дополнительная проверка типов
+            if allowed_objects:
+                logger.info(f"allowed_objects elements types: {[type(x) for x in allowed_objects]}")
+                logger.info(f"Comparison: {timeslot.object_id} in {allowed_objects} = {timeslot.object_id in allowed_objects}")
+            
             if timeslot.object_id not in allowed_objects:
                 raise HTTPException(status_code=400, detail=f"У сотрудника нет доступа к объекту ID {timeslot.object_id}")
 
@@ -2363,17 +2394,8 @@ def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]]
                     elif shift["status"] == "completed":
                         completed_shifts_by_object[object_id] = shift
             
-            # Фильтруем смены: показываем только если нет активной или завершенной смены для того же объекта
+            # Показываем все смены - не фильтруем запланированные смены
             for shift in all_day_shifts:
-                object_id = shift.get("object_id")
-                
-                # Если смена запланированная и есть активная или завершенная для того же объекта - скрываем
-                if (shift["status"] == "planned" and 
-                    object_id and 
-                    (object_id in active_shifts_by_object or object_id in completed_shifts_by_object)):
-                    continue
-                
-                # Показываем все остальные смены
                 day_shifts.append(shift)
             
             # Фильтруем тайм-слоты: показываем только те, у которых нет связанных смен
@@ -2389,9 +2411,16 @@ def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]]
                             has_related_shift = True
                             break
                     
-                    # Показываем тайм-слот только если нет связанных смен
-                    if not has_related_shift:
-                        day_timeslots.append(slot)
+                    # Показываем тайм-слот всегда, но с правильным индикатором занятости
+                    day_timeslots.append(slot)
+                    
+                    # Debug для тайм-слота 508
+                    if slot["id"] == 508:
+                        logger.info(f"Timeslot 508: date={slot['date']}, current_date={current_date}, is_active={slot.get('is_active', True)}, has_related_shift={has_related_shift}, max_employees={slot.get('max_employees', 1)}")
+                        logger.info(f"Timeslot 508: day_shifts count={len(day_shifts)}")
+                        for shift in day_shifts:
+                            if shift.get("object_id") == slot["object_id"]:
+                                logger.info(f"  Related shift: {shift['id']} status={shift['status']}")
             
             if day_timeslots:
                 logger.info(f"Found {len(day_timeslots)} timeslots for {current_date}")

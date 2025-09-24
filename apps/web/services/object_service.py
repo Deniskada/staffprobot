@@ -541,6 +541,7 @@ class TimeSlotService:
             # Получаем внутренний ID пользователя
             internal_id = await self._get_user_internal_id(telegram_id)
             if not internal_id:
+                logger.warning(f"No internal ID found for telegram_id {telegram_id}")
                 return []
             
             # Сначала проверяем, что объект принадлежит владельцу
@@ -550,6 +551,7 @@ class TimeSlotService:
             )
             object_result = await self.db.execute(object_query)
             if not object_result.scalar_one_or_none():
+                logger.warning(f"Object {object_id} not found or not owned by user {internal_id}")
                 return []
             
             # Получаем тайм-слоты
@@ -559,7 +561,16 @@ class TimeSlotService:
             ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
             
             result = await self.db.execute(query)
-            return result.scalars().all()
+            timeslots = result.scalars().all()
+            
+            # Debug для тайм-слота 508
+            if object_id == 6:  # объект "тест"
+                logger.info(f"Found {len(timeslots)} timeslots for object {object_id}")
+                for slot in timeslots:
+                    if slot.id == 508:
+                        logger.info(f"Found timeslot 508: max_employees={slot.max_employees}, is_active={slot.is_active}")
+            
+            return timeslots
         except Exception as e:
             logger.error(f"Error getting timeslots for object {object_id}: {e}")
             raise
