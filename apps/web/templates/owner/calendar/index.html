@@ -272,7 +272,7 @@ calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId
             throw new Error(`HTTP ${employeeResponse.status}: ${employeeResponse.statusText}`);
         }
         const employees = await employeeResponse.json();
-        const employee = employees.find(emp => emp.id == employeeId);
+        const employee = employees.find(emp => emp.id == parseInt(employeeId));
         if (!employee) {
             calendarPanels.showNotification('Сотрудник не найден', 'error');
             return;

@@ -189,6 +189,28 @@
                                             <i class="bi bi-geo-alt-fill me-1"></i>
                                             Макс. расстояние: {{ object.max_distance_meters }}м
                                         </p>
+                                        
+                                        {% if object.work_conditions %}
+                                        <p class="text-muted small mb-2">
+                                            <i class="bi bi-briefcase me-1"></i>
+                                            <strong>Условия:</strong> {{ object.work_conditions[:50] }}{% if object.work_conditions|length > 50 %}...{% endif %}
+                                        </p>
+                                        {% endif %}
+                                        
+                                        {% if object.shift_tasks %}
+                                        <div class="mb-2">
+                                            <small class="text-muted">
+                                                <i class="bi bi-list-task me-1"></i>
+                                                <strong>Задачи:</strong>
+                                            </small><br>
+                                            {% for task in object.shift_tasks[:2] %}
+                                            <span class="badge bg-light text-dark me-1 small">{{ task }}</span>
+                                            {% endfor %}
+                                            {% if object.shift_tasks|length > 2 %}
+                                            <small class="text-muted">+{{ object.shift_tasks|length - 2 }} еще</small>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
                                     </div>
                                     
                                     <!-- Действия -->

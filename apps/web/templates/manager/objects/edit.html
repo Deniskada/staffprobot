@@ -94,6 +94,28 @@
                             </div>
                             
                             <div class="mb-3">
+                                <label for="timezone" class="form-label">Часовой пояс</label>
+                                <select class="form-select" 
+                                        id="timezone" 
+                                        name="timezone">
+                                    <option value="Europe/Moscow" {% if object.timezone == 'Europe/Moscow' %}selected{% endif %}>Москва (UTC+3)</option>
+                                    <option value="Europe/Kaliningrad" {% if object.timezone == 'Europe/Kaliningrad' %}selected{% endif %}>Калининград (UTC+2)</option>
+                                    <option value="Europe/Volgograd" {% if object.timezone == 'Europe/Volgograd' %}selected{% endif %}>Волгоград (UTC+3)</option>
+                                    <option value="Europe/Samara" {% if object.timezone == 'Europe/Samara' %}selected{% endif %}>Самара (UTC+4)</option>
+                                    <option value="Asia/Yekaterinburg" {% if object.timezone == 'Asia/Yekaterinburg' %}selected{% endif %}>Екатеринбург (UTC+5)</option>
+                                    <option value="Asia/Omsk" {% if object.timezone == 'Asia/Omsk' %}selected{% endif %}>Омск (UTC+6)</option>
+                                    <option value="Asia/Novosibirsk" {% if object.timezone == 'Asia/Novosibirsk' %}selected{% endif %}>Новосибирск (UTC+7)</option>
+                                    <option value="Asia/Krasnoyarsk" {% if object.timezone == 'Asia/Krasnoyarsk' %}selected{% endif %}>Красноярск (UTC+7)</option>
+                                    <option value="Asia/Irkutsk" {% if object.timezone == 'Asia/Irkutsk' %}selected{% endif %}>Иркутск (UTC+8)</option>
+                                    <option value="Asia/Yakutsk" {% if object.timezone == 'Asia/Yakutsk' %}selected{% endif %}>Якутск (UTC+9)</option>
+                                    <option value="Asia/Vladivostok" {% if object.timezone == 'Asia/Vladivostok' %}selected{% endif %}>Владивосток (UTC+10)</option>
+                                    <option value="Asia/Magadan" {% if object.timezone == 'Asia/Magadan' %}selected{% endif %}>Магадан (UTC+11)</option>
+                                    <option value="Asia/Kamchatka" {% if object.timezone == 'Asia/Kamchatka' %}selected{% endif %}>Камчатка (UTC+12)</option>
+                                </select>
+                                <div class="form-text">Часовой пояс объекта для корректного отображения времени</div>
+                            </div>
+                            
+                            <div class="mb-3">
                                 <label for="max_distance" class="form-label">Максимальное расстояние (м)</label>
                                 <input type="number" 
                                        class="form-control" 
@@ -130,6 +152,70 @@
                                         Объект активен
                                     </label>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Условия работы и задачи -->
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-briefcase"></i> Условия работы и задачи
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="work_conditions" class="form-label">Условия работы</label>
+                                <textarea class="form-control" 
+                                          id="work_conditions" 
+                                          name="work_conditions" 
+                                          rows="4"
+                                          placeholder="Опишите условия работы на объекте: график, требования, особенности...">{{ object.work_conditions or '' }}</textarea>
+                                <div class="form-text">Детальное описание условий работы для соискателей</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="shift_tasks" class="form-label">Задачи на смене</label>
+                                <div id="tasks-container">
+                                    {% if object.shift_tasks %}
+                                        {% for task in object.shift_tasks %}
+                                        <div class="task-item mb-2">
+                                            <div class="input-group">
+                                                <input type="text" 
+                                                       class="form-control" 
+                                                       name="shift_tasks[]" 
+                                                       value="{{ task }}"
+                                                       placeholder="Например: Уборка торгового зала">
+                                                <button type="button" 
+                                                        class="btn btn-outline-danger" 
+                                                        onclick="removeTask(this)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    {% else %}
+                                        <div class="task-item mb-2">
+                                            <div class="input-group">
+                                                <input type="text" 
+                                                       class="form-control" 
+                                                       name="shift_tasks[]" 
+                                                       placeholder="Например: Уборка торгового зала">
+                                                <button type="button" 
+                                                        class="btn btn-outline-danger" 
+                                                        onclick="removeTask(this)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <button type="button" 
+                                        class="btn btn-outline-primary btn-sm" 
+                                        onclick="addTask()">
+                                    <i class="bi bi-plus"></i> Добавить задачу
+                                </button>
+                                <div class="form-text">Список основных задач, которые выполняет сотрудник на смене</div>
                             </div>
                         </div>
                     </div>
@@ -343,5 +429,40 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Final work days mask:', mask);
     });
 });
+
+// Функции для управления задачами
+function addTask() {
+    const container = document.getElementById('tasks-container');
+    const taskItem = document.createElement('div');
+    taskItem.className = 'task-item mb-2';
+    taskItem.innerHTML = `
+        <div class="input-group">
+            <input type="text" 
+                   class="form-control" 
+                   name="shift_tasks[]" 
+                   placeholder="Например: Уборка торгового зала">
+            <button type="button" 
+                    class="btn btn-outline-danger" 
+                    onclick="removeTask(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(taskItem);
+}
+
+function removeTask(button) {
+    const taskItem = button.closest('.task-item');
+    const container = document.getElementById('tasks-container');
+    
+    // Не удаляем последнюю задачу, если она единственная
+    if (container.children.length > 1) {
+        taskItem.remove();
+    } else {
+        // Очищаем поле вместо удаления
+        const input = taskItem.querySelector('input');
+        input.value = '';
+    }
+}
 </script>
 {% endblock %}
