@@ -11,8 +11,8 @@ class EmployeeObjectsManager {
 
     init() {
         this.setupEventListeners();
-        this.loadObjects();
         this.initMap();
+        this.loadObjects();
     }
 
     setupEventListeners() {
@@ -46,13 +46,17 @@ class EmployeeObjectsManager {
 
     async loadObjects() {
         try {
+            console.log('Загружаем объекты...');
             const response = await fetch('/employee/api/objects');
             if (response.ok) {
                 this.objects = await response.json();
+                console.log('Загружено объектов:', this.objects.length);
+                console.log('Объекты:', this.objects);
                 this.filteredObjects = [...this.objects];
                 this.updateObjectsDisplay();
+                this.addObjectsToMap();
             } else {
-                console.error('Ошибка загрузки объектов');
+                console.error('Ошибка загрузки объектов:', response.status);
             }
         } catch (error) {
             console.error('Ошибка:', error);
@@ -68,12 +72,16 @@ class EmployeeObjectsManager {
             attribution: '© OpenStreetMap contributors'
         }).addTo(this.map);
 
-        // Добавляем объекты на карту после загрузки
-        this.addObjectsToMap();
+        console.log('Карта инициализирована');
     }
 
     addObjectsToMap() {
-        if (!this.map) return;
+        if (!this.map) {
+            console.log('Карта не инициализирована');
+            return;
+        }
+
+        console.log('Добавляем объекты на карту. Количество:', this.filteredObjects.length);
 
         // Очищаем существующие маркеры
         this.map.eachLayer(layer => {
@@ -83,8 +91,11 @@ class EmployeeObjectsManager {
         });
 
         // Добавляем маркеры для каждого объекта
-        this.filteredObjects.forEach(object => {
+        this.filteredObjects.forEach((object, index) => {
+            console.log(`Объект ${index + 1}:`, object.name, 'координаты:', object.latitude, object.longitude);
+            
             if (object.latitude && object.longitude && object.latitude !== 0 && object.longitude !== 0) {
+                console.log('Добавляем маркер для:', object.name);
                 const marker = L.marker([object.latitude, object.longitude])
                     .addTo(this.map)
                     .bindPopup(`
@@ -98,6 +109,8 @@ class EmployeeObjectsManager {
                             </button>
                         </div>
                     `);
+            } else {
+                console.log('Пропускаем объект с нулевыми координатами:', object.name);
             }
         });
     }
