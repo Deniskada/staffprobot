@@ -144,6 +144,48 @@
                         
                         <div class="card mt-3">
                             <div class="card-header">
+                                <h5 class="card-title mb-0"><i class="bi bi-briefcase"></i> Условия работы и задачи</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="work_conditions" class="form-label">Условия работы</label>
+                                    <textarea class="form-control" 
+                                              id="work_conditions" 
+                                              name="work_conditions" 
+                                              rows="4"
+                                              placeholder="Опишите условия работы на объекте: график, требования, особенности..."></textarea>
+                                    <div class="form-text">Детальное описание условий работы для соискателей</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="shift_tasks" class="form-label">Задачи на смене</label>
+                                    <div id="tasks-container">
+                                        <div class="task-item mb-2">
+                                            <div class="input-group">
+                                                <input type="text" 
+                                                       class="form-control" 
+                                                       name="shift_tasks[]" 
+                                                       placeholder="Например: Уборка торгового зала">
+                                                <button type="button" 
+                                                        class="btn btn-outline-danger" 
+                                                        onclick="removeTask(this)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type="button" 
+                                            class="btn btn-outline-primary btn-sm" 
+                                            onclick="addTask()">
+                                        <i class="bi bi-plus"></i> Добавить задачу
+                                    </button>
+                                    <div class="form-text">Список основных задач, которые выполняет сотрудник на смене</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mt-3">
+                            <div class="card-header">
                                 <h5 class="card-title mb-0"><i class="bi bi-calendar3"></i> График работы</h5>
                             </div>
                             <div class="card-body">
@@ -224,6 +266,41 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// Функции для управления задачами
+function addTask() {
+    const container = document.getElementById('tasks-container');
+    const taskItem = document.createElement('div');
+    taskItem.className = 'task-item mb-2';
+    taskItem.innerHTML = `
+        <div class="input-group">
+            <input type="text" 
+                   class="form-control" 
+                   name="shift_tasks[]" 
+                   placeholder="Например: Уборка торгового зала">
+            <button type="button" 
+                    class="btn btn-outline-danger" 
+                    onclick="removeTask(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(taskItem);
+}
+
+function removeTask(button) {
+    const taskItem = button.closest('.task-item');
+    const container = document.getElementById('tasks-container');
+    
+    // Не удаляем последнюю задачу, если она единственная
+    if (container.children.length > 1) {
+        taskItem.remove();
+    } else {
+        // Очищаем поле вместо удаления
+        const input = taskItem.querySelector('input');
+        input.value = '';
+    }
+}
 </script>
 {% endblock %}
 {% endblock %}

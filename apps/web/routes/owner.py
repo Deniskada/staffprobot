@@ -285,6 +285,12 @@ async def owner_objects_create_post(
         # Обработка чекбокса (он не отправляется, если не отмечен)
         available_for_applicants = "available_for_applicants" in form_data
         
+        # Обработка новых полей
+        work_conditions = form_data.get("work_conditions", "").strip()
+        shift_tasks = form_data.getlist("shift_tasks")
+        # Фильтруем пустые задачи
+        shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
+        
         # Обработка графика работы
         work_days = form_data.getlist("work_days")
         work_days_mask = 0
@@ -310,7 +316,9 @@ async def owner_objects_create_post(
             "is_active": True,
             "coordinates": coordinates,
             "work_days_mask": work_days_mask,
-            "schedule_repeat_weeks": schedule_repeat_weeks
+            "schedule_repeat_weeks": schedule_repeat_weeks,
+            "work_conditions": work_conditions if work_conditions else None,
+            "shift_tasks": shift_tasks if shift_tasks else None
         }
         
         # Передаем telegram_id в create_object (метод ожидает telegram_id)
@@ -537,6 +545,12 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         available_for_applicants = to_bool(form_data.get("available_for_applicants"))
         is_active = to_bool(form_data.get("is_active"))
         
+        # Обработка новых полей
+        work_conditions = form_data.get("work_conditions", "").strip()
+        shift_tasks = form_data.getlist("shift_tasks")
+        # Фильтруем пустые задачи
+        shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
+        
         # Обработка графика работы
         work_days_mask_str = form_data.get("work_days_mask", "0").strip()
         schedule_repeat_weeks_str = form_data.get("schedule_repeat_weeks", "1").strip()
@@ -568,7 +582,9 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "is_active": is_active,
                 "coordinates": coordinates,
                 "work_days_mask": work_days_mask,
-                "schedule_repeat_weeks": schedule_repeat_weeks
+                "schedule_repeat_weeks": schedule_repeat_weeks,
+                "work_conditions": work_conditions if work_conditions else None,
+                "shift_tasks": shift_tasks if shift_tasks else None
             }
             
             # Получаем внутренний ID пользователя
