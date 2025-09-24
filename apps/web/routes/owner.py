@@ -2143,6 +2143,9 @@ async def api_calendar_plan_shift(
             
             # Проверяем, что сотрудник имеет доступ к объекту тайм-слота
             allowed_objects = contract.allowed_objects if contract.allowed_objects else []
+            logger.info(f"Contract {contract.id} allowed_objects: {allowed_objects}")
+            logger.info(f"Timeslot object_id: {timeslot.object_id}")
+            logger.info(f"Timeslot object_id in allowed_objects: {timeslot.object_id in allowed_objects}")
             if timeslot.object_id not in allowed_objects:
                 raise HTTPException(status_code=400, detail=f"У сотрудника нет доступа к объекту ID {timeslot.object_id}")
 
