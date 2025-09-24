@@ -66,8 +66,8 @@ class EmployeeObjectsManager {
         this.map = new mapboxgl.Map({
             container: 'map',
             style: 'mapbox://styles/mapbox/streets-v11',
-            center: [37.6173, 55.7558], // Москва
-            zoom: 10
+            center: [39.7000, 47.2000], // Ростов-на-Дону
+            zoom: 12
         });
 
         this.map.on('load', () => {

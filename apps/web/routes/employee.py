@@ -195,6 +195,48 @@ async def employee_objects(
         logger.error(f"Ошибка загрузки объектов: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки объектов: {e}")
 
+@router.get("/api/objects")
+async def employee_api_objects(
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API для получения объектов для карты"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем доступные объекты
+        objects_query = select(Object).where(Object.available_for_applicants == True)
+        objects_result = await db.execute(objects_query)
+        objects = []
+        
+        for obj in objects_result.scalars():
+            # Парсим координаты из формата "lat,lon"
+            lat, lon = obj.coordinates.split(',') if obj.coordinates else (0, 0)
+            
+            objects.append({
+                'id': obj.id,
+                'name': obj.name,
+                'address': obj.address or '',
+                'latitude': float(lat),
+                'longitude': float(lon),
+                'opening_time': str(obj.opening_time),
+                'closing_time': str(obj.closing_time),
+                'hourly_rate': float(obj.hourly_rate),
+                'work_conditions': 'Стандартные условия работы',
+                'shift_tasks': ['Выполнение основных обязанностей']
+            })
+        
+        return objects
+        
+    except Exception as e:
+        logger.error(f"Ошибка загрузки объектов API: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки объектов: {e}")
+
 @router.get("/applications", response_class=HTMLResponse)
 async def employee_applications(
     request: Request,
