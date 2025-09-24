@@ -171,17 +171,20 @@ async def employee_objects(
         objects = []
         
         for obj in objects_result.scalars():
+            # Парсим координаты из формата "lat,lon"
+            lat, lon = obj.coordinates.split(',') if obj.coordinates else (0, 0)
+            
             objects.append({
                 'id': obj.id,
                 'name': obj.name,
                 'address': obj.address or '',
-                'latitude': 0.0,
-                'longitude': 0.0,
-                'opening_time': '09:00',
-                'closing_time': '21:00',
+                'latitude': float(lat),
+                'longitude': float(lon),
+                'opening_time': str(obj.opening_time),
+                'closing_time': str(obj.closing_time),
                 'hourly_rate': float(obj.hourly_rate),
-                'work_conditions': 'Стандартные условия работы',
-                'shift_tasks': ['Выполнение основных обязанностей']
+                'work_conditions': obj.work_conditions or 'Стандартные условия работы',
+                'shift_tasks': obj.shift_tasks or ['Выполнение основных обязанностей']
             })
         
         return templates.TemplateResponse("employee/objects.html", {
@@ -227,8 +230,8 @@ async def employee_api_objects(
                 'opening_time': str(obj.opening_time),
                 'closing_time': str(obj.closing_time),
                 'hourly_rate': float(obj.hourly_rate),
-                'work_conditions': 'Стандартные условия работы',
-                'shift_tasks': ['Выполнение основных обязанностей']
+                'work_conditions': obj.work_conditions or 'Стандартные условия работы',
+                'shift_tasks': obj.shift_tasks or ['Выполнение основных обязанностей']
             })
         
         return objects

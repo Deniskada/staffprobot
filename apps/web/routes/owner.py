@@ -175,7 +175,9 @@ async def owner_objects(
                     "is_active": obj.is_active,
                     "available_for_applicants": obj.available_for_applicants,
                     "created_at": obj.created_at.strftime("%Y-%m-%d"),
-                    "owner_id": obj.owner_id
+                    "owner_id": obj.owner_id,
+                    "work_conditions": obj.work_conditions or "",
+                    "shift_tasks": obj.shift_tasks or []
                 })
             
             # Получаем данные для переключения интерфейсов
@@ -448,7 +450,9 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "available_for_applicants": obj.available_for_applicants,
                 "is_active": obj.is_active,
                 "work_days_mask": obj.work_days_mask,
-                "schedule_repeat_weeks": obj.schedule_repeat_weeks
+                "schedule_repeat_weeks": obj.schedule_repeat_weeks,
+                "work_conditions": obj.work_conditions or "",
+                "shift_tasks": obj.shift_tasks or []
             }
             
             # Получаем данные для переключения интерфейсов
@@ -484,6 +488,10 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         
         # Получение данных формы
         form_data = await request.form()
+        
+        # Логируем все данные формы
+        logger.info(f"Form data keys: {list(form_data.keys())}")
+        logger.info(f"Form data values: {dict(form_data)}")
         
         name = form_data.get("name", "").strip()
         address = form_data.get("address", "").strip()
@@ -547,9 +555,11 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         
         # Обработка новых полей
         work_conditions = form_data.get("work_conditions", "").strip()
-        shift_tasks = form_data.getlist("shift_tasks")
+        shift_tasks = form_data.getlist("shift_tasks[]")
         # Фильтруем пустые задачи
         shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
+        
+        logger.info(f"Form data - work_conditions: '{work_conditions}', shift_tasks: {shift_tasks}")
         
         # Обработка графика работы
         work_days_mask_str = form_data.get("work_days_mask", "0").strip()
@@ -568,8 +578,8 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         logger.info(f"Work days mask: {work_days_mask}, Schedule repeat weeks: {schedule_repeat_weeks}")
         
         # Обновление объекта в базе данных
-        async with get_async_session() as session:
-            object_service = ObjectService(session)
+        async with get_async_session() as db:
+            object_service = ObjectService(db)
             object_data = {
                 "name": name,
                 "address": address,
@@ -588,7 +598,7 @@ async def owner_objects_edit_post(request: Request, object_id: int):
             }
             
             # Получаем внутренний ID пользователя
-            user_id = await get_user_id_from_current_user(current_user, session)
+            user_id = await get_user_id_from_current_user(current_user, db)
             if not user_id:
                 raise HTTPException(status_code=400, detail="Пользователь не найден")
             
@@ -1881,9 +1891,10 @@ async def api_employees(request: Request):
             if not user_id:
                 raise HTTPException(status_code=404, detail="Владелец не найден")
 
-            # Получаем всех сотрудников с активными договорами (без ограничений по владельцу или объектам)
+            # Получаем только сотрудников, с которыми у владельца есть активные договоры
             from domain.entities.contract import Contract
             employees_q = select(User).distinct().join(Contract, User.id == Contract.employee_id).where(
+                Contract.owner_id == user_id,  # Только договоры с текущим владельцем
                 Contract.status == "active",
                 Contract.is_active == True
             )
@@ -2098,7 +2109,7 @@ async def api_calendar_plan_shift(
             logger.info(f"Planning shift for user_id: {user_id}, timeslot_id: {timeslot_id}, employee_id: {employee_id}")
 
             # Проверяем, что тайм-слот существует и принадлежит владельцу
-            timeslot_query = select(TimeSlot).join(Object).where(
+            timeslot_query = select(TimeSlot).options(selectinload(TimeSlot.object)).join(Object).where(
                 TimeSlot.id == timeslot_id,
                 Object.owner_id == user_id
             )
@@ -2107,10 +2118,15 @@ async def api_calendar_plan_shift(
                 raise HTTPException(status_code=404, detail="Тайм-слот не найден")
 
             # Проверяем, что сотрудник существует
-            employee_query = select(User).where(User.id == employee_id, User.role == "employee")
+            employee_query = select(User).where(User.id == employee_id)
             employee = (await session.execute(employee_query)).scalar_one_or_none()
             if not employee:
                 raise HTTPException(status_code=404, detail="Сотрудник не найден")
+            
+            # Проверяем, что у сотрудника есть роль employee
+            employee_roles = employee.roles if isinstance(employee.roles, list) else [employee.role]
+            if "employee" not in employee_roles:
+                raise HTTPException(status_code=400, detail="Пользователь не является сотрудником")
 
             # Проверяем, что у сотрудника есть договор с владельцем
             contract_query = select(Contract).where(
@@ -2132,8 +2148,19 @@ async def api_calendar_plan_shift(
 
             # Создаем datetime объекты для planned_start и planned_end
             from datetime import datetime, time, date
-            slot_datetime = datetime.combine(timeslot.slot_date, timeslot.start_time)
-            end_datetime = datetime.combine(timeslot.slot_date, timeslot.end_time)
+            import pytz
+            
+            # Получаем временную зону объекта
+            object_timezone = timeslot.object.timezone if timeslot.object and timeslot.object.timezone else 'Europe/Moscow'
+            tz = pytz.timezone(object_timezone)
+            
+            # Создаем naive datetime в локальной временной зоне объекта
+            slot_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.start_time)
+            end_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.end_time)
+            
+            # Локализуем в временную зону объекта, затем конвертируем в UTC для сохранения
+            slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+            end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
             
             # Проверяем, что сотрудник не занят в это время
             existing_schedule_query = select(ShiftSchedule).where(

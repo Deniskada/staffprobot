@@ -171,6 +171,12 @@ class ObjectService:
             obj.work_days_mask = object_data.get('work_days_mask', obj.work_days_mask)
             obj.schedule_repeat_weeks = object_data.get('schedule_repeat_weeks', obj.schedule_repeat_weeks)
             
+            # Обновляем новые поля
+            obj.work_conditions = object_data.get('work_conditions', obj.work_conditions)
+            obj.shift_tasks = object_data.get('shift_tasks', obj.shift_tasks)
+            
+            logger.info(f"Updating object {object_id} - work_conditions: '{obj.work_conditions}', shift_tasks: {obj.shift_tasks}")
+            
             # Обновляем координаты если нужно
             if 'coordinates' in object_data:
                 coordinates = object_data['coordinates']
@@ -227,6 +233,8 @@ class ObjectService:
             obj.available_for_applicants = object_data.get('available_for_applicants', obj.available_for_applicants)
             obj.work_days_mask = object_data.get('work_days_mask', obj.work_days_mask)
             obj.schedule_repeat_weeks = object_data.get('schedule_repeat_weeks', obj.schedule_repeat_weeks)
+            obj.work_conditions = object_data.get('work_conditions', obj.work_conditions)
+            obj.shift_tasks = object_data.get('shift_tasks', obj.shift_tasks)
             
             # Обновляем координаты если нужно
             if 'coordinates' in object_data:

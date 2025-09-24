@@ -178,6 +178,28 @@ async def manager_objects(
             # Получаем доступные объекты
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
             
+            # Обрабатываем объекты для отображения
+            processed_objects = []
+            for obj in accessible_objects:
+                processed_obj = {
+                    "id": obj.id,
+                    "name": obj.name,
+                    "address": obj.address or "",
+                    "coordinates": obj.coordinates or "",
+                    "hourly_rate": float(obj.hourly_rate),
+                    "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "",
+                    "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "",
+                    "max_distance_meters": obj.max_distance_meters or 500,
+                    "available_for_applicants": obj.available_for_applicants,
+                    "is_active": obj.is_active,
+                    "work_conditions": obj.work_conditions or "",
+                    "shift_tasks": obj.shift_tasks or [],
+                    "work_days_mask": obj.work_days_mask,
+                    "schedule_repeat_weeks": obj.schedule_repeat_weeks,
+                    "timezone": obj.timezone
+                }
+                processed_objects.append(processed_obj)
+            
             # Получаем права на каждый объект
             object_permissions = {}
             for obj in accessible_objects:
@@ -206,7 +228,7 @@ async def manager_objects(
             return templates.TemplateResponse("manager/objects.html", {
                 "request": request,
                 "current_user": current_user,
-                "accessible_objects": accessible_objects,
+                "accessible_objects": processed_objects,
                 "object_permissions": object_permissions,
                 "permission_names": permission_names,
                 "available_interfaces": available_interfaces
@@ -326,6 +348,8 @@ async def manager_object_edit(
                 "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "",
                 "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "",
                 "max_distance": obj.max_distance_meters or 500,
+                "work_conditions": obj.work_conditions or "",
+                "shift_tasks": obj.shift_tasks or [],
                 "available_for_applicants": obj.available_for_applicants,
                 "is_active": obj.is_active,
                 "work_days_mask": obj.work_days_mask,
@@ -400,11 +424,14 @@ async def manager_object_edit_post(
             hourly_rate_str = form_data.get("hourly_rate", "0").strip()
             opening_time = form_data.get("opening_time", "").strip()
             closing_time = form_data.get("closing_time", "").strip()
+            timezone = form_data.get("timezone", "Europe/Moscow").strip()
             max_distance_str = form_data.get("max_distance", "500").strip()
             latitude_str = form_data.get("latitude", "").strip()
             longitude_str = form_data.get("longitude", "").strip()
             available_for_applicants = form_data.get("available_for_applicants") == "true"
             is_active = form_data.get("is_active") == "true"
+            work_conditions = form_data.get("work_conditions", "").strip()
+            shift_tasks = form_data.getlist("shift_tasks[]")
             
             # Получение дней недели (битовая маска)
             work_days_mask_str = form_data.get("work_days_mask", "0").strip()
@@ -488,12 +515,15 @@ async def manager_object_edit_post(
                 "hourly_rate": hourly_rate,
                 "opening_time": opening_time_obj,
                 "closing_time": closing_time_obj,
+                "timezone": timezone,
                 "max_distance_meters": max_distance,
                 "coordinates": coordinates,
                 "available_for_applicants": available_for_applicants,
                 "is_active": is_active,
                 "work_days_mask": work_days_mask,
-                "schedule_repeat_weeks": schedule_repeat_weeks
+                "schedule_repeat_weeks": schedule_repeat_weeks,
+                "work_conditions": work_conditions,
+                "shift_tasks": shift_tasks
             }
             
             # Обновляем объект (используем метод для управляющих)
@@ -1571,8 +1601,8 @@ async def get_timeslots_status_manager(
                         "user_id": shift.user_id,
                         "user_name": user_name,
                         "status": shift.status,
-                        "start_time": web_timezone_helper.format_time_with_timezone(shift.planned_start, obj.timezone if obj else 'Europe/Moscow'),
-                        "end_time": web_timezone_helper.format_time_with_timezone(shift.planned_end, obj.timezone if obj else 'Europe/Moscow'),
+                        "start_time": shift.planned_start.time().strftime("%H:%M"),
+                        "end_time": shift.planned_end.time().strftime("%H:%M"),
                         "notes": shift.notes
                     })
                 key = (shift.object_id, shift.planned_start.date())
@@ -2454,20 +2484,59 @@ async def get_employees_for_manager(
             if not object_ids:
                 return []
             
-            # Получаем сотрудников, работающих на доступных объектах
-            from sqlalchemy import select, distinct, text
+            # Получаем сотрудников, которые имеют доступ к тем же объектам, что и управляющий
+            from sqlalchemy import select, and_, or_
             from domain.entities.contract import Contract
             from domain.entities.user import User
+            from sqlalchemy.dialects.postgresql import JSONB
             
+            # Получаем договоры управляющего, чтобы узнать владельцев
+            manager_contracts = await permission_service.get_manager_contracts_for_user(user_id)
+            owner_ids = [contract.owner_id for contract in manager_contracts]
+            
+            if not owner_ids:
+                return []
+            
+            # Получаем сотрудников, которые работают по договорам с этими владельцами
+            # И имеют доступ к объектам, доступным управляющему
             employees_query = select(User).join(
                 Contract, User.id == Contract.employee_id
             ).where(
+                Contract.owner_id.in_(owner_ids),  # Договоры с владельцами управляющего
                 Contract.is_active == True,
-                text("EXISTS (SELECT 1 FROM json_array_elements(contracts.allowed_objects) AS elem WHERE elem::text::int = ANY(ARRAY[{}]))".format(','.join(map(str, object_ids))))
+                Contract.status == "active"
             ).distinct()
             
             result = await db.execute(employees_query)
-            employees = result.scalars().all()
+            all_employees = result.scalars().all()
+            
+            # Фильтруем сотрудников по доступу к объектам управляющего
+            employees = []
+            for emp in all_employees:
+                # Получаем договоры сотрудника с владельцами управляющего
+                emp_contracts_query = select(Contract).where(
+                    Contract.employee_id == emp.id,
+                    Contract.owner_id.in_(owner_ids),
+                    Contract.is_active == True,
+                    Contract.status == "active"
+                )
+                emp_contracts_result = await db.execute(emp_contracts_query)
+                emp_contracts = emp_contracts_result.scalars().all()
+                
+                # Проверяем, есть ли у сотрудника доступ к объектам управляющего
+                has_access = False
+                for contract in emp_contracts:
+                    if contract.allowed_objects:
+                        # Проверяем пересечение объектов
+                        for allowed_obj_id in contract.allowed_objects:
+                            if allowed_obj_id in object_ids:
+                                has_access = True
+                                break
+                    if has_access:
+                        break
+                
+                if has_access:
+                    employees.append(emp)
             
             employees_data = []
             for emp in employees:
@@ -2653,7 +2722,7 @@ async def plan_shift_manager(
             from sqlalchemy import select
             from domain.entities.time_slot import TimeSlot
             
-            timeslot_query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
+            timeslot_query = select(TimeSlot).options(selectinload(TimeSlot.object)).where(TimeSlot.id == timeslot_id)
             timeslot = (await db.execute(timeslot_query)).scalar_one_or_none()
             if not timeslot:
                 raise HTTPException(status_code=404, detail="Тайм-слот не найден")
@@ -2667,13 +2736,62 @@ async def plan_shift_manager(
             if object_id not in accessible_object_ids:
                 raise HTTPException(status_code=403, detail="Нет доступа к объекту")
             
+            # Проверяем, что у сотрудника есть договор с управляющим
+            from domain.entities.contract import Contract
+            from domain.entities.user import User
+            
+            # Получаем сотрудника
+            employee_query = select(User).where(User.id == employee_id)
+            employee = (await db.execute(employee_query)).scalar_one_or_none()
+            if not employee:
+                raise HTTPException(status_code=404, detail="Сотрудник не найден")
+            
+            # Получаем договоры управляющего, чтобы узнать владельцев
+            manager_contracts = await permission_service.get_manager_contracts_for_user(user_id)
+            owner_ids = [contract.owner_id for contract in manager_contracts]
+            
+            if not owner_ids:
+                raise HTTPException(status_code=403, detail="У управляющего нет активных договоров")
+            
+            # Проверяем, что сотрудник работает по договорам с владельцами управляющего
+            contract_query = select(Contract).where(
+                Contract.employee_id == employee_id,
+                Contract.owner_id.in_(owner_ids),  # Договоры с владельцами управляющего
+                Contract.is_active == True,
+                Contract.status == "active"
+            )
+            contracts = (await db.execute(contract_query)).scalars().all()
+            if not contracts:
+                raise HTTPException(status_code=400, detail="У сотрудника нет договора с владельцами управляющего")
+            
+            # Проверяем, что у сотрудника есть доступ к объекту тайм-слота
+            has_object_access = False
+            for contract in contracts:
+                if contract.allowed_objects and object_id in contract.allowed_objects:
+                    has_object_access = True
+                    break
+            
+            if not has_object_access:
+                raise HTTPException(status_code=400, detail=f"У сотрудника нет доступа к объекту ID {object_id}")
+            
             # Создаем запланированную смену
             from domain.entities.shift_schedule import ShiftSchedule
             from datetime import datetime, time, date
             
-            # Создаем datetime объекты для planned_start и planned_end из тайм-слота
-            slot_datetime = datetime.combine(timeslot.slot_date, timeslot.start_time)
-            end_datetime = datetime.combine(timeslot.slot_date, timeslot.end_time)
+            # Создаем datetime объекты для planned_start и planned_end
+            import pytz
+            
+            # Получаем временную зону объекта
+            object_timezone = timeslot.object.timezone if timeslot.object and timeslot.object.timezone else 'Europe/Moscow'
+            tz = pytz.timezone(object_timezone)
+            
+            # Создаем naive datetime в локальной временной зоне объекта
+            slot_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.start_time)
+            end_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.end_time)
+            
+            # Локализуем в временную зону объекта, затем конвертируем в UTC для сохранения
+            slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+            end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
             
             shift_schedule = ShiftSchedule(
                 user_id=int(employee_id),
@@ -2910,8 +3028,8 @@ async def manager_shift_detail(
                     'type': 'schedule',
                     'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
                     'user_name': f"{schedule.user.first_name} {schedule.user.last_name or ''}".strip() if schedule.user else 'Неизвестный пользователь',
-                    'start_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_start, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_start else '-',
-                    'end_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_end, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_end else '-',
+                    'start_time': schedule.planned_start.strftime('%Y-%m-%d %H:%M') if schedule.planned_start else '-',
+                    'end_time': schedule.planned_end.strftime('%Y-%m-%d %H:%M') if schedule.planned_end else '-',
                     'status': schedule.status,
                     'hourly_rate': schedule.hourly_rate,
                     'notes': schedule.notes,

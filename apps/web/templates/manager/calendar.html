@@ -38,7 +38,7 @@ calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId
         const employeeResponse = await fetch(`/manager/api/employees`);
         if (!employeeResponse.ok) throw new Error(`HTTP ${employeeResponse.status}`);
         const employees = await employeeResponse.json();
-        const employee = employees.find(e => e.id == employeeId);
+        const employee = employees.find(e => e.id == parseInt(employeeId));
         if (!employee) return calendarPanels.showNotification('Сотрудник не найден', 'error');
 
         const tsResp = await fetch(`/manager/calendar/api/timeslot/${timeslotId}`);

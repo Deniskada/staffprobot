@@ -316,6 +316,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Валидация времени
     form.addEventListener('submit', function(e) {
+        console.log('Form submit event triggered');
+        console.log('Form data:', new FormData(form));
+        
         if (openingTime.value >= closingTime.value) {
             e.preventDefault();
             alert('Время открытия должно быть раньше времени закрытия');
@@ -328,6 +331,11 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Почасовая ставка должна быть больше 0');
             return;
         }
+        
+        // Логируем данные формы перед отправкой
+        const formData = new FormData(form);
+        console.log('Form data keys:', Array.from(formData.keys()));
+        console.log('Form data values:', Array.from(formData.values()));
     });
     
     // Автоматическое обновление времени закрытия при изменении времени открытия
