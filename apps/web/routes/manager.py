@@ -1389,8 +1389,11 @@ async def manager_calendar(
             logger.info(f"Creating calendar grid with {len(timeslots_data)} timeslots and {len(shifts_data)} shifts")
             logger.info(f"Sample shifts_data: {shifts_data[:3] if shifts_data else 'No shifts'}")
             calendar_data = _create_calendar_grid_manager(year, month, timeslots_data, shifts_data)
-            logger.info(f"Calendar grid created with {len(calendar_data)} weeks")
-            logger.info(f"First week has {len(calendar_data[0]) if calendar_data else 0} days")
+            logger.info(f"Calendar grid created with {len(calendar_data) if calendar_data else 0} weeks")
+            if calendar_data and len(calendar_data) > 0:
+                logger.info(f"First week has {len(calendar_data[0])} days")
+            else:
+                logger.warning("calendar_data is None or empty!")
             
             # Проверяем структуру calendar_data
             if calendar_data and len(calendar_data) > 0:
@@ -1448,6 +1451,9 @@ async def manager_calendar(
             
             # Используем calendar_data напрямую как calendar_weeks
             calendar_weeks = calendar_data
+            if not calendar_weeks:
+                logger.warning("calendar_data is None or empty, creating empty calendar")
+                calendar_weeks = []
             
             logger.info("Rendering template")
             return templates.TemplateResponse("manager/calendar.html", {
