@@ -1301,6 +1301,7 @@ async def manager_calendar(
                             "start_time": slot.start_time.strftime("%H:%M"),
                             "end_time": slot.end_time.strftime("%H:%M"),
                             "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
+                            "max_employees": slot.max_employees or 1,
                             "is_active": slot.is_active,
                             "notes": slot.notes or ""
                         })

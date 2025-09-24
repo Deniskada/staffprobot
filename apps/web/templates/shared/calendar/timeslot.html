@@ -62,6 +62,14 @@
         </button>
         {% endif %}
     </div>
+    
+    <!-- Occupancy Indicator -->
+    <div class="timeslot-occupancy" 
+         data-timeslot-id="{{ timeslot.id }}"
+         data-max-employees="{{ timeslot.max_employees or 1 }}"
+         data-planned-employees="0">
+        <span class="occupancy-text">0/{{ timeslot.max_employees or 1 }}</span>
+    </div>
 </div>
 
 <!-- Timeslot JavaScript -->

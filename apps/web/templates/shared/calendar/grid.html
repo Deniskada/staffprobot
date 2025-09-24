@@ -74,7 +74,7 @@
                                 {% endif %}
                                 <div class="{{ shift_class }}" 
                                      data-shift-id="{{ shift.id }}"
-                                     onclick="showShiftDetails({{ shift.id }})">
+                                     onclick="showShiftDetails('{{ shift.id }}')">
                                     <div class="shift-time">{{ shift.start_time }} - {{ shift.end_time }}</div>
                                     <div class="shift-employee">{{ shift.employee_name }}</div>
                                     {% if shift.object_name %}
@@ -94,12 +94,47 @@
                                 {% endif %}
                                 <div class="{{ timeslot_class }}" 
                                      data-timeslot-id="{{ timeslot.id }}"
+                                     data-object-id="{{ timeslot.object_id }}"
+                                     data-max-employees="{{ timeslot.max_employees or 1 }}"
                                      onclick="showTimeslotDetails({{ timeslot.id }})">
                                     <div class="timeslot-time">{{ timeslot.start_time }} - {{ timeslot.end_time }}</div>
                                     <div class="timeslot-object">{{ timeslot.object_name }}</div>
                                     {% if timeslot.employee_count %}
                                     <div class="timeslot-employees">{{ timeslot.employee_count }} сотрудников</div>
                                     {% endif %}
+                                    
+                                    <!-- Shifts within timeslot -->
+                                    {% if timeslot.scheduled_shifts %}
+                                        <div class="timeslot-shifts">
+                                            {% for shift in timeslot.scheduled_shifts %}
+                                                {% set shift_class = "shift-item" %}
+                                                {% if shift.status == "completed" %}
+                                                    {% set shift_class = shift_class + " shift-completed-positive" %}
+                                                {% elif shift.status == "active" %}
+                                                    {% set shift_class = shift_class + " shift-active-positive" %}
+                                                {% elif shift.status == "planned" %}
+                                                    {% set shift_class = shift_class + " shift-planned" %}
+                                                {% else %}
+                                                    {% set shift_class = shift_class + " shift-" + shift.status %}
+                                                {% endif %}
+                                                <div class="{{ shift_class }}" 
+                                                     data-shift-id="{{ shift.id }}"
+                                                     onclick="showShiftDetails('{{ shift.id }}')">
+                                                    <div class="shift-time">{{ shift.start_time }} - {{ shift.end_time }}</div>
+                                                    <div class="shift-employee">{{ shift.user_name }}</div>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    
+                                    <!-- Occupancy Indicator -->
+                                    <div class="timeslot-occupancy" 
+                                         data-timeslot-id="{{ timeslot.id }}"
+                                         data-object-id="{{ timeslot.object_id }}"
+                                         data-max-employees="{{ timeslot.max_employees or 1 }}"
+                                         data-planned-employees="0">
+                                        <span class="occupancy-text">0/{{ timeslot.max_employees or 1 }}</span>
+                                    </div>
                                 </div>
                             {% endfor %}
                         {% endif %}

@@ -253,6 +253,96 @@ class CalendarManager {
             filtersPanel.style.display = filtersPanel.style.display === 'none' ? 'block' : 'none';
         }
     }
+    
+    // Timeslot Occupancy Management
+    calculateTimeslotOccupancy(timeslotId, scheduledShifts = []) {
+        // Calculate occupancy for a specific timeslot
+        const timeslot = document.querySelector(`[data-timeslot-id="${timeslotId}"]`);
+        if (!timeslot) return null;
+        
+        const maxEmployees = parseInt(timeslot.dataset.maxEmployees) || 1;
+        const plannedCount = scheduledShifts.filter(shift => 
+            shift.time_slot_id === timeslotId && 
+            shift.status !== 'cancelled'
+        ).length;
+        
+        return {
+            planned: plannedCount,
+            max: maxEmployees,
+            isFull: plannedCount >= maxEmployees,
+            display: `${plannedCount}/${maxEmployees}`
+        };
+    }
+    
+    updateTimeslotOccupancy(timeslotId, scheduledShifts = []) {
+        // Update occupancy display for a timeslot
+        const occupancy = this.calculateTimeslotOccupancy(timeslotId, scheduledShifts);
+        if (!occupancy) return;
+        
+        const timeslot = document.querySelector(`[data-timeslot-id="${timeslotId}"]`);
+        const occupancyIndicator = timeslot?.querySelector('.timeslot-occupancy');
+        
+        if (!occupancyIndicator) return;
+        
+        // Update display text
+        const textElement = occupancyIndicator.querySelector('.occupancy-text');
+        if (textElement) {
+            textElement.textContent = occupancy.display;
+        }
+        
+        // Update data attributes
+        occupancyIndicator.dataset.plannedEmployees = occupancy.planned;
+        occupancyIndicator.dataset.maxEmployees = occupancy.max;
+        
+        // Update CSS classes
+        occupancyIndicator.className = 'timeslot-occupancy';
+        if (occupancy.planned === 0) {
+            occupancyIndicator.classList.add('available');
+        } else if (occupancy.isFull) {
+            occupancyIndicator.classList.add('full');
+        } else {
+            occupancyIndicator.classList.add('partial');
+        }
+        
+        // Update timeslot visibility
+        if (occupancy.isFull) {
+            timeslot.classList.add('timeslot-full');
+        } else {
+            timeslot.classList.remove('timeslot-full');
+        }
+    }
+    
+    updateAllTimeslotsOccupancy(scheduledShifts = []) {
+        // Update occupancy for all timeslots on the page
+        const timeslots = document.querySelectorAll('.timeslot-item');
+        timeslots.forEach(timeslot => {
+            const timeslotId = timeslot.dataset.timeslotId;
+            if (timeslotId) {
+                this.updateTimeslotOccupancy(timeslotId, scheduledShifts);
+            }
+        });
+    }
+    
+    hideFullTimeslots() {
+        // Hide timeslots that are completely full
+        const fullTimeslots = document.querySelectorAll('.timeslot-item.timeslot-full');
+        fullTimeslots.forEach(timeslot => {
+            timeslot.classList.add('timeslot-hiding');
+            setTimeout(() => {
+                timeslot.style.display = 'none';
+            }, 300);
+        });
+    }
+    
+    showAllTimeslots() {
+        // Show all timeslots (including full ones)
+        const hiddenTimeslots = document.querySelectorAll('.timeslot-item[style*="display: none"]');
+        hiddenTimeslots.forEach(timeslot => {
+            timeslot.style.display = '';
+            timeslot.classList.remove('timeslot-hiding');
+            timeslot.classList.add('timeslot-showing');
+        });
+    }
 }
 
 // Utility functions
