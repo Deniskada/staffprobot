@@ -24,7 +24,7 @@
 <script src="{{ url_for('static', path='js/shared/calendar_panels.js') }}"></script>
 <script>
 // Экспорт данных календаря для JS-логики занятости
-window.calendar_weeks = {{ calendar_weeks | tojson }};
+window.calendar_weeks = {{ (calendar_weeks or []) | tojson }};
 
 // Define callback functions before using them
 function showShiftDetails(shiftId) {
