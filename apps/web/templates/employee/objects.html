@@ -5,7 +5,7 @@
 {% block extra_css %}
 <style>
 .map-container {
-    height: 500px;
+    height: 600px;
     width: 100%;
 }
 .map-popup {
@@ -14,14 +14,98 @@
 .ymaps-2-1-79-balloon {
     min-width: 200px;
 }
+
+/* Стили для списка объектов */
+.object-item {
+    border: none;
+    border-bottom: 1px solid #e9ecef;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.object-item:hover {
+    background-color: #f8f9fa;
+    transform: translateX(2px);
+}
+
+.object-item:last-child {
+    border-bottom: none;
+}
+
+.object-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 0.5rem;
+}
+
+.object-salary {
+    font-size: 0.95rem;
+    color: #28a745;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.object-address {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-bottom: 0.75rem;
+    transition: color 0.2s ease;
+}
+
+.object-address:hover {
+    color: #007bff;
+    text-decoration: underline;
+}
+
+.object-apply-btn {
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.object-apply-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,123,255,0.3);
+}
+
+.currency-symbol {
+    font-family: 'Times New Roman', serif;
+    font-weight: bold;
+}
+
+/* Адаптивность */
+@media (max-width: 991.98px) {
+    .map-container {
+        height: 400px;
+    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Карта -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
+<div class="row g-3">
+    <!-- Список объектов (2/7) -->
+    <div class="col-12 col-lg-3">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-briefcase"></i> Доступные вакансии
+                </h5>
+            </div>
+            <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
+                <div id="objects-list" class="list-group list-group-flush">
+                    <!-- Объекты будут загружены через JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Карта (5/7) -->
+    <div class="col-12 col-lg-9">
+        <div class="card h-100">
             <div class="card-body p-0">
                 <div id="map" class="map-container"></div>
             </div>
