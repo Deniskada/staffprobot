@@ -158,6 +158,7 @@ services:
       - PYTHONUNBUFFERED=1
       - SECRET_KEY=dev-secret-key-change-in-production
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - YANDEX_MAPS_API_KEY=${YANDEX_MAPS_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
