@@ -1,11 +1,11 @@
-// JavaScript для страницы поиска работы (объектов)
+// JavaScript для страницы поиска работы (объектов) с Яндекс Картами
 
 class EmployeeObjectsManager {
     constructor() {
         this.map = null;
         this.objects = [];
         this.filteredObjects = [];
-        this.currentView = 'map';
+        this.markers = [];
         this.init();
     }
 
@@ -16,20 +16,6 @@ class EmployeeObjectsManager {
     }
 
     setupEventListeners() {
-        // Переключение между картой и списком
-        document.getElementById('view-map').addEventListener('click', () => {
-            this.switchView('map');
-        });
-
-        document.getElementById('view-list').addEventListener('click', () => {
-            this.switchView('list');
-        });
-
-        // Применение фильтров
-        document.getElementById('apply-filters').addEventListener('click', () => {
-            this.applyFilters();
-        });
-
         // Кнопки подачи заявок
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('apply-btn')) {
@@ -48,31 +34,52 @@ class EmployeeObjectsManager {
         try {
             console.log('Загружаем объекты...');
             const response = await fetch('/employee/api/objects');
-            if (response.ok) {
-                this.objects = await response.json();
-                console.log('Загружено объектов:', this.objects.length);
-                console.log('Объекты:', this.objects);
-                this.filteredObjects = [...this.objects];
-                this.updateObjectsDisplay();
-                this.addObjectsToMap();
-            } else {
-                console.error('Ошибка загрузки объектов:', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
+            
+            const data = await response.json();
+            this.objects = data.objects || [];
+            this.filteredObjects = [...this.objects];
+            
+            console.log('Объекты загружены:', this.objects.length);
+            
+            // Добавляем объекты на карту если она готова
+            if (this.map) {
+                this.addObjectsToMap();
+            }
+            
         } catch (error) {
-            console.error('Ошибка:', error);
+            console.error('Ошибка загрузки объектов:', error);
+            this.showError('Ошибка загрузки объектов. Попробуйте обновить страницу.');
         }
     }
 
     initMap() {
-        // Инициализация карты Leaflet
-        this.map = L.map('map').setView([47.2000, 39.7000], 12); // Ростов-на-Дону
-        
-        // Добавляем слой OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(this.map);
+        // Проверяем, что Яндекс Maps API загружен
+        if (typeof ymaps === 'undefined') {
+            console.error('Яндекс Maps API не загружен, ждем...');
+            // Ждем загрузки API
+            setTimeout(() => this.initMap(), 100);
+            return;
+        }
 
-        console.log('Карта инициализирована');
+        // Инициализируем карту
+        ymaps.ready(() => {
+            this.map = new ymaps.Map('map', {
+                center: [47.2000, 39.7000], // Ростов-на-Дону
+                zoom: 12,
+                controls: ['zoomControl', 'typeSelector', 'fullscreenControl']
+            });
+
+            console.log('Яндекс карта инициализирована');
+            
+            // Если объекты уже загружены, добавляем их на карту
+            if (this.objects.length > 0) {
+                this.addObjectsToMap();
+            }
+        });
     }
 
     addObjectsToMap() {
@@ -84,150 +91,75 @@ class EmployeeObjectsManager {
         console.log('Добавляем объекты на карту. Количество:', this.filteredObjects.length);
 
         // Очищаем существующие маркеры
-        this.map.eachLayer(layer => {
-            if (layer instanceof L.Marker) {
-                this.map.removeLayer(layer);
+        this.map.geoObjects.removeAll();
+
+        this.filteredObjects.forEach(object => {
+            if (object.latitude && object.longitude) {
+                const marker = new ymaps.Placemark(
+                    [object.latitude, object.longitude],
+                    {
+                        balloonContentHeader: `<strong>${object.name}</strong>`,
+                        balloonContentBody: this.createBalloonContent(object),
+                        balloonContentFooter: `<button class="btn btn-primary btn-sm apply-btn" data-object-id="${object.id}">Подать заявку</button>`,
+                        hintContent: object.name
+                    },
+                    {
+                        preset: 'islands#redDotIcon',
+                        iconColor: '#ff0000'
+                    }
+                );
+
+                this.map.geoObjects.add(marker);
+                this.markers.push(marker);
             }
         });
 
-        // Добавляем маркеры для каждого объекта
-        this.filteredObjects.forEach((object, index) => {
-            console.log(`Объект ${index + 1}:`, object.name, 'координаты:', object.latitude, object.longitude);
-            
-            if (object.latitude && object.longitude && object.latitude !== 0 && object.longitude !== 0) {
-                console.log('Добавляем маркер для:', object.name);
-                const marker = L.marker([object.latitude, object.longitude])
-                    .addTo(this.map)
-                    .bindPopup(`
-                        <div class="map-popup">
-                            <h6>${object.name}</h6>
-                            <p><i class="bi bi-geo-alt"></i> ${object.address}</p>
-                            <p><i class="bi bi-clock"></i> ${object.opening_time} - ${object.closing_time}</p>
-                            <p><i class="bi bi-currency-ruble"></i> ${object.hourly_rate} ₽/час</p>
-                            <button class="btn btn-primary btn-sm w-100 apply-btn" data-object-id="${object.id}">
-                                <i class="bi bi-file-text"></i> Подать заявку
-                            </button>
-                        </div>
-                    `);
-            } else {
-                console.log('Пропускаем объект с нулевыми координатами:', object.name);
+        // Если есть объекты, центрируем карту на них
+        if (this.filteredObjects.length > 0) {
+            const bounds = this.map.geoObjects.getBounds();
+            if (bounds) {
+                this.map.setBounds(bounds, { checkZoomRange: true });
             }
-        });
-    }
-
-    switchView(view) {
-        this.currentView = view;
-        
-        // Обновляем кнопки
-        document.getElementById('view-map').classList.toggle('active', view === 'map');
-        document.getElementById('view-list').classList.toggle('active', view === 'list');
-        
-        // Показываем/скрываем соответствующие блоки
-        document.getElementById('map-view').classList.toggle('d-none', view !== 'map');
-        document.getElementById('list-view').classList.toggle('d-none', view !== 'list');
-        
-        if (view === 'map' && this.map) {
-            setTimeout(() => this.map.resize(), 100);
         }
     }
 
-    applyFilters() {
-        const filters = {
-            workType: document.getElementById('work-type-filter').value,
-            schedule: document.getElementById('schedule-filter').value,
-            experience: document.getElementById('experience-filter').value,
-            salary: document.getElementById('salary-filter').value,
-            distance: document.getElementById('distance-filter').value,
-            transport: document.getElementById('transport-filter').value,
-            flexibility: document.getElementById('flexibility-filter').value
-        };
-
-        this.filteredObjects = this.objects.filter(object => {
-            // Фильтр по типу работы
-            if (filters.workType && !object.shift_tasks.includes(filters.workType)) {
-                return false;
-            }
-
-            // Фильтр по зарплате
-            if (filters.salary && object.hourly_rate < parseInt(filters.salary)) {
-                return false;
-            }
-
-            // Другие фильтры можно добавить по мере необходимости
-            return true;
-        });
-
-        this.updateObjectsDisplay();
-        this.updateMapMarkers();
-    }
-
-    updateObjectsDisplay() {
-        const objectsList = document.getElementById('objects-list');
-        const objectsCount = document.getElementById('objects-count');
-        
-        objectsCount.textContent = `${this.filteredObjects.length} объектов`;
-        
-        // Обновляем список объектов
-        objectsList.innerHTML = this.filteredObjects.map(object => `
-            <div class="col-md-6 col-lg-4 mb-3 object-item" data-object-id="${object.id}">
-                <div class="object-card card h-100">
-                    <div class="card-header">
-                        <h6 class="mb-0">${object.name}</h6>
-                    </div>
-                    <div class="card-body">
-                        <p class="card-text">
-                            <i class="bi bi-geo-alt"></i> ${object.address}
-                        </p>
-                        <p class="card-text">
-                            <i class="bi bi-clock"></i> ${object.opening_time} - ${object.closing_time}
-                        </p>
-                        <p class="card-text">
-                            <i class="bi bi-currency-ruble"></i> ${object.hourly_rate} ₽/час
-                        </p>
-                        ${object.work_conditions ? `
-                            <p class="card-text">
-                                <small class="text-muted">${object.work_conditions.substring(0, 100)}${object.work_conditions.length > 100 ? '...' : ''}</small>
-                            </p>
-                        ` : ''}
-                        <div class="mt-3">
-                            ${object.shift_tasks.map(category => 
-                                `<span class="badge bg-secondary me-1">${category}</span>`
-                            ).join('')}
-                        </div>
-                    </div>
-                    <div class="card-footer">
-                        <button class="btn btn-primary btn-action w-100 apply-btn" data-object-id="${object.id}">
-                            <i class="bi bi-file-text"></i> Подать заявку
-                        </button>
-                    </div>
-                </div>
+    createBalloonContent(object) {
+        const tasks = object.shift_tasks ? object.shift_tasks.join(', ') : 'Стандартные задачи';
+        return `
+            <div class="map-popup">
+                <p><strong>Адрес:</strong> ${object.address}</p>
+                <p><strong>Время работы:</strong> ${object.opening_time} - ${object.closing_time}</p>
+                <p><strong>Ставка:</strong> ${object.hourly_rate} ₽/час</p>
+                <p><strong>Условия:</strong> ${object.work_conditions}</p>
+                <p><strong>Задачи:</strong> ${tasks}</p>
             </div>
-        `).join('');
+        `;
     }
 
-    updateMapMarkers() {
-        if (!this.map) return;
 
-        // Добавляем новые маркеры (очистка уже в addObjectsToMap)
-        this.addObjectsToMap();
-    }
+
+
+
 
     showApplicationModal(objectId) {
         const object = this.objects.find(obj => obj.id == objectId);
         if (!object) return;
 
-        // Заполняем модальное окно данными объекта
-        document.getElementById('object-id').value = object.id;
+        document.getElementById('object-id').value = objectId;
         document.getElementById('object-name').value = object.name;
-        document.getElementById('work-conditions').value = object.work_conditions || '';
+        document.getElementById('work-conditions').value = object.work_conditions;
         
-        // Отображаем задачи на смене
         const tasksList = document.getElementById('shift-tasks-list');
-        tasksList.innerHTML = object.shift_tasks.map(task => 
-            `<span class="badge bg-primary me-1 mb-1">${task}</span>`
-        ).join('');
+        tasksList.innerHTML = '';
+        if (object.shift_tasks) {
+            object.shift_tasks.forEach(task => {
+                const taskItem = document.createElement('div');
+                taskItem.className = 'form-control-plaintext';
+                taskItem.textContent = `• ${task}`;
+                tasksList.appendChild(taskItem);
+            });
+        }
 
-        // Показываем модальное окно
         const modal = new bootstrap.Modal(document.getElementById('applicationModal'));
         modal.show();
     }
@@ -239,60 +171,72 @@ class EmployeeObjectsManager {
         try {
             const response = await fetch('/employee/api/applications', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    object_id: parseInt(formData.get('object_id')),
-                    message: formData.get('message'),
-                    preferred_schedule: formData.get('preferred_schedule')
-                })
+                body: formData
             });
-
+            
             if (response.ok) {
                 const result = await response.json();
-                this.showNotification('Заявка успешно подана!', 'success');
+                console.log('Заявка отправлена:', result);
                 
                 // Закрываем модальное окно
                 const modal = bootstrap.Modal.getInstance(document.getElementById('applicationModal'));
                 modal.hide();
                 
+                // Показываем уведомление
+                this.showSuccess('Заявка успешно отправлена!');
+                
                 // Очищаем форму
                 form.reset();
             } else {
                 const error = await response.json();
-                this.showNotification(error.detail || 'Ошибка при подаче заявки', 'error');
+                throw new Error(error.detail || 'Ошибка отправки заявки');
             }
         } catch (error) {
-            console.error('Ошибка:', error);
-            this.showNotification('Ошибка при подаче заявки', 'error');
+            console.error('Ошибка отправки заявки:', error);
+            this.showError('Ошибка отправки заявки: ' + error.message);
         }
     }
 
-    showNotification(message, type = 'info') {
-        // Создаем уведомление
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
-        alertDiv.style.top = '20px';
-        alertDiv.style.right = '20px';
-        alertDiv.style.zIndex = '9999';
-        alertDiv.innerHTML = `
+    showSuccess(message) {
+        // Создаем уведомление об успехе
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-success alert-dismissible fade show position-fixed';
+        alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999;';
+        alert.innerHTML = `
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
-        document.body.appendChild(alertDiv);
+        document.body.appendChild(alert);
         
         // Автоматически скрываем через 5 секунд
         setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
+            if (alert.parentNode) {
+                alert.parentNode.removeChild(alert);
             }
         }, 5000);
     }
+
+    showError(message) {
+        // Создаем уведомление об ошибке
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+        alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999;';
+        alert.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alert);
+        
+        // Автоматически скрываем через 10 секунд
+        setTimeout(() => {
+            if (alert.parentNode) {
+                alert.parentNode.removeChild(alert);
+            }
+        }, 10000);
+    }
 }
 
-// Инициализация при загрузке страницы
+// Инициализируем менеджер объектов при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     new EmployeeObjectsManager();
 });

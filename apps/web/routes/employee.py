@@ -213,9 +213,14 @@ async def employee_objects(
                 'shift_tasks': obj.shift_tasks or ['Выполнение основных обязанностей']
             })
         
+        # Получаем ключ API Яндекс Карт
+        import os
+        yandex_maps_api_key = os.getenv("YANDEX_MAPS_API_KEY", "")
+        
         return templates.TemplateResponse("employee/objects.html", {
         "request": request,
         "current_user": current_user,
+        "yandex_maps_api_key": yandex_maps_api_key,
             "objects": objects,
             "available_interfaces": available_interfaces,
             "applications_count": applications_count
@@ -231,12 +236,18 @@ async def employee_api_objects(
 ):
     """API для получения объектов для карты"""
     try:
+        logger.info(f"API objects called, current_user: {type(current_user)}")
+        
         if isinstance(current_user, RedirectResponse):
+            logger.info("Redirecting to login")
             return current_user
             
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
+            logger.error("User not found")
             raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        logger.info(f"User ID: {user_id}")
         
         # Получаем доступные объекты
         objects_query = select(Object).where(Object.available_for_applicants == True)
@@ -260,7 +271,8 @@ async def employee_api_objects(
                 'shift_tasks': obj.shift_tasks or ['Выполнение основных обязанностей']
             })
         
-        return objects
+        logger.info(f"Found {len(objects)} objects")
+        return {"objects": objects}
         
     except Exception as e:
         logger.error(f"Ошибка загрузки объектов API: {e}")
