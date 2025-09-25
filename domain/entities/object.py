@@ -29,6 +29,7 @@ class Object(Base):
     available_for_applicants = Column(Boolean, default=False)  # Доступен для соискателей
     work_conditions = Column(Text, nullable=True)  # Условия работы
     shift_tasks = Column(JSONB, nullable=True)  # Список задач на смене
+    employee_position = Column(Text, nullable=True)  # Должность сотрудника (краткое описание выполняемой работы)
     # График работы: битовая маска дней (1=Пн ... 64=Вс), по умолчанию Пн-Пт (31)
     work_days_mask = Column(Integer, nullable=False, server_default="31")
     # Периодичность повторения недель: 1 = каждую неделю

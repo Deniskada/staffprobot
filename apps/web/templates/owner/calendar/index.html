@@ -17,7 +17,7 @@
     background: white;
     border-radius: 10px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 1000;
+    z-index: 999;
     transition: all 0.3s ease;
 }
 
@@ -78,7 +78,7 @@
     background: white;
     border-radius: 10px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 1000;
+    z-index: 999;
     transition: all 0.3s ease;
     display: flex;
     flex-direction: column;
@@ -229,22 +229,13 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
+<!-- Shared panels -->
+{% include 'shared/calendar/objects_panel.html' %}
+{% include 'shared/calendar/employees_panel.html' %}
+{% include 'shared/calendar/quick_create_form.html' %}
 
-
-            <!-- Shared panels -->
-            {% include 'shared/calendar/objects_panel.html' %}
-            {% include 'shared/calendar/employees_panel.html' %}
-            {% include 'shared/calendar/quick_create_form.html' %}
-
-            <!-- Shared Calendar Grid -->
-            {% include 'shared/calendar/grid.html' %}
-        </div>
-    </div>
-</div>
-
+<!-- Shared Calendar Grid -->
+{% include 'shared/calendar/grid.html' %}
 {% endblock %}
 
 {% block extra_js %}

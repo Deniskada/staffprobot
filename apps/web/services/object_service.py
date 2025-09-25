@@ -114,7 +114,10 @@ class ObjectService:
                 available_for_applicants=object_data.get('available_for_applicants', False),
                 is_active=object_data.get('is_active', True),
                 work_days_mask=object_data.get('work_days_mask', 31),
-                schedule_repeat_weeks=object_data.get('schedule_repeat_weeks', 1)
+                schedule_repeat_weeks=object_data.get('schedule_repeat_weeks', 1),
+                work_conditions=object_data.get('work_conditions'),
+                employee_position=object_data.get('employee_position'),
+                shift_tasks=object_data.get('shift_tasks')
             )
             
             self.db.add(new_object)
@@ -173,6 +176,7 @@ class ObjectService:
             
             # Обновляем новые поля
             obj.work_conditions = object_data.get('work_conditions', obj.work_conditions)
+            obj.employee_position = object_data.get('employee_position', obj.employee_position)
             obj.shift_tasks = object_data.get('shift_tasks', obj.shift_tasks)
             
             logger.info(f"Updating object {object_id} - work_conditions: '{obj.work_conditions}', shift_tasks: {obj.shift_tasks}")
@@ -234,6 +238,7 @@ class ObjectService:
             obj.work_days_mask = object_data.get('work_days_mask', obj.work_days_mask)
             obj.schedule_repeat_weeks = object_data.get('schedule_repeat_weeks', obj.schedule_repeat_weeks)
             obj.work_conditions = object_data.get('work_conditions', obj.work_conditions)
+            obj.employee_position = object_data.get('employee_position', obj.employee_position)
             obj.shift_tasks = object_data.get('shift_tasks', obj.shift_tasks)
             
             # Обновляем координаты если нужно

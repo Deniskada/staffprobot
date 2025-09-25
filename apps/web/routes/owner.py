@@ -177,6 +177,7 @@ async def owner_objects(
                     "created_at": obj.created_at.strftime("%Y-%m-%d"),
                     "owner_id": obj.owner_id,
                     "work_conditions": obj.work_conditions or "",
+                    "employee_position": obj.employee_position or "",
                     "shift_tasks": obj.shift_tasks or []
                 })
             
@@ -289,6 +290,7 @@ async def owner_objects_create_post(
         
         # Обработка новых полей
         work_conditions = form_data.get("work_conditions", "").strip()
+        employee_position = form_data.get("employee_position", "").strip()
         shift_tasks = form_data.getlist("shift_tasks")
         # Фильтруем пустые задачи
         shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
@@ -320,6 +322,7 @@ async def owner_objects_create_post(
             "work_days_mask": work_days_mask,
             "schedule_repeat_weeks": schedule_repeat_weeks,
             "work_conditions": work_conditions if work_conditions else None,
+            "employee_position": employee_position if employee_position else None,
             "shift_tasks": shift_tasks if shift_tasks else None
         }
         
@@ -452,6 +455,7 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "work_days_mask": obj.work_days_mask,
                 "schedule_repeat_weeks": obj.schedule_repeat_weeks,
                 "work_conditions": obj.work_conditions or "",
+                "employee_position": obj.employee_position or "",
                 "shift_tasks": obj.shift_tasks or []
             }
             
@@ -555,6 +559,7 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         
         # Обработка новых полей
         work_conditions = form_data.get("work_conditions", "").strip()
+        employee_position = form_data.get("employee_position", "").strip()
         shift_tasks = form_data.getlist("shift_tasks[]")
         # Фильтруем пустые задачи
         shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
@@ -594,6 +599,7 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "work_days_mask": work_days_mask,
                 "schedule_repeat_weeks": schedule_repeat_weeks,
                 "work_conditions": work_conditions if work_conditions else None,
+                "employee_position": employee_position if employee_position else None,
                 "shift_tasks": shift_tasks if shift_tasks else None
             }
             
