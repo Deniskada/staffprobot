@@ -1,175 +1,17 @@
 {% extends "employee/base_employee.html" %}
 
-{% block title %}StaffProBot - Календарь собеседований{% endblock %}
+{% block title %}Календарь{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h3 mb-0">
-                <i class="bi bi-calendar3 text-primary"></i>
-                Календарь собеседований
-            </h1>
-            <div class="btn-group" role="group">
-                <button type="button" class="btn btn-outline-primary" id="prev-month">
-                    <i class="bi bi-chevron-left"></i>
-                </button>
-                <button type="button" class="btn btn-outline-primary" id="current-month">
-                    <span id="current-month-text">{{ current_date.strftime('%B %Y') }}</span>
-                </button>
-                <button type="button" class="btn btn-outline-primary" id="next-month">
-                    <i class="bi bi-chevron-right"></i>
-                </button>
-            </div>
-        </div>
+        {% include 'shared/calendar/grid.html' %}
     </div>
 </div>
 
-<!-- Статистика собеседований -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <i class="bi bi-calendar-event text-info fs-1"></i>
-                <h5 class="card-title mt-2">Запланировано</h5>
-                <h3 class="text-info" id="scheduled-count">{{ interviews_stats.scheduled }}</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <i class="bi bi-check-circle text-success fs-1"></i>
-                <h5 class="card-title mt-2">Пройдено</h5>
-                <h3 class="text-success" id="completed-count">{{ interviews_stats.completed }}</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <i class="bi bi-clock text-warning fs-1"></i>
-                <h5 class="card-title mt-2">Сегодня</h5>
-                <h3 class="text-warning" id="today-count">{{ interviews_stats.today }}</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <i class="bi bi-x-circle text-danger fs-1"></i>
-                <h5 class="card-title mt-2">Отменено</h5>
-                <h3 class="text-danger" id="cancelled-count">{{ interviews_stats.cancelled }}</h3>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Панели: сотруднику не нужен список объектов; панель сотрудников показывает только себя -->
+{% include 'shared/calendar/employees_panel.html' %}
 
-<!-- Календарь -->
-<div class="row">
-    <div class="col-12">
-        <div class="interview-calendar">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="bi bi-calendar3"></i> Календарь собеседований
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <!-- Легенда цветов -->
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <div class="d-flex flex-wrap gap-3">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-2" style="width: 20px; height: 20px; background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 4px;"></div>
-                                    <small>Запланировано</small>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <div class="me-2" style="width: 20px; height: 20px; background: #fff3e0; border: 1px solid #ffcc02; border-radius: 4px;"></div>
-                                    <small>Сегодня</small>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <div class="me-2" style="width: 20px; height: 20px; background: #e8f5e8; border: 1px solid #4caf50; border-radius: 4px;"></div>
-                                    <small>Пройдено</small>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <div class="me-2" style="width: 20px; height: 20px; background: #ffebee; border: 1px solid #f44336; border-radius: 4px;"></div>
-                                    <small>Отменено</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Сетка календаря -->
-                    <div id="calendar-grid">
-                        <!-- Календарь будет загружен динамически -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Ближайшие собеседования -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-clock"></i> Ближайшие собеседования
-                </h5>
-            </div>
-            <div class="card-body">
-                <div id="upcoming-interviews">
-                    {% if upcoming_interviews %}
-                        {% for interview in upcoming_interviews %}
-                        <div class="interview-item interview-scheduled mb-3">
-                            <div class="row">
-                                <div class="col-md-8">
-                                    <h6 class="mb-1">
-                                        <i class="bi bi-geo-alt"></i> {{ interview.object_name }}
-                                    </h6>
-                                    <p class="mb-1">
-                                        <i class="bi bi-calendar-event"></i> 
-                                        {{ interview.scheduled_at.strftime('%d.%m.%Y %H:%M') }}
-                                    </p>
-                                    {% if interview.location %}
-                                    <p class="mb-1">
-                                        <i class="bi bi-geo-alt"></i> {{ interview.location }}
-                                    </p>
-                                    {% endif %}
-                                    {% if interview.contact_person %}
-                                    <p class="mb-0">
-                                        <i class="bi bi-person"></i> {{ interview.contact_person }}
-                                    </p>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-4 text-end">
-                                    <div class="btn-group-vertical">
-                                        {% if interview.type == 'online' %}
-                                            <span class="badge bg-info mb-2">Онлайн</span>
-                                        {% else %}
-                                            <span class="badge bg-primary mb-2">Очно</span>
-                                        {% endif %}
-                                        <button class="btn btn-outline-primary btn-sm" onclick="viewInterviewDetails({{ interview.id }})">
-                                            <i class="bi bi-eye"></i> Подробнее
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="text-center py-3">
-                            <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
-                            <p class="text-muted mt-2">Нет запланированных собеседований</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Модальное окно деталей собеседования -->
 <div class="modal fade" id="interviewDetailsModal" tabindex="-1">
@@ -193,5 +35,106 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/employee/calendar.js"></script>
+<script>
+// Экспорт данных календаря
+window.calendar_weeks = {{ calendar_weeks_json | safe }};
+
+function showShiftDetails(shiftId) {
+    if (shiftId.toString().startsWith('schedule_')) {
+        const scheduleId = shiftId.toString().replace('schedule_', '');
+        window.location.href = `/employee/shifts/${scheduleId}?shift_type=schedule`;
+    } else {
+        window.location.href = `/employee/shifts/${shiftId}`;
+    }
+}
+function showTimeslotDetails(timeslotId) {
+    // У сотрудника только просмотр
+    window.location.href = `/employee/timeslots/${timeslotId}`;
+}
+function showDateDetails(date) {}
+
+window.calendarManager = new CalendarManager({
+    currentDate: new Date('{{ current_date }}'),
+    viewType: 'month',
+    baseUrl: '{{ request.url.path }}',
+    onShiftClick: showShiftDetails,
+    onTimeslotClick: showTimeslotDetails,
+    onDateClick: showDateDetails
+});
+window.calendarPanels = new CalendarPanels('employee');
+
+// Переопределяем методы панелей для сотрудника
+calendarPanels.loadObjects = function() { /* сотруднику объекты не нужны */ };
+calendarManager.createTimeslotFromObject = function() { /* запрет создания тайм-слотов */ };
+// Разрешаем сотруднику назначить себя на тайм-слот
+calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId) {
+    try {
+        // Сотрудник назначает только себя: игнорируем переданный employeeId и берем текущего
+        const resp = await fetch(`/employee/api/employees`);
+        const list = await resp.json();
+        const self = Array.isArray(list) && list.length ? list[0] : null;
+        if (!self) throw new Error('Профиль сотрудника не найден');
+
+        const planResp = await fetch('/manager/api/calendar/plan-shift', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timeslot_id: Number(timeslotId), employee_id: Number(self.id) })
+        });
+        const data = await planResp.json().catch(() => ({}));
+        if (!planResp.ok || data.success === false) {
+            const detail = data && (data.detail || data.message);
+            throw new Error(detail || `HTTP ${planResp.status}`);
+        }
+        if (window.calendarPanels && typeof window.calendarPanels.showNotification === 'function') {
+            window.calendarPanels.showNotification('Вы назначены на смену', 'success');
+        }
+        setTimeout(() => window.location.reload(), 400);
+    } catch (e) {
+        console.error(e);
+        if (window.calendarPanels && typeof window.calendarPanels.showNotification === 'function') {
+            window.calendarPanels.showNotification(`Ошибка назначения: ${e.message}`, 'error');
+        }
+    }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        // Инициализируем панели (внутри будет клик-хэндлер и автообновление)
+        calendarPanels.init();
+        // И сразу подгрузим список (только текущий сотрудник)
+        calendarPanels.loadEmployees();
+        // Настраиваем drag&drop только для просмотра (без назначения)
+        setTimeout(() => {
+            calendarManager.setupDragDrop();
+            initializeTimeslotOccupancy();
+            // Разрешить dnd только для себя
+            document.querySelectorAll('.employee-item').forEach(el => {
+                el.setAttribute('draggable', 'true');
+            });
+        }, 500);
+    } catch (e) { console.error(e); }
+});
+
+function initializeTimeslotOccupancy() {
+    const shifts = [];
+    if (window.calendar_weeks && Array.isArray(window.calendar_weeks)) {
+        window.calendar_weeks.forEach(week => week.forEach(day => {
+            (day.shifts || []).forEach(s => {
+                if (s.time_slot_id && s.status !== 'cancelled') {
+                    shifts.push({ time_slot_id: Number(s.time_slot_id), status: s.status });
+                }
+            });
+        }));
+    }
+    const timeslotElements = document.querySelectorAll('.timeslot-item[data-timeslot-id]');
+    timeslotElements.forEach(ts => {
+        const id = Number(ts.dataset.timeslotId);
+        const max = Number(ts.dataset.maxEmployees) || 1;
+        const current = shifts.filter(s => s.time_slot_id === id).length;
+        const ind = ts.querySelector('.timeslot-occupancy .occupancy-text');
+        if (ind) ind.textContent = `${current}/${max}`;
+        if (current >= max) ts.style.display = 'none'; else ts.style.display = '';
+    });
+}
+</script>
 {% endblock %}

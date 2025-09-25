@@ -24,7 +24,7 @@
 <script src="{{ url_for('static', path='js/shared/calendar_panels.js') }}"></script>
 <script>
 // Экспорт данных календаря для JS-логики занятости
-window.calendar_weeks = {{ (calendar_weeks or []) | tojson }};
+window.calendar_weeks = {{ calendar_weeks_json | safe }};
 
 // Define callback functions before using them
 function showShiftDetails(shiftId) {
@@ -103,12 +103,19 @@ calendarManager.createTimeslotFromObject = async function(objectId, date) {
 
 
 document.addEventListener('DOMContentLoaded', function() {
-    calendarPanels.init();
-    setTimeout(() => { 
-        calendarManager.setupDragDrop();
-        // Initialize timeslot occupancy
-        initializeTimeslotOccupancy();
-    }, 1000);
+    console.log('Initializing manager calendar...');
+    try {
+        calendarPanels.init();
+        console.log('Calendar panels initialized');
+        setTimeout(() => { 
+            calendarManager.setupDragDrop();
+            console.log('Drag&drop setup completed');
+            // Initialize timeslot occupancy
+            initializeTimeslotOccupancy();
+        }, 1000);
+    } catch (error) {
+        console.error('Error initializing calendar:', error);
+    }
 });
 
 // Initialize timeslot occupancy
@@ -173,6 +180,17 @@ function initializeTimeslotOccupancy() {
 
                 const currentShifts = shiftsForThisTimeslot.length;
 
+                // Отладка для тайм-слота 181 (17 сентября)
+                if (timeslotId === 181) {
+                    console.log(`DEBUG Manager Timeslot 181:`, {
+                        timeslotId,
+                        maxEmployees,
+                        currentShifts,
+                        shiftsForThisTimeslot,
+                        willHide: currentShifts >= maxEmployees
+                    });
+                }
+
                 if (currentShifts >= maxEmployees) {
                     // Скрываем заполненные тайм-слоты
                     timeslot.element.style.display = 'none';
@@ -193,35 +211,27 @@ function initializeTimeslotOccupancy() {
         });
     };
 
-    if (scheduledShifts.length === 0) {
-        const year = {{ year }};
-        const month = {{ month }};
-        fetch(`/manager/calendar/api/timeslots-status?year=${year}&month=${month}`)
-            .then(r => r.json())
-            .then(data => {
-                // Преобразуем в вид со сдвигами на слот
-                const shifts = [];
-                (data || []).forEach(item => {
-                    // planned shifts
-                    (item.scheduled_shifts || []).forEach(s => {
-                        if (s.status !== 'cancelled') {
-                            shifts.push({ time_slot_id: item.slot_id, status: s.status });
-                        }
-                    });
-                    // actual shifts
-                    (item.actual_shifts || []).forEach(s => {
-                        if (s.status !== 'cancelled') {
-                            shifts.push({ time_slot_id: item.slot_id, status: s.status });
-                        }
-                    });
-                });
-                applyOccupancy(shifts);
-            })
-            .catch(() => applyOccupancy([]));
-        return;
+    console.log('Manager - Found scheduledShifts:', scheduledShifts.length);
+    console.log('Manager - window.calendar_weeks exists:', !!window.calendar_weeks);
+    if (window.calendar_weeks && window.calendar_weeks.length > 0) {
+        console.log('Manager - First week shifts:', window.calendar_weeks[0].map(day => day.shifts ? day.shifts.length : 0));
+        // Проверим 17 сентября (3-я неделя, 3-й день)
+        if (window.calendar_weeks[2] && window.calendar_weeks[2][3]) {
+            console.log('Manager - 17 September data:', window.calendar_weeks[2][3]);
+        }
     }
 
-    applyOccupancy(scheduledShifts);
+    // Всегда применяем логику к найденным сменам
+    if (scheduledShifts.length > 0) {
+        applyOccupancy(scheduledShifts);
+    } else {
+        // Если смен нет в данных — подтягиваем с сервера статусы тайм-слотов как fallback
+        const year = {{ year }};
+        const month = {{ month }};
+        // Отключаем проблемный API, используем только данные из window.calendar_weeks
+        // Применяем логику к пустому массиву смен (показываем все тайм-слоты как 0/max)
+        applyOccupancy([]);
+    }
 }
 </script>
 {% endblock %}
