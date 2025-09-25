@@ -89,6 +89,29 @@
                                 </dl>
                             </div>
                         </div>
+                        
+                        {% if object.work_conditions or object.employee_position %}
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <hr>
+                                <h6 class="text-muted mb-3">Дополнительная информация</h6>
+                                
+                                {% if object.employee_position %}
+                                <div class="mb-3">
+                                    <dt class="fw-bold">Должность сотрудника:</dt>
+                                    <dd class="text-muted">{{ object.employee_position }}</dd>
+                                </div>
+                                {% endif %}
+                                
+                                {% if object.work_conditions %}
+                                <div class="mb-3">
+                                    <dt class="fw-bold">Условия работы:</dt>
+                                    <dd class="text-muted">{{ object.work_conditions }}</dd>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 

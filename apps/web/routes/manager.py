@@ -193,6 +193,7 @@ async def manager_objects(
                     "available_for_applicants": obj.available_for_applicants,
                     "is_active": obj.is_active,
                     "work_conditions": obj.work_conditions or "",
+                    "employee_position": obj.employee_position or "",
                     "shift_tasks": obj.shift_tasks or [],
                     "work_days_mask": obj.work_days_mask,
                     "schedule_repeat_weeks": obj.schedule_repeat_weeks,
@@ -349,6 +350,7 @@ async def manager_object_edit(
                 "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "",
                 "max_distance": obj.max_distance_meters or 500,
                 "work_conditions": obj.work_conditions or "",
+                "employee_position": obj.employee_position or "",
                 "shift_tasks": obj.shift_tasks or [],
                 "available_for_applicants": obj.available_for_applicants,
                 "is_active": obj.is_active,
@@ -431,6 +433,7 @@ async def manager_object_edit_post(
             available_for_applicants = form_data.get("available_for_applicants") == "true"
             is_active = form_data.get("is_active") == "true"
             work_conditions = form_data.get("work_conditions", "").strip()
+            employee_position = form_data.get("employee_position", "").strip()
             shift_tasks = form_data.getlist("shift_tasks[]")
             
             # Получение дней недели (битовая маска)
@@ -523,6 +526,7 @@ async def manager_object_edit_post(
                 "work_days_mask": work_days_mask,
                 "schedule_repeat_weeks": schedule_repeat_weeks,
                 "work_conditions": work_conditions,
+                "employee_position": employee_position,
                 "shift_tasks": shift_tasks
             }
             
