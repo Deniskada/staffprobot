@@ -16,11 +16,18 @@ class EmployeeObjectsManager {
     }
 
     setupEventListeners() {
-        // Кнопки подачи заявок
+        // Кнопки подачи заявок и клики по адресу
         document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('apply-btn')) {
-                const objectId = e.target.dataset.objectId;
+            if (e.target.classList.contains('object-apply-btn') || e.target.closest('.object-apply-btn')) {
+                const button = e.target.classList.contains('object-apply-btn') ? e.target : e.target.closest('.object-apply-btn');
+                const objectId = button.dataset.objectId;
+                console.log('Клик по кнопке заявки, objectId:', objectId);
                 this.showApplicationModal(objectId);
+            } else if (e.target.classList.contains('object-address') || e.target.closest('.object-address')) {
+                const addressElement = e.target.classList.contains('object-address') ? e.target : e.target.closest('.object-address');
+                const objectId = addressElement.dataset.objectId;
+                console.log('Клик по адресу, objectId:', objectId);
+                this.focusOnObject(objectId);
             }
         });
 
@@ -45,10 +52,11 @@ class EmployeeObjectsManager {
             
             console.log('Объекты загружены:', this.objects.length);
             
-            // Добавляем объекты на карту если она готова
+            // Добавляем объекты на карту если она готова и обновляем список
             if (this.map) {
                 this.addObjectsToMap();
             }
+            this.updateObjectsList();
             
         } catch (error) {
             console.error('Ошибка загрузки объектов:', error);
@@ -134,6 +142,64 @@ class EmployeeObjectsManager {
                 <p><strong>Задачи:</strong> ${tasks}</p>
             </div>
         `;
+    }
+
+    updateObjectsList() {
+        const listContainer = document.getElementById('objects-list');
+        if (!listContainer) return;
+
+        listContainer.innerHTML = '';
+
+        this.filteredObjects.forEach(object => {
+            const listItem = this.createObjectListItem(object);
+            listContainer.appendChild(listItem);
+        });
+    }
+
+    createObjectListItem(object) {
+        // Вычисляем общую зарплату за смену (12 часов)
+        const totalSalary = Math.round(object.hourly_rate * 12);
+        
+        // Создаем элемент списка
+        const listItem = document.createElement('div');
+        listItem.className = 'list-group-item object-item';
+        listItem.innerHTML = `
+            <div class="d-flex flex-column">
+                <div class="object-title">${object.name}</div>
+                <div class="object-salary">
+                    ${totalSalary.toLocaleString()} <span class="currency-symbol">₽</span> • 12 часов • ${object.hourly_rate} <span class="currency-symbol">₽</span>/час
+                </div>
+                <div class="object-address" data-object-id="${object.id}" style="cursor: pointer;">
+                    <i class="bi bi-geo-alt me-1"></i>${object.address}
+                </div>
+                <button class="btn btn-primary btn-sm object-apply-btn align-self-start" data-object-id="${object.id}">
+                    <i class="bi bi-file-text me-1"></i>Подать заявку
+                </button>
+            </div>
+        `;
+
+        return listItem;
+    }
+
+    focusOnObject(objectId) {
+        if (!this.map) return;
+        
+        const object = this.objects.find(obj => obj.id == objectId);
+        if (!object) return;
+        
+        // Центрируем карту на объекте
+        this.map.setCenter([object.latitude, object.longitude], 16);
+        
+        // Находим маркер и открываем его балун
+        const marker = this.markers.find(m => {
+            const coords = m.geometry.getCoordinates();
+            return Math.abs(coords[0] - object.latitude) < 0.0001 && 
+                   Math.abs(coords[1] - object.longitude) < 0.0001;
+        });
+        
+        if (marker) {
+            marker.balloon.open();
+        }
     }
 
 
