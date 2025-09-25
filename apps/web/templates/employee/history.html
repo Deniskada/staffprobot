@@ -112,6 +112,11 @@
                                             <i class="bi bi-geo-alt"></i> {{ event.object_name }}
                                         </p>
                                         {% endif %}
+                                        {% if event.get('earned') is not none %}
+                                        <p class="mb-0">
+                                            <i class="bi bi-cash"></i> Заработано: {{ '%.2f'|format(event.earned) }} ₽
+                                        </p>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 <div class="col-md-2 text-end">
@@ -124,11 +129,20 @@
                                             <span class="badge bg-secondary">Отменено</span>
                                         {% elif event.status == 'rejected' %}
                                             <span class="badge bg-danger">Отклонено</span>
+                                        {% elif event.status == 'planned' %}
+                                            <span class="badge bg-info">Запланировано</span>
                                         {% endif %}
                                     </div>
                                     <div class="event-time">
                                         <small class="text-muted">{{ event.created_at.strftime('%H:%M') }}</small>
                                     </div>
+                                    {% if event.type == 'planned_shift' and event.is_cancellable %}
+                                    <div class="mt-2">
+                                        <button class="btn btn-sm btn-outline-danger" onclick="cancelPlannedShift('{{ event.id }}')">
+                                            <i class="bi bi-x-circle"></i> Отменить
+                                        </button>
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>

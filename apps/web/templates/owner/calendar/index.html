@@ -402,6 +402,13 @@ function initializeTimeslotOccupancy() {
         });
     }
 
+    console.log('Found scheduledShifts:', scheduledShifts.length);
+    console.log('window.calendar_weeks exists:', !!window.calendar_weeks);
+    console.log('window.calendarData exists:', !!window.calendarData);
+    if (window.calendar_weeks && window.calendar_weeks.length > 0) {
+        console.log('First week shifts:', window.calendar_weeks[0].map(day => day.shifts ? day.shifts.length : 0));
+    }
+
     // Если смен нет в данных — подтягиваем с сервера статусы тайм-слотов как fallback
     const applyOccupancy = (shifts) => {
         // ПРАВИЛЬНАЯ ЛОГИКА: Группируем тайм-слоты по объектам и считаем смены для каждого
@@ -440,6 +447,17 @@ function initializeTimeslotOccupancy() {
 
                 const currentShifts = shiftsForThisTimeslot.length;
 
+                // Отладка для тайм-слота 181 (17 сентября)
+                if (timeslotId === 181) {
+                    console.log(`DEBUG Timeslot 181:`, {
+                        timeslotId,
+                        maxEmployees,
+                        currentShifts,
+                        shiftsForThisTimeslot,
+                        willHide: currentShifts >= maxEmployees
+                    });
+                }
+
                 if (currentShifts >= maxEmployees) {
                     // Скрываем заполненные тайм-слоты
                     timeslot.element.style.display = 'none';
@@ -460,7 +478,11 @@ function initializeTimeslotOccupancy() {
         });
     };
 
-    if (scheduledShifts.length === 0) {
+    // Всегда применяем логику к найденным сменам
+    if (scheduledShifts.length > 0) {
+        applyOccupancy(scheduledShifts);
+    } else {
+        // Если смен нет в данных — подтягиваем с сервера статусы тайм-слотов как fallback
         const year = {{ year }};
         const month = {{ month }};
         fetch(`/owner/calendar/api/timeslots-status?year=${year}&month=${month}`)
@@ -485,10 +507,7 @@ function initializeTimeslotOccupancy() {
                 applyOccupancy(shifts);
             })
             .catch(() => applyOccupancy([]));
-        return;
     }
-
-    applyOccupancy(scheduledShifts);
 }
 </script>
 {% endblock %}

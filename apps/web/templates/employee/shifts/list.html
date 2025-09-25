@@ -1,0 +1,134 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}Мои смены{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-clock-history"></i> Мои смены
+                </h1>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="GET" id="filterForm">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Статус</label>
+                                <select class="form-select" name="status">
+                                    <option value="">Все</option>
+                                    <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Активные</option>
+                                    <option value="planned" {% if filters.status == 'planned' %}selected{% endif %}>Запланированные</option>
+                                    <option value="completed" {% if filters.status == 'completed' %}selected{% endif %}>Завершенные</option>
+                                    <option value="cancelled" {% if filters.status == 'cancelled' %}selected{% endif %}>Отмененные</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">С даты</label>
+                                <input type="date" class="form-control" name="date_from" value="{{ filters.date_from or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">По дату</label>
+                                <input type="date" class="form-control" name="date_to" value="{{ filters.date_to or '' }}">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button class="btn btn-primary w-100"><i class="bi bi-search"></i> Применить</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Список</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if shifts %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Объект</th>
+                                    <th>Время</th>
+                                    <th>Статус</th>
+                                    <th>Оплата</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for shift in shifts %}
+                                <tr>
+                                    <td>{{ shift.object_name }}</td>
+                                    <td>
+                                        <div>{{ shift.start_time }}</div>
+                                        {% if shift.end_time %}
+                                        <small class="text-muted">до {{ shift.end_time }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if shift.type == 'schedule' and shift.status == 'planned' %}
+                                        <span class="badge bg-info">Запланирована</span>
+                                        {% elif shift.status == 'active' %}
+                                        <span class="badge bg-success">Активна</span>
+                                        {% elif shift.status == 'completed' %}
+                                        <span class="badge bg-secondary">Завершена</span>
+                                        {% elif shift.status == 'cancelled' %}
+                                        <span class="badge bg-danger">Отменена</span>
+                                        {% else %}
+                                        <span class="badge bg-light text-dark">{{ shift.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if shift.total_payment %}
+                                        {{ '%.2f'|format(shift.total_payment) }} ₽
+                                        {% else %}-{% endif %}
+                                    </td>
+                                    <td>
+                                        {% if shift.type == 'schedule' and shift.status == 'planned' %}
+                                        <button class="btn btn-sm btn-outline-danger" onclick="cancelMySchedule({{ shift.id }})">
+                                            <i class="bi bi-x-circle"></i> Отменить
+                                        </button>
+                                        {% else %}
+                                        <button class="btn btn-sm btn-outline-secondary" disabled>—</button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-clock-history fs-1 text-muted"></i>
+                        <h5 class="text-muted mt-3">Смены не найдены</h5>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function cancelMySchedule(scheduleId) {
+    try {
+        const resp = await fetch('/employee/api/shifts/cancel', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ schedule_id: Number(scheduleId) })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.success !== true) {
+            throw new Error((data && data.detail) || `HTTP ${resp.status}`);
+        }
+        location.reload();
+    } catch (e) {
+        alert('Ошибка отмены: ' + e.message);
+    }
+}
+</script>
+{% endblock %}
+

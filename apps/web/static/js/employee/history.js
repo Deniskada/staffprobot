@@ -168,6 +168,13 @@ class EmployeeHistoryManager {
                             <div class="event-time">
                                 <small class="text-muted">${eventDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</small>
                             </div>
+                            ${event.type === 'planned_shift' && event.status === 'planned' ? `
+                                <div class="mt-2">
+                                    <button class="btn btn-sm btn-outline-danger" onclick="cancelPlannedShift('${event.id}')">
+                                        <i class="bi bi-x-circle"></i> Отменить
+                                    </button>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                 </div>
@@ -321,3 +328,23 @@ class EmployeeHistoryManager {
 document.addEventListener('DOMContentLoaded', () => {
     new EmployeeHistoryManager();
 });
+
+// Отмена запланированной смены
+async function cancelPlannedShift(scheduleId) {
+    try {
+        const resp = await fetch('/employee/api/shifts/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ schedule_id: Number(scheduleId) })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.success !== true) {
+            throw new Error((data && data.detail) || `HTTP ${resp.status}`);
+        }
+        // Перезагрузим историю
+        window.location.reload();
+    } catch (e) {
+        console.error('Ошибка отмены смены:', e);
+        alert('Ошибка отмены смены: ' + e.message);
+    }
+}

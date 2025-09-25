@@ -2,12 +2,14 @@
 Роуты для интерфейса сотрудника (соискателя)
 """
 
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
+from sqlalchemy.orm import selectinload
 from datetime import datetime, date, timedelta
+from typing import List, Dict, Any, Optional
 import logging
 
 from apps.web.dependencies import get_current_user_dependency
@@ -16,6 +18,8 @@ from apps.web.middleware.role_middleware import require_employee_or_applicant
 from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift
 from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
+from apps.web.dependencies import get_async_session
+from shared.services.manager_permission_service import ManagerPermissionService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -60,6 +64,18 @@ async def employee_index(
             raise HTTPException(status_code=401, detail="Пользователь не найден")
             
         available_interfaces = await get_available_interfaces_for_user(current_user, db)
+
+        # Счетчик заявок для бейджа в шапке
+        applications_count_result = await db.execute(
+            select(func.count(Application.id)).where(Application.applicant_id == user_id)
+        )
+        applications_count = applications_count_result.scalar() or 0
+
+        # Счетчик заявок для бейджа в шапке
+        applications_count_result = await db.execute(
+            select(func.count(Application.id)).where(Application.applicant_id == user_id)
+        )
+        applications_count = applications_count_result.scalar() or 0
         
         # Получаем статистику
         applications_count = await db.execute(
@@ -69,7 +85,7 @@ async def employee_index(
         
         interviews_count = await db.execute(
             select(func.count(Interview.id)).where(
-                and_(
+                    and_(
                     Interview.applicant_id == user_id,
                     Interview.status.in_(['SCHEDULED', 'PENDING'])
                 )
@@ -125,6 +141,15 @@ async def employee_index(
                 'type': row.Interview.type
             })
         
+        # Всего заработано
+        from sqlalchemy import func as _func
+        total_earned = (await db.execute(
+            select(_func.coalesce(_func.sum(Shift.total_payment), 0)).where(
+                Shift.user_id == user_id,
+                Shift.status == 'completed'
+            )
+        )).scalar() or 0
+
         return templates.TemplateResponse("employee/index.html", {
             "request": request,
             "current_user": current_user,
@@ -133,6 +158,7 @@ async def employee_index(
             "interviews_count": interviews_count,
             "available_objects_count": available_objects_count,
             "history_count": history_count,
+            "total_earned": float(total_earned),
             "recent_applications": recent_applications,
             "upcoming_interviews": upcoming_interviews,
             "available_interfaces": available_interfaces
@@ -188,8 +214,8 @@ async def employee_objects(
             })
         
         return templates.TemplateResponse("employee/objects.html", {
-            "request": request,
-            "current_user": current_user,
+        "request": request,
+        "current_user": current_user,
             "objects": objects,
             "available_interfaces": available_interfaces,
             "applications_count": applications_count
@@ -315,74 +341,429 @@ async def employee_applications(
 @router.get("/calendar", response_class=HTMLResponse)
 async def employee_calendar(
     request: Request,
+    year: int = Query(None),
+    month: int = Query(None),
+    object_id: int = Query(None),
     current_user: dict = Depends(require_employee_or_applicant),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """Страница календаря собеседований"""
+    """Календарь сотрудника (общий календарь объектов/смен)."""
     try:
-        # Проверяем, что current_user не является RedirectResponse
+        from datetime import date
+        import json
+
         if isinstance(current_user, RedirectResponse):
             return current_user
-            
-        
+
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
-            
+
+        available_interfaces = await get_available_interfaces_for_user(current_user, db)
+
+        # Текущая дата по умолчанию
+        today = date.today()
+        if year is None:
+            year = today.year
+        if month is None:
+            month = today.month
+
+        # Получаем объекты, доступные сотруднику по активным договорам
+        from sqlalchemy import select, and_
+        from sqlalchemy.orm import selectinload
+        from domain.entities.contract import Contract
+        from domain.entities.object import Object
+        from domain.entities.time_slot import TimeSlot
+        from domain.entities.shift_schedule import ShiftSchedule
+        from domain.entities.shift import Shift
+
+        # Активные договоры сотрудника
+        contracts_query = select(Contract).where(
+            and_(Contract.employee_id == user_id, Contract.is_active == True)
+        )
+        contracts = (await db.execute(contracts_query)).scalars().all()
+
+        # Список доступных object_ids из allowed_objects договоров
+        object_ids = []
+        import json as _json
+        for c in contracts:
+            if c and c.allowed_objects:
+                allowed = c.allowed_objects if isinstance(c.allowed_objects, list) else _json.loads(c.allowed_objects)
+                for oid in allowed:
+                    if oid not in object_ids:
+                        object_ids.append(oid)
+
+        # Опциональная фильтрация по выбранному объекту
+        if object_id and object_id in object_ids:
+            object_ids = [object_id]
+
+        # Карта объектов
+        objects_map = {}
+        if object_ids:
+            objs_q = select(Object).where(Object.id.in_(object_ids))
+            objs = (await db.execute(objs_q)).scalars().all()
+            objects_map = {o.id: o for o in objs}
+
+        # Тайм-слоты за месяц
+        timeslots_data = []
+        if object_ids:
+            start_date = date(year, month, 1)
+            end_date = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+
+            ts_q = select(TimeSlot).options(selectinload(TimeSlot.object)).where(
+                and_(
+                    TimeSlot.object_id.in_(object_ids),
+                    TimeSlot.slot_date >= start_date,
+                    TimeSlot.slot_date < end_date,
+                    TimeSlot.is_active == True,
+                )
+            ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
+
+            timeslots = (await db.execute(ts_q)).scalars().all()
+            for slot in timeslots:
+                obj = objects_map.get(slot.object_id)
+                if not obj:
+                    continue
+                timeslots_data.append({
+                    "id": slot.id,
+                    "object_id": slot.object_id,
+                    "object_name": obj.name,
+                    "date": slot.slot_date.isoformat(),
+                    "start_time": slot.start_time.strftime("%H:%M"),
+                    "end_time": slot.end_time.strftime("%H:%M"),
+                    "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate) if obj.hourly_rate else 0,
+                    "max_employees": slot.max_employees or 1,
+                    "is_active": slot.is_active,
+                    "notes": slot.notes or "",
+                })
+
+        # Смены за месяц (запланированные и фактические)
+        shifts_data = []
+        if object_ids:
+            start_date = date(year, month, 1)
+            end_date = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+
+            # Запланированные
+            sched_q = select(ShiftSchedule).where(
+                and_(
+                    ShiftSchedule.object_id.in_(object_ids),
+                    ShiftSchedule.planned_start >= start_date,
+                    ShiftSchedule.planned_start < end_date,
+                )
+            ).order_by(ShiftSchedule.planned_start)
+            scheduled = (await db.execute(sched_q)).scalars().all()
+
+            # Фактические
+            act_q = select(Shift).options(selectinload(Shift.user)).where(
+                and_(
+                    Shift.object_id.in_(object_ids),
+                    Shift.start_time >= start_date,
+                    Shift.start_time < end_date,
+                )
+            ).order_by(Shift.start_time)
+            actual = (await db.execute(act_q)).scalars().all()
+
+            # Преобразуем (запланированные)
+            # Загрузим пользователей для отображения имени
+            user_ids = list({s.user_id for s in scheduled if s.user_id})
+            users_map = {}
+            if user_ids:
+                users_res = await db.execute(select(User).where(User.id.in_(user_ids)))
+                users_map = {u.id: u for u in users_res.scalars().all()}
+
+            for s in scheduled:
+                obj = objects_map.get(s.object_id)
+                if not obj:
+                    continue
+                emp = users_map.get(s.user_id)
+                emp_name = (f"{emp.first_name or ''} {emp.last_name or ''}".strip() if emp else None)
+                shifts_data.append({
+                    "id": f"schedule_{s.id}",
+                    "object_id": s.object_id,
+                    "object_name": obj.name,
+                    "date": s.planned_start.date().isoformat(),
+                    "start_time": web_timezone_helper.format_time_with_timezone(s.planned_start, obj.timezone if obj else 'Europe/Moscow'),
+                    "end_time": web_timezone_helper.format_time_with_timezone(s.planned_end, obj.timezone if obj else 'Europe/Moscow'),
+                    "status": s.status,
+                    "time_slot_id": s.time_slot_id,
+                    "employee_name": emp_name,
+                    "notes": s.notes or "",
+                })
+
+            # Преобразуем (фактические)
+            act_user_ids = list({sh.user_id for sh in actual if sh.user_id})
+            act_users_map = {}
+            if act_user_ids:
+                act_users_res = await db.execute(select(User).where(User.id.in_(act_user_ids)))
+                act_users_map = {u.id: u for u in act_users_res.scalars().all()}
+
+            for sh in actual:
+                obj = objects_map.get(sh.object_id)
+                if not obj:
+                    continue
+                emp = act_users_map.get(sh.user_id)
+                emp_name = (f"{emp.first_name or ''} {emp.last_name or ''}".strip() if emp else None)
+                shifts_data.append({
+                    "id": sh.id,
+                    "object_id": sh.object_id,
+                    "object_name": obj.name,
+                    "date": sh.start_time.date().isoformat(),
+                    "start_time": web_timezone_helper.format_time_with_timezone(sh.start_time, obj.timezone if obj else 'Europe/Moscow'),
+                    "end_time": web_timezone_helper.format_time_with_timezone(sh.end_time, obj.timezone if obj else 'Europe/Moscow') if sh.end_time else None,
+                    "status": sh.status,
+                    "time_slot_id": sh.time_slot_id,
+                    "employee_name": emp_name,
+                    "notes": sh.notes or "",
+                })
+
+        # Сетка календаря
+        calendar_weeks = _create_calendar_grid_employee(year, month, timeslots_data, shifts_data)
+
+        # JSON для шаблона
+        def _serialize(obj):
+            if isinstance(obj, date):
+                return obj.isoformat()
+            from datetime import datetime as _dt
+            if isinstance(obj, _dt):
+                return obj.isoformat()
+            raise TypeError(str(type(obj)))
+
+        calendar_weeks_json = json.dumps(calendar_weeks, default=_serialize)
+
+        # Счетчик заявок для бейджа в шапке
+        applications_count_result = await db.execute(
+            select(func.count(Application.id)).where(Application.applicant_id == user_id)
+        )
+        applications_count = applications_count_result.scalar() or 0
+
+        # Заголовок месяца
+        RU_MONTHS = ["", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
+        title = f"{RU_MONTHS[month]} {year}"
+
+        return templates.TemplateResponse("employee/calendar.html", {
+            "request": request,
+            "title": title,
+            "calendar_title": title,
+            "year": year,
+            "month": month,
+            "current_date": today,
+            "calendar_weeks": calendar_weeks,
+            "calendar_weeks_json": calendar_weeks_json,
+            "available_interfaces": available_interfaces,
+            "applications_count": applications_count,
+        })
+    except Exception as e:
+        logger.error(f"Ошибка загрузки календаря: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки календаря: {e}")
+
+
+@router.get("/api/employees")
+async def employee_api_employees(
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Возвращает только текущего сотрудника для панели сотрудников."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        if not user:
+            return []
+
+        name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username or f"ID {user.id}"
+        return [{
+            "id": int(user.id),
+            "name": str(name),
+            "role": "employee",
+            "is_active": bool(user.is_active),
+            "telegram_id": int(user.telegram_id) if user.telegram_id else None,
+            # для dnd назначения самим сотрудником на слот
+            "draggable": True,
+        }]
+    except Exception as e:
+        logger.error(f"Ошибка загрузки сотрудника: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
+
+
+def _create_calendar_grid_employee(
+    year: int,
+    month: int,
+    timeslots: List[Dict[str, Any]],
+    shifts: List[Dict[str, Any]] | None = None,
+) -> List[List[Dict[str, Any]]]:
+    """Создает календарную сетку для сотрудника (показываем все активные тайм‑слоты и все смены, кроме отмененных)."""
+    import calendar as _cal
+    from datetime import date, timedelta
+
+    if shifts is None:
+        shifts = []
+
+    first_day = date(year, month, 1)
+    last_day = date(year, month, _cal.monthrange(year, month)[1])
+    first_monday = first_day - timedelta(days=first_day.weekday())
+
+    calendar_grid: List[List[Dict[str, Any]]] = []
+    current_date = first_monday
+
+    for _ in range(6):
+        week_data: List[Dict[str, Any]] = []
+        for _d in range(7):
+            current_date_str = current_date.isoformat()
+
+            # Смены за день
+            all_day_shifts = [s for s in shifts if s.get("date") == current_date_str]
+            day_shifts = [s for s in all_day_shifts if s.get("status") != "cancelled"]
+
+            # Тайм-слоты за день
+            day_timeslots = []
+            for slot in timeslots:
+                if slot.get("date") == current_date_str and slot.get("is_active", True):
+                    slot_with_status = slot.copy()
+                    slot_with_status["status"] = "available"
+                    day_timeslots.append(slot_with_status)
+
+            week_data.append({
+                "date": current_date,
+                "day": current_date.day,
+                "is_current_month": current_date.month == month,
+                "is_other_month": current_date.month != month,
+                "is_today": current_date == date.today(),
+                "timeslots": day_timeslots,
+                "timeslots_count": len(day_timeslots),
+                "shifts": day_shifts,
+                "shifts_count": len(day_shifts),
+            })
+
+            current_date += timedelta(days=1)
+
+        calendar_grid.append(week_data)
+
+    return calendar_grid
+
+
+@router.get("/shifts", response_class=HTMLResponse)
+async def employee_shifts_list(
+    request: Request,
+    status: Optional[str] = Query(None, description="Фильтр: active, planned, completed, cancelled"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Табличный список смен сотрудника (по аналогии с владельцем)."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        # Фильтр периода
+        from datetime import datetime as _dt, time as _time
+        df = _dt.strptime(date_from, "%Y-%m-%d") if date_from else None
+        dt = _dt.strptime(date_to, "%Y-%m-%d") if date_to else None
+
+        # Фактические смены
+        from sqlalchemy import select, desc, and_
+        shifts_q = select(Shift).options(
+            selectinload(Shift.object),
+            selectinload(Shift.user)
+        ).where(Shift.user_id == user_id)
+        if df:
+            shifts_q = shifts_q.where(Shift.start_time >= df)
+        if dt:
+            shifts_q = shifts_q.where(Shift.start_time <= dt)
+
+        # Запланированные смены
+        schedules_q = select(ShiftSchedule).options(
+            selectinload(ShiftSchedule.object),
+            selectinload(ShiftSchedule.user)
+        ).where(ShiftSchedule.user_id == user_id)
+        if df:
+            schedules_q = schedules_q.where(ShiftSchedule.planned_start >= df)
+        if dt:
+            schedules_q = schedules_q.where(ShiftSchedule.planned_start <= dt)
+
+        # Получение
+        shifts = (await db.execute(shifts_q.order_by(desc(Shift.created_at)))).scalars().all()
+        schedules = (await db.execute(schedules_q.order_by(desc(ShiftSchedule.created_at)))).scalars().all()
+
+        # Форматирование
+        all_shifts = []
+        for s in shifts:
+            all_shifts.append({
+                'id': s.id,
+                'type': 'shift',
+                'object_name': s.object.name if s.object else '-',
+                'user_name': f"{s.user.first_name} {s.user.last_name or ''}".strip() if s.user else '-',
+                'start_time': web_timezone_helper.format_datetime_with_timezone(s.start_time, s.object.timezone if s.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if s.start_time else '-',
+                'end_time': web_timezone_helper.format_datetime_with_timezone(s.end_time, s.object.timezone if s.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if s.end_time else '-',
+                'status': s.status,
+                'total_hours': float(s.total_hours) if s.total_hours else None,
+                'total_payment': float(s.total_payment) if s.total_payment else None,
+            })
+        for sc in schedules:
+            all_shifts.append({
+                'id': sc.id,
+                'type': 'schedule',
+                'object_name': sc.object.name if sc.object else '-',
+                'user_name': f"{sc.user.first_name} {sc.user.last_name or ''}".strip() if sc.user else '-',
+                'start_time': web_timezone_helper.format_datetime_with_timezone(sc.planned_start, sc.object.timezone if sc.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if sc.planned_start else '-',
+                'end_time': web_timezone_helper.format_datetime_with_timezone(sc.planned_end, sc.object.timezone if sc.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if sc.planned_end else '-',
+                'status': sc.status,
+                'total_hours': None,
+                'total_payment': None,
+            })
+
+        # Фильтр статуса
+        if status:
+            if status == 'planned':
+                all_shifts = [x for x in all_shifts if x['type'] == 'schedule']
+            else:
+                all_shifts = [x for x in all_shifts if x['status'] == status]
+
+        # Сортировка и пагинация
+        all_shifts.sort(key=lambda x: x['start_time'] or '', reverse=True)
+        total = len(all_shifts)
+        start_i = (page - 1) * per_page
+        end_i = start_i + per_page
+        page_shifts = all_shifts[start_i:end_i]
+
+        # Интерфейсы
         available_interfaces = await get_available_interfaces_for_user(current_user, db)
         
-        # Получаем статистику для навигации
+        # Подсчет заявок для навигации
         applications_count = await db.execute(
             select(func.count(Application.id)).where(Application.applicant_id == user_id)
         )
         applications_count = applications_count.scalar() or 0
-        
-        # Получаем собеседования
-        interviews_query = select(Interview, Object.name.label('object_name')).join(
-            Object, Interview.object_id == Object.id
-        ).where(Interview.applicant_id == user_id).order_by(Interview.scheduled_at.desc())
-        
-        interviews_result = await db.execute(interviews_query)
-        interviews = []
-        for row in interviews_result:
-            interviews.append({
-                'id': row.Interview.id,
-                'object_id': row.Interview.object_id,
-                'object_name': row.object_name,
-                'scheduled_at': row.Interview.scheduled_at,
-                'type': row.Interview.type,
-                'location': row.Interview.location,
-                'contact_person': row.Interview.contact_person,
-                'contact_phone': row.Interview.contact_phone,
-                'notes': row.Interview.notes,
-                'status': row.Interview.status,
-                'result': row.Interview.result
-            })
-        
-        # Статистика собеседований
-        today = datetime.now().date()
-        interviews_stats = {
-            'scheduled': len([i for i in interviews if i['status'] == 'SCHEDULED']),
-            'completed': len([i for i in interviews if i['status'] == 'COMPLETED']),
-            'today': len([i for i in interviews if i['scheduled_at'].date() == today]),
-            'cancelled': len([i for i in interviews if i['status'] == 'CANCELLED'])
-        }
-        
-        # Ближайшие собеседования
-        upcoming_interviews = [i for i in interviews if i['scheduled_at'] >= datetime.now()][:5]
-        
-        return templates.TemplateResponse("employee/calendar.html", {
+
+        return templates.TemplateResponse("employee/shifts/list.html", {
             "request": request,
             "current_user": current_user,
-            "interviews_stats": interviews_stats,
-            "upcoming_interviews": upcoming_interviews,
             "available_interfaces": available_interfaces,
             "applications_count": applications_count,
-            "current_date": datetime.now()
+            "shifts": page_shifts,
+            "stats": {
+                "total": total,
+                "active": len([s for s in all_shifts if s['status'] == 'active']),
+                "planned": len([s for s in all_shifts if s['type'] == 'schedule']),
+                "completed": len([s for s in all_shifts if s['status'] == 'completed'])
+            },
+            "filters": {"status": status, "date_from": date_from, "date_to": date_to},
+            "pagination": {"page": page, "per_page": per_page, "total": total, "pages": (total + per_page - 1)//per_page}
         })
     except Exception as e:
-        logger.error(f"Ошибка загрузки календаря: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки календаря: {e}")
+        logger.error(f"Error loading employee shifts: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка загрузки смен сотрудника")
 
 @router.get("/profile", response_class=HTMLResponse)
 async def employee_profile(
@@ -583,10 +964,12 @@ async def employee_profile_update(
 @router.get("/history", response_class=HTMLResponse)
 async def employee_history(
     request: Request,
+    date_from: str | None = Query(None, description="YYYY-MM-DD"),
+    date_to: str | None = Query(None, description="YYYY-MM-DD"),
     current_user: dict = Depends(require_employee_or_applicant),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """Страница истории активности"""
+    """Страница истории активности: заявки, собеседования, смены."""
     try:
         # Проверяем, что current_user не является RedirectResponse
         if isinstance(current_user, RedirectResponse):
@@ -605,6 +988,11 @@ async def employee_history(
         )
         applications_count = applications_count.scalar() or 0
         
+        # Период
+        from datetime import datetime as _dt
+        df = _dt.strptime(date_from, "%Y-%m-%d").date() if date_from else None
+        dt = _dt.strptime(date_to, "%Y-%m-%d").date() if date_to else None
+
         # Получаем историю событий
         history_events = []
         
@@ -622,13 +1010,22 @@ async def employee_history(
                 'description': f'Заявка на объект "{row.object_name}"',
                 'object_name': row.object_name,
                 'status': row.Application.status,
-                'created_at': row.Application.created_at
+                'created_at': row.Application.created_at,
+                'start': row.Application.created_at,
+                'end': None
             })
         
         # Собеседования
         interviews_query = select(Interview, Object.name.label('object_name')).join(
             Object, Interview.object_id == Object.id
-        ).where(Interview.applicant_id == user_id).order_by(Interview.scheduled_at.desc())
+        ).where(Interview.applicant_id == user_id)
+        if df:
+            interviews_query = interviews_query.where(Interview.scheduled_at >= df)
+        if dt:
+            # включительно конец дня
+            from datetime import datetime, time
+            interviews_query = interviews_query.where(Interview.scheduled_at <= datetime.combine(dt, time.max))
+        interviews_query = interviews_query.order_by(Interview.scheduled_at.desc())
         
         interviews_result = await db.execute(interviews_query)
         for row in interviews_result:
@@ -639,9 +1036,76 @@ async def employee_history(
                 'description': f'Собеседование на объекте "{row.object_name}"',
                 'object_name': row.object_name,
                 'status': row.Interview.status,
-                'created_at': row.Interview.scheduled_at
+                'created_at': row.Interview.scheduled_at,
+                'start': row.Interview.scheduled_at,
+                'end': None
             })
         
+        # Смены сотрудника: запланированные (расписание), фактические (смены)
+        # Запланированные
+        sched_q = select(ShiftSchedule, Object.name.label('object_name')).join(
+            Object, ShiftSchedule.object_id == Object.id
+        ).where(ShiftSchedule.user_id == user_id)
+        if df:
+            sched_q = sched_q.where(ShiftSchedule.planned_start >= df)
+        if dt:
+            from datetime import datetime, time
+            sched_q = sched_q.where(ShiftSchedule.planned_start <= datetime.combine(dt, time.max))
+        sched_q = sched_q.order_by(ShiftSchedule.planned_start.desc())
+
+        sched_res = await db.execute(sched_q)
+        for row in sched_res:
+            history_events.append({
+                'id': row.ShiftSchedule.id,
+                'type': 'planned_shift',
+                'title': 'Запланирована смена',
+                'description': f"Объект \"{row.object_name}\"",
+                'object_name': row.object_name,
+                'status': row.ShiftSchedule.status,
+                'created_at': row.ShiftSchedule.planned_start,
+                'start': row.ShiftSchedule.planned_start,
+                'end': row.ShiftSchedule.planned_end,
+                'is_cancellable': row.ShiftSchedule.status == 'planned'
+            })
+
+        # Фактические (активные/завершенные/отмененные)
+        shift_q = select(Shift, Object.name.label('object_name')).join(
+            Object, Shift.object_id == Object.id
+        ).where(Shift.user_id == user_id)
+        if df:
+            shift_q = shift_q.where(Shift.start_time >= df)
+        if dt:
+            from datetime import datetime, time
+            shift_q = shift_q.where(Shift.start_time <= datetime.combine(dt, time.max))
+        shift_q = shift_q.order_by(Shift.start_time.desc())
+
+        shift_res = await db.execute(shift_q)
+        # Подсчет заработка по завершенным сменам
+        total_earned_period = 0.0
+        for row in shift_res:
+            earned = None
+            if row.Shift.status == 'completed':
+                if row.Shift.total_payment:
+                    earned = float(row.Shift.total_payment)
+                elif row.Shift.start_time and row.Shift.end_time and row.Shift.hourly_rate:
+                    duration = (row.Shift.end_time - row.Shift.start_time).total_seconds() / 3600.0
+                    earned = float(row.Shift.hourly_rate) * max(0.0, duration)
+                if earned:
+                    total_earned_period += earned
+
+            history_events.append({
+                'id': row.Shift.id,
+                'type': 'shift',
+                'title': 'Смена',
+                'description': f"Объект \"{row.object_name}\"",
+                'object_name': row.object_name,
+                'status': row.Shift.status,
+                'created_at': row.Shift.start_time,
+                'start': row.Shift.start_time,
+                'end': row.Shift.end_time,
+                'earned': earned
+            })
+
         # Сортируем по дате
         history_events.sort(key=lambda x: x['created_at'], reverse=True)
         
@@ -649,6 +1113,11 @@ async def employee_history(
         stats = {
             'total_applications': len([e for e in history_events if e['type'] == 'application']),
             'total_interviews': len([e for e in history_events if e['type'] == 'interview']),
+            'total_shifts': len([e for e in history_events if e['type'] in ('shift', 'planned_shift')]),
+            'completed_shifts': len([e for e in history_events if e.get('status') == 'completed']),
+            'planned_shifts': len([e for e in history_events if e['type'] == 'planned_shift' and e.get('status') == 'planned']),
+            'cancelled_shifts': len([e for e in history_events if e.get('status') == 'cancelled']),
+            'earned_period': round(total_earned_period, 2),
             'success_rate': 0
         }
         
@@ -657,13 +1126,52 @@ async def employee_history(
             stats['success_rate'] = round((successful_applications / stats['total_applications']) * 100)
         
         return templates.TemplateResponse("employee/history.html", {
-            "request": request,
-            "current_user": current_user,
+        "request": request,
+        "current_user": current_user,
             "history_events": history_events,
             "stats": stats,
             "available_interfaces": available_interfaces,
-            "applications_count": applications_count
+            "applications_count": applications_count,
+            "date_from": date_from,
+            "date_to": date_to
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки истории: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки истории: {e}")
+
+
+@router.post("/api/shifts/cancel")
+async def employee_cancel_planned_shift(
+    request: Request,
+    current_user: dict = Depends(require_employee_or_applicant)
+):
+    """Отмена запланированной смены сотрудником (смена в ShiftSchedule)."""
+    try:
+        data = await request.json()
+        schedule_id = data.get('schedule_id')
+        if not schedule_id:
+            raise HTTPException(status_code=400, detail="Не указан ID запланированной смены")
+
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+            # Найдем запланированную смену и проверим владельца
+            from sqlalchemy import select
+            schedule = (await db.execute(select(ShiftSchedule).where(ShiftSchedule.id == schedule_id))).scalar_one_or_none()
+            if not schedule:
+                raise HTTPException(status_code=404, detail="Запланированная смена не найдена")
+            if int(schedule.user_id) != int(user_id):
+                raise HTTPException(status_code=403, detail="Нельзя отменить чужую смену")
+            if schedule.status != 'planned':
+                raise HTTPException(status_code=400, detail="Можно отменять только запланированные смены")
+
+            schedule.status = 'cancelled'
+            await db.commit()
+            return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cancelling planned shift: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка отмены смены")
