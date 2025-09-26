@@ -138,9 +138,15 @@
 
             <div class="mb-3">
               <label class="form-label">Контент шаблона (Jinja2/HTML) *</label>
+              <div class="mb-2">
+                <button type="button" id="pasteHtmlBtn" class="btn btn-outline-primary btn-sm">
+                  <i class="fas fa-code me-1"></i>Вставить как HTML
+                </button>
+                <span class="small text-muted ms-2">Для форматированного текста из внешних редакторов</span>
+              </div>
               <div id="contentEditor" style="min-height: 300px;"></div>
               <textarea name="content" id="content" class="form-control" style="display: none;" required></textarea>
-              <div class="form-text">Используйте теги вида {{ "{{ key }}" }} из справочника тегов справа. ВАЖНО: Для копирования форматированного текста используйте "Вставить как HTML" в контекстном меню</div>
+              <div class="form-text">Используйте теги вида {{ "{{ key }}" }} из справочника тегов справа. Используйте кнопку "Вставить как HTML" для сохранения форматирования</div>
             </div>
 
             <hr>
@@ -395,6 +401,7 @@ function initializeSummernote($) {
                 ['para', ['ul', 'ol', 'paragraph']],
                 ['table', ['table']],
                 ['insert', ['link']],
+                ['misc', ['undo', 'redo']],
                 ['view', ['fullscreen', 'codeview', 'help']]
             ],
             fontNames: ['Times New Roman', 'Arial', 'Georgia', 'Verdana', 'Courier New'],
@@ -427,11 +434,95 @@ function initializeSummernote($) {
             ]
         });
         console.log('Summernote успешно инициализирован!');
+        
+        // Инициализируем кнопку "Вставить как HTML"
+        setupPasteHtmlButton($);
+        
     } catch (e) {
         console.error('Ошибка инициализации Summernote:', e);
         // Fallback при ошибке
         fallbackToTextarea();
     }
+}
+
+function setupPasteHtmlButton($) {
+    $('#pasteHtmlBtn').click(function() {
+        // Создаем простое модальное окно для вставки HTML
+        var modalHtml = `
+            <div class="modal fade" id="htmlPasteModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-code me-2"></i>Вставить форматированный текст
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label class="form-label">HTML-код для вставки:</label>
+                            <textarea id="htmlInput" class="form-control" rows="8" placeholder="Скопируйте отформатированный текст из внешнего редактора (Word, Google Docs, etc.) и вставьте сюда...
+                            
+Рекомендации:
+• Скопируйте текст из Word или другого редактора
+• Нажмите Ctrl+V в этом поле
+• HTML сохранится автоматически"></textarea>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('htmlInput').value='';">
+                                    <i class="fas fa-trash me-1"></i>Очистить
+                                </button>
+                                <span class="small text-muted ms-2">Или вставьте готовый HTML-код</span>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="button" class="btn btn-primary" id="insertHtmlBtn">
+                                <i class="fas fa-paste me-1"></i>Вставить в редактор
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Удаляем старое модальное окно если оно есть
+        $('#htmlPasteModal').remove();
+        
+        // Добавляем новое в body
+        $('body').append(modalHtml);
+        
+        // Показываем модальное окно
+        var modal = new bootstrap.Modal(document.getElementById('htmlPasteModal'));
+        modal.show();
+        
+        // Фокус на textarea
+        setTimeout(function() {
+            document.getElementById('htmlInput').focus();
+        }, 300);
+        
+        // Обработчик для кнопки Вставить
+        $('#insertHtmlBtn').click(function() {
+            var htmlContent = $('#htmlInput').val();
+            
+            if (htmlContent && htmlContent.trim()) {
+                try {
+                    // Вставляем HTML в редактор
+                    $('#contentEditor').summernote('pasteHTML', htmlContent);
+                    modal.hide();
+                    console.log('HTML успешно вставлен в редактор');
+                } catch (e) {
+                    console.error('Ошибка вставки HTML:', e);
+                    alert('Ошибка вставки HTML: ' + e.message);
+                }
+            } else {
+                alert('Вставьте HTML-код в поле выше');
+            }
+        });
+        
+        // Очистка модального окна при закрытии
+        $('#htmlPasteModal').on('hidden.bs.modal', function() {
+            $(this).remove();
+        });
+    });
 }
 
 function fallbackToTextarea() {
