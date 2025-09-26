@@ -40,6 +40,14 @@ class ApplicationsManager {
                 this.rejectApplication();
             }
         });
+
+        document.addEventListener('click', (e) => {
+            const viewBtn = e.target.closest('.view-application');
+            if (viewBtn) {
+                this.viewApplicationDetails(viewBtn.dataset.applicationId, viewBtn.dataset.role || this.currentRole);
+                return;
+            }
+        });
     }
 
     showApproveModal(applicationId) {
@@ -173,6 +181,87 @@ class ApplicationsManager {
         } catch (error) {
             console.error('Ошибка отклонения заявки:', error);
             this.showError('Ошибка отклонения заявки: ' + error.message);
+        }
+    }
+
+    async viewApplicationDetails(applicationId, role = 'manager') {
+        try {
+            const response = await fetch(`/${role}/api/applications/${applicationId}`);
+            if (!response.ok) {
+                throw new Error('Не удалось загрузить информацию о заявке');
+            }
+
+            const data = await response.json();
+            const modalBody = document.getElementById('applicationDetailsModalBody');
+            if (!modalBody) {
+                throw new Error('Модальное окно не найдено');
+            }
+
+            modalBody.innerHTML = this.buildApplicationDetailsHtml(data);
+            const modal = new bootstrap.Modal(document.getElementById('applicationDetailsModal'));
+            modal.show();
+        } catch (error) {
+            console.error('Ошибка загрузки заявки:', error);
+            this.showError(error.message || 'Ошибка загрузки заявки');
+        }
+    }
+
+    buildApplicationDetailsHtml(data) {
+        const applicant = data.applicant || {};
+        return `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Объект</h6>
+                    <p>${data.object_name || 'Не указан'}</p>
+                    ${data.object_address ? `<p class="text-muted">${data.object_address}</p>` : ''}
+                    <h6>Статус</h6>
+                    <span class="badge bg-${this.getStatusColor(data.status?.toLowerCase())}">${this.getStatusText(data.status?.toLowerCase())}</span>
+                    <h6 class="mt-3">Дата подачи</h6>
+                    <p>${data.created_at ? new Date(data.created_at).toLocaleString('ru-RU') : 'Неизвестно'}</p>
+                </div>
+                <div class="col-md-6">
+                    <h6>Соискатель</h6>
+                    <p>${applicant.full_name || `${applicant.first_name || ''} ${applicant.last_name || ''}`.trim() || 'Без имени'}</p>
+                    ${applicant.phone ? `<p><i class="bi bi-telephone"></i> <a href="tel:${applicant.phone}">${applicant.phone}</a></p>` : ''}
+                    ${applicant.email ? `<p><i class="bi bi-envelope"></i> <a href="mailto:${applicant.email}">${applicant.email}</a></p>` : ''}
+                    ${applicant.preferred_schedule ? `<p><span class="badge bg-secondary">${applicant.preferred_schedule}</span></p>` : ''}
+                </div>
+            </div>
+            ${data.message ? `<div class="mt-3"><h6>Сообщение</h6><div class="border rounded p-3">${data.message}</div></div>` : ''}
+            ${applicant.about ? `<div class="mt-3"><h6>О себе</h6><div class="border rounded p-3">${applicant.about}</div></div>` : ''}
+            ${applicant.skills ? `<div class="mt-3"><h6>Навыки</h6><div class="border rounded p-3">${applicant.skills}</div></div>` : ''}
+            ${applicant.work_experience ? `<div class="mt-3"><h6>Опыт работы</h6><div class="border rounded p-3">${applicant.work_experience}</div></div>` : ''}
+            ${applicant.education ? `<div class="mt-3"><h6>Образование</h6><div class="border rounded p-3">${applicant.education}</div></div>` : ''}
+        `;
+    }
+
+    getStatusColor(status = '') {
+        switch (status.toLowerCase()) {
+            case 'pending':
+                return 'warning';
+            case 'approved':
+                return 'success';
+            case 'rejected':
+                return 'danger';
+            case 'interview':
+                return 'info';
+            default:
+                return 'secondary';
+        }
+    }
+
+    getStatusText(status = '') {
+        switch (status.toLowerCase()) {
+            case 'pending':
+                return 'На рассмотрении';
+            case 'approved':
+                return 'Одобрена';
+            case 'rejected':
+                return 'Отклонена';
+            case 'interview':
+                return 'Собеседование';
+            default:
+                return 'Неизвестно';
         }
     }
 

@@ -246,4 +246,20 @@ document.addEventListener('DOMContentLoaded', function() {
     clearFiltersBtn.addEventListener('click', clearFilters);
 });
 </script>
+
+<!-- Модальное окно деталей заявки -->
+<div class="modal fade" id="applicationDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-person-badge me-2"></i> Подробнее о соискателе</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="applicationDetailsModalBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

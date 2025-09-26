@@ -23,6 +23,8 @@ from domain.entities.time_slot import TimeSlot
 from domain.entities.application import Application, ApplicationStatus
 from core.logging.logger import logger
 from apps.web.utils.applications_utils import get_new_applications_count
+from domain.entities.manager_object_permission import ManagerObjectPermission
+from domain.entities.contract import Contract
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 templates = Jinja2Templates(directory="apps/web/templates")
@@ -3473,3 +3475,53 @@ async def manager_applications_count(
     from apps.web.utils.applications_utils import get_new_applications_count
     count = await get_new_applications_count(user_id, db, "manager")
     return {"count": count}
+
+@router.get("/api/applications/{application_id}")
+async def manager_application_details_api(
+    application_id: int,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    if isinstance(current_user, RedirectResponse):
+        raise HTTPException(status_code=401, detail="Необходима авторизация")
+
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+    from domain.entities.manager_object_permission import ManagerObjectPermission
+    from domain.entities.contract import Contract
+
+    query = select(Application, Object, User).select_from(Application).join(Object, Application.object_id == Object.id).join(User, Application.applicant_id == User.id).join(
+        ManagerObjectPermission, and_(Object.id == ManagerObjectPermission.object_id)
+    ).join(Contract, and_(ManagerObjectPermission.contract_id == Contract.id, Contract.employee_id == user_id, Contract.is_manager == True))
+    result = await db.execute(query.where(Application.id == application_id))
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Заявка не найдена или нет доступа")
+
+    application, obj, applicant = row
+
+    return {
+        "id": application.id,
+        "object_name": obj.name,
+        "object_address": obj.address,
+        "status": application.status.value,
+        "message": application.message,
+        "created_at": application.created_at.isoformat() if application.created_at else None,
+        "interview_scheduled_at": application.interview_scheduled_at.isoformat() if application.interview_scheduled_at else None,
+        "interview_type": application.interview_type,
+        "applicant": {
+            "full_name": applicant.full_name,
+            "first_name": applicant.first_name,
+            "last_name": applicant.last_name,
+            "username": applicant.username,
+            "email": applicant.email,
+            "phone": applicant.phone,
+            "skills": applicant.skills,
+            "about": applicant.about,
+            "work_experience": applicant.work_experience,
+            "preferred_schedule": applicant.preferred_schedule,
+            "education": applicant.education,
+        }
+    }
