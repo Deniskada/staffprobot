@@ -4960,6 +4960,28 @@ async def approve_application(
         
         await db.commit()
         
+        # Отправляем уведомления
+        try:
+            from shared.services.notification_service import NotificationService
+            notification_service = NotificationService(db)
+            
+            # Уведомляем соискателя
+            notification_payload = {
+                "application_id": application.id,
+                "object_name": application.object.name if application.object else "Объект",
+                "scheduled_at": application.interview_scheduled_at.isoformat(),
+                "interview_type": interview_type
+            }
+            
+            notification_service.create(
+                [application.applicant_id],
+                "interview_assigned",
+                notification_payload,
+                send_telegram=True
+            )
+        except Exception as notification_error:
+            logger.error(f"Ошибка отправки уведомлений: {notification_error}")
+        
         logger.info(f"Заявка {application_id} одобрена, собеседование назначено на {interview_datetime}")
         
         return {
