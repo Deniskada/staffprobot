@@ -113,6 +113,9 @@ async def create_contract_form(
             'current_year': str(datetime.now().year)
         })
     
+    # Получаем справочник всех тегов для подсказок
+    all_tags = await tag_service.get_all_tags(session)
+    
     return templates.TemplateResponse(
         "employees/create.html",
         {
@@ -125,7 +128,8 @@ async def create_contract_form(
             "templates_json": templates_json,  # Добавляем JSON данные для JavaScript
             "current_date": current_date,
             "employee_telegram_id": employee_telegram_id,
-            "owner_tags": owner_tags  # Теги владельца для JavaScript
+            "owner_tags": owner_tags,  # Теги владельца для JavaScript
+            "all_tags": all_tags  # Справочник всех тегов для подсказок
         }
     )
 
