@@ -2528,11 +2528,18 @@ async def owner_contract_templates_create_form(request: Request):
     if user_role != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
+    # Получаем справочник всех тегов для подсказок
+    async with get_async_session() as session:
+        from apps.web.services.tag_service import TagService
+        tag_service = TagService()
+        all_tags = await tag_service.get_all_tags(session)
+    
     return templates.TemplateResponse(
         "owner/templates/contracts/create.html",
         {
             "request": request,
-            "current_user": current_user
+            "current_user": current_user,
+            "all_tags": all_tags  # Справочник всех тегов для подсказок
         }
     )
 
