@@ -3,11 +3,16 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block head %}
+<!-- Summernote WYSIWYG Editor CSS -->
+<link href="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.css" rel="stylesheet">
 <!-- jQuery for Summernote -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<!-- Summernote WYSIWYG Editor -->
-<link href="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.css" rel="stylesheet">
+<!-- Summernote WYSIWYG Editor JS -->
 <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.js"></script>
+<!-- jQuery fallback check -->
+<script>
+console.log('jQuery статус:', typeof window.jQuery !== 'undefined' ? 'загружен' : 'не найден');
+</script>
 
 <style>
 /* Стили для блока подсказок тегов */
@@ -342,6 +347,29 @@ function renderFields(){
 
 // Инициализация Summernote WYSIWYG редактора
 document.addEventListener('DOMContentLoaded', function() {
+    // Проверяем что jQuery загружен
+    if (typeof window.$ !== 'undefined' || typeof window.jQuery !== 'undefined') {
+        const $ = window.jQuery || window.$;
+        initializeSummernote($);
+    } else {
+        // Ждем загрузки jQuery
+        let retryCount = 0;
+        const checkJQuery = setInterval(() => {
+            if (typeof window.$ !== 'undefined' || typeof window.jQuery !== 'undefined') {
+                clearInterval(checkJQuery);
+                const $ = window.jQuery || window.$;
+                initializeSummernote($);
+            } else if (retryCount > 50) {
+                clearInterval(checkJQuery);
+                console.error('jQuery не загрузился!');
+            }
+            retryCount++;
+        }, 100);
+    }
+});
+
+function initializeSummernote($) {
+    console.log('Инициализация Summernote редактора...');
     $('#contentEditor').summernote({
         height: 350,
         minHeight: 200,
@@ -387,12 +415,15 @@ document.addEventListener('DOMContentLoaded', function() {
             { tag: 'span', name: 'Встроенный текст', class: 'inline-text' }
         ]
     });
-});
+}
 
 document.getElementById('templateForm').addEventListener('submit', function(e){
-    // Получаем содержимое из Summernote и сохраняем его в скрытое поле textarea
-    const content = $('#contentEditor').summernote('code');
-    document.getElementById('content').value = content;
+    // Получаем содержимое из Summernote через jQuery
+    if (typeof window.$ !== 'undefined' || typeof window.jQuery !== 'undefined') {
+        const $ = window.jQuery || window.$;
+        const content = $('#contentEditor').summernote('code');
+        document.getElementById('content').value = content;
+    }
     
     // Продолжаем стандартную логику
     document.getElementById('fields_schema').value = JSON.stringify(fields);
