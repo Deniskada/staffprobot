@@ -5094,3 +5094,38 @@ async def owner_application_details_api(
             "education": applicant.education,
         }
     }
+
+@router.post("/api/applications/finalize-contract")
+async def owner_finalize_contract(
+    application_id: int = Form(...),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        query = select(Application).select_from(Application).join(
+            Object, Application.object_id == Object.id
+        ).where(and_(Application.id == application_id, Object.owner_id == user_id))
+
+        result = await db.execute(query)
+        application = result.scalar_one_or_none()
+        if not application:
+            raise HTTPException(status_code=404, detail="Заявка не найдена или нет доступа")
+
+        application.status = ApplicationStatus.APPROVED
+        await db.commit()
+
+        logger.info(f"Заявка {application_id} переведена в статус APPROVED владельцем {user_id}")
+        return {"message": "Заявка одобрена", "status": application.status.value}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка одобрения заявки владельцем: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка одобрения заявки: {e}")

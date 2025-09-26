@@ -106,14 +106,14 @@
                         <div class="d-flex gap-2">
                             <button class="btn btn-success btn-sm approve-application" 
                                     data-application-id="{{ application.id }}"
-                                    data-role="{{ parent_role }}"
-                                    data-endpoint="/{{ parent_role }}/api/applications/approve">
+                                    data-role="{{ current_role }}"
+                                    data-endpoint="/{{ current_role }}/api/applications/approve">
                                 <i class="bi bi-check-circle me-1"></i> Одобрить
                             </button>
                             <button class="btn btn-danger btn-sm reject-application" 
                                     data-application-id="{{ application.id }}"
-                                    data-role="{{ parent_role }}"
-                                    data-endpoint="/{{ parent_role }}/api/applications/reject">
+                                    data-role="{{ current_role }}"
+                                    data-endpoint="/{{ current_role }}/api/applications/reject">
                                 <i class="bi bi-x-circle me-1"></i> Отклонить
                             </button>
                             <button class="btn btn-outline-primary btn-sm view-application" 
@@ -122,6 +122,36 @@
                                 <i class="bi bi-eye me-1"></i> Подробнее
                             </button>
                         </div>
+                    </div>
+                    {% elif show_actions and application.status.value == 'INTERVIEW' %}
+                    <div class="card-footer">
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-success btn-sm finalize-contract" 
+                                    data-application-id="{{ application.id }}"
+                                    data-role="{{ current_role }}"
+                                    data-endpoint="/{{ current_role }}/api/applications/finalize-contract">
+                                <i class="bi bi-file-earmark-check me-1"></i> Заключить договор
+                            </button>
+                            <button class="btn btn-danger btn-sm reject-application" 
+                                    data-application-id="{{ application.id }}"
+                                    data-role="{{ current_role }}"
+                                    data-endpoint="/{{ current_role }}/api/applications/reject">
+                                <i class="bi bi-x-circle me-1"></i> Отклонить
+                            </button>
+                            <button class="btn btn-outline-primary btn-sm view-application" 
+                                    data-application-id="{{ application.id }}"
+                                    data-role="{{ current_role }}">
+                                <i class="bi bi-eye me-1"></i> Подробнее
+                            </button>
+                        </div>
+                    </div>
+                    {% elif show_actions %}
+                    <div class="card-footer text-end">
+                        <button class="btn btn-outline-primary btn-sm view-application" 
+                                data-application-id="{{ application.id }}"
+                                data-role="{{ current_role }}">
+                            <i class="bi bi-eye me-1"></i> Подробнее
+                        </button>
                     </div>
                     {% endif %}
                 </div>
