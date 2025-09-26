@@ -3,6 +3,12 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block head %}
+<!-- jQuery for Summernote -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<!-- Summernote WYSIWYG Editor -->
+<link href="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.js"></script>
+
 <style>
 /* Стили для блока подсказок тегов */
 .card .tag-item {
@@ -63,6 +69,29 @@
     80% { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(-10px); }
 }
+
+/* Стили для Summernote редактора */
+.summernote-editor {
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+}
+
+.note-editor.note-frame .note-editing-area .note-editable {
+    font-family: 'Times New Roman', serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #333;
+    padding: 15px;
+}
+
+/* Стили для средного блока редактора */
+.summernote-container {
+    background: white;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    height: 400px;
+    position: relative;
+}
 </style>
 {% endblock %}
 
@@ -102,8 +131,9 @@
 
             <div class="mb-3">
               <label class="form-label">Контент шаблона (Jinja2/HTML) *</label>
-              <textarea name="content" class="form-control" rows="10" placeholder="Например: Договор с {{ fio }} от {{ date }}" required></textarea>
-              <div class="form-text">Используйте теги вида {{ "{{ key }}" }} из справочника тегов справа</div>
+              <div id="contentEditor" style="min-height: 300px;"></div>
+              <textarea name="content" id="content" class="form-control" style="display: none;" required></textarea>
+              <div class="form-text">Используйте теги вида {{ "{{ key }}" }} из справочника тегов справа. ВАЖНО: Для копирования форматированного текста используйте "Вставить как HTML" в контекстном меню</div>
             </div>
 
             <hr>
@@ -244,7 +274,8 @@
           </div>
           
           <div class="alert alert-info mt-3 mb-0 p-2" style="font-size: 0.8rem;">
-            <strong><i class="fas fa-lightbulb me-1"></i>TIP:</strong> Кликните по тегу чтобы скопировать его в буфер обмена
+            <strong><i class="fas fa-lightbulb me-1"></i>TIP:</strong> Кликните по тегу чтобы скопировать его в буфер обмена<br>
+            <strong><i class="fas fa-crown me-1"></i>FORMAT:</strong> Для форматированного текста используйте "Вставить как HTML" в редакторе
           </div>
         </div>
       </div>
@@ -309,8 +340,62 @@ function renderFields(){
   `).join('');
 }
 
+// Инициализация Summernote WYSIWYG редактора
+document.addEventListener('DOMContentLoaded', function() {
+    $('#contentEditor').summernote({
+        height: 350,
+        minHeight: 200,
+        maxHeight: 500,
+        placeholder: 'Например: Договор с {{ fio }} от {{ date }}',
+        toolbar: [
+            ['style', ['style']],
+            ['font', ['bold', 'underline', 'italic', 'clear']],
+            ['fontname', ['fontname']],
+            ['fontsize', ['fontsize']],
+            ['color', ['color']],
+            ['para', ['ul', 'ol', 'paragraph']],
+            ['table', ['table']],
+            ['insert', ['link']],
+            ['view', ['fullscreen', 'codeview', 'help']]
+        ],
+        fontNames: ['Times New Roman', 'Arial', 'Georgia', 'Verdana', 'Courier New'],
+        fontNamesIgnoreCheck: ['Times New Roman'],
+        callbacks: {
+            onChange: function(contents, $editable) {
+                // Копируем HTML содержимое в скрытое поле textarea
+                document.getElementById('content').value = contents;
+            },
+            onPaste: function(e) {
+                const clipboardData = e.originalEvent.clipboardData || window.clipboardData;
+                if (clipboardData && clipboardData.getData) {
+                    e.preventDefault();
+                    const html = clipboardData.getData('text/html');
+                    const text = clipboardData.getData('text/plain');
+                    
+                    // Если есть HTML разметка, вставляем её
+                    if (html) {
+                        document.execCommand('insertHTML', false, html);
+                    } else {
+                        document.execCommand('insertText', false, text);
+                    }
+                }
+            }
+        },
+        styleTags: [
+            'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            { tag: 'div', name: 'Контейнер блока', class: 'content-block' },
+            { tag: 'span', name: 'Встроенный текст', class: 'inline-text' }
+        ]
+    });
+});
+
 document.getElementById('templateForm').addEventListener('submit', function(e){
-  document.getElementById('fields_schema').value = JSON.stringify(fields);
+    // Получаем содержимое из Summernote и сохраняем его в скрытое поле textarea
+    const content = $('#contentEditor').summernote('code');
+    document.getElementById('content').value = content;
+    
+    // Продолжаем стандартную логику
+    document.getElementById('fields_schema').value = JSON.stringify(fields);
 });
 
 // Функция копирования тега в буфер обмена
