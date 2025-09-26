@@ -91,15 +91,27 @@ class NotificationService:
                 if not message:
                     continue
 
-                self.bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=message,
-                    parse_mode="HTML",
-                )
-            except TelegramError:  # pragma: no cover
-                logger.exception(
-                    "Не удалось отправить Telegram уведомление пользователю %s",
-                    user.telegram_id,
+                # Используем прямые HTTP запросы к Telegram Bot API
+                import requests
+                import json
+                
+                url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+                payload = {
+                    "chat_id": user.telegram_id,
+                    "text": message,
+                    "parse_mode": "HTML"
+                }
+                
+                response = requests.post(url, json=payload, timeout=10)
+                if response.status_code == 200:
+                    logger.info(f"Telegram уведомление отправлено пользователю {user.telegram_id}")
+                else:
+                    logger.error(f"Ошибка отправки telegram уведомления: {response.status_code} - {response.text}")
+                        
+            except Exception as e:
+                logger.error(
+                    "Отправка сообщения через Telegram завершилась с ошибкой %s",
+                    str(e)
                 )
 
     def _format_telegram_message(self, notification: Notification) -> Optional[str]:
