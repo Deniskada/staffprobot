@@ -398,30 +398,48 @@ async def employee_create_application(
         await db.commit()
         await db.refresh(application)
 
-        # Отправляем уведомления
+        # Отправляем уведомления через асинхронную команду  
         try:
+            from core.database.session import get_sync_session
             from shared.services.notification_service import NotificationService
-            notification_service = NotificationService(db)
+            from core.config.settings import settings
+            from domain.entities.user import User
             
-            # Уведомляем владельца и управляющих объекта
-            notification_payload = {
-                "application_id": application.id,
-                "applicant_name": f"Пользователь {user_id}",
-                "object_name": obj.name,
-                "message": message
-            }
-            
-            # Создаем уведомления для владельца и управляющих
-            owner_and_managers = [obj.owner_id]
-            # Добавим позже логику поиска управляющих для этого объекта
-            
-            if owner_and_managers:
-                notification_service.create(
-                    [obj.owner_id],
-                    "application_created",
-                    notification_payload,
-                    send_telegram=True
+            # Получаем синхронную сессию для NotificationService
+            sync_session = get_sync_session()
+            with sync_session() as session:
+                logger.info(f"Sending notification to owner_id={obj.owner_id}, application_id={application.id}")
+                
+                notification_service = NotificationService(
+                    session=session,
+                    telegram_token=settings.telegram_bot_token
                 )
+                
+                # Уведомляем владельца конкретного объекта
+                owner_id = obj.owner_id
+                logger.info(f"Creating notification for owner user_id={owner_id}, for application_id={application.id}")
+                
+                notification_payload = {
+                    "application_id": application.id,
+                    "applicant_name": f"Пользователь {user_id}",
+                    "object_name": obj.name,
+                    "message": message
+                }
+                
+                # Создаем уведомления для владельца  
+                try:
+                    notifications = notification_service.create(
+                        [owner_id],
+                        "application_created",
+                        notification_payload,
+                        send_telegram=True
+                    )
+                    logger.info(f"Notification created: {len(notifications)} notifications")
+                    session.commit()
+                except Exception as service_error:
+                    logger.error(f"Error in notification service create: {service_error}")
+                    raise service_error
+                    
         except Exception as notification_error:
             logger.error(f"Ошибка отправки уведомлений: {notification_error}")
             # Не прерываем выполнение основной операции
