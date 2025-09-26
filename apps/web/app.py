@@ -41,6 +41,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"❌ Ошибка подключения к базе данных: {e}")
     
+    # Инициализация справочника тегов
+    from apps.web.services.tag_service import TagService
+    from core.database.session import get_async_session
+    try:
+        async with get_async_session() as session:
+            tag_service = TagService()
+            await tag_service.create_default_tags(session)
+        print("✅ Справочник тегов инициализирован")
+    except Exception as e:
+        print(f"❌ Ошибка инициализации справочника тегов: {e}")
+    
     yield
     
     # Очистка при завершении
