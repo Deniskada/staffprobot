@@ -386,10 +386,90 @@ function initSummernoteEditor() {
     }
 }
 
+// Дополнительная проверка для fallback если напрямую в DOMContentLoaded установлена fallback кнопка
+function ensureHtmlButtonExists() {
+    var pasteButton = document.getElementById('pasteHtmlBtn');
+    if (pasteButton && typeof pasteButton.onclick !== 'function') {
+        console.log('Устанавливаем fallback handler для HTML button (только если не set уже)');
+        pasteButton.onclick = function() {
+            const modalHtml = `
+                <div class="modal fade" id="htmlPasteModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Вставить форматированный текст</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <textarea id="htmlInput" class="form-control" rows="8" placeholder="Вставьте HTML или отформатированный текст."></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                <button type="button" class="btn btn-primary" id="insertHtmlBtn">Вставить в редактор</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Удаляем предыдущее модальное окно если есть
+            const existingModal = document.getElementById('htmlPasteModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            const modalElement = document.getElementById('htmlPasteModal');
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            
+            document.getElementById('insertHtmlBtn').addEventListener('click', function() {
+                const htmlContent = document.getElementById('htmlInput').value;
+                
+                if (htmlContent && htmlContent.trim()) {
+                    // Ищем поле content editor или обычный textarea
+                    const editorElement = document.getElementById('contentEditor');
+                    const textAreaElement = document.getElementById('content');
+
+                    if (editorElement && editorElement.style.display !== 'none') {
+                        // Summernote все еще работает
+                        if (typeof window.jQuery !== 'undefined') {
+                            window.jQuery(editorElement).summernote('pasteHTML', htmlContent);
+                        }
+                    } else {
+                        // Fallback на textarea
+                        const currentValue = textAreaElement.value;
+                        textAreaElement.value = currentValue + htmlContent;
+                    }
+                    
+                    modal.hide();
+                    setTimeout(() => modalElement.remove(), 300);
+                }
+            });
+            
+            modalElement.addEventListener('hidden.bs.modal', function() {
+                modalElement.remove();
+            });
+        };
+    }
+}
+
 // Подключаемся к событию когда DOM готов
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM готов, проверяем jQuery...');
+    
+    // Проверяем кнопку HTML Paste существует сразу 
+    const pasteButton = document.getElementById('pasteHtmlBtn');
+    if (pasteButton) {
+        console.log('Кнопка HTML Paste найдена, добавляем временный обработчик');
+        // Временно отключаем до нормальной инициализации
+        pasteButton.style.display = 'block';
+    }
+    
     setTimeout(initSummernoteEditor, 100); // небольшая задержка для загрузки скриптов
+    
+    // Дополнительная защита кнопки HTML Paste после небольшей паузы
+    setTimeout(ensureHtmlButtonExists, 2000);
 });
 
 function initializeSummernote($) {
@@ -442,13 +522,17 @@ function initializeSummernote($) {
         });
         console.log('Summernote успешно инициализирован!');
         
-        // Инициализируем кнопку "Вставить как HTML"
-        setupPasteHtmlButton($);
-        
     } catch (e) {
         console.error('Ошибка инициализации Summernote:', e);
         // Fallback при ошибке
         fallbackToTextarea();
+        return; // выходим, чтобы не делать setupPasteHtmlButton
+    }
+    
+    // Инициализируем кнопку "Вставить как HTML" только при успешном запуске Summernote
+    if (typeof window.jQuery !== 'undefined' || typeof window.$ !== 'undefined') {
+        const $ = window.jQuery || window.$;
+        setupPasteHtmlButton($);
     }
 }
 
@@ -539,14 +623,8 @@ function fallbackToTextarea() {
     document.getElementById('content').classList.add('form-control');
     console.log('Используется fallback textarea');
     
-    // Делаем кнопку HTML Paste работающей в fallback режиме
-    const pasteButton = document.getElementById('pasteHtmlBtn');
-    if (pasteButton) {
-        pasteButton.innerHTML = '<i class="fas fa-code me-1"></i>HTML вставить';
-        pasteButton.onclick = function() {
-            alert('Для вставки HTML-кода откройте соответствующую панель инструментов в обычном текстовом редакторе.\nВ режиме fallback рекомендуется использовать функции Правка -> Вставить без форматирования или Ctrl+Shift+V');
-        };
-    }
+    // Сразу устанавливаем кнопку HTML, а не там же где ошибка - значит что будет перезаписана
+    ensureHtmlButtonExists();
 }
 
 document.getElementById('templateForm').addEventListener('submit', function(e){
