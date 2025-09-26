@@ -400,6 +400,7 @@ async def employee_create_application(
 
         # Отправляем уведомления через асинхронную команду  
         try:
+            logger.info(f"=== Начинаем отправку уведомлений ===")
             from core.database.session import get_sync_session
             from shared.services.notification_service import NotificationService
             from core.config.settings import settings
@@ -410,10 +411,30 @@ async def employee_create_application(
             with session_factory() as session:
                 logger.info(f"Sending notification to owner_id={obj.owner_id}, application_id={application.id}")
                 
+                telegram_token = settings.telegram_bot_token
+                logger.info(f"Telegram token получен: {telegram_token[:10]}...")
+                
                 notification_service = NotificationService(
                     session=session,
-                    telegram_token=settings.telegram_bot_token
+                    telegram_token=telegram_token
                 )
+                
+                # Получаем информацию о пользователе для имени в уведомлении
+                user_query = select(User).where(User.id == user_id)
+                user_result = session.execute(user_query)
+                applicant_user = user_result.scalar_one_or_none()
+                
+                applicant_name = "Пользователь"
+                if applicant_user:
+                    if applicant_user.first_name or applicant_user.last_name:
+                        parts = []
+                        if applicant_user.first_name:
+                            parts.append(applicant_user.first_name.strip())
+                        if applicant_user.last_name:
+                            parts.append(applicant_user.last_name.strip())
+                        applicant_name = " ".join(parts) if parts else applicant_user.username
+                    elif applicant_user.username:
+                        applicant_name = applicant_user.username
                 
                 # Уведомляем владельца конкретного объекта
                 owner_id = obj.owner_id
@@ -421,10 +442,12 @@ async def employee_create_application(
                 
                 notification_payload = {
                     "application_id": application.id,
-                    "applicant_name": f"Пользователь {user_id}",
+                    "applicant_name": applicant_name,
                     "object_name": obj.name,
                     "message": message
                 }
+                
+                logger.info(f"Notification payload: {notification_payload}")
                 
                 # Создаем уведомления для владельца  
                 try:
@@ -436,6 +459,7 @@ async def employee_create_application(
                     )
                     logger.info(f"Notification created: {len(notifications)} notifications")
                     session.commit()
+                    logger.info(f"Notifications committed to database successfully")
                 except Exception as service_error:
                     logger.error(f"Error in notification service create: {service_error}")
                     raise service_error

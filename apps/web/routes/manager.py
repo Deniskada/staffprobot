@@ -3387,6 +3387,58 @@ async def manager_approve_application(
         
         await db.commit()
         
+        # Отправляем уведомления
+        try:
+            from core.database.session import get_sync_session
+            from shared.services.notification_service import NotificationService
+            from core.config.settings import settings
+            from domain.entities.user import User
+            
+            session_factory = get_sync_session
+            with session_factory() as session:
+                notification_service = NotificationService(
+                    session=session,
+                    telegram_token=settings.telegram_bot_token
+                )
+                
+                # Получаем информацию об управляющем для имени в уведомлении
+                manager_query = select(User).where(User.id == user_id)
+                manager_result = session.execute(manager_query)
+                manager_user = manager_result.scalar_one_or_none()
+                
+                manager_name = "Управляющий"
+                if manager_user:
+                    if manager_user.first_name or manager_user.last_name:
+                        parts = []
+                        if manager_user.first_name:
+                            parts.append(manager_user.first_name.strip())
+                        if manager_user.last_name:
+                            parts.append(manager_user.last_name.strip())
+                        manager_name = " ".join(parts) if parts else manager_user.username
+                    elif manager_user.username:
+                        manager_name = manager_user.username
+                
+                # Уведомляем соискателя о назначении собеседования
+                notification_payload = {
+                    "application_id": application.id,
+                    "object_name": application.object.name if hasattr(application, 'object') and application.object else "Объект",
+                    "object_address": application.object.address if hasattr(application, 'object') and application.object else "—",
+                    "employee_position": application.object.employee_position if hasattr(application, 'object') and application.object and hasattr(application.object, 'employee_position') else "Должность не указана",
+                    "scheduled_at": application.interview_scheduled_at.isoformat(),
+                    "interview_type": interview_type,
+                    "owner_name": manager_name
+                }
+                
+                notification_service.create(
+                    [application.applicant_id],
+                    "interview_assigned",
+                    notification_payload,
+                    send_telegram=True
+                )
+                session.commit()
+        except Exception as notification_error:
+            logger.error(f"Ошибка отправки уведомлений управляющим: {notification_error}")
+        
         logger.info(f"Заявка {application_id} одобрена управляющим {user_id}, собеседование назначено на {interview_datetime}")
         
         return {
@@ -3404,11 +3456,12 @@ async def manager_approve_application(
 @router.post("/api/applications/reject")
 async def manager_reject_application(
     application_id: int = Form(...),
-    reject_reason: str = Form(...),
+    reject_reason: str = Form(""),
     current_user: dict = Depends(require_manager_or_owner),
     db: AsyncSession = Depends(get_db_session)
 ):
     try:
+        logger.info(f"*** MANAGER REJECT NOT OWNER! application_id={application_id}, reject_reason={reject_reason} ***")
         if isinstance(current_user, RedirectResponse):
             return current_user
         user_id = await get_user_id_from_current_user(current_user, db)
@@ -3428,6 +3481,58 @@ async def manager_reject_application(
         application.status = ApplicationStatus.REJECTED
         application.interview_result = reject_reason
         await db.commit()
+        
+        # Отправляем уведомления
+        try:
+            from core.database.session import get_sync_session
+            from shared.services.notification_service import NotificationService
+            from core.config.settings import settings
+            from domain.entities.user import User
+            
+            session_factory = get_sync_session
+            with session_factory() as session:
+                notification_service = NotificationService(
+                    session=session,
+                    telegram_token=settings.telegram_bot_token
+                )
+                
+                # Получаем информацию об управляющем для имени в уведомлении
+                manager_query = select(User).where(User.id == user_id)
+                manager_result = session.execute(manager_query)
+                manager_user = manager_result.scalar_one_or_none()
+                
+                manager_name = "Управляющий"
+                if manager_user:
+                    if manager_user.first_name or manager_user.last_name:
+                        parts = []
+                        if manager_user.first_name:
+                            parts.append(manager_user.first_name.strip())
+                        if manager_user.last_name:
+                            parts.append(manager_user.last_name.strip())
+                        manager_name = " ".join(parts) if parts else manager_user.username
+                    elif manager_user.username:
+                        manager_name = manager_user.username
+                
+                # Уведомляем соискателя об отклонении
+                notification_payload = {
+                    "application_id": application.id,
+                    "object_name": application.object.name if hasattr(application, 'object') and application.object else "Объект",
+                    "object_address": application.object.address if hasattr(application, 'object') and application.object else "—",
+                    "employee_position": application.object.employee_position if hasattr(application, 'object') and application.object and hasattr(application.object, 'employee_position') else "Должность не указана",
+                    "reason": reject_reason,
+                    "owner_name": manager_name
+                }
+                
+                notification_service.create(
+                    [application.applicant_id],
+                    "application_rejected",
+                    notification_payload,
+                    send_telegram=True
+                )
+                session.commit()
+        except Exception as notification_error:
+            logger.error(f"Ошибка отправки уведомлений об отклонении управляющим: {notification_error}")
+        
         logger.info(f"Заявка {application_id} отклонена управляющим {user_id}")
         return {"message": "Заявка отклонена", "status": application.status.value}
     except HTTPException:

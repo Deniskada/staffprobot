@@ -156,15 +156,20 @@ class ApplicationsManager {
     }
 
     async rejectApplication() {
+        console.log('🔥 [JS] rejectApplication() вызван');
         const form = document.getElementById('reject-application-form');
+        console.log('🔥 [JS] Форма найдена:', form);
         const formData = new FormData(form);
 
         try {
             const endpoint = form.dataset.endpoint || this.rejectEndpoint;
+            console.log('🔥 [JS] Endpoint для отклонения:', endpoint);
+            console.log('🔥 [JS] FormData наполнен, отправляем запрос к:', endpoint);
             const response = await fetch(endpoint, {
                 method: 'POST',
                 body: formData
             });
+            console.log('🔥 [JS] HTTP запрос отправлен, получен ответ:', response.status, response.statusText);
             
             if (response.ok) {
                 const result = await response.json();
