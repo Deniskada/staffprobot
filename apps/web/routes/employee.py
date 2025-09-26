@@ -406,8 +406,8 @@ async def employee_create_application(
             from domain.entities.user import User
             
             # Получаем синхронную сессию для NotificationService
-            sync_session = get_sync_session()
-            with sync_session() as session:
+            session_factory = get_sync_session
+            with session_factory() as session:
                 logger.info(f"Sending notification to owner_id={obj.owner_id}, application_id={application.id}")
                 
                 notification_service = NotificationService(

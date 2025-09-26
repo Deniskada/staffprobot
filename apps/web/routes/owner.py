@@ -4967,8 +4967,8 @@ async def approve_application(
             from core.config.settings import settings
             
             # Получаем синхронную сессию для NotificationService
-            sync_session = get_sync_session()
-            with sync_session() as session:
+            session_factory = get_sync_session
+            with session_factory() as session:
                 notification_service = NotificationService(
                     session=session,
                     telegram_token=settings.telegram_bot_token
