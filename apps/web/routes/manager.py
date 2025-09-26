@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select
+from sqlalchemy import select, and_, desc
 from core.database.session import get_async_session, get_db_session
 from shared.services.role_service import RoleService
 from shared.services.manager_permission_service import ManagerPermissionService
@@ -20,7 +20,9 @@ from domain.entities.object import Object
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.time_slot import TimeSlot
+from domain.entities.application import Application, ApplicationStatus
 from core.logging.logger import logger
+from apps.web.utils.applications_utils import get_new_applications_count
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 templates = Jinja2Templates(directory="apps/web/templates")
@@ -134,9 +136,8 @@ async def manager_dashboard(
             }
             
             # Получаем данные для переключения интерфейсов
-            login_service = RoleBasedLoginService(db)
-            available_interfaces = await login_service.get_available_interfaces(user_id)
-            
+            manager_context = await get_manager_context(user_id, db)
+
             return templates.TemplateResponse("manager/dashboard.html", {
                 "request": request,
                 "current_user": current_user,
@@ -148,7 +149,7 @@ async def manager_dashboard(
                 "recent_shifts": recent_shifts,
                 "object_permissions": object_permissions,
                 "permission_names": permission_names,
-                "available_interfaces": available_interfaces
+                **manager_context
             })
         
     except Exception as e:
@@ -222,9 +223,7 @@ async def manager_objects(
                 "can_edit_schedule": "Редактирование расписания"
             }
             
-            # Получаем данные для переключения интерфейсов
-            login_service = RoleBasedLoginService(db)
-            available_interfaces = await login_service.get_available_interfaces(user_id)
+            manager_context = await get_manager_context(user_id, db)
             
             return templates.TemplateResponse("manager/objects.html", {
                 "request": request,
@@ -232,7 +231,7 @@ async def manager_objects(
                 "accessible_objects": processed_objects,
                 "object_permissions": object_permissions,
                 "permission_names": permission_names,
-                "available_interfaces": available_interfaces
+                **manager_context
             })
         
     except Exception as e:
@@ -282,16 +281,14 @@ async def manager_object_detail(
                     object_permission = permission
                     break
             
-            # Получаем данные для переключения интерфейсов
-            login_service = RoleBasedLoginService(db)
-            available_interfaces = await login_service.get_available_interfaces(user_id)
+            manager_context = await get_manager_context(user_id, db)
             
             return templates.TemplateResponse("manager/objects/detail.html", {
                 "request": request,
                 "current_user": current_user,
                 "object": obj,
                 "object_permission": object_permission,
-                "available_interfaces": available_interfaces
+                **manager_context
             })
         
     except Exception as e:
@@ -357,18 +354,16 @@ async def manager_object_edit(
                 "work_days_mask": obj.work_days_mask,
                 "schedule_repeat_weeks": obj.schedule_repeat_weeks
             }
-            
-            # Получаем данные для переключения интерфейсов
-            login_service = RoleBasedLoginService(db)
-            available_interfaces = await login_service.get_available_interfaces(user_id)
-            
+
+            manager_context = await get_manager_context(user_id, db)
+
             return templates.TemplateResponse("manager/objects/edit.html", {
                 "request": request,
                 "title": f"Редактирование: {object_data['name']}",
                 "object": object_data,
                 "current_user": current_user,
                 "object_permission": object_permission,
-                "available_interfaces": available_interfaces
+                **manager_context
             })
             
     except HTTPException:
@@ -622,11 +617,12 @@ async def manager_employees(
             logger.info(f"Available interfaces: {available_interfaces}")
             
             logger.info("Rendering template")
+            manager_context = await get_manager_context(user_id, db)
             return templates.TemplateResponse("manager/employees.html", {
                 "request": request,
                 "current_user": current_user,
                 "employees": employees,
-                "available_interfaces": available_interfaces
+                **manager_context
             })
         
     except Exception as e:
@@ -661,15 +657,14 @@ async def manager_employee_add_form(
             permission_service = ManagerPermissionService(db)
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
             
-            login_service = RoleBasedLoginService(db)
-            available_interfaces = await login_service.get_available_interfaces(user_id)
+            manager_context = await get_manager_context(user_id, db)
             
             return templates.TemplateResponse("manager/employees/add.html", {
                 "request": request,
                 "current_user": current_user,
                 "contract_templates": contract_templates,
                 "accessible_objects": accessible_objects,
-                "available_interfaces": available_interfaces
+                **manager_context
             })
         
     except Exception as e:
@@ -1483,6 +1478,7 @@ async def manager_calendar(
             calendar_weeks_json = json.dumps(calendar_weeks, default=serialize_date_objects)
             
             logger.info("Rendering template")
+            manager_context = await get_manager_context(user_id, db)
             return templates.TemplateResponse("manager/calendar.html", {
                 "request": request,
                 "title": "Календарное планирование",
@@ -1509,7 +1505,7 @@ async def manager_calendar(
                 "next_month": next_month,
                 "next_year": next_year,
                 "today": today,
-                "available_interfaces": available_interfaces
+                **manager_context
             })
         
     except Exception as e:
@@ -3259,3 +3255,220 @@ async def manager_settings(
     except Exception as e:
         logger.error(f"Error in manager settings: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки настроек")
+
+async def get_manager_context(user_id: int, session: AsyncSession):
+    """Получает общий контекст для страниц управляющего"""
+    
+    # Получаем доступные интерфейсы
+    login_service = RoleBasedLoginService(session)
+    available_interfaces = await login_service.get_available_interfaces(user_id)
+    
+    # Получаем количество новых заявок
+    new_applications_count = await get_new_applications_count(user_id, session, "manager")
+    
+    return {
+        "available_interfaces": available_interfaces,
+        "new_applications_count": new_applications_count
+    }
+
+@router.get("/applications", response_class=HTMLResponse)
+async def manager_applications(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница заявок управляющего"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем заявки по объектам, к которым у управляющего есть доступ
+        from domain.entities.manager_object_permission import ManagerObjectPermission
+        from domain.entities.contract import Contract
+        
+        # Сначала получаем объекты, к которым у управляющего есть доступ
+        objects_query = select(Object.id).join(
+            ManagerObjectPermission, Object.id == ManagerObjectPermission.object_id
+        ).join(Contract, ManagerObjectPermission.contract_id == Contract.id).where(
+            and_(
+                Contract.employee_id == user_id,
+                Contract.is_manager == True
+            )
+        )
+        
+        objects_result = await db.execute(objects_query)
+        accessible_object_ids = [obj for obj in objects_result.scalars()]
+        
+        if not accessible_object_ids:
+            # Если нет доступных объектов, возвращаем пустой список
+            applications = []
+        else:
+            # Получаем заявки по доступным объектам
+            applications_query = select(Application).where(
+                Application.object_id.in_(accessible_object_ids)
+            ).options(
+                selectinload(Application.applicant),
+                selectinload(Application.object)
+            ).order_by(desc(Application.created_at))
+            
+        applications_result = await db.execute(applications_query)
+        applications = applications_result.scalars().all()
+    
+        # Получаем общий контекст управляющего
+        manager_context = await get_manager_context(user_id, db)
+    
+        return templates.TemplateResponse("manager/applications.html", {
+            "request": request,
+            "current_user": current_user,
+            "applications": applications,
+            "show_actions": True,
+            **manager_context
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка загрузки заявок управляющего: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки заявок: {e}")
+
+@router.post("/api/applications/approve")
+async def manager_approve_application(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Одобрение заявки управляющим с назначением собеседования"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        form_data = await request.form()
+        application_id = form_data.get("application_id")
+        interview_datetime = form_data.get("interview_datetime")
+        interview_type = form_data.get("interview_type")
+        interview_notes = form_data.get("interview_notes", "").strip()
+        
+        if not application_id or not interview_datetime or not interview_type:
+            raise HTTPException(status_code=400, detail="Не все поля заполнены")
+        
+        # Получаем заявку с проверкой прав управляющего
+        from domain.entities.manager_object_permission import ManagerObjectPermission
+        from domain.entities.contract import Contract
+        
+        application_query = select(Application).join(Object).join(
+            ManagerObjectPermission, Object.id == ManagerObjectPermission.object_id
+        ).join(Contract, ManagerObjectPermission.contract_id == Contract.id).where(
+            and_(
+                Application.id == int(application_id),
+                Contract.employee_id == user_id,
+                Contract.is_manager == True
+            )
+        )
+        application_result = await db.execute(application_query)
+        application = application_result.scalar_one_or_none()
+        
+        if not application:
+            raise HTTPException(status_code=404, detail="Заявка не найдена или нет доступа")
+        
+        # Обновляем заявку
+        application.status = ApplicationStatus.INTERVIEW
+        application.interview_scheduled_at = datetime.fromisoformat(interview_datetime.replace('T', ' '))
+        application.interview_type = interview_type
+        application.interview_result = interview_notes
+        
+        await db.commit()
+        
+        logger.info(f"Заявка {application_id} одобрена управляющим {user_id}, собеседование назначено на {interview_datetime}")
+        
+        return {
+            "message": "Заявка одобрена и собеседование назначено",
+            "interview_datetime": interview_datetime,
+            "interview_type": interview_type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка одобрения заявки управляющим: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка одобрения заявки: {e}")
+
+@router.post("/api/applications/reject")
+async def manager_reject_application(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Отклонение заявки управляющим"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        form_data = await request.form()
+        application_id = form_data.get("application_id")
+        reject_reason = form_data.get("reject_reason", "").strip()
+        
+        if not application_id or not reject_reason:
+            raise HTTPException(status_code=400, detail="Не все поля заполнены")
+        
+        # Получаем заявку с проверкой прав управляющего
+        from domain.entities.manager_object_permission import ManagerObjectPermission
+        from domain.entities.contract import Contract
+        
+        application_query = select(Application).join(Object).join(
+            ManagerObjectPermission, Object.id == ManagerObjectPermission.object_id
+        ).join(Contract, ManagerObjectPermission.contract_id == Contract.id).where(
+            and_(
+                Application.id == int(application_id),
+                Contract.employee_id == user_id,
+                Contract.is_manager == True
+            )
+        )
+        application_result = await db.execute(application_query)
+        application = application_result.scalar_one_or_none()
+        
+        if not application:
+            raise HTTPException(status_code=404, detail="Заявка не найдена или нет доступа")
+        
+        # Обновляем заявку
+        application.status = ApplicationStatus.REJECTED
+        application.interview_result = reject_reason
+        
+        await db.commit()
+        
+        logger.info(f"Заявка {application_id} отклонена управляющим {user_id}")
+        
+        return {
+            "message": "Заявка отклонена",
+            "reason": reject_reason
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка отклонения заявки управляющим: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка отклонения заявки: {e}")
+
+@router.get("/api/applications/count")
+async def manager_applications_count(
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+) -> dict[str, int]:
+    """Количество новых заявок для управляющего."""
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+    from apps.web.utils.applications_utils import get_new_applications_count
+    count = await get_new_applications_count(user_id, db, "manager")
+    return {"count": count}
