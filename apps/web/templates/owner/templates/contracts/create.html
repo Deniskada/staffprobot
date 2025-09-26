@@ -5,14 +5,16 @@
 {% block head %}
 <!-- Summernote WYSIWYG Editor CSS -->
 <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.css" rel="stylesheet">
-<!-- jQuery for Summernote -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<!-- jQuery for Summernote with integrity check -->
+<script
+    src="https://code.jquery.com/jquery-3.7.1.min.js"
+    integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+    crossorigin="anonymous"
+    onload="console.log('jQuery загружен успешно')"
+    onerror="console.error('Ошибка загрузки jQuery')"
+></script>
 <!-- Summernote WYSIWYG Editor JS -->
-<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.js"></script>
-<!-- jQuery fallback check -->
-<script>
-console.log('jQuery статус:', typeof window.jQuery !== 'undefined' ? 'загружен' : 'не найден');
-</script>
+<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.js" onload="console.log('Summernote загружен')"></script>
 
 <style>
 /* Стили для блока подсказок тегов */
@@ -346,83 +348,112 @@ function renderFields(){
 }
 
 // Инициализация Summernote WYSIWYG редактора
-document.addEventListener('DOMContentLoaded', function() {
-    // Проверяем что jQuery загружен
-    if (typeof window.$ !== 'undefined' || typeof window.jQuery !== 'undefined') {
-        const $ = window.jQuery || window.$;
-        initializeSummernote($);
-    } else {
-        // Ждем загрузки jQuery
-        let retryCount = 0;
-        const checkJQuery = setInterval(() => {
-            if (typeof window.$ !== 'undefined' || typeof window.jQuery !== 'undefined') {
-                clearInterval(checkJQuery);
-                const $ = window.jQuery || window.$;
-                initializeSummernote($);
-            } else if (retryCount > 50) {
-                clearInterval(checkJQuery);
-                console.error('jQuery не загрузился!');
-            }
-            retryCount++;
-        }, 100);
-    }
+window.addEventListener('load', function() {
+    console.log('DOM полностью загружен, начинаем инициализацию...');
+    initSummernoteEditor();
 });
 
+function initSummernoteEditor() {
+    // Проверяем что jQuery загружен
+    function waitForjQuery(callback, timeout = 10000) {
+        const start = Date.now();
+        
+        function check() {
+            if (typeof window.jQuery !== 'undefined') {
+                console.log('jQuery найден, инициализируем Summernote...');
+                callback(window.jQuery);
+            } else if ((Date.now() - start) > timeout) {
+                console.error('Тайм-аут ожидания jQuery! Скримма будет недоступна.');
+                // Fallback: показываем обычную textarea
+                document.getElementById('contentEditor').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+            } else {
+                setTimeout(check, 50);
+            }
+        }
+        check();
+    }
+    
+    waitForjQuery(function($) {
+        initializeSummernote($);
+    });
+}
+
 function initializeSummernote($) {
-    console.log('Инициализация Summernote редактора...');
-    $('#contentEditor').summernote({
-        height: 350,
-        minHeight: 200,
-        maxHeight: 500,
-        placeholder: 'Например: Договор с {{ fio }} от {{ date }}',
-        toolbar: [
-            ['style', ['style']],
-            ['font', ['bold', 'underline', 'italic', 'clear']],
-            ['fontname', ['fontname']],
-            ['fontsize', ['fontsize']],
-            ['color', ['color']],
-            ['para', ['ul', 'ol', 'paragraph']],
-            ['table', ['table']],
-            ['insert', ['link']],
-            ['view', ['fullscreen', 'codeview', 'help']]
-        ],
-        fontNames: ['Times New Roman', 'Arial', 'Georgia', 'Verdana', 'Courier New'],
-        fontNamesIgnoreCheck: ['Times New Roman'],
-        callbacks: {
-            onChange: function(contents, $editable) {
-                // Копируем HTML содержимое в скрытое поле textarea
-                document.getElementById('content').value = contents;
-            },
-            onPaste: function(e) {
-                const clipboardData = e.originalEvent.clipboardData || window.clipboardData;
-                if (clipboardData && clipboardData.getData) {
-                    e.preventDefault();
-                    const html = clipboardData.getData('text/html');
-                    const text = clipboardData.getData('text/plain');
-                    
-                    // Если есть HTML разметка, вставляем её
-                    if (html) {
-                        document.execCommand('insertHTML', false, html);
-                    } else {
-                        document.execCommand('insertText', false, text);
+    try {
+        $('#contentEditor').summernote({
+            height: 350,
+            minHeight: 200,
+            maxHeight: 500,
+            placeholder: 'Например: Договор с {{ fio }} от {{ date }}',
+            toolbar: [
+                ['style', ['style']],
+                ['font', ['bold', 'underline', 'italic', 'clear']],
+                ['fontname', ['fontname']],
+                ['fontsize', ['fontsize']],
+                ['color', ['color']],
+                ['para', ['ul', 'ol', 'paragraph']],
+                ['table', ['table']],
+                ['insert', ['link']],
+                ['view', ['fullscreen', 'codeview', 'help']]
+            ],
+            fontNames: ['Times New Roman', 'Arial', 'Georgia', 'Verdana', 'Courier New'],
+            fontNamesIgnoreCheck: ['Times New Roman'],
+            callbacks: {
+                onChange: function(contents, $editable) {
+                    // Копируем HTML содержимое в скрытое поле textarea
+                    document.getElementById('content').value = contents;
+                },
+                onPaste: function(e) {
+                    const clipboardData = e.originalEvent.clipboardData || window.clipboardData;
+                    if (clipboardData && clipboardData.getData) {
+                        e.preventDefault();
+                        const html = clipboardData.getData('text/html');
+                        const text = clipboardData.getData('text/plain');
+                        
+                        // Если есть HTML разметка, вставляем её
+                        if (html) {
+                            document.execCommand('insertHTML', false, html);
+                        } else {
+                            document.execCommand('insertText', false, text);
+                        }
                     }
                 }
-            }
-        },
-        styleTags: [
-            'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-            { tag: 'div', name: 'Контейнер блока', class: 'content-block' },
-            { tag: 'span', name: 'Встроенный текст', class: 'inline-text' }
-        ]
-    });
+            },
+            styleTags: [
+                'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                { tag: 'div', name: 'Контейнер блока', class: 'content-block' },
+                { tag: 'span', name: 'Встроенный текст', class: 'inline-text' }
+            ]
+        });
+        console.log('Summernote успешно инициализирован!');
+    } catch (e) {
+        console.error('Ошибка инициализации Summernote:', e);
+        // Fallback при ошибке
+        fallbackToTextarea();
+    }
+}
+
+function fallbackToTextarea() {
+    document.getElementById('contentEditor').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+    document.getElementById('content').setAttribute('rows', '10');
+    document.getElementById('content').classList.add('form-control');
+    console.log('Используется fallback textarea');
 }
 
 document.getElementById('templateForm').addEventListener('submit', function(e){
     // Получаем содержимое из Summernote через jQuery
-    if (typeof window.$ !== 'undefined' || typeof window.jQuery !== 'undefined') {
-        const $ = window.jQuery || window.$;
-        const content = $('#contentEditor').summernote('code');
-        document.getElementById('content').value = content;
+    try {
+        if (typeof window.jQuery !== 'undefined') {
+            const $ = window.jQuery;
+            const content = $('#contentEditor').summernote('code');
+            document.getElementById('content').value = content;
+        } else {
+            console.warn('jQuery недоступен, используем текущее содержимое textarea');
+        }
+    } catch (error) {
+        console.error('Ошибка получения содержимого Summernote:', error);
     }
     
     // Продолжаем стандартную логику
