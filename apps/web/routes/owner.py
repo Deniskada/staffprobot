@@ -2519,6 +2519,82 @@ async def owner_contract_templates(request: Request):
         raise HTTPException(status_code=500, detail="Ошибка загрузки шаблонов договоров")
 
 
+@router.get("/templates/contracts/create", response_class=HTMLResponse)
+async def owner_contract_templates_create_form(request: Request):
+    """Форма создания шаблона договора для владельца."""
+    # Проверяем авторизацию и роль владельца
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    return templates.TemplateResponse(
+        "owner/templates/contracts/create.html",
+        {
+            "request": request,
+            "current_user": current_user
+        }
+    )
+
+
+@router.post("/templates/contracts/create")
+async def owner_create_contract_template(request: Request):
+    """Создание шаблона договора владельцем."""
+    # Проверяем авторизацию и роль владельца  
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        from fastapi import Form
+        from apps.web.services.contract_service import ContractService
+        
+        form_data = await request.form()
+        
+        name = form_data.get("name", "")
+        description = form_data.get("description", "") 
+        content = form_data.get("content", "")
+        version = form_data.get("version", "1.0")
+        is_public = form_data.get("is_public") == "on"
+        fields_schema = form_data.get("fields_schema")
+        
+        if not name or not content:
+            raise HTTPException(status_code=400, detail="Название и содержимое обязательны")
+            
+        contract_service = ContractService()
+        
+        template_data = {
+            "name": name,
+            "description": description,
+            "content": content,
+            "version": version,
+            "created_by": current_user["id"],  # telegram_id
+            "is_public": is_public,
+            "fields_schema": None
+        }
+        
+        if fields_schema:
+            try:
+                import json
+                template_data["fields_schema"] = json.loads(fields_schema)
+            except Exception:
+                template_data["fields_schema"] = None
+        
+        template = await contract_service.create_contract_template(template_data)
+        
+        if template:
+            return RedirectResponse(url="/owner/templates/contracts", status_code=303)
+        else:
+            raise HTTPException(status_code=400, detail="Ошибка создания шаблона")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating contract template: {e}")
+        raise HTTPException(status_code=400, detail=f"Ошибка создания шаблона: {str(e)}")
+
+
 # ===============================
 # ТАЙМ-СЛОТЫ
 # ===============================
