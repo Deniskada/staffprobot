@@ -4907,6 +4907,7 @@ async def owner_applications(
             "current_user": current_user,
             "applications": applications,
             "show_actions": True,
+            "current_role": "owner",
             **owner_context
         })
         

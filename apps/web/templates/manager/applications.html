@@ -1,0 +1,249 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}StaffProBot - Заявки на работу{% endblock %}
+
+{% block manager_content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="bi bi-file-text text-primary"></i>
+                Заявки на работу
+                {% if new_applications_count > 0 %}
+                <span class="badge bg-warning ms-2">{{ new_applications_count }} новых</span>
+                {% endif %}
+            </h1>
+        </div>
+    </div>
+</div>
+
+<!-- Фильтры -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Статус</label>
+                        <select class="form-select" id="status-filter">
+                            <option value="">Все статусы</option>
+                            <option value="PENDING">На рассмотрении</option>
+                            <option value="APPROVED">Одобрены</option>
+                            <option value="REJECTED">Отклонены</option>
+                            <option value="INTERVIEW">Собеседование</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Объект</label>
+                        <select class="form-select" id="object-filter">
+                            <option value="">Все объекты</option>
+                            <!-- Объекты будут загружены через JavaScript -->
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Дата от</label>
+                        <input type="date" class="form-control" id="date-from">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Дата до</label>
+                        <input type="date" class="form-control" id="date-to">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <button type="button" class="btn btn-primary" id="apply-filters">
+                            <i class="bi bi-funnel"></i> Применить фильтры
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" id="clear-filters">
+                            <i class="bi bi-x-circle"></i> Очистить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список заявок -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-list"></i> Список заявок
+                </h5>
+            </div>
+            <div class="card-body" data-role="manager" data-endpoint-approve="/manager/api/applications/approve" data-endpoint-reject="/manager/api/applications/reject">
+                {% include "shared/applications/list.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальные окна -->
+{% include "shared/applications/approve_modal.html" %}
+{% include "shared/applications/reject_modal.html" %}
+{% endblock %}
+
+{% block manager_extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.approve-application').forEach((btn) => {
+        btn.dataset.endpoint = '/manager/api/applications/approve';
+        btn.dataset.role = 'manager';
+    });
+    document.querySelectorAll('.reject-application').forEach((btn) => {
+        btn.dataset.endpoint = '/manager/api/applications/reject';
+        btn.dataset.role = 'manager';
+    });
+});
+</script>
+<script src="/static/js/shared/applications.js"></script>
+<script>
+// Фильтрация заявок
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM загружен, ищем элементы фильтров...');
+    
+    const statusFilter = document.getElementById('status-filter');
+    const objectFilter = document.getElementById('object-filter');
+    const dateFromFilter = document.getElementById('date-from');
+    const dateToFilter = document.getElementById('date-to');
+    const applyFiltersBtn = document.getElementById('apply-filters');
+    const clearFiltersBtn = document.getElementById('clear-filters');
+    
+    console.log('Найденные элементы:', {
+        statusFilter: !!statusFilter,
+        objectFilter: !!objectFilter,
+        dateFromFilter: !!dateFromFilter,
+        dateToFilter: !!dateToFilter,
+        applyFiltersBtn: !!applyFiltersBtn,
+        clearFiltersBtn: !!clearFiltersBtn
+    });
+    
+    // Проверяем, что все элементы найдены
+    if (!statusFilter) {
+        console.error('statusFilter не найден');
+        return;
+    }
+    if (!objectFilter) {
+        console.error('objectFilter не найден');
+        return;
+    }
+    if (!dateFromFilter) {
+        console.error('dateFromFilter не найден');
+        return;
+    }
+    if (!dateToFilter) {
+        console.error('dateToFilter не найден');
+        return;
+    }
+    if (!applyFiltersBtn) {
+        console.error('applyFiltersBtn не найден');
+        return;
+    }
+    if (!clearFiltersBtn) {
+        console.error('clearFiltersBtn не найден');
+        return;
+    }
+    
+    // Загружаем объекты для фильтра
+    loadObjects();
+    
+    function loadObjects() {
+        // Получаем уникальные объекты из заявок
+        const applications = document.querySelectorAll('.application-card');
+        const objects = new Set();
+        
+        applications.forEach(app => {
+            const objectName = app.querySelector('.card-header small').textContent.trim();
+            objects.add(objectName);
+        });
+        
+        // Заполняем селект объектов
+        if (objectFilter) {
+            objectFilter.innerHTML = '<option value="">Все объекты</option>';
+            objects.forEach(objectName => {
+                const option = document.createElement('option');
+                option.value = objectName;
+                option.textContent = objectName;
+                objectFilter.appendChild(option);
+            });
+        }
+    }
+    
+    function applyFilters() {
+        const status = statusFilter.value;
+        const object = objectFilter.value;
+        const dateFrom = dateFromFilter.value;
+        const dateTo = dateToFilter.value;
+        
+        const applications = document.querySelectorAll('.application-card');
+        
+        applications.forEach(app => {
+            let show = true;
+            
+            // Фильтр по статусу
+            if (status) {
+                const statusBadge = app.querySelector('.badge');
+                const statusText = statusBadge.textContent.trim();
+                const statusMap = {
+                    'PENDING': 'На рассмотрении',
+                    'APPROVED': 'Одобрена',
+                    'REJECTED': 'Отклонена',
+                    'INTERVIEW': 'Собеседование'
+                };
+                if (statusText !== statusMap[status]) {
+                    show = false;
+                }
+            }
+            
+            // Фильтр по объекту
+            if (object) {
+                const objectName = app.querySelector('.card-header small').textContent.trim();
+                if (objectName !== object) {
+                    show = false;
+                }
+            }
+            
+            // Фильтр по дате
+            if (dateFrom || dateTo) {
+                const dateText = app.querySelector('.text-muted').textContent.trim();
+                const appDate = new Date(dateText.split(' ')[0].split('.').reverse().join('-'));
+                
+                if (dateFrom) {
+                    const fromDate = new Date(dateFrom);
+                    if (appDate < fromDate) {
+                        show = false;
+                    }
+                }
+                
+                if (dateTo) {
+                    const toDate = new Date(dateTo);
+                    if (appDate > toDate) {
+                        show = false;
+                    }
+                }
+            }
+            
+            app.style.display = show ? 'block' : 'none';
+        });
+    }
+    
+    function clearFilters() {
+        statusFilter.value = '';
+        objectFilter.value = '';
+        dateFromFilter.value = '';
+        dateToFilter.value = '';
+        
+        // Показываем все заявки
+        const applications = document.querySelectorAll('.application-card');
+        applications.forEach(app => {
+            app.style.display = 'block';
+        });
+    }
+    
+    applyFiltersBtn.addEventListener('click', applyFilters);
+    clearFiltersBtn.addEventListener('click', clearFilters);
+});
+</script>
+{% endblock %}

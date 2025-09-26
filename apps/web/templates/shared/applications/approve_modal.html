@@ -1,0 +1,55 @@
+<!-- Модальное окно одобрения заявки -->
+<div class="modal fade" id="approveApplicationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-check-circle text-success me-2"></i>
+                    Одобрение заявки
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="approve-application-form">
+                    <input type="hidden" id="approve-application-id" name="application_id">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Соискатель</label>
+                        <input type="text" class="form-control" id="approve-applicant-name" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Объект</label>
+                        <input type="text" class="form-control" id="approve-object-name" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Дата и время собеседования</label>
+                        <input type="datetime-local" class="form-control" id="interview-datetime" name="interview_datetime" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Тип собеседования</label>
+                        <select class="form-select" id="interview-type" name="interview_type" required>
+                            <option value="">Выберите тип</option>
+                            <option value="online">Онлайн (видеозвонок)</option>
+                            <option value="offline">Офлайн (встреча)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Дополнительная информация для соискателя</label>
+                        <textarea class="form-control" id="interview-notes" name="interview_notes" rows="3" 
+                                  placeholder="Укажите детали собеседования, контакты для связи и т.д."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-success" id="confirm-approve">
+                    <i class="bi bi-check-circle me-1"></i> Одобрить и назначить собеседование
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
