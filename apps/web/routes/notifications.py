@@ -3,11 +3,12 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, update
+from datetime import datetime, timezone
 
 from core.database.session import get_db_session
-from core.auth.jwt_auth import get_current_user_dependency
+from apps.web.dependencies import get_current_user_dependency
 from domain.entities.notification import Notification
 from shared.services.notification_service import NotificationService
 
@@ -27,8 +28,14 @@ async def get_unread_notifications(
         else:
             user_id = user.id
         
-        notification_service = NotificationService(db)
-        notifications = notification_service.get_unread(user_id, limit)
+        # Получаем уведомления через AsyncSession
+        result = await db.execute(
+            select(Notification)
+            .where(Notification.user_id == user_id, Notification.is_read.is_(False))
+            .order_by(Notification.created_at.desc())
+            .limit(limit)
+        )
+        notifications = list(result.scalars())
         
         return {
             "notifications": [
@@ -39,6 +46,7 @@ async def get_unread_notifications(
                     "created_at": n.created_at.isoformat(),
                     "source": n.source,
                     "channel": n.channel,
+                    "is_read": n.is_read,
                 }
                 for n in notifications
             ],
@@ -89,15 +97,16 @@ async def mark_notifications_read(
         else:
             user_id = user.id
         
-        notification_service = NotificationService(db)
-        notification_service.mark_as_read(user_id, notification_ids)
-        
+        await db.execute(
+            update(Notification)
+            .where(Notification.user_id == user_id, Notification.id.in_(notification_ids))
+            .values(is_read=True, read_at=datetime.now(timezone.utc))
+        )
         await db.commit()
         
         return {"success": True, "marked_count": len(notification_ids)}
         
     except Exception as e:
-        await db.rollback()
         raise HTTPException(status_code=500, detail=f"Ошибка отметки уведомлений: {str(e)}")
 
 
@@ -135,5 +144,4 @@ async def delete_notification(
     except HTTPException:
         raise
     except Exception as e:
-        await db.rollback()
         raise HTTPException(status_code=500, detail=f"Ошибка удаления уведомления: {str(e)}")
