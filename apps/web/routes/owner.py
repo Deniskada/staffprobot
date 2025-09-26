@@ -4960,25 +4960,35 @@ async def approve_application(
         
         await db.commit()
         
-        # Отправляем уведомления
+        # Отправляем уведомления  
         try:
+            from core.database.session import get_sync_session
             from shared.services.notification_service import NotificationService
-            notification_service = NotificationService(db)
+            from core.config.settings import settings
             
-            # Уведомляем соискателя
-            notification_payload = {
-                "application_id": application.id,
-                "object_name": application.object.name if application.object else "Объект",
-                "scheduled_at": application.interview_scheduled_at.isoformat(),
-                "interview_type": interview_type
-            }
-            
-            notification_service.create(
-                [application.applicant_id],
-                "interview_assigned",
-                notification_payload,
-                send_telegram=True
-            )
+            # Получаем синхронную сессию для NotificationService
+            sync_session = get_sync_session()
+            with sync_session() as session:
+                notification_service = NotificationService(
+                    session=session,
+                    telegram_token=settings.telegram_bot_token
+                )
+                
+                # Уведомляем соискателя
+                notification_payload = {
+                    "application_id": application.id,
+                    "object_name": application.object.name if application.object else "Объект",
+                    "scheduled_at": application.interview_scheduled_at.isoformat(),
+                    "interview_type": interview_type
+                }
+                
+                notification_service.create(
+                    [application.applicant_id],
+                    "interview_assigned",
+                    notification_payload,
+                    send_telegram=True
+                )
+                session.commit()
         except Exception as notification_error:
             logger.error(f"Ошибка отправки уведомлений: {notification_error}")
         
