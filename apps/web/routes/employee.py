@@ -398,6 +398,34 @@ async def employee_create_application(
         await db.commit()
         await db.refresh(application)
 
+        # Отправляем уведомления
+        try:
+            from shared.services.notification_service import NotificationService
+            notification_service = NotificationService(db)
+            
+            # Уведомляем владельца и управляющих объекта
+            notification_payload = {
+                "application_id": application.id,
+                "applicant_name": f"Пользователь {user_id}",
+                "object_name": obj.name,
+                "message": message
+            }
+            
+            # Создаем уведомления для владельца и управляющих
+            owner_and_managers = [obj.owner_id]
+            # Добавим позже логику поиска управляющих для этого объекта
+            
+            if owner_and_managers:
+                notification_service.create(
+                    [obj.owner_id],
+                    "application_created",
+                    notification_payload,
+                    send_telegram=True
+                )
+        except Exception as notification_error:
+            logger.error(f"Ошибка отправки уведомлений: {notification_error}")
+            # Не прерываем выполнение основной операции
+
         return {"id": application.id, "status": application.status.value, "message": "Заявка успешно создана"}
 
     except HTTPException:

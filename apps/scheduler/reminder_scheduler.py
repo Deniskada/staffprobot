@@ -6,7 +6,8 @@ import time
 from datetime import datetime
 from typing import Optional
 from core.logging.logger import logger
-from apps.notification.notification_service import NotificationService
+from shared.services.notification_service import NotificationService
+from core.database.session import get_sync_session
 
 
 class ReminderScheduler:
@@ -19,7 +20,7 @@ class ReminderScheduler:
         Args:
             bot_token: Токен Telegram бота
         """
-        self.notification_service = NotificationService(bot_token)
+        self.bot_token = bot_token
         self.is_running = False
         self._task: Optional[asyncio.Task] = None
         logger.info("ReminderScheduler initialized")
@@ -29,23 +30,29 @@ class ReminderScheduler:
         try:
             logger.info("Starting reminder processing job")
             
-            # Обрабатываем напоминания за 2 часа до начала
-            result = await self.notification_service.process_pending_reminders(
-                hours_before=2
-            )
-            
-            if result['total_shifts'] > 0:
-                logger.info(
-                    f"Reminder job completed: "
-                    f"processed {result['total_shifts']} shifts, "
-                    f"sent {result['sent_successfully']}, "
-                    f"failed {result['failed_to_send']}"
-                )
+            # Создаем сессию для работы с БД
+            session = get_sync_session()
+            try:
+                notification_service = NotificationService(session=session, telegram_token=self.bot_token)
                 
-                if result['errors']:
-                    logger.warning(f"Reminder errors: {result['errors']}")
-            else:
-                logger.debug("No reminders to process")
+                # Обрабатываем напоминания за 2 часа до начала
+                result = notification_service.process_pending_reminders(hours_before=2)
+                
+                if result['total_shifts'] > 0:
+                    logger.info(
+                        f"Reminder job completed: "
+                        f"processed {result['total_shifts']} shifts, "
+                        f"sent {result['sent_successfully']}, "
+                        f"failed {result['failed_to_send']}"
+                    )
+                    
+                    if result['errors']:
+                        logger.warning(f"Reminder errors: {result['errors']}")
+                else:
+                    logger.debug("No reminders to process")
+                
+            finally:
+                session.close()
                 
         except Exception as e:
             logger.error(f"Error in reminder processing job: {e}")
@@ -139,17 +146,37 @@ class ReminderScheduler:
         try:
             from datetime import timedelta
             
-            success = await self.notification_service.send_shift_reminder(
-                user_telegram_id=user_telegram_id,
-                user_name="Тестовый пользователь",
-                object_name="Тестовый объект",
-                formatted_time_range="01.01.2024 09:00-17:00",
-                planned_start=datetime.now() + timedelta(hours=2),
-                time_until_start=timedelta(hours=2)
-            )
-            
-            logger.info(f"Test reminder sent to {user_telegram_id}: {success}")
-            return success
+            # Создаем сессию для работы с БД
+            session = get_sync_session()
+            try:
+                notification_service = NotificationService(session=session, telegram_token=self.bot_token)
+                
+                # Создаем тестовое уведомление напрямую через create
+                payload = {
+                    "object_name": "Тестовый объект",
+                    "time_range": "01.01.2024 09:00-17:00",
+                }
+                
+                # Найдем пользователя по telegram_id
+                from domain.entities.user import User
+                from sqlalchemy import select
+                
+                result = session.execute(
+                    select(User).where(User.telegram_id == str(user_telegram_id))
+                )
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    logger.error(f"User with telegram_id {user_telegram_id} not found")
+                    return False
+                
+                notification_service.create([user.id], "shift_reminder", payload, send_telegram=True)
+                
+                logger.info(f"Test reminder sent to {user_telegram_id}")
+                return True
+                
+            finally:
+                session.close()
             
         except Exception as e:
             logger.error(f"Error sending test reminder: {e}")

@@ -1,5 +1,5 @@
-"""Модуль уведомлений StaffProBot."""
+"""Совместимость: импорт NotificationService из shared."""
 
-from .notification_service import NotificationService
+from shared.services.notification_service import NotificationService
 
 __all__ = ["NotificationService"]
