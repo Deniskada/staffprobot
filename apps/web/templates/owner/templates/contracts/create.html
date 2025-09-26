@@ -3,18 +3,16 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block head %}
+<!-- jQuery загружаем первым - версия для совместимости -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js" integrity="sha512-pumBsjNRGGqkPzKHndZMaAG+bir374sORyzM3uulLV14lN5LyykqNk8eEeUlUkB3U0M4FApyaHraT65ihJhDpQ==" crossorigin="anonymous"></script>
 <!-- Summernote WYSIWYG Editor CSS -->
 <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.css" rel="stylesheet">
-<!-- jQuery for Summernote with integrity check -->
-<script
-    src="https://code.jquery.com/jquery-3.7.1.min.js"
-    integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
-    crossorigin="anonymous"
-    onload="console.log('jQuery загружен успешно')"
-    onerror="console.error('Ошибка загрузки jQuery')"
-></script>
 <!-- Summernote WYSIWYG Editor JS -->
-<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.js" onload="console.log('Summernote загружен')"></script>
+<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.js"></script>
+<!-- Проверка загрузки -->
+<script>
+console.log('Скрипты head загружены. jQuery доступен:', typeof window.jQuery !== 'undefined');
+</script>
 
 <style>
 /* Стили для блока подсказок тегов */
@@ -353,37 +351,46 @@ function renderFields(){
   `).join('');
 }
 
-// Инициализация Summernote WYSIWYG редактора
-window.addEventListener('load', function() {
-    console.log('DOM полностью загружен, начинаем инициализацию...');
-    initSummernoteEditor();
-});
-
+// Инициализация Summernote WYSIWYG редактора - двойная проверка
 function initSummernoteEditor() {
-    // Проверяем что jQuery загружен
-    function waitForjQuery(callback, timeout = 10000) {
-        const start = Date.now();
-        
-        function check() {
-            if (typeof window.jQuery !== 'undefined') {
-                console.log('jQuery найден, инициализируем Summernote...');
-                callback(window.jQuery);
-            } else if ((Date.now() - start) > timeout) {
-                console.error('Тайм-аут ожидания jQuery! Скримма будет недоступна.');
-                // Fallback: показываем обычную textarea
-                document.getElementById('contentEditor').style.display = 'none';
-                document.getElementById('content').style.display = 'block';
-            } else {
-                setTimeout(check, 50);
-            }
-        }
-        check();
-    }
+    console.log('Проверка jQuery:', typeof window.jQuery, typeof $);
     
-    waitForjQuery(function($) {
+    if (typeof window.jQuery !== 'undefined' || typeof window.$ !== 'undefined') {
+        const $ = window.jQuery || window.$;
+        console.log('jQuery найден, инициализируем Summernote');
         initializeSummernote($);
-    });
+    } else {
+        console.warn('jQuery не найден, ожидание...');
+        
+        function waitForjQuery(callback, timeout = 3000) {
+            const start = Date.now();
+            
+            function check() {
+                if (typeof window.jQuery !== 'undefined' || typeof window.$ !== 'undefined') {
+                    console.log('jQuery загружен!');
+                    const $ = window.jQuery || window.$;
+                    callback($);
+                } else if ((Date.now() - start) > timeout) {
+                    console.warn('jQuery не загрузился, используем fallback');
+                    fallbackToTextarea();
+                } else {
+                    setTimeout(check, 100);
+                }
+            }
+            check();
+        }
+        
+        waitForjQuery(function($) {
+            initializeSummernote($);
+        });
+    }
 }
+
+// Подключаемся к событию когда DOM готов
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM готов, проверяем jQuery...');
+    setTimeout(initSummernoteEditor, 100); // небольшая задержка для загрузки скриптов
+});
 
 function initializeSummernote($) {
     try {
@@ -531,6 +538,15 @@ function fallbackToTextarea() {
     document.getElementById('content').setAttribute('rows', '10');
     document.getElementById('content').classList.add('form-control');
     console.log('Используется fallback textarea');
+    
+    // Делаем кнопку HTML Paste работающей в fallback режиме
+    const pasteButton = document.getElementById('pasteHtmlBtn');
+    if (pasteButton) {
+        pasteButton.innerHTML = '<i class="fas fa-code me-1"></i>HTML вставить';
+        pasteButton.onclick = function() {
+            alert('Для вставки HTML-кода откройте соответствующую панель инструментов в обычном текстовом редакторе.\nВ режиме fallback рекомендуется использовать функции Правка -> Вставить без форматирования или Ctrl+Shift+V');
+        };
+    }
 }
 
 document.getElementById('templateForm').addEventListener('submit', function(e){
