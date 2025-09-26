@@ -61,6 +61,16 @@
                                 <i class="bi bi-clock"></i> Смены
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/owner/applications">
+                                <i class="bi bi-file-text"></i> Заявки
+                                <span
+                                    id="owner-new-applications-badge"
+                                    class="badge bg-warning ms-1 {% if not new_applications_count or new_applications_count == 0 %}d-none{% endif %}">
+                                    {% if new_applications_count and new_applications_count > 0 %}{{ new_applications_count }}{% endif %}
+                                </span>
+                            </a>
+                        </li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                 <i class="bi bi-layout-text-window-reverse"></i> Шаблоны
@@ -159,6 +169,9 @@
     <!-- Custom JS -->
     <script src="/static/js/main.js"></script>
     
-    {% block extra_js %}{% endblock %}
+    {% block extra_js %}
+    {% block owner_extra_js %}{% endblock %}
+    <script src="/static/js/shared/applications_badge.js" data-role="owner"></script>
+    {% endblock %}
 </body>
 </html>

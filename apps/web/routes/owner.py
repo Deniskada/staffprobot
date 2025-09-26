@@ -31,6 +31,7 @@ from domain.entities.user import User, UserRole
 from domain.entities.object import Object
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
+from domain.entities.application import Application, ApplicationStatus
 from core.logging.logger import logger
 
 router = APIRouter()
@@ -43,6 +44,18 @@ async def get_available_interfaces_for_user(user_id: int):
     async with get_async_session() as session:
         login_service = RoleBasedLoginService(session)
         return await login_service.get_available_interfaces(user_id)
+
+async def get_owner_context(user_id: int, session: AsyncSession):
+    """Получает общий контекст для страниц владельца"""
+    from apps.web.utils.applications_utils import get_new_applications_count
+    
+    available_interfaces = await get_available_interfaces_for_user(user_id)
+    new_applications_count = await get_new_applications_count(user_id, session, "owner")
+    
+    return {
+        "available_interfaces": available_interfaces,
+        "new_applications_count": new_applications_count
+    }
 
 
 async def get_user_id_from_current_user(current_user, session):
@@ -4859,3 +4872,173 @@ async def owner_contract_pdf(
     except Exception as e:
         logger.error(f"Error generating contract PDF: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {str(e)}")
+
+@router.get("/applications", response_class=HTMLResponse)
+async def owner_applications(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница заявок владельца"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем заявки по объектам владельца
+        applications_query = select(Application).join(Object).where(
+            Object.owner_id == user_id
+        ).options(
+            selectinload(Application.applicant),
+            selectinload(Application.object)
+        ).order_by(desc(Application.created_at))
+        
+        applications_result = await db.execute(applications_query)
+        applications = applications_result.scalars().all()
+        
+        # Получаем общий контекст владельца
+        owner_context = await get_owner_context(user_id, db)
+        
+        return templates.TemplateResponse("owner/applications.html", {
+            "request": request,
+            "current_user": current_user,
+            "applications": applications,
+            "show_actions": True,
+            **owner_context
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка загрузки заявок: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки заявок: {e}")
+
+@router.post("/api/applications/approve")
+async def approve_application(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Одобрение заявки с назначением собеседования"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        form_data = await request.form()
+        application_id = form_data.get("application_id")
+        interview_datetime = form_data.get("interview_datetime")
+        interview_type = form_data.get("interview_type")
+        interview_notes = form_data.get("interview_notes", "").strip()
+        
+        if not application_id or not interview_datetime or not interview_type:
+            raise HTTPException(status_code=400, detail="Не все поля заполнены")
+        
+        # Получаем заявку
+        application_query = select(Application).join(Object).where(
+            and_(
+                Application.id == int(application_id),
+                Object.owner_id == user_id
+            )
+        )
+        application_result = await db.execute(application_query)
+        application = application_result.scalar_one_or_none()
+        
+        if not application:
+            raise HTTPException(status_code=404, detail="Заявка не найдена")
+        
+        # Обновляем заявку
+        application.status = ApplicationStatus.INTERVIEW
+        application.interview_scheduled_at = datetime.fromisoformat(interview_datetime.replace('T', ' '))
+        application.interview_type = interview_type
+        application.interview_result = interview_notes
+        
+        await db.commit()
+        
+        logger.info(f"Заявка {application_id} одобрена, собеседование назначено на {interview_datetime}")
+        
+        return {
+            "message": "Заявка одобрена и собеседование назначено",
+            "interview_datetime": interview_datetime,
+            "interview_type": interview_type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка одобрения заявки: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка одобрения заявки: {e}")
+
+@router.post("/api/applications/reject")
+async def reject_application(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Отклонение заявки"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        form_data = await request.form()
+        application_id = form_data.get("application_id")
+        reject_reason = form_data.get("reject_reason", "").strip()
+        
+        if not application_id or not reject_reason:
+            raise HTTPException(status_code=400, detail="Не все поля заполнены")
+        
+        # Получаем заявку
+        application_query = select(Application).join(Object).where(
+            and_(
+                Application.id == int(application_id),
+                Object.owner_id == user_id
+            )
+        )
+        application_result = await db.execute(application_query)
+        application = application_result.scalar_one_or_none()
+        
+        if not application:
+            raise HTTPException(status_code=404, detail="Заявка не найдена")
+        
+        # Обновляем заявку
+        application.status = ApplicationStatus.REJECTED
+        application.interview_result = reject_reason
+        
+        await db.commit()
+        
+        logger.info(f"Заявка {application_id} отклонена")
+        
+        return {
+            "message": "Заявка отклонена",
+            "reason": reject_reason
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка отклонения заявки: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка отклонения заявки: {e}")
+
+
+@router.get("/api/applications/count")
+async def owner_applications_count(
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+) -> dict[str, int]:
+    """Количество новых заявок для владельца."""
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+    from apps.web.utils.applications_utils import get_new_applications_count
+    count = await get_new_applications_count(user_id, db, "owner")
+    return {"count": count}
