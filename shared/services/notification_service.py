@@ -162,23 +162,38 @@ class NotificationService:
             )
         return None
 
-    def get_unread(self, user_id: int, limit: int = 20) -> List[Notification]:
-        result = self.session.execute(
-            select(Notification)
-            .where(Notification.user_id == user_id, Notification.is_read.is_(False))
-            .order_by(Notification.created_at.desc())
-            .limit(limit)
-        )
+    async def get_unread(self, user_id: int, limit: int = 20) -> List[Notification]:
+        if self.is_async:
+            result = await self.session.execute(
+                select(Notification)
+                .where(Notification.user_id == user_id, Notification.is_read.is_(False))
+                .order_by(Notification.created_at.desc())
+                .limit(limit)
+            )
+        else:
+            result = self.session.execute(
+                select(Notification)
+                .where(Notification.user_id == user_id, Notification.is_read.is_(False))
+                .order_by(Notification.created_at.desc())
+                .limit(limit)
+            )
         return list(result.scalars())
 
-    def mark_as_read(self, user_id: int, notification_ids: Sequence[int]) -> None:
+    async def mark_as_read(self, user_id: int, notification_ids: Sequence[int]) -> None:
         if not notification_ids:
             return
-        self.session.execute(
-            update(Notification)
-            .where(Notification.user_id == user_id, Notification.id.in_(notification_ids))
-            .values(is_read=True, read_at=datetime.now(timezone.utc))
-        )
+        if self.is_async:
+            await self.session.execute(
+                update(Notification)
+                .where(Notification.user_id == user_id, Notification.id.in_(notification_ids))
+                .values(is_read=True, read_at=datetime.now(timezone.utc))
+            )
+        else:
+            self.session.execute(
+                update(Notification)
+                .where(Notification.user_id == user_id, Notification.id.in_(notification_ids))
+                .values(is_read=True, read_at=datetime.now(timezone.utc))
+            )
 
     def create_for_role(
         self,
