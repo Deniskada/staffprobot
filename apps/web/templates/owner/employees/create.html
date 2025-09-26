@@ -31,12 +31,72 @@
     font-weight: bold;
     color: #155724;
 }
+
+/* Стили для блока подсказок тегов */
+.card .tag-item {
+    border-left: 3px solid #0d6efd;
+    padding-left: 8px;
+    margin-left: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.card .tag-item:hover {
+    background-color: #f8f9fa;
+    transform: translateX(2px);
+}
+
+.card .tag-item code {
+    background-color: #f8f9fa;
+    color: #0d6efd;
+    font-size: 0.9em;
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-family: 'Courier New', monospace;
+    cursor: pointer;
+}
+
+.card .tag-item code:hover {
+    background-color: #e0e7ff;
+}
+
+.card .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.card .card-header h5 {
+    color: #495057;
+}
+
+/* Плавный скрол для sticky бокс */
+.sticky-top {
+    transition: top 0.3s ease;
+}
+
+/* Скрытие категорий при фильтрации */
+.tag-category {
+    transition: opacity 0.3s ease;
+}
+
+.tag-category.hidden {
+    display: none;
+}
+
+/* Анимация уведомления */
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(-10px); }
+    20% { opacity: 1; transform: translateY(0); }
+    80% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-10px); }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <div class="row justify-content-center">
+    <div class="row">
         <div class="col-lg-8">
             <div class="card">
                 <div class="card-header">
@@ -313,6 +373,133 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Правая колонка с подсказками по тегам -->
+        <div class="col-lg-4">
+            <div class="card sticky-top" style="top: 20px;">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Подсказки по тегам
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Используйте теги для автоматической подстановки данных в шаблоны договоров:
+                    </p>
+                    
+                    <!-- Фильтр категорий -->
+                    <div class="mb-3">
+                        <label class="form-label">Фильтр:</label>
+                        <select class="form-select form-select-sm" id="tagFilter">
+                            <option value="all">Все категории</option>
+                            <option value="system">Системные</option>
+                            <option value="owner">Владелец</option>
+                            <option value="company">Компания</option>
+                            <option value="employee">Сотрудник</option>
+                            <option value="contract">Договор</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Теги по категориям -->
+                    <div id="tagsContainer">
+                        <!-- Системные теги -->
+                        <div class="tag-category" data-category="system">
+                            <h6 class="text-primary mb-2">
+                                <i class="fas fa-cog me-1"></i>
+                                Системные теги
+                            </h6>
+                            <div class="small mb-3">
+                                <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ current_date }}" }}')">
+                                    <code>{{ "{{ current_date }}" }}</code>
+                                    <div class="small text-muted">Текущая дата</div>
+                                </div>
+                                <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ current_time }}" }}')">
+                                    <code>{{ "{{ current_time }}" }}</code>
+                                    <div class="small text-muted">Текущее время</div>
+                                </div>
+                                <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ current_year }}" }}')">
+                                    <code>{{ "{{ current_year }}" }}</code>
+                                    <div class="small text-muted">Текущий год</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Теги владельца -->
+                        <div class="tag-category" data-category="owner">
+                            <h6 class="text-success mb-2">
+                                <i class="fas fa-user me-1"></i>
+                                Владелец
+                            </h6>
+                            {% for tag in all_tags if tag.category == "owner" %}
+                            <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ " + tag.key + " }}" }}')">
+                                <code>{{ "{{ " + tag.key + " }}" }}</code>
+                                <div class="small text-muted">{{ tag.label }}</div>
+                                {% if tag.description %}
+                                <div class="small text-info">{{ tag.description|truncate(100) }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Теги компании -->
+                        <div class="tag-category" data-category="company">
+                            <h6 class="text-info mb-2">
+                                <i class="fas fa-building me-1"></i>
+                                Компания
+                            </h6>
+                            {% for tag in all_tags if tag.category == "company" %}
+                            <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ " + tag.key + " }}" }}')">
+                                <code>{{ "{{ " + tag.key + " }}" }}</code>
+                                <div class="small text-muted">{{ tag.label }}</div>
+                                {% if tag.description %}
+                                <div class="small text-info">{{ tag.description|truncate(100) }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Теги сотрудника -->
+                        <div class="tag-category" data-category="employee">
+                            <h6 class="text-warning mb-2">
+                                <i class="fas fa-users me-1"></i>
+                                Сотрудник
+                            </h6>
+                            {% for tag in all_tags if tag.category == "employee" %}
+                            <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ " + tag.key + " }}" }}')">
+                                <code>{{ "{{ " + tag.key + " }}" }}</code>
+                                <div class="small text-muted">{{ tag.label }}</div>
+                                {% if tag.description %}
+                                <div class="small text-info">{{ tag.description|truncate(100) }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Договорные теги -->
+                        <div class="tag-category" data-category="contract">
+                            <h6 class="text-danger mb-2">
+                                <i class="fas fa-file-contract me-1"></i>
+                                Договор
+                            </h6>
+                            {% for tag in all_tags if tag.category == "contract" %}
+                            <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ " + tag.key + " }}" }}')">
+                                <code>{{ "{{ " + tag.key + " }}" }}</code>
+                                <div class="small text-muted">{{ tag.label }}</div>
+                                {% if tag.description %}
+                                <div class="small text-info">{{ tag.description|truncate(100) }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mt-3 mb-0 p-2" style="font-size: 0.8rem;">
+                        <strong><i class="fas fa-lightbulb me-1"></i>TIP:</strong> Кликните по тегу чтобы скопировать его в буфер обмена
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -574,6 +761,81 @@ function createDynamicField(field) {
 
 
 }); // Конец DOMContentLoaded
+
+// Функция копирования тега в буфер обмена
+function copyToClipboard(text) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function() {
+            showCopySuccess();
+        }).catch(function(err) {
+            console.error('Ошибка копирования:', err);
+            fallbackCopyToClipboard(text);
+        });
+    } else {
+        fallbackCopyToClipboard(text);
+    }
+}
+
+// Альтернативный способ копирования для браузеров без поддержки Clipboard API
+function fallbackCopyToClipboard(text) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+            showCopySuccess();
+        }
+    } catch (err) {
+        console.error('Не удалось скопировать текст: ', err);
+        alert('Скопируйте тег вручную: ' + text);
+    }
+    
+    document.body.removeChild(textArea);
+}
+
+// Показать уведомление об успешном копировании
+function showCopySuccess() {
+    // Создаем временное уведомление
+    const notification = document.createElement('div');
+    notification.className = 'alert alert-success position-fixed';
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; animation: fadeInOut 2s ease-in-out;';
+    notification.innerHTML = '<i class="fas fa-check me-2"></i>Тег скопирован!';
+    
+    document.body.appendChild(notification);
+    
+    // Удаляем уведомление через 2 секунды
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 2000);
+}
+
+// Обработчик фильтра тегов
+document.addEventListener('DOMContentLoaded', function() {
+    const tagFilter = document.getElementById('tagFilter');
+    if (tagFilter) {
+        tagFilter.addEventListener('change', function() {
+            const filterValue = this.value;
+            const categories = document.querySelectorAll('.tag-category');
+            
+            categories.forEach(category => {
+                const categoryName = category.dataset.category;
+                if (filterValue === 'all' || filterValue === categoryName) {
+                    category.style.display = 'block';
+                    category.classList.remove('hidden');
+                } else {
+                    category.style.display = 'none';
+                    category.classList.add('hidden');
+                }
+            });
+        });
+    }
+});
 
 // Функция для переключения прав управляющего
 function toggleManagerPermissions() {
