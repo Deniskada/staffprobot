@@ -49,6 +49,7 @@ class NotificationService:
         source: str = "system",
         send_telegram: bool = True,
     ) -> List[Notification]:
+        logger.info(f"=== NotificationService.create() called - user_ids={user_ids}, type={notification_type}, send_telegram={send_telegram}")
         now = datetime.now(timezone.utc)
         notifications: List[Notification] = []
         for user_id in user_ids:
@@ -71,28 +72,34 @@ class NotificationService:
         return notifications
 
     def _send_telegram_notifications(self, notifications: Iterable[Notification]) -> None:
-        if not self.bot:
+        if not self.telegram_token:
+            logger.error("Telegram token не установлен")
             return
 
         user_ids = {item.user_id for item in notifications}
         if not user_ids:
             return
 
+        logger.info(f"Отправка telegram уведомлений для пользователей: {list(user_ids)}")
         result = self.session.execute(select(User).where(User.id.in_(user_ids)))
         users_map = {user.id: user for user in result.scalars()}
+        
+        logger.info(f"Найдены пользователи: {list(users_map.keys())}")
 
         for notification in notifications:
             user = users_map.get(notification.user_id)
             if not user or not user.telegram_id:
+                logger.info(f"Пользователь {notification.user_id} не найден или не имеет telegram_id: {user.telegram_id if user else None}")
                 continue
 
             try:
                 message = self._format_telegram_message(notification)
                 if not message:
+                    logger.warning(f"Пустое сообщение для уведомления типа {notification.type}")
                     continue
 
                 # Используем прямые HTTP запросы к Telegram Bot API
-                import requests
+                import httpx
                 import json
                 
                 url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
@@ -102,11 +109,16 @@ class NotificationService:
                     "parse_mode": "HTML"
                 }
                 
-                response = requests.post(url, json=payload, timeout=10)
-                if response.status_code == 200:
-                    logger.info(f"Telegram уведомление отправлено пользователю {user.telegram_id}")
-                else:
-                    logger.error(f"Ошибка отправки telegram уведомления: {response.status_code} - {response.text}")
+                logger.info(f"Отправляем telegram уведомление пользователю {user.telegram_id}")
+                try:
+                    with httpx.Client(timeout=10.0) as client:
+                        response = client.post(url, json=payload)
+                        if response.status_code == 200:
+                            logger.info(f"Telegram уведомление отправлено пользователю {user.telegram_id}")
+                        else:
+                            logger.error(f"Ошибка отправки telegram уведомления: {response.status_code} - {response.text}")
+                except Exception as e:
+                    logger.error(f"Ошибка HTTP-запроса к Telegram API: {str(e)}")
                         
             except Exception as e:
                 logger.error(
@@ -132,14 +144,19 @@ class NotificationService:
         if status == "application_rejected":
             return (
                 "❌ <b>Заявка отклонена</b>\n\n"
-                f"Объект: <b>{payload.get('object_name', '—')}</b>\n"
+                f"Должность: <b>{payload.get('employee_position', payload.get('object_name', '—'))}</b>\n"
+                f"Адрес: {payload.get('object_address', '—')}\n"
+                f"От: <b>{payload.get('owner_name', 'Владелец')}</b>\n"
                 f"Причина: {payload.get('reason', '—')}"
             )
         if status == "interview_assigned":
             return (
                 "📅 <b>Назначено собеседование</b>\n\n"
-                f"Объект: <b>{payload.get('object_name', '—')}</b>\n"
-                f"Дата: {payload.get('scheduled_at', '—')}"
+                f"Должность: <b>{payload.get('employee_position', payload.get('object_name', '—'))}</b>\n"
+                f"Адрес: {payload.get('object_address', '—')}\n"
+                f"От: <b>{payload.get('owner_name', 'Владелец')}</b>\n"
+                f"Дата: {payload.get('scheduled_at', '—')}\n"
+                f"Тип: {payload.get('interview_type', '—')}"
             )
         if status == "interview_cancelled":
             return (
