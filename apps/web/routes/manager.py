@@ -3326,6 +3326,7 @@ async def manager_applications(
             "current_user": current_user,
             "applications": applications,
             "show_actions": True,
+            "current_role": "manager",
             **manager_context
         })
         

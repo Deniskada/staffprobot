@@ -1,0 +1,41 @@
+<!-- Модальное окно отклонения заявки -->
+<div class="modal fade" id="rejectApplicationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-x-circle text-danger me-2"></i>
+                    Отклонение заявки
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="reject-application-form">
+                    <input type="hidden" id="reject-application-id" name="application_id">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Соискатель</label>
+                        <input type="text" class="form-control" id="reject-applicant-name" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Объект</label>
+                        <input type="text" class="form-control" id="reject-object-name" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Причина отклонения</label>
+                        <textarea class="form-control" id="reject-reason" name="reject_reason" rows="4" 
+                                  placeholder="Укажите причину отклонения заявки..." required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger" id="confirm-reject">
+                    <i class="bi bi-x-circle me-1"></i> Отклонить заявку
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

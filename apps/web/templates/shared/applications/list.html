@@ -1,0 +1,137 @@
+<!-- Список заявок -->
+<div class="applications-list">
+    {% if applications %}
+        <div class="row">
+            {% for application in applications %}
+            <div class="col-12 mb-3">
+                <div class="card application-card" data-application-id="{{ application.id }}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">
+                                <i class="bi bi-person-circle me-2"></i>
+                                {{ application.applicant.full_name or application.applicant.username }}
+                            </h6>
+                            <small class="text-muted">
+                                <i class="bi bi-building me-1"></i>
+                                {{ application.object.name }}
+                            </small>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span class="badge 
+                                {% if application.status.value == 'PENDING' %}bg-warning
+                                {% elif application.status.value == 'APPROVED' %}bg-success
+                                {% elif application.status.value == 'REJECTED' %}bg-danger
+                                {% elif application.status.value == 'INTERVIEW' %}bg-info
+                                {% endif %} me-2">
+                                {% if application.status.value == 'PENDING' %}На рассмотрении
+                                {% elif application.status.value == 'APPROVED' %}Одобрена
+                                {% elif application.status.value == 'REJECTED' %}Отклонена
+                                {% elif application.status.value == 'INTERVIEW' %}Собеседование
+                                {% endif %}
+                            </span>
+                            <small class="text-muted">
+                                {{ application.created_at.strftime('%d.%m.%Y %H:%M') }}
+                            </small>
+                        </div>
+                    </div>
+                    <div class="card-body" data-role="{{ parent_role }}" data-endpoint-approve="/{{ parent_role }}/api/applications/approve" data-endpoint-reject="/{{ parent_role }}/api/applications/reject">
+                        {% if application.message %}
+                        <div class="mb-3">
+                            <strong>Сообщение от соискателя:</strong>
+                            <p class="mt-1 mb-0">{{ application.message }}</p>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Информация об объекте:</h6>
+                                <p class="mb-1">
+                                    <i class="bi bi-geo-alt me-1"></i>
+                                    {{ application.object.address }}
+                                </p>
+                                <p class="mb-1">
+                                    <i class="bi bi-clock me-1"></i>
+                                    {{ application.object.opening_time }} - {{ application.object.closing_time }}
+                                </p>
+                                <p class="mb-1">
+                                    <i class="bi bi-currency-ruble me-1"></i>
+                                    {{ application.object.hourly_rate }} ₽/час
+                                </p>
+                                {% if application.object.employee_position %}
+                                <p class="mb-1">
+                                    <i class="bi bi-briefcase me-1"></i>
+                                    {{ application.object.employee_position }}
+                                </p>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Информация о соискателе:</h6>
+                                <p class="mb-1">
+                                    <i class="bi bi-person me-1"></i>
+                                    {{ application.applicant.full_name or application.applicant.username }}
+                                </p>
+                                <p class="mb-1">
+                                    <i class="bi bi-telephone me-1"></i>
+                                    {{ application.applicant.phone or 'Не указан' }}
+                                </p>
+                                <p class="mb-1">
+                                    <i class="bi bi-envelope me-1"></i>
+                                    {{ application.applicant.email or 'Не указан' }}
+                                </p>
+                            </div>
+                        </div>
+                        
+                        {% if application.status.value == 'INTERVIEW' and application.interview_scheduled_at %}
+                        <div class="mt-3 p-3 bg-light rounded">
+                            <h6><i class="bi bi-calendar-event me-1"></i> Запланированное собеседование</h6>
+                            <p class="mb-1">
+                                <strong>Дата и время:</strong> 
+                                {{ application.interview_scheduled_at.strftime('%d.%m.%Y в %H:%M') }}
+                            </p>
+                            {% if application.interview_type %}
+                            <p class="mb-0">
+                                <strong>Тип:</strong> 
+                                {% if application.interview_type == 'online' %}Онлайн
+                                {% elif application.interview_type == 'offline' %}Офлайн
+                                {% else %}{{ application.interview_type }}
+                                {% endif %}
+                            </p>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if show_actions and application.status.value == 'PENDING' %}
+                    <div class="card-footer">
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-success btn-sm approve-application" 
+                                    data-application-id="{{ application.id }}"
+                                    data-role="{{ parent_role }}"
+                                    data-endpoint="/{{ parent_role }}/api/applications/approve">
+                                <i class="bi bi-check-circle me-1"></i> Одобрить
+                            </button>
+                            <button class="btn btn-danger btn-sm reject-application" 
+                                    data-application-id="{{ application.id }}"
+                                    data-role="{{ parent_role }}"
+                                    data-endpoint="/{{ parent_role }}/api/applications/reject">
+                                <i class="bi bi-x-circle me-1"></i> Отклонить
+                            </button>
+                            <button class="btn btn-outline-primary btn-sm view-application" 
+                                    data-application-id="{{ application.id }}">
+                                <i class="bi bi-eye me-1"></i> Подробнее
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-inbox display-1 text-muted"></i>
+            <h4 class="mt-3 text-muted">Заявок пока нет</h4>
+            <p class="text-muted">Когда появятся новые заявки, они отобразятся здесь</p>
+        </div>
+    {% endif %}
+</div>
