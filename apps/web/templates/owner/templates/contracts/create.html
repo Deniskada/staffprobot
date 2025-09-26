@@ -495,8 +495,9 @@ function initializeSummernote($) {
             fontNamesIgnoreCheck: ['Times New Roman'],
             callbacks: {
                 onChange: function(contents, $editable) {
-                    // Копируем HTML содержимое в скрытое поле textarea
+                    // Копируем HTML содержимое в скрытое поле textarea - АКТИВНОЕ ОБНОВЛЕНИЕ HTML
                     document.getElementById('content').value = contents;
+                    console.log('Summernote onChange: HTML сохранён (длина)', contents.length, 'превью:', contents.substring(0, 50) + '...');
                 },
                 onPaste: function(e) {
                     const clipboardData = e.originalEvent.clipboardData || window.clipboardData;
@@ -591,23 +592,26 @@ function setupPasteHtmlButton($) {
         }, 300);
         
         // Обработчик для кнопки Вставить
-        $('#insertHtmlBtn').click(function() {
-            var htmlContent = $('#htmlInput').val();
-            
-            if (htmlContent && htmlContent.trim()) {
-                try {
-                    // Вставляем HTML в редактор
-                    $('#contentEditor').summernote('pasteHTML', htmlContent);
-                    modal.hide();
-                    console.log('HTML успешно вставлен в редактор');
-                } catch (e) {
-                    console.error('Ошибка вставки HTML:', e);
-                    alert('Ошибка вставки HTML: ' + e.message);
-                }
-            } else {
-                alert('Вставьте HTML-код в поле выше');
-            }
-        });
+                $('#insertHtmlBtn').click(function() {
+                    var htmlContent = $('#htmlInput').val();
+                    
+                    if (htmlContent && htmlContent.trim()) {
+                        try {
+                            console.log('Вставляем HTML в Summernote (длина)', htmlContent.length);
+                            console.log('HTML контент превью:', htmlContent.substring(0, 200) + '...');
+                            
+                            // Вставляем HTML в редактор
+                            $('#contentEditor').summernote('pasteHTML', htmlContent);
+                            modal.hide();
+                            console.log('HTML успешно вставлен в редактор');
+                        } catch (e) {
+                            console.error('Ошибка вставки HTML в редактор:', e);
+                            alert('Ошибка вставки HTML в редактор: ' + e.message);
+                        }
+                    } else {
+                        alert('Вставьте HTML-код в поле выше');
+                    }
+                });
         
         // Очистка модального окна при закрытии
         $('#htmlPasteModal').on('hidden.bs.modal', function() {
@@ -628,17 +632,49 @@ function fallbackToTextarea() {
 }
 
 document.getElementById('templateForm').addEventListener('submit', function(e){
-    // Получаем содержимое из Summernote через jQuery
+    // КРИТИЧНО: Получаем содержимое из Summernote с HTML-форматированием
     try {
-        if (typeof window.jQuery !== 'undefined') {
+        const contentField = document.getElementById('content');
+        const editorElement = document.getElementById('contentEditor');
+        
+        // Проверяем в каком режиме мы работаем - Summernote или fallback
+        if (typeof window.jQuery !== 'undefined' && 
+            $(editorElement).length && 
+            $(editorElement).summernote('code')) {
+            
+            console.log('Логика Summernote: извлекаем HTML-код из редактора');
             const $ = window.jQuery;
-            const content = $('#contentEditor').summernote('code');
-            document.getElementById('content').value = content;
+            
+            // Получаем все HTML из Summernote редактора
+            const htmlContent = $(editorElement).summernote('code');
+            console.log('Получен HTML из Summernote (длина):', htmlContent.length, 'превью:', htmlContent.substring(0, 100) + '...');
+            
+            // Записываем в скрытое поле для отправки на сервер
+            contentField.value = htmlContent;
+            
+        } else if (contentField !== null && contentField.style.display !== 'none') {
+            // Fallback режим - textarea уже активен
+            console.log('Fallback режим: используем содержимое textarea');
+            const textContent = contentField.value;
+            const htmlContent = textContent.replace(/\r\n/g, '<br>').replace(/\r/g, '<br>').replace(/\n/g, '<br>');
+            
+            console.log('Fallback: преобразовали text в HTML, длина:', htmlContent.length);
+            contentField.value = htmlContent;
+            
         } else {
-            console.warn('jQuery недоступен, используем текущее содержимое textarea');
+            console.warn('Ни один редактор не найден - отключаем сохранение');
+            // В крайнем случае - берем элемент как text и личностируем HTML
+            const container = editorElement || contentField;
+            if (container && container.innerHTML) {
+                contentField.value = container.innerHTML;
+            }
         }
+        
     } catch (error) {
         console.error('Ошибка получения содержимого Summernote:', error);
+        alert('Ошибка извлечения содержимого редактора. Попробуйте еще раз.');
+        e.preventDefault();
+        return false;
     }
     
     // Продолжаем стандартную логику
