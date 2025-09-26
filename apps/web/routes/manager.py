@@ -3403,58 +3403,33 @@ async def manager_approve_application(
 
 @router.post("/api/applications/reject")
 async def manager_reject_application(
-    request: Request,
+    application_id: int = Form(...),
+    reject_reason: str = Form(...),
     current_user: dict = Depends(require_manager_or_owner),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """Отклонение заявки управляющим"""
     try:
         if isinstance(current_user, RedirectResponse):
             return current_user
-            
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
-        
-        form_data = await request.form()
-        application_id = form_data.get("application_id")
-        reject_reason = form_data.get("reject_reason", "").strip()
-        
-        if not application_id or not reject_reason:
-            raise HTTPException(status_code=400, detail="Не все поля заполнены")
-        
-        # Получаем заявку с проверкой прав управляющего
-        from domain.entities.manager_object_permission import ManagerObjectPermission
-        from domain.entities.contract import Contract
-        
-        application_query = select(Application).join(Object).join(
+        query = select(Application).select_from(Application).join(
+            Object, Application.object_id == Object.id
+        ).join(
             ManagerObjectPermission, Object.id == ManagerObjectPermission.object_id
-        ).join(Contract, ManagerObjectPermission.contract_id == Contract.id).where(
-            and_(
-                Application.id == int(application_id),
-                Contract.employee_id == user_id,
-                Contract.is_manager == True
-            )
-        )
-        application_result = await db.execute(application_query)
-        application = application_result.scalar_one_or_none()
-        
+        ).join(
+            Contract, and_(ManagerObjectPermission.contract_id == Contract.id, Contract.employee_id == user_id, Contract.is_manager == True)
+        ).where(Application.id == application_id)
+        result = await db.execute(query)
+        application = result.scalar_one_or_none()
         if not application:
             raise HTTPException(status_code=404, detail="Заявка не найдена или нет доступа")
-        
-        # Обновляем заявку
         application.status = ApplicationStatus.REJECTED
         application.interview_result = reject_reason
-        
         await db.commit()
-        
         logger.info(f"Заявка {application_id} отклонена управляющим {user_id}")
-        
-        return {
-            "message": "Заявка отклонена",
-            "reason": reject_reason
-        }
-        
+        return {"message": "Заявка отклонена", "status": application.status.value}
     except HTTPException:
         raise
     except Exception as e:
@@ -3525,3 +3500,42 @@ async def manager_application_details_api(
             "education": applicant.education,
         }
     }
+
+@router.post("/api/applications/finalize-contract")
+async def manager_finalize_contract(
+    application_id: int = Form(...),
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        query = select(Application).select_from(Application).join(
+            Object, Application.object_id == Object.id
+        ).join(
+            ManagerObjectPermission, Object.id == ManagerObjectPermission.object_id
+        ).join(
+            Contract, and_(ManagerObjectPermission.contract_id == Contract.id, Contract.employee_id == user_id, Contract.is_manager == True)
+        ).where(Application.id == application_id)
+
+        result = await db.execute(query)
+        application = result.scalar_one_or_none()
+        if not application:
+            raise HTTPException(status_code=404, detail="Заявка не найдена или нет доступа")
+
+        application.status = ApplicationStatus.APPROVED
+        await db.commit()
+
+        logger.info(f"Заявка {application_id} переведена в статус APPROVED управляющим {user_id}")
+        return {"message": "Заявка одобрена", "status": application.status.value}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка завершения заявки управляющим: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обработки заявки: {e}")

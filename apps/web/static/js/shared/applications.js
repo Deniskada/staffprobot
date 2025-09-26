@@ -48,6 +48,14 @@ class ApplicationsManager {
                 return;
             }
         });
+
+        document.addEventListener('click', (e) => {
+            const finalizeBtn = e.target.closest('.finalize-contract');
+            if (finalizeBtn) {
+                this.finalizeContract(finalizeBtn.dataset.applicationId, finalizeBtn.dataset.role || this.currentRole, finalizeBtn.dataset.endpoint);
+                return;
+            }
+        });
     }
 
     showApproveModal(applicationId) {
@@ -289,6 +297,27 @@ class ApplicationsManager {
                 alert.remove();
             }
         }, 5000);
+    }
+
+    async finalizeContract(applicationId, role = 'manager', endpoint) {
+        try {
+            const response = await fetch(endpoint || `/${role}/api/applications/finalize-contract`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ application_id: applicationId })
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.detail || 'Не удалось заключить договор');
+            }
+
+            this.showSuccess('Заявка переведена в статус "Одобрена"');
+            setTimeout(() => window.location.reload(), 1200);
+        } catch (error) {
+            console.error('Ошибка заключения договора:', error);
+            this.showError(error.message || 'Ошибка заключения договора');
+        }
     }
 }
 
