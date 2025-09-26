@@ -17,58 +17,15 @@
     </div>
 </div>
 
-<!-- Фильтры заявок -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="filter-panel">
-            <div class="row">
-                <div class="col-md-3 mb-3">
-                    <label class="form-label">Статус заявки</label>
-                    <select class="form-select" id="status-filter">
-                        <option value="">Все статусы</option>
-                        <option value="pending">На рассмотрении</option>
-                        <option value="approved">Одобрена</option>
-                        <option value="rejected">Отклонена</option>
-                        <option value="interview">Собеседование</option>
-                    </select>
-                </div>
-                <div class="col-md-3 mb-3">
-                    <label class="form-label">Объект</label>
-                    <select class="form-select" id="object-filter">
-                        <option value="">Все объекты</option>
-                        {% for object in objects %}
-                        <option value="{{ object.id }}">{{ object.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3 mb-3">
-                    <label class="form-label">Дата подачи</label>
-                    <select class="form-select" id="date-filter">
-                        <option value="">Все даты</option>
-                        <option value="today">Сегодня</option>
-                        <option value="week">За неделю</option>
-                        <option value="month">За месяц</option>
-                        <option value="older">Старые</option>
-                    </select>
-                </div>
-                <div class="col-md-3 mb-3 d-flex align-items-end">
-                    <button type="button" class="btn btn-primary w-100" id="apply-filters">
-                        <i class="bi bi-funnel"></i> Применить фильтры
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Статистика заявок -->
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-md-3" data-status-card="pending">
         <div class="card text-center">
             <div class="card-body">
                 <i class="bi bi-clock text-warning fs-1"></i>
                 <h5 class="card-title mt-2">На рассмотрении</h5>
-                <h3 class="text-warning">{{ applications_stats.pending }}</h3>
+                <h3 class="text-warning" data-status-count>{{ applications_stats.pending }}</h3>
             </div>
         </div>
     </div>
@@ -114,7 +71,7 @@
             <div class="card-body">
                 {% if applications %}
                     {% for application in applications %}
-                    <div class="application-card card mb-3 status-{{ application.status }}">
+                    <div class="application-card card mb-3 status-{{ application.status }}" data-status="{{ application.status }}" data-application-id="{{ application.id }}">
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-8">
@@ -174,16 +131,16 @@
                                 <div class="col-md-4 text-end">
                                     <div class="btn-group-vertical w-100">
                                         {% if application.status == 'pending' %}
-                                            <button class="btn btn-warning btn-sm mb-2" onclick="cancelApplication({{ application.id }})">
+                                            <button class="btn btn-warning btn-sm mb-2" data-action="cancel-application" data-application-id="{{ application.id }}">
                                                 <i class="bi bi-x-circle"></i> Отозвать заявку
                                             </button>
                                         {% elif application.status == 'interview' %}
-                                            <button class="btn btn-info btn-sm mb-2" onclick="viewInterviewDetails({{ application.id }})">
+                                            <button class="btn btn-info btn-sm mb-2" data-action="view-interview" data-application-id="{{ application.id }}">
                                                 <i class="bi bi-calendar-event"></i> Детали собеседования
                                             </button>
                                         {% endif %}
                                         
-                                        <button class="btn btn-outline-primary btn-sm" onclick="viewApplicationDetails({{ application.id }})">
+                                        <button class="btn btn-outline-primary btn-sm" data-action="view-application" data-application-id="{{ application.id }}">
                                             <i class="bi bi-eye"></i> Подробнее
                                         </button>
                                     </div>
