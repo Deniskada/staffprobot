@@ -74,7 +74,7 @@ class EmployeeApplicationsManager {
 
     async viewApplicationDetails(applicationId) {
         try {
-            const response = await fetch(`/employee/api/applications/${applicationId}`);
+        const response = await fetch(`/employee/api/applications/${applicationId}`);
             if (response.ok) {
                 const application = await response.json();
                 this.showApplicationDetailsModal(application);

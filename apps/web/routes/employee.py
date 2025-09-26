@@ -16,6 +16,7 @@ from apps.web.dependencies import get_current_user_dependency
 from core.database.session import get_db_session
 from apps.web.middleware.role_middleware import require_employee_or_applicant
 from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift
+from domain.entities.application import ApplicationStatus
 from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from apps.web.dependencies import get_async_session
@@ -350,6 +351,60 @@ async def employee_applications(
     except Exception as e:
         logger.error(f"Ошибка загрузки заявок: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки заявок: {e}")
+
+@router.post("/api/applications")
+async def employee_create_application(
+    request: Request,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        form_data = await request.form()
+        object_id = form_data.get("object_id")
+        message = form_data.get("message", "").strip()
+
+        if not object_id:
+            raise HTTPException(status_code=400, detail="Не указан объект")
+
+        object_query = select(Object).where(and_(Object.id == int(object_id), Object.available_for_applicants == True))
+        obj_result = await db.execute(object_query)
+        obj = obj_result.scalar_one_or_none()
+        if not obj:
+            raise HTTPException(status_code=404, detail="Объект не найден или недоступен")
+
+        existing_query = select(Application).where(and_(
+            Application.applicant_id == user_id,
+            Application.object_id == int(object_id),
+            Application.status.in_([ApplicationStatus.PENDING, ApplicationStatus.APPROVED, ApplicationStatus.INTERVIEW])
+        ))
+        existing_result = await db.execute(existing_query)
+        if existing_result.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="У вас уже есть активная заявка на этот объект")
+
+        application = Application(
+            applicant_id=user_id,
+            object_id=int(object_id),
+            message=message,
+            status=ApplicationStatus.PENDING
+        )
+        db.add(application)
+        await db.commit()
+        await db.refresh(application)
+
+        return {"id": application.id, "status": application.status.value, "message": "Заявка успешно создана"}
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Ошибка создания заявки: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка создания заявки: {exc}")
 
 @router.get("/api/applications/{application_id}")
 async def employee_application_details_api(
