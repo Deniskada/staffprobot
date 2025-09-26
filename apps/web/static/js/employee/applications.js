@@ -2,116 +2,25 @@
 
 class EmployeeApplicationsManager {
     constructor() {
-        this.applications = [];
-        this.filteredApplications = [];
-        this.init();
+        this.bindActions();
+        this.updateStatisticsFromDom();
     }
 
-    init() {
-        this.setupEventListeners();
-        this.loadApplications();
-    }
-
-    setupEventListeners() {
-        // Применение фильтров
-        document.getElementById('apply-filters').addEventListener('click', () => {
-            this.applyFilters();
+    bindActions() {
+        document.querySelectorAll('[data-action="cancel-application"]').forEach((button) => {
+            button.addEventListener('click', () => this.cancelApplication(button.dataset.applicationId));
         });
 
-        // Глобальные функции для кнопок
-        window.cancelApplication = (applicationId) => {
-            this.cancelApplication(applicationId);
-        };
-
-        window.viewApplicationDetails = (applicationId) => {
-            this.viewApplicationDetails(applicationId);
-        };
-
-        window.viewInterviewDetails = (applicationId) => {
-            this.viewInterviewDetails(applicationId);
-        };
-    }
-
-    async loadApplications() {
-        try {
-            const response = await fetch('/employee/api/applications');
-            if (response.ok) {
-                this.applications = await response.json();
-                this.filteredApplications = [...this.applications];
-                this.updateApplicationsDisplay();
-            } else {
-                console.error('Ошибка загрузки заявок');
-            }
-        } catch (error) {
-            console.error('Ошибка:', error);
-        }
-    }
-
-    applyFilters() {
-        const filters = {
-            status: document.getElementById('status-filter').value,
-            object: document.getElementById('object-filter').value,
-            date: document.getElementById('date-filter').value
-        };
-
-        this.filteredApplications = this.applications.filter(application => {
-            // Фильтр по статусу
-            if (filters.status && application.status !== filters.status) {
-                return false;
-            }
-
-            // Фильтр по объекту
-            if (filters.object && application.object_id != filters.object) {
-                return false;
-            }
-
-            // Фильтр по дате
-            if (filters.date) {
-                const applicationDate = new Date(application.created_at);
-                const now = new Date();
-                
-                switch (filters.date) {
-                    case 'today':
-                        if (applicationDate.toDateString() !== now.toDateString()) {
-                            return false;
-                        }
-                        break;
-                    case 'week':
-                        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                        if (applicationDate < weekAgo) {
-                            return false;
-                        }
-                        break;
-                    case 'month':
-                        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-                        if (applicationDate < monthAgo) {
-                            return false;
-                        }
-                        break;
-                    case 'older':
-                        const monthAgoForOlder = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-                        if (applicationDate >= monthAgoForOlder) {
-                            return false;
-                        }
-                        break;
-                }
-            }
-
-            return true;
+        document.querySelectorAll('[data-action="view-application"]').forEach((button) => {
+            button.addEventListener('click', () => this.viewApplicationDetails(button.dataset.applicationId));
         });
 
-        this.updateApplicationsDisplay();
+        document.querySelectorAll('[data-action="view-interview"]').forEach((button) => {
+            button.addEventListener('click', () => this.viewInterviewDetails(button.dataset.applicationId));
+        });
     }
 
-    updateApplicationsDisplay() {
-        const applicationsCount = document.getElementById('applications-count');
-        applicationsCount.textContent = `${this.filteredApplications.length} заявок`;
-        
-        // Обновляем статистику
-        this.updateStatistics();
-    }
-
-    updateStatistics() {
+    updateStatisticsFromDom() {
         const stats = {
             pending: 0,
             approved: 0,
@@ -119,23 +28,23 @@ class EmployeeApplicationsManager {
             interview: 0
         };
 
-        this.filteredApplications.forEach(application => {
-            stats[application.status]++;
+        document.querySelectorAll('.application-card').forEach((card) => {
+            const status = card.dataset.status;
+            if (status && stats[status] !== undefined) {
+                stats[status] += 1;
+            }
         });
 
-        // Обновляем счетчики в карточках статистики
-        document.querySelectorAll('.card.text-center').forEach(card => {
-            const title = card.querySelector('.card-title').textContent.trim();
-            const counter = card.querySelector('h3');
-            
-            if (title.includes('На рассмотрении')) {
-                counter.textContent = stats.pending;
-            } else if (title.includes('Одобрены')) {
-                counter.textContent = stats.approved;
-            } else if (title.includes('Собеседования')) {
-                counter.textContent = stats.interview;
-            } else if (title.includes('Отклонены')) {
-                counter.textContent = stats.rejected;
+        const totalBadge = document.getElementById('applications-count');
+        if (totalBadge) {
+            totalBadge.textContent = `${document.querySelectorAll('.application-card').length} заявок`;
+        }
+
+        document.querySelectorAll('[data-status-card]').forEach((card) => {
+            const key = card.dataset.statusCard;
+            const counter = card.querySelector('[data-status-count]');
+            if (counter && stats[key] !== undefined) {
+                counter.textContent = stats[key];
             }
         });
     }
@@ -152,7 +61,7 @@ class EmployeeApplicationsManager {
 
             if (response.ok) {
                 this.showNotification('Заявка успешно отозвана', 'success');
-                this.loadApplications(); // Перезагружаем список
+                setTimeout(() => window.location.reload(), 1200);
             } else {
                 const error = await response.json();
                 this.showNotification(error.detail || 'Ошибка при отзыве заявки', 'error');
@@ -180,53 +89,26 @@ class EmployeeApplicationsManager {
 
     showApplicationDetailsModal(application) {
         const content = document.getElementById('application-details-content');
+        if (!content) return;
+
         content.innerHTML = `
             <div class="row">
                 <div class="col-md-6">
                     <h6>Объект</h6>
                     <p>${application.object_name}</p>
-                    
                     <h6>Статус</h6>
-                    <span class="badge bg-${this.getStatusColor(application.status)}">
-                        ${this.getStatusText(application.status)}
-                    </span>
-                    
+                    <span class="badge bg-${this.getStatusColor(application.status)}">${this.getStatusText(application.status)}</span>
                     <h6 class="mt-3">Дата подачи</h6>
                     <p>${new Date(application.created_at).toLocaleString('ru-RU')}</p>
                 </div>
                 <div class="col-md-6">
-                    ${application.preferred_schedule ? `
-                        <h6>Предпочитаемый график</h6>
-                        <p>${application.preferred_schedule}</p>
-                    ` : ''}
-                    
-                    ${application.interview_scheduled_at ? `
-                        <h6>Собеседование</h6>
-                        <p>${new Date(application.interview_scheduled_at).toLocaleString('ru-RU')}</p>
-                        ${application.interview_type ? `
-                            <p><span class="badge bg-info">${application.interview_type === 'online' ? 'Онлайн' : 'Очно'}</span></p>
-                        ` : ''}
-                    ` : ''}
+                    ${application.preferred_schedule ? `<h6>Предпочитаемый график</h6><p>${application.preferred_schedule}</p>` : ''}
+                    ${application.interview_scheduled_at ? `<h6>Собеседование</h6><p>${new Date(application.interview_scheduled_at).toLocaleString('ru-RU')}</p>` : ''}
+                    ${application.interview_type ? `<p><span class="badge bg-info">${application.interview_type === 'online' ? 'Онлайн' : 'Очно'}</span></p>` : ''}
                 </div>
             </div>
-            
-            ${application.message ? `
-                <div class="mt-3">
-                    <h6>Ваше сообщение</h6>
-                    <div class="border p-3 rounded">
-                        ${application.message}
-                    </div>
-                </div>
-            ` : ''}
-            
-            ${application.interview_result ? `
-                <div class="mt-3">
-                    <h6>Результат собеседования</h6>
-                    <div class="border p-3 rounded">
-                        ${application.interview_result}
-                    </div>
-                </div>
-            ` : ''}
+            ${application.message ? `<div class="mt-3"><h6>Ваше сообщение</h6><div class="border p-3 rounded">${application.message}</div></div>` : ''}
+            ${application.interview_result ? `<div class="mt-3"><h6>Результат собеседования</h6><div class="border p-3 rounded">${application.interview_result}</div></div>` : ''}
         `;
 
         const modal = new bootstrap.Modal(document.getElementById('applicationDetailsModal'));
@@ -250,53 +132,26 @@ class EmployeeApplicationsManager {
 
     showInterviewDetailsModal(interview) {
         const content = document.getElementById('interview-details-content');
+        if (!content) return;
+
         content.innerHTML = `
             <div class="row">
                 <div class="col-md-6">
                     <h6>Объект</h6>
                     <p>${interview.object_name}</p>
-                    
                     <h6>Дата и время</h6>
                     <p>${new Date(interview.scheduled_at).toLocaleString('ru-RU')}</p>
-                    
                     <h6>Тип собеседования</h6>
                     <span class="badge bg-info">${interview.type === 'online' ? 'Онлайн' : 'Очно'}</span>
                 </div>
                 <div class="col-md-6">
-                    ${interview.location ? `
-                        <h6>Место проведения</h6>
-                        <p>${interview.location}</p>
-                    ` : ''}
-                    
-                    ${interview.contact_person ? `
-                        <h6>Контактное лицо</h6>
-                        <p>${interview.contact_person}</p>
-                    ` : ''}
-                    
-                    ${interview.contact_phone ? `
-                        <h6>Телефон</h6>
-                        <p><a href="tel:${interview.contact_phone}">${interview.contact_phone}</a></p>
-                    ` : ''}
+                    ${interview.location ? `<h6>Место проведения</h6><p>${interview.location}</p>` : ''}
+                    ${interview.contact_person ? `<h6>Контактное лицо</h6><p>${interview.contact_person}</p>` : ''}
+                    ${interview.contact_phone ? `<h6>Телефон</h6><p><a href="tel:${interview.contact_phone} ">${interview.contact_phone}</a></p>` : ''}
                 </div>
             </div>
-            
-            ${interview.notes ? `
-                <div class="mt-3">
-                    <h6>Дополнительная информация</h6>
-                    <div class="border p-3 rounded">
-                        ${interview.notes}
-                    </div>
-                </div>
-            ` : ''}
-            
-            ${interview.result ? `
-                <div class="mt-3">
-                    <h6>Результат собеседования</h6>
-                    <div class="border p-3 rounded">
-                        ${interview.result}
-                    </div>
-                </div>
-            ` : ''}
+            ${interview.notes ? `<div class="mt-3"><h6>Дополнительная информация</h6><div class="border p-3 rounded">${interview.notes}</div></div>` : ''}
+            ${interview.result ? `<div class="mt-3"><h6>Результат собеседования</h6><div class="border p-3 rounded">${interview.result}</div></div>` : ''}
         `;
 
         const modal = new bootstrap.Modal(document.getElementById('interviewDetailsModal'));

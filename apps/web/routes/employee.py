@@ -20,6 +20,7 @@ from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from apps.web.dependencies import get_async_session
 from shared.services.manager_permission_service import ManagerPermissionService
+from domain.entities.application import ApplicationStatus
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -315,7 +316,7 @@ async def employee_applications(
                 'id': row.Application.id,
                 'object_id': row.Application.object_id,
                 'object_name': row.object_name,
-                'status': row.Application.status,
+                'status': row.Application.status.value.lower(),
                 'message': row.Application.message,
                 'preferred_schedule': row.Application.preferred_schedule,
                 'created_at': row.Application.created_at,
@@ -326,10 +327,10 @@ async def employee_applications(
         
         # Статистика заявок
         applications_stats = {
-            'pending': len([a for a in applications if a['status'] == 'PENDING']),
-            'approved': len([a for a in applications if a['status'] == 'APPROVED']),
-            'rejected': len([a for a in applications if a['status'] == 'REJECTED']),
-            'interview': len([a for a in applications if a['status'] == 'INTERVIEW'])
+            'pending': len([a for a in applications if a['status'] == 'pending']),
+            'approved': len([a for a in applications if a['status'] == 'approved']),
+            'rejected': len([a for a in applications if a['status'] == 'rejected']),
+            'interview': len([a for a in applications if a['status'] == 'interview'])
         }
         
         # Получаем объекты для фильтра
@@ -349,6 +350,77 @@ async def employee_applications(
     except Exception as e:
         logger.error(f"Ошибка загрузки заявок: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки заявок: {e}")
+
+@router.get("/api/applications/{application_id}")
+async def employee_application_details_api(
+    application_id: int,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    if isinstance(current_user, RedirectResponse):
+        raise HTTPException(status_code=401, detail="Необходима авторизация")
+
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+    query = select(Application, Object.name.label("object_name")).join(Object).where(
+        and_(Application.id == application_id, Application.applicant_id == user_id)
+    )
+    result = await db.execute(query)
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Заявка не найдена")
+
+    application = row.Application
+    return {
+        "id": application.id,
+        "object_id": application.object_id,
+        "object_name": row.object_name,
+        "status": application.status.value.lower(),
+        "message": application.message,
+        "preferred_schedule": application.preferred_schedule,
+        "created_at": application.created_at.isoformat() if application.created_at else None,
+        "interview_scheduled_at": application.interview_scheduled_at.isoformat() if application.interview_scheduled_at else None,
+        "interview_type": application.interview_type,
+        "interview_result": application.interview_result
+    }
+
+
+@router.get("/api/applications/{application_id}/interview")
+async def employee_application_interview_api(
+    application_id: int,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    if isinstance(current_user, RedirectResponse):
+        raise HTTPException(status_code=401, detail="Необходима авторизация")
+
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+    query = select(Application, Object.name.label("object_name"), Object.address.label("object_address"))\
+        .join(Object).where(and_(Application.id == application_id, Application.applicant_id == user_id))
+    result = await db.execute(query)
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Заявка или собеседование не найдены")
+
+    application = row.Application
+    if application.status != ApplicationStatus.INTERVIEW:
+        raise HTTPException(status_code=404, detail="Собеседование не назначено")
+
+    return {
+        "application_id": application.id,
+        "object_name": row.object_name,
+        "location": row.object_address,
+        "scheduled_at": application.interview_scheduled_at.isoformat() if application.interview_scheduled_at else None,
+        "type": application.interview_type,
+        "notes": application.interview_result,
+        "contact_person": None,
+        "contact_phone": None
+    }
 
 @router.get("/calendar", response_class=HTMLResponse)
 async def employee_calendar(
