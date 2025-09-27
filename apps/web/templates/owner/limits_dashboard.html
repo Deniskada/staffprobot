@@ -1,0 +1,383 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.limits-card {
+    border-left: 4px solid #007bff;
+    transition: all 0.3s ease;
+    margin-bottom: 20px;
+}
+
+.limits-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.limits-card.limit-ok { border-left-color: #28a745; }
+.limits-card.limit-warning { border-left-color: #ffc107; }
+.limits-card.limit-danger { border-left-color: #dc3545; }
+
+.progress-bar-custom {
+    height: 25px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.progress-bar-custom:hover {
+    transform: scale(1.02);
+}
+
+.limit-indicator {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.limit-ok { background-color: #d4edda; color: #155724; }
+.limit-warning { background-color: #fff3cd; color: #856404; }
+.limit-danger { background-color: #f8d7da; color: #721c24; }
+
+.subscription-info {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.feature-tag {
+    display: inline-block;
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    margin: 2px;
+}
+
+.warning-alert {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.upgrade-card {
+    background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+    color: white;
+    border-radius: 15px;
+    padding: 20px;
+    text-align: center;
+    margin-top: 20px;
+}
+
+.action-btn {
+    background: #007bff;
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
+    margin: 5px;
+}
+
+.action-btn:hover {
+    transform: scale(1.05);
+    color: white;
+    text-decoration: none;
+}
+
+.action-btn.btn-success { background: #28a745; }
+.action-btn.btn-warning { background: #ffc107; color: black; }
+.action-btn.btn-danger { background: #dc3545; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>{{ title }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/owner">Личный кабинет</a>
+                    </li>
+                    <li class="breadcrumb-item active">Лимиты</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary" onclick="refreshLimits()">
+                <i class="bi bi-arrow-clockwise"></i> Обновить
+            </button>
+        </div>
+    </div>
+
+    {% if not limits_summary.has_subscription %}
+    <!-- Нет подписки -->
+    <div class="alert alert-warning text-center">
+        <h4>⚠️ Нет активной подписки</h4>
+        <p>Для использования всех функций необходимо оформить подписку.</p>
+        <a href="/admin/subscriptions/assign?user_id={{ current_user.id }}" class="btn btn-primary">
+            <i class="bi bi-credit-card"></i> Выбрать тариф
+        </a>
+    </div>
+    {% else %}
+    <!-- Информация о подписке -->
+    <div class="subscription-info">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h4>{{ limits_summary.subscription.tariff_name }}</h4>
+                <p class="mb-0">
+                    Статус: {{ limits_summary.subscription.status | title }}
+                    {% if limits_summary.subscription.expires_at %}
+                    | Истекает: {{ limits_summary.subscription.expires_at[:10] }}
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="/admin/subscriptions/assign?user_id={{ current_user.id }}" class="btn btn-light">
+                    <i class="bi bi-arrow-up-circle"></i> Изменить тариф
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Предупреждения -->
+    {% if limits_summary.warnings %}
+    <div class="warning-alert">
+        <h6><i class="bi bi-exclamation-triangle"></i> Предупреждения:</h6>
+        <ul class="mb-0">
+            {% for warning in limits_summary.warnings %}
+            <li>{{ warning }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Лимиты -->
+    <div class="row">
+        <!-- Объекты -->
+        <div class="col-md-4">
+            <div class="card limits-card {% if limits_summary.limits.objects.allowed %}limit-ok{% else %}limit-danger{% endif %}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-building"></i> Объекты
+                    </h6>
+                    <span class="limit-indicator {% if not limits_summary.limits.objects.allowed %}limit-danger{% elif limits_summary.limits.objects.details.remaining <= 2 %}limit-warning{% else %}limit-ok{% endif %}">
+                        {{ limits_summary.limits.objects.details.current }}/{{ limits_summary.limits.objects.details.max if limits_summary.limits.objects.details.max != -1 else '∞' }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-2">
+                        {% set percentage = (limits_summary.limits.objects.details.current / limits_summary.limits.objects.details.max * 100) if limits_summary.limits.objects.details.max != -1 else 0 %}
+                        <div class="progress-bar progress-bar-custom {% if not limits_summary.limits.objects.allowed %}bg-danger{% elif percentage >= 80 %}bg-warning{% else %}bg-success{% endif %}" 
+                             style="width: {{ percentage }}%">
+                            {{ limits_summary.limits.objects.details.current }}
+                        </div>
+                    </div>
+                    <p class="mb-1">{{ limits_summary.limits.objects.message }}</p>
+                    {% if limits_summary.limits.objects.details.remaining != -1 %}
+                    <small class="text-muted">Осталось: {{ limits_summary.limits.objects.details.remaining }}</small>
+                    {% endif %}
+                    
+                    <div class="mt-3">
+                        {% if limits_summary.limits.objects.allowed %}
+                        <a href="/owner/objects/create" class="action-btn btn-success">
+                            <i class="bi bi-plus-circle"></i> Создать объект
+                        </a>
+                        {% else %}
+                        <button type="button" class="action-btn btn-danger" disabled>
+                            <i class="bi bi-x-circle"></i> Лимит превышен
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Сотрудники -->
+        <div class="col-md-4">
+            <div class="card limits-card {% if limits_summary.limits.employees.allowed %}limit-ok{% else %}limit-danger{% endif %}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-people"></i> Сотрудники
+                    </h6>
+                    <span class="limit-indicator {% if not limits_summary.limits.employees.allowed %}limit-danger{% elif limits_summary.limits.employees.details.remaining <= 2 %}limit-warning{% else %}limit-ok{% endif %}">
+                        {{ limits_summary.limits.employees.details.current }}/{{ limits_summary.limits.employees.details.max if limits_summary.limits.employees.details.max != -1 else '∞' }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-2">
+                        {% set percentage = (limits_summary.limits.employees.details.current / limits_summary.limits.employees.details.max * 100) if limits_summary.limits.employees.details.max != -1 else 0 %}
+                        <div class="progress-bar progress-bar-custom {% if not limits_summary.limits.employees.allowed %}bg-danger{% elif percentage >= 80 %}bg-warning{% else %}bg-success{% endif %}" 
+                             style="width: {{ percentage }}%">
+                            {{ limits_summary.limits.employees.details.current }}
+                        </div>
+                    </div>
+                    <p class="mb-1">{{ limits_summary.limits.employees.message }}</p>
+                    {% if limits_summary.limits.employees.details.remaining != -1 %}
+                    <small class="text-muted">Осталось: {{ limits_summary.limits.employees.details.remaining }}</small>
+                    {% endif %}
+                    
+                    <div class="mt-3">
+                        {% if limits_summary.limits.employees.allowed %}
+                        <a href="/owner/employees" class="action-btn btn-success">
+                            <i class="bi bi-person-plus"></i> Добавить сотрудника
+                        </a>
+                        {% else %}
+                        <button type="button" class="action-btn btn-danger" disabled>
+                            <i class="bi bi-x-circle"></i> Лимит превышен
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Управляющие -->
+        <div class="col-md-4">
+            <div class="card limits-card {% if limits_summary.limits.managers.allowed %}limit-ok{% else %}limit-danger{% endif %}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-person-gear"></i> Управляющие
+                    </h6>
+                    <span class="limit-indicator {% if not limits_summary.limits.managers.allowed %}limit-danger{% elif limits_summary.limits.managers.details.remaining <= 2 %}limit-warning{% else %}limit-ok{% endif %}">
+                        {{ limits_summary.limits.managers.details.current }}/{{ limits_summary.limits.managers.details.max if limits_summary.limits.managers.details.max != -1 else '∞' }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-2">
+                        {% set percentage = (limits_summary.limits.managers.details.current / limits_summary.limits.managers.details.max * 100) if limits_summary.limits.managers.details.max != -1 else 0 %}
+                        <div class="progress-bar progress-bar-custom {% if not limits_summary.limits.managers.allowed %}bg-danger{% elif percentage >= 80 %}bg-warning{% else %}bg-success{% endif %}" 
+                             style="width: {{ percentage }}%">
+                            {{ limits_summary.limits.managers.details.current }}
+                        </div>
+                    </div>
+                    <p class="mb-1">{{ limits_summary.limits.managers.message }}</p>
+                    {% if limits_summary.limits.managers.details.remaining != -1 %}
+                    <small class="text-muted">Осталось: {{ limits_summary.limits.managers.details.remaining }}</small>
+                    {% endif %}
+                    
+                    <div class="mt-3">
+                        {% if limits_summary.limits.managers.allowed %}
+                        <a href="/owner/managers" class="action-btn btn-success">
+                            <i class="bi bi-person-check"></i> Назначить управляющего
+                        </a>
+                        {% else %}
+                        <button type="button" class="action-btn btn-danger" disabled>
+                            <i class="bi bi-x-circle"></i> Лимит превышен
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Доступные функции -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-star"></i> Доступные функции ({{ limits_summary.features.count }})
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% for feature in limits_summary.features.available %}
+                    <span class="feature-tag">
+                        {% if feature == 'basic_reports' %}
+                            📊 Базовые отчеты
+                        {% elif feature == 'telegram_bot' %}
+                            🤖 Telegram бот
+                        {% elif feature == 'shared_calendar' %}
+                            📅 Общий календарь
+                        {% elif feature == 'notifications' %}
+                            🔔 Уведомления
+                        {% elif feature == 'advanced_reports' %}
+                            📈 Расширенные отчеты
+                        {% elif feature == 'api_access' %}
+                            🔌 API доступ
+                        {% elif feature == 'advanced_calendar' %}
+                            📆 Расширенный календарь
+                        {% elif feature == 'custom_notifications' %}
+                            🔔 Кастомные уведомления
+                        {% else %}
+                            ✨ {{ feature }}
+                        {% endif %}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статус платежей -->
+    {% if limits_summary.payment_status %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-credit-card"></i> Статус платежей
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-{% if limits_summary.payment_status.status == 'paid' %}success{% elif limits_summary.payment_status.status == 'payment_failed' %}danger{% elif limits_summary.payment_status.status == 'pending' %}warning{% else %}info{% endif %}">
+                        <strong>{{ limits_summary.payment_status.message }}</strong>
+                        {% if limits_summary.payment_status.last_payment %}
+                        <br><small>Последний платеж: {{ limits_summary.payment_status.last_payment[:10] }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Предложение обновления -->
+    {% if limits_summary.warnings or not limits_summary.limits.objects.allowed or not limits_summary.limits.employees.allowed %}
+    <div class="upgrade-card">
+        <h4>🚀 Нужно больше возможностей?</h4>
+        <p>Обновите тариф, чтобы получить больше объектов, сотрудников и функций!</p>
+        <a href="/admin/subscriptions/assign?user_id={{ current_user.id }}" class="btn btn-light btn-lg">
+            <i class="bi bi-arrow-up-circle"></i> Обновить тариф
+        </a>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+
+<script>
+async function refreshLimits() {
+    try {
+        const response = await fetch('/owner/limits/api/summary');
+        const data = await response.json();
+        
+        if (data.success) {
+            // Перезагружаем страницу для обновления данных
+            window.location.reload();
+        } else {
+            alert('Ошибка обновления лимитов: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Ошибка обновления лимитов:', error);
+        alert('Ошибка обновления лимитов');
+    }
+}
+
+// Автообновление каждые 5 минут
+setInterval(refreshLimits, 5 * 60 * 1000);
+</script>
+{% endblock %}
