@@ -267,13 +267,8 @@ async def admin_tariffs(
         login_service = RoleBasedLoginService(session)
         available_interfaces = await login_service.get_available_interfaces(user_id)
     
-    return templates.TemplateResponse("admin/tariffs.html", {
-        "request": request,
-        "current_user": current_user,
-        "title": "Тарифные планы",
-        "message": "Функция в разработке",
-        "available_interfaces": available_interfaces
-    })
+    # Перенаправляем на новый роут тарифов
+    return RedirectResponse(url="/admin/tariffs/", status_code=status.HTTP_302_FOUND)
 
 
 @router.get("/monitoring", response_class=HTMLResponse, name="admin_monitoring")

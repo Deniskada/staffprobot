@@ -143,7 +143,10 @@ class User(Base):
     # Связи с заявками и собеседованиями
     applications = relationship("Application", back_populates="applicant", cascade="all, delete-orphan")
     interviews = relationship("Interview", back_populates="applicant", cascade="all, delete-orphan")
-    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    # notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")  # Временно отключено
+    
+    # Связи с тарифными планами
+    subscriptions = relationship("UserSubscription", back_populates="user")
 
 
 

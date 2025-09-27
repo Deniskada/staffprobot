@@ -1,0 +1,251 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.tariff-card {
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.tariff-card:hover {
+    border-color: #007bff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.tariff-card.selected {
+    border-color: #007bff;
+    background-color: #e3f2fd;
+}
+
+.user-search {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.feature-list {
+    list-style: none;
+    padding: 0;
+}
+
+.feature-list li {
+    padding: 5px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.feature-list li:last-child {
+    border-bottom: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок и навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>{{ title }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/admin">Админ панель</a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="/admin/subscriptions/">Подписки</a>
+                    </li>
+                    <li class="breadcrumb-item active">Назначение</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="/admin/subscriptions/" class="btn btn-secondary">
+                ← К подпискам
+            </a>
+        </div>
+    </div>
+
+    <form method="POST" action="/admin/subscriptions/assign" id="assignForm">
+        <!-- Поиск пользователя -->
+        <div class="user-search">
+            <h5>👤 Выбор пользователя</h5>
+            {% if selected_user %}
+            <div class="alert alert-success">
+                <strong>Выбранный пользователь:</strong>
+                {{ selected_user.first_name }} {{ selected_user.last_name }}
+                (ID: {{ selected_user.id }}, Telegram: @{{ selected_user.username or 'не указан' }})
+            </div>
+            <input type="hidden" name="user_id" id="selected_user_id" value="{{ selected_user.id }}">
+            {% else %}
+            <div class="row">
+                <div class="col-md-8">
+                    <label for="user_search" class="form-label">Поиск пользователя по ID или имени</label>
+                    <input type="number" class="form-control" id="user_search" placeholder="Введите ID пользователя">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="button" class="btn btn-primary d-block w-100" onclick="searchUser()">
+                        <i class="bi bi-search"></i> Найти
+                    </button>
+                </div>
+            </div>
+            <input type="hidden" name="user_id" id="selected_user_id" required>
+            {% endif %}
+        </div>
+
+        <!-- Выбор тарифа -->
+        <div class="mb-4">
+            <h5>💰 Выбор тарифного плана</h5>
+            <div class="row">
+                {% for tariff in tariff_plans %}
+                <div class="col-md-4 mb-3">
+                    <div class="tariff-card" onclick="selectTariff({{ tariff.id }}, this)">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <h6 class="mb-0">{{ tariff.name }}</h6>
+                            {% if tariff.is_popular %}
+                            <span class="badge bg-warning">Популярный</span>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h4 class="text-primary mb-0">
+                                {% if tariff.price == 0 %}
+                                    Бесплатно
+                                {% else %}
+                                    {{ tariff.price }} {{ tariff.currency }}
+                                    <small class="text-muted">/{{ tariff.billing_period }}</small>
+                                {% endif %}
+                            </h4>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <small class="text-muted">Лимиты:</small>
+                            <ul class="list-unstyled">
+                                <li>Объекты: {{ tariff.max_objects if tariff.max_objects != -1 else '∞' }}</li>
+                                <li>Сотрудники: {{ tariff.max_employees if tariff.max_employees != -1 else '∞' }}</li>
+                                <li>Управляющие: {{ tariff.max_managers if tariff.max_managers != -1 else '∞' }}</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <small class="text-muted">Возможности:</small>
+                            <ul class="feature-list">
+                                {% for feature in tariff.features[:5] %}
+                                <li><i class="bi bi-check-circle text-success"></i> {{ feature }}</li>
+                                {% endfor %}
+                                {% if tariff.features|length > 5 %}
+                                <li><i class="bi bi-three-dots text-muted"></i> и еще {{ tariff.features|length - 5 }}...</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                        
+                        {% if tariff.description %}
+                        <p class="text-muted small">{{ tariff.description }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <input type="hidden" name="tariff_plan_id" id="selected_tariff_id" required>
+        </div>
+
+        <!-- Дополнительные настройки -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">⚙️ Дополнительные настройки</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="payment_method" class="form-label">Способ оплаты</label>
+                            <select class="form-control" id="payment_method" name="payment_method">
+                                <option value="manual">Ручное назначение</option>
+                                <option value="card">Банковская карта</option>
+                                <option value="bank_transfer">Банковский перевод</option>
+                                <option value="cash">Наличные</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Примечания</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="Дополнительная информация о подписке"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопки -->
+        <div class="d-flex justify-content-between mt-4">
+            <a href="/admin/subscriptions/" class="btn btn-secondary">Отмена</a>
+            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                <i class="bi bi-check-circle"></i> Назначить подписку
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+let selectedTariffId = null;
+
+function selectTariff(tariffId, element) {
+    // Убираем выделение с других карточек
+    document.querySelectorAll('.tariff-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    
+    // Выделяем выбранную карточку
+    element.classList.add('selected');
+    selectedTariffId = tariffId;
+    
+    // Безопасно устанавливаем значение
+    const tariffIdElement = document.getElementById('selected_tariff_id');
+    if (tariffIdElement) {
+        tariffIdElement.value = tariffId;
+    }
+    
+    // Проверяем, можно ли отправить форму
+    checkFormValidity();
+}
+
+function searchUser() {
+    const userId = document.getElementById('user_search').value;
+    if (userId) {
+        window.location.href = `/admin/subscriptions/assign?user_id=${userId}`;
+    } else {
+        alert('Введите ID пользователя');
+    }
+}
+
+function checkFormValidity() {
+    const userIdElement = document.getElementById('selected_user_id');
+    const tariffIdElement = document.getElementById('selected_tariff_id');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    const userId = userIdElement ? userIdElement.value : null;
+    const tariffId = tariffIdElement ? tariffIdElement.value : null;
+    
+    if (userId && tariffId) {
+        submitBtn.disabled = false;
+    } else {
+        submitBtn.disabled = true;
+    }
+}
+
+// Проверяем валидность формы при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+    {% if selected_user %}
+    checkFormValidity();
+    {% endif %}
+});
+</script>
+{% endblock %}
