@@ -38,6 +38,31 @@
     gap: 10px;
 }
 
+/* Object filter styles */
+.object-filter {
+    display: flex;
+    align-items: center;
+}
+
+.object-filter .form-select {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    padding: 0.375rem 0.75rem;
+    background-color: #fff;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.object-filter .form-select:focus {
+    border-color: #007bff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.object-filter .form-select:hover {
+    border-color: #adb5bd;
+}
+
 .calendar-title {
     font-size: 1.25rem;
     font-weight: 600;
