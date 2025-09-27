@@ -32,7 +32,7 @@
             <div class="nav-actions">
                 {% if objects and objects|length > 1 %}
                 <div class="object-filter me-3">
-                    <select class="form-select form-select-sm" id="objectFilter" onchange="if(typeof filterByObject === 'function') { filterByObject(); } else { console.error('filterByObject function not found'); }" style="min-width: 200px;">
+                    <select class="form-select form-select-sm" id="objectFilter" style="min-width: 200px;">
                         <option value="">Все объекты</option>
                         {% for obj in objects %}
                         <option value="{{ obj.id }}" {% if selected_object_id and selected_object_id == obj.id %}selected{% endif %}>
@@ -205,9 +205,25 @@ function filterByObject() {
 // Делаем функцию доступной глобально
 window.filterByObject = filterByObject;
 
-// Проверяем что функция доступна после загрузки
+// Проверяем что функция доступна после загрузки и привязываем события
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, filterByObject available:', typeof window.filterByObject === 'function');
+    
+    // Привязываем событие к фильтру объектов
+    const objectFilter = document.getElementById('objectFilter');
+    if (objectFilter) {
+        console.log('Object filter element found, binding change event');
+        objectFilter.addEventListener('change', function() {
+            console.log('Object filter change event triggered, value:', this.value);
+            if (typeof window.filterByObject === 'function') {
+                window.filterByObject();
+            } else {
+                console.error('filterByObject function not available');
+            }
+        });
+    } else {
+        console.log('Object filter element not found');
+    }
 });
 
 function loadCalendar(date) {
