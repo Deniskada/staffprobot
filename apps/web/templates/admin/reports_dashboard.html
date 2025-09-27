@@ -1,0 +1,420 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.metric-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    transition: transform 0.3s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-5px);
+}
+
+.metric-card h3 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+.metric-card p {
+    margin: 0;
+    opacity: 0.9;
+}
+
+.metric-card.success { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }
+.metric-card.warning { background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); color: black; }
+.metric-card.info { background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%); }
+.metric-card.danger { background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%); }
+
+.report-card {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+}
+
+.report-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.report-btn {
+    background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+    border: none;
+    color: white;
+    padding: 15px 25px;
+    border-radius: 25px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
+    margin: 5px;
+    width: 100%;
+}
+
+.report-btn:hover {
+    transform: scale(1.05);
+    color: white;
+    text-decoration: none;
+}
+
+.chart-container {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.quick-stats {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    margin: 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок и навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>{{ title }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/admin">Админ панель</a>
+                    </li>
+                    <li class="breadcrumb-item active">Отчеты</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary" onclick="refreshReports()">
+                <i class="bi bi-arrow-clockwise"></i> Обновить
+            </button>
+        </div>
+    </div>
+
+    <!-- Быстрая статистика -->
+    <div class="quick-stats">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number">{{ users_summary.total_users or 0 }}</p>
+                    <p class="stat-label">Всего пользователей</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number">{{ users_summary.active_users or 0 }}</p>
+                    <p class="stat-label">Активных пользователей</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number">{{ system_summary.subscriptions.conversion_rate | round(1) }}%</p>
+                    <p class="stat-label">Конверсия в подписки</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number">{{ financial_summary.total_revenue | round(0) }} ₽</p>
+                    <p class="stat-label">Общая выручка</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Основные метрики -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="metric-card success">
+                <h3>{{ system_summary.users.active or 0 }}</h3>
+                <p>Активных пользователей</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card info">
+                <h3>{{ system_summary.objects.active or 0 }}</h3>
+                <p>Активных объектов</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card warning">
+                <h3>{{ system_summary.subscriptions.active or 0 }}</h3>
+                <p>Активных подписок</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card danger">
+                <h3>{{ financial_summary.monthly_potential | round(0) }} ₽</h3>
+                <p>Потенциальный месячный доход</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Отчеты -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="report-card">
+                <h5><i class="bi bi-people"></i> Отчеты по пользователям</h5>
+                <p class="text-muted">Детальная статистика по пользователям системы</p>
+                
+                <div class="d-grid gap-2">
+                    <a href="/admin/reports/users" class="report-btn">
+                        <i class="bi bi-person-lines-fill"></i> Все пользователи
+                    </a>
+                    <a href="/admin/reports/owners" class="report-btn">
+                        <i class="bi bi-building"></i> Владельцы объектов
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="report-card">
+                <h5><i class="bi bi-credit-card"></i> Финансовые отчеты</h5>
+                <p class="text-muted">Анализ доходов и платежей</p>
+                
+                <div class="d-grid gap-2">
+                    <a href="/admin/reports/financial" class="report-btn">
+                        <i class="bi bi-graph-up-arrow"></i> Финансовый отчет
+                    </a>
+                    <a href="/admin/billing/" class="report-btn">
+                        <i class="bi bi-cash-coin"></i> Биллинг
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Системная аналитика -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="report-card">
+                <h5><i class="bi bi-graph-up"></i> Системная аналитика</h5>
+                <p class="text-muted">Общая статистика и производительность системы</p>
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="d-grid">
+                            <a href="/admin/reports/analytics" class="report-btn">
+                                <i class="bi bi-bar-chart"></i> Аналитика системы
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-grid">
+                            <a href="/admin/billing/usage" class="report-btn">
+                                <i class="bi bi-pie-chart"></i> Метрики использования
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-grid">
+                            <a href="/admin/monitoring" class="report-btn">
+                                <i class="bi bi-cpu"></i> Мониторинг системы
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Экспорт отчетов -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="report-card">
+                <h5><i class="bi bi-download"></i> Экспорт отчетов</h5>
+                <p class="text-muted">Скачать отчеты в различных форматах</p>
+                
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <a href="/admin/reports/export/users.csv" class="btn btn-outline-success">
+                                <i class="bi bi-file-earmark-spreadsheet"></i> CSV - Пользователи
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <a href="/admin/reports/export/owners.csv" class="btn btn-outline-success">
+                                <i class="bi bi-file-earmark-spreadsheet"></i> CSV - Владельцы
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <a href="/admin/reports/export/financial.csv" class="btn btn-outline-success">
+                                <i class="bi bi-file-earmark-spreadsheet"></i> CSV - Финансы
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <a href="#" class="btn btn-outline-info" onclick="alert('PDF экспорт будет добавлен позже')">
+                                <i class="bi bi-file-earmark-pdf"></i> PDF - Все отчеты
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Последние активности -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h5>📊 Распределение пользователей по ролям</h5>
+                <canvas id="rolesChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h5>💰 Месячная выручка</h5>
+                <canvas id="revenueChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadChartsData();
+});
+
+async function loadChartsData() {
+    try {
+        // Загружаем данные для графиков
+        const usersResponse = await fetch('/admin/reports/api/users');
+        const usersData = await usersResponse.json();
+        
+        const financialResponse = await fetch('/admin/reports/api/financial');
+        const financialData = await financialResponse.json();
+        
+        if (usersData.success) {
+            createRolesChart(usersData.data.roles_distribution);
+        }
+        
+        if (financialData.success) {
+            createRevenueChart(financialData.data.monthly_revenue);
+        }
+        
+    } catch (error) {
+        console.error('Ошибка загрузки данных для графиков:', error);
+    }
+}
+
+function createRolesChart(rolesData) {
+    const ctx = document.getElementById('rolesChart').getContext('2d');
+    
+    const labels = Object.keys(rolesData);
+    const data = Object.values(rolesData);
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors.slice(0, labels.length),
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function createRevenueChart(monthlyRevenue) {
+    const ctx = document.getElementById('revenueChart').getContext('2d');
+    
+    const labels = Object.keys(monthlyRevenue).sort();
+    const data = labels.map(month => monthlyRevenue[month]);
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Выручка (₽)',
+                data: data,
+                borderColor: '#4ECDC4',
+                backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return value.toLocaleString('ru-RU') + ' ₽';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+async function refreshReports() {
+    try {
+        window.location.reload();
+    } catch (error) {
+        console.error('Ошибка обновления отчетов:', error);
+        alert('Ошибка обновления отчетов');
+    }
+}
+
+// Автообновление каждые 10 минут
+setInterval(refreshReports, 10 * 60 * 1000);
+</script>
+{% endblock %}

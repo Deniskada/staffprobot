@@ -1,0 +1,367 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.report-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.filter-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.users-table {
+    background: white;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.table th {
+    background: #f8f9fa;
+    border: none;
+    font-weight: 600;
+}
+
+.table td {
+    border: none;
+    border-bottom: 1px solid #f1f3f4;
+    vertical-align: middle;
+}
+
+.role-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.role-owner { background-color: #d4edda; color: #155724; }
+.role-manager { background-color: #cce5ff; color: #004085; }
+.role-employee { background-color: #fff3cd; color: #856404; }
+.role-superadmin { background-color: #f8d7da; color: #721c24; }
+
+.status-active { color: #28a745; }
+.status-inactive { color: #dc3545; }
+
+.export-section {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.summary-stats {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 15px;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin: 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок отчета -->
+    <div class="report-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2>{{ title }}</h2>
+                <p class="mb-0">
+                    {% if filters.start_date or filters.end_date %}
+                    Период: 
+                    {% if filters.start_date %}{{ filters.start_date }}{% else %}с начала{% endif %} - 
+                    {% if filters.end_date %}{{ filters.end_date }}{% else %}по настоящее время{% endif %}
+                    {% else %}
+                    За все время
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="/admin/reports/" class="btn btn-light">
+                    ← К отчетам
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Сводная статистика -->
+    {% if report_data.summary %}
+    <div class="summary-stats">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number text-primary">{{ report_data.summary.total_users }}</p>
+                    <p class="stat-label">Всего пользователей</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number text-success">{{ report_data.summary.active_users }}</p>
+                    <p class="stat-label">Активных</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number text-danger">{{ report_data.summary.inactive_users }}</p>
+                    <p class="stat-label">Неактивных</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number text-info">{{ report_data.roles_distribution | length }}</p>
+                    <p class="stat-label">Ролей</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Фильтры -->
+    <div class="filter-section">
+        <h5>🔍 Фильтры</h5>
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="start_date" class="form-label">Дата начала</label>
+                <input type="date" class="form-control" id="start_date" name="start_date" 
+                       value="{{ filters.start_date or '' }}">
+            </div>
+            <div class="col-md-3">
+                <label for="end_date" class="form-label">Дата окончания</label>
+                <input type="date" class="form-control" id="end_date" name="end_date" 
+                       value="{{ filters.end_date or '' }}">
+            </div>
+            <div class="col-md-3">
+                <label for="role" class="form-label">Роль</label>
+                <select class="form-control" id="role" name="role">
+                    <option value="">Все роли</option>
+                    <option value="owner" {% if filters.role == 'owner' %}selected{% endif %}>Владелец</option>
+                    <option value="manager" {% if filters.role == 'manager' %}selected{% endif %}>Управляющий</option>
+                    <option value="employee" {% if filters.role == 'employee' %}selected{% endif %}>Сотрудник</option>
+                    <option value="superadmin" {% if filters.role == 'superadmin' %}selected{% endif %}>Суперадмин</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Применить
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Экспорт -->
+    <div class="export-section">
+        <h5>📊 Экспорт отчета</h5>
+        <div class="row">
+            <div class="col-md-4">
+                <a href="/admin/reports/export/users.csv?{% if filters.start_date %}start_date={{ filters.start_date }}&{% endif %}{% if filters.end_date %}end_date={{ filters.end_date }}&{% endif %}{% if filters.role %}role={{ filters.role }}{% endif %}" 
+                   class="btn btn-success">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Скачать CSV
+                </a>
+            </div>
+            <div class="col-md-4">
+                <button type="button" class="btn btn-info" onclick="alert('PDF экспорт будет добавлен позже')">
+                    <i class="bi bi-file-earmark-pdf"></i> Скачать PDF
+                </button>
+            </div>
+            <div class="col-md-4">
+                <button type="button" class="btn btn-warning" onclick="printReport()">
+                    <i class="bi bi-printer"></i> Печать
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Таблица пользователей -->
+    <div class="users-table">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Telegram</th>
+                    <th>Имя</th>
+                    <th>Роль</th>
+                    <th>Статус</th>
+                    <th>Дата регистрации</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in report_data.users %}
+                <tr>
+                    <td><strong>{{ user.id }}</strong></td>
+                    <td>
+                        <div>
+                            <strong>@{{ user.username or 'не указан' }}</strong>
+                            <br><small class="text-muted">ID: {{ user.telegram_id }}</small>
+                        </div>
+                    </td>
+                    <td>
+                        {{ user.first_name or '' }} {{ user.last_name or '' }}
+                        {% if user.email %}
+                        <br><small class="text-muted">{{ user.email }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="role-badge role-{{ user.role }}">
+                            {% if user.role == 'owner' %}Владелец
+                            {% elif user.role == 'manager' %}Управляющий
+                            {% elif user.role == 'employee' %}Сотрудник
+                            {% elif user.role == 'superadmin' %}Суперадмин
+                            {% else %}{{ user.role | title }}
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-{{ 'active' if user.is_active else 'inactive' }}">
+                            <i class="bi bi-circle-fill"></i>
+                            {{ 'Активен' if user.is_active else 'Неактивен' }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if user.created_at %}
+                        {{ user.created_at[:10] }}
+                        <br><small class="text-muted">{{ user.created_at[11:16] }}</small>
+                        {% else %}
+                        Не указана
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            {% if user.role == 'owner' %}
+                            <a href="/admin/reports/owners?user_id={{ user.id }}" class="btn btn-outline-info" title="Объекты">
+                                <i class="bi bi-building"></i>
+                            </a>
+                            {% endif %}
+                            <a href="/admin/billing/transactions?user_id={{ user.id }}" class="btn btn-outline-success" title="Транзакции">
+                                <i class="bi bi-credit-card"></i>
+                            </a>
+                            <button type="button" class="btn btn-outline-warning" title="Связаться">
+                                <i class="bi bi-envelope"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        <i class="bi bi-people fs-1"></i>
+                        <p class="mb-0">Пользователи не найдены</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Распределение по ролям -->
+    {% if report_data.roles_distribution %}
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">📊 Распределение по ролям</h6>
+                </div>
+                <div class="card-body">
+                    {% for role, count in report_data.roles_distribution.items() %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="role-badge role-{{ role }}">
+                            {% if role == 'owner' %}Владельцы
+                            {% elif role == 'manager' %}Управляющие
+                            {% elif role == 'employee' %}Сотрудники
+                            {% elif role == 'superadmin' %}Суперадмины
+                            {% else %}{{ role | title }}
+                            {% endif %}
+                        </span>
+                        <strong>{{ count }}</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">📅 Регистрации по месяцам</h6>
+                </div>
+                <div class="card-body">
+                    {% for month, count in report_data.monthly_registrations.items() %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>{{ month }}</span>
+                        <strong>{{ count }}</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Пагинация -->
+    {% if report_data.users %}
+    <div class="d-flex justify-content-center mt-4">
+        <nav aria-label="Пагинация пользователей">
+            <ul class="pagination">
+                <li class="page-item">
+                    <a class="page-link" href="#" aria-label="Предыдущая">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                <li class="page-item active">
+                    <a class="page-link" href="#">1</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="#" aria-label="Следующая">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function printReport() {
+    window.print();
+}
+
+// Автообновление каждые 5 минут
+setInterval(() => {
+    if (!document.hidden) {
+        // Можно добавить автоматическое обновление данных
+    }
+}, 5 * 60 * 1000);
+</script>
+{% endblock %}
