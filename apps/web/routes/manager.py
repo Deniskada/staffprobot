@@ -1497,6 +1497,7 @@ async def manager_calendar(
                 "show_refresh": True,
                 "calendar_weeks": calendar_weeks,
                 "calendar_weeks_json": calendar_weeks_json,
+                "objects": objects_list,  # Переименовано для совместимости с shared компонентом
                 "accessible_objects": objects_list,
                 "employees": employees_list,
                 "selected_object_id": object_id,
