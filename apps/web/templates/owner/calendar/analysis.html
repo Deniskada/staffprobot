@@ -497,7 +497,9 @@ function filterByObjectAnalysis() {
         params.delete('object_id');
     }
     
-    window.location.search = params.toString();
+    const newSearch = params.toString();
+    const newUrl = newSearch ? `${window.location.pathname}?${newSearch}` : window.location.pathname;
+    window.location.href = newUrl;
 }
 
 // Используем общую функцию если доступна, иначе локальную

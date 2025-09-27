@@ -194,7 +194,11 @@ function filterByObject() {
     const selectedObjectId = objectSelect ? objectSelect.value : '';
     console.log('selectedObjectId:', selectedObjectId);
     
-    const params = new URLSearchParams(window.location.search);
+    // Получаем текущие параметры из URL или создаем новые
+    let currentSearch = window.location.search;
+    console.log('current search string:', currentSearch);
+    
+    const params = new URLSearchParams(currentSearch);
     console.log('current params:', params.toString());
     
     if (selectedObjectId) {
@@ -203,8 +207,14 @@ function filterByObject() {
         params.delete('object_id');
     }
     
-    console.log('new params:', params.toString());
-    window.location.search = params.toString();
+    const newSearch = params.toString();
+    console.log('new params:', newSearch);
+    
+    // Формируем новый URL
+    const newUrl = newSearch ? `${window.location.pathname}?${newSearch}` : window.location.pathname;
+    console.log('new URL:', newUrl);
+    
+    window.location.href = newUrl;
 }
 
 // Делаем функцию доступной глобально
