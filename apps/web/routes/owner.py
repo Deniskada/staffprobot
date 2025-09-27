@@ -719,15 +719,18 @@ async def owner_calendar(
                 if not selected_object:
                     raise HTTPException(status_code=404, detail="Объект не найден")
             
+            # Определяем объекты для загрузки данных
+            objects_to_load = [selected_object] if selected_object else objects
+            
             # Получаем тайм-слоты для выбранного объекта или всех объектов
             timeslots_data = []
-            logger.info(f"Selected object: {selected_object}, Objects count: {len(objects)}")
+            logger.info(f"Selected object: {selected_object}, Objects to load count: {len(objects_to_load)}")
             
-            # Всегда загружаем тайм-слоты для всех объектов
+            # Загружаем тайм-слоты для выбранных объектов
             from sqlalchemy import select
             from domain.entities.time_slot import TimeSlot
             
-            for obj in objects:
+            for obj in objects_to_load:
                 query = select(TimeSlot).where(
                     TimeSlot.object_id == obj.id,
                     TimeSlot.is_active == True
@@ -784,13 +787,13 @@ async def owner_calendar(
                     # Загружаем активные и завершенные смены
                     shifts_query = select(Shift).where(
                         and_(
-                            Shift.object_id.in_([obj.id for obj in objects]),
+                            Shift.object_id.in_([obj.id for obj in objects_to_load]),
                             Shift.start_time >= datetime.combine(start_date, time.min),
                             Shift.start_time <= datetime.combine(end_date, time.max)
                         )
                     ).options(selectinload(Shift.user))
                     shifts = (await session.execute(shifts_query)).scalars().all()
-                    logger.info(f"Found {len(shifts)} active/completed shifts in database for objects: {[obj.id for obj in objects]}")
+                    logger.info(f"Found {len(shifts)} active/completed shifts in database for objects: {[obj.id for obj in objects_to_load]}")
                     
                     for shift in shifts:
                         # Находим объект для смены
@@ -814,14 +817,14 @@ async def owner_calendar(
                     # Загружаем запланированные смены (исключаем отмененные)
                     schedules_query = select(ShiftSchedule).where(
                         and_(
-                            ShiftSchedule.object_id.in_([obj.id for obj in objects]),
+                            ShiftSchedule.object_id.in_([obj.id for obj in objects_to_load]),
                             ShiftSchedule.planned_start >= datetime.combine(start_date, time.min),
                             ShiftSchedule.planned_start <= datetime.combine(end_date, time.max),
                             ShiftSchedule.status != 'cancelled'  # Исключаем отмененные
                         )
                     ).options(selectinload(ShiftSchedule.user))
                     schedules = (await session.execute(schedules_query)).scalars().all()
-                    logger.info(f"Found {len(schedules)} planned shifts in database for objects: {[obj.id for obj in objects]}")
+                    logger.info(f"Found {len(schedules)} planned shifts in database for objects: {[obj.id for obj in objects_to_load]}")
                     
                     for schedule in schedules:
                         # Находим объект для запланированной смены
