@@ -432,8 +432,8 @@
 </div>
 
 <script>
-// Функция фильтрации по объекту
-function filterByObject() {
+// Функция фильтрации по объекту для недельного календаря
+function filterByObjectWeek() {
     const objectSelect = document.getElementById('objectFilter');
     const selectedObjectId = objectSelect ? objectSelect.value : '';
     
@@ -447,6 +447,9 @@ function filterByObject() {
     
     window.location.search = params.toString();
 }
+
+// Используем общую функцию если доступна, иначе локальную
+window.filterByObject = window.filterByObject || filterByObjectWeek;
 
 // Подсветка статусов как в месячном представлении
 let timeslotsStatus = {};
