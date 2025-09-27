@@ -166,12 +166,17 @@ class CalendarPanels {
             
             employees.forEach(employee => {
                 const employeeItem = document.createElement('div');
-                employeeItem.className = 'employee-item';
+                employeeItem.className = `employee-item ${employee.is_owner ? 'owner-item' : ''}`;
                 employeeItem.draggable = true;
                 employeeItem.dataset.employeeId = employee.id;
                 employeeItem.innerHTML = `
-                    <div class="employee-name">${employee.name}</div>
-                    <div class="employee-role">${employee.role || 'Сотрудник'}</div>
+                    <div class="employee-name">
+                        ${employee.name}
+                        ${employee.is_owner ? '<i class="bi bi-crown text-warning ms-1" title="Владелец"></i>' : ''}
+                    </div>
+                    <div class="employee-role ${employee.is_owner ? 'owner-role' : ''}">
+                        ${employee.is_owner ? 'Владелец' : (employee.role || 'Сотрудник')}
+                    </div>
                 `;
                 
                 employeeItem.addEventListener('dragstart', function(e) {

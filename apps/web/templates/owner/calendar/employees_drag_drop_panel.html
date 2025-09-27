@@ -298,6 +298,32 @@
         border-radius: 0;
     }
 }
+
+/* Стили для владельца в панели сотрудников */
+.employee-item.owner-item {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    border: 2px solid #ffc107;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+}
+
+.employee-item.owner-item:hover {
+    background: linear-gradient(135deg, #ffeaa7 0%, #ffd93d 100%);
+    border-color: #e0a800;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
+}
+
+.owner-role {
+    background: #ffc107 !important;
+    color: #000 !important;
+    font-weight: bold;
+}
+
+.employee-item.owner-item .employee-name {
+    font-weight: 600;
+    color: #856404;
+}
 </style>
 
 <script>
@@ -371,15 +397,19 @@ function renderEmployees() {
     }
     
     container.innerHTML = employeesData.map(emp => `
-        <div class="employee-item" 
+        <div class="employee-item ${emp.is_owner ? 'owner-item' : ''}" 
              draggable="true" 
              data-employee-id="${emp.id}"
              data-employee-name="${emp.name || emp.username}"
              data-employee-role="${emp.role || 'employee'}"
-             data-employee-status="${emp.is_active ? 'Активен' : 'Неактивен'}">
-            <div class="employee-name">${emp.name || emp.username}</div>
+             data-employee-status="${emp.is_active ? 'Активен' : 'Неактивен'}"
+             ${emp.is_owner ? 'title="Владелец"' : ''}>
+            <div class="employee-name">
+                ${emp.name || emp.username}
+                ${emp.is_owner ? '<i class="bi bi-crown text-warning ms-1" title="Владелец"></i>' : ''}
+            </div>
             <div class="employee-details">
-                <span class="employee-role">${emp.role || 'employee'}</span>
+                <span class="employee-role ${emp.is_owner ? 'owner-role' : ''}">${emp.is_owner ? 'Владелец' : (emp.role || 'employee')}</span>
                 <span class="employee-status">${emp.is_active ? 'Активен' : 'Неактивен'}</span>
             </div>
         </div>
