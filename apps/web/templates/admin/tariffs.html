@@ -75,6 +75,109 @@
         </div>
     </div>
 
+    {% if is_management %}
+    <!-- Управление тарифами -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>📋 Тарифные планы</h3>
+        <a href="/admin/tariffs/create" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Создать тариф
+        </a>
+    </div>
+
+    <!-- Статистика -->
+    {% if statistics %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">{{ statistics.total_subscriptions }}</h5>
+                    <p class="card-text">Всего подписок</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">{{ statistics.active_subscriptions }}</h5>
+                    <p class="card-text">Активных подписок</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Распределение по тарифам</h6>
+                    {% for tariff_stat in statistics.tariff_breakdown %}
+                    <div class="d-flex justify-content-between">
+                        <span>{{ tariff_stat.name }}</span>
+                        <span class="badge bg-primary">{{ tariff_stat.count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Список тарифов -->
+    <div class="row">
+        {% for tariff in tariff_plans %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ tariff.name }}</h5>
+                    {% if tariff.is_popular %}
+                    <span class="badge bg-warning">Популярный</span>
+                    {% endif %}
+                    {% if not tariff.is_active %}
+                    <span class="badge bg-secondary">Неактивный</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <p class="card-text">{{ tariff.description }}</p>
+                    <div class="mb-3">
+                        <h4 class="text-primary">
+                            {% if tariff.price == 0 %}
+                                Бесплатно
+                            {% else %}
+                                {{ tariff.price }} {{ tariff.currency }}/{{ tariff.billing_period }}
+                            {% endif %}
+                        </h4>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted">Лимиты:</small>
+                        <ul class="list-unstyled">
+                            <li>Объекты: {{ tariff.max_objects if tariff.max_objects != -1 else '∞' }}</li>
+                            <li>Сотрудники: {{ tariff.max_employees if tariff.max_employees != -1 else '∞' }}</li>
+                            <li>Управляющие: {{ tariff.max_managers if tariff.max_managers != -1 else '∞' }}</li>
+                        </ul>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted">Возможности:</small>
+                        <ul class="list-unstyled">
+                            {% for feature in tariff.features %}
+                            <li><i class="bi bi-check-circle text-success"></i> {{ feature }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="btn-group w-100">
+                        <a href="/admin/tariffs/{{ tariff.id }}/edit" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-pencil"></i> Редактировать
+                        </a>
+                        <button type="button" class="btn btn-outline-danger btn-sm" 
+                                onclick="deleteTariff({{ tariff.id }}, '{{ tariff.name }}')">
+                            <i class="bi bi-trash"></i> Удалить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% else %}
     <!-- В разработке -->
     <div class="coming-soon">
         <h1>🚧 В разработке</h1>
@@ -85,6 +188,7 @@
             </span>
         </div>
     </div>
+    {% endif %}
 
     <!-- Планируемый функционал -->
     <div class="row">
@@ -205,4 +309,28 @@
         </p>
     </div>
 </div>
+
+<script>
+function deleteTariff(tariffId, tariffName) {
+    if (confirm(`Вы уверены, что хотите удалить тариф "${tariffName}"?`)) {
+        // Создаем форму для отправки POST запроса
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/tariffs/${tariffId}/delete`;
+        
+        // Добавляем CSRF токен если нужно
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+        if (csrfToken) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = '_token';
+            input.value = csrfToken.getAttribute('content');
+            form.appendChild(input);
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
 {% endblock %}

@@ -17,5 +17,7 @@ from .application import Application, ApplicationStatus
 from .interview import Interview, InterviewType, InterviewStatus
 from .task_category import TaskCategory
 from .task_template import TaskTemplate
+from .tariff_plan import TariffPlan
+from .user_subscription import UserSubscription, SubscriptionStatus, BillingPeriod
 
-__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate"]
+__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate", "TariffPlan", "UserSubscription", "SubscriptionStatus", "BillingPeriod"]
