@@ -32,6 +32,7 @@
             <div class="nav-actions">
                 {% if objects and objects|length > 1 %}
                 <div class="object-filter me-3">
+                    <script>console.log('Object filter HTML rendered, objects count:', {{ objects|length }});</script>
                     <select class="form-select form-select-sm" id="objectFilter" style="min-width: 200px;">
                         <option value="">Все объекты</option>
                         {% for obj in objects %}
@@ -41,6 +42,8 @@
                         {% endfor %}
                     </select>
                 </div>
+                {% else %}
+                <script>console.log('Object filter not shown - objects count:', {{ objects|length if objects else 0 }});</script>
                 {% endif %}
                 
                 {% if show_today_button %}
@@ -161,6 +164,8 @@
 
 <!-- Calendar JavaScript -->
 <script>
+console.log('Shared calendar grid script loading...');
+
 // Calendar navigation
 function navigateCalendar(direction) {
     const currentDate = new Date('{{ current_date }}');
