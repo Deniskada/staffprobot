@@ -15,7 +15,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, test_calendar, notifications, tariffs, user_subscriptions
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, test_calendar, notifications, tariffs, user_subscriptions, billing
 from apps.web.services.auth_service import AuthService
 
 
@@ -158,6 +158,7 @@ app.include_router(contract_templates.router, prefix="/contract-templates", tags
 app.include_router(admin.router, prefix="/admin", tags=["Администрирование"])
 app.include_router(tariffs.router, prefix="/admin/tariffs", tags=["Тарифные планы"])
 app.include_router(user_subscriptions.router, prefix="/admin/subscriptions", tags=["Подписки пользователей"])
+app.include_router(billing.router, prefix="/admin/billing", tags=["Система биллинга"])
 app.include_router(owner.router, prefix="/owner", tags=["Владелец"])
 app.include_router(manager.router, tags=["Управляющий"])
 app.include_router(test_calendar.router, tags=["Тест календаря"])
