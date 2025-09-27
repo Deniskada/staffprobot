@@ -225,6 +225,20 @@
         </div>
         
         <div class="d-flex align-items-center gap-3">
+            <!-- Фильтр объектов -->
+            {% if objects and objects|length > 1 %}
+            <div class="object-filter me-3">
+                <select class="form-select form-select-sm" id="objectFilter" onchange="filterByObject()" style="min-width: 200px;">
+                    <option value="">Все объекты</option>
+                    {% for obj in objects %}
+                    <option value="{{ obj.id }}" {% if selected_object and selected_object.id == obj.id %}selected{% endif %}>
+                        {{ obj.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            
             <!-- Переключение видов -->
             <div class="btn-group" role="group">
                 <a href="/owner/calendar/" class="btn btn-outline-primary">
@@ -470,6 +484,22 @@
 </div>
 
 <script>
+// Функция фильтрации по объекту
+function filterByObject() {
+    const objectSelect = document.getElementById('objectFilter');
+    const selectedObjectId = objectSelect ? objectSelect.value : '';
+    
+    const params = new URLSearchParams(window.location.search);
+    
+    if (selectedObjectId) {
+        params.set('object_id', selectedObjectId);
+    } else {
+        params.delete('object_id');
+    }
+    
+    window.location.search = params.toString();
+}
+
 // Автообновление анализа каждые 5 минут
 setInterval(function() {
     // Здесь можно добавить AJAX запрос для обновления данных

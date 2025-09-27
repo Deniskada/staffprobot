@@ -30,6 +30,19 @@
                 </button>
             </div>
             <div class="nav-actions">
+                {% if objects and objects|length > 1 %}
+                <div class="object-filter me-3">
+                    <select class="form-select form-select-sm" id="objectFilter" onchange="filterByObject()" style="min-width: 200px;">
+                        <option value="">Все объекты</option>
+                        {% for obj in objects %}
+                        <option value="{{ obj.id }}" {% if selected_object_id and selected_object_id == obj.id %}selected{% endif %}>
+                            {{ obj.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
                 {% if show_today_button %}
                 <button type="button" class="btn btn-primary btn-sm" onclick="goToToday()">
                     <i class="bi bi-calendar-today"></i> Сегодня
@@ -168,11 +181,32 @@ function goToToday() {
     loadCalendar(today);
 }
 
+function filterByObject() {
+    const objectSelect = document.getElementById('objectFilter');
+    const selectedObjectId = objectSelect ? objectSelect.value : '';
+    
+    const params = new URLSearchParams(window.location.search);
+    
+    if (selectedObjectId) {
+        params.set('object_id', selectedObjectId);
+    } else {
+        params.delete('object_id');
+    }
+    
+    window.location.search = params.toString();
+}
 
 function loadCalendar(date) {
     const params = new URLSearchParams(window.location.search);
     params.set('year', date.getFullYear());
     params.set('month', date.getMonth() + 1);
+    
+    // Сохраняем фильтр объекта при навигации
+    const objectSelect = document.getElementById('objectFilter');
+    if (objectSelect && objectSelect.value) {
+        params.set('object_id', objectSelect.value);
+    }
+    
     window.location.search = params.toString();
 }
 
