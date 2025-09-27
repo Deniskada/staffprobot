@@ -55,6 +55,11 @@ class UserSubscription(Base):
     user = relationship("User", back_populates="subscriptions")
     tariff_plan = relationship("TariffPlan", back_populates="subscriptions")
     
+    # Связи с биллингом
+    billing_transactions = relationship("BillingTransaction", back_populates="subscription")
+    usage_metrics = relationship("UsageMetrics", back_populates="subscription")
+    payment_notifications = relationship("PaymentNotification", back_populates="subscription")
+    
     def __repr__(self) -> str:
         return f"<UserSubscription(id={self.id}, user_id={self.user_id}, status='{self.status.value}')>"
     

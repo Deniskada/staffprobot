@@ -147,6 +147,11 @@ class User(Base):
     
     # Связи с тарифными планами
     subscriptions = relationship("UserSubscription", back_populates="user")
+    
+    # Связи с биллингом
+    billing_transactions = relationship("BillingTransaction", back_populates="user")
+    usage_metrics = relationship("UsageMetrics", back_populates="user")
+    payment_notifications = relationship("PaymentNotification", back_populates="user")
 
 
 

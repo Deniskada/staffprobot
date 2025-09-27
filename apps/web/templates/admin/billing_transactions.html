@@ -1,0 +1,286 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.transaction-card {
+    border-left: 4px solid #007bff;
+    transition: all 0.3s ease;
+}
+
+.transaction-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.status-completed { border-left-color: #28a745; }
+.status-pending { border-left-color: #ffc107; }
+.status-failed { border-left-color: #dc3545; }
+.status-processing { border-left-color: #17a2b8; }
+.status-cancelled { border-left-color: #6c757d; }
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-completed { background-color: #28a745; color: white; }
+.status-pending { background-color: #ffc107; color: black; }
+.status-failed { background-color: #dc3545; color: white; }
+.status-processing { background-color: #17a2b8; color: white; }
+.status-cancelled { background-color: #6c757d; color: white; }
+
+.filter-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.amount-display {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.amount-positive { color: #28a745; }
+.amount-negative { color: #dc3545; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок и навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>{{ title }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/admin">Админ панель</a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="/admin/billing/">Биллинг</a>
+                    </li>
+                    <li class="breadcrumb-item active">Транзакции</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="/admin/billing/" class="btn btn-secondary">
+                ← К биллингу
+            </a>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="filter-section">
+        <h5>🔍 Фильтры</h5>
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="user_id" class="form-label">Пользователь</label>
+                <input type="number" class="form-control" id="user_id" name="user_id" 
+                       value="{{ selected_user_id or '' }}" placeholder="ID пользователя">
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label">Статус</label>
+                <select class="form-control" id="status" name="status">
+                    <option value="">Все статусы</option>
+                    <option value="pending">Ожидает</option>
+                    <option value="processing">В обработке</option>
+                    <option value="completed">Завершена</option>
+                    <option value="failed">Не удалась</option>
+                    <option value="cancelled">Отменена</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="transaction_type" class="form-label">Тип</label>
+                <select class="form-control" id="transaction_type" name="transaction_type">
+                    <option value="">Все типы</option>
+                    <option value="payment">Платеж</option>
+                    <option value="refund">Возврат</option>
+                    <option value="credit">Кредит</option>
+                    <option value="debit">Списание</option>
+                    <option value="adjustment">Корректировка</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Применить
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Список транзакций -->
+    <div class="row">
+        {% for transaction in transactions %}
+        <div class="col-md-6 mb-4">
+            <div class="card transaction-card status-{{ transaction.status.value }}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-credit-card"></i> 
+                        Транзакция #{{ transaction.id }}
+                    </h6>
+                    <span class="status-badge status-{{ transaction.status.value }}">
+                        {{ transaction.status.value | title }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>👤 Пользователь</h6>
+                            <p class="mb-1"><strong>ID:</strong> {{ transaction.user_id }}</p>
+                            <p class="mb-1"><strong>Подписка:</strong> {{ transaction.subscription_id or 'Нет' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>💰 Детали платежа</h6>
+                            <p class="mb-1">
+                                <span class="amount-display {% if transaction.transaction_type.value in ['payment', 'credit'] %}amount-positive{% else %}amount-negative{% endif %}">
+                                    {% if transaction.transaction_type.value in ['payment', 'credit'] %}+{% else %}-{% endif %}{{ transaction.amount }} {{ transaction.currency }}
+                                </span>
+                            </p>
+                            <p class="mb-1"><strong>Тип:</strong> {{ transaction.transaction_type.value | title }}</p>
+                            <p class="mb-0"><strong>Способ:</strong> {{ transaction.payment_method.value if transaction.payment_method else 'Не указан' }}</p>
+                        </div>
+                    </div>
+                    
+                    {% if transaction.description %}
+                    <div class="mt-3">
+                        <h6>📝 Описание</h6>
+                        <p class="mb-0">{{ transaction.description }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <small class="text-muted">Создана:</small>
+                            <p class="mb-0">{{ transaction.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            {% if transaction.processed_at %}
+                            <small class="text-muted">Обработана:</small>
+                            <p class="mb-0">{{ transaction.processed_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if transaction.expires_at and transaction.expires_at > now %}
+                    <div class="mt-2">
+                        <small class="text-warning">
+                            <i class="bi bi-clock"></i> Истекает: {{ transaction.expires_at.strftime('%d.%m.%Y %H:%M') }}
+                        </small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if transaction.external_id %}
+                    <div class="mt-2">
+                        <small class="text-info">
+                            <i class="bi bi-link"></i> Внешний ID: {{ transaction.external_id }}
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer">
+                    <div class="btn-group w-100">
+                        {% if transaction.status.value == 'pending' %}
+                        <button type="button" class="btn btn-outline-success btn-sm" 
+                                onclick="updateTransactionStatus({{ transaction.id }}, 'completed')">
+                            <i class="bi bi-check-circle"></i> Завершить
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" 
+                                onclick="updateTransactionStatus({{ transaction.id }}, 'failed')">
+                            <i class="bi bi-x-circle"></i> Отклонить
+                        </button>
+                        {% endif %}
+                        
+                        {% if transaction.status.value == 'processing' %}
+                        <button type="button" class="btn btn-outline-success btn-sm" 
+                                onclick="updateTransactionStatus({{ transaction.id }}, 'completed')">
+                            <i class="bi bi-check-circle"></i> Завершить
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" 
+                                onclick="updateTransactionStatus({{ transaction.id }}, 'pending')">
+                            <i class="bi bi-arrow-counterclockwise"></i> В ожидание
+                        </button>
+                        {% endif %}
+                        
+                        <a href="/admin/billing/transactions?user_id={{ transaction.user_id }}" class="btn btn-outline-info btn-sm">
+                            <i class="bi bi-person"></i> Пользователь
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="alert alert-info text-center">
+                <h5>📋 Нет транзакций</h5>
+                <p>Транзакции по указанным фильтрам не найдены.</p>
+                {% if selected_user_id %}
+                <a href="/admin/billing/transactions" class="btn btn-primary">
+                    Показать все транзакции
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Пагинация -->
+    {% if transactions %}
+    <div class="d-flex justify-content-center mt-4">
+        <nav aria-label="Пагинация транзакций">
+            <ul class="pagination">
+                <li class="page-item">
+                    <a class="page-link" href="#" aria-label="Предыдущая">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                <li class="page-item active">
+                    <a class="page-link" href="#">1</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="#" aria-label="Следующая">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function updateTransactionStatus(transactionId, newStatus) {
+    const statusNames = {
+        'completed': 'завершенной',
+        'failed': 'отклоненной',
+        'pending': 'ожидающей',
+        'cancelled': 'отмененной'
+    };
+    
+    const statusName = statusNames[newStatus] || newStatus;
+    
+    if (confirm(`Вы уверены, что хотите изменить статус транзакции на "${statusName}"?`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/billing/transactions/${transactionId}/status`;
+        
+        const statusInput = document.createElement('input');
+        statusInput.type = 'hidden';
+        statusInput.name = 'status';
+        statusInput.value = newStatus;
+        form.appendChild(statusInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,313 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.usage-card {
+    border-left: 4px solid #007bff;
+    transition: all 0.3s ease;
+}
+
+.usage-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.usage-warning { border-left-color: #ffc107; }
+.usage-danger { border-left-color: #dc3545; }
+.usage-success { border-left-color: #28a745; }
+
+.progress-bar-custom {
+    height: 25px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.progress-bar-custom:hover {
+    transform: scale(1.02);
+}
+
+.limit-indicator {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.limit-ok { background-color: #d4edda; color: #155724; }
+.limit-warning { background-color: #fff3cd; color: #856404; }
+.limit-danger { background-color: #f8d7da; color: #721c24; }
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.filter-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.user-info {
+    background: #e3f2fd;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок и навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>{{ title }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/admin">Админ панель</a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="/admin/billing/">Биллинг</a>
+                    </li>
+                    <li class="breadcrumb-item active">Метрики использования</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="/admin/billing/" class="btn btn-secondary">
+                ← К биллингу
+            </a>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="filter-section">
+        <h5>🔍 Фильтры</h5>
+        <form method="GET" class="row g-3">
+            <div class="col-md-4">
+                <label for="user_id" class="form-label">Пользователь</label>
+                <input type="number" class="form-control" id="user_id" name="user_id" 
+                       value="{{ selected_user_id or '' }}" placeholder="ID пользователя">
+            </div>
+            <div class="col-md-4">
+                <label for="show_warnings" class="form-label">Показать только предупреждения</label>
+                <select class="form-control" id="show_warnings" name="show_warnings">
+                    <option value="">Все пользователи</option>
+                    <option value="true">Только с предупреждениями</option>
+                    <option value="false">Без предупреждений</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Применить
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Список метрик использования -->
+    {% for user_limit in user_limits %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card usage-card {% if user_limit.warnings %}usage-warning{% endif %}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-person-circle"></i> 
+                        Пользователь {{ user_limit.subscription.user_id }}
+                    </h6>
+                    <div>
+                        <span class="badge bg-primary">{{ user_limit.subscription.tariff_plan.name }}</span>
+                        {% if user_limit.warnings %}
+                        <span class="badge bg-warning">
+                            <i class="bi bi-exclamation-triangle"></i> Предупреждения
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Информация о пользователе -->
+                    <div class="user-info">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>👤 Информация о пользователе</h6>
+                                <p class="mb-1"><strong>ID:</strong> {{ user_limit.subscription.user_id }}</p>
+                                <p class="mb-1"><strong>Подписка:</strong> {{ user_limit.subscription.tariff_plan.name }}</p>
+                                <p class="mb-0"><strong>Статус:</strong> {{ user_limit.subscription.status | title }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>📅 Сроки подписки</h6>
+                                <p class="mb-1"><strong>Начало:</strong> {{ user_limit.subscription.started_at.strftime('%d.%m.%Y') if user_limit.subscription.started_at else 'Не указано' }}</p>
+                                <p class="mb-0"><strong>Истекает:</strong> {{ user_limit.subscription.expires_at.strftime('%d.%m.%Y') if user_limit.subscription.expires_at else 'Бессрочная' }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Метрики использования -->
+                    <div class="row mt-3">
+                        <div class="col-md-4">
+                            <h6>🏢 Объекты</h6>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="metric-value">{{ user_limit.usage.objects }}</span>
+                                <span class="limit-indicator {% if user_limit.percentages.objects >= 100 %}limit-danger{% elif user_limit.percentages.objects >= 80 %}limit-warning{% else %}limit-ok{% endif %}">
+                                    {{ user_limit.percentages.objects | round(1) }}%
+                                </span>
+                            </div>
+                            <div class="progress mb-2">
+                                <div class="progress-bar progress-bar-custom {% if user_limit.percentages.objects >= 100 %}bg-danger{% elif user_limit.percentages.objects >= 80 %}bg-warning{% else %}bg-success{% endif %}" 
+                                     style="width: {{ user_limit.percentages.objects }}%">
+                                    {{ user_limit.usage.objects }}/{{ user_limit.limits.objects if user_limit.limits.objects != -1 else '∞' }}
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                Осталось: {{ user_limit.remaining.objects if user_limit.remaining.objects != -1 else '∞' }}
+                            </small>
+                        </div>
+
+                        <div class="col-md-4">
+                            <h6>👥 Сотрудники</h6>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="metric-value">{{ user_limit.usage.employees }}</span>
+                                <span class="limit-indicator {% if user_limit.percentages.employees >= 100 %}limit-danger{% elif user_limit.percentages.employees >= 80 %}limit-warning{% else %}limit-ok{% endif %}">
+                                    {{ user_limit.percentages.employees | round(1) }}%
+                                </span>
+                            </div>
+                            <div class="progress mb-2">
+                                <div class="progress-bar progress-bar-custom {% if user_limit.percentages.employees >= 100 %}bg-danger{% elif user_limit.percentages.employees >= 80 %}bg-warning{% else %}bg-success{% endif %}" 
+                                     style="width: {{ user_limit.percentages.employees }}%">
+                                    {{ user_limit.usage.employees }}/{{ user_limit.limits.employees if user_limit.limits.employees != -1 else '∞' }}
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                Осталось: {{ user_limit.remaining.employees if user_limit.remaining.employees != -1 else '∞' }}
+                            </small>
+                        </div>
+
+                        <div class="col-md-4">
+                            <h6>👨‍💼 Управляющие</h6>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="metric-value">{{ user_limit.usage.managers }}</span>
+                                <span class="limit-indicator {% if user_limit.percentages.managers >= 100 %}limit-danger{% elif user_limit.percentages.managers >= 80 %}limit-warning{% else %}limit-ok{% endif %}">
+                                    {{ user_limit.percentages.managers | round(1) }}%
+                                </span>
+                            </div>
+                            <div class="progress mb-2">
+                                <div class="progress-bar progress-bar-custom {% if user_limit.percentages.managers >= 100 %}bg-danger{% elif user_limit.percentages.managers >= 80 %}bg-warning{% else %}bg-success{% endif %}" 
+                                     style="width: {{ user_limit.percentages.managers }}%">
+                                    {{ user_limit.usage.managers }}/{{ user_limit.limits.managers if user_limit.limits.managers != -1 else '∞' }}
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                Осталось: {{ user_limit.remaining.managers if user_limit.remaining.managers != -1 else '∞' }}
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Предупреждения -->
+                    {% if user_limit.warnings %}
+                    <div class="alert alert-warning mt-3">
+                        <h6><i class="bi bi-exclamation-triangle"></i> Предупреждения:</h6>
+                        <ul class="mb-0">
+                            {% for warning in user_limit.warnings %}
+                            <li>{{ warning }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <!-- Действия -->
+                    <div class="mt-3">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-primary btn-sm" 
+                                    onclick="refreshMetrics({{ user_limit.subscription.user_id }})">
+                                <i class="bi bi-arrow-clockwise"></i> Обновить метрики
+                            </button>
+                            <button type="button" class="btn btn-outline-success btn-sm" 
+                                    onclick="processAutoRenewal({{ user_limit.subscription.user_id }})">
+                                <i class="bi bi-arrow-repeat"></i> Автопродление
+                            </button>
+                            <a href="/admin/billing/transactions?user_id={{ user_limit.subscription.user_id }}" 
+                               class="btn btn-outline-info btn-sm">
+                                <i class="bi bi-credit-card"></i> Транзакции
+                            </a>
+                            <a href="/admin/subscriptions/assign?user_id={{ user_limit.subscription.user_id }}" 
+                               class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-gear"></i> Изменить тариф
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="alert alert-info text-center">
+            <h5>📊 Нет данных о метриках</h5>
+            <p>Метрики использования по указанным фильтрам не найдены.</p>
+            {% if selected_user_id %}
+            <a href="/admin/billing/usage" class="btn btn-primary">
+                Показать все метрики
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+async function refreshMetrics(userId) {
+    try {
+        const response = await fetch(`/admin/billing/api/usage/${userId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            // Перезагружаем страницу для обновления данных
+            window.location.reload();
+        } else {
+            alert('Ошибка обновления метрик: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Ошибка обновления метрик:', error);
+        alert('Ошибка обновления метрик');
+    }
+}
+
+async function processAutoRenewal(userId) {
+    if (confirm(`Вы уверены, что хотите обработать автопродление для пользователя ${userId}?`)) {
+        try {
+            const response = await fetch(`/admin/billing/auto-renewal/${userId}`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('Автопродление успешно обработано: ' + data.message);
+                window.location.reload();
+            } else {
+                alert('Ошибка автопродления: ' + data.message);
+            }
+        } catch (error) {
+            console.error('Ошибка автопродления:', error);
+            alert('Ошибка автопродления');
+        }
+    }
+}
+
+// Автообновление метрик каждые 5 минут
+setInterval(() => {
+    // Обновляем метрики только если пользователь активен
+    if (!document.hidden) {
+        // Можно добавить автоматическое обновление метрик
+    }
+}, 5 * 60 * 1000);
+</script>
+{% endblock %}

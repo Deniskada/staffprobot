@@ -19,5 +19,8 @@ from .task_category import TaskCategory
 from .task_template import TaskTemplate
 from .tariff_plan import TariffPlan
 from .user_subscription import UserSubscription, SubscriptionStatus, BillingPeriod
+from .billing_transaction import BillingTransaction, TransactionType, TransactionStatus, PaymentMethod
+from .usage_metrics import UsageMetrics
+from .payment_notification import PaymentNotification, NotificationType, NotificationStatus, NotificationChannel
 
-__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate", "TariffPlan", "UserSubscription", "SubscriptionStatus", "BillingPeriod"]
+__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate", "TariffPlan", "UserSubscription", "SubscriptionStatus", "BillingPeriod", "BillingTransaction", "TransactionType", "TransactionStatus", "PaymentMethod", "UsageMetrics", "PaymentNotification", "NotificationType", "NotificationStatus", "NotificationChannel"]
