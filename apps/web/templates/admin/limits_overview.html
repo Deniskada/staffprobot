@@ -1,0 +1,407 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.user-limits-card {
+    border-left: 4px solid #007bff;
+    transition: all 0.3s ease;
+    margin-bottom: 20px;
+}
+
+.user-limits-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.user-limits-card.has-warnings { border-left-color: #ffc107; }
+.user-limits-card.over-limit { border-left-color: #dc3545; }
+
+.limit-bar {
+    height: 20px;
+    border-radius: 10px;
+    background: #e9ecef;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.limit-fill {
+    height: 100%;
+    transition: all 0.3s ease;
+    border-radius: 10px;
+}
+
+.limit-fill.ok { background: #28a745; }
+.limit-fill.warning { background: #ffc107; }
+.limit-fill.danger { background: #dc3545; }
+
+.user-info {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-ok { background-color: #d4edda; color: #155724; }
+.status-warning { background-color: #fff3cd; color: #856404; }
+.status-danger { background-color: #f8d7da; color: #721c24; }
+
+.filter-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.quick-stats {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    margin: 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок и навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>{{ title }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/admin">Админ панель</a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="/admin/billing/">Биллинг</a>
+                    </li>
+                    <li class="breadcrumb-item active">Лимиты</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary" onclick="refreshOverview()">
+                <i class="bi bi-arrow-clockwise"></i> Обновить
+            </button>
+            <a href="/admin/billing/" class="btn btn-secondary">
+                ← К биллингу
+            </a>
+        </div>
+    </div>
+
+    <!-- Быстрая статистика -->
+    <div class="quick-stats">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number" id="total-users">{{ user_limits | length }}</p>
+                    <p class="stat-label">Пользователей с подписками</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number" id="over-limit-users">-</p>
+                    <p class="stat-label">Превысили лимиты</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number" id="warning-users">-</p>
+                    <p class="stat-label">С предупреждениями</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <p class="stat-number" id="expiring-users">-</p>
+                    <p class="stat-label">Подписки истекают</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="filter-section">
+        <h5>🔍 Фильтры</h5>
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="tariff" class="form-label">Тариф</label>
+                <select class="form-control" id="tariff" name="tariff">
+                    <option value="">Все тарифы</option>
+                    <option value="Базовый">Базовый</option>
+                    <option value="Стандартный">Стандартный</option>
+                    <option value="Премиум">Премиум</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label">Статус лимитов</label>
+                <select class="form-control" id="status" name="status">
+                    <option value="">Все статусы</option>
+                    <option value="ok">В норме</option>
+                    <option value="warning">Предупреждения</option>
+                    <option value="over">Превышены</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="payment_status" class="form-label">Статус платежей</label>
+                <select class="form-control" id="payment_status" name="payment_status">
+                    <option value="">Все статусы</option>
+                    <option value="paid">Оплачено</option>
+                    <option value="pending">Ожидает</option>
+                    <option value="failed">Не удалось</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Применить
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Список пользователей с лимитами -->
+    {% for user_limit in user_limits %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card user-limits-card {% if user_limit.warnings %}has-warnings{% elif not user_limit.limits.objects.allowed or not user_limit.limits.employees.allowed %}over-limit{% endif %}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-person-circle"></i> 
+                        Пользователь {{ user_limit.subscription.user_id }}
+                    </h6>
+                    <div>
+                        <span class="badge bg-primary">{{ user_limit.subscription.tariff_name }}</span>
+                        {% if user_limit.warnings %}
+                        <span class="badge bg-warning">
+                            <i class="bi bi-exclamation-triangle"></i> Предупреждения
+                        </span>
+                        {% endif %}
+                        {% if not user_limit.limits.objects.allowed or not user_limit.limits.employees.allowed %}
+                        <span class="badge bg-danger">
+                            <i class="bi bi-x-circle"></i> Лимиты превышены
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Информация о пользователе -->
+                    <div class="user-info">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <h6>👤 Информация</h6>
+                                <p class="mb-1"><strong>ID:</strong> {{ user_limit.subscription.user_id }}</p>
+                                <p class="mb-1"><strong>Тариф:</strong> {{ user_limit.subscription.tariff_name }}</p>
+                                <p class="mb-0"><strong>Статус:</strong> {{ user_limit.subscription.status | title }}</p>
+                            </div>
+                            <div class="col-md-4">
+                                <h6>📅 Сроки</h6>
+                                <p class="mb-1"><strong>Начало:</strong> {{ user_limit.subscription.started_at[:10] if user_limit.subscription.started_at else 'Не указано' }}</p>
+                                <p class="mb-0"><strong>Истекает:</strong> {{ user_limit.subscription.expires_at[:10] if user_limit.subscription.expires_at else 'Бессрочная' }}</p>
+                            </div>
+                            <div class="col-md-4">
+                                <h6>💳 Платежи</h6>
+                                <p class="mb-1">
+                                    <span class="status-badge {% if user_limit.payment_status.status == 'paid' %}status-ok{% elif user_limit.payment_status.status == 'failed' %}status-danger{% else %}status-warning{% endif %}">
+                                        {{ user_limit.payment_status.status | title }}
+                                    </span>
+                                </p>
+                                <p class="mb-0"><strong>Функций:</strong> {{ user_limit.features.count }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Лимиты -->
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6>🏢 Объекты</h6>
+                            <div class="limit-bar">
+                                {% set percentage = (user_limit.limits.objects.details.current / user_limit.limits.objects.details.max * 100) if user_limit.limits.objects.details.max != -1 else 0 %}
+                                <div class="limit-fill {% if not user_limit.limits.objects.allowed %}danger{% elif percentage >= 80 %}warning{% else %}ok{% endif %}" 
+                                     style="width: {{ percentage }}%"></div>
+                            </div>
+                            <p class="mb-0">
+                                <strong>{{ user_limit.limits.objects.details.current }}</strong>
+                                / {{ user_limit.limits.objects.details.max if user_limit.limits.objects.details.max != -1 else '∞' }}
+                                {% if user_limit.limits.objects.details.remaining != -1 %}
+                                (осталось: {{ user_limit.limits.objects.details.remaining }})
+                                {% endif %}
+                            </p>
+                            {% if not user_limit.limits.objects.allowed %}
+                            <small class="text-danger">{{ user_limit.limits.objects.message }}</small>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-4">
+                            <h6>👥 Сотрудники</h6>
+                            <div class="limit-bar">
+                                {% set percentage = (user_limit.limits.employees.details.current / user_limit.limits.employees.details.max * 100) if user_limit.limits.employees.details.max != -1 else 0 %}
+                                <div class="limit-fill {% if not user_limit.limits.employees.allowed %}danger{% elif percentage >= 80 %}warning{% else %}ok{% endif %}" 
+                                     style="width: {{ percentage }}%"></div>
+                            </div>
+                            <p class="mb-0">
+                                <strong>{{ user_limit.limits.employees.details.current }}</strong>
+                                / {{ user_limit.limits.employees.details.max if user_limit.limits.employees.details.max != -1 else '∞' }}
+                                {% if user_limit.limits.employees.details.remaining != -1 %}
+                                (осталось: {{ user_limit.limits.employees.details.remaining }})
+                                {% endif %}
+                            </p>
+                            {% if not user_limit.limits.employees.allowed %}
+                            <small class="text-danger">{{ user_limit.limits.employees.message }}</small>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-4">
+                            <h6>👨‍💼 Управляющие</h6>
+                            <div class="limit-bar">
+                                {% set percentage = (user_limit.limits.managers.details.current / user_limit.limits.managers.details.max * 100) if user_limit.limits.managers.details.max != -1 else 0 %}
+                                <div class="limit-fill {% if not user_limit.limits.managers.allowed %}danger{% elif percentage >= 80 %}warning{% else %}ok{% endif %}" 
+                                     style="width: {{ percentage }}%"></div>
+                            </div>
+                            <p class="mb-0">
+                                <strong>{{ user_limit.limits.managers.details.current }}</strong>
+                                / {{ user_limit.limits.managers.details.max if user_limit.limits.managers.details.max != -1 else '∞' }}
+                                {% if user_limit.limits.managers.details.remaining != -1 %}
+                                (осталось: {{ user_limit.limits.managers.details.remaining }})
+                                {% endif %}
+                            </p>
+                            {% if not user_limit.limits.managers.allowed %}
+                            <small class="text-danger">{{ user_limit.limits.managers.message }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Предупреждения -->
+                    {% if user_limit.warnings %}
+                    <div class="alert alert-warning mt-3">
+                        <h6><i class="bi bi-exclamation-triangle"></i> Предупреждения:</h6>
+                        <ul class="mb-0">
+                            {% for warning in user_limit.warnings %}
+                            <li>{{ warning }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <!-- Действия -->
+                    <div class="mt-3">
+                        <div class="btn-group">
+                            <a href="/admin/subscriptions/assign?user_id={{ user_limit.subscription.user_id }}" 
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-arrow-up-circle"></i> Изменить тариф
+                            </a>
+                            <a href="/admin/billing/transactions?user_id={{ user_limit.subscription.user_id }}" 
+                               class="btn btn-outline-info btn-sm">
+                                <i class="bi bi-credit-card"></i> Транзакции
+                            </a>
+                            <a href="/admin/billing/usage?user_id={{ user_limit.subscription.user_id }}" 
+                               class="btn btn-outline-success btn-sm">
+                                <i class="bi bi-graph-up"></i> Метрики
+                            </a>
+                            <button type="button" class="btn btn-outline-warning btn-sm" 
+                                    onclick="contactUser({{ user_limit.subscription.user_id }})">
+                                <i class="bi bi-envelope"></i> Связаться
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="alert alert-info text-center">
+            <h5>📊 Нет данных о лимитах</h5>
+            <p>Пользователи с активными подписками не найдены.</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    updateStatistics();
+});
+
+function updateStatistics() {
+    const userLimits = {{ user_limits | tojson }};
+    
+    let overLimitUsers = 0;
+    let warningUsers = 0;
+    let expiringUsers = 0;
+    
+    userLimits.forEach(userLimit => {
+        if (!userLimit.limits.objects.allowed || !userLimit.limits.employees.allowed) {
+            overLimitUsers++;
+        }
+        
+        if (userLimit.warnings && userLimit.warnings.length > 0) {
+            warningUsers++;
+        }
+        
+        // Проверяем истечение подписки
+        if (userLimit.subscription.expires_at) {
+            const expiresAt = new Date(userLimit.subscription.expires_at);
+            const now = new Date();
+            const daysUntilExpiry = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+            
+            if (daysUntilExpiry <= 7) {
+                expiringUsers++;
+            }
+        }
+    });
+    
+    document.getElementById('over-limit-users').textContent = overLimitUsers;
+    document.getElementById('warning-users').textContent = warningUsers;
+    document.getElementById('expiring-users').textContent = expiringUsers;
+}
+
+async function refreshOverview() {
+    try {
+        const response = await fetch('/owner/limits/admin/api/overview');
+        const data = await response.json();
+        
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert('Ошибка обновления обзора: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Ошибка обновления обзора:', error);
+        alert('Ошибка обновления обзора');
+    }
+}
+
+function contactUser(userId) {
+    // TODO: Реализовать связь с пользователем
+    alert(`Функция связи с пользователем ${userId} будет реализована позже`);
+}
+</script>
+{% endblock %}
