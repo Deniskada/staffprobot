@@ -77,6 +77,9 @@ async def owner_dashboard(request: Request):
     """Дашборд владельца"""
     # Проверяем авторизацию и роль владельца
     current_user = await get_current_user(request)
+    if not current_user:
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
     user_role = current_user.get("role", "employee")
     if user_role != "owner":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
@@ -1931,7 +1934,7 @@ async def api_employees(request: Request):
             if not user_id:
                 raise HTTPException(status_code=404, detail="Владелец не найден")
 
-            # Получаем только сотрудников, с которыми у владельца есть активные договоры
+            # Получаем сотрудников, с которыми у владельца есть активные договоры
             from domain.entities.contract import Contract
             employees_q = select(User).distinct().join(Contract, User.id == Contract.employee_id).where(
                 Contract.owner_id == user_id,  # Только договоры с текущим владельцем
@@ -1940,12 +1943,22 @@ async def api_employees(request: Request):
             )
             all_employees = (await session.execute(employees_q)).scalars().all()
             
-            # Фильтруем только тех, кто имеет роль employee
+            # Получаем самого владельца для добавления в список
+            owner_user = await session.execute(select(User).where(User.id == user_id))
+            owner = owner_user.scalar_one_or_none()
+            
+            # Собираем всех сотрудников + владельца
             employees = []
+            
+            # Добавляем сотрудников с договорами
             for emp in all_employees:
                 employee_roles = emp.roles if isinstance(emp.roles, list) else [emp.role]
                 if "employee" in employee_roles:
                     employees.append(emp)
+            
+            # Добавляем самого владельца в начало списка
+            if owner:
+                employees.insert(0, owner)
 
             return [
                 {
@@ -1954,7 +1967,8 @@ async def api_employees(request: Request):
                     "username": emp.username,
                     "role": emp.role,
                     "is_active": emp.is_active,
-                    "telegram_id": emp.telegram_id
+                    "telegram_id": emp.telegram_id,
+                    "is_owner": emp.id == user_id  # Флаг для отличия владельца
                 }
                 for emp in employees
             ]
