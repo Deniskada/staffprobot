@@ -500,5 +500,8 @@ function initializeTimeslotOccupancy() {
             .catch(() => applyOccupancy([]));
     }
 }
+
+// Проверяем доступность функции фильтрации
+console.log('Calendar loaded, filterByObject available:', typeof window.filterByObject === 'function');
 </script>
 {% endblock %}
