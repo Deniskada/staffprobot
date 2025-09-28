@@ -1,0 +1,463 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Системные настройки - StaffProBot - Администратор{% endblock %}
+
+{% block admin_content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="h4 mb-4">
+            <i class="bi bi-gear me-2"></i>
+            Системные настройки
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Настройки домена -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-globe me-2"></i>
+                    Настройки домена
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="domainForm">
+                    <div class="mb-3">
+                        <label for="domain" class="form-label">Домен системы</label>
+                        <input type="text" class="form-control" id="domain" name="domain" 
+                               placeholder="example.com" required>
+                        <div class="form-text">Введите домен без протокола (например: example.com)</div>
+                        <div id="domainValidation" class="invalid-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="useHttps" name="use_https">
+                            <label class="form-check-label" for="useHttps">
+                                Использовать HTTPS
+                            </label>
+                        </div>
+                        <div class="form-text">Включить защищенное соединение</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="sslEmail" class="form-label">Email для SSL сертификатов</label>
+                        <input type="email" class="form-control" id="sslEmail" name="ssl_email" 
+                               placeholder="admin@example.com">
+                        <div class="form-text">Email для получения Let's Encrypt сертификатов</div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i>
+                            Сохранить настройки
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="validateDomain()">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Проверить домен
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="previewConfig()">
+                            <i class="bi bi-eye me-1"></i>
+                            Предпросмотр
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Предварительный просмотр конфигурации -->
+        <div class="card mb-4" id="configPreview" style="display: none;">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-eye me-2"></i>
+                    Предварительный просмотр конфигурации
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="configContent">
+                    <!-- Контент будет загружен через AJAX -->
+                </div>
+            </div>
+        </div>
+
+        <!-- История изменений -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-clock-history me-2"></i>
+                    История изменений
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Настройка</th>
+                                <th>Старое значение</th>
+                                <th>Новое значение</th>
+                                <th>Дата изменения</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTable">
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">
+                                    История изменений будет отображаться здесь
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Текущие настройки -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Текущие настройки
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="currentSettings">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Быстрые действия -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightning me-2"></i>
+                    Быстрые действия
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary" onclick="loadCurrentSettings()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+                        Обновить настройки
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="clearCache()">
+                        <i class="bi bi-trash me-1"></i>
+                        Очистить кэш
+                    </button>
+                    <button class="btn btn-outline-info" onclick="initializeSettings()">
+                        <i class="bi bi-gear me-1"></i>
+                        Инициализировать по умолчанию
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Статус системы -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-activity me-2"></i>
+                    Статус системы
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong>Домен:</strong> 
+                    <span id="statusDomain" class="text-muted">Загрузка...</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Протокол:</strong> 
+                    <span id="statusProtocol" class="text-muted">Загрузка...</span>
+                </div>
+                <div class="mb-2">
+                    <strong>SSL:</strong> 
+                    <span id="statusSSL" class="text-muted">Загрузка...</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Кэш:</strong> 
+                    <span id="statusCache" class="badge bg-success">Активен</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Загрузка текущих настроек при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadCurrentSettings();
+});
+
+// Загрузка текущих настроек
+async function loadCurrentSettings() {
+    try {
+        const response = await fetch('/api/system-settings/all');
+        const data = await response.json();
+        
+        if (data.success) {
+            const settings = data.settings;
+            
+            // Заполняем форму
+            document.getElementById('domain').value = settings.domain || '';
+            document.getElementById('useHttps').checked = settings.use_https === 'true';
+            document.getElementById('sslEmail').value = settings.ssl_email || '';
+            
+            // Обновляем статус
+            updateStatus(settings);
+            
+            // Обновляем текущие настройки
+            updateCurrentSettings(settings);
+        }
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        showNotification('Ошибка загрузки настроек', 'error');
+    }
+}
+
+// Обновление статуса системы
+function updateStatus(settings) {
+    document.getElementById('statusDomain').textContent = settings.domain || 'Не установлен';
+    document.getElementById('statusProtocol').textContent = settings.use_https === 'true' ? 'HTTPS' : 'HTTP';
+    document.getElementById('statusSSL').textContent = settings.use_https === 'true' ? 'Включен' : 'Отключен';
+}
+
+// Обновление блока текущих настроек
+function updateCurrentSettings(settings) {
+    const container = document.getElementById('currentSettings');
+    container.innerHTML = `
+        <div class="mb-2">
+            <strong>Домен:</strong> ${settings.domain || 'Не установлен'}
+        </div>
+        <div class="mb-2">
+            <strong>Протокол:</strong> ${settings.use_https === 'true' ? 'HTTPS' : 'HTTP'}
+        </div>
+        <div class="mb-2">
+            <strong>SSL Email:</strong> ${settings.ssl_email || 'Не установлен'}
+        </div>
+        <div class="mb-2">
+            <strong>Nginx Path:</strong> ${settings.nginx_config_path || '/etc/nginx/sites-available'}
+        </div>
+        <div class="mb-2">
+            <strong>Certbot Path:</strong> ${settings.certbot_path || '/usr/bin/certbot'}
+        </div>
+    `;
+}
+
+// Валидация домена
+async function validateDomain() {
+    const domain = document.getElementById('domain').value;
+    
+    if (!domain) {
+        showNotification('Введите домен для проверки', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/system-settings/domain/validate?domain=${encodeURIComponent(domain)}`);
+        const data = await response.json();
+        
+        if (data.valid) {
+            showNotification('Домен валиден', 'success');
+        } else {
+            showNotification(`Домен невалиден: ${data.errors.join(', ')}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error validating domain:', error);
+        showNotification('Ошибка валидации домена', 'error');
+    }
+}
+
+// Предварительный просмотр конфигурации
+async function previewConfig() {
+    try {
+        const response = await fetch('/api/system-settings/domain/preview');
+        const data = await response.json();
+        
+        if (data.success) {
+            const config = data.config;
+            const preview = document.getElementById('configPreview');
+            const content = document.getElementById('configContent');
+            
+            content.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Основные URL:</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Базовый URL:</strong> ${config.base_url}</li>
+                            <li><strong>Веб-интерфейс:</strong> ${config.web_url}</li>
+                            <li><strong>API:</strong> ${config.api_url}</li>
+                            <li><strong>Админка:</strong> ${config.admin_url}</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Интерфейсы:</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Управляющий:</strong> ${config.manager_url}</li>
+                            <li><strong>Сотрудник:</strong> ${config.employee_url}</li>
+                            <li><strong>Webhook:</strong> ${config.bot_webhook_url}</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>SSL настройки:</h6>
+                    <ul class="list-unstyled">
+                        <li><strong>SSL включен:</strong> ${config.ssl_enabled ? 'Да' : 'Нет'}</li>
+                        <li><strong>SSL Email:</strong> ${config.ssl_email}</li>
+                    </ul>
+                </div>
+            `;
+            
+            preview.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error previewing config:', error);
+        showNotification('Ошибка предварительного просмотра', 'error');
+    }
+}
+
+// Сохранение настроек
+document.getElementById('domainForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const domain = formData.get('domain');
+    const useHttps = formData.get('use_https') === 'on';
+    const sslEmail = formData.get('ssl_email');
+    
+    try {
+        // Обновляем домен
+        const domainResponse = await fetch('/api/system-settings/domain', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ domain: domain })
+        });
+        const domainData = await domainResponse.json();
+        
+        if (!domainData.success) {
+            showNotification(`Ошибка обновления домена: ${domainData.message}`, 'error');
+            return;
+        }
+        
+        // Обновляем настройку HTTPS
+        const httpsResponse = await fetch('/api/system-settings/https', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ use_https: useHttps })
+        });
+        const httpsData = await httpsResponse.json();
+        
+        if (!httpsData.success) {
+            showNotification(`Ошибка обновления HTTPS: ${httpsData.message}`, 'error');
+            return;
+        }
+        
+        // Обновляем SSL email
+        if (sslEmail) {
+            const emailResponse = await fetch('/api/system-settings/ssl/email', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email: sslEmail })
+            });
+            const emailData = await emailResponse.json();
+            
+            if (!emailData.success) {
+                showNotification(`Ошибка обновления email: ${emailData.message}`, 'error');
+                return;
+            }
+        }
+        
+        showNotification('Настройки успешно сохранены', 'success');
+        loadCurrentSettings();
+        
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        showNotification('Ошибка сохранения настроек', 'error');
+    }
+});
+
+// Очистка кэша
+async function clearCache() {
+    try {
+        const response = await fetch('/api/system-settings/cache/clear', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Кэш успешно очищен', 'success');
+        } else {
+            showNotification(`Ошибка очистки кэша: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error clearing cache:', error);
+        showNotification('Ошибка очистки кэша', 'error');
+    }
+}
+
+// Инициализация настроек по умолчанию
+async function initializeSettings() {
+    if (!confirm('Вы уверены, что хотите инициализировать настройки по умолчанию?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/system-settings/initialize', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Настройки по умолчанию инициализированы', 'success');
+            loadCurrentSettings();
+        } else {
+            showNotification(`Ошибка инициализации: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error initializing settings:', error);
+        showNotification('Ошибка инициализации настроек', 'error');
+    }
+}
+
+// Показ уведомлений
+function showNotification(message, type = 'info') {
+    const alertClass = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'warning': 'alert-warning',
+        'info': 'alert-info'
+    }[type] || 'alert-info';
+    
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass} alert-dismissible fade show`;
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Добавляем уведомление в начало страницы
+    const container = document.querySelector('.container-fluid');
+    container.insertBefore(alert, container.firstChild);
+    
+    // Автоматически скрываем через 5 секунд
+    setTimeout(() => {
+        if (alert.parentNode) {
+            alert.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

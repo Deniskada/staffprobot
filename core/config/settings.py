@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440  # 24 часа
     
+    # Системные настройки
+    domain: str = "localhost:8001"
+    ssl_email: str = "admin@localhost"
+    nginx_config_path: str = "/etc/nginx/sites-available"
+    certbot_path: str = "/usr/bin/certbot"
+    use_https: bool = False
+    
     # Логирование
     log_level: str = "INFO"
     log_format: str = "json"

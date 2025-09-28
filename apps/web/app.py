@@ -16,6 +16,7 @@ from typing import Optional
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
 from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews
+from apps.web.routes.system_settings_api import router as system_settings_router
 from apps.web.services.auth_service import AuthService
 
 
@@ -51,6 +52,18 @@ async def lifespan(app: FastAPI):
         print("✅ Справочник тегов инициализирован")
     except Exception as e:
         print(f"❌ Ошибка инициализации справочника тегов: {e}")
+    
+    # Инициализация системных настроек и URLHelper
+    from apps.web.services.system_settings_service import SystemSettingsService
+    from core.utils.url_helper import URLHelper
+    try:
+        async with get_async_session() as session:
+            settings_service = SystemSettingsService(session)
+            await settings_service.initialize_default_settings()
+            URLHelper.set_settings_service(settings_service)
+        print("✅ Системные настройки инициализированы")
+    except Exception as e:
+        print(f"❌ Ошибка инициализации системных настроек: {e}")
     
     yield
     
@@ -156,6 +169,7 @@ app.include_router(users.router, prefix="/users", tags=["Пользовател�
 app.include_router(contract_templates.router, prefix="/contract-templates", tags=["Шаблоны договоров"])
 # app.include_router(profile.router, tags=["Профиль владельца"])  # Перенесено в owner.py
 app.include_router(admin.router, prefix="/admin", tags=["Администрирование"])
+app.include_router(system_settings_router, tags=["Системные настройки"])
 app.include_router(tariffs.router, prefix="/admin/tariffs", tags=["Тарифные планы"])
 app.include_router(user_subscriptions.router, prefix="/admin/subscriptions", tags=["Подписки пользователей"])
 app.include_router(billing.router, prefix="/admin/billing", tags=["Система биллинга"])
