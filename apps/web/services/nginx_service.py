@@ -1,5 +1,6 @@
 import os
 import re
+import subprocess
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
