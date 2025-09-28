@@ -765,12 +765,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            const response = await fetch('/api/system-settings/nginx/backups/restore', {
+            const response = await fetch(`/api/system-settings/nginx/backups/restore?domain=${encodeURIComponent(domain)}&backup_filename=${encodeURIComponent(backupFilename)}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ domain: domain, backup_filename: backupFilename })
+                }
             });
             const data = await response.json();
             
@@ -796,12 +795,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            const response = await fetch('/api/system-settings/nginx/backups/delete', {
+            const response = await fetch(`/api/system-settings/nginx/backups/delete?domain=${encodeURIComponent(domain)}&backup_filename=${encodeURIComponent(backupFilename)}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ domain: domain, backup_filename: backupFilename })
+                }
             });
             const data = await response.json();
             
