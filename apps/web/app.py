@@ -15,7 +15,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, moderator, moderator_web
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, moderator, moderator_web
 from apps.web.services.auth_service import AuthService
 
 
@@ -170,6 +170,7 @@ app.include_router(shared_media.router, prefix="/api/media", tags=["Медиа-�
 app.include_router(shared_ratings.router, prefix="/api/ratings", tags=["Рейтинги"])
 app.include_router(moderator.router, prefix="/moderator/api", tags=["Модерация"])
 app.include_router(moderator_web.router, prefix="/moderator", tags=["Модерация - Веб"])
+app.include_router(shared_appeals.router, prefix="/api/appeals", tags=["Обжалования"])
 
 
 # API для интеграции с ботом
