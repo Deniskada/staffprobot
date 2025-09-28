@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Модерация отзывов - StaffProBot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-moderator {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .navbar-moderator .navbar-brand,
+        .navbar-moderator .nav-link {
+            color: white !important;
+        }
+        
+        .review-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+        
+        .review-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .review-card.pending {
+            border-left: 5px solid #ffc107;
+        }
+        
+        .review-card.overdue {
+            border-left: 5px solid #dc3545;
+        }
+        
+        .rating-stars {
+            color: #ffc107;
+        }
+        
+        .filter-tabs {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .filter-tabs .nav-link {
+            border: none;
+            border-radius: 25px;
+            margin: 0 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .filter-tabs .nav-link.active {
+            background: #007bff;
+            color: white;
+        }
+        
+        .bulk-actions {
+            background: #e3f2fd;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .bulk-actions.show {
+            display: block;
+        }
+        
+        .review-meta {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        
+        .moderation-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .auto-moderation-badge {
+            font-size: 0.8em;
+            padding: 4px 8px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Навигация модератора -->
+    <nav class="navbar navbar-expand-lg navbar-moderator">
+        <div class="container">
+            <a class="navbar-brand" href="/moderator/">
+                <i class="fas fa-shield-alt"></i> Модерация
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/moderator/">
+                            <i class="fas fa-tachometer-alt"></i> Дашборд
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/moderator/reviews">
+                            <i class="fas fa-comments"></i> Отзывы
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/moderator/appeals">
+                            <i class="fas fa-gavel"></i> Обжалования
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/moderator/statistics">
+                            <i class="fas fa-chart-bar"></i> Статистика
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/" onclick="switchToAdmin()">
+                            <i class="fas fa-arrow-left"></i> Вернуться в админку
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="container">
+            <!-- Заголовок -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h1><i class="fas fa-comments"></i> Модерация отзывов</h1>
+                    <p class="text-muted">Просмотр и модерация отзывов пользователей</p>
+                </div>
+            </div>
+
+            <!-- Уведомления -->
+            <div id="alerts-container"></div>
+
+            <!-- Фильтры -->
+            <div class="filter-tabs">
+                <ul class="nav nav-pills justify-content-center">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#" onclick="filterReviews('pending')">
+                            <i class="fas fa-clock"></i> Ожидающие
+                            <span class="badge bg-warning ms-1" id="pending-badge">-</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="filterReviews('overdue')">
+                            <i class="fas fa-exclamation-triangle"></i> Просроченные
+                            <span class="badge bg-danger ms-1" id="overdue-badge">-</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="filterReviews('all')">
+                            <i class="fas fa-list"></i> Все отзывы
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Массовые действия -->
+            <div class="bulk-actions" id="bulk-actions">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <strong>Выбрано отзывов: <span id="selected-count">0</span></strong>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <button class="btn btn-success me-2" onclick="bulkModerate('approved')">
+                            <i class="fas fa-check"></i> Одобрить выбранные
+                        </button>
+                        <button class="btn btn-danger" onclick="bulkModerate('rejected')">
+                            <i class="fas fa-times"></i> Отклонить выбранные
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Список отзывов -->
+            <div id="reviews-container">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Пагинация -->
+            <div class="row">
+                <div class="col-12">
+                    <nav aria-label="Пагинация отзывов">
+                        <ul class="pagination justify-content-center" id="pagination">
+                            <!-- Пагинация будет добавлена динамически -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для детального просмотра -->
+    <div class="modal fade" id="reviewDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Детали отзыва</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="review-detail-body">
+                    <!-- Содержимое будет загружено динамически -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                    <button type="button" class="btn btn-success" onclick="moderateCurrentReview('approved')">
+                        <i class="fas fa-check"></i> Одобрить
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="moderateCurrentReview('rejected')">
+                        <i class="fas fa-times"></i> Отклонить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentStatus = 'pending';
+        let currentPage = 0;
+        let selectedReviews = new Set();
+        let currentReviewId = null;
+
+        // Загрузка страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            loadReviews();
+        });
+
+        // Фильтрация отзывов
+        function filterReviews(status) {
+            currentStatus = status;
+            currentPage = 0;
+            selectedReviews.clear();
+            updateBulkActions();
+            
+            // Обновляем активную вкладку
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            event.target.closest('.nav-link').classList.add('active');
+            
+            loadReviews();
+        }
+
+        // Загрузка отзывов
+        async function loadReviews() {
+            try {
+                const response = await fetch(`/moderator/api/reviews?status=${currentStatus}&limit=10&offset=${currentPage * 10}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    displayReviews(data.reviews);
+                    updatePagination(data.pagination);
+                } else {
+                    showAlert('Ошибка загрузки отзывов', 'danger');
+                }
+            } catch (error) {
+                console.error('Error loading reviews:', error);
+                showAlert('Ошибка загрузки отзывов', 'danger');
+            }
+        }
+
+        // Отображение отзывов
+        function displayReviews(reviews) {
+            const container = document.getElementById('reviews-container');
+            
+            if (!reviews || reviews.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Нет отзывов для модерации</h5>
+                        <p class="text-muted">Все отзывы обработаны</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            reviews.forEach(review => {
+                const isSelected = selectedReviews.has(review.id);
+                const isOverdue = currentStatus === 'overdue';
+                
+                html += `
+                    <div class="card review-card ${isOverdue ? 'overdue' : 'pending'}">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-1">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               ${isSelected ? 'checked' : ''}
+                                               onchange="toggleReviewSelection(${review.id})">
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <h5 class="card-title">${review.title}</h5>
+                                    <div class="rating-display mb-2">
+                                        ${createStarRating(review.rating)}
+                                        <span class="ms-2">${review.rating}/5</span>
+                                    </div>
+                                    <p class="card-text text-muted">
+                                        ${review.content ? (review.content.length > 150 ? 
+                                            review.content.substring(0, 150) + '...' : 
+                                            review.content) : 'Без описания'}
+                                    </p>
+                                    <div class="review-meta">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-user"></i> 
+                                                    ${review.is_anonymous ? 'Анонимно' : 'ID: ' + review.reviewer_id}
+                                                </small>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-calendar"></i> 
+                                                    ${formatDate(review.created_at)}
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <div class="row mt-1">
+                                            <div class="col-md-6">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-tag"></i> 
+                                                    ${review.target_type === 'employee' ? 'Сотрудник' : 'Объект'} #${review.target_id}
+                                                </small>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-file-contract"></i> 
+                                                    Договор #${review.contract_id}
+                                                </small>
+                                            </div>
+                                        </div>
+                                        ${review.media_count > 0 ? `
+                                            <div class="mt-1">
+                                                <small class="text-info">
+                                                    <i class="fas fa-paperclip"></i> 
+                                                    ${review.media_count} файлов
+                                                </small>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="moderation-buttons">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="viewReviewDetails(${review.id})">
+                                            <i class="fas fa-eye"></i> Подробно
+                                        </button>
+                                        <button class="btn btn-success btn-sm" onclick="quickModerate(${review.id}, 'approved')">
+                                            <i class="fas fa-check"></i> OK
+                                        </button>
+                                        <button class="btn btn-danger btn-sm" onclick="quickModerate(${review.id}, 'rejected')">
+                                            <i class="fas fa-times"></i> NO
+                                        </button>
+                                    </div>
+                                    ${isOverdue ? `
+                                        <div class="mt-2">
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-clock"></i> Просрочено
+                                            </span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Создание звездного рейтинга
+        function createStarRating(rating) {
+            const fullStars = Math.floor(rating);
+            const hasHalfStar = (rating - fullStars) >= 0.5;
+            const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+
+            let stars = '';
+            for (let i = 0; i < fullStars; i++) {
+                stars += '<i class="fas fa-star"></i>';
+            }
+            if (hasHalfStar) {
+                stars += '<i class="fas fa-star-half-alt"></i>';
+            }
+            for (let i = 0; i < emptyStars; i++) {
+                stars += '<i class="far fa-star"></i>';
+            }
+            return stars;
+        }
+
+        // Форматирование даты
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Переключение выбора отзыва
+        function toggleReviewSelection(reviewId) {
+            if (selectedReviews.has(reviewId)) {
+                selectedReviews.delete(reviewId);
+            } else {
+                selectedReviews.add(reviewId);
+            }
+            updateBulkActions();
+        }
+
+        // Обновление массовых действий
+        function updateBulkActions() {
+            const bulkActions = document.getElementById('bulk-actions');
+            const selectedCount = document.getElementById('selected-count');
+            
+            if (selectedReviews.size > 0) {
+                bulkActions.classList.add('show');
+                selectedCount.textContent = selectedReviews.size;
+            } else {
+                bulkActions.classList.remove('show');
+            }
+        }
+
+        // Массовая модерация
+        async function bulkModerate(decision) {
+            if (selectedReviews.size === 0) return;
+
+            const confirmMessage = `Вы уверены, что хотите ${decision === 'approved' ? 'одобрить' : 'отклонить'} ${selectedReviews.size} отзывов?`;
+            if (!confirm(confirmMessage)) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('review_ids', JSON.stringify(Array.from(selectedReviews)));
+                formData.append('decision', decision);
+
+                const response = await fetch('/moderator/api/reviews/bulk-moderate', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert(`Обработано ${data.result.successful} из ${data.result.total} отзывов`, 'success');
+                    selectedReviews.clear();
+                    updateBulkActions();
+                    loadReviews();
+                } else {
+                    showAlert('Ошибка массовой модерации', 'danger');
+                }
+            } catch (error) {
+                console.error('Error in bulk moderation:', error);
+                showAlert('Ошибка массовой модерации', 'danger');
+            }
+        }
+
+        // Быстрая модерация
+        async function quickModerate(reviewId, decision) {
+            const confirmMessage = `Вы уверены, что хотите ${decision === 'approved' ? 'одобрить' : 'отклонить'} этот отзыв?`;
+            if (!confirm(confirmMessage)) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('decision', decision);
+
+                const response = await fetch(`/moderator/api/reviews/${reviewId}/moderate`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert(`Отзыв ${decision === 'approved' ? 'одобрен' : 'отклонен'}`, 'success');
+                    loadReviews();
+                } else {
+                    showAlert('Ошибка модерации', 'danger');
+                }
+            } catch (error) {
+                console.error('Error moderating review:', error);
+                showAlert('Ошибка модерации', 'danger');
+            }
+        }
+
+        // Просмотр деталей отзыва
+        async function viewReviewDetails(reviewId) {
+            currentReviewId = reviewId;
+            
+            try {
+                const response = await fetch(`/moderator/api/reviews/${reviewId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    displayReviewDetails(data.review, data.auto_moderation, data.media_files, data.appeals);
+                    const modal = new bootstrap.Modal(document.getElementById('reviewDetailModal'));
+                    modal.show();
+                } else {
+                    showAlert('Ошибка загрузки деталей отзыва', 'danger');
+                }
+            } catch (error) {
+                console.error('Error loading review details:', error);
+                showAlert('Ошибка загрузки деталей отзыва', 'danger');
+            }
+        }
+
+        // Отображение деталей отзыва
+        function displayReviewDetails(review, autoModeration, mediaFiles, appeals) {
+            const body = document.getElementById('review-detail-body');
+            
+            let autoModerationHtml = '';
+            if (autoModeration) {
+                const result = autoModeration.result;
+                const checks = autoModeration.checks;
+                
+                autoModerationHtml = `
+                    <div class="alert alert-${result === 'auto_approved' ? 'success' : 'warning'} mb-3">
+                        <h6><i class="fas fa-robot"></i> Автоматическая модерация</h6>
+                        <p><strong>Результат:</strong> ${result === 'auto_approved' ? 'Рекомендуется одобрить' : 'Требуется ручная проверка'}</p>
+                        <div class="row">
+                            ${Object.entries(checks).map(([check, result]) => `
+                                <div class="col-md-6 mb-1">
+                                    <i class="fas fa-${result.failed ? 'times text-danger' : 'check text-success'}"></i>
+                                    ${check}: ${result.failed ? result.reason : 'Пройдено'}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            let mediaHtml = '';
+            if (mediaFiles && mediaFiles.length > 0) {
+                mediaHtml = `
+                    <div class="mb-3">
+                        <h6><i class="fas fa-paperclip"></i> Прикрепленные файлы (${mediaFiles.length})</h6>
+                        <div class="row">
+                            ${mediaFiles.map(media => `
+                                <div class="col-md-3 mb-2">
+                                    <div class="card">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-${getMediaIcon(media.file_type)} fa-2x text-muted mb-2"></i>
+                                            <p class="small mb-1">${media.file_type}</p>
+                                            <p class="small text-muted">${formatFileSize(media.file_size)}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            let appealsHtml = '';
+            if (appeals && appeals.length > 0) {
+                appealsHtml = `
+                    <div class="mb-3">
+                        <h6><i class="fas fa-gavel"></i> Обжалования (${appeals.length})</h6>
+                        ${appeals.map(appeal => `
+                            <div class="alert alert-info">
+                                <strong>Причина:</strong> ${appeal.appeal_reason}
+                                <br><small class="text-muted">${formatDate(appeal.created_at)}</small>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            body.innerHTML = `
+                <div class="row">
+                    <div class="col-md-8">
+                        ${autoModerationHtml}
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">${review.title}</h5>
+                                <div class="rating-display mt-2">
+                                    ${createStarRating(review.rating)}
+                                    <span class="ms-2">${review.rating}/5</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <p>${review.content || 'Без описания'}</p>
+                                
+                                <div class="row text-muted small">
+                                    <div class="col-md-6">
+                                        <p><i class="fas fa-user"></i> ${review.is_anonymous ? 'Анонимно' : 'ID: ' + review.reviewer_id}</p>
+                                        <p><i class="fas fa-calendar"></i> ${formatDate(review.created_at)}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><i class="fas fa-tag"></i> ${review.target_type === 'employee' ? 'Сотрудник' : 'Объект'} #${review.target_id}</p>
+                                        <p><i class="fas fa-file-contract"></i> Договор #${review.contract_id}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        ${mediaHtml}
+                        ${appealsHtml}
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="fas fa-edit"></i> Модерация</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="moderation-notes" class="form-label">Заметки модератора</label>
+                                    <textarea class="form-control" id="moderation-notes" rows="4" placeholder="Дополнительные заметки...">${review.moderation_notes || ''}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Модерация текущего отзыва
+        async function moderateCurrentReview(decision) {
+            if (!currentReviewId) return;
+
+            const notes = document.getElementById('moderation-notes').value;
+            
+            try {
+                const formData = new FormData();
+                formData.append('decision', decision);
+                formData.append('notes', notes);
+
+                const response = await fetch(`/moderator/api/reviews/${currentReviewId}/moderate`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert(`Отзыв ${decision === 'approved' ? 'одобрен' : 'отклонен'}`, 'success');
+                    
+                    // Закрываем модальное окно
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('reviewDetailModal'));
+                    modal.hide();
+                    
+                    // Обновляем список
+                    loadReviews();
+                } else {
+                    showAlert('Ошибка модерации', 'danger');
+                }
+            } catch (error) {
+                console.error('Error moderating review:', error);
+                showAlert('Ошибка модерации', 'danger');
+            }
+        }
+
+        // Обновление пагинации
+        function updatePagination(pagination) {
+            const container = document.getElementById('pagination');
+            
+            if (!pagination || !pagination.has_more) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            
+            if (currentPage > 0) {
+                html += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Предыдущая</a>
+                    </li>
+                `;
+            }
+            
+            html += `
+                <li class="page-item active">
+                    <span class="page-link">${currentPage + 1}</span>
+                </li>
+            `;
+            
+            if (pagination.has_more) {
+                html += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Следующая</a>
+                    </li>
+                `;
+            }
+            
+            container.innerHTML = html;
+        }
+
+        // Смена страницы
+        function changePage(page) {
+            currentPage = page;
+            loadReviews();
+        }
+
+        // Вспомогательные функции
+        function getMediaIcon(fileType) {
+            const icons = {
+                photo: 'image',
+                video: 'video',
+                audio: 'music',
+                document: 'file'
+            };
+            return icons[fileType] || 'file';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alerts-container');
+            const alertId = 'alert-' + Date.now();
+            container.innerHTML += `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const alert = document.getElementById(alertId);
+                if (alert) alert.remove();
+            }, 5000);
+        }
+
+        function switchToAdmin() {
+            window.location.href = '/admin/';
+        }
+    </script>
+</body>
+</html>

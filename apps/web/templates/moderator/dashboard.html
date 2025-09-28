@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель модератора - StaffProBot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .moderator-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card.pending {
+            border-left: 5px solid #ffc107;
+        }
+        
+        .stat-card.overdue {
+            border-left: 5px solid #dc3545;
+        }
+        
+        .stat-card.approved {
+            border-left: 5px solid #28a745;
+        }
+        
+        .stat-card.rejected {
+            border-left: 5px solid #6c757d;
+        }
+        
+        .quick-action-btn {
+            border-radius: 25px;
+            padding: 10px 25px;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .quick-action-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .recent-review-item {
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .rating-display {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .rating-stars {
+            color: #ffc107;
+        }
+        
+        .navbar-moderator {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .navbar-moderator .navbar-brand,
+        .navbar-moderator .nav-link {
+            color: white !important;
+        }
+        
+        .alert-overdue {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            color: white;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Навигация модератора -->
+    <nav class="navbar navbar-expand-lg navbar-moderator">
+        <div class="container">
+            <a class="navbar-brand" href="/moderator/">
+                <i class="fas fa-shield-alt"></i> Модерация
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/moderator/">
+                            <i class="fas fa-tachometer-alt"></i> Дашборд
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/moderator/reviews">
+                            <i class="fas fa-comments"></i> Отзывы
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/moderator/appeals">
+                            <i class="fas fa-gavel"></i> Обжалования
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/moderator/statistics">
+                            <i class="fas fa-chart-bar"></i> Статистика
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/" onclick="switchToAdmin()">
+                            <i class="fas fa-arrow-left"></i> Вернуться в админку
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <!-- Заголовок -->
+        <div class="moderator-header">
+            <div class="container">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1><i class="fas fa-shield-alt"></i> Панель модератора</h1>
+                        <p class="lead">Управление отзывами и обеспечение качества контента</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="btn-group">
+                            <button class="btn btn-outline-light quick-action-btn" onclick="loadPendingReviews()">
+                                <i class="fas fa-clock"></i> Ожидающие
+                            </button>
+                            <button class="btn btn-outline-light quick-action-btn" onclick="loadOverdueReviews()">
+                                <i class="fas fa-exclamation-triangle"></i> Просроченные
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <!-- Уведомления -->
+            <div id="alerts-container"></div>
+
+            <!-- Статистика -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card stat-card pending">
+                        <div class="card-body text-center">
+                            <i class="fas fa-clock fa-2x text-warning mb-3"></i>
+                            <h3 id="pending-count" class="card-title">-</h3>
+                            <p class="card-text">Ожидают модерации</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card overdue">
+                        <div class="card-body text-center">
+                            <i class="fas fa-exclamation-triangle fa-2x text-danger mb-3"></i>
+                            <h3 id="overdue-count" class="card-title">-</h3>
+                            <p class="card-text">Просроченные</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card approved">
+                        <div class="card-body text-center">
+                            <i class="fas fa-check-circle fa-2x text-success mb-3"></i>
+                            <h3 id="approved-count" class="card-title">-</h3>
+                            <p class="card-text">Одобрено</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card rejected">
+                        <div class="card-body text-center">
+                            <i class="fas fa-times-circle fa-2x text-secondary mb-3"></i>
+                            <h3 id="rejected-count" class="card-title">-</h3>
+                            <p class="card-text">Отклонено</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Быстрые действия -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-bolt"></i> Быстрые действия</h5>
+                        </div>
+                        <div class="card-body">
+                            <button class="btn btn-primary quick-action-btn" onclick="loadPendingReviews()">
+                                <i class="fas fa-list"></i> Просмотреть ожидающие
+                            </button>
+                            <button class="btn btn-warning quick-action-btn" onclick="loadOverdueReviews()">
+                                <i class="fas fa-exclamation-triangle"></i> Просроченные отзывы
+                            </button>
+                            <button class="btn btn-info quick-action-btn" onclick="loadRecentReviews()">
+                                <i class="fas fa-history"></i> Последние отзывы
+                            </button>
+                            <button class="btn btn-success quick-action-btn" onclick="loadStatistics()">
+                                <i class="fas fa-chart-bar"></i> Статистика
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Последние отзывы на модерации -->
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5><i class="fas fa-comments"></i> Последние отзывы на модерации</h5>
+                            <a href="/moderator/reviews" class="btn btn-sm btn-outline-primary">
+                                Все отзывы <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            <div id="recent-reviews-container">
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Загрузка...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-info-circle"></i> Информация</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <h6>Время модерации</h6>
+                                <p class="text-muted small">Максимальное время на рассмотрение отзыва: <strong>48 часов</strong></p>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Автоматические фильтры</h6>
+                                <ul class="list-unstyled small">
+                                    <li><i class="fas fa-check text-success"></i> Проверка на спам</li>
+                                    <li><i class="fas fa-check text-success"></i> Нецензурная лексика</li>
+                                    <li><i class="fas fa-check text-success"></i> Дубликаты</li>
+                                    <li><i class="fas fa-check text-success"></i> Персональные данные</li>
+                                </ul>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Статистика за неделю</h6>
+                                <p class="text-muted small">Новых отзывов: <strong id="recent-count">-</strong></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для модерации -->
+    <div class="modal fade" id="moderationModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Модерация отзыва</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="moderation-modal-body">
+                    <!-- Содержимое будет загружено динамически -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-success" onclick="moderateReview('approved')">
+                        <i class="fas fa-check"></i> Одобрить
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="moderateReview('rejected')">
+                        <i class="fas fa-times"></i> Отклонить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentReviewId = null;
+
+        // Загрузка дашборда при инициализации
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboard();
+        });
+
+        // Загрузка данных дашборда
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/moderator/api/');
+                const data = await response.json();
+
+                if (data.success) {
+                    updateStatistics(data.statistics);
+                    updateRecentReviews(data.recent_pending);
+                    
+                    if (data.overdue_count > 0) {
+                        showOverdueAlert(data.overdue_count);
+                    }
+                } else {
+                    showAlert('Ошибка загрузки данных', 'danger');
+                }
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                showAlert('Ошибка загрузки данных', 'danger');
+            }
+        }
+
+        // Обновление статистики
+        function updateStatistics(stats) {
+            document.getElementById('pending-count').textContent = stats.pending_reviews || 0;
+            document.getElementById('overdue-count').textContent = stats.overdue_reviews || 0;
+            document.getElementById('approved-count').textContent = stats.approved_reviews || 0;
+            document.getElementById('rejected-count').textContent = stats.rejected_reviews || 0;
+            document.getElementById('recent-count').textContent = stats.recent_reviews || 0;
+        }
+
+        // Обновление списка последних отзывов
+        function updateRecentReviews(reviews) {
+            const container = document.getElementById('recent-reviews-container');
+            
+            if (!reviews || reviews.length === 0) {
+                container.innerHTML = '<p class="text-muted text-center">Нет отзывов на модерации</p>';
+                return;
+            }
+
+            let html = '';
+            reviews.forEach(review => {
+                html += `
+                    <div class="recent-review-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">${review.title}</h6>
+                                <div class="rating-display mb-2">
+                                    ${createStarRating(review.rating)}
+                                    <span class="ms-2 text-muted">${review.rating}/5</span>
+                                </div>
+                                <small class="text-muted">
+                                    <i class="fas fa-user"></i> 
+                                    ${review.is_anonymous ? 'Анонимно' : 'ID: ' + review.reviewer_id}
+                                    <span class="ms-3">
+                                        <i class="fas fa-clock"></i> 
+                                        ${formatDate(review.created_at)}
+                                    </span>
+                                </small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="openModerationModal(${review.id})">
+                                <i class="fas fa-eye"></i> Модерировать
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Создание звездного рейтинга
+        function createStarRating(rating) {
+            const fullStars = Math.floor(rating);
+            const hasHalfStar = (rating - fullStars) >= 0.5;
+            const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+
+            let stars = '';
+            for (let i = 0; i < fullStars; i++) {
+                stars += '<i class="fas fa-star"></i>';
+            }
+            if (hasHalfStar) {
+                stars += '<i class="fas fa-star-half-alt"></i>';
+            }
+            for (let i = 0; i < emptyStars; i++) {
+                stars += '<i class="far fa-star"></i>';
+            }
+            return stars;
+        }
+
+        // Форматирование даты
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Показ уведомления о просроченных отзывах
+        function showOverdueAlert(count) {
+            const container = document.getElementById('alerts-container');
+            container.innerHTML = `
+                <div class="alert alert-overdue alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Внимание!</strong> У вас ${count} просроченных отзывов на модерации.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+        }
+
+        // Показ уведомления
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alerts-container');
+            const alertId = 'alert-' + Date.now();
+            container.innerHTML += `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+
+            // Автоматическое скрытие через 5 секунд
+            setTimeout(() => {
+                const alert = document.getElementById(alertId);
+                if (alert) {
+                    alert.remove();
+                }
+            }, 5000);
+        }
+
+        // Открытие модального окна модерации
+        async function openModerationModal(reviewId) {
+            currentReviewId = reviewId;
+            
+            try {
+                const response = await fetch(`/moderator/api/reviews/${reviewId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    loadModerationModal(data.review, data.auto_moderation);
+                    const modal = new bootstrap.Modal(document.getElementById('moderationModal'));
+                    modal.show();
+                } else {
+                    showAlert('Ошибка загрузки отзыва', 'danger');
+                }
+            } catch (error) {
+                console.error('Error loading review:', error);
+                showAlert('Ошибка загрузки отзыва', 'danger');
+            }
+        }
+
+        // Загрузка содержимого модального окна
+        function loadModerationModal(review, autoModeration) {
+            const body = document.getElementById('moderation-modal-body');
+            
+            let autoModerationHtml = '';
+            if (autoModeration) {
+                const result = autoModeration.result;
+                const checks = autoModeration.checks;
+                
+                autoModerationHtml = `
+                    <div class="alert alert-${result === 'auto_approved' ? 'success' : 'warning'}">
+                        <h6><i class="fas fa-robot"></i> Автоматическая модерация</h6>
+                        <p><strong>Результат:</strong> ${result === 'auto_approved' ? 'Рекомендуется одобрить' : 'Требуется ручная проверка'}</p>
+                        ${Object.entries(checks).map(([check, result]) => `
+                            <div class="mb-1">
+                                <i class="fas fa-${result.failed ? 'times text-danger' : 'check text-success'}"></i>
+                                ${check}: ${result.failed ? result.reason : 'Пройдено'}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            body.innerHTML = `
+                <div class="row">
+                    <div class="col-md-8">
+                        <h6>${review.title}</h6>
+                        <div class="rating-display mb-3">
+                            ${createStarRating(review.rating)}
+                            <span class="ms-2">${review.rating}/5</span>
+                        </div>
+                        <p class="text-muted">${review.content || 'Без описания'}</p>
+                        <div class="mb-3">
+                            <small class="text-muted">
+                                <i class="fas fa-calendar"></i> ${formatDate(review.created_at)}
+                                <span class="ms-3"><i class="fas fa-user"></i> ${review.is_anonymous ? 'Анонимно' : 'ID: ' + review.reviewer_id}</span>
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        ${autoModerationHtml}
+                        <div class="mb-3">
+                            <label for="moderation-notes" class="form-label">Заметки модератора</label>
+                            <textarea class="form-control" id="moderation-notes" rows="3" placeholder="Дополнительные заметки..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Модерация отзыва
+        async function moderateReview(decision) {
+            if (!currentReviewId) return;
+
+            const notes = document.getElementById('moderation-notes').value;
+            
+            try {
+                const formData = new FormData();
+                formData.append('decision', decision);
+                formData.append('notes', notes);
+
+                const response = await fetch(`/moderator/api/reviews/${currentReviewId}/moderate`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert(`Отзыв ${decision === 'approved' ? 'одобрен' : 'отклонен'}`, 'success');
+                    
+                    // Закрываем модальное окно
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('moderationModal'));
+                    modal.hide();
+                    
+                    // Обновляем дашборд
+                    loadDashboard();
+                } else {
+                    showAlert('Ошибка модерации', 'danger');
+                }
+            } catch (error) {
+                console.error('Error moderating review:', error);
+                showAlert('Ошибка модерации', 'danger');
+            }
+        }
+
+        // Переключение в админку
+        function switchToAdmin() {
+            window.location.href = '/admin/';
+        }
+
+        // Загрузка ожидающих отзывов
+        function loadPendingReviews() {
+            window.location.href = '/moderator/reviews?status=pending';
+        }
+
+        // Загрузка просроченных отзывов
+        function loadOverdueReviews() {
+            window.location.href = '/moderator/reviews?status=overdue';
+        }
+
+        // Загрузка последних отзывов
+        function loadRecentReviews() {
+            window.location.href = '/moderator/reviews';
+        }
+
+        // Загрузка статистики
+        function loadStatistics() {
+            window.location.href = '/moderator/statistics';
+        }
+    </script>
+</body>
+</html>
