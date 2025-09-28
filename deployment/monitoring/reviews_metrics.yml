@@ -1,0 +1,352 @@
+# Конфигурация метрик Prometheus для системы отзывов и рейтингов
+
+# =============================================================================
+# МЕТРИКИ ОТЗЫВОВ
+# =============================================================================
+
+# Общее количество отзывов
+reviews_total:
+  type: counter
+  help: "Общее количество созданных отзывов"
+  labels: [target_type, status]
+
+# Отзывы по статусам
+reviews_pending:
+  type: gauge
+  help: "Количество отзывов на модерации"
+  labels: [target_type]
+
+reviews_approved:
+  type: gauge
+  help: "Количество одобренных отзывов"
+  labels: [target_type]
+
+reviews_rejected:
+  type: gauge
+  help: "Количество отклоненных отзывов"
+  labels: [target_type]
+
+reviews_appealed:
+  type: gauge
+  help: "Количество отзывов на обжаловании"
+  labels: [target_type]
+
+# Время модерации отзывов
+reviews_moderation_time:
+  type: histogram
+  help: "Время модерации отзывов в часах"
+  buckets: [1, 6, 12, 24, 48, 72, 96, 120, 144, 168]
+
+# =============================================================================
+# МЕТРИКИ РЕЙТИНГОВ
+# =============================================================================
+
+# Средние рейтинги
+reviews_rating_average:
+  type: gauge
+  help: "Средний рейтинг объектов/сотрудников"
+  labels: [target_type, target_id]
+
+# Количество отзывов для расчета рейтинга
+reviews_rating_count:
+  type: gauge
+  help: "Количество отзывов для расчета рейтинга"
+  labels: [target_type, target_id]
+
+# Время обновления рейтинга
+reviews_rating_update_time:
+  type: histogram
+  help: "Время обновления рейтинга в секундах"
+  buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60]
+
+# =============================================================================
+# МЕТРИКИ ОБЖАЛОВАНИЙ
+# =============================================================================
+
+# Общее количество обжалований
+appeals_total:
+  type: counter
+  help: "Общее количество поданных обжалований"
+  labels: [status]
+
+# Обжалования по статусам
+appeals_pending:
+  type: gauge
+  help: "Количество обжалований на рассмотрении"
+  labels: []
+
+appeals_approved:
+  type: gauge
+  help: "Количество одобренных обжалований"
+  labels: []
+
+appeals_rejected:
+  type: gauge
+  help: "Количество отклоненных обжалований"
+  labels: []
+
+# Время рассмотрения обжалований
+appeals_review_time:
+  type: histogram
+  help: "Время рассмотрения обжалований в часах"
+  buckets: [1, 6, 12, 24, 48, 72, 96, 120]
+
+# =============================================================================
+# МЕТРИКИ МЕДИА-ФАЙЛОВ
+# =============================================================================
+
+# Загрузки медиа-файлов
+media_uploads_total:
+  type: counter
+  help: "Общее количество загруженных медиа-файлов"
+  labels: [file_type, status]
+
+# Размер загруженных файлов
+media_upload_size:
+  type: histogram
+  help: "Размер загруженных медиа-файлов в байтах"
+  labels: [file_type]
+  buckets: [1024, 10240, 102400, 1048576, 10485760, 104857600, 1073741824]
+
+# Ошибки загрузки медиа-файлов
+media_upload_errors:
+  type: counter
+  help: "Количество ошибок загрузки медиа-файлов"
+  labels: [file_type, error_type]
+
+# =============================================================================
+# МЕТРИКИ МОДЕРАЦИИ
+# =============================================================================
+
+# Производительность модераторов
+moderators_activity:
+  type: gauge
+  help: "Активность модераторов (количество обработанных отзывов)"
+  labels: [moderator_id, period]
+
+# Время работы модераторов
+moderators_work_time:
+  type: histogram
+  help: "Время работы модераторов в минутах"
+  labels: [moderator_id]
+  buckets: [5, 15, 30, 60, 120, 240, 480, 720, 1440]
+
+# Эффективность автоматических фильтров
+auto_filter_effectiveness:
+  type: gauge
+  help: "Эффективность автоматических фильтров (процент правильно определенного контента)"
+  labels: [filter_type]
+
+# =============================================================================
+# МЕТРИКИ ПРОИЗВОДИТЕЛЬНОСТИ
+# =============================================================================
+
+# Время ответа API
+api_response_time:
+  type: histogram
+  help: "Время ответа API endpoints в секундах"
+  labels: [endpoint, method]
+  buckets: [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 30]
+
+# Использование памяти
+memory_usage:
+  type: gauge
+  help: "Использование памяти системой отзывов в байтах"
+  labels: [component]
+
+# Использование CPU
+cpu_usage:
+  type: gauge
+  help: "Использование CPU системой отзывов в процентах"
+  labels: [component]
+
+# =============================================================================
+# МЕТРИКИ БАЗЫ ДАННЫХ
+# =============================================================================
+
+# Время выполнения запросов
+db_query_time:
+  type: histogram
+  help: "Время выполнения запросов к базе данных в секундах"
+  labels: [query_type, table]
+  buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 2, 5]
+
+# Количество подключений к БД
+db_connections:
+  type: gauge
+  help: "Количество активных подключений к базе данных"
+  labels: [status]
+
+# Размер таблиц
+db_table_size:
+  type: gauge
+  help: "Размер таблиц базы данных в байтах"
+  labels: [table_name]
+
+# =============================================================================
+# МЕТРИКИ БЕЗОПАСНОСТИ
+# =============================================================================
+
+# Попытки создания отзывов без прав
+unauthorized_review_attempts:
+  type: counter
+  help: "Количество попыток создания отзывов без прав"
+  labels: [user_role, target_type]
+
+# Подозрительная активность
+suspicious_activity:
+  type: counter
+  help: "Количество подозрительных действий"
+  labels: [activity_type, severity]
+
+# Блокировки пользователей
+user_blocks:
+  type: counter
+  help: "Количество блокировок пользователей"
+  labels: [reason, duration]
+
+# =============================================================================
+# МЕТРИКИ УВЕДОМЛЕНИЙ
+# =============================================================================
+
+# Отправленные уведомления
+notifications_sent:
+  type: counter
+  help: "Количество отправленных уведомлений"
+  labels: [type, channel, status]
+
+# Ошибки отправки уведомлений
+notification_errors:
+  type: counter
+  help: "Количество ошибок отправки уведомлений"
+  labels: [type, channel, error_type]
+
+# Время доставки уведомлений
+notification_delivery_time:
+  type: histogram
+  help: "Время доставки уведомлений в секундах"
+  labels: [type, channel]
+  buckets: [1, 5, 10, 30, 60, 300, 600, 1800, 3600]
+
+# =============================================================================
+# МЕТРИКИ ОТЧЕТОВ
+# =============================================================================
+
+# Генерация отчетов
+reports_generated:
+  type: counter
+  help: "Количество сгенерированных отчетов"
+  labels: [report_type, period]
+
+# Время генерации отчетов
+reports_generation_time:
+  type: histogram
+  help: "Время генерации отчетов в секундах"
+  labels: [report_type]
+  buckets: [1, 5, 10, 30, 60, 300, 600, 1800, 3600]
+
+# Ошибки генерации отчетов
+reports_errors:
+  type: counter
+  help: "Количество ошибок генерации отчетов"
+  labels: [report_type, error_type]
+
+# =============================================================================
+# МЕТРИКИ СИСТЕМЫ
+# =============================================================================
+
+# Версия системы
+system_version:
+  type: gauge
+  help: "Версия системы отзывов"
+  labels: [version, environment]
+
+# Время работы системы
+system_uptime:
+  type: gauge
+  help: "Время работы системы в секундах"
+  labels: [component]
+
+# Статус системы
+system_status:
+  type: gauge
+  help: "Статус системы (1 - работает, 0 - не работает)"
+  labels: [component]
+
+# =============================================================================
+# АЛЕРТЫ
+# =============================================================================
+
+# Правила алертов
+alerts:
+  - alert: HighModerationBacklog
+    expr: reviews_pending > 50
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Высокая нагрузка на модерацию"
+      description: "Количество отзывов на модерации: {{ $value }}"
+
+  - alert: ModerationOverdue
+    expr: reviews_moderation_time > 48
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Просрочена модерация отзывов"
+      description: "Время модерации превышает 48 часов"
+
+  - alert: HighRejectionRate
+    expr: rate(reviews_rejected[1h]) / rate(reviews_total[1h]) > 0.3
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Высокий процент отклонения отзывов"
+      description: "Процент отклонения: {{ $value | humanizePercentage }}"
+
+  - alert: AppealOverdue
+    expr: appeals_review_time > 72
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Просрочены обжалования"
+      description: "Время рассмотрения обжалования превышает 72 часа"
+
+  - alert: HighAPIResponseTime
+    expr: api_response_time > 5
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Высокое время ответа API"
+      description: "Время ответа API: {{ $value }}s"
+
+  - alert: DatabaseConnectionIssues
+    expr: db_connections{status="active"} / db_connections{status="total"} < 0.1
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Проблемы с подключением к базе данных"
+      description: "Доступно только {{ $value | humanizePercentage }} подключений"
+
+  - alert: HighMemoryUsage
+    expr: memory_usage / (1024^3) > 2
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Высокое использование памяти"
+      description: "Использование памяти: {{ $value | humanize1024 }}GB"
+
+  - alert: SystemDown
+    expr: system_status == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Система отзывов недоступна"
+      description: "Компонент {{ $labels.component }} не работает"
