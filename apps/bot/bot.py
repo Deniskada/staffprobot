@@ -66,15 +66,15 @@ class StaffProBot:
             # Инициализация планировщика напоминаний
             self.reminder_scheduler = ReminderScheduler(self.bot_token)
             
-            # Инициализация URLHelper для динамических URL
-            from apps.web.services.system_settings_service import SystemSettingsService
-            from core.utils.url_helper import URLHelper
-            from core.database.session import get_async_session
+            # Инициализация URLHelper для динамических URL (временно отключено)
+            # from apps.web.services.system_settings_service import SystemSettingsService
+            # from core.utils.url_helper import URLHelper
+            # from core.database.session import get_async_session
             
-            async with get_async_session() as session:
-                settings_service = SystemSettingsService(session)
-                await settings_service.initialize_default_settings()
-                URLHelper.set_settings_service(settings_service)
+            # async with get_async_session() as session:
+            #     settings_service = SystemSettingsService(session)
+            #     await settings_service.initialize_default_settings()
+            #     URLHelper.set_settings_service(settings_service)
             
             logger.info("Telegram bot initialized successfully")
             
