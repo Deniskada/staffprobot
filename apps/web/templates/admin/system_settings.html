@@ -66,6 +66,97 @@
                 </form>
             </div>
         </div>
+        
+        <!-- Nginx Configuration Card -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-server me-2"></i>
+                    Конфигурация Nginx
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Управление конфигурацией</h6>
+                        <div class="btn-group-vertical d-grid gap-2" role="group">
+                            <button type="button" class="btn btn-outline-info" id="previewNginxBtn">
+                                <i class="bi bi-eye me-1"></i>
+                                Предпросмотр конфигурации
+                            </button>
+                            <button type="button" class="btn btn-outline-success" id="generateNginxBtn">
+                                <i class="bi bi-file-earmark-code me-1"></i>
+                                Генерировать конфигурацию
+                            </button>
+                            <button type="button" class="btn btn-outline-warning" id="validateNginxBtn">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Валидировать конфигурацию
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="applyNginxBtn">
+                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                Применить конфигурацию
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Статус Nginx</h6>
+                        <button type="button" class="btn btn-outline-secondary mb-2" id="checkNginxStatusBtn">
+                            <i class="bi bi-arrow-repeat me-1"></i>
+                            Проверить статус
+                        </button>
+                        <div id="nginxStatus" class="mt-2"></div>
+                    </div>
+                </div>
+                
+                <!-- Nginx Configuration Preview -->
+                <div id="nginxPreview" class="mt-4" style="display: none;">
+                    <h6>Предпросмотр конфигурации Nginx</h6>
+                    <pre class="bg-light p-3 rounded"><code id="nginxConfigContent"></code></pre>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SSL Monitoring Card -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-shield-check me-2"></i>
+                    Мониторинг SSL
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Статус SSL</h6>
+                        <div class="btn-group-vertical d-grid gap-2" role="group">
+                            <button type="button" class="btn btn-outline-info" id="checkSslStatusBtn">
+                                <i class="bi bi-shield-check me-1"></i>
+                                Проверить статус SSL
+                            </button>
+                            <button type="button" class="btn btn-outline-warning" id="checkSslAlertsBtn">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Показать алерты
+                            </button>
+                            <button type="button" class="btn btn-outline-success" id="renewSslBtn">
+                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                Обновить сертификаты
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Информация о сертификате</h6>
+                        <div id="sslStatus" class="mt-2"></div>
+                        <div id="sslAlerts" class="mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+                
+                <!-- SSL Statistics -->
+                <div id="sslStatistics" class="mt-4" style="display: none;">
+                    <h6>Статистика SSL</h6>
+                    <div class="row" id="sslStatsContent"></div>
+                </div>
+            </div>
+        </div>
 
         <!-- Предварительный просмотр конфигурации -->
         <div class="card mb-4" id="configPreview" style="display: none;">
@@ -459,5 +550,290 @@ function showNotification(message, type = 'info') {
         }
     }, 5000);
 }
+
+// Nginx функции
+document.addEventListener('DOMContentLoaded', function() {
+    // Предпросмотр конфигурации Nginx
+    document.getElementById('previewNginxBtn').addEventListener('click', async function() {
+        const domain = document.getElementById('domain').value;
+        const useHttps = document.getElementById('useHttps').checked;
+        
+        if (!domain) {
+            showNotification('Введите домен для предпросмотра', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/system-settings/nginx/preview?domain=${encodeURIComponent(domain)}&use_https=${useHttps}`);
+            const data = await response.json();
+            
+            if (data.preview) {
+                document.getElementById('nginxConfigContent').textContent = data.preview;
+                document.getElementById('nginxPreview').style.display = 'block';
+                showNotification('Предпросмотр конфигурации загружен', 'success');
+            } else {
+                showNotification('Ошибка загрузки предпросмотра', 'error');
+            }
+        } catch (error) {
+            console.error('Error previewing nginx config:', error);
+            showNotification('Ошибка загрузки предпросмотра', 'error');
+        }
+    });
+    
+    // Генерация конфигурации Nginx
+    document.getElementById('generateNginxBtn').addEventListener('click', async function() {
+        const domain = document.getElementById('domain').value;
+        const useHttps = document.getElementById('useHttps').checked;
+        
+        if (!domain) {
+            showNotification('Введите домен для генерации', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/system-settings/nginx/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ domain: domain, use_https: useHttps })
+            });
+            const data = await response.json();
+            
+            if (data.message) {
+                showNotification(data.message, 'success');
+            } else {
+                showNotification('Ошибка генерации конфигурации', 'error');
+            }
+        } catch (error) {
+            console.error('Error generating nginx config:', error);
+            showNotification('Ошибка генерации конфигурации', 'error');
+        }
+    });
+    
+    // Валидация конфигурации Nginx
+    document.getElementById('validateNginxBtn').addEventListener('click', async function() {
+        const domain = document.getElementById('domain').value;
+        const useHttps = document.getElementById('useHttps').checked;
+        
+        if (!domain) {
+            showNotification('Введите домен для валидации', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/system-settings/nginx/validate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ domain: domain, use_https: useHttps })
+            });
+            const data = await response.json();
+            
+            if (data.valid) {
+                showNotification('Конфигурация Nginx валидна', 'success');
+            } else {
+                showNotification(`Конфигурация Nginx невалидна: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error validating nginx config:', error);
+            showNotification('Ошибка валидации конфигурации', 'error');
+        }
+    });
+    
+    // Применение конфигурации Nginx
+    document.getElementById('applyNginxBtn').addEventListener('click', async function() {
+        const domain = document.getElementById('domain').value;
+        
+        if (!domain) {
+            showNotification('Введите домен для применения', 'warning');
+            return;
+        }
+        
+        if (!confirm('Вы уверены, что хотите применить конфигурацию Nginx? Это может повлиять на работу сайта.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/system-settings/nginx/apply', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ domain: domain })
+            });
+            const data = await response.json();
+            
+            if (data.message) {
+                showNotification(data.message, 'success');
+            } else {
+                showNotification('Ошибка применения конфигурации', 'error');
+            }
+        } catch (error) {
+            console.error('Error applying nginx config:', error);
+            showNotification('Ошибка применения конфигурации', 'error');
+        }
+    });
+    
+    // Проверка статуса Nginx
+    document.getElementById('checkNginxStatusBtn').addEventListener('click', async function() {
+        try {
+            const response = await fetch('/api/system-settings/nginx/status');
+            const data = await response.json();
+            
+            const statusDiv = document.getElementById('nginxStatus');
+            let statusHtml = '';
+            
+            if (data.is_active) {
+                statusHtml += '<span class="badge bg-success">Активен</span>';
+            } else {
+                statusHtml += '<span class="badge bg-danger">Неактивен</span>';
+            }
+            
+            if (data.config_valid) {
+                statusHtml += ' <span class="badge bg-success">Конфигурация валидна</span>';
+            } else {
+                statusHtml += ' <span class="badge bg-warning">Конфигурация невалидна</span>';
+            }
+            
+            if (data.status_output) {
+                statusHtml += `<div class="mt-2"><small class="text-muted">${data.status_output}</small></div>`;
+            }
+            
+            if (data.config_output) {
+                statusHtml += `<div class="mt-1"><small class="text-muted">${data.config_output}</small></div>`;
+            }
+            
+            statusDiv.innerHTML = statusHtml;
+            showNotification('Статус Nginx обновлен', 'info');
+        } catch (error) {
+            console.error('Error checking nginx status:', error);
+            showNotification('Ошибка проверки статуса Nginx', 'error');
+        }
+    });
+    
+    // SSL Monitoring функции
+    // Проверка статуса SSL
+    document.getElementById('checkSslStatusBtn').addEventListener('click', async function() {
+        try {
+            const response = await fetch('/api/system-settings/ssl/monitoring/status');
+            const data = await response.json();
+            
+            const statusDiv = document.getElementById('sslStatus');
+            let statusHtml = '';
+            
+            // Статус сертификата
+            const status = data.status || 'unknown';
+            const criticality = data.criticality || 'low';
+            
+            let statusBadge = '';
+            if (status === 'healthy') {
+                statusBadge = '<span class="badge bg-success">Здоровый</span>';
+            } else if (status === 'expiring_soon') {
+                statusBadge = '<span class="badge bg-warning">Истекает скоро</span>';
+            } else if (status === 'expired') {
+                statusBadge = '<span class="badge bg-danger">Истек</span>';
+            } else if (status === 'no_certificate') {
+                statusBadge = '<span class="badge bg-secondary">Нет сертификата</span>';
+            } else {
+                statusBadge = '<span class="badge bg-dark">Неизвестно</span>';
+            }
+            
+            statusHtml += `<div class="mb-2">${statusBadge}</div>`;
+            
+            // Информация о сертификате
+            const certInfo = data.certificate_info || {};
+            if (certInfo.days_remaining !== undefined) {
+                statusHtml += `<div class="mb-1"><strong>Дней до истечения:</strong> ${certInfo.days_remaining}</div>`;
+            }
+            if (certInfo.expiry_date) {
+                statusHtml += `<div class="mb-1"><strong>Дата истечения:</strong> ${certInfo.expiry_date}</div>`;
+            }
+            if (certInfo.domains) {
+                statusHtml += `<div class="mb-1"><strong>Домены:</strong> ${certInfo.domains.join(', ')}</div>`;
+            }
+            
+            // Рекомендации
+            const recommendations = data.recommendations || [];
+            if (recommendations.length > 0) {
+                statusHtml += '<div class="mt-3"><strong>Рекомендации:</strong><ul class="mb-0">';
+                recommendations.forEach(rec => {
+                    statusHtml += `<li>${rec}</li>`;
+                });
+                statusHtml += '</ul></div>';
+            }
+            
+            statusDiv.innerHTML = statusHtml;
+            showNotification('Статус SSL обновлен', 'info');
+            
+        } catch (error) {
+            console.error('Error checking SSL status:', error);
+            showNotification('Ошибка проверки статуса SSL', 'error');
+        }
+    });
+    
+    // Показать алерты SSL
+    document.getElementById('checkSslAlertsBtn').addEventListener('click', async function() {
+        try {
+            const response = await fetch('/api/system-settings/ssl/monitoring/alerts');
+            const data = await response.json();
+            
+            const alertsDiv = document.getElementById('sslAlerts');
+            let alertsHtml = '';
+            
+            if (data.alerts && data.alerts.length > 0) {
+                alertsHtml = '<h6>Алерты SSL:</h6>';
+                data.alerts.forEach(alert => {
+                    let alertClass = 'alert-info';
+                    if (alert.type === 'critical') alertClass = 'alert-danger';
+                    else if (alert.type === 'warning') alertClass = 'alert-warning';
+                    else if (alert.type === 'error') alertClass = 'alert-danger';
+                    
+                    alertsHtml += `
+                        <div class="alert ${alertClass} alert-sm mb-2">
+                            <strong>${alert.type.toUpperCase()}:</strong> ${alert.message}
+                            <br><small class="text-muted">${alert.timestamp}</small>
+                        </div>
+                    `;
+                });
+            } else {
+                alertsHtml = '<div class="alert alert-success alert-sm">Нет активных алертов SSL</div>';
+            }
+            
+            alertsDiv.innerHTML = alertsHtml;
+            alertsDiv.style.display = 'block';
+            showNotification('Алерты SSL загружены', 'info');
+            
+        } catch (error) {
+            console.error('Error getting SSL alerts:', error);
+            showNotification('Ошибка получения алертов SSL', 'error');
+        }
+    });
+    
+    // Обновление SSL сертификатов
+    document.getElementById('renewSslBtn').addEventListener('click', async function() {
+        if (!confirm('Вы уверены, что хотите обновить SSL сертификаты? Это может занять некоторое время.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/system-settings/ssl/monitoring/renew', {
+                method: 'POST'
+            });
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                showNotification('SSL сертификаты успешно обновлены', 'success');
+            } else {
+                showNotification(`Ошибка обновления SSL: ${data.message}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Error renewing SSL:', error);
+            showNotification('Ошибка обновления SSL сертификатов', 'error');
+        }
+    });
+});
 </script>
 {% endblock %}
