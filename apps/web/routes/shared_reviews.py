@@ -72,8 +72,18 @@ async def create_review(
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
         # Проверяем права на создание отзыва
-        if not await _can_create_review(db, user_obj.id, target_type, target_id, contract_id):
-            raise HTTPException(status_code=403, detail="Нет прав на создание отзыва")
+        from shared.services.review_permission_service import ReviewPermissionService
+        
+        permission_service = ReviewPermissionService(db)
+        permission_check = await permission_service.can_create_review(
+            user_id=user_obj.id,
+            target_type=target_type,
+            target_id=target_id,
+            contract_id=contract_id
+        )
+        
+        if not permission_check["can_create"]:
+            raise HTTPException(status_code=403, detail=permission_check["reason"])
         
         # Создаем отзыв
         from domain.entities.review import Review
@@ -208,6 +218,69 @@ async def get_my_reviews(
         raise HTTPException(status_code=500, detail=f"Ошибка получения отзывов: {str(e)}")
 
 
+@router.get("/available-targets/{target_type}")
+async def get_available_targets(
+    request: Request,
+    target_type: str,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Получение доступных целей для создания отзыва.
+    
+    Args:
+        target_type: Тип цели ('employee' или 'object')
+        current_user: Текущий пользователь
+        db: Сессия базы данных
+        
+    Returns:
+        JSONResponse: Список доступных целей
+    """
+    try:
+        if target_type not in ['employee', 'object']:
+            raise HTTPException(status_code=400, detail="Недопустимый тип цели")
+        
+        # Получаем внутренний ID пользователя
+        from sqlalchemy import select
+        from domain.entities.user import User
+        
+        if hasattr(current_user, 'telegram_id'):
+            user_id = current_user.telegram_id  # Объект User
+        elif isinstance(current_user, dict):
+            user_id = current_user.get('id')  # Словарь с Telegram ID
+        else:
+            raise HTTPException(status_code=401, detail="Пользователь не аутентифицирован")
+        
+        user_query = select(User).where(User.telegram_id == user_id)
+        user_result = await db.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        
+        if not user_obj:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        # Получаем доступные цели
+        from shared.services.review_permission_service import ReviewPermissionService
+        
+        permission_service = ReviewPermissionService(db)
+        available_targets = await permission_service.get_available_targets_for_review(
+            user_id=user_obj.id,
+            target_type=target_type
+        )
+        
+        return JSONResponse(content={
+            "success": True,
+            "target_type": target_type,
+            "available_targets": available_targets,
+            "count": len(available_targets)
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting available targets: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения доступных целей: {str(e)}")
+
+
 @router.get("/{review_id}")
 async def get_review_details(
     request: Request,
@@ -282,29 +355,6 @@ async def get_review_details(
         raise HTTPException(status_code=500, detail=f"Ошибка получения деталей отзыва: {str(e)}")
 
 
-async def _can_create_review(db: AsyncSession, user_id: int, target_type: str, target_id: int, contract_id: int) -> bool:
-    """
-    Проверка прав на создание отзыва.
-    
-    Args:
-        db: Сессия базы данных
-        user_id: ID пользователя
-        target_type: Тип цели
-        target_id: ID цели
-        contract_id: ID договора
-        
-    Returns:
-        bool: True если можно создать отзыв
-    """
-    try:
-        # TODO: Реализовать проверку прав на создание отзыва
-        # - Проверить, что пользователь работал по этому договору
-        # - Проверить, что цель отзыва связана с договором
-        # - Проверить, что пользователь еще не оставлял отзыв по этому договору
-        return True
-    except Exception as e:
-        logger.error(f"Error checking review creation rights: {e}")
-        return False
 
 
 async def _process_media_files(db: AsyncSession, review_id: int, media_files: List[UploadFile]) -> None:
