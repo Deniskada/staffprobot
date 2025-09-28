@@ -45,7 +45,7 @@ class SSLMonitoringService:
             monitoring_result = await self._analyze_certificate_status(domain, cert_info)
             
             # Кэшируем результат на 1 час
-            await cache.set(cache_key, json.dumps(monitoring_result), ex=3600)
+            await cache.set(cache_key, json.dumps(monitoring_result), ttl=3600)
             
             logger.info(f"SSL monitoring check completed for domain: {domain}")
             return monitoring_result
