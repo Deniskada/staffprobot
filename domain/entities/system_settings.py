@@ -5,7 +5,7 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime
 from sqlalchemy.sql import func
 from datetime import datetime
-from core.database.connection import Base
+from .base import Base
 
 
 class SystemSettings(Base):

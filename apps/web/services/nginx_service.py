@@ -1,7 +1,7 @@
 import os
 import re
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from apps.web.services.system_settings_service import SystemSettingsService
 from core.logging.logger import logger
