@@ -302,3 +302,33 @@ async def require_moderator_switch_access(request: Request, current_user = Depen
         }
 
 
+async def require_manager_or_superadmin(request: Request, current_user = Depends(get_current_user_dependency())):
+    """Проверка роли управляющего или суперадмина."""
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    # Если пользователь не аутентифицирован
+    if current_user is None:
+        return RedirectResponse(url="/auth/login", status_code=302)
+    
+    # current_user теперь объект User, проверяем роли напрямую
+    from core.database.session import get_async_session
+    async with get_async_session() as session:
+        role_service = RoleService(session)
+        has_role = await role_service.has_any_role(current_user.id, [UserRole.MANAGER, UserRole.SUPERADMIN])
+        
+        if not has_role:
+            logger.warning(f"User {current_user.id} is not a manager or superadmin")
+            raise HTTPException(status_code=403, detail="Недостаточно прав доступа")
+        
+        # Возвращаем словарь с данными пользователя для совместимости
+        return {
+            "id": current_user.telegram_id,
+            "username": current_user.username,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "role": current_user.role,
+            "roles": current_user.roles
+        }
+
+

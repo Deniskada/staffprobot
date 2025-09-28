@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отзывы - StaffProBot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .review-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+        
+        .review-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .rating-stars {
+            color: #ffc107;
+        }
+        
+        .review-tabs {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .review-tabs .nav-link {
+            border: none;
+            border-radius: 25px;
+            margin: 0 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .review-tabs .nav-link.active {
+            background: #6f42c1;
+            color: white;
+        }
+        
+        .review-meta {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        
+        .status-badge {
+            font-size: 0.8em;
+            padding: 4px 8px;
+        }
+        
+        .navbar-manager {
+            background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%);
+        }
+        
+        .navbar-manager .navbar-brand,
+        .navbar-manager .nav-link {
+            color: white !important;
+        }
+        
+        .statistics-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .statistics-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Навигация управляющего -->
+    <nav class="navbar navbar-expand-lg navbar-manager">
+        <div class="container">
+            <a class="navbar-brand" href="/manager/">
+                <i class="fas fa-user-tie"></i> StaffProBot
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/manager/">
+                            <i class="fas fa-tachometer-alt"></i> Дашборд
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/manager/objects">
+                            <i class="fas fa-building"></i> Объекты
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/manager/employees">
+                            <i class="fas fa-users"></i> Сотрудники
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/manager/reviews">
+                            <i class="fas fa-comments"></i> Отзывы
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="container">
+            <!-- Заголовок -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h1><i class="fas fa-comments"></i> Отзывы</h1>
+                    <p class="text-muted">Просмотр отзывов о ваших объектах и сотрудниках</p>
+                </div>
+            </div>
+
+            <!-- Уведомления -->
+            <div id="alerts-container"></div>
+
+            <!-- Статистика -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card statistics-card">
+                        <div class="card-body text-center">
+                            <i class="fas fa-comments fa-2x text-primary mb-3"></i>
+                            <h3 id="total-reviews" class="card-title">-</h3>
+                            <p class="card-text">Всего отзывов</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card statistics-card">
+                        <div class="card-body text-center">
+                            <i class="fas fa-star fa-2x text-warning mb-3"></i>
+                            <h3 id="average-rating" class="card-title">-</h3>
+                            <p class="card-text">Средний рейтинг</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card statistics-card">
+                        <div class="card-body text-center">
+                            <i class="fas fa-check-circle fa-2x text-success mb-3"></i>
+                            <h3 id="approved-reviews" class="card-title">-</h3>
+                            <p class="card-text">Одобрено</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card statistics-card">
+                        <div class="card-body text-center">
+                            <i class="fas fa-clock fa-2x text-info mb-3"></i>
+                            <h3 id="pending-reviews" class="card-title">-</h3>
+                            <p class="card-text">На модерации</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Фильтры -->
+            <div class="review-tabs">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <ul class="nav nav-pills">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="#" onclick="filterReviews('all')">
+                                    <i class="fas fa-list"></i> Все отзывы
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" onclick="filterReviews('about-objects')">
+                                    <i class="fas fa-building"></i> Об объектах
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" onclick="filterReviews('about-employees')">
+                                    <i class="fas fa-users"></i> О сотрудниках
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" onclick="filterReviews('high-rating')">
+                                    <i class="fas fa-star"></i> Высокие оценки
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary" onclick="loadStatistics()">
+                                <i class="fas fa-chart-bar"></i> Статистика
+                            </button>
+                            <button class="btn btn-outline-info" onclick="exportReviews()">
+                                <i class="fas fa-download"></i> Экспорт
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Список отзывов -->
+            <div id="reviews-container">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Пагинация -->
+            <div class="row">
+                <div class="col-12">
+                    <nav aria-label="Пагинация отзывов">
+                        <ul class="pagination justify-content-center" id="pagination">
+                            <!-- Пагинация будет добавлена динамически -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно детального просмотра -->
+    <div class="modal fade" id="reviewDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Детали отзыва</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="review-detail-body">
+                    <!-- Содержимое будет загружено динамически -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentFilter = 'all';
+        let currentPage = 0;
+
+        // Загрузка страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            loadReviews();
+            loadStatistics();
+        });
+
+        // Фильтрация отзывов
+        function filterReviews(filter) {
+            currentFilter = filter;
+            currentPage = 0;
+            
+            // Обновляем активную вкладку
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            event.target.closest('.nav-link').classList.add('active');
+            
+            loadReviews();
+        }
+
+        // Загрузка отзывов
+        async function loadReviews() {
+            try {
+                // TODO: Реализовать API для получения отзывов управляющего
+                const container = document.getElementById('reviews-container');
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-comments fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Отзывы</h5>
+                        <p class="text-muted">Функция будет реализована в следующих этапах</p>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading reviews:', error);
+                showAlert('Ошибка загрузки отзывов', 'danger');
+            }
+        }
+
+        // Загрузка статистики
+        async function loadStatistics() {
+            try {
+                // TODO: Реализовать API для получения статистики отзывов управляющего
+                document.getElementById('total-reviews').textContent = '0';
+                document.getElementById('average-rating').textContent = '0.0';
+                document.getElementById('approved-reviews').textContent = '0';
+                document.getElementById('pending-reviews').textContent = '0';
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+                showAlert('Ошибка загрузки статистики', 'danger');
+            }
+        }
+
+        // Экспорт отзывов
+        function exportReviews() {
+            // TODO: Реализовать экспорт отзывов
+            showAlert('Функция экспорта будет реализована в следующих этапах', 'info');
+        }
+
+        // Показ деталей отзыва
+        function showReviewDetails(reviewId) {
+            // TODO: Реализовать загрузку деталей отзыва
+            const modal = new bootstrap.Modal(document.getElementById('reviewDetailModal'));
+            modal.show();
+        }
+
+        // Создание звездного рейтинга
+        function createStarRating(rating) {
+            const fullStars = Math.floor(rating);
+            const hasHalfStar = (rating - fullStars) >= 0.5;
+            const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+
+            let stars = '';
+            for (let i = 0; i < fullStars; i++) {
+                stars += '<i class="fas fa-star"></i>';
+            }
+            if (hasHalfStar) {
+                stars += '<i class="fas fa-star-half-alt"></i>';
+            }
+            for (let i = 0; i < emptyStars; i++) {
+                stars += '<i class="far fa-star"></i>';
+            }
+            return stars;
+        }
+
+        // Форматирование даты
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Показ уведомления
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alerts-container');
+            const alertId = 'alert-' + Date.now();
+            container.innerHTML += `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const alert = document.getElementById(alertId);
+                if (alert) alert.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
