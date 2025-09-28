@@ -475,6 +475,29 @@ async function previewConfig() {
 }
 
 
+// Очистка кэша
+async function clearCache() {
+    if (!confirm('Вы уверены, что хотите очистить кэш настроек?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/system-settings/clear-cache', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert('success', data.message);
+        } else {
+            showAlert('danger', data.message || 'Ошибка очистки кэша');
+        }
+    } catch (error) {
+        console.error('Error clearing cache:', error);
+        showAlert('danger', 'Ошибка очистки кэша');
+    }
+}
+
 // Инициализация настроек по умолчанию
 async function initializeSettings() {
     if (!confirm('Вы уверены, что хотите инициализировать настройки по умолчанию?')) {

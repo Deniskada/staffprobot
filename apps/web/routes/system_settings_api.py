@@ -371,6 +371,40 @@ async def setup_ssl_certificates(
         raise HTTPException(status_code=500, detail=f"Ошибка настройки SSL: {str(e)}")
 
 
+# Cache and initialization endpoints
+@router.post("/clear-cache")
+async def clear_settings_cache(
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Очистить кэш настроек"""
+    try:
+        settings_service = SystemSettingsService(db)
+        success = await settings_service.clear_cache()
+        if success:
+            return {"success": True, "message": "Кэш настроек очищен"}
+        else:
+            raise HTTPException(status_code=500, detail="Ошибка очистки кэша")
+    except Exception as e:
+        logger.error(f"Error clearing cache: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка очистки кэша: {str(e)}")
+
+
+@router.post("/initialize")
+async def initialize_default_settings(
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Инициализировать настройки по умолчанию"""
+    try:
+        settings_service = SystemSettingsService(db)
+        await settings_service.initialize_default_settings()
+        return {"success": True, "message": "Настройки инициализированы по умолчанию"}
+    except Exception as e:
+        logger.error(f"Error initializing settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка инициализации: {str(e)}")
+
+
 # History endpoints
 @router.get("/history")
 async def get_settings_history(
