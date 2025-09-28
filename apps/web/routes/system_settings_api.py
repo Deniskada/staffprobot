@@ -71,7 +71,7 @@ async def update_domain(
             }
         
         # Обновляем домен
-        success = await settings_service.set_domain(request.domain)
+        success = await settings_service.set_domain(request.domain, str(current_user.get("id")))
         
         if success:
             # Очищаем кэш URL
@@ -612,7 +612,7 @@ async def update_ssl_email(
     """Обновить email для SSL"""
     try:
         settings_service = SystemSettingsService(db)
-        success = await settings_service.set_ssl_email(request.email)
+        success = await settings_service.set_ssl_email(request.email, str(current_user.get("id")))
         
         if success:
             return {
@@ -659,8 +659,10 @@ async def update_https_setting(
 ):
     """Обновить настройку HTTPS"""
     try:
+        logger.info(f"Updating HTTPS setting to {request.use_https} by user {current_user.get('id')}")
         settings_service = SystemSettingsService(db)
-        success = await settings_service.set_use_https(request.use_https)
+        success = await settings_service.set_use_https(request.use_https, str(current_user.get("id")))
+        logger.info(f"HTTPS setting update result: {success}")
         
         if success:
             # Очищаем кэш URL

@@ -47,13 +47,15 @@ class SystemSettingsService:
             logger.error(f"Error getting setting {key}: {e}")
             return default
     
-    async def set_setting(self, key: str, value: str, description: Optional[str] = None) -> bool:
+    async def set_setting(self, key: str, value: str, description: Optional[str] = None, changed_by: str = None) -> bool:
         """Установить значение настройки"""
         try:
             # Проверяем, существует ли настройка
             query = select(SystemSettings).where(SystemSettings.key == key)
             result = await self.db.execute(query)
             existing_setting = result.scalar_one_or_none()
+            
+            old_value = existing_setting.value if existing_setting else None
             
             if existing_setting:
                 # Обновляем существующую настройку
@@ -74,6 +76,20 @@ class SystemSettingsService:
             
             await self.db.commit()
             
+            # Логируем изменение, если значение изменилось
+            logger.info(f"Setting change check: key={key}, old_value='{old_value}', new_value='{value}', changed={old_value != value}")
+            if old_value != value:
+                logger.info(f"Logging setting change: {key} from '{old_value}' to '{value}' by {changed_by}")
+                await self.log_setting_change(
+                    key=key,
+                    old_value=old_value or "",
+                    new_value=value,
+                    changed_by=changed_by,
+                    reason=f"Изменение настройки {key}"
+                )
+            else:
+                logger.info(f"Setting {key} value unchanged, skipping history log")
+            
             # Обновляем кэш
             await self.cache.set(f"{self.cache_key_prefix}{key}", value, self.cache_ttl)
             
@@ -89,25 +105,25 @@ class SystemSettingsService:
         """Получить домен системы"""
         return await self.get_setting("domain", "localhost:8001")
     
-    async def set_domain(self, domain: str) -> bool:
+    async def set_domain(self, domain: str, changed_by: str = None) -> bool:
         """Установить домен системы"""
         # Валидируем домен
         if not self._validate_domain(domain):
             return False
         
-        return await self.set_setting("domain", domain, "Основной домен системы")
+        return await self.set_setting("domain", domain, "Основной домен системы", changed_by)
     
     async def get_ssl_email(self) -> str:
         """Получить email для SSL"""
         return await self.get_setting("ssl_email", "admin@localhost")
     
-    async def set_ssl_email(self, email: str) -> bool:
+    async def set_ssl_email(self, email: str, changed_by: str = None) -> bool:
         """Установить email для SSL"""
         # Валидируем email
         if not self._validate_email(email):
             return False
         
-        return await self.set_setting("ssl_email", email, "Email для Let's Encrypt сертификатов")
+        return await self.set_setting("ssl_email", email, "Email для Let's Encrypt сертификатов", changed_by)
     
     async def get_use_https(self) -> bool:
         """Получить настройку использования HTTPS"""
@@ -122,9 +138,9 @@ class SystemSettingsService:
         """Получить путь к исполняемому файлу Certbot."""
         return await self.get_setting("certbot_path") or settings.certbot_path
     
-    async def set_use_https(self, use_https: bool) -> bool:
+    async def set_use_https(self, use_https: bool, changed_by: str = None) -> bool:
         """Установить настройку использования HTTPS"""
-        return await self.set_setting("use_https", str(use_https).lower(), "Использовать HTTPS")
+        return await self.set_setting("use_https", str(use_https).lower(), "Использовать HTTPS", changed_by)
     
     async def validate_domain(self, domain: str) -> Dict[str, Any]:
         """Валидация домена"""
