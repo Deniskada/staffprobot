@@ -11,6 +11,22 @@ from sqlalchemy.orm import relationship
 from .base import Base
 from typing import Optional
 from datetime import datetime
+from enum import Enum
+
+
+class ReviewStatus(str, Enum):
+    """Статусы отзывов."""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    APPEALED = "appealed"
+
+
+class AppealStatus(str, Enum):
+    """Статусы обжалований."""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class Review(Base):
