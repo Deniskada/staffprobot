@@ -42,6 +42,17 @@ async def moderator_dashboard(
         # Получаем последние отзывы на модерации
         pending_reviews = await moderation_service.get_pending_reviews(limit=5)
         
+        # Получаем статистику обжалований
+        from shared.services.appeal_service import AppealService
+        appeal_service = AppealService(db)
+        appeal_statistics = await appeal_service.get_appeal_statistics()
+        
+        # Получаем просроченные обжалования
+        overdue_appeals = await appeal_service.get_overdue_appeals()
+        
+        # Получаем последние обжалования
+        pending_appeals = await appeal_service.get_pending_appeals(limit=5)
+        
         return JSONResponse(content={
             "success": True,
             "statistics": statistics,
@@ -58,6 +69,19 @@ async def moderator_dashboard(
                     "is_anonymous": review.is_anonymous
                 }
                 for review in pending_reviews
+            ],
+            "appeal_statistics": appeal_statistics,
+            "overdue_appeals_count": len(overdue_appeals),
+            "recent_appeals": [
+                {
+                    "id": appeal.id,
+                    "review_id": appeal.review_id,
+                    "appeal_reason": appeal.appeal_reason,
+                    "appellant_id": appeal.appellant_id,
+                    "status": appeal.status,
+                    "created_at": appeal.created_at.isoformat()
+                }
+                for appeal in pending_appeals
             ]
         })
         
@@ -507,3 +531,269 @@ async def auto_moderate_review(
     except Exception as e:
         logger.error(f"Error in auto moderation: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка автоматической модерации: {str(e)}")
+
+
+# ==================== ОБЖАЛОВАНИЯ ====================
+
+@router.get("/appeals")
+async def get_appeals_for_moderation(
+    request: Request,
+    status: str = Query(default="pending", description="Статус обжалований"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: dict = Depends(require_moderator_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Получение обжалований для рассмотрения.
+    
+    Args:
+        status: Статус обжалований ('pending', 'overdue')
+        limit: Количество записей
+        offset: Смещение
+        current_user: Текущий пользователь
+        db: Сессия базы данных
+        
+    Returns:
+        JSONResponse: Список обжалований
+    """
+    try:
+        from shared.services.appeal_service import AppealService
+        
+        appeal_service = AppealService(db)
+        
+        if status == "pending":
+            appeals = await appeal_service.get_pending_appeals(limit, offset)
+        elif status == "overdue":
+            overdue_appeals = await appeal_service.get_overdue_appeals()
+            appeals = overdue_appeals[offset:offset + limit]
+        else:
+            raise HTTPException(status_code=400, detail="Неподдерживаемый статус")
+        
+        # Форматируем обжалования для ответа
+        formatted_appeals = []
+        for appeal in appeals:
+            # Рассчитываем время ожидания
+            from datetime import datetime
+            days_pending = (datetime.utcnow() - appeal.created_at).days
+            
+            formatted_appeals.append({
+                "id": appeal.id,
+                "review_id": appeal.review_id,
+                "appellant_id": appeal.appellant_id,
+                "appeal_reason": appeal.appeal_reason,
+                "appeal_evidence": appeal.appeal_evidence,
+                "status": appeal.status,
+                "moderator_decision": appeal.moderator_decision,
+                "decision_notes": appeal.decision_notes,
+                "created_at": appeal.created_at.isoformat(),
+                "decided_at": appeal.decided_at.isoformat() if appeal.decided_at else None,
+                "days_pending": days_pending
+            })
+        
+        return JSONResponse(content={
+            "success": True,
+            "appeals": formatted_appeals,
+            "count": len(formatted_appeals),
+            "status": status,
+            "pagination": {
+                "limit": limit,
+                "offset": offset,
+                "has_more": len(formatted_appeals) == limit
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting appeals for moderation: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения обжалований: {str(e)}")
+
+
+@router.get("/appeals/{appeal_id}")
+async def get_appeal_details_for_moderation(
+    request: Request,
+    appeal_id: int,
+    current_user: dict = Depends(require_moderator_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Получение детальной информации об обжаловании для модерации.
+    
+    Args:
+        appeal_id: ID обжалования
+        current_user: Текущий пользователь
+        db: Сессия базы данных
+        
+    Returns:
+        JSONResponse: Детальная информация об обжаловании
+    """
+    try:
+        from shared.services.appeal_service import AppealService
+        
+        appeal_service = AppealService(db)
+        appeal_details = await appeal_service.get_appeal_details(appeal_id)
+        
+        if not appeal_details:
+            raise HTTPException(status_code=404, detail="Обжалование не найдено")
+        
+        return JSONResponse(content={
+            "success": True,
+            "appeal_details": appeal_details
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting appeal details: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения деталей обжалования: {str(e)}")
+
+
+@router.post("/appeals/{appeal_id}/review")
+async def review_appeal(
+    request: Request,
+    appeal_id: int,
+    decision: str = Form(..., description="Решение: 'approved' или 'rejected'"),
+    decision_notes: Optional[str] = Form(None, description="Заметки модератора"),
+    current_user: dict = Depends(require_moderator_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Рассмотрение обжалования модератором.
+    
+    Args:
+        appeal_id: ID обжалования
+        decision: Решение ('approved' или 'rejected')
+        decision_notes: Заметки модератора
+        current_user: Текущий пользователь
+        db: Сессия базы данных
+        
+    Returns:
+        JSONResponse: Результат рассмотрения
+    """
+    try:
+        if decision not in ['approved', 'rejected']:
+            raise HTTPException(status_code=400, detail="Недопустимое решение")
+        
+        from shared.services.appeal_service import AppealService
+        
+        appeal_service = AppealService(db)
+        moderator_id = current_user.get('id')  # Telegram ID
+        
+        # Получаем внутренний ID пользователя
+        from sqlalchemy import select
+        from domain.entities.user import User
+        
+        user_query = select(User).where(User.telegram_id == moderator_id)
+        user_result = await db.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        
+        if not user_obj:
+            raise HTTPException(status_code=404, detail="Модератор не найден")
+        
+        # Рассматриваем обжалование
+        success = await appeal_service.review_appeal(
+            appeal_id=appeal_id,
+            moderator_id=user_obj.id,
+            decision=decision,
+            decision_notes=decision_notes
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Ошибка рассмотрения обжалования")
+        
+        logger.info(f"Appeal {appeal_id} reviewed by {user_obj.id} with decision {decision}")
+        
+        return JSONResponse(content={
+            "success": True,
+            "message": f"Обжалование {'одобрено' if decision == 'approved' else 'отклонено'}",
+            "appeal_id": appeal_id,
+            "decision": decision,
+            "moderator_id": user_obj.id
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reviewing appeal: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка рассмотрения обжалования: {str(e)}")
+
+
+@router.get("/appeals/overdue")
+async def get_overdue_appeals(
+    request: Request,
+    current_user: dict = Depends(require_moderator_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Получение просроченных обжалований.
+    
+    Args:
+        current_user: Текущий пользователь
+        db: Сессия базы данных
+        
+    Returns:
+        JSONResponse: Список просроченных обжалований
+    """
+    try:
+        from shared.services.appeal_service import AppealService
+        
+        appeal_service = AppealService(db)
+        overdue_appeals = await appeal_service.get_overdue_appeals()
+        
+        # Форматируем просроченные обжалования
+        formatted_appeals = []
+        for appeal in overdue_appeals:
+            from datetime import datetime
+            hours_overdue = (datetime.utcnow() - appeal.created_at).total_seconds() / 3600 - 72
+            
+            formatted_appeals.append({
+                "id": appeal.id,
+                "review_id": appeal.review_id,
+                "appellant_id": appeal.appellant_id,
+                "appeal_reason": appeal.appeal_reason,
+                "created_at": appeal.created_at.isoformat(),
+                "hours_overdue": round(hours_overdue, 1)
+            })
+        
+        return JSONResponse(content={
+            "success": True,
+            "overdue_appeals": formatted_appeals,
+            "count": len(formatted_appeals)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting overdue appeals: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения просроченных обжалований: {str(e)}")
+
+
+@router.get("/appeals/statistics")
+async def get_appeal_statistics(
+    request: Request,
+    current_user: dict = Depends(require_moderator_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Получение статистики обжалований.
+    
+    Args:
+        current_user: Текущий пользователь
+        db: Сессия базы данных
+        
+    Returns:
+        JSONResponse: Статистика обжалований
+    """
+    try:
+        from shared.services.appeal_service import AppealService
+        
+        appeal_service = AppealService(db)
+        statistics = await appeal_service.get_appeal_statistics()
+        
+        return JSONResponse(content={
+            "success": True,
+            "statistics": statistics
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting appeal statistics: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения статистики обжалований: {str(e)}")
