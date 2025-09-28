@@ -12,13 +12,15 @@ from pathlib import Path
 import asyncio
 from core.logging.logger import logger
 from apps.web.services.system_settings_service import SystemSettingsService
+from apps.web.services.ssl_logging_service import SSLLoggingService
 
 
 class SSLService:
     """Сервис для управления SSL сертификатами"""
     
-    def __init__(self, settings_service: SystemSettingsService):
+    def __init__(self, settings_service: SystemSettingsService, logging_service: SSLLoggingService = None):
         self.settings_service = settings_service
+        self.logging_service = logging_service
         self.certbot_path = "/usr/bin/certbot"
         self.letsencrypt_dir = "/etc/letsencrypt"
         self.nginx_dir = "/etc/nginx/sites-available"
@@ -27,6 +29,15 @@ class SSLService:
         """Настройка SSL сертификатов для домена"""
         try:
             logger.info(f"Starting SSL setup for domain: {domain}")
+            
+            # Логируем начало операции
+            if self.logging_service:
+                await self.logging_service.log_ssl_operation(
+                    operation="setup_ssl",
+                    domain=domain,
+                    status="started",
+                    details={"email": email}
+                )
             
             # Проверяем DNS
             dns_check = await self._check_dns_resolution(domain)

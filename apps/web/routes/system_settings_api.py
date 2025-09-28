@@ -11,6 +11,7 @@ from apps.web.middleware.auth_middleware import require_superadmin
 from apps.web.services.system_settings_service import SystemSettingsService
 from apps.web.services.nginx_service import NginxService
 from apps.web.services.ssl_monitoring_service import SSLMonitoringService
+from apps.web.services.ssl_logging_service import SSLLoggingService
 from core.utils.url_helper import URLHelper
 from core.logging.logger import logger
 
@@ -253,6 +254,60 @@ async def remove_nginx_config(
         raise HTTPException(status_code=500, detail=f"Ошибка удаления конфигурации: {str(e)}")
 
 
+@router.get("/nginx/backups")
+async def list_nginx_backups(
+    domain: str,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение списка backup'ов конфигурации Nginx."""
+    try:
+        nginx_service = NginxService(db)
+        backups = await nginx_service.list_config_backups(domain)
+        return {"backups": backups}
+    except Exception as e:
+        logger.error(f"Error listing Nginx backups: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения списка backup'ов: {str(e)}")
+
+
+@router.post("/nginx/backups/restore")
+async def restore_nginx_config_from_backup(
+    domain: str,
+    backup_filename: str,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Восстановление конфигурации Nginx из backup'а."""
+    try:
+        nginx_service = NginxService(db)
+        success = await nginx_service.restore_config_from_backup(domain, backup_filename)
+        if success:
+            return {"message": f"Конфигурация Nginx восстановлена из backup: {backup_filename}", "domain": domain}
+        raise HTTPException(status_code=500, detail="Ошибка восстановления конфигурации из backup")
+    except Exception as e:
+        logger.error(f"Error restoring Nginx config from backup: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка восстановления конфигурации: {str(e)}")
+
+
+@router.delete("/nginx/backups/delete")
+async def delete_nginx_backup(
+    domain: str,
+    backup_filename: str,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Удаление backup'а конфигурации Nginx."""
+    try:
+        nginx_service = NginxService(db)
+        success = await nginx_service.delete_config_backup(domain, backup_filename)
+        if success:
+            return {"message": f"Backup конфигурации Nginx удален: {backup_filename}", "domain": domain}
+        raise HTTPException(status_code=500, detail="Ошибка удаления backup'а")
+    except Exception as e:
+        logger.error(f"Error deleting Nginx backup: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления backup'а: {str(e)}")
+
+
 # SSL Monitoring endpoints
 @router.get("/ssl/monitoring/status")
 async def get_ssl_monitoring_status(
@@ -343,6 +398,110 @@ async def get_ssl_statistics(
     except Exception as e:
         logger.error(f"Error getting SSL statistics: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка получения статистики SSL: {str(e)}")
+
+
+# SSL Logging endpoints
+@router.get("/ssl/logs")
+async def get_ssl_logs(
+    domain: str = None,
+    operation: str = None,
+    status: str = None,
+    days: int = 7,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение логов SSL операций."""
+    try:
+        logging_service = SSLLoggingService(db)
+        logs = await logging_service.get_ssl_logs(
+            domain=domain,
+            operation=operation,
+            status=status,
+            days=days
+        )
+        return {"logs": logs}
+    except Exception as e:
+        logger.error(f"Error getting SSL logs: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения логов SSL: {str(e)}")
+
+
+@router.get("/ssl/logs/statistics")
+async def get_ssl_logs_statistics(
+    domain: str = None,
+    days: int = 30,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение статистики логов SSL."""
+    try:
+        logging_service = SSLLoggingService(db)
+        statistics = await logging_service.get_ssl_statistics(domain=domain, days=days)
+        return statistics
+    except Exception as e:
+        logger.error(f"Error getting SSL logs statistics: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения статистики логов: {str(e)}")
+
+
+@router.get("/ssl/logs/errors")
+async def get_recent_ssl_errors(
+    domain: str = None,
+    limit: int = 10,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение последних ошибок SSL."""
+    try:
+        logging_service = SSLLoggingService(db)
+        errors = await logging_service.get_recent_ssl_errors(domain=domain, limit=limit)
+        return {"errors": errors}
+    except Exception as e:
+        logger.error(f"Error getting recent SSL errors: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения ошибок SSL: {str(e)}")
+
+
+@router.post("/ssl/logs/cleanup")
+async def cleanup_ssl_logs(
+    days_to_keep: int = 30,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Очистка старых логов SSL."""
+    try:
+        logging_service = SSLLoggingService(db)
+        deleted_count = await logging_service.cleanup_old_logs(days_to_keep)
+        return {"message": f"Удалено {deleted_count} старых файлов логов", "deleted_count": deleted_count}
+    except Exception as e:
+        logger.error(f"Error cleaning up SSL logs: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка очистки логов: {str(e)}")
+
+
+@router.get("/ssl/logs/export")
+async def export_ssl_logs(
+    domain: str = None,
+    days: int = 7,
+    format: str = "json",
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Экспорт логов SSL."""
+    try:
+        logging_service = SSLLoggingService(db)
+        exported_data = await logging_service.export_ssl_logs(
+            domain=domain,
+            days=days,
+            format=format
+        )
+        
+        if format == "json":
+            return {"data": exported_data, "format": "json"}
+        elif format == "csv":
+            return {"data": exported_data, "format": "csv"}
+        else:
+            raise HTTPException(status_code=400, detail="Неподдерживаемый формат экспорта")
+            
+    except Exception as e:
+        logger.error(f"Error exporting SSL logs: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка экспорта логов: {str(e)}")
 
 
 @router.get("/ssl/email")
