@@ -206,11 +206,45 @@ server {{
                 "error": str(e)
             }
     
+    async def create_config_backup(self, domain: str) -> bool:
+        """
+        Создает backup текущей конфигурации Nginx
+        """
+        try:
+            nginx_config_path = await self.settings_service.get_nginx_config_path()
+            config_file_path = Path(nginx_config_path) / f"staffprobot-{domain}.conf"
+            
+            if not config_file_path.exists():
+                logger.warning(f"No existing configuration to backup for domain: {domain}")
+                return True  # Не ошибка, если нет файла для backup
+            
+            # Создаем директорию для backup
+            backup_dir = Path(nginx_config_path) / "backups"
+            backup_dir.mkdir(exist_ok=True)
+            
+            # Создаем backup с timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file_path = backup_dir / f"staffprobot-{domain}_{timestamp}.conf"
+            
+            # Копируем файл
+            import shutil
+            shutil.copy2(config_file_path, backup_file_path)
+            
+            logger.info(f"Nginx configuration backup created: {backup_file_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to create Nginx configuration backup: {e}")
+            return False
+
     async def apply_nginx_config(self, domain: str) -> bool:
         """
         Применяет конфигурацию Nginx (перезагружает)
         """
         try:
+            # Создаем backup перед применением
+            await self.create_config_backup(domain)
+            
             # Получаем путь к конфигурации
             nginx_config_path = await self.settings_service.get_nginx_config_path()
             config_file_path = Path(nginx_config_path) / f"staffprobot-{domain}.conf"
@@ -292,6 +326,111 @@ server {{
             
         except Exception as e:
             logger.error(f"Failed to remove Nginx configuration: {e}")
+            return False
+    
+    async def list_config_backups(self, domain: str) -> List[Dict[str, Any]]:
+        """
+        Получает список backup'ов конфигурации для домена
+        """
+        try:
+            nginx_config_path = await self.settings_service.get_nginx_config_path()
+            backup_dir = Path(nginx_config_path) / "backups"
+            
+            if not backup_dir.exists():
+                return []
+            
+            backups = []
+            pattern = f"staffprobot-{domain}_*.conf"
+            
+            for backup_file in backup_dir.glob(pattern):
+                stat = backup_file.stat()
+                backups.append({
+                    "filename": backup_file.name,
+                    "path": str(backup_file),
+                    "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "size": stat.st_size
+                })
+            
+            # Сортируем по дате создания (новые сверху)
+            backups.sort(key=lambda x: x["created_at"], reverse=True)
+            
+            return backups
+            
+        except Exception as e:
+            logger.error(f"Failed to list Nginx configuration backups: {e}")
+            return []
+    
+    async def restore_config_from_backup(self, domain: str, backup_filename: str) -> bool:
+        """
+        Восстанавливает конфигурацию из backup'а
+        """
+        try:
+            nginx_config_path = await self.settings_service.get_nginx_config_path()
+            backup_dir = Path(nginx_config_path) / "backups"
+            backup_file_path = backup_dir / backup_filename
+            config_file_path = Path(nginx_config_path) / f"staffprobot-{domain}.conf"
+            
+            if not backup_file_path.exists():
+                logger.error(f"Backup file not found: {backup_file_path}")
+                return False
+            
+            # Создаем backup текущей конфигурации перед восстановлением
+            await self.create_config_backup(domain)
+            
+            # Копируем backup в основную конфигурацию
+            import shutil
+            shutil.copy2(backup_file_path, config_file_path)
+            
+            # Тестируем восстановленную конфигурацию
+            test_result = subprocess.run(
+                ['nginx', '-t'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if test_result.returncode != 0:
+                logger.error(f"Restored Nginx configuration test failed: {test_result.stderr}")
+                return False
+            
+            # Перезагружаем Nginx
+            reload_result = subprocess.run(
+                ['systemctl', 'reload', 'nginx'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if reload_result.returncode != 0:
+                logger.error(f"Failed to reload Nginx after restore: {reload_result.stderr}")
+                return False
+            
+            logger.info(f"Nginx configuration restored from backup: {backup_filename}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to restore Nginx configuration from backup: {e}")
+            return False
+    
+    async def delete_config_backup(self, domain: str, backup_filename: str) -> bool:
+        """
+        Удаляет backup конфигурации
+        """
+        try:
+            nginx_config_path = await self.settings_service.get_nginx_config_path()
+            backup_dir = Path(nginx_config_path) / "backups"
+            backup_file_path = backup_dir / backup_filename
+            
+            if not backup_file_path.exists():
+                logger.error(f"Backup file not found: {backup_file_path}")
+                return False
+            
+            backup_file_path.unlink()
+            logger.info(f"Nginx configuration backup deleted: {backup_filename}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to delete Nginx configuration backup: {e}")
             return False
     
     async def get_nginx_status(self) -> Dict[str, Any]:
