@@ -6,6 +6,7 @@ from core.logging.logger import logger
 from apps.bot.services.shift_service import ShiftService
 from apps.bot.services.object_service import ObjectService
 from core.utils.timezone_helper import timezone_helper
+from core.utils.url_helper import URLHelper
 from core.state import user_state_manager, UserAction, UserStep
 # Импорты удаленных файлов убраны
 
@@ -52,6 +53,9 @@ async def _handle_get_telegram_id(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     user = query.from_user
     
+    # Получаем URL сайта динамически
+    web_url = await URLHelper.get_web_url()
+    
     telegram_id_text = f"""
 🆔 <b>Ваш Telegram ID</b>
 
@@ -67,7 +71,7 @@ async def _handle_get_telegram_id(update: Update, context: ContextTypes.DEFAULT_
 • Введите этот ID для входа
 • Получите PIN-код в этом боте
 
-🌐 <b>Сайт:</b> http://localhost:8001
+🌐 <b>Сайт:</b> {web_url}
 """
     
     keyboard = [

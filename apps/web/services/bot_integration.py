@@ -7,6 +7,7 @@ import asyncio
 from typing import Optional
 from core.config.settings import settings
 from core.logging.logger import logger
+from core.utils.url_helper import URLHelper
 
 
 class BotIntegrationService:
@@ -22,13 +23,16 @@ class BotIntegrationService:
             logger.error("Telegram bot token not configured")
             return False
         
+        # Получаем URL сайта динамически
+        web_url = await URLHelper.get_web_url()
+        
         message = f"""
 🔐 <b>Код для входа в StaffProBot</b>
 
 Ваш PIN-код: <code>{pin_code}</code>
 
 ⏰ Код действителен 5 минут
-🌐 Сайт: http://localhost:8001
+🌐 Сайт: {web_url}
 
 <i>Если вы не запрашивали код, проигнорируйте это сообщение.</i>
 """

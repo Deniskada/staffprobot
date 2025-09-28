@@ -299,6 +299,29 @@ async def admin_monitoring(
     })
 
 
+@router.get("/system-settings", response_class=HTMLResponse, name="admin_system_settings")
+async def admin_system_settings(request: Request):
+    """Системные настройки"""
+    # Проверяем авторизацию и роль суперадмина
+    current_user = await get_current_user_from_request(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "superadmin":
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    
+    # Получаем данные для переключения интерфейсов
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        user_id = current_user.get("id")  # Это telegram_id
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+    
+    return templates.TemplateResponse("admin/system_settings.html", {
+        "request": request,
+        "current_user": current_user,
+        "available_interfaces": available_interfaces
+    })
+
+
 @router.get("/reports", response_class=HTMLResponse, name="admin_reports")
 async def admin_reports(request: Request):
     """Административные отчеты"""
