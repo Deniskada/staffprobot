@@ -733,14 +733,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            // Создаем backup через генерацию новой конфигурации
-            const useHttps = document.getElementById('useHttps').checked;
-            const response = await fetch('/api/system-settings/nginx/generate', {
+            // Создаем backup
+            const response = await fetch('/api/system-settings/nginx/backups/create', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ domain: domain, use_https: useHttps })
+                body: JSON.stringify({ domain: domain })
             });
             const data = await response.json();
             
