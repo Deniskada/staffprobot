@@ -15,7 +15,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews
 from apps.web.services.auth_service import AuthService
 
 
@@ -172,6 +172,7 @@ app.include_router(moderator.router, prefix="/moderator/api", tags=["Модер�
 app.include_router(moderator_web.router, prefix="/moderator", tags=["Модерация - Веб"])
 app.include_router(shared_appeals.router, prefix="/api/appeals", tags=["Обжалования"])
 app.include_router(shared_reviews.router, prefix="/api/reviews", tags=["Отзывы"])
+app.include_router(review_reports.router, prefix="/api/reports/reviews", tags=["Отчеты - Отзывы"])
 app.include_router(owner_reviews.router, prefix="/owner", tags=["Владелец - Отзывы"])
 app.include_router(employee_reviews.router, prefix="/employee", tags=["Сотрудник - Отзывы"])
 app.include_router(manager_reviews.router, prefix="/manager", tags=["Управляющий - Отзывы"])
