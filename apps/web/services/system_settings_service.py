@@ -4,10 +4,11 @@
 
 import socket
 import re
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, insert
 from domain.entities.system_settings import SystemSettings
+from domain.entities.settings_history import SettingsHistory
 from core.cache.redis_cache import RedisCache
 from core.logging.logger import logger
 
@@ -222,3 +223,43 @@ class SystemSettingsService:
         except Exception as e:
             logger.error(f"Error clearing cache: {e}")
             return False
+
+    async def log_setting_change(self, key: str, old_value: str, new_value: str, changed_by: str = None, reason: str = None) -> None:
+        """Логирование изменения настройки"""
+        try:
+            history_entry = SettingsHistory(
+                setting_key=key,
+                old_value=old_value,
+                new_value=new_value,
+                changed_by=changed_by,
+                change_reason=reason
+            )
+            self.db.add(history_entry)
+            await self.db.commit()
+            logger.info(f"Setting change logged: {key} by {changed_by}")
+        except Exception as e:
+            logger.error(f"Error logging setting change: {e}")
+
+    async def get_settings_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Получение истории изменений настроек"""
+        try:
+            query = select(SettingsHistory).order_by(SettingsHistory.created_at.desc()).limit(limit)
+            result = await self.db.execute(query)
+            history_entries = result.scalars().all()
+            
+            history = []
+            for entry in history_entries:
+                history.append({
+                    "id": entry.id,
+                    "setting_key": entry.setting_key,
+                    "old_value": entry.old_value,
+                    "new_value": entry.new_value,
+                    "changed_by": entry.changed_by,
+                    "change_reason": entry.change_reason,
+                    "created_at": entry.created_at.isoformat() if entry.created_at else None
+                })
+            
+            return history
+        except Exception as e:
+            logger.error(f"Error getting settings history: {e}")
+            return []

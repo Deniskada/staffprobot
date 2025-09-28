@@ -308,6 +308,45 @@
 
 {% block extra_js %}
 <script>
+// Загрузка истории изменений
+async function loadSettingsHistory() {
+    try {
+        const response = await fetch('/api/system-settings/history');
+        const data = await response.json();
+        
+        if (data.history) {
+            const historyTable = document.getElementById('historyTable');
+            let historyHtml = '';
+            
+            if (data.history.length > 0) {
+                data.history.forEach(entry => {
+                    const date = new Date(entry.created_at).toLocaleString('ru-RU');
+                    historyHtml += `
+                        <tr>
+                            <td><code>${entry.setting_key}</code></td>
+                            <td>${entry.old_value || '-'}</td>
+                            <td>${entry.new_value || '-'}</td>
+                            <td>${date}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                historyHtml = `
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">
+                            История изменений пуста
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            historyTable.innerHTML = historyHtml;
+        }
+    } catch (error) {
+        console.error('Error loading settings history:', error);
+    }
+}
+
 // Загрузка текущих настроек
 async function loadCurrentSettings() {
     try {
@@ -505,6 +544,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Загружаем настройки только после проверки элементов
     loadCurrentSettings();
+    
+    // Загружаем историю изменений
+    loadSettingsHistory();
     
     // Предпросмотр конфигурации Nginx
     document.getElementById('previewNginxBtn').addEventListener('click', async function() {
