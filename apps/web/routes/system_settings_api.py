@@ -276,6 +276,30 @@ async def list_nginx_backups(
         raise HTTPException(status_code=500, detail=f"Ошибка получения списка backup'ов: {str(e)}")
 
 
+@router.post("/nginx/backups/create")
+async def create_nginx_backup(
+    request: Request,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Создание backup'а конфигурации Nginx."""
+    try:
+        data = await request.json()
+        domain = data.get("domain")
+        
+        if not domain:
+            raise HTTPException(status_code=400, detail="Домен обязателен")
+        
+        nginx_service = NginxService(db)
+        backup_filename = await nginx_service.create_config_backup(domain)
+        if backup_filename:
+            return {"message": f"Backup создан: {backup_filename}", "backup_filename": backup_filename}
+        raise HTTPException(status_code=500, detail="Ошибка создания backup'а")
+    except Exception as e:
+        logger.error(f"Error creating Nginx backup: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка создания backup'а: {str(e)}")
+
+
 @router.post("/nginx/backups/restore")
 async def restore_nginx_config_from_backup(
     domain: str,
