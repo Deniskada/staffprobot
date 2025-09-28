@@ -2,7 +2,7 @@
 
 {% block title %}Системные настройки - StaffProBot - Администратор{% endblock %}
 
-{% block admin_content %}
+{% block content %}
 <div class="row">
     <div class="col-12">
         <h2 class="h4 mb-4">
@@ -304,13 +304,10 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-// Загрузка текущих настроек при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-    loadCurrentSettings();
-});
-
 // Загрузка текущих настроек
 async function loadCurrentSettings() {
     try {
@@ -438,90 +435,6 @@ async function previewConfig() {
     }
 }
 
-// Сохранение настроек
-document.getElementById('domainForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(this);
-    const domain = formData.get('domain');
-    const useHttps = formData.get('use_https') === 'on';
-    const sslEmail = formData.get('ssl_email');
-    
-    try {
-        // Обновляем домен
-        const domainResponse = await fetch('/api/system-settings/domain', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ domain: domain })
-        });
-        const domainData = await domainResponse.json();
-        
-        if (!domainData.success) {
-            showNotification(`Ошибка обновления домена: ${domainData.message}`, 'error');
-            return;
-        }
-        
-        // Обновляем настройку HTTPS
-        const httpsResponse = await fetch('/api/system-settings/https', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ use_https: useHttps })
-        });
-        const httpsData = await httpsResponse.json();
-        
-        if (!httpsData.success) {
-            showNotification(`Ошибка обновления HTTPS: ${httpsData.message}`, 'error');
-            return;
-        }
-        
-        // Обновляем SSL email
-        if (sslEmail) {
-            const emailResponse = await fetch('/api/system-settings/ssl/email', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ email: sslEmail })
-            });
-            const emailData = await emailResponse.json();
-            
-            if (!emailData.success) {
-                showNotification(`Ошибка обновления email: ${emailData.message}`, 'error');
-                return;
-            }
-        }
-        
-        showNotification('Настройки успешно сохранены', 'success');
-        loadCurrentSettings();
-        
-    } catch (error) {
-        console.error('Error saving settings:', error);
-        showNotification('Ошибка сохранения настроек', 'error');
-    }
-});
-
-// Очистка кэша
-async function clearCache() {
-    try {
-        const response = await fetch('/api/system-settings/cache/clear', {
-            method: 'POST'
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            showNotification('Кэш успешно очищен', 'success');
-        } else {
-            showNotification(`Ошибка очистки кэша: ${data.message}`, 'error');
-        }
-    } catch (error) {
-        console.error('Error clearing cache:', error);
-        showNotification('Ошибка очистки кэша', 'error');
-    }
-}
 
 // Инициализация настроек по умолчанию
 async function initializeSettings() {
@@ -575,8 +488,24 @@ function showNotification(message, type = 'info') {
     }, 5000);
 }
 
-// Nginx функции
+// Загрузка текущих настроек при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
+    // Проверяем, что все элементы загружены
+    const requiredElements = [
+        'previewNginxBtn', 'generateNginxBtn', 'validateNginxBtn', 'applyNginxBtn',
+        'checkNginxStatusBtn', 'listNginxBackupsBtn', 'createNginxBackupBtn',
+        'checkSslStatusBtn', 'checkSslAlertsBtn', 'renewSslBtn', 'domainForm'
+    ];
+    
+    const missingElements = requiredElements.filter(id => !document.getElementById(id));
+    if (missingElements.length > 0) {
+        console.error('Missing elements:', missingElements);
+        return;
+    }
+    
+    // Загружаем настройки только после проверки элементов
+    loadCurrentSettings();
+    
     // Предпросмотр конфигурации Nginx
     document.getElementById('previewNginxBtn').addEventListener('click', async function() {
         const domain = document.getElementById('domain').value;
@@ -1009,6 +938,55 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error renewing SSL:', error);
             showNotification('Ошибка обновления SSL сертификатов', 'error');
+        }
+    });
+    
+    // Сохранение настроек
+    document.getElementById('domainForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const domain = formData.get('domain');
+        const useHttps = formData.get('use_https') === 'on';
+        const sslEmail = formData.get('ssl_email');
+        
+        try {
+            const response = await fetch('/api/system-settings/domain', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ domain })
+            });
+            
+            if (response.ok) {
+                const response2 = await fetch('/api/system-settings/ssl-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email: sslEmail })
+                });
+                
+                const response3 = await fetch('/api/system-settings/use-https', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ use_https: useHttps })
+                });
+                
+                if (response2.ok && response3.ok) {
+                    showNotification('Настройки успешно сохранены', 'success');
+                } else {
+                    showNotification('Ошибка сохранения настроек', 'error');
+                }
+            } else {
+                showNotification('Ошибка сохранения настроек', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            showNotification('Ошибка сохранения настроек', 'error');
         }
     });
 });
