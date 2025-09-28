@@ -9,6 +9,8 @@ from typing import Dict, Any
 from core.database.session import get_db_session
 from apps.web.middleware.auth_middleware import require_superadmin
 from apps.web.services.system_settings_service import SystemSettingsService
+from apps.web.services.nginx_service import NginxService
+from apps.web.services.ssl_monitoring_service import SSLMonitoringService
 from core.utils.url_helper import URLHelper
 from core.logging.logger import logger
 
@@ -145,6 +147,202 @@ async def preview_domain_config(
     except Exception as e:
         logger.error(f"Error previewing domain config: {e}")
         raise HTTPException(status_code=500, detail="Ошибка предварительного просмотра")
+
+
+@router.get("/nginx/preview")
+async def preview_nginx_config(
+    domain: str,
+    use_https: bool,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Предварительный просмотр конфигурации Nginx."""
+    try:
+        nginx_service = NginxService(db)
+        config_content = await nginx_service.generate_nginx_config(domain, use_https)
+        return {"preview": config_content}
+    except Exception as e:
+        logger.error(f"Error generating Nginx config preview: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка генерации предварительного просмотра: {str(e)}")
+
+
+@router.post("/nginx/generate")
+async def generate_nginx_config(
+    domain: str,
+    use_https: bool,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Генерация и сохранение конфигурации Nginx."""
+    try:
+        nginx_service = NginxService(db)
+        success = await nginx_service.save_nginx_config(domain, use_https)
+        if success:
+            return {"message": "Конфигурация Nginx сгенерирована успешно", "domain": domain}
+        raise HTTPException(status_code=500, detail="Ошибка генерации конфигурации Nginx")
+    except Exception as e:
+        logger.error(f"Error generating Nginx config: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка генерации конфигурации: {str(e)}")
+
+
+@router.post("/nginx/validate")
+async def validate_nginx_config(
+    domain: str,
+    use_https: bool,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Валидация конфигурации Nginx."""
+    try:
+        nginx_service = NginxService(db)
+        validation_result = await nginx_service.validate_nginx_config(domain, use_https)
+        return validation_result
+    except Exception as e:
+        logger.error(f"Error validating Nginx config: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка валидации конфигурации: {str(e)}")
+
+
+@router.post("/nginx/apply")
+async def apply_nginx_config(
+    domain: str,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Применение конфигурации Nginx."""
+    try:
+        nginx_service = NginxService(db)
+        success = await nginx_service.apply_nginx_config(domain)
+        if success:
+            return {"message": "Конфигурация Nginx применена успешно", "domain": domain}
+        raise HTTPException(status_code=500, detail="Ошибка применения конфигурации Nginx")
+    except Exception as e:
+        logger.error(f"Error applying Nginx config: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка применения конфигурации: {str(e)}")
+
+
+@router.get("/nginx/status")
+async def get_nginx_status(
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение статуса Nginx."""
+    try:
+        nginx_service = NginxService(db)
+        status = await nginx_service.get_nginx_status()
+        return status
+    except Exception as e:
+        logger.error(f"Error getting Nginx status: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения статуса: {str(e)}")
+
+
+@router.delete("/nginx/remove")
+async def remove_nginx_config(
+    domain: str,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Удаление конфигурации Nginx."""
+    try:
+        nginx_service = NginxService(db)
+        success = await nginx_service.remove_nginx_config(domain)
+        if success:
+            return {"message": "Конфигурация Nginx удалена успешно", "domain": domain}
+        raise HTTPException(status_code=500, detail="Ошибка удаления конфигурации Nginx")
+    except Exception as e:
+        logger.error(f"Error removing Nginx config: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления конфигурации: {str(e)}")
+
+
+# SSL Monitoring endpoints
+@router.get("/ssl/monitoring/status")
+async def get_ssl_monitoring_status(
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение статуса мониторинга SSL."""
+    try:
+        monitoring_service = SSLMonitoringService(db)
+        result = await monitoring_service.check_all_certificates()
+        return result
+    except Exception as e:
+        logger.error(f"Error getting SSL monitoring status: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения статуса мониторинга: {str(e)}")
+
+
+@router.get("/ssl/monitoring/health")
+async def get_ssl_health_summary(
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение краткой сводки о состоянии SSL."""
+    try:
+        monitoring_service = SSLMonitoringService(db)
+        summary = await monitoring_service.get_ssl_health_summary()
+        return summary
+    except Exception as e:
+        logger.error(f"Error getting SSL health summary: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения сводки SSL: {str(e)}")
+
+
+@router.get("/ssl/monitoring/alerts")
+async def get_ssl_alerts(
+    limit: int = 10,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение списка SSL алертов."""
+    try:
+        monitoring_service = SSLMonitoringService(db)
+        alerts = await monitoring_service.get_ssl_alerts(limit)
+        return {"alerts": alerts}
+    except Exception as e:
+        logger.error(f"Error getting SSL alerts: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения алертов SSL: {str(e)}")
+
+
+@router.get("/ssl/monitoring/recommendations")
+async def get_ssl_recommendations(
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение рекомендаций по SSL."""
+    try:
+        monitoring_service = SSLMonitoringService(db)
+        recommendations = await monitoring_service.get_ssl_recommendations()
+        return {"recommendations": recommendations}
+    except Exception as e:
+        logger.error(f"Error getting SSL recommendations: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения рекомендаций SSL: {str(e)}")
+
+
+@router.post("/ssl/monitoring/renew")
+async def force_ssl_renewal(
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Принудительное обновление SSL сертификатов."""
+    try:
+        monitoring_service = SSLMonitoringService(db)
+        result = await monitoring_service.force_ssl_renewal()
+        return result
+    except Exception as e:
+        logger.error(f"Error forcing SSL renewal: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка принудительного обновления SSL: {str(e)}")
+
+
+@router.get("/ssl/monitoring/statistics")
+async def get_ssl_statistics(
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение статистики по SSL сертификатам."""
+    try:
+        monitoring_service = SSLMonitoringService(db)
+        stats = await monitoring_service.get_ssl_statistics()
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting SSL statistics: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения статистики SSL: {str(e)}")
 
 
 @router.get("/ssl/email")
