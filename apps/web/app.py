@@ -154,6 +154,20 @@ async def root(request: Request):
     return templates.TemplateResponse("landing.html", {"request": request})
 
 
+@app.get("/login")
+async def login_redirect():
+    """Редирект на страницу входа"""
+    return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+
+
+@app.get("/test-page")
+async def test_page():
+    """Тестовая страница для проверки загрузки"""
+    with open("test_simple_page.html", "r", encoding="utf-8") as f:
+        content = f.read()
+    return HTMLResponse(content=content)
+
+
 # Включение роутов
 app.include_router(auth.router, prefix="/auth", tags=["Авторизация"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Дашборд"])
