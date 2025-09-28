@@ -1,0 +1,449 @@
+<!-- Компонент для отображения рейтингов в системе отзывов -->
+<div class="rating-component">
+    <!-- Основной рейтинг -->
+    <div class="rating-main">
+        <div id="rating-display-{{ target_type }}-{{ target_id }}" 
+             class="rating-container"
+             data-target-type="{{ target_type }}"
+             data-target-id="{{ target_id }}"
+             data-size="{{ size or 'medium' }}"
+             data-show-stats="{{ show_statistics or 'false' }}"
+             data-interactive="{{ interactive or 'false' }}">
+            <!-- JavaScript будет инициализирован здесь -->
+        </div>
+    </div>
+    
+    <!-- Дополнительная информация о рейтинге -->
+    {% if show_additional_info %}
+    <div class="rating-additional-info">
+        <div class="rating-summary">
+            <span class="rating-text" id="rating-text-{{ target_type }}-{{ target_id }}">
+                <!-- Текст рейтинга будет заполнен JavaScript -->
+            </span>
+        </div>
+        
+        {% if show_last_updated %}
+        <div class="rating-last-updated">
+            <small class="text-muted">
+                <i class="fas fa-clock"></i>
+                Обновлено: <span id="last-updated-{{ target_type }}-{{ target_id }}">-</span>
+            </small>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- CSS стили для компонента рейтинга -->
+<style>
+.rating-component {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.rating-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rating-display.small {
+    gap: 5px;
+}
+
+.rating-display.large {
+    gap: 15px;
+}
+
+.rating-stars {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.rating-stars i {
+    color: #ffc107;
+    transition: color 0.2s ease;
+}
+
+.rating-stars i.star-full {
+    color: #ffc107;
+}
+
+.rating-stars i.star-half {
+    color: #ffc107;
+}
+
+.rating-stars i.star-empty {
+    color: #e9ecef;
+}
+
+.rating-stars i.highlighted {
+    color: #ffc107;
+    transform: scale(1.1);
+}
+
+.rating-stars i.small {
+    font-size: 14px;
+}
+
+.rating-stars i.medium {
+    font-size: 18px;
+}
+
+.rating-stars i.large {
+    font-size: 24px;
+}
+
+.rating-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.rating-value {
+    font-weight: 600;
+    font-size: 18px;
+    color: #495057;
+}
+
+.rating-display.small .rating-value {
+    font-size: 14px;
+}
+
+.rating-display.large .rating-value {
+    font-size: 24px;
+}
+
+.reviews-count {
+    font-size: 12px;
+    color: #6c757d;
+    margin-top: 2px;
+}
+
+.rating-display.small .reviews-count {
+    font-size: 10px;
+}
+
+.rating-display.large .reviews-count {
+    font-size: 14px;
+}
+
+.rating-additional-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.rating-text {
+    font-weight: 500;
+    color: #495057;
+}
+
+.rating-last-updated {
+    font-size: 12px;
+}
+
+/* Статистика рейтинга */
+.rating-statistics {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.stats-header h6 {
+    margin: 0 0 15px 0;
+    color: #495057;
+    font-weight: 600;
+}
+
+.stats-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.distribution-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.distribution-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.star-label {
+    width: 40px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 12px;
+    color: #495057;
+}
+
+.star-label i {
+    color: #ffc107;
+    font-size: 10px;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 8px;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: #ffc107;
+    transition: width 0.3s ease;
+}
+
+.count-label {
+    width: 30px;
+    text-align: right;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.recent-info {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.recent-info i {
+    color: #17a2b8;
+}
+
+.distribution-empty {
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    padding: 20px;
+}
+
+/* Состояния загрузки и ошибок */
+.rating-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.rating-loading::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid #e9ecef;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.rating-error {
+    color: #dc3545;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.rating-error::before {
+    content: '⚠️';
+}
+
+.stars-placeholder {
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Анимация вращения */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Интерактивность */
+.rating-display.interactive .rating-stars i {
+    cursor: pointer;
+}
+
+.rating-display.interactive .rating-stars i:hover {
+    transform: scale(1.1);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .rating-display {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .rating-info {
+        align-items: flex-start;
+    }
+    
+    .distribution-row {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .star-label {
+        width: auto;
+    }
+    
+    .count-label {
+        width: auto;
+        text-align: left;
+    }
+    
+    .progress-bar {
+        width: 100%;
+    }
+}
+
+/* Цветовая схема для разных рейтингов */
+.rating-excellent .rating-value {
+    color: #28a745;
+}
+
+.rating-good .rating-value {
+    color: #17a2b8;
+}
+
+.rating-satisfactory .rating-value {
+    color: #ffc107;
+}
+
+.rating-bad .rating-value {
+    color: #fd7e14;
+}
+
+.rating-very-bad .rating-value {
+    color: #dc3545;
+}
+</style>
+
+<!-- JavaScript для компонента рейтинга -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Обновляем дополнительную информацию после загрузки рейтинга
+    function updateAdditionalInfo(targetType, targetId, rating) {
+        // Обновляем текст рейтинга
+        const ratingTextElement = document.getElementById(`rating-text-${targetType}-${targetId}`);
+        if (ratingTextElement && rating) {
+            const ratingText = RatingUtils.getRatingText(rating.average_rating);
+            ratingTextElement.textContent = ratingText;
+            
+            // Добавляем класс для цветовой схемы
+            const ratingContainer = document.getElementById(`rating-display-${targetType}-${targetId}`);
+            if (ratingContainer) {
+                // Удаляем предыдущие классы
+                ratingContainer.classList.remove('rating-excellent', 'rating-good', 'rating-satisfactory', 'rating-bad', 'rating-very-bad');
+                
+                // Добавляем соответствующий класс
+                const ratingValue = parseFloat(rating.average_rating);
+                if (ratingValue >= 4.5) ratingContainer.classList.add('rating-excellent');
+                else if (ratingValue >= 3.5) ratingContainer.classList.add('rating-good');
+                else if (ratingValue >= 2.5) ratingContainer.classList.add('rating-satisfactory');
+                else if (ratingValue >= 1.5) ratingContainer.classList.add('rating-bad');
+                else ratingContainer.classList.add('rating-very-bad');
+            }
+        }
+        
+        // Обновляем время последнего обновления
+        const lastUpdatedElement = document.getElementById(`last-updated-${targetType}-${targetId}`);
+        if (lastUpdatedElement && rating) {
+            const lastUpdated = new Date(rating.last_updated);
+            lastUpdatedElement.textContent = lastUpdated.toLocaleDateString('ru-RU', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+    }
+    
+    // Переопределяем метод render в RatingDisplay для обновления дополнительной информации
+    const originalRender = RatingDisplay.prototype.render;
+    RatingDisplay.prototype.render = function() {
+        originalRender.call(this);
+        
+        if (this.rating && this.options.targetType && this.options.targetId) {
+            updateAdditionalInfo(this.options.targetType, this.options.targetId, this.rating);
+        }
+    };
+    
+    // Функция для создания простого звездного рейтинга без контейнера
+    window.createSimpleRating = function(rating, size = 'medium') {
+        return RatingUtils.createStarRating(rating, size);
+    };
+    
+    // Функция для получения текста рейтинга
+    window.getRatingText = function(rating) {
+        return RatingUtils.getRatingText(rating);
+    };
+    
+    // Функция для получения цвета рейтинга
+    window.getRatingColor = function(rating) {
+        return RatingUtils.getRatingColor(rating);
+    };
+    
+    // Функция для загрузки рейтингов для списка элементов
+    window.loadRatingsForList = async function(elements, targetType) {
+        const targets = [];
+        const elementMap = new Map();
+        
+        elements.forEach(element => {
+            const targetId = element.dataset.targetId || element.dataset.id;
+            if (targetId) {
+                targets.push({ target_type: targetType, target_id: parseInt(targetId) });
+                elementMap.set(`${targetType}_${targetId}`, element);
+            }
+        });
+        
+        if (targets.length === 0) return;
+        
+        try {
+            const ratings = await RatingUtils.loadMultipleRatings(targets);
+            
+            elementMap.forEach((element, key) => {
+                const rating = ratings[key];
+                if (rating) {
+                    const ratingContainer = element.querySelector('.rating-container');
+                    if (ratingContainer) {
+                        const starsHTML = RatingUtils.createStarRating(rating.average_rating);
+                        const reviewsText = rating.total_reviews > 0 ? 
+                            `${rating.total_reviews} ${rating.total_reviews === 1 ? 'отзыв' : 
+                             rating.total_reviews >= 2 && rating.total_reviews <= 4 ? 'отзыва' : 'отзывов'}` : 
+                            'Нет отзывов';
+                        
+                        ratingContainer.innerHTML = `
+                            <div class="rating-stars">${starsHTML}</div>
+                            <div class="rating-info">
+                                <div class="rating-value">${rating.average_rating.toFixed(1)}</div>
+                                <div class="reviews-count">${reviewsText}</div>
+                            </div>
+                        `;
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error loading ratings for list:', error);
+        }
+    };
+});
+</script>
