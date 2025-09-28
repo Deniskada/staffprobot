@@ -960,7 +960,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             if (response.ok) {
-                const response2 = await fetch('/api/system-settings/ssl-email', {
+                const response2 = await fetch('/api/system-settings/ssl/email', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -968,7 +968,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     body: JSON.stringify({ email: sslEmail })
                 });
                 
-                const response3 = await fetch('/api/system-settings/use-https', {
+                const response3 = await fetch('/api/system-settings/https', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
