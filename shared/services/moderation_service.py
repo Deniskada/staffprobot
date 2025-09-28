@@ -491,7 +491,35 @@ class ModerationService:
             decision: Решение модерации
         """
         try:
-            # TODO: Интеграция с системой уведомлений
+            from shared.templates.notifications.review_notifications import ReviewNotificationService
+            
+            notification_service = ReviewNotificationService(self.session)
+            
+            # Отправляем уведомление автору отзыва
+            await notification_service.send_review_status_notification(
+                user_id=review.reviewer_id,
+                review_data={
+                    "target_type": "сотруднику" if review.target_type == "employee" else "объекту",
+                    "target_id": review.target_id,
+                    "rejection_reason": review.moderation_notes
+                },
+                status=decision
+            )
+            
+            # Если отзыв одобрен, уведомляем владельца объекта/сотрудника
+            if decision == "approved":
+                # TODO: Получить ID владельца объекта/сотрудника
+                # await notification_service.send_new_review_notification(
+                #     target_owner_id=owner_id,
+                #     review_data={
+                #         "target_type": review.target_type,
+                #         "target_id": review.target_id,
+                #         "rating": float(review.rating),
+                #         "title": review.title
+                #     }
+                # )
+                pass
+            
             logger.info(f"Notification sent for review {review.id} with decision {decision}")
         except Exception as e:
             logger.error(f"Error sending moderation notifications: {e}")

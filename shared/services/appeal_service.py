@@ -449,7 +449,26 @@ class AppealService:
             appeal: Объект обжалования
         """
         try:
-            # TODO: Интеграция с системой уведомлений
+            from shared.templates.notifications.review_notifications import ReviewNotificationService
+            
+            notification_service = ReviewNotificationService(self.session)
+            
+            # Отправляем уведомление автору обжалования
+            await notification_service.send_appeal_submitted_notification(
+                user_id=appeal.appellant_id,
+                appeal_data={
+                    "review_id": appeal.review_id
+                }
+            )
+            
+            # Отправляем уведомление модераторам
+            await notification_service.send_appeal_required_notification(
+                appeal_id=appeal.id,
+                appeal_data={
+                    "review_id": appeal.review_id
+                }
+            )
+            
             logger.info(f"Notification sent for appeal {appeal.id}")
         except Exception as e:
             logger.error(f"Error sending appeal notifications: {e}")
@@ -462,7 +481,19 @@ class AppealService:
             appeal: Объект обжалования
         """
         try:
-            # TODO: Интеграция с системой уведомлений
+            from shared.templates.notifications.review_notifications import ReviewNotificationService
+            
+            notification_service = ReviewNotificationService(self.session)
+            
+            # Отправляем уведомление автору обжалования
+            await notification_service.send_appeal_status_notification(
+                user_id=appeal.appellant_id,
+                appeal_data={
+                    "review_id": appeal.review_id
+                },
+                status=appeal.status
+            )
+            
             logger.info(f"Notification sent for appeal decision {appeal.id}")
         except Exception as e:
             logger.error(f"Error sending appeal decision notifications: {e}")
