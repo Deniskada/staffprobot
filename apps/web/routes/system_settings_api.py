@@ -10,6 +10,7 @@ from core.database.session import get_db_session
 from apps.web.middleware.auth_middleware import require_superadmin
 from apps.web.services.system_settings_service import SystemSettingsService
 from apps.web.services.nginx_service import NginxService
+from apps.web.services.ssl_service import SSLService
 from apps.web.services.ssl_monitoring_service import SSLMonitoringService
 from apps.web.services.ssl_logging_service import SSLLoggingService
 from core.utils.url_helper import URLHelper
@@ -336,6 +337,54 @@ async def delete_nginx_backup(
     except Exception as e:
         logger.error(f"Error deleting Nginx backup: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка удаления backup'а: {str(e)}")
+
+
+# SSL Setup endpoints
+@router.post("/ssl/setup")
+async def setup_ssl_certificates(
+    request: Request,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Настройка SSL сертификатов для домена."""
+    try:
+        data = await request.json()
+        domain = data.get("domain")
+        
+        if not domain:
+            # Получаем домен из настроек
+            settings_service = SystemSettingsService(db)
+            domain = await settings_service.get_domain()
+            if not domain:
+                raise HTTPException(status_code=400, detail="Домен не настроен")
+        
+        settings_service = SystemSettingsService(db)
+        ssl_service = SSLService(db)
+        result = await ssl_service.setup_ssl(domain, await settings_service.get_ssl_email())
+        
+        if result.get("success"):
+            return {"message": "SSL сертификаты настроены успешно", "domain": domain}
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "Ошибка настройки SSL"))
+    except Exception as e:
+        logger.error(f"Error setting up SSL: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка настройки SSL: {str(e)}")
+
+
+# History endpoints
+@router.get("/history")
+async def get_settings_history(
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получение истории изменений настроек."""
+    try:
+        settings_service = SystemSettingsService(db)
+        history = await settings_service.get_settings_history()
+        return {"history": history}
+    except Exception as e:
+        logger.error(f"Error getting settings history: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения истории: {str(e)}")
 
 
 # SSL Monitoring endpoints
