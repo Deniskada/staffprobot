@@ -112,6 +112,14 @@ class SystemSettingsService:
         """Получить настройку использования HTTPS"""
         value = await self.get_setting("use_https", "false")
         return value.lower() == "true"
+
+    async def get_nginx_config_path(self) -> str:
+        """Получить путь к конфигурации Nginx."""
+        return await self.get_setting("nginx_config_path") or settings.nginx_config_path
+
+    async def get_certbot_path(self) -> str:
+        """Получить путь к исполняемому файлу Certbot."""
+        return await self.get_setting("certbot_path") or settings.certbot_path
     
     async def set_use_https(self, use_https: bool) -> bool:
         """Установить настройку использования HTTPS"""

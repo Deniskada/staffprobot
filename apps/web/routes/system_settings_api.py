@@ -169,13 +169,19 @@ async def preview_nginx_config(
 
 @router.post("/nginx/generate")
 async def generate_nginx_config(
-    domain: str,
-    use_https: bool,
+    request: Request,
     current_user: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Генерация и сохранение конфигурации Nginx."""
     try:
+        data = await request.json()
+        domain = data.get("domain")
+        use_https = data.get("use_https", False)
+        
+        if not domain:
+            raise HTTPException(status_code=400, detail="Домен обязателен")
+        
         nginx_service = NginxService(db)
         success = await nginx_service.save_nginx_config(domain, use_https)
         if success:
