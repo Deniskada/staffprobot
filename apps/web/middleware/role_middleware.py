@@ -242,3 +242,63 @@ async def require_employee_or_applicant(request: Request, current_user = Depends
         }
 
 
+async def require_moderator_or_superadmin(request: Request, current_user = Depends(get_current_user_dependency())):
+    """Проверка роли модератора или суперадмина."""
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    # Если пользователь не аутентифицирован
+    if current_user is None:
+        return RedirectResponse(url="/auth/login", status_code=302)
+    
+    # current_user теперь объект User, проверяем роли напрямую
+    from core.database.session import get_async_session
+    async with get_async_session() as session:
+        role_service = RoleService(session)
+        has_role = await role_service.has_any_role(current_user.id, [UserRole.MODERATOR, UserRole.SUPERADMIN])
+        
+        if not has_role:
+            logger.warning(f"User {current_user.id} is not a moderator or superadmin")
+            raise HTTPException(status_code=403, detail="Недостаточно прав доступа")
+        
+        # Возвращаем словарь с данными пользователя для совместимости
+        return {
+            "id": current_user.telegram_id,
+            "username": current_user.username,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "role": current_user.role,
+            "roles": current_user.roles
+        }
+
+
+async def require_moderator_switch_access(request: Request, current_user = Depends(get_current_user_dependency())):
+    """Проверка прав на переключение в режим модерации (только суперадмин)."""
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    # Если пользователь не аутентифицирован
+    if current_user is None:
+        return RedirectResponse(url="/auth/login", status_code=302)
+    
+    # Только суперадмин может переключаться в режим модерации
+    from core.database.session import get_async_session
+    async with get_async_session() as session:
+        role_service = RoleService(session)
+        has_role = await role_service.has_role(current_user.id, UserRole.SUPERADMIN)
+        
+        if not has_role:
+            logger.warning(f"User {current_user.id} is not a superadmin, cannot switch to moderation mode")
+            raise HTTPException(status_code=403, detail="Недостаточно прав доступа для переключения в режим модерации")
+        
+        # Возвращаем словарь с данными пользователя для совместимости
+        return {
+            "id": current_user.telegram_id,
+            "username": current_user.username,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "role": current_user.role,
+            "roles": current_user.roles
+        }
+
+

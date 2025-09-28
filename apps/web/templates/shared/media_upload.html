@@ -1,0 +1,424 @@
+<!-- Компонент для загрузки медиа-файлов в системе отзывов -->
+<div class="media-upload-component">
+    <div class="media-upload-header">
+        <h5>
+            <i class="fas fa-paperclip"></i>
+            Прикрепить файлы
+        </h5>
+        <small class="text-muted">
+            Поддерживаются фото, видео, аудио и документы
+        </small>
+    </div>
+    
+    <div id="media-upload-container" data-review-id="{{ review_id or '' }}">
+        <!-- JavaScript загрузчик будет инициализирован здесь -->
+    </div>
+    
+    <div class="media-upload-actions mt-3">
+        <button type="button" class="btn btn-primary" onclick="mediaUploader.uploadFiles()">
+            <i class="fas fa-upload"></i>
+            Загрузить файлы
+        </button>
+        <button type="button" class="btn btn-outline-secondary" onclick="mediaUploader.clear()">
+            <i class="fas fa-trash"></i>
+            Очистить
+        </button>
+    </div>
+</div>
+
+<!-- CSS стили для компонента загрузки медиа -->
+<style>
+.media-upload-component {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    background-color: #f8f9fa;
+}
+
+.media-upload-header h5 {
+    color: #495057;
+    margin-bottom: 5px;
+}
+
+.media-upload-header h5 i {
+    color: #007bff;
+    margin-right: 8px;
+}
+
+.media-upload-area {
+    margin-bottom: 20px;
+}
+
+.upload-dropzone {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    background-color: white;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.upload-dropzone:hover {
+    border-color: #007bff;
+    background-color: #f8f9ff;
+}
+
+.upload-dropzone.drag-over {
+    border-color: #007bff;
+    background-color: #e3f2fd;
+    transform: scale(1.02);
+}
+
+.upload-icon {
+    font-size: 48px;
+    color: #6c757d;
+    margin-bottom: 15px;
+}
+
+.upload-icon i {
+    transition: color 0.3s ease;
+}
+
+.upload-dropzone:hover .upload-icon i {
+    color: #007bff;
+}
+
+.upload-text p {
+    font-size: 16px;
+    color: #495057;
+    margin-bottom: 10px;
+}
+
+.upload-link {
+    color: #007bff;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.upload-link:hover {
+    color: #0056b3;
+}
+
+.upload-limits {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.upload-progress {
+    margin-top: 20px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: #007bff;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.progress-text {
+    text-align: center;
+    margin-top: 8px;
+    font-size: 14px;
+    color: #495057;
+}
+
+.media-preview {
+    margin-top: 20px;
+}
+
+.media-preview-item {
+    background-color: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    transition: box-shadow 0.2s ease;
+}
+
+.media-preview-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.preview-content {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.preview-icon {
+    font-size: 24px;
+    color: #6c757d;
+    margin-right: 15px;
+    width: 40px;
+    text-align: center;
+}
+
+.preview-info {
+    flex: 1;
+}
+
+.preview-name {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 4px;
+}
+
+.preview-details {
+    font-size: 14px;
+    color: #6c757d;
+}
+
+.preview-actions {
+    margin-left: 15px;
+}
+
+.btn-remove {
+    background: none;
+    border: none;
+    color: #dc3545;
+    font-size: 18px;
+    padding: 5px;
+    cursor: pointer;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+}
+
+.btn-remove:hover {
+    background-color: #f8d7da;
+}
+
+.media-errors {
+    margin-top: 15px;
+}
+
+.alert {
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+}
+
+.alert i {
+    margin-right: 8px;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.media-upload-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.media-upload-actions .btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .media-upload-component {
+        padding: 15px;
+    }
+    
+    .upload-dropzone {
+        padding: 30px 15px;
+    }
+    
+    .upload-icon {
+        font-size: 36px;
+    }
+    
+    .upload-text p {
+        font-size: 14px;
+    }
+    
+    .media-upload-actions {
+        flex-direction: column;
+    }
+    
+    .media-upload-actions .btn {
+        justify-content: center;
+    }
+}
+</style>
+
+<!-- JavaScript для компонента -->
+<script>
+// Инициализация компонента загрузки медиа
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('media-upload-container');
+    if (container && typeof MediaUploader !== 'undefined') {
+        const reviewId = container.dataset.reviewId;
+        
+        mediaUploader = new MediaUploader('media-upload-container', {
+            reviewId: reviewId,
+            maxFiles: 10,
+            onUploadComplete: function(media) {
+                console.log('Files uploaded successfully:', media);
+                
+                // Уведомление пользователя
+                if (typeof showNotification === 'function') {
+                    showNotification(`Загружено ${media.length} файлов`, 'success');
+                }
+                
+                // Обновление интерфейса отзыва
+                updateReviewMediaDisplay(media);
+            },
+            onError: function(error) {
+                console.error('Upload error:', error);
+                
+                if (typeof showNotification === 'function') {
+                    showNotification('Ошибка загрузки файлов', 'error');
+                }
+            }
+        });
+    }
+});
+
+// Функция для обновления отображения медиа-файлов в отзыве
+function updateReviewMediaDisplay(media) {
+    const mediaContainer = document.getElementById('review-media-container');
+    if (!mediaContainer) return;
+    
+    mediaContainer.innerHTML = '';
+    
+    media.forEach(item => {
+        const mediaItem = createMediaItem(item);
+        mediaContainer.appendChild(mediaItem);
+    });
+}
+
+// Создание элемента медиа для отображения
+function createMediaItem(media) {
+    const item = document.createElement('div');
+    item.className = 'review-media-item';
+    item.dataset.mediaId = media.id;
+    
+    const icon = getMediaIcon(media.file_type);
+    const size = formatFileSize(media.file_size);
+    
+    item.innerHTML = `
+        <div class="media-item-content">
+            <div class="media-icon">${icon}</div>
+            <div class="media-info">
+                <div class="media-type">${media.file_type.toUpperCase()}</div>
+                <div class="media-size">${size}</div>
+            </div>
+            <div class="media-actions">
+                <a href="${media.url}" target="_blank" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-eye"></i>
+                </a>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteMedia(${media.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    return item;
+}
+
+// Получение иконки для типа медиа
+function getMediaIcon(fileType) {
+    const icons = {
+        photo: '<i class="fas fa-image"></i>',
+        video: '<i class="fas fa-video"></i>',
+        audio: '<i class="fas fa-music"></i>',
+        document: '<i class="fas fa-file"></i>'
+    };
+    return icons[fileType] || '<i class="fas fa-file"></i>';
+}
+
+// Форматирование размера файла
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Удаление медиа-файла
+async function deleteMedia(mediaId) {
+    if (!confirm('Удалить этот файл?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/media/${mediaId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Удаляем элемент из DOM
+            const mediaItem = document.querySelector(`[data-media-id="${mediaId}"]`);
+            if (mediaItem) {
+                mediaItem.remove();
+            }
+            
+            if (typeof showNotification === 'function') {
+                showNotification('Файл удален', 'success');
+            }
+        } else {
+            throw new Error(result.message);
+        }
+        
+    } catch (error) {
+        console.error('Delete media error:', error);
+        if (typeof showNotification === 'function') {
+            showNotification('Ошибка удаления файла', 'error');
+        }
+    }
+}
+
+// Функция для показа уведомлений (если не определена глобально)
+if (typeof showNotification === 'undefined') {
+    function showNotification(message, type = 'info') {
+        // Простая реализация уведомлений
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'}`;
+        notification.textContent = message;
+        notification.style.position = 'fixed';
+        notification.style.top = '20px';
+        notification.style.right = '20px';
+        notification.style.zIndex = '9999';
+        notification.style.minWidth = '300px';
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 5000);
+    }
+}
+</script>

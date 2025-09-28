@@ -17,6 +17,7 @@ class UserRole(str, Enum):
     APPLICANT = "applicant"
     MANAGER = "manager"
     SUPERADMIN = "superadmin"
+    MODERATOR = "moderator"
 
 
 class User(Base):
