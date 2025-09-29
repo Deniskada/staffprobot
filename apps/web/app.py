@@ -15,7 +15,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown
 from apps.web.routes.system_settings_api import router as system_settings_router
 from apps.web.services.auth_service import AuthService
 
@@ -207,6 +207,7 @@ app.include_router(manager_reviews.router, prefix="/manager", tags=["Управ�
 app.include_router(user_appeals.router, tags=["Обжалования - Веб"])
 app.include_router(simple_test.router, tags=["Простой тест"])
 app.include_router(manager_reviews_simple.router, tags=["Управляющий - Отзывы (Простая версия)"])
+app.include_router(test_dropdown.router, tags=["Тест Dropdown"])
 
 
 # API для интеграции с ботом
