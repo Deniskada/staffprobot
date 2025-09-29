@@ -1,0 +1,79 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}Отзывы и рейтинги - StaffProBot{% endblock %}
+
+{% block manager_content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1><i class="fas fa-comments"></i> Отзывы</h1>
+            
+            <!-- Простая статистика -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h3 id="total-reviews">-</h3>
+                            <p>Всего отзывов</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Контейнер отзывов -->
+            <div id="reviews-container">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                    <p class="mt-3">Загрузка отзывов...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+console.log('🚀 JavaScript загружен!');
+
+// Простая функция загрузки отзывов
+async function loadReviews() {
+    console.log('🔄 Загружаем отзывы...');
+    try {
+        const response = await fetch('/api/reviews/my-reviews');
+        console.log('📡 Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('📦 Response data:', data);
+        
+        // Обновляем статистику
+        document.getElementById('total-reviews').textContent = data.count || 0;
+        
+        // Обновляем контейнер
+        const container = document.getElementById('reviews-container');
+        if (data.reviews && data.reviews.length > 0) {
+            container.innerHTML = '<div class="alert alert-success">✅ Найдено отзывов: ' + data.reviews.length + '</div>';
+        } else {
+            container.innerHTML = '<div class="alert alert-info">ℹ️ Отзывов пока нет.</div>';
+        }
+        
+        console.log('✅ Отзывы загружены успешно');
+        
+    } catch (error) {
+        console.error('❌ Ошибка загрузки отзывов:', error);
+        document.getElementById('reviews-container').innerHTML = 
+            '<div class="alert alert-danger">❌ Ошибка: ' + error.message + '</div>';
+    }
+}
+
+// Загрузка при готовности DOM
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎯 DOM загружен, запускаем загрузку отзывов...');
+    loadReviews();
+});
+</script>
+{% endblock %}
