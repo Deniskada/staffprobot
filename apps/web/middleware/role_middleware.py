@@ -15,6 +15,9 @@ from apps.web.dependencies import get_current_user_dependency
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:
     """Получает внутренний ID пользователя из current_user."""
+    if current_user is None:
+        return None
+        
     if isinstance(current_user, dict):
         # current_user - это словарь из JWT payload
         telegram_id = current_user.get("id")
@@ -32,7 +35,7 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession) -> 
 
 def require_any_role(roles: List[UserRole]):
     """Декоратор для проверки наличия любой из указанных ролей."""
-    async def role_checker(request: Request, current_user: dict = Depends(require_owner_or_superadmin)):
+    async def role_checker(request: Request, current_user: dict = Depends(get_current_user_dependency())):
         if isinstance(current_user, RedirectResponse):
             return current_user
         
