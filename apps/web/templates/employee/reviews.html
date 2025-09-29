@@ -364,6 +364,9 @@
     document.addEventListener('DOMContentLoaded', function() {
         console.log('DOM loaded, starting initialization...');
         
+        // Инициализация фильтров из URL параметров
+        initFiltersFromURL();
+        
         // Небольшая задержка для инициализации Bootstrap
         setTimeout(() => {
             try {
@@ -376,6 +379,33 @@
             }
         }, 100);
     });
+
+    // Инициализация фильтров из URL параметров
+    function initFiltersFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetType = urlParams.get('target_type');
+        const targetId = urlParams.get('target_id');
+        
+        if (targetType && targetId) {
+            console.log('Applying filters from URL:', { targetType, targetId });
+            
+            // Устанавливаем фильтр по типу
+            if (targetType === 'object') {
+                currentFilter = 'objects';
+                // Активируем соответствующую кнопку фильтра
+                const filterButton = document.querySelector(`[onclick="filterReviews('objects')"]`);
+                if (filterButton) {
+                    // Убираем активность с других кнопок
+                    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                    // Активируем нужную кнопку
+                    filterButton.classList.add('active');
+                }
+            }
+            
+            // Сохраняем ID цели для фильтрации
+            window.currentTargetId = parseInt(targetId);
+        }
+    }
 
     // Фильтрация отзывов
     function filterReviews(filter) {
@@ -403,8 +433,12 @@
                 if (currentFilter === 'about-me') {
                     // Для сотрудника "Обо мне" означает отзывы о нем самом
                     url += `&target_type=employee`;
-                } else if (currentFilter === 'about-objects') {
+                } else if (currentFilter === 'objects') {
                     url += `&target_type=object`;
+                    // Если есть фильтр по конкретному объекту, добавляем его
+                    if (window.currentTargetId) {
+                        url += `&target_id=${window.currentTargetId}`;
+                    }
                 }
             }
             

@@ -16,7 +16,7 @@ class EmployeeObjectsManager {
     }
 
     setupEventListeners() {
-        // Кнопки подачи заявок и клики по адресу
+        // Кнопки подачи заявок, клики по адресу и рейтингу
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('object-apply-btn') || e.target.closest('.object-apply-btn')) {
                 const button = e.target.classList.contains('object-apply-btn') ? e.target : e.target.closest('.object-apply-btn');
@@ -28,6 +28,11 @@ class EmployeeObjectsManager {
                 const objectId = addressElement.dataset.objectId;
                 console.log('Клик по адресу, objectId:', objectId);
                 this.focusOnObject(objectId);
+            } else if (e.target.classList.contains('object-rating') || e.target.closest('.object-rating')) {
+                const ratingElement = e.target.classList.contains('object-rating') ? e.target : e.target.closest('.object-rating');
+                const objectId = ratingElement.dataset.objectId;
+                console.log('Клик по рейтингу, objectId:', objectId);
+                this.openObjectReviews(objectId);
             }
         });
 
@@ -162,10 +167,7 @@ class EmployeeObjectsManager {
         
         // Создаем рейтинг
         const rating = object.rating || { average_rating: 5.0, total_reviews: 0, stars: { full_stars: 5, has_half_star: false, empty_stars: 0 } };
-        console.log('Rating data:', rating);
-        const stars = this.createStarRating(rating.stars);
-        console.log('Generated stars HTML:', stars);
-        const ratingText = `(${rating.total_reviews})`;
+        const stars = this.createStarRating(rating.stars, object.id);
         
         // Создаем элемент списка
         const listItem = document.createElement('div');
@@ -174,9 +176,8 @@ class EmployeeObjectsManager {
             <div class="d-flex flex-column">
                 <div class="object-title">
                     <span>${object.name}</span>
-                    <div class="object-rating">
+                    <div class="object-rating" data-object-id="${object.id}" style="cursor: pointer;" title="Посмотреть отзывы об объекте">
                         <div class="star-rating">${stars}</div>
-                        <span class="rating-text">${ratingText}</span>
                     </div>
                 </div>
                 <div class="object-salary">
@@ -194,7 +195,7 @@ class EmployeeObjectsManager {
         return listItem;
     }
     
-    createStarRating(stars) {
+    createStarRating(stars, objectId) {
         let html = '';
         
         // Полные звезды
@@ -213,6 +214,12 @@ class EmployeeObjectsManager {
         }
         
         return html;
+    }
+
+    openObjectReviews(objectId) {
+        // Переходим на страницу отзывов с фильтром по объекту
+        const reviewsUrl = `/employee/reviews?target_type=object&target_id=${objectId}`;
+        window.location.href = reviewsUrl;
     }
 
     focusOnObject(objectId) {

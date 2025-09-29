@@ -140,6 +140,7 @@ async def create_review(
 async def get_my_reviews(
     request: Request,
     target_type: Optional[str] = None,
+    target_id: Optional[int] = None,
     limit: int = 20,
     offset: int = 0,
     current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPERADMIN])),
@@ -195,6 +196,9 @@ async def get_my_reviews(
         
         if target_type:
             query = query.where(Review.target_type == target_type)
+        
+        if target_id:
+            query = query.where(Review.target_id == target_id)
         
         query = query.order_by(Review.created_at.desc()).limit(limit).offset(offset)
         
