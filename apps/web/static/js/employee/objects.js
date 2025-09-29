@@ -161,8 +161,10 @@ class EmployeeObjectsManager {
         const totalSalary = Math.round(object.hourly_rate * 12);
         
         // Создаем рейтинг
-        const rating = object.rating || { average_rating: 5.0, total_reviews: 0, stars: { full: 5, half: 0, empty: 0 } };
+        const rating = object.rating || { average_rating: 5.0, total_reviews: 0, stars: { full_stars: 5, has_half_star: false, empty_stars: 0 } };
+        console.log('Rating data:', rating);
         const stars = this.createStarRating(rating.stars);
+        console.log('Generated stars HTML:', stars);
         const ratingText = `(${rating.total_reviews})`;
         
         // Создаем элемент списка
@@ -196,17 +198,17 @@ class EmployeeObjectsManager {
         let html = '';
         
         // Полные звезды
-        for (let i = 0; i < stars.full; i++) {
+        for (let i = 0; i < stars.full_stars; i++) {
             html += '<i class="bi bi-star-fill"></i>';
         }
         
         // Половина звезды
-        if (stars.half > 0) {
+        if (stars.has_half_star) {
             html += '<i class="bi bi-star-half"></i>';
         }
         
         // Пустые звезды
-        for (let i = 0; i < stars.empty; i++) {
+        for (let i = 0; i < stars.empty_stars; i++) {
             html += '<i class="bi bi-star"></i>';
         }
         
