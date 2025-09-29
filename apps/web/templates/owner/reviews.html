@@ -676,28 +676,45 @@
         }
 
         // Загрузка договоров
-        async function loadContracts() {
+        async function loadContracts(employeeId = null) {
             try {
-                // TODO: Реализовать API для получения договоров владельца
                 const contractSelect = document.getElementById('contract-id');
                 contractSelect.innerHTML = '<option value="">Загрузка договоров...</option>';
                 
-                // Заглушка
-                setTimeout(() => {
-                    contractSelect.innerHTML = `
-                        <option value="">Выберите договор</option>
-                        <option value="1">Договор #12345 - Объект "Офис на Тверской"</option>
-                        <option value="2">Договор #12346 - Объект "Склад в Подольске"</option>
-                    `;
-                }, 1000);
+                // Загружаем договоры владельца
+                const response = await fetch('/api/contracts/my-contracts', {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    contractSelect.innerHTML = '<option value="">Выберите договор</option>';
+                    
+                    if (data.success && data.contracts) {
+                        data.contracts.forEach(contract => {
+                            // Если указан employeeId, фильтруем только договоры с этим сотрудником
+                            if (!employeeId || contract.employee_id == employeeId) {
+                                const option = document.createElement('option');
+                                option.value = contract.id;
+                                option.textContent = `${contract.contract_number} - ${contract.title}`;
+                                contractSelect.appendChild(option);
+                            }
+                        });
+                    }
+                } else {
+                    contractSelect.innerHTML = '<option value="">Ошибка загрузки договоров</option>';
+                }
             } catch (error) {
                 console.error('Error loading contracts:', error);
+                const contractSelect = document.getElementById('contract-id');
+                contractSelect.innerHTML = '<option value="">Ошибка загрузки договоров</option>';
             }
         }
 
         // Показ модального окна создания отзыва
         function showCreateReviewModal() {
             loadAvailableEmployees();
+            loadContracts(); // Загружаем все договоры
             const modal = new bootstrap.Modal(document.getElementById('createReviewModal'));
             modal.show();
         }
@@ -717,9 +734,23 @@
                         const option = document.createElement('option');
                         option.value = target.id;
                         option.textContent = target.name;
+                        option.dataset.contractId = target.contract_id; // Сохраняем contract_id
                         select.appendChild(option);
                     });
                 }
+                
+                // Добавляем обработчик изменения выбора сотрудника
+                select.addEventListener('change', function() {
+                    const selectedOption = this.options[this.selectedIndex];
+                    if (selectedOption.value) {
+                        // Фильтруем договоры по выбранному сотруднику
+                        loadContracts(selectedOption.value);
+                    } else {
+                        // Показываем все договоры
+                        loadContracts();
+                    }
+                });
+                
             } catch (error) {
                 console.error('Ошибка загрузки сотрудников:', error);
                 showAlert('Ошибка загрузки сотрудников', 'danger');

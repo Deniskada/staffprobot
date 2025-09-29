@@ -4,7 +4,7 @@ URL-префикс: /owner/*
 """
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query, Body
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from typing import List, Optional, Dict, Any
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -29,6 +29,7 @@ from apps.web.services.object_service import ObjectService, TimeSlotService
 from apps.web.utils.timezone_utils import web_timezone_helper
 from domain.entities.user import User, UserRole
 from domain.entities.object import Object
+from domain.entities.contract import Contract
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.application import Application, ApplicationStatus
@@ -1979,6 +1980,68 @@ async def api_employees(request: Request):
     except Exception as e:
         logger.error(f"Error getting employees: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
+
+
+@router.get("/api/contracts/my-contracts")
+async def api_my_contracts(request: Request):
+    """API: получение договоров владельца."""
+    current_user = await get_current_user(request)
+    if not current_user:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    # Проверяем роли (поддержка множественных ролей)
+    user_roles = current_user.get("roles", [])
+    if isinstance(user_roles, str):
+        user_roles = [user_roles]
+    if "owner" not in user_roles and "superadmin" not in user_roles:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    try:
+        async with get_async_session() as session:
+            # Получаем внутренний ID пользователя
+            telegram_id = current_user.get("id")
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await session.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            
+            if not user_obj:
+                raise HTTPException(status_code=404, detail="Пользователь не найден")
+            
+            # Получаем договоры владельца
+            contracts_query = select(Contract).where(Contract.owner_id == user_obj.id)
+            contracts_result = await session.execute(contracts_query)
+            contracts = contracts_result.scalars().all()
+            
+            # Формируем ответ
+            contracts_data = []
+            for contract in contracts:
+                # Получаем информацию о сотруднике
+                employee_query = select(User).where(User.id == contract.employee_id)
+                employee_result = await session.execute(employee_query)
+                employee = employee_result.scalar_one_or_none()
+                
+                contracts_data.append({
+                    "id": contract.id,
+                    "contract_number": contract.contract_number,
+                    "title": contract.title,
+                    "employee_id": contract.employee_id,
+                    "employee_name": f"{employee.first_name} {employee.last_name}" if employee else "Неизвестно",
+                    "status": contract.status,
+                    "start_date": contract.start_date.isoformat() if contract.start_date else None,
+                    "end_date": contract.end_date.isoformat() if contract.end_date else None
+                })
+            
+            return JSONResponse(content={
+                "success": True,
+                "contracts": contracts_data,
+                "count": len(contracts_data)
+            })
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting contracts: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки договоров")
 
 
 @router.get("/api/employees/for-object/{object_id}")
