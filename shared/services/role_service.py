@@ -233,6 +233,8 @@ class RoleService:
             
             if UserRole.SUPERADMIN.value in user_roles:
                 interfaces.append("admin")
+            if UserRole.MODERATOR.value in user_roles:
+                interfaces.append("moderator")
             if UserRole.OWNER.value in user_roles:
                 interfaces.append("owner")
             if UserRole.MANAGER.value in user_roles:
@@ -252,7 +254,7 @@ class RoleService:
             interfaces = await self.get_available_interfaces(user_id)
             
             # Приоритет интерфейсов
-            priority = ["admin", "owner", "manager", "employee"]
+            priority = ["admin", "moderator", "owner", "manager", "employee"]
             
             for interface in priority:
                 if interface in interfaces:
