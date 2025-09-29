@@ -5,6 +5,7 @@
 from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
+from sqlalchemy.orm import selectinload
 from core.logging.logger import logger
 from domain.entities.contract import Contract
 from domain.entities.object import Object
@@ -113,6 +114,14 @@ class ReviewPermissionService:
         try:
             print(f"DEBUG: get_available_targets_for_review called with user_id={user_id}, target_type={target_type}")
             
+            # Получаем пользователя для проверки ролей
+            user = await self._get_user(user_id)
+            if not user:
+                print(f"DEBUG: User {user_id} not found")
+                return []
+            
+            print(f"DEBUG: User roles: {user.get_roles()}")
+            
             # Получаем договоры пользователя (все статусы)
             contracts_query = select(Contract).where(
                 or_(
@@ -130,43 +139,64 @@ class ReviewPermissionService:
             
             for contract in contracts:
                 if target_type == 'employee':
-                    # Для отзыва о сотруднике - берем employee_id из договора
-                    if contract.employee_id != user_id:  # Не оставляем отзыв о себе
-                        employee = await self._get_user(contract.employee_id)
-                        if employee:
+                    # Для отзыва о сотруднике - только владельцы и управляющие
+                    if contract.owner_id == user_id:  # Только владелец договора
+                        if contract.employee_id != user_id:  # Не оставляем отзыв о себе
+                            employee = await self._get_user(contract.employee_id)
+                            if employee:
+                                # Проверяем, что отзыв еще не оставлен
+                                existing_review = await self._get_existing_review(
+                                    user_id, contract.id, target_type, contract.employee_id
+                                )
+                                if not existing_review:
+                                    available_targets.append({
+                                        "id": contract.employee_id,
+                                        "name": f"{employee.first_name} {employee.last_name}",
+                                        "contract_id": contract.id,
+                                        "contract_number": contract.contract_number,
+                                        "contract_title": contract.title
+                                    })
+                
+                elif target_type == 'object':
+                    # Для отзыва об объекте - только сотрудники и управляющие
+                    if contract.employee_id == user_id:  # Только сотрудник договора
+                        objects = await self._get_objects_by_contract(contract)
+                        print(f"DEBUG: Contract {contract.id} has {len(objects)} objects")
+                        for obj in objects:
                             # Проверяем, что отзыв еще не оставлен
                             existing_review = await self._get_existing_review(
-                                user_id, contract.id, target_type, contract.employee_id
+                                user_id, contract.id, target_type, obj.id
                             )
                             if not existing_review:
                                 available_targets.append({
-                                    "id": contract.employee_id,
-                                    "name": f"{employee.first_name} {employee.last_name}",
+                                    "id": obj.id,
+                                    "name": obj.name,
+                                    "address": obj.address,
                                     "contract_id": contract.id,
                                     "contract_number": contract.contract_number,
                                     "contract_title": contract.title
                                 })
-                
-                elif target_type == 'object':
-                    # Для отзыва об объекте - получаем объекты по договору
-                    # Любой участник договора может оставлять отзыв об объектах
-                    objects = await self._get_objects_by_contract(contract)
-                    print(f"DEBUG: Contract {contract.id} has {len(objects)} objects")
-                    for obj in objects:
-                        # Проверяем, что отзыв еще не оставлен
-                        existing_review = await self._get_existing_review(
-                            user_id, contract.id, target_type, obj.id
-                        )
-                        if not existing_review:
-                            available_targets.append({
-                                "id": obj.id,
-                                "name": obj.name,
-                                "address": obj.address,
-                                "contract_id": contract.id,
-                                "contract_number": contract.contract_number,
-                                "contract_title": contract.title
-                            })
-                            print(f"DEBUG: Added object {obj.id} ({obj.name}) to available targets")
+                                print(f"DEBUG: Added object {obj.id} ({obj.name}) to available targets")
+            
+            # Дополнительная логика для управляющих
+            if target_type == 'object' and user.is_manager():
+                print(f"DEBUG: User is manager, checking manager permissions")
+                manager_objects = await self._get_objects_for_manager(user_id)
+                for obj in manager_objects:
+                    # Проверяем, что отзыв еще не оставлен (без привязки к договору)
+                    existing_review = await self._get_existing_review_for_manager(
+                        user_id, target_type, obj.id
+                    )
+                    if not existing_review:
+                        available_targets.append({
+                            "id": obj.id,
+                            "name": obj.name,
+                            "address": obj.address,
+                            "contract_id": None,  # Нет привязки к договору
+                            "contract_number": "Управляющий",
+                            "contract_title": "Права управляющего"
+                        })
+                        print(f"DEBUG: Added manager object {obj.id} ({obj.name}) to available targets")
             
             return available_targets
             
@@ -262,9 +292,62 @@ class ReviewPermissionService:
                 # Владелец может оставлять отзыв о сотруднике
                 return contract.owner_id == user_id
             elif target_type == 'object':
-                # Любой участник договора может оставлять отзыв об объекте
-                return True
+                # Сотрудник может оставлять отзыв об объекте
+                return contract.employee_id == user_id
             return False
         except Exception as e:
             logger.error(f"Error checking target permissions: {e}")
             return False
+    
+    async def _get_objects_for_manager(self, user_id: int) -> List[Object]:
+        """Получение объектов для управляющего через ManagerObjectPermission."""
+        try:
+            from domain.entities.manager_object_permission import ManagerObjectPermission
+            
+            # Получаем все права управляющего на объекты
+            permissions_query = select(ManagerObjectPermission).where(
+                ManagerObjectPermission.contract_id.in_(
+                    select(Contract.id).where(
+                        or_(
+                            Contract.owner_id == user_id,
+                            Contract.employee_id == user_id
+                        )
+                    )
+                )
+            ).options(selectinload(ManagerObjectPermission.object))
+            
+            result = await self.db.execute(permissions_query)
+            permissions = result.scalars().all()
+            
+            # Извлекаем объекты из прав
+            objects = []
+            for permission in permissions:
+                if permission.object and permission.has_any_permission():
+                    objects.append(permission.object)
+            
+            return objects
+        except Exception as e:
+            logger.error(f"Error getting objects for manager: {e}")
+            return []
+    
+    async def _get_existing_review_for_manager(
+        self, 
+        user_id: int, 
+        target_type: str, 
+        target_id: int
+    ) -> Optional[Review]:
+        """Получение существующего отзыва для управляющего (без привязки к договору)."""
+        try:
+            query = select(Review).where(
+                and_(
+                    Review.reviewer_id == user_id,
+                    Review.target_type == target_type,
+                    Review.target_id == target_id,
+                    Review.contract_id.is_(None)  # Отзыв без привязки к договору
+                )
+            )
+            result = await self.db.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting existing review for manager: {e}")
+            return None
