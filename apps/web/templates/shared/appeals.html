@@ -1,0 +1,423 @@
+{% extends base_template %}
+
+{% block title %}Мои обжалования - StaffProBot{% endblock %}
+
+{% block extra_css %}
+<style>
+    .appeal-card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        transition: transform 0.3s ease;
+    }
+    
+    .appeal-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .appeal-tabs {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .appeal-tabs .nav-link {
+        border: none;
+        border-radius: 25px;
+        margin: 0 5px;
+        transition: all 0.3s ease;
+    }
+    
+    .appeal-tabs .nav-link.active {
+        background: #007bff;
+        color: white;
+    }
+    
+    .status-badge {
+        font-size: 0.8em;
+        padding: 4px 8px;
+    }
+    
+    .appeal-meta {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 10px;
+        margin-top: 10px;
+    }
+    
+    .create-appeal-btn {
+        border-radius: 25px;
+        padding: 10px 25px;
+        margin: 5px;
+        transition: all 0.3s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Заголовок -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1><i class="fas fa-gavel"></i> Мои обжалования</h1>
+            <p class="text-muted">Управление обжалованиями отзывов</p>
+        </div>
+    </div>
+
+    <!-- Уведомления -->
+    <div id="alerts-container"></div>
+
+    <!-- Фильтры и действия -->
+    <div class="appeal-tabs">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <ul class="nav nav-pills">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#" onclick="filterAppeals('all')">
+                            <i class="fas fa-list"></i> Все обжалования
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="filterAppeals('pending')">
+                            <i class="fas fa-clock"></i> На рассмотрении
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="filterAppeals('approved')">
+                            <i class="fas fa-check-circle"></i> Одобренные
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="filterAppeals('rejected')">
+                            <i class="fas fa-times-circle"></i> Отклоненные
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-primary create-appeal-btn" onclick="showCreateAppealModal()">
+                    <i class="fas fa-plus"></i> Подать обжалование
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Список обжалований -->
+    <div id="appeals-container">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно создания обжалования -->
+<div class="modal fade" id="createAppealModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Подать обжалование</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="create-appeal-form">
+                    <div class="mb-3">
+                        <label for="review-id" class="form-label">ID отзыва</label>
+                        <input type="number" class="form-control" id="review-id" required>
+                        <div class="form-text">Введите ID отзыва, который хотите обжаловать</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="appeal-reason" class="form-label">Причина обжалования</label>
+                        <textarea class="form-control" id="appeal-reason" rows="4" required 
+                                  placeholder="Опишите причину обжалования..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="appeal-evidence" class="form-label">Доказательства (опционально)</label>
+                        <textarea class="form-control" id="appeal-evidence" rows="3" 
+                                  placeholder="Приложите дополнительные доказательства..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="submitAppeal()">
+                    <i class="fas fa-gavel"></i> Подать обжалование
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно деталей обжалования -->
+<div class="modal fade" id="appealDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали обжалования</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="appeal-details-content">
+                <!-- Содержимое будет загружено динамически -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentFilter = 'all';
+    let currentPage = 0;
+
+    // Инициализация страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        loadAppeals();
+    });
+
+    // Фильтрация обжалований
+    function filterAppeals(filter) {
+        currentFilter = filter;
+        currentPage = 0;
+        
+        // Обновляем активную вкладку
+        document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+        event.target.closest('.nav-link').classList.add('active');
+        
+        loadAppeals();
+    }
+
+    // Загрузка обжалований
+    async function loadAppeals() {
+        try {
+            const response = await fetch('/api/appeals/my-appeals');
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки обжалований');
+            }
+            
+            const data = await response.json();
+            const appeals = data.appeals || [];
+            displayAppeals(appeals);
+        } catch (error) {
+            console.error('Error loading appeals:', error);
+            showAlert('Ошибка загрузки обжалований', 'danger');
+            
+            // Показываем пустое состояние
+            const container = document.getElementById('appeals-container');
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-gavel fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Нет обжалований</h5>
+                    <p class="text-muted">Подайте первое обжалование отзыва</p>
+                    <button class="btn btn-primary" onclick="showCreateAppealModal()">
+                        <i class="fas fa-plus"></i> Подать обжалование
+                    </button>
+                </div>
+            `;
+        }
+    }
+    
+    // Отображение обжалований
+    function displayAppeals(appeals) {
+        const container = document.getElementById('appeals-container');
+        
+        // Применяем фильтрацию
+        let filteredAppeals = appeals;
+        if (currentFilter !== 'all') {
+            filteredAppeals = appeals.filter(appeal => appeal.status === currentFilter);
+        }
+        
+        if (!filteredAppeals || filteredAppeals.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-gavel fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Нет обжалований</h5>
+                    <p class="text-muted">Подайте первое обжалование отзыва</p>
+                    <button class="btn btn-primary" onclick="showCreateAppealModal()">
+                        <i class="fas fa-plus"></i> Подать обжалование
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        filteredAppeals.forEach(appeal => {
+            html += `
+                <div class="card appeal-card">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h5 class="card-title">Обжалование отзыва #${appeal.review_id}</h5>
+                                <p class="card-text">${appeal.appeal_reason}</p>
+                                <div class="appeal-meta">
+                                    <small class="text-muted">
+                                        <i class="fas fa-calendar"></i> ${new Date(appeal.created_at).toLocaleDateString()}
+                                        <span class="ms-3">
+                                            <i class="fas fa-clock"></i> ${getStatusText(appeal.status)}
+                                        </span>
+                                        ${appeal.decided_at ? `
+                                            <span class="ms-3">
+                                                <i class="fas fa-gavel"></i> Решено: ${new Date(appeal.decided_at).toLocaleDateString()}
+                                            </span>
+                                        ` : ''}
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <span class="badge ${getStatusBadgeClass(appeal.status)} status-badge">
+                                    ${getStatusText(appeal.status)}
+                                </span>
+                                <button class="btn btn-outline-primary btn-sm mt-2" onclick="showAppealDetails(${appeal.id})">
+                                    <i class="fas fa-eye"></i> Подробнее
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    // Получение класса для статуса
+    function getStatusBadgeClass(status) {
+        switch (status) {
+            case 'approved': return 'bg-success';
+            case 'rejected': return 'bg-danger';
+            case 'pending': return 'bg-warning';
+            default: return 'bg-secondary';
+        }
+    }
+    
+    // Получение текста статуса
+    function getStatusText(status) {
+        switch (status) {
+            case 'approved': return 'Одобрено';
+            case 'rejected': return 'Отклонено';
+            case 'pending': return 'На рассмотрении';
+            default: return 'Неизвестно';
+        }
+    }
+
+    // Показ модального окна создания обжалования
+    function showCreateAppealModal() {
+        const modal = new bootstrap.Modal(document.getElementById('createAppealModal'));
+        modal.show();
+    }
+
+    // Показ деталей обжалования
+    async function showAppealDetails(appealId) {
+        try {
+            const response = await fetch(`/api/appeals/details/${appealId}`);
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки деталей обжалования');
+            }
+            
+            const data = await response.json();
+            const appeal = data.appeal_details;
+            
+            const content = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Информация об обжаловании</h6>
+                        <p><strong>ID отзыва:</strong> ${appeal.review_id}</p>
+                        <p><strong>Статус:</strong> <span class="badge ${getStatusBadgeClass(appeal.status)}">${getStatusText(appeal.status)}</span></p>
+                        <p><strong>Дата подачи:</strong> ${new Date(appeal.created_at).toLocaleString()}</p>
+                        ${appeal.decided_at ? `<p><strong>Дата решения:</strong> ${new Date(appeal.decided_at).toLocaleString()}</p>` : ''}
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Причина обжалования</h6>
+                        <p>${appeal.appeal_reason}</p>
+                        ${appeal.appeal_evidence ? `
+                            <h6>Доказательства</h6>
+                            <p>${appeal.appeal_evidence}</p>
+                        ` : ''}
+                        ${appeal.decision_notes ? `
+                            <h6>Комментарий модератора</h6>
+                            <p>${appeal.decision_notes}</p>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('appeal-details-content').innerHTML = content;
+            const modal = new bootstrap.Modal(document.getElementById('appealDetailsModal'));
+            modal.show();
+            
+        } catch (error) {
+            console.error('Error loading appeal details:', error);
+            showAlert('Ошибка загрузки деталей обжалования', 'danger');
+        }
+    }
+
+    // Отправка обжалования
+    async function submitAppeal() {
+        try {
+            const reviewId = document.getElementById('review-id').value;
+            const appealReason = document.getElementById('appeal-reason').value;
+            const appealEvidence = document.getElementById('appeal-evidence').value;
+
+            if (!reviewId || !appealReason) {
+                showAlert('Заполните все обязательные поля', 'warning');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('review_id', reviewId);
+            formData.append('appeal_reason', appealReason);
+            if (appealEvidence) {
+                formData.append('appeal_evidence', appealEvidence);
+            }
+
+            const response = await fetch('/api/appeals/create', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Ошибка создания обжалования');
+            }
+
+            const data = await response.json();
+            showAlert('Обжалование успешно подано', 'success');
+            
+            // Закрываем модальное окно
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createAppealModal'));
+            modal.hide();
+            
+            // Очищаем форму
+            document.getElementById('create-appeal-form').reset();
+            
+            // Перезагружаем список обжалований
+            loadAppeals();
+            
+        } catch (error) {
+            console.error('Error submitting appeal:', error);
+            showAlert(error.message || 'Ошибка подачи обжалования', 'danger');
+        }
+    }
+
+    // Показ уведомления
+    function showAlert(message, type = 'info') {
+        const container = document.getElementById('alerts-container');
+        const alertId = 'alert-' + Date.now();
+        container.innerHTML += `
+            <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+
+        setTimeout(() => {
+            const alert = document.getElementById(alertId);
+            if (alert) alert.remove();
+        }, 5000);
+    }
+</script>
+{% endblock %}
