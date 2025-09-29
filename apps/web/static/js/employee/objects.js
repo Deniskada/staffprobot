@@ -160,12 +160,23 @@ class EmployeeObjectsManager {
         // Вычисляем общую зарплату за смену (12 часов)
         const totalSalary = Math.round(object.hourly_rate * 12);
         
+        // Создаем рейтинг
+        const rating = object.rating || { average_rating: 5.0, total_reviews: 0, stars: { full: 5, half: 0, empty: 0 } };
+        const stars = this.createStarRating(rating.stars);
+        const ratingText = `(${rating.total_reviews})`;
+        
         // Создаем элемент списка
         const listItem = document.createElement('div');
         listItem.className = 'list-group-item object-item';
         listItem.innerHTML = `
             <div class="d-flex flex-column">
-                <div class="object-title">${object.name}</div>
+                <div class="object-title">
+                    <span>${object.name}</span>
+                    <div class="object-rating">
+                        <div class="star-rating">${stars}</div>
+                        <span class="rating-text">${ratingText}</span>
+                    </div>
+                </div>
                 <div class="object-salary">
                     ${totalSalary.toLocaleString()} <span class="currency-symbol">₽</span> • 12 часов • ${object.hourly_rate} <span class="currency-symbol">₽</span>/час
                 </div>
@@ -179,6 +190,27 @@ class EmployeeObjectsManager {
         `;
 
         return listItem;
+    }
+    
+    createStarRating(stars) {
+        let html = '';
+        
+        // Полные звезды
+        for (let i = 0; i < stars.full; i++) {
+            html += '<i class="bi bi-star-fill"></i>';
+        }
+        
+        // Половина звезды
+        if (stars.half > 0) {
+            html += '<i class="bi bi-star-half"></i>';
+        }
+        
+        // Пустые звезды
+        for (let i = 0; i < stars.empty; i++) {
+            html += '<i class="bi bi-star"></i>';
+        }
+        
+        return html;
     }
 
     focusOnObject(objectId) {

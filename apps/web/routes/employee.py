@@ -256,9 +256,21 @@ async def employee_api_objects(
         objects_result = await db.execute(objects_query)
         objects = []
         
+        # Получаем рейтинги для всех объектов
+        from shared.services.rating_service import RatingService
+        rating_service = RatingService(db)
+        
         for obj in objects_result.scalars():
             # Парсим координаты из формата "lat,lon"
             lat, lon = obj.coordinates.split(',') if obj.coordinates else (0, 0)
+            
+            # Получаем рейтинг объекта
+            rating = await rating_service.get_rating('object', obj.id)
+            if not rating:
+                rating = await rating_service.get_or_create_rating('object', obj.id)
+            
+            # Форматируем звездный рейтинг
+            star_info = rating_service.get_star_rating(float(rating.average_rating))
             
             objects.append({
                 'id': obj.id,
@@ -270,7 +282,12 @@ async def employee_api_objects(
                 'closing_time': str(obj.closing_time),
                 'hourly_rate': float(obj.hourly_rate),
                 'work_conditions': obj.work_conditions or 'Стандартные условия работы',
-                'shift_tasks': obj.shift_tasks or ['Выполнение основных обязанностей']
+                'shift_tasks': obj.shift_tasks or ['Выполнение основных обязанностей'],
+                'rating': {
+                    'average_rating': float(rating.average_rating),
+                    'total_reviews': rating.total_reviews,
+                    'stars': star_info
+                }
             })
         
         logger.info(f"Found {len(objects)} objects")
