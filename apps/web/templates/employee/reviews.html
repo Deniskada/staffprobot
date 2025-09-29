@@ -369,6 +369,7 @@
             try {
                 loadReviews();
                 loadStatistics();
+                initRating();
                 console.log('Initialization completed successfully');
             } catch (error) {
                 console.error('Error during initialization:', error);
@@ -598,7 +599,8 @@
     async function submitAppeal() {
         try {
             const reviewId = document.getElementById('appealReviewId').value;
-            const reason = document.querySelector('input[name="appeal_reason"]:checked').value;
+            const reasonElement = document.querySelector('input[name="appeal_reason"]:checked');
+            const reason = reasonElement ? reasonElement.value : null;
             const description = document.getElementById('appealDescription').value;
             const mediaFiles = document.getElementById('appealMedia').files;
             
@@ -745,7 +747,7 @@
     }
 
     // Инициализация рейтинга
-    document.addEventListener('DOMContentLoaded', function() {
+    function initRating() {
         const stars = document.querySelectorAll('.stars i');
         stars.forEach((star, index) => {
             star.addEventListener('click', function() {
@@ -759,15 +761,18 @@
             });
         });
         
-        document.querySelector('.stars').addEventListener('mouseleave', function() {
-            const currentRating = document.getElementById('rating').value;
-            if (currentRating) {
-                highlightStars(parseInt(currentRating));
-            } else {
-                clearStars();
-            }
-        });
-    });
+        const starsContainer = document.querySelector('.stars');
+        if (starsContainer) {
+            starsContainer.addEventListener('mouseleave', function() {
+                const currentRating = document.getElementById('rating').value;
+                if (currentRating) {
+                    highlightStars(parseInt(currentRating));
+                } else {
+                    clearStars();
+                }
+            });
+        }
+    }
 
     function setRating(rating) {
         document.getElementById('rating').value = rating;
