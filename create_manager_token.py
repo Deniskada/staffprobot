@@ -14,9 +14,9 @@ async def create_token():
         user_data = {
             'id': '5577223137',
             'telegram_id': '5577223137',
-            'username': 'manager_user',
-            'first_name': 'Manager',
-            'last_name': 'User',
+            'username': 'techpodru',
+            'first_name': 'Петр',
+            'last_name': 'Петров',
             'role': 'manager'
         }
         token = await auth_service.create_token(user_data)

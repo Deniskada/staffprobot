@@ -38,7 +38,7 @@ class AuthMiddleware:
             
             # Получаем пользователя из базы данных
             logger.debug(f"Getting user by telegram_id: {telegram_id}")
-            user = await self.user_manager.get_user_by_telegram_id(telegram_id)
+            user = await self.user_manager.get_user_by_telegram_id(int(telegram_id))
             if not user:
                 logger.warning(f"User not found for telegram_id: {telegram_id}")
                 return None
