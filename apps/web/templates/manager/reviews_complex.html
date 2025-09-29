@@ -1,0 +1,781 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}Отзывы и рейтинги - StaffProBot{% endblock %}
+
+{% block extra_css %}
+<style>
+        .review-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+        
+        .review-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .rating-stars {
+            color: #ffc107;
+        }
+        
+        .review-tabs {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .review-tabs .nav-link {
+            border: none;
+            border-radius: 25px;
+            margin: 0 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .review-tabs .nav-link.active {
+            background: #6f42c1;
+            color: white;
+        }
+        
+        .review-meta {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        
+        .status-badge {
+            font-size: 0.8em;
+            padding: 4px 8px;
+        }
+        
+        .appeal-status {
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        
+        .appeal-status.approved {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .appeal-status.rejected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .appeal-status.pending {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .navbar-manager {
+            background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%);
+        }
+        
+        .navbar-manager .navbar-brand,
+        .navbar-manager .nav-link {
+            color: white !important;
+        }
+        
+        .statistics-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .statistics-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+{% endblock %}
+
+{% block manager_content %}
+<div class="container-fluid">
+        <div class="container">
+            <!-- Заголовок -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h1><i class="fas fa-comments"></i> Отзывы</h1>
+                    <p class="text-muted">Просмотр отзывов о ваших объектах и сотрудниках</p>
+                </div>
+            </div>
+
+            <!-- Уведомления -->
+            <div id="alerts-container"></div>
+
+            <!-- Статистика -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card statistics-card">
+                        <div class="card-body text-center">
+                            <i class="fas fa-comments fa-2x text-primary mb-3"></i>
+                            <h3 id="total-reviews" class="card-title">-</h3>
+                            <p class="card-text">Всего отзывов</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card statistics-card">
+                        <div class="card-body text-center">
+                            <i class="fas fa-star fa-2x text-warning mb-3"></i>
+                            <h3 id="average-rating" class="card-title">-</h3>
+                            <p class="card-text">Средний рейтинг</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card statistics-card">
+                        <div class="card-body text-center">
+                            <i class="fas fa-check-circle fa-2x text-success mb-3"></i>
+                            <h3 id="approved-reviews" class="card-title">-</h3>
+                            <p class="card-text">Одобрено</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card statistics-card">
+                        <div class="card-body text-center">
+                            <i class="fas fa-clock fa-2x text-info mb-3"></i>
+                            <h3 id="pending-reviews" class="card-title">-</h3>
+                            <p class="card-text">На модерации</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Фильтры -->
+            <div class="review-tabs">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <ul class="nav nav-pills">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="#" onclick="filterReviews('all')">
+                                    <i class="fas fa-list"></i> Все отзывы
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" onclick="filterReviews('about-objects')">
+                                    <i class="fas fa-building"></i> Об объектах
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" onclick="filterReviews('about-employees')">
+                                    <i class="fas fa-users"></i> О сотрудниках
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" onclick="filterReviews('high-rating')">
+                                    <i class="fas fa-star"></i> Высокие оценки
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary" onclick="loadStatistics()">
+                                <i class="fas fa-chart-bar"></i> Статистика
+                            </button>
+                            <button class="btn btn-outline-info" onclick="exportReviews()">
+                                <i class="fas fa-download"></i> Экспорт
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Список отзывов -->
+            <div id="reviews-container">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Пагинация -->
+            <div class="row">
+                <div class="col-12">
+                    <nav aria-label="Пагинация отзывов">
+                        <ul class="pagination justify-content-center" id="pagination">
+                            <!-- Пагинация будет добавлена динамически -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно детального просмотра -->
+    <div class="modal fade" id="reviewDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Детали отзыва</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="review-detail-body">
+                    <!-- Содержимое будет загружено динамически -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно обжалования -->
+    <div class="modal fade" id="appealModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-gavel text-warning"></i> Подать обжалование
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="appeal-form">
+                        <input type="hidden" id="appeal-review-id">
+                        
+                        <div class="mb-4">
+                            <h6 class="text-muted mb-3">Выберите причину обжалования:</h6>
+                            <div class="appeal-reasons">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-1" value="1">
+                                    <label class="form-check-label" for="reason-1">
+                                        <strong>В отзыве искажены факты</strong>
+                                        <small class="text-muted d-block">Информация в отзыве не соответствует действительности</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-2" value="2">
+                                    <label class="form-check-label" for="reason-2">
+                                        <strong>В отзыве есть оскорбления или мат</strong>
+                                        <small class="text-muted d-block">Использование нецензурной лексики или оскорбительных выражений</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-3" value="3">
+                                    <label class="form-check-label" for="reason-3">
+                                        <strong>Автор жалуется на то, о чем знал из объявления или общения</strong>
+                                        <small class="text-muted d-block">Проблемы были известны заранее</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-4" value="4">
+                                    <label class="form-check-label" for="reason-4">
+                                        <strong>Проблему уже решили</strong>
+                                        <small class="text-muted d-block">Вопрос был урегулирован после написания отзыва</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-5" value="5">
+                                    <label class="form-check-label" for="reason-5">
+                                        <strong>Раскрыты персональные данные</strong>
+                                        <small class="text-muted d-block">Нарушение конфиденциальности</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-6" value="6">
+                                    <label class="form-check-label" for="reason-6">
+                                        <strong>Отзыв содержит дискриминацию по национальному или другому признаку</strong>
+                                        <small class="text-muted d-block">Нарушение принципов равенства</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-7" value="7">
+                                    <label class="form-check-label" for="reason-7">
+                                        <strong>Автор шантажирует меня или компанию</strong>
+                                        <small class="text-muted d-block">Попытка давления или вымогательства</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-8" value="8">
+                                    <label class="form-check-label" for="reason-8">
+                                        <strong>Отзыв не информативен</strong>
+                                        <small class="text-muted d-block">Отсутствует полезная информация</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-9" value="9">
+                                    <label class="form-check-label" for="reason-9">
+                                        <strong>Отзыв хороший, но оценка низкая</strong>
+                                        <small class="text-muted d-block">Несоответствие содержания и оценки</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-10" value="10">
+                                    <label class="form-check-label" for="reason-10">
+                                        <strong>Профиль взломали, с автором общался злоумышленник</strong>
+                                        <small class="text-muted d-block">Отзыв написан не автором</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="appeal-description" class="form-label">
+                                <i class="fas fa-comment-alt"></i> Дополнительное описание
+                            </label>
+                            <textarea class="form-control" id="appeal-description" rows="4" 
+                                      placeholder="Опишите подробнее причину обжалования..." maxlength="500"></textarea>
+                            <div class="form-text">Максимум 500 символов</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="appeal-media" class="form-label">
+                                <i class="fas fa-paperclip"></i> Доказательства (опционально)
+                            </label>
+                            <input type="file" class="form-control" id="appeal-media" multiple 
+                                   accept="image/*,video/*,audio/*,.pdf,.doc,.docx">
+                            <div class="form-text">Максимум 3 файла, до 10MB каждый. Поддерживаются: изображения, видео, аудио, документы</div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Важно:</strong> Обжалование будет рассмотрено в течение 48 часов. 
+                            При положительном решении отзыв будет скрыт от других пользователей и не будет учитываться в рейтинге.
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Отмена
+                    </button>
+                    <button type="button" class="btn btn-warning" onclick="submitAppeal()">
+                        <i class="fas fa-gavel"></i> Подать обжалование
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block manager_extra_js %}
+    <script>
+        let currentFilter = 'all';
+        let currentPage = 0;
+
+        // Загрузка страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, starting initialization...');
+            try {
+                loadReviews();
+                loadStatistics();
+                console.log('Initialization completed successfully');
+            } catch (error) {
+                console.error('Error during initialization:', error);
+            }
+        });
+
+        // Фильтрация отзывов
+        function filterReviews(filter) {
+            currentFilter = filter;
+            currentPage = 0;
+            
+            // Обновляем активную вкладку
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            event.target.closest('.nav-link').classList.add('active');
+            
+            loadReviews();
+        }
+
+        // Загрузка отзывов
+        async function loadReviews() {
+            console.log('Loading reviews with filter:', currentFilter);
+            try {
+                // Определяем параметр фильтрации на основе currentFilter
+                let targetType = null;
+                if (currentFilter === 'about-employees') {
+                    targetType = 'employee';
+                } else if (currentFilter === 'about-objects') {
+                    targetType = 'object';
+                }
+                // Для 'all' и 'high-rating' не передаем target_type (показываем все)
+                
+                // Формируем URL с параметрами
+                let url = '/api/reviews/my-reviews';
+                const params = new URLSearchParams();
+                if (targetType) {
+                    params.append('target_type', targetType);
+                }
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+                
+                console.log('Fetching URL:', url);
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                const reviews = data.reviews || []; // Извлекаем массив отзывов из ответа
+                console.log('Reviews count:', reviews.length);
+                displayReviews(reviews);
+            } catch (error) {
+                console.error('Error loading reviews:', error);
+                console.error('Response status:', error.status);
+                console.error('Response text:', error.message);
+                showAlert('Ошибка загрузки отзывов: ' + error.message, 'danger');
+                
+                // Показываем пустое состояние
+                const container = document.getElementById('reviews-container');
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                        <h5 class="text-warning">Ошибка загрузки</h5>
+                        <p class="text-muted">Не удалось загрузить отзывы. Проверьте подключение к интернету.</p>
+                        <button class="btn btn-primary" onclick="loadReviews()">
+                            <i class="fas fa-refresh"></i> Попробовать снова
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Отображение отзывов
+        function displayReviews(reviews) {
+            const container = document.getElementById('reviews-container');
+            
+            // Применяем клиентскую фильтрацию для 'high-rating'
+            let filteredReviews = reviews;
+            if (currentFilter === 'high-rating') {
+                filteredReviews = reviews.filter(review => review.rating >= 4.0);
+            }
+            
+            if (!filteredReviews || filteredReviews.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-comments fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Нет отзывов</h5>
+                        <p class="text-muted">Создайте первый отзыв о сотруднике или объекте</p>
+                        <button class="btn btn-primary" onclick="showCreateReviewModal()">
+                            <i class="fas fa-plus"></i> Создать первый отзыв
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            filteredReviews.forEach(review => {
+                html += `
+                    <div class="card review-card">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <h5 class="card-title">${review.title}</h5>
+                                    ${review.appeal_status ? `
+                                        <div class="appeal-status mt-2 mb-2">
+                                            ${getAppealStatusHtml(review.appeal_status, review.appeal_decision)}
+                                        </div>
+                                    ` : ''}
+                                    <div class="rating-stars mb-2">
+                                        ${generateStars(review.rating)}
+                                    </div>
+                                    <p class="card-text">${review.content || 'Без описания'}</p>
+                                    <div class="review-meta">
+                                        <small class="text-muted">
+                                            <i class="fas fa-calendar"></i> ${new Date(review.created_at).toLocaleDateString()}
+                                            <span class="ms-3">
+                                                <i class="fas fa-user"></i> ${review.is_anonymous ? 'Анонимно' : 'Именной'}
+                                            </span>
+                                            <span class="ms-3">
+                                                <i class="fas fa-tag"></i> ${review.target_type === 'employee' ? 'О сотруднике' : 'Об объекте'}
+                                            </span>
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <span class="badge ${getStatusBadgeClass(review.status)} status-badge">
+                                        ${getStatusText(review.status)}
+                                    </span>
+                                    ${getAppealButtonHtml(review)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        // Генерация звезд рейтинга
+        function generateStars(rating) {
+            let stars = '';
+            const fullStars = Math.floor(rating);
+            const hasHalfStar = rating % 1 !== 0;
+            
+            for (let i = 0; i < fullStars; i++) {
+                stars += '<i class="fas fa-star"></i>';
+            }
+            
+            if (hasHalfStar) {
+                stars += '<i class="fas fa-star-half-alt"></i>';
+            }
+            
+            const emptyStars = 5 - Math.ceil(rating);
+            for (let i = 0; i < emptyStars; i++) {
+                stars += '<i class="far fa-star"></i>';
+            }
+            
+            return stars;
+        }
+        
+        // Получение класса для статуса
+        function getStatusBadgeClass(status) {
+            switch (status) {
+                case 'approved': return 'bg-success';
+                case 'rejected': return 'bg-danger';
+                case 'pending': return 'bg-warning';
+                case 'appealed': return 'bg-info';
+                default: return 'bg-secondary';
+            }
+        }
+        
+        // Получение текста статуса
+        function getStatusText(status) {
+            switch (status) {
+                case 'approved': return 'Одобрен';
+                case 'rejected': return 'Отклонен';
+                case 'pending': return 'На модерации';
+                case 'appealed': return 'Обжалован';
+                default: return 'Неизвестно';
+            }
+        }
+        // Создание обжалования
+        async function createAppeal(reviewId) {
+            // Устанавливаем ID отзыва в скрытое поле
+            document.getElementById('appeal-review-id').value = reviewId;
+            
+            // Очищаем форму
+            document.getElementById('appeal-form').reset();
+            document.getElementById('appeal-review-id').value = reviewId;
+            
+            // Показываем модальное окно
+            const modal = new bootstrap.Modal(document.getElementById('appealModal'));
+            modal.show();
+        }
+
+        // Получение HTML для статуса обжалования
+        function getAppealStatusHtml(status, decision) {
+            switch (status) {
+                case 'approved':
+                    return `
+                        <div class="appeal-status approved">
+                            <i class="fas fa-check-circle"></i> 
+                            Вы успешно обжаловали отзыв, он скрыт от других пользователей и не учитывается в рейтинге
+                        </div>
+                    `;
+                case 'rejected':
+                    return `
+                        <div class="appeal-status rejected">
+                            <i class="fas fa-times-circle"></i> 
+                            Вы обжаловали отзыв, но мы не нашли в нем нарушений
+                        </div>
+                    `;
+                case 'pending':
+                    return `
+                        <div class="appeal-status pending">
+                            <i class="fas fa-clock"></i> 
+                            Ваше обжалование на рассмотрении
+                        </div>
+                    `;
+                default:
+                    return '';
+            }
+        }
+        
+        // Получение HTML для кнопки обжалования
+        function getAppealButtonHtml(review) {
+            // Если уже есть обжалование, не показываем кнопку
+            if (review.appeal_status) {
+                return '';
+            }
+            
+            // Показываем кнопку для всех отзывов
+            return `
+                <button class="btn btn-outline-warning btn-sm appeal-btn mt-2" onclick="createAppeal(${review.id})">
+                    <i class="fas fa-gavel"></i> Обжаловать
+                </button>
+            `;
+        }
+
+        // Отправка обжалования
+        async function submitAppeal() {
+            try {
+                const reviewId = document.getElementById('appeal-review-id').value;
+                const selectedReason = document.querySelector('input[name="appeal-reason"]:checked');
+                const description = document.getElementById('appeal-description').value.trim();
+                const mediaFiles = document.getElementById('appeal-media').files;
+
+                if (!selectedReason) {
+                    showAlert('Выберите причину обжалования', 'warning');
+                    return;
+                }
+
+                // Получаем текст выбранной причины
+                const reasonText = selectedReason.nextElementSibling.querySelector('strong').textContent;
+                const fullReason = reasonText + (description ? '\n\nДополнительно: ' + description : '');
+
+                const formData = new FormData();
+                formData.append('review_id', reviewId);
+                formData.append('appeal_reason', fullReason);
+
+                // Добавляем медиа-файлы
+                for (let i = 0; i < mediaFiles.length; i++) {
+                    formData.append('media_files', mediaFiles[i]);
+                }
+
+                const response = await fetch('/api/appeals/create', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Ошибка создания обжалования');
+                }
+
+                const data = await response.json();
+                showAlert('Обжалование успешно подано', 'success');
+                
+                // Закрываем модальное окно
+                const modal = bootstrap.Modal.getInstance(document.getElementById('appealModal'));
+                modal.hide();
+                
+                // Перезагружаем отзывы для обновления статуса
+                loadReviews();
+                
+            } catch (error) {
+                console.error('Error submitting appeal:', error);
+                showAlert(error.message || 'Ошибка подачи обжалования', 'danger');
+            }
+        }
+
+        // Показ модального окна создания отзыва
+        function showCreateReviewModal() {
+            showAlert('Функция создания отзывов будет реализована в следующих этапах', 'info');
+        }
+
+        async function loadStatistics() {
+            try {
+                console.log('Loading statistics...');
+                
+                // Получаем статистику из API
+                const response = await fetch('/api/reviews/my-reviews');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                const reviews = data.reviews || [];
+                
+                // Подсчитываем статистику
+                const totalReviews = reviews.length;
+                const approvedReviews = reviews.filter(r => r.status === 'approved').length;
+                const pendingReviews = reviews.filter(r => r.status === 'pending').length;
+                const averageRating = totalReviews > 0 
+                    ? (reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1)
+                    : '0.0';
+                
+                // Обновляем DOM элементы
+                const totalReviewsEl = document.getElementById('total-reviews');
+                const averageRatingEl = document.getElementById('average-rating');
+                const approvedReviewsEl = document.getElementById('approved-reviews');
+                const pendingReviewsEl = document.getElementById('pending-reviews');
+                
+                if (totalReviewsEl) totalReviewsEl.textContent = totalReviews;
+                if (averageRatingEl) averageRatingEl.textContent = averageRating;
+                if (approvedReviewsEl) approvedReviewsEl.textContent = approvedReviews;
+                if (pendingReviewsEl) pendingReviewsEl.textContent = pendingReviews;
+                
+                console.log('Statistics loaded successfully:', {
+                    total: totalReviews,
+                    average: averageRating,
+                    approved: approvedReviews,
+                    pending: pendingReviews
+                });
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+                showAlert('Ошибка загрузки статистики', 'danger');
+            }
+        }
+
+        // Экспорт отзывов
+        function exportReviews() {
+            // TODO: Реализовать экспорт отзывов
+            showAlert('Функция экспорта будет реализована в следующих этапах', 'info');
+        }
+
+        // Показ деталей отзыва
+        function showReviewDetails(reviewId) {
+            // TODO: Реализовать загрузку деталей отзыва
+            const modal = new bootstrap.Modal(document.getElementById('reviewDetailModal'));
+            modal.show();
+        }
+
+        // Создание звездного рейтинга
+        function createStarRating(rating) {
+            const fullStars = Math.floor(rating);
+            const hasHalfStar = (rating - fullStars) >= 0.5;
+            const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+
+            let stars = '';
+            for (let i = 0; i < fullStars; i++) {
+                stars += '<i class="fas fa-star"></i>';
+            }
+            if (hasHalfStar) {
+                stars += '<i class="fas fa-star-half-alt"></i>';
+            }
+            for (let i = 0; i < emptyStars; i++) {
+                stars += '<i class="far fa-star"></i>';
+            }
+            return stars;
+        }
+
+        // Форматирование даты
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Показ уведомления
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alerts-container');
+            const alertId = 'alert-' + Date.now();
+            container.innerHTML += `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const alert = document.getElementById(alertId);
+                if (alert) alert.remove();
+            }, 5000);
+        }
+    </script>
+{% endblock %}
