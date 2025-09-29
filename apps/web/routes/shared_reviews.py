@@ -5,6 +5,7 @@ API endpoints для создания и управления отзывами.
 from fastapi import APIRouter, Request, Depends, HTTPException, Form, File, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from core.database.session import get_db_session
 from apps.web.middleware.role_middleware import require_employee_or_applicant, require_owner_or_superadmin, require_any_role
 from domain.entities.user import UserRole
@@ -176,7 +177,7 @@ async def get_my_reviews(
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
         # Получаем отзывы пользователя
-        from domain.entities.review import Review
+        from domain.entities.review import Review, ReviewAppeal
         
         query = select(Review).where(Review.reviewer_id == user_obj.id)
         
@@ -191,6 +192,11 @@ async def get_my_reviews(
         # Форматируем отзывы
         formatted_reviews = []
         for review in reviews:
+            # Получаем информацию об обжаловании
+            appeal_query = select(ReviewAppeal).where(ReviewAppeal.review_id == review.id)
+            appeal_result = await db.execute(appeal_query)
+            appeal = appeal_result.scalar_one_or_none()
+            
             formatted_reviews.append({
                 "id": review.id,
                 "target_type": review.target_type,
@@ -203,7 +209,9 @@ async def get_my_reviews(
                 "is_anonymous": review.is_anonymous,
                 "created_at": review.created_at.isoformat(),
                 "published_at": review.published_at.isoformat() if review.published_at else None,
-                "moderation_notes": review.moderation_notes
+                "moderation_notes": review.moderation_notes,
+                "appeal_status": appeal.status if appeal else None,
+                "appeal_decision": appeal.moderator_decision if appeal else None
             })
         
         return JSONResponse(content={
