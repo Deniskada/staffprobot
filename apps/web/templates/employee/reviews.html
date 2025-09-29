@@ -61,6 +61,84 @@
         color: #ffc107;
         font-weight: bold;
     }
+    
+    /* Стили для рейтинга */
+    .rating-input .stars {
+        display: flex;
+        gap: 5px;
+        margin-bottom: 10px;
+    }
+    
+    .rating-input .stars i {
+        font-size: 2rem;
+        color: #ddd;
+        cursor: pointer;
+        transition: color 0.2s ease;
+    }
+    
+    .rating-input .stars i.active,
+    .rating-input .stars i:hover {
+        color: #ffc107;
+    }
+    
+    /* Стили для медиа-загрузки */
+    .media-upload-container {
+        border: 2px dashed #ddd;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        transition: border-color 0.3s ease;
+    }
+    
+    .media-upload-container:hover {
+        border-color: #007bff;
+    }
+    
+    .drop-area {
+        cursor: pointer;
+    }
+    
+    .drop-area i {
+        font-size: 3rem;
+        color: #ddd;
+        margin-bottom: 10px;
+    }
+    
+    .preview-container {
+        margin-top: 15px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .preview-item {
+        position: relative;
+        width: 100px;
+        height: 100px;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 2px solid #ddd;
+    }
+    
+    .preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .preview-item .remove-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: rgba(220, 53, 69, 0.8);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 25px;
+        height: 25px;
+        font-size: 12px;
+        cursor: pointer;
+    }
 </style>
 {% endblock %}
 
@@ -69,9 +147,14 @@
     <div class="container">
         <!-- Заголовок -->
         <div class="row mb-4">
-            <div class="col-12">
+            <div class="col-md-8">
                 <h1><i class="fas fa-comments"></i> Отзывы и рейтинги</h1>
                 <p class="text-muted">Отзывы о вашей работе и объектах</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <button class="btn btn-success btn-lg" onclick="showCreateReviewModal()">
+                    <i class="fas fa-plus"></i> Добавить отзыв
+                </button>
             </div>
         </div>
 
@@ -626,5 +709,196 @@
             if (alert) alert.remove();
         }, 5000);
     }
+
+    // Функции для создания отзыва
+    function showCreateReviewModal() {
+        loadAvailableObjects();
+        const modal = new bootstrap.Modal(document.getElementById('createReviewModal'));
+        modal.show();
+    }
+
+    async function loadAvailableObjects() {
+        try {
+            const response = await fetch('/api/reviews/available-targets?target_type=object');
+            const data = await response.json();
+            
+            const select = document.getElementById('targetObject');
+            select.innerHTML = '<option value="">Выберите объект</option>';
+            
+            if (data.success && data.targets) {
+                data.targets.forEach(target => {
+                    const option = document.createElement('option');
+                    option.value = target.id;
+                    option.textContent = target.name;
+                    select.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки объектов:', error);
+            showAlert('Ошибка загрузки объектов', 'danger');
+        }
+    }
+
+    // Инициализация рейтинга
+    document.addEventListener('DOMContentLoaded', function() {
+        const stars = document.querySelectorAll('.stars i');
+        stars.forEach((star, index) => {
+            star.addEventListener('click', function() {
+                const rating = parseInt(this.dataset.rating);
+                setRating(rating);
+            });
+            
+            star.addEventListener('mouseenter', function() {
+                const rating = parseInt(this.dataset.rating);
+                highlightStars(rating);
+            });
+        });
+        
+        document.querySelector('.stars').addEventListener('mouseleave', function() {
+            const currentRating = document.getElementById('rating').value;
+            if (currentRating) {
+                highlightStars(parseInt(currentRating));
+            } else {
+                clearStars();
+            }
+        });
+    });
+
+    function setRating(rating) {
+        document.getElementById('rating').value = rating;
+        highlightStars(rating);
+    }
+
+    function highlightStars(rating) {
+        const stars = document.querySelectorAll('.stars i');
+        stars.forEach((star, index) => {
+            if (index < rating) {
+                star.classList.add('active');
+            } else {
+                star.classList.remove('active');
+            }
+        });
+    }
+
+    function clearStars() {
+        const stars = document.querySelectorAll('.stars i');
+        stars.forEach(star => star.classList.remove('active'));
+    }
+
+    async function submitReview() {
+        const form = document.getElementById('createReviewForm');
+        const formData = new FormData();
+        
+        // Валидация
+        const targetId = document.getElementById('targetObject').value;
+        const rating = document.getElementById('rating').value;
+        const text = document.getElementById('reviewText').value;
+        
+        if (!targetId || !rating || !text) {
+            showAlert('Заполните все обязательные поля', 'warning');
+            return;
+        }
+        
+        // Подготовка данных
+        formData.append('target_type', 'object');
+        formData.append('target_id', targetId);
+        formData.append('rating', rating);
+        formData.append('text', text);
+        
+        // Добавление медиафайлов
+        const mediaFiles = document.getElementById('mediaFiles').files;
+        for (let i = 0; i < mediaFiles.length; i++) {
+            formData.append('media_files', mediaFiles[i]);
+        }
+        
+        try {
+            const response = await fetch('/api/reviews/create', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert('Отзыв отправлен на модерацию', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('createReviewModal')).hide();
+                form.reset();
+                clearStars();
+                loadReviews(); // Обновляем список отзывов
+            } else {
+                showAlert(data.message || 'Ошибка создания отзыва', 'danger');
+            }
+        } catch (error) {
+            console.error('Ошибка создания отзыва:', error);
+            showAlert('Ошибка создания отзыва', 'danger');
+        }
+    }
 </script>
+
+<!-- Модальное окно для создания отзыва -->
+<div class="modal fade" id="createReviewModal" tabindex="-1" aria-labelledby="createReviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createReviewModalLabel">
+                    <i class="fas fa-star"></i> Добавить отзыв об объекте
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createReviewForm">
+                    <!-- Выбор объекта -->
+                    <div class="mb-3">
+                        <label for="targetObject" class="form-label">Объект *</label>
+                        <select class="form-select" id="targetObject" required>
+                            <option value="">Выберите объект</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Рейтинг -->
+                    <div class="mb-3">
+                        <label class="form-label">Оценка *</label>
+                        <div class="rating-input">
+                            <div class="stars">
+                                <i class="fas fa-star" data-rating="1"></i>
+                                <i class="fas fa-star" data-rating="2"></i>
+                                <i class="fas fa-star" data-rating="3"></i>
+                                <i class="fas fa-star" data-rating="4"></i>
+                                <i class="fas fa-star" data-rating="5"></i>
+                            </div>
+                            <input type="hidden" id="rating" name="rating" required>
+                        </div>
+                    </div>
+                    
+                    <!-- Текст отзыва -->
+                    <div class="mb-3">
+                        <label for="reviewText" class="form-label">Текст отзыва *</label>
+                        <textarea class="form-control" id="reviewText" name="text" rows="4" 
+                                  placeholder="Опишите ваш опыт работы на объекте..." required></textarea>
+                    </div>
+                    
+                    <!-- Загрузка медиа -->
+                    <div class="mb-3">
+                        <label class="form-label">Медиафайлы (необязательно)</label>
+                        <div class="media-upload-container">
+                            <div class="drop-area" id="dropArea">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>Перетащите файлы сюда или нажмите для выбора</p>
+                                <input type="file" id="mediaFiles" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx">
+                            </div>
+                            <div class="preview-container" id="previewContainer"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-success" onclick="submitReview()">
+                    <i class="fas fa-paper-plane"></i> Отправить на модерацию
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
