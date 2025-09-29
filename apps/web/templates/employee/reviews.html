@@ -619,7 +619,8 @@
             
             const response = await fetch('/api/appeals/create', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                credentials: 'include'
             });
             
             if (!response.ok) {
@@ -648,7 +649,9 @@
             console.log('Loading statistics...');
             
             // Получаем статистику из API
-            const response = await fetch('/api/reviews/my-reviews');
+            const response = await fetch('/api/reviews/my-reviews', {
+                credentials: 'include'
+            });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -719,7 +722,9 @@
 
     async function loadAvailableObjects() {
         try {
-            const response = await fetch('/api/reviews/available-targets?target_type=object');
+            const response = await fetch('/api/reviews/available-targets?target_type=object', {
+                credentials: 'include'
+            });
             const data = await response.json();
             
             const select = document.getElementById('targetObject');
@@ -814,7 +819,8 @@
         try {
             const response = await fetch('/api/reviews/create', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                credentials: 'include'
             });
             
             const data = await response.json();
