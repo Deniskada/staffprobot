@@ -404,8 +404,14 @@
 
         // Загрузка страницы
         document.addEventListener('DOMContentLoaded', function() {
-            loadReviews();
-            loadStatistics();
+            console.log('DOM loaded, starting initialization...');
+            try {
+                loadReviews();
+                loadStatistics();
+                console.log('Initialization completed successfully');
+            } catch (error) {
+                console.error('Error during initialization:', error);
+            }
         });
 
         // Фильтрация отзывов
@@ -705,11 +711,19 @@
 
         async function loadStatistics() {
             try {
+                console.log('Loading statistics...');
                 // TODO: Реализовать API для получения статистики отзывов управляющего
-                document.getElementById('total-reviews').textContent = '0';
-                document.getElementById('average-rating').textContent = '0.0';
-                document.getElementById('approved-reviews').textContent = '0';
-                document.getElementById('pending-reviews').textContent = '0';
+                const totalReviewsEl = document.getElementById('total-reviews');
+                const averageRatingEl = document.getElementById('average-rating');
+                const approvedReviewsEl = document.getElementById('approved-reviews');
+                const pendingReviewsEl = document.getElementById('pending-reviews');
+                
+                if (totalReviewsEl) totalReviewsEl.textContent = '0';
+                if (averageRatingEl) averageRatingEl.textContent = '0.0';
+                if (approvedReviewsEl) approvedReviewsEl.textContent = '0';
+                if (pendingReviewsEl) pendingReviewsEl.textContent = '0';
+                
+                console.log('Statistics loaded successfully');
             } catch (error) {
                 console.error('Error loading statistics:', error);
                 showAlert('Ошибка загрузки статистики', 'danger');
