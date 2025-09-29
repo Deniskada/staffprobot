@@ -103,9 +103,14 @@
         <div class="container">
             <!-- Заголовок -->
             <div class="row mb-4">
-                <div class="col-12">
+                <div class="col-md-8">
                     <h1><i class="fas fa-comments"></i> Отзывы</h1>
                     <p class="text-muted">Просмотр отзывов о ваших объектах и сотрудниках</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-success btn-lg" onclick="showCreateReviewModal()">
+                        <i class="fas fa-plus"></i> Добавить отзыв
+                    </button>
                 </div>
             </div>
 
@@ -792,5 +797,188 @@
                 if (alert) alert.remove();
             }, 5000);
         }
+
+        // Функции для создания отзыва
+        function showCreateReviewModal() {
+            loadAvailableTargets();
+            const modal = new bootstrap.Modal(document.getElementById('createReviewModal'));
+            modal.show();
+        }
+
+        async function loadAvailableTargets() {
+            try {
+                // Загружаем сотрудников
+                const employeesResponse = await fetch('/api/reviews/targets/employee', {
+                    credentials: 'include'
+                });
+                const employeesData = await employeesResponse.json();
+                
+                // Загружаем объекты
+                const objectsResponse = await fetch('/api/reviews/targets/object', {
+                    credentials: 'include'
+                });
+                const objectsData = await objectsResponse.json();
+                
+                const typeSelect = document.getElementById('targetType');
+                const targetSelect = document.getElementById('targetId');
+                
+                // Очищаем селекты
+                typeSelect.innerHTML = '<option value="">Выберите тип</option>';
+                targetSelect.innerHTML = '<option value="">Сначала выберите тип</option>';
+                
+                // Добавляем опции
+                if (employeesData.success && employeesData.available_targets && employeesData.available_targets.length > 0) {
+                    typeSelect.innerHTML += '<option value="employee">О сотруднике</option>';
+                }
+                if (objectsData.success && objectsData.available_targets && objectsData.available_targets.length > 0) {
+                    typeSelect.innerHTML += '<option value="object">Об объекте</option>';
+                }
+                
+                // Обработчик изменения типа
+                typeSelect.addEventListener('change', function() {
+                    const targetType = this.value;
+                    targetSelect.innerHTML = '<option value="">Выберите цель</option>';
+                    
+                    if (targetType === 'employee' && employeesData.success && employeesData.available_targets) {
+                        employeesData.available_targets.forEach(target => {
+                            const option = document.createElement('option');
+                            option.value = target.id;
+                            option.textContent = target.name;
+                            targetSelect.appendChild(option);
+                        });
+                    } else if (targetType === 'object' && objectsData.success && objectsData.available_targets) {
+                        objectsData.available_targets.forEach(target => {
+                            const option = document.createElement('option');
+                            option.value = target.id;
+                            option.textContent = target.name;
+                            targetSelect.appendChild(option);
+                        });
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Ошибка загрузки целей:', error);
+                showAlert('Ошибка загрузки целей', 'danger');
+            }
+        }
+
+        // Обработка звездного рейтинга
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('fa-star') && e.target.closest('#createReviewModal')) {
+                const rating = parseInt(e.target.dataset.rating);
+                const stars = e.target.parentElement.querySelectorAll('.fa-star');
+                
+                stars.forEach((star, index) => {
+                    if (index < rating) {
+                        star.classList.add('active');
+                    } else {
+                        star.classList.remove('active');
+                    }
+                });
+                
+                document.getElementById('rating').value = rating;
+            }
+        });
+
+        // Отправка отзыва
+        async function submitReview() {
+            try {
+                const form = document.getElementById('createReviewForm');
+                const formData = new FormData(form);
+                
+                const reviewData = {
+                    target_type: document.getElementById('targetType').value,
+                    target_id: parseInt(document.getElementById('targetId').value),
+                    rating: parseInt(document.getElementById('rating').value),
+                    text: document.getElementById('reviewText').value
+                };
+                
+                const response = await fetch('/api/reviews/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(reviewData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('Отзыв отправлен на модерацию', 'success');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('createReviewModal'));
+                    modal.hide();
+                    form.reset();
+                    loadReviews(); // Перезагружаем список отзывов
+                } else {
+                    showAlert(result.message || 'Ошибка отправки отзыва', 'danger');
+                }
+                
+            } catch (error) {
+                console.error('Ошибка отправки отзыва:', error);
+                showAlert('Ошибка отправки отзыва', 'danger');
+            }
+        }
     </script>
+
+    <!-- Модальное окно для создания отзыва -->
+    <div class="modal fade" id="createReviewModal" tabindex="-1" aria-labelledby="createReviewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createReviewModalLabel">
+                        <i class="fas fa-star"></i> Добавить отзыв
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createReviewForm">
+                        <!-- Выбор типа -->
+                        <div class="mb-3">
+                            <label for="targetType" class="form-label">Тип отзыва *</label>
+                            <select class="form-select" id="targetType" required>
+                                <option value="">Выберите тип</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Выбор цели -->
+                        <div class="mb-3">
+                            <label for="targetId" class="form-label">Цель отзыва *</label>
+                            <select class="form-select" id="targetId" required>
+                                <option value="">Сначала выберите тип</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Рейтинг -->
+                        <div class="mb-3">
+                            <label class="form-label">Оценка *</label>
+                            <div class="rating-input">
+                                <div class="stars">
+                                    <i class="fas fa-star" data-rating="1"></i>
+                                    <i class="fas fa-star" data-rating="2"></i>
+                                    <i class="fas fa-star" data-rating="3"></i>
+                                    <i class="fas fa-star" data-rating="4"></i>
+                                    <i class="fas fa-star" data-rating="5"></i>
+                                </div>
+                                <input type="hidden" id="rating" name="rating" required>
+                            </div>
+                        </div>
+                        
+                        <!-- Текст отзыва -->
+                        <div class="mb-3">
+                            <label for="reviewText" class="form-label">Текст отзыва *</label>
+                            <textarea class="form-control" id="reviewText" name="text" rows="4" 
+                                      placeholder="Опишите ваш опыт..." required></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-success" onclick="submitReview()">
+                        <i class="fas fa-paper-plane"></i> Отправить на модерацию
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}
