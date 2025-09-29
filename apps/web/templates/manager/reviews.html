@@ -269,6 +269,135 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    </div>
+
+    <!-- Модальное окно обжалования -->
+    <div class="modal fade" id="appealModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-gavel text-warning"></i> Подать обжалование
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="appeal-form">
+                        <input type="hidden" id="appeal-review-id">
+                        
+                        <div class="mb-4">
+                            <h6 class="text-muted mb-3">Выберите причину обжалования:</h6>
+                            <div class="appeal-reasons">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-1" value="1">
+                                    <label class="form-check-label" for="reason-1">
+                                        <strong>В отзыве искажены факты</strong>
+                                        <small class="text-muted d-block">Информация в отзыве не соответствует действительности</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-2" value="2">
+                                    <label class="form-check-label" for="reason-2">
+                                        <strong>В отзыве есть оскорбления или мат</strong>
+                                        <small class="text-muted d-block">Использование нецензурной лексики или оскорбительных выражений</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-3" value="3">
+                                    <label class="form-check-label" for="reason-3">
+                                        <strong>Автор жалуется на то, о чем знал из объявления или общения</strong>
+                                        <small class="text-muted d-block">Проблемы были известны заранее</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-4" value="4">
+                                    <label class="form-check-label" for="reason-4">
+                                        <strong>Проблему уже решили</strong>
+                                        <small class="text-muted d-block">Вопрос был урегулирован после написания отзыва</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-5" value="5">
+                                    <label class="form-check-label" for="reason-5">
+                                        <strong>Раскрыты персональные данные</strong>
+                                        <small class="text-muted d-block">Нарушение конфиденциальности</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-6" value="6">
+                                    <label class="form-check-label" for="reason-6">
+                                        <strong>Отзыв содержит дискриминацию по национальному или другому признаку</strong>
+                                        <small class="text-muted d-block">Нарушение принципов равенства</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-7" value="7">
+                                    <label class="form-check-label" for="reason-7">
+                                        <strong>Автор шантажирует меня или компанию</strong>
+                                        <small class="text-muted d-block">Попытка давления или вымогательства</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-8" value="8">
+                                    <label class="form-check-label" for="reason-8">
+                                        <strong>Отзыв не информативен</strong>
+                                        <small class="text-muted d-block">Отсутствует полезная информация</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-9" value="9">
+                                    <label class="form-check-label" for="reason-9">
+                                        <strong>Отзыв хороший, но оценка низкая</strong>
+                                        <small class="text-muted d-block">Несоответствие содержания и оценки</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="appeal-reason" id="reason-10" value="10">
+                                    <label class="form-check-label" for="reason-10">
+                                        <strong>Профиль взломали, с автором общался злоумышленник</strong>
+                                        <small class="text-muted d-block">Отзыв написан не автором</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="appeal-description" class="form-label">
+                                <i class="fas fa-comment-alt"></i> Дополнительное описание
+                            </label>
+                            <textarea class="form-control" id="appeal-description" rows="4" 
+                                      placeholder="Опишите подробнее причину обжалования..." maxlength="500"></textarea>
+                            <div class="form-text">Максимум 500 символов</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="appeal-media" class="form-label">
+                                <i class="fas fa-paperclip"></i> Доказательства (опционально)
+                            </label>
+                            <input type="file" class="form-control" id="appeal-media" multiple 
+                                   accept="image/*,video/*,audio/*,.pdf,.doc,.docx">
+                            <div class="form-text">Максимум 3 файла, до 10MB каждый. Поддерживаются: изображения, видео, аудио, документы</div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Важно:</strong> Обжалование будет рассмотрено в течение 48 часов. 
+                            При положительном решении отзыв будет скрыт от других пользователей и не будет учитываться в рейтинге.
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Отмена
+                    </button>
+                    <button type="button" class="btn btn-warning" onclick="submitAppeal()">
+                        <i class="fas fa-gavel"></i> Подать обжалование
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentFilter = 'all';
         let currentPage = 0;
@@ -453,37 +582,16 @@
         }
         // Создание обжалования
         async function createAppeal(reviewId) {
-            try {
-                const appealReason = prompt('Введите причину обжалования:');
-                if (!appealReason || appealReason.trim() === '') {
-                    showAlert('Причина обжалования обязательна', 'warning');
-                    return;
-                }
-
-                const formData = new FormData();
-                formData.append('review_id', reviewId);
-                formData.append('appeal_reason', appealReason.trim());
-
-                const response = await fetch('/api/appeals/create', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Ошибка создания обжалования');
-                }
-
-                const data = await response.json();
-                showAlert('Обжалование успешно подано', 'success');
-                
-                // Перезагружаем отзывы для обновления статуса
-                loadReviews();
-                
-            } catch (error) {
-                console.error('Error creating appeal:', error);
-                showAlert(error.message || 'Ошибка подачи обжалования', 'danger');
-            }
+            // Устанавливаем ID отзыва в скрытое поле
+            document.getElementById('appeal-review-id').value = reviewId;
+            
+            // Очищаем форму
+            document.getElementById('appeal-form').reset();
+            document.getElementById('appeal-review-id').value = reviewId;
+            
+            // Показываем модальное окно
+            const modal = new bootstrap.Modal(document.getElementById('appealModal'));
+            modal.show();
         }
 
         // Получение HTML для статуса обжалования
@@ -528,6 +636,58 @@
                     <i class="fas fa-gavel"></i> Обжаловать
                 </button>
             `;
+        }
+
+        // Отправка обжалования
+        async function submitAppeal() {
+            try {
+                const reviewId = document.getElementById('appeal-review-id').value;
+                const selectedReason = document.querySelector('input[name="appeal-reason"]:checked');
+                const description = document.getElementById('appeal-description').value.trim();
+                const mediaFiles = document.getElementById('appeal-media').files;
+
+                if (!selectedReason) {
+                    showAlert('Выберите причину обжалования', 'warning');
+                    return;
+                }
+
+                // Получаем текст выбранной причины
+                const reasonText = selectedReason.nextElementSibling.querySelector('strong').textContent;
+                const fullReason = reasonText + (description ? '\n\nДополнительно: ' + description : '');
+
+                const formData = new FormData();
+                formData.append('review_id', reviewId);
+                formData.append('appeal_reason', fullReason);
+
+                // Добавляем медиа-файлы
+                for (let i = 0; i < mediaFiles.length; i++) {
+                    formData.append('media_files', mediaFiles[i]);
+                }
+
+                const response = await fetch('/api/appeals/create', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Ошибка создания обжалования');
+                }
+
+                const data = await response.json();
+                showAlert('Обжалование успешно подано', 'success');
+                
+                // Закрываем модальное окно
+                const modal = bootstrap.Modal.getInstance(document.getElementById('appealModal'));
+                modal.hide();
+                
+                // Перезагружаем отзывы для обновления статуса
+                loadReviews();
+                
+            } catch (error) {
+                console.error('Error submitting appeal:', error);
+                showAlert(error.message || 'Ошибка подачи обжалования', 'danger');
+            }
         }
 
         async function loadStatistics() {
