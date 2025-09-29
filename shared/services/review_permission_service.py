@@ -139,8 +139,8 @@ class ReviewPermissionService:
             
             for contract in contracts:
                 if target_type == 'employee':
-                    # Для отзыва о сотруднике - только владельцы и управляющие
-                    if contract.owner_id == user_id:  # Только владелец договора
+                    # Для отзыва о сотруднике - владельцы и управляющие
+                    if contract.owner_id == user_id:  # Владелец договора
                         if contract.employee_id != user_id:  # Не оставляем отзыв о себе
                             employee = await self._get_user(contract.employee_id)
                             if employee:
@@ -179,26 +179,53 @@ class ReviewPermissionService:
                                 print(f"DEBUG: Added object {obj.id} ({obj.name}) to available targets")
             
             # Дополнительная логика для управляющих
-            if target_type == 'object' and user.is_manager():
-                print(f"DEBUG: User is manager, checking manager permissions")
-                manager_objects = await self._get_objects_for_manager(user_id)
-                for obj in manager_objects:
-                    # Проверяем, что отзыв еще не оставлен (без привязки к договору)
-                    existing_review = await self._get_existing_review_for_manager(
-                        user_id, target_type, obj.id
-                    )
-                    if not existing_review:
-                        available_targets.append({
-                            "id": obj.id,
-                            "name": obj.name,
-                            "address": obj.address,
-                            "contract_id": None,  # Нет привязки к договору
-                            "contract_number": "Управляющий",
-                            "contract_title": "Права управляющего"
-                        })
-                        print(f"DEBUG: Added manager object {obj.id} ({obj.name}) to available targets")
+            if user.is_manager():
+                if target_type == 'object':
+                    print(f"DEBUG: User is manager, checking manager permissions for objects")
+                    manager_objects = await self._get_objects_for_manager(user_id)
+                    for obj in manager_objects:
+                        # Проверяем, что отзыв еще не оставлен (без привязки к договору)
+                        existing_review = await self._get_existing_review_for_manager(
+                            user_id, target_type, obj.id
+                        )
+                        if not existing_review:
+                            available_targets.append({
+                                "id": obj.id,
+                                "name": obj.name,
+                                "address": obj.address,
+                                "contract_id": None,  # Нет привязки к договору
+                                "contract_number": "Управляющий",
+                                "contract_title": "Права управляющего"
+                            })
+                            print(f"DEBUG: Added manager object {obj.id} ({obj.name}) to available targets")
+                
+                elif target_type == 'employee':
+                    print(f"DEBUG: User is manager, checking manager permissions for employees")
+                    manager_employees = await self._get_employees_for_manager(user_id)
+                    for employee in manager_employees:
+                        # Проверяем, что отзыв еще не оставлен (без привязки к договору)
+                        existing_review = await self._get_existing_review_for_manager(
+                            user_id, target_type, employee.id
+                        )
+                        if not existing_review:
+                            available_targets.append({
+                                "id": employee.id,
+                                "name": f"{employee.first_name} {employee.last_name}",
+                                "contract_id": None,  # Нет привязки к договору
+                                "contract_number": "Управляющий",
+                                "contract_title": "Права управляющего"
+                            })
+                            print(f"DEBUG: Added manager employee {employee.id} ({employee.first_name} {employee.last_name}) to available targets")
             
-            return available_targets
+            # Убираем дубликаты по id
+            seen_ids = set()
+            unique_targets = []
+            for target in available_targets:
+                if target["id"] not in seen_ids:
+                    seen_ids.add(target["id"])
+                    unique_targets.append(target)
+            
+            return unique_targets
             
         except Exception as e:
             logger.error(f"Error getting available targets for review: {e}")
@@ -351,3 +378,65 @@ class ReviewPermissionService:
         except Exception as e:
             logger.error(f"Error getting existing review for manager: {e}")
             return None
+    
+    async def _get_employees_for_manager(self, user_id: int) -> List[User]:
+        """Получение сотрудников для управляющего через объекты, к которым у него есть доступ."""
+        try:
+            from domain.entities.manager_object_permission import ManagerObjectPermission
+            
+            # 1. Находим объекты, к которым у управляющего есть доступ
+            permissions_query = select(ManagerObjectPermission).where(
+                ManagerObjectPermission.contract_id.in_(
+                    select(Contract.id).where(
+                        or_(
+                            Contract.owner_id == user_id,
+                            Contract.employee_id == user_id
+                        )
+                    )
+                )
+            ).options(selectinload(ManagerObjectPermission.object))
+            
+            result = await self.db.execute(permissions_query)
+            permissions = result.scalars().all()
+            
+            # Получаем ID объектов, к которым есть доступ
+            accessible_object_ids = set()
+            for permission in permissions:
+                if permission.object and permission.has_any_permission():
+                    accessible_object_ids.add(permission.object.id)
+            
+            print(f"DEBUG: Manager {user_id} has access to objects: {list(accessible_object_ids)}")
+            
+            if not accessible_object_ids:
+                return []
+            
+            # 2. Находим договоры, которые дают доступ к этим объектам
+            # Поскольку allowed_objects - это JSON, используем простую проверку
+            contracts_query = select(Contract)
+            result = await self.db.execute(contracts_query)
+            all_contracts = result.scalars().all()
+            
+            # Фильтруем договоры, которые содержат нужные объекты
+            contracts = []
+            for contract in all_contracts:
+                if contract.allowed_objects:
+                    # Проверяем пересечение массивов
+                    contract_objects = set(contract.allowed_objects)
+                    if contract_objects.intersection(accessible_object_ids):
+                        contracts.append(contract)
+            
+            print(f"DEBUG: Found {len(contracts)} contracts with access to these objects")
+            
+            # 3. Извлекаем сотрудников из этих договоров
+            employees = []
+            for contract in contracts:
+                if contract.employee_id != user_id:  # Не включаем самого себя
+                    employee = await self._get_user(contract.employee_id)
+                    if employee and employee not in employees:
+                        employees.append(employee)
+                        print(f"DEBUG: Added employee {employee.id} ({employee.first_name} {employee.last_name}) from contract {contract.id}")
+            
+            return employees
+        except Exception as e:
+            logger.error(f"Error getting employees for manager: {e}")
+            return []
