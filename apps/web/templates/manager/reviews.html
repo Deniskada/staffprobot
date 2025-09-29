@@ -676,18 +676,41 @@
         async function loadStatistics() {
             try {
                 console.log('Loading statistics...');
-                // TODO: Реализовать API для получения статистики отзывов управляющего
+                
+                // Получаем статистику из API
+                const response = await fetch('/api/reviews/my-reviews');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                const reviews = data.reviews || [];
+                
+                // Подсчитываем статистику
+                const totalReviews = reviews.length;
+                const approvedReviews = reviews.filter(r => r.status === 'approved').length;
+                const pendingReviews = reviews.filter(r => r.status === 'pending').length;
+                const averageRating = totalReviews > 0 
+                    ? (reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1)
+                    : '0.0';
+                
+                // Обновляем DOM элементы
                 const totalReviewsEl = document.getElementById('total-reviews');
                 const averageRatingEl = document.getElementById('average-rating');
                 const approvedReviewsEl = document.getElementById('approved-reviews');
                 const pendingReviewsEl = document.getElementById('pending-reviews');
                 
-                if (totalReviewsEl) totalReviewsEl.textContent = '0';
-                if (averageRatingEl) averageRatingEl.textContent = '0.0';
-                if (approvedReviewsEl) approvedReviewsEl.textContent = '0';
-                if (pendingReviewsEl) pendingReviewsEl.textContent = '0';
+                if (totalReviewsEl) totalReviewsEl.textContent = totalReviews;
+                if (averageRatingEl) averageRatingEl.textContent = averageRating;
+                if (approvedReviewsEl) approvedReviewsEl.textContent = approvedReviews;
+                if (pendingReviewsEl) pendingReviewsEl.textContent = pendingReviews;
                 
-                console.log('Statistics loaded successfully');
+                console.log('Statistics loaded successfully:', {
+                    total: totalReviews,
+                    average: averageRating,
+                    approved: approvedReviews,
+                    pending: pendingReviews
+                });
             } catch (error) {
                 console.error('Error loading statistics:', error);
                 showAlert('Ошибка загрузки статистики', 'danger');
