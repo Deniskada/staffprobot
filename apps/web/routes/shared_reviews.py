@@ -179,7 +179,16 @@ async def get_my_reviews(
         # Получаем отзывы пользователя
         from domain.entities.review import Review, ReviewAppeal
         
-        query = select(Review).where(Review.reviewer_id == user_obj.id)
+        # Для управляющих показываем отзывы О НИХ, а не созданные ими
+        if user_obj.role == 'manager':
+            # Показываем отзывы о самом управляющем
+            query = select(Review).where(
+                Review.target_type == 'employee',
+                Review.target_id == user_obj.id
+            )
+        else:
+            # Для остальных ролей показываем созданные ими отзывы
+            query = select(Review).where(Review.reviewer_id == user_obj.id)
         
         if target_type:
             query = query.where(Review.target_type == target_type)
