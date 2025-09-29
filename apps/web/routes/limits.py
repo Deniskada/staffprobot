@@ -276,7 +276,7 @@ async def _get_user_id_from_current_user(current_user: dict) -> Optional[int]:
     try:
         if isinstance(current_user, dict):
             # current_user - это словарь из JWT payload
-            telegram_id = current_user.get("id")
+            telegram_id = current_user.get("telegram_id")
             if not telegram_id:
                 return None
             
