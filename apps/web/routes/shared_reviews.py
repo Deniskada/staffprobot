@@ -190,6 +190,9 @@ async def get_my_reviews(
             # Для остальных ролей показываем созданные ими отзывы
             query = select(Review).where(Review.reviewer_id == user_obj.id)
         
+        # Исключаем отклоненные отзывы
+        query = query.where(Review.status != 'rejected')
+        
         if target_type:
             query = query.where(Review.target_type == target_type)
         
@@ -205,6 +208,10 @@ async def get_my_reviews(
             appeal_query = select(ReviewAppeal).where(ReviewAppeal.review_id == review.id)
             appeal_result = await db.execute(appeal_query)
             appeal = appeal_result.scalar_one_or_none()
+            
+            # Пропускаем отзывы с успешно обжалованными обжалованиями
+            if appeal and appeal.status == 'approved':
+                continue
             
             # Получаем информацию о цели отзыва
             target_info = None

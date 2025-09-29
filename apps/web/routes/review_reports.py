@@ -5,6 +5,7 @@ API endpoints для отчетов по отзывам и рейтингам.
 from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_
 from core.database.session import get_db_session
 from apps.web.middleware.role_middleware import require_owner_or_superadmin, require_manager_or_superadmin
 from core.logging.logger import logger
@@ -42,8 +43,13 @@ async def get_reviews_summary(
         # Определяем дату начала периода
         start_date = datetime.utcnow() - timedelta(days=period_days)
         
-        # Базовый запрос для отзывов
-        base_query = select(Review).where(Review.created_at >= start_date)
+        # Базовый запрос для отзывов (исключаем отклоненные)
+        base_query = select(Review).where(
+            and_(
+                Review.created_at >= start_date,
+                Review.status != 'rejected'
+            )
+        )
         
         if target_type:
             base_query = base_query.where(Review.target_type == target_type)
@@ -71,33 +77,65 @@ async def get_reviews_summary(
         type_result = await db.execute(type_stats_query)
         type_stats = {row.target_type: row.count for row in type_result}
         
-        # Средние рейтинги
-        avg_rating_query = select(
-            Review.target_type,
-            func.avg(Review.rating).label('avg_rating')
-        ).select_from(base_query.subquery()).where(
-            Review.status == 'approved'
-        ).group_by(Review.target_type)
+        # Получаем отзывы для расчета рейтингов (исключаем успешно обжалованные)
+        from domain.entities.review import ReviewAppeal
         
-        rating_result = await db.execute(avg_rating_query)
-        avg_ratings = {row.target_type: float(row.avg_rating) for row in rating_result}
+        # Сначала получаем все одобренные отзывы
+        approved_reviews_query = base_query.where(Review.status == 'approved')
+        approved_result = await db.execute(approved_reviews_query)
+        all_approved_reviews = approved_result.scalars().all()
+        
+        # Фильтруем отзывы с успешно обжалованными обжалованиями
+        filtered_reviews = []
+        for review in all_approved_reviews:
+            appeal_query = select(ReviewAppeal).where(
+                and_(
+                    ReviewAppeal.review_id == review.id,
+                    ReviewAppeal.status == 'approved'
+                )
+            )
+            appeal_result = await db.execute(appeal_query)
+            appeal = appeal_result.scalar_one_or_none()
+            
+            # Если обжалования нет или оно не одобрено, включаем отзыв
+            if not appeal:
+                filtered_reviews.append(review)
+        
+        # Рассчитываем средние рейтинги
+        avg_ratings = {}
+        if filtered_reviews:
+            type_ratings = {}
+            type_counts = {}
+            
+            for review in filtered_reviews:
+                target_type = review.target_type
+                rating = float(review.rating)
+                
+                if target_type not in type_ratings:
+                    type_ratings[target_type] = 0.0
+                    type_counts[target_type] = 0
+                
+                type_ratings[target_type] += rating
+                type_counts[target_type] += 1
+            
+            for target_type in type_ratings:
+                avg_ratings[target_type] = type_ratings[target_type] / type_counts[target_type]
         
         # Топ отзывов по рейтингу
-        top_reviews_query = select(Review).select_from(base_query.subquery()).where(
-            Review.status == 'approved'
-        ).order_by(Review.rating.desc()).limit(10)
-        
-        top_result = await db.execute(top_reviews_query)
         top_reviews = []
-        for review in top_result.scalars():
-            top_reviews.append({
-                "id": review.id,
-                "target_type": review.target_type,
-                "target_id": review.target_id,
-                "rating": float(review.rating),
-                "title": review.title,
-                "created_at": review.created_at.isoformat()
-            })
+        if filtered_reviews:
+            # Сортируем по рейтингу и берем топ 10
+            sorted_reviews = sorted(filtered_reviews, key=lambda r: float(r.rating), reverse=True)[:10]
+            
+            for review in sorted_reviews:
+                top_reviews.append({
+                    "id": review.id,
+                    "target_type": review.target_type,
+                    "target_id": review.target_id,
+                    "rating": float(review.rating),
+                    "title": review.title,
+                    "created_at": review.created_at.isoformat()
+                })
         
         return JSONResponse(content={
             "success": True,
