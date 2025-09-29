@@ -72,11 +72,12 @@ class LimitsService:
             if not subscription:
                 return False, "Нет активной подписки", {}
             
-            # Получаем текущее количество сотрудников по всем объектам пользователя
+            # Получаем текущее количество сотрудников (исключая управляющих)
             employees_count_result = await self.session.execute(
                 select(func.count(Contract.id.distinct())).where(
                     Contract.owner_id == user_id,
-                    Contract.is_active == True
+                    Contract.is_active == True,
+                    Contract.is_manager == False
                 )
             )
             current_employees = employees_count_result.scalar() or 0
@@ -116,8 +117,14 @@ class LimitsService:
                 return False, "Нет активной подписки", {}
             
             # Получаем количество управляющих
-            # TODO: Реализовать подсчет управляющих когда будет модель ManagerObjectPermission
-            current_managers = 0  # Временно
+            managers_count_result = await self.session.execute(
+                select(func.count(Contract.id.distinct())).where(
+                    Contract.owner_id == user_id,
+                    Contract.is_active == True,
+                    Contract.is_manager == True
+                )
+            )
+            current_managers = managers_count_result.scalar() or 0
             
             # Проверяем лимит
             max_managers = subscription.tariff_plan.max_managers
