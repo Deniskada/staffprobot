@@ -678,7 +678,6 @@
         // Загрузка договоров
         async function loadContracts(employeeId = null) {
             try {
-                console.log('Loading contracts for employeeId:', employeeId);
                 const contractSelect = document.getElementById('contract-id');
                 contractSelect.innerHTML = '<option value="">Загрузка договоров...</option>';
                 
@@ -689,7 +688,6 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('Contracts data:', data);
                     contractSelect.innerHTML = '<option value="">Выберите договор</option>';
                     
                     if (data.success && data.contracts) {
@@ -704,14 +702,12 @@
                                 filteredCount++;
                             }
                         });
-                        console.log(`Filtered ${filteredCount} contracts for employee ${employeeId}`);
                         
                         if (filteredCount === 0 && employeeId) {
                             contractSelect.innerHTML = '<option value="">Нет договоров с выбранным сотрудником</option>';
                         }
                     }
                 } else {
-                    console.error('API response not ok:', response.status, response.statusText);
                     contractSelect.innerHTML = '<option value="">Ошибка загрузки договоров</option>';
                 }
             } catch (error) {
@@ -793,27 +789,43 @@
         // Отправка отзыва
         async function submitReview() {
             try {
-                const formData = new FormData();
-                formData.append('target_type', document.getElementById('target-type').value);
-                formData.append('target_id', document.getElementById('target-id').value);
-                formData.append('contract_id', document.getElementById('contract-id').value);
-                formData.append('title', document.getElementById('review-title').value);
-                formData.append('rating', document.getElementById('review-rating').value);
-                formData.append('content', document.getElementById('review-content').value);
-                formData.append('is_anonymous', document.getElementById('is-anonymous').checked);
+                const reviewData = {
+                    target_type: document.getElementById('target-type').value,
+                    target_id: parseInt(document.getElementById('target-id').value),
+                    contract_id: parseInt(document.getElementById('contract-id').value),
+                    rating: parseInt(document.getElementById('review-rating').value),
+                    text: document.getElementById('review-content').value,
+                    is_anonymous: document.getElementById('is-anonymous').checked
+                };
 
-                // TODO: Реализовать API для создания отзыва
-                console.log('Submitting review:', Object.fromEntries(formData));
+                const response = await fetch('/api/reviews/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(reviewData)
+                });
                 
-                showAlert('Отзыв отправлен на модерацию', 'success');
+                const result = await response.json();
                 
-                // Закрываем модальное окно
-                const modal = bootstrap.Modal.getInstance(document.getElementById('createReviewModal'));
-                modal.hide();
-                
-                // Очищаем форму
-                document.getElementById('create-review-form').reset();
-                selectedRating = 5;
+                if (result.success) {
+                    showAlert('Отзыв отправлен на модерацию', 'success');
+                    
+                    // Закрываем модальное окно
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('createReviewModal'));
+                    modal.hide();
+                    
+                    // Очищаем форму
+                    document.getElementById('create-review-form').reset();
+                    selectedRating = 5;
+                    
+                    // Обновляем статистику и список отзывов
+                    loadStatistics();
+                    loadReviews();
+                } else {
+                    showAlert(result.message || 'Ошибка отправки отзыва', 'danger');
+                }
                 
             } catch (error) {
                 console.error('Error submitting review:', error);
