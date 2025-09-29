@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Reviews API</title>
+</head>
+<body>
+    <h1>Test Reviews API</h1>
+    <button onclick="setToken()">Set Token</button>
+    <button onclick="testAPI()">Test API</button>
+    <div id="result"></div>
+
+    <script>
+        function setToken() {
+            const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTc3MjIzMTM3IiwidGVsZWdyYW1faWQiOiI1NTc3MjIzMTM3IiwidXNlcm5hbWUiOiJtYW5hZ2VyX3VzZXIiLCJmaXJzdF9uYW1lIjoiTWFuYWdlciIsImxhc3RfbmFtZSI6IlVzZXIiLCJyb2xlIjoibWFuYWdlciIsImV4cCI6MTc1OTIxNzY4MSwiaWF0IjoxNzU5MTMxMjgxfQ.aZ0uIugUvZWPFMG1-Jfvx-kspCxmacPZJjb5bUY1174";
+            document.cookie = "access_token=" + token + "; path=/";
+            document.getElementById('result').innerHTML = "Token set!";
+        }
+
+        async function testAPI() {
+            try {
+                console.log('Testing API...');
+                const response = await fetch('/api/reviews/my-reviews');
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                document.getElementById('result').innerHTML = 
+                    `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = 
+                    `<div style="color: red;">Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
