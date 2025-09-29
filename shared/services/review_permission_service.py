@@ -161,8 +161,9 @@ class ReviewPermissionService:
                 elif target_type == 'object':
                     # Для отзыва об объекте - сотрудники и владельцы
                     if contract.employee_id == user_id:  # Сотрудник договора
-                        objects = await self._get_objects_by_contract(contract)
-                        print(f"DEBUG: Contract {contract.id} has {len(objects)} objects")
+                        # Для сотрудника показываем объекты владельца договора
+                        objects = await self._get_objects_by_owner(contract.owner_id)
+                        print(f"DEBUG: Contract {contract.id} owner {contract.owner_id} has {len(objects)} objects")
                         for obj in objects:
                             # Проверяем, что отзыв еще не оставлен
                             existing_review = await self._get_existing_review(
@@ -180,7 +181,8 @@ class ReviewPermissionService:
                                 print(f"DEBUG: Added employee object {obj.id} ({obj.name}) to available targets")
                     
                     elif contract.owner_id == user_id:  # Владелец договора
-                        objects = await self._get_objects_by_contract(contract)
+                        # Для владельца показываем его объекты
+                        objects = await self._get_objects_by_owner(contract.owner_id)
                         print(f"DEBUG: Owner contract {contract.id} has {len(objects)} objects")
                         for obj in objects:
                             # Проверяем, что отзыв еще не оставлен
@@ -283,6 +285,16 @@ class ReviewPermissionService:
             return result.scalars().all()
         except Exception as e:
             logger.error(f"Error getting objects by contract: {e}")
+            return []
+    
+    async def _get_objects_by_owner(self, owner_id: int) -> List[Object]:
+        """Получение объектов по владельцу."""
+        try:
+            objects_query = select(Object).where(Object.owner_id == owner_id)
+            result = await self.db.execute(objects_query)
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error getting objects by owner {owner_id}: {e}")
             return []
     
     async def _is_target_linked_to_contract(
