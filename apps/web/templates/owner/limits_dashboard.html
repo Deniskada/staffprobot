@@ -188,7 +188,7 @@
                 </div>
                 <div class="card-body">
                     <div class="progress mb-2">
-                        {% set percentage = (limits_summary.limits.objects.details.current / limits_summary.limits.objects.details.max * 100) if limits_summary.limits.objects.details.max != -1 else 0 %}
+                        {% set percentage = (limits_summary.limits.objects.details.current / limits_summary.limits.objects.details.max * 100) if limits_summary.limits.objects.details.max != -1 and limits_summary.limits.objects.details.max > 0 else 0 %}
                         <div class="progress-bar progress-bar-custom {% if not limits_summary.limits.objects.allowed %}bg-danger{% elif percentage >= 80 %}bg-warning{% else %}bg-success{% endif %}" 
                              style="width: {{ percentage }}%">
                             {{ limits_summary.limits.objects.details.current }}
@@ -227,7 +227,7 @@
                 </div>
                 <div class="card-body">
                     <div class="progress mb-2">
-                        {% set percentage = (limits_summary.limits.employees.details.current / limits_summary.limits.employees.details.max * 100) if limits_summary.limits.employees.details.max != -1 else 0 %}
+                        {% set percentage = (limits_summary.limits.employees.details.current / limits_summary.limits.employees.details.max * 100) if limits_summary.limits.employees.details.max != -1 and limits_summary.limits.employees.details.max > 0 else 0 %}
                         <div class="progress-bar progress-bar-custom {% if not limits_summary.limits.employees.allowed %}bg-danger{% elif percentage >= 80 %}bg-warning{% else %}bg-success{% endif %}" 
                              style="width: {{ percentage }}%">
                             {{ limits_summary.limits.employees.details.current }}
@@ -266,7 +266,7 @@
                 </div>
                 <div class="card-body">
                     <div class="progress mb-2">
-                        {% set percentage = (limits_summary.limits.managers.details.current / limits_summary.limits.managers.details.max * 100) if limits_summary.limits.managers.details.max != -1 else 0 %}
+                        {% set percentage = (limits_summary.limits.managers.details.current / limits_summary.limits.managers.details.max * 100) if limits_summary.limits.managers.details.max != -1 and limits_summary.limits.managers.details.max > 0 else 0 %}
                         <div class="progress-bar progress-bar-custom {% if not limits_summary.limits.managers.allowed %}bg-danger{% elif percentage >= 80 %}bg-warning{% else %}bg-success{% endif %}" 
                              style="width: {{ percentage }}%">
                             {{ limits_summary.limits.managers.details.current }}
