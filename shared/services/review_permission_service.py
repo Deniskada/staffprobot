@@ -111,16 +111,20 @@ class ReviewPermissionService:
             List доступных целей
         """
         try:
-            # Получаем договоры пользователя
+            print(f"DEBUG: get_available_targets_for_review called with user_id={user_id}, target_type={target_type}")
+            
+            # Получаем договоры пользователя (все статусы)
             contracts_query = select(Contract).where(
                 or_(
                     Contract.owner_id == user_id,
                     Contract.employee_id == user_id
                 )
-            ).where(Contract.status.in_(['active', 'completed']))
+            )
             
             result = await self.db.execute(contracts_query)
             contracts = result.scalars().all()
+            
+            print(f"DEBUG: Found {len(contracts)} contracts for user {user_id}")
             
             available_targets = []
             
@@ -145,7 +149,9 @@ class ReviewPermissionService:
                 
                 elif target_type == 'object':
                     # Для отзыва об объекте - получаем объекты по договору
+                    # Любой участник договора может оставлять отзыв об объектах
                     objects = await self._get_objects_by_contract(contract)
+                    print(f"DEBUG: Contract {contract.id} has {len(objects)} objects")
                     for obj in objects:
                         # Проверяем, что отзыв еще не оставлен
                         existing_review = await self._get_existing_review(
@@ -160,6 +166,7 @@ class ReviewPermissionService:
                                 "contract_number": contract.contract_number,
                                 "contract_title": contract.title
                             })
+                            print(f"DEBUG: Added object {obj.id} ({obj.name}) to available targets")
             
             return available_targets
             
@@ -190,9 +197,13 @@ class ReviewPermissionService:
     async def _get_objects_by_contract(self, contract: Contract) -> List[Object]:
         """Получение объектов по договору."""
         try:
-            # TODO: Реализовать связь объектов с договорами
-            # Пока возвращаем пустой список
-            return []
+            if not contract.allowed_objects:
+                return []
+            
+            # Получаем объекты по ID из allowed_objects
+            objects_query = select(Object).where(Object.id.in_(contract.allowed_objects))
+            result = await self.db.execute(objects_query)
+            return result.scalars().all()
         except Exception as e:
             logger.error(f"Error getting objects by contract: {e}")
             return []
@@ -251,8 +262,8 @@ class ReviewPermissionService:
                 # Владелец может оставлять отзыв о сотруднике
                 return contract.owner_id == user_id
             elif target_type == 'object':
-                # Сотрудник может оставлять отзыв об объекте
-                return contract.employee_id == user_id
+                # Любой участник договора может оставлять отзыв об объекте
+                return True
             return False
         except Exception as e:
             logger.error(f"Error checking target permissions: {e}")

@@ -279,6 +279,10 @@ async def get_available_targets(
         JSONResponse: Список доступных целей
     """
     try:
+        print(f"DEBUG: get_available_targets called with target_type={target_type}")
+        print(f"DEBUG: current_user type: {type(current_user)}")
+        print(f"DEBUG: current_user: {current_user}")
+        
         if target_type not in ['employee', 'object']:
             raise HTTPException(status_code=400, detail="Недопустимый тип цели")
         
