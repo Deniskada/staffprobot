@@ -24,24 +24,30 @@ class URLHelper:
         """Получить базовый URL системы"""
         try:
             if not cls._settings_service:
+                logger.warning("URLHelper: SystemSettingsService not set, using default localhost:8001")
                 return "http://localhost:8001"
             
             # Получаем домен и настройку HTTPS
             domain = await cls._settings_service.get_domain()
             use_https = await cls._settings_service.get_use_https()
             
+            logger.info(f"URLHelper: domain={domain}, use_https={use_https}")
+            
             protocol = "https" if use_https else "http"
             
             # Обрабатываем случай с портом в домене
             if ":" in domain and not domain.startswith("http"):
-                return f"{protocol}://{domain}"
+                result = f"{protocol}://{domain}"
             elif domain.startswith("http"):
-                return domain
+                result = domain
             else:
-                return f"{protocol}://{domain}"
-                
+                result = f"{protocol}://{domain}"
+            
+            logger.info(f"URLHelper: returning base_url={result}")
+            return result
+            
         except Exception as e:
-            logger.error(f"Error getting base URL: {e}")
+            logger.error(f"URLHelper: Error getting base URL: {e}")
             return "http://localhost:8001"
     
     @classmethod
