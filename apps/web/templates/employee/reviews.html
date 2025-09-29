@@ -630,13 +630,24 @@
             
             const formData = new FormData();
             formData.append('review_id', reviewId);
-            formData.append('reason', reason);
-            formData.append('description', description);
+            formData.append('appeal_reason', reason);
             
-            // Добавляем медиафайлы
+            // Создаем объект доказательств
+            const evidence = {
+                description: description,
+                media_files: []
+            };
+            
+            // Добавляем информацию о медиафайлах
             for (let file of mediaFiles) {
-                formData.append('media_files', file);
+                evidence.media_files.push({
+                    name: file.name,
+                    size: file.size,
+                    type: file.type
+                });
             }
+            
+            formData.append('evidence', JSON.stringify(evidence));
             
             const response = await fetch('/api/appeals/create', {
                 method: 'POST',
