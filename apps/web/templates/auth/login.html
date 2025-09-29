@@ -5,12 +5,17 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-6 col-lg-4">
-        <div class="card shadow">
-            <div class="card-body">
-                <h3 class="card-title text-center mb-4">
-                    <i class="bi bi-robot text-primary"></i><br>
-                    Вход в StaffProBot
-                </h3>
+        <div class="card shadow-lg border-0" style="border-radius: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <div class="robot-icon mb-3" style="animation: bounce 2s infinite;">
+                        <i class="bi bi-robot text-white" style="font-size: 4rem;"></i>
+                    </div>
+                    <h3 class="card-title text-white mb-2" style="font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                        Добро пожаловать! 👋
+                    </h3>
+                    <p class="text-white-50 mb-0">Войдите в StaffProBot для управления персоналом</p>
+                </div>
                 
                 {% if success %}
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -28,53 +33,61 @@
                 {% endif %}
                 
                 <form id="loginForm" method="POST" action="/auth/login">
-                    <div class="mb-3">
-                        <label for="telegram_id" class="form-label">Telegram ID</label>
+                    <div class="mb-4">
+                        <label for="telegram_id" class="form-label text-white fw-bold">
+                            <i class="bi bi-person-badge me-2"></i>Telegram ID
+                        </label>
                         <input type="number" 
-                               class="form-control" 
+                               class="form-control form-control-lg" 
                                id="telegram_id" 
                                name="telegram_id" 
                                value="{{ telegram_id or '' }}"
                                placeholder="Введите ваш Telegram ID"
+                               style="border-radius: 15px; border: 2px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.9);"
                                required>
-                        <div class="form-text">
-                            <strong>Ваш Telegram ID можно узнать у бота @StaffProBot командой /start</strong>
+                        <div class="form-text text-white-75 mt-2">
+                            <strong><i class="bi bi-telegram me-1"></i>Ваш Telegram ID можно узнать у бота @StaffProBot командой /start меню Мой Telegram ID</strong>
                         </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="pin_code" class="form-label">PIN-код</label>
+                    <div class="mb-4">
+                        <label for="pin_code" class="form-label text-white fw-bold">
+                            <i class="bi bi-shield-lock me-2"></i>PIN-код
+                        </label>
                         <div class="input-group">
                             <input type="text" 
-                                   class="form-control" 
+                                   class="form-control form-control-lg" 
                                    id="pin_code" 
                                    name="pin_code" 
                                    value="{{ pin_code or '' }}"
                                    placeholder="6-значный код"
                                    maxlength="6"
                                    pattern="[0-9]{6}"
+                                   style="border-radius: 15px 0 0 15px; border: 2px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.9);"
                                    required>
                             <button type="button" 
-                                    class="btn btn-outline-secondary" 
-                                    id="sendPinBtn">
-                                <i class="bi bi-send"></i> Получить код
+                                    class="btn btn-light btn-lg" 
+                                    id="sendPinBtn"
+                                    style="border-radius: 0 15px 15px 0; border: 2px solid rgba(255,255,255,0.3); border-left: none;">
+                                <i class="bi bi-send me-1"></i> Получить код
                             </button>
                         </div>
-                        <div id="pinResult" class="form-text"></div>
+                        <div id="pinResult" class="form-text text-white-75 mt-2"></div>
                     </div>
                     
                     <div class="d-grid">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-box-arrow-in-right"></i> Войти
+                        <button type="submit" class="btn btn-light btn-lg fw-bold" style="border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                            <i class="bi bi-box-arrow-in-right me-2"></i> Войти в систему
                         </button>
                     </div>
                 </form>
                 
                 
-                <hr class="my-4">
+                <hr class="my-4" style="border-color: rgba(255,255,255,0.3);">
                 
                 <div class="text-center">
-                    <small class="text-muted">
+                    <small class="text-white-75">
+                        <i class="bi bi-info-circle me-1"></i>
                         Нет аккаунта? Обратитесь к администратору или используйте бота @StaffProBot
                     </small>
                 </div>
@@ -82,6 +95,62 @@
         </div>
     </div>
 </div>
+
+<style>
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-10px);
+    }
+    60% {
+        transform: translateY(-5px);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 255, 255, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+    }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.robot-icon {
+    animation: bounce 2s infinite, pulse 2s infinite;
+}
+
+.form-control:focus {
+    border-color: rgba(255, 255, 255, 0.8) !important;
+    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25) !important;
+    background: rgba(255, 255, 255, 1) !important;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
+}
+
+.text-white-75 {
+    color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.card {
+    backdrop-filter: blur(10px);
+    background: rgba(102, 126, 234, 0.9) !important;
+}
+</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -126,16 +195,35 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                // Успешная отправка - не показываем сообщение
-                this.innerHTML = '<i class="bi bi-check-circle text-success"></i> Отправлено';
+                // Успешная отправка - показываем анимированную галочку
+                this.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i> Отправлено!';
+                this.classList.add('btn-success');
+                this.classList.remove('btn-light');
+                
+                // Добавляем анимацию успеха
+                this.style.animation = 'pulse 0.6s ease-in-out';
+                
                 setTimeout(() => {
                     this.innerHTML = '<i class="bi bi-send"></i> Получить код';
+                    this.classList.remove('btn-success');
+                    this.classList.add('btn-light');
+                    this.style.animation = '';
+                    this.disabled = false;
+                }, 3000);
+            } else {
+                // Показываем ошибку с анимацией
+                this.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger"></i> Ошибка';
+                this.classList.add('btn-danger');
+                this.classList.remove('btn-light');
+                this.style.animation = 'shake 0.5s ease-in-out';
+                
+                setTimeout(() => {
+                    this.innerHTML = '<i class="bi bi-send"></i> Получить код';
+                    this.classList.remove('btn-danger');
+                    this.classList.add('btn-light');
+                    this.style.animation = '';
                     this.disabled = false;
                 }, 2000);
-            } else {
-                alert('Ошибка отправки: ' + (data.message || 'Неизвестная ошибка'));
-                this.innerHTML = '<i class="bi bi-send"></i> Получить код';
-                this.disabled = false;
             }
         })
         .catch(error => {
