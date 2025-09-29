@@ -598,16 +598,35 @@
     // Отправка обжалования
     async function submitAppeal() {
         try {
-            const reviewId = document.getElementById('appealReviewId').value;
+            const reviewIdElement = document.getElementById('appealReviewId');
             const reasonElement = document.querySelector('input[name="appeal_reason"]:checked');
-            const reason = reasonElement ? reasonElement.value : null;
-            const description = document.getElementById('appealDescription').value;
-            const mediaFiles = document.getElementById('appealMedia').files;
+            const descriptionElement = document.getElementById('appeal-description');
+            const mediaElement = document.getElementById('appeal-media');
             
-            if (!reason) {
+            if (!reviewIdElement) {
+                showAlert('Ошибка: не найден элемент appealReviewId', 'danger');
+                return;
+            }
+            
+            if (!reasonElement) {
                 showAlert('Выберите причину обжалования', 'warning');
                 return;
             }
+            
+            if (!descriptionElement) {
+                showAlert('Ошибка: не найден элемент appeal-description', 'danger');
+                return;
+            }
+            
+            if (!mediaElement) {
+                showAlert('Ошибка: не найден элемент appeal-media', 'danger');
+                return;
+            }
+            
+            const reviewId = reviewIdElement.value;
+            const reason = reasonElement.value;
+            const description = descriptionElement.value;
+            const mediaFiles = mediaElement.files;
             
             const formData = new FormData();
             formData.append('review_id', reviewId);
