@@ -15,6 +15,18 @@
         .navbar-moderator .nav-link {
             color: white !important;
         }
+        
+        .stat-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
     </style>
 </head>
 <body>
@@ -63,21 +75,407 @@
 
     <div class="container-fluid">
         <div class="container">
-            <div class="row">
-                <div class="col-12 text-center py-5">
-                    <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
-                    <h2>Статистика модерации</h2>
-                    <p class="text-muted">Страница статистики модерации будет реализована в следующих этапах</p>
-                    <a href="/moderator/" class="btn btn-primary">
-                        <i class="fas fa-arrow-left"></i> Вернуться к дашборду
-                    </a>
+            <!-- Заголовок -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h2><i class="fas fa-chart-bar me-2"></i>Статистика модерации</h2>
+                    <p class="text-muted">Аналитика и отчеты по модерации отзывов</p>
+                </div>
+            </div>
+
+            <!-- Период фильтрации -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label class="form-label">Период от</label>
+                                    <input type="date" class="form-control" id="date-from">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Период до</label>
+                                    <input type="date" class="form-control" id="date-to">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Тип отчета</label>
+                                    <select class="form-select" id="report-type">
+                                        <option value="daily">По дням</option>
+                                        <option value="weekly">По неделям</option>
+                                        <option value="monthly">По месяцам</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <div>
+                                        <button class="btn btn-primary" onclick="loadStatistics()">
+                                            <i class="fas fa-chart-line me-1"></i>Обновить
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Общая статистика -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-comments fa-2x text-primary mb-2"></i>
+                            <h4 id="total-reviews">0</h4>
+                            <p class="text-muted">Всего отзывов</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-clock fa-2x text-warning mb-2"></i>
+                            <h4 id="pending-reviews">0</h4>
+                            <p class="text-muted">На модерации</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                            <h4 id="approved-reviews">0</h4>
+                            <p class="text-muted">Одобрено</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                            <h4 id="rejected-reviews">0</h4>
+                            <p class="text-muted">Отклонено</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Статистика обжалований -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-gavel fa-2x text-info mb-2"></i>
+                            <h4 id="total-appeals">0</h4>
+                            <p class="text-muted">Всего обжалований</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-clock fa-2x text-warning mb-2"></i>
+                            <h4 id="pending-appeals">0</h4>
+                            <p class="text-muted">На рассмотрении</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                            <h4 id="approved-appeals">0</h4>
+                            <p class="text-muted">Удовлетворено</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                            <h4 id="rejected-appeals">0</h4>
+                            <p class="text-muted">Отклонено</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Графики -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-line me-2"></i>Динамика отзывов</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="reviewsChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-pie me-2"></i>Статусы отзывов</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="statusChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Время модерации -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-stopwatch me-2"></i>Среднее время модерации</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <h3 id="avg-moderation-time">0</h3>
+                                    <p class="text-muted">часов</p>
+                                </div>
+                                <div class="col-4">
+                                    <h3 id="fastest-moderation">0</h3>
+                                    <p class="text-muted">мин (быстрее всего)</p>
+                                </div>
+                                <div class="col-4">
+                                    <h3 id="slowest-moderation">0</h3>
+                                    <p class="text-muted">часов (медленнее всего)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-user-shield me-2"></i>Активность модераторов</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="moderators-activity">
+                                <div class="text-center py-3">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <p class="text-muted mt-2">Загрузка...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        let reviewsChart = null;
+        let statusChart = null;
+
+        // Загрузка при инициализации
+        document.addEventListener('DOMContentLoaded', function() {
+            // Устанавливаем даты по умолчанию (последние 30 дней)
+            const today = new Date();
+            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+            
+            document.getElementById('date-to').value = today.toISOString().split('T')[0];
+            document.getElementById('date-from').value = monthAgo.toISOString().split('T')[0];
+            
+            loadStatistics();
+        });
+
+        // Загрузка статистики
+        async function loadStatistics() {
+            try {
+                const dateFrom = document.getElementById('date-from').value;
+                const dateTo = document.getElementById('date-to').value;
+                const reportType = document.getElementById('report-type').value;
+
+                const params = new URLSearchParams({
+                    date_from: dateFrom,
+                    date_to: dateTo,
+                    report_type: reportType
+                });
+
+                const response = await fetch(`/api/moderator/statistics?${params}`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    updateStatistics(data);
+                    updateCharts(data);
+                } else {
+                    showAlert('Ошибка загрузки статистики', 'danger');
+                }
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+                showAlert('Ошибка загрузки статистики', 'danger');
+            }
+        }
+
+        // Обновление статистики
+        function updateStatistics(data) {
+            // Общая статистика отзывов
+            document.getElementById('total-reviews').textContent = data.reviews?.total || 0;
+            document.getElementById('pending-reviews').textContent = data.reviews?.pending || 0;
+            document.getElementById('approved-reviews').textContent = data.reviews?.approved || 0;
+            document.getElementById('rejected-reviews').textContent = data.reviews?.rejected || 0;
+
+            // Статистика обжалований
+            document.getElementById('total-appeals').textContent = data.appeals?.total || 0;
+            document.getElementById('pending-appeals').textContent = data.appeals?.pending || 0;
+            document.getElementById('approved-appeals').textContent = data.appeals?.approved || 0;
+            document.getElementById('rejected-appeals').textContent = data.appeals?.rejected || 0;
+
+            // Время модерации
+            document.getElementById('avg-moderation-time').textContent = data.moderation_time?.average_hours || 0;
+            document.getElementById('fastest-moderation').textContent = data.moderation_time?.fastest_minutes || 0;
+            document.getElementById('slowest-moderation').textContent = data.moderation_time?.slowest_hours || 0;
+
+            // Активность модераторов
+            updateModeratorsActivity(data.moderators_activity || []);
+        }
+
+        // Обновление графиков
+        function updateCharts(data) {
+            updateReviewsChart(data.reviews_dynamics || []);
+            updateStatusChart(data.reviews || {});
+        }
+
+        // График динамики отзывов
+        function updateReviewsChart(dynamics) {
+            const ctx = document.getElementById('reviewsChart').getContext('2d');
+            
+            if (reviewsChart) {
+                reviewsChart.destroy();
+            }
+
+            const labels = dynamics.map(item => item.date);
+            const approvedData = dynamics.map(item => item.approved || 0);
+            const rejectedData = dynamics.map(item => item.rejected || 0);
+            const pendingData = dynamics.map(item => item.pending || 0);
+
+            reviewsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Одобрено',
+                            data: approvedData,
+                            borderColor: '#28a745',
+                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Отклонено',
+                            data: rejectedData,
+                            borderColor: '#dc3545',
+                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'На модерации',
+                            data: pendingData,
+                            borderColor: '#ffc107',
+                            backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // График статусов отзывов
+        function updateStatusChart(reviews) {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            
+            if (statusChart) {
+                statusChart.destroy();
+            }
+
+            const total = (reviews.total || 0);
+            const approved = (reviews.approved || 0);
+            const rejected = (reviews.rejected || 0);
+            const pending = (reviews.pending || 0);
+
+            statusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Одобрено', 'Отклонено', 'На модерации'],
+                    datasets: [{
+                        data: [approved, rejected, pending],
+                        backgroundColor: ['#28a745', '#dc3545', '#ffc107'],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Обновление активности модераторов
+        function updateModeratorsActivity(moderators) {
+            const container = document.getElementById('moderators-activity');
+            
+            if (moderators.length === 0) {
+                container.innerHTML = '<p class="text-muted text-center">Нет данных об активности</p>';
+                return;
+            }
+
+            let html = '';
+            moderators.forEach(moderator => {
+                html += `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>${moderator.name}</strong>
+                            <small class="text-muted d-block">${moderator.email}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-primary">${moderator.reviews_moderated || 0} отзывов</span>
+                            <small class="text-muted d-block">${moderator.last_activity || 'Неактивен'}</small>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Вспомогательные функции
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alerts-container') || document.body;
+            const alertId = 'alert-' + Date.now();
+            container.innerHTML += `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const alert = document.getElementById(alertId);
+                if (alert) alert.remove();
+            }, 5000);
+        }
+
         function switchToAdmin() {
             window.location.href = '/admin/';
         }

@@ -15,6 +15,36 @@
         .navbar-moderator .nav-link {
             color: white !important;
         }
+        
+        .stat-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .review-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+        
+        .review-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .moderation-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
     </style>
 </head>
 <body>
@@ -63,14 +93,113 @@
 
     <div class="container-fluid">
         <div class="container">
+            <!-- Заголовок -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h2><i class="fas fa-gavel me-2"></i>Обжалования</h2>
+                    <p class="text-muted">Рассмотрение обжалований отзывов</p>
+                </div>
+            </div>
+
+            <!-- Статистика -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-clock fa-2x text-warning mb-2"></i>
+                            <h4 id="pending-appeals">0</h4>
+                            <p class="text-muted">На рассмотрении</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                            <h4 id="approved-appeals">0</h4>
+                            <p class="text-muted">Удовлетворено</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                            <h4 id="rejected-appeals">0</h4>
+                            <p class="text-muted">Отклонено</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-chart-line fa-2x text-info mb-2"></i>
+                            <h4 id="total-appeals">0</h4>
+                            <p class="text-muted">Всего обжалований</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Фильтры -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label class="form-label">Статус</label>
+                                    <select class="form-select" id="status-filter">
+                                        <option value="">Все статусы</option>
+                                        <option value="pending">На рассмотрении</option>
+                                        <option value="approved">Удовлетворено</option>
+                                        <option value="rejected">Отклонено</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Причина</label>
+                                    <select class="form-select" id="reason-filter">
+                                        <option value="">Все причины</option>
+                                        <option value="facts_distorted">Искажены факты</option>
+                                        <option value="offensive_content">Оскорбления</option>
+                                        <option value="personal_data">Персональные данные</option>
+                                        <option value="discrimination">Дискриминация</option>
+                                        <option value="other">Другое</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Дата от</label>
+                                    <input type="date" class="form-control" id="date-from">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Дата до</label>
+                                    <input type="date" class="form-control" id="date-to">
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <button class="btn btn-primary" onclick="loadAppeals()">
+                                        <i class="fas fa-search me-1"></i>Применить фильтры
+                                    </button>
+                                    <button class="btn btn-outline-secondary ms-2" onclick="clearFilters()">
+                                        <i class="fas fa-times me-1"></i>Очистить
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Список обжалований -->
             <div class="row">
-                <div class="col-12 text-center py-5">
-                    <i class="fas fa-gavel fa-3x text-muted mb-3"></i>
-                    <h2>Обжалования</h2>
-                    <p class="text-muted">Страница рассмотрения обжалований будет реализована в следующих этапах</p>
-                    <a href="/moderator/" class="btn btn-primary">
-                        <i class="fas fa-arrow-left"></i> Вернуться к дашборду
-                    </a>
+                <div class="col-12">
+                    <div id="appeals-container">
+                        <div class="text-center py-5">
+                            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                            <p class="text-muted mt-2">Загрузка обжалований...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -78,6 +207,230 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        let currentPage = 1;
+        const pageSize = 10;
+
+        // Загрузка при инициализации
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAppeals();
+            loadStatistics();
+        });
+
+        // Загрузка обжалований
+        async function loadAppeals() {
+            try {
+                const status = document.getElementById('status-filter').value;
+                const reason = document.getElementById('reason-filter').value;
+                const dateFrom = document.getElementById('date-from').value;
+                const dateTo = document.getElementById('date-to').value;
+
+                const params = new URLSearchParams({
+                    page: currentPage,
+                    limit: pageSize
+                });
+
+                if (status) params.append('status', status);
+                if (reason) params.append('reason', reason);
+                if (dateFrom) params.append('date_from', dateFrom);
+                if (dateTo) params.append('date_to', dateTo);
+
+                const response = await fetch(`/api/appeals/moderator?${params}`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    displayAppeals(data.appeals || []);
+                } else {
+                    showAlert('Ошибка загрузки обжалований', 'danger');
+                }
+            } catch (error) {
+                console.error('Error loading appeals:', error);
+                showAlert('Ошибка загрузки обжалований', 'danger');
+            }
+        }
+
+        // Загрузка статистики
+        async function loadStatistics() {
+            try {
+                const response = await fetch('/api/appeals/moderator/statistics', {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('pending-appeals').textContent = data.pending || 0;
+                    document.getElementById('approved-appeals').textContent = data.approved || 0;
+                    document.getElementById('rejected-appeals').textContent = data.rejected || 0;
+                    document.getElementById('total-appeals').textContent = data.total || 0;
+                }
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+            }
+        }
+
+        // Отображение обжалований
+        function displayAppeals(appeals) {
+            const container = document.getElementById('appeals-container');
+            
+            if (appeals.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-gavel fa-3x text-muted mb-3"></i>
+                        <h4>Обжалования не найдены</h4>
+                        <p class="text-muted">По выбранным фильтрам обжалования не найдены</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            appeals.forEach(appeal => {
+                const statusBadge = getStatusBadge(appeal.status);
+                const reasonText = getReasonText(appeal.appeal_reason);
+                
+                html += `
+                    <div class="card review-card mb-3">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <h5 class="card-title">
+                                        Обжалование отзыва #${appeal.review_id}
+                                        ${statusBadge}
+                                    </h5>
+                                    <p class="card-text">
+                                        <strong>Причина:</strong> ${reasonText}<br>
+                                        <strong>Описание:</strong> ${appeal.description || 'Не указано'}<br>
+                                        <strong>Дата подачи:</strong> ${formatDate(appeal.created_at)}
+                                    </p>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <div class="moderation-buttons">
+                                        ${appeal.status === 'pending' ? `
+                                            <button class="btn btn-success btn-sm" onclick="approveAppeal(${appeal.id})">
+                                                <i class="fas fa-check"></i> Удовлетворить
+                                            </button>
+                                            <button class="btn btn-danger btn-sm" onclick="rejectAppeal(${appeal.id})">
+                                                <i class="fas fa-times"></i> Отклонить
+                                            </button>
+                                        ` : ''}
+                                        <button class="btn btn-info btn-sm" onclick="viewAppealDetails(${appeal.id})">
+                                            <i class="fas fa-eye"></i> Подробнее
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Удовлетворение обжалования
+        async function approveAppeal(appealId) {
+            if (confirm('Удовлетворить обжалование?')) {
+                try {
+                    const response = await fetch(`/api/appeals/${appealId}/approve`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+
+                    if (response.ok) {
+                        showAlert('Обжалование удовлетворено', 'success');
+                        loadAppeals();
+                        loadStatistics();
+                    } else {
+                        showAlert('Ошибка при удовлетворении обжалования', 'danger');
+                    }
+                } catch (error) {
+                    console.error('Error approving appeal:', error);
+                    showAlert('Ошибка при удовлетворении обжалования', 'danger');
+                }
+            }
+        }
+
+        // Отклонение обжалования
+        async function rejectAppeal(appealId) {
+            if (confirm('Отклонить обжалование?')) {
+                try {
+                    const response = await fetch(`/api/appeals/${appealId}/reject`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+
+                    if (response.ok) {
+                        showAlert('Обжалование отклонено', 'success');
+                        loadAppeals();
+                        loadStatistics();
+                    } else {
+                        showAlert('Ошибка при отклонении обжалования', 'danger');
+                    }
+                } catch (error) {
+                    console.error('Error rejecting appeal:', error);
+                    showAlert('Ошибка при отклонении обжалования', 'danger');
+                }
+            }
+        }
+
+        // Просмотр деталей обжалования
+        function viewAppealDetails(appealId) {
+            // TODO: Реализовать модальное окно с деталями
+            alert('Детали обжалования #' + appealId);
+        }
+
+        // Очистка фильтров
+        function clearFilters() {
+            document.getElementById('status-filter').value = '';
+            document.getElementById('reason-filter').value = '';
+            document.getElementById('date-from').value = '';
+            document.getElementById('date-to').value = '';
+            currentPage = 1;
+            loadAppeals();
+        }
+
+        // Вспомогательные функции
+        function getStatusBadge(status) {
+            const badges = {
+                'pending': '<span class="badge bg-warning">На рассмотрении</span>',
+                'approved': '<span class="badge bg-success">Удовлетворено</span>',
+                'rejected': '<span class="badge bg-danger">Отклонено</span>'
+            };
+            return badges[status] || '<span class="badge bg-secondary">Неизвестно</span>';
+        }
+
+        function getReasonText(reason) {
+            const reasons = {
+                'facts_distorted': 'Искажены факты',
+                'offensive_content': 'Оскорбления или мат',
+                'personal_data': 'Раскрыты персональные данные',
+                'discrimination': 'Дискриминация',
+                'other': 'Другое'
+            };
+            return reasons[reason] || reason;
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleString('ru-RU');
+        }
+
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alerts-container') || document.body;
+            const alertId = 'alert-' + Date.now();
+            container.innerHTML += `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const alert = document.getElementById(alertId);
+                if (alert) alert.remove();
+            }, 5000);
+        }
+
         function switchToAdmin() {
             window.location.href = '/admin/';
         }
