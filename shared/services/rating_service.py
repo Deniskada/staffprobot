@@ -50,7 +50,24 @@ class RatingService:
             ).order_by(Review.published_at.desc())
             
             result = await self.session.execute(query)
-            reviews = result.scalars().all()
+            all_reviews = result.scalars().all()
+            
+            # Исключаем отзывы с успешно обжалованными обжалованиями
+            from domain.entities.review import ReviewAppeal
+            reviews = []
+            for review in all_reviews:
+                appeal_query = select(ReviewAppeal).where(
+                    and_(
+                        ReviewAppeal.review_id == review.id,
+                        ReviewAppeal.status == 'approved'
+                    )
+                )
+                appeal_result = await self.session.execute(appeal_query)
+                appeal = appeal_result.scalar_one_or_none()
+                
+                # Если обжалования нет или оно не одобрено, включаем отзыв
+                if not appeal:
+                    reviews.append(review)
             
             if not reviews:
                 # Если отзывов нет, возвращаем начальный рейтинг
@@ -275,7 +292,24 @@ class RatingService:
         )
         
         result = await self.session.execute(query)
-        reviews = result.scalars().all()
+        all_reviews = result.scalars().all()
+        
+        # Исключаем отзывы с успешно обжалованными обжалованиями
+        from domain.entities.review import ReviewAppeal
+        reviews = []
+        for review in all_reviews:
+            appeal_query = select(ReviewAppeal).where(
+                and_(
+                    ReviewAppeal.review_id == review.id,
+                    ReviewAppeal.status == 'approved'
+                )
+            )
+            appeal_result = await self.session.execute(appeal_query)
+            appeal = appeal_result.scalar_one_or_none()
+            
+            # Если обжалования нет или оно не одобрено, включаем отзыв
+            if not appeal:
+                reviews.append(review)
         
         if not reviews:
             return {
