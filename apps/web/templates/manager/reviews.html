@@ -487,6 +487,13 @@
                             <div class="row">
                                 <div class="col-md-8">
                                     <h5 class="card-title">${review.title}</h5>
+                                    ${review.target_info ? `
+                                        <div class="target-info mb-2">
+                                            <small class="text-muted">
+                                                <i class="fas fa-user"></i> О ${review.target_info.position.toLowerCase()}: <strong>${review.target_info.name}</strong>
+                                            </small>
+                                        </div>
+                                    ` : ''}
                                     ${review.appeal_status ? `
                                         <div class="appeal-status mt-2 mb-2">
                                             ${getAppealStatusHtml(review.appeal_status, review.appeal_decision)}

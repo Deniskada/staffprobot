@@ -206,10 +206,34 @@ async def get_my_reviews(
             appeal_result = await db.execute(appeal_query)
             appeal = appeal_result.scalar_one_or_none()
             
+            # Получаем информацию о цели отзыва
+            target_info = None
+            if review.target_type == 'employee':
+                from domain.entities.user import User
+                target_query = select(User).where(User.id == review.target_id)
+                target_result = await db.execute(target_query)
+                target_user = target_result.scalar_one_or_none()
+                if target_user:
+                    target_info = {
+                        "name": f"{target_user.first_name} {target_user.last_name}",
+                        "position": "Сотрудник"  # Можно добавить должность в будущем
+                    }
+            elif review.target_type == 'object':
+                from domain.entities.object import Object
+                target_query = select(Object).where(Object.id == review.target_id)
+                target_result = await db.execute(target_query)
+                target_object = target_result.scalar_one_or_none()
+                if target_object:
+                    target_info = {
+                        "name": target_object.name,
+                        "position": "Объект"
+                    }
+            
             formatted_reviews.append({
                 "id": review.id,
                 "target_type": review.target_type,
                 "target_id": review.target_id,
+                "target_info": target_info,
                 "contract_id": review.contract_id,
                 "rating": float(review.rating),
                 "title": review.title,
