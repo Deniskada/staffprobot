@@ -156,10 +156,11 @@ class ReviewPermissionService:
                                         "contract_number": contract.contract_number,
                                         "contract_title": contract.title
                                     })
+                                    print(f"DEBUG: Added owner employee {contract.employee_id} ({employee.first_name} {employee.last_name}) to available targets")
                 
                 elif target_type == 'object':
-                    # Для отзыва об объекте - только сотрудники и управляющие
-                    if contract.employee_id == user_id:  # Только сотрудник договора
+                    # Для отзыва об объекте - сотрудники и владельцы
+                    if contract.employee_id == user_id:  # Сотрудник договора
                         objects = await self._get_objects_by_contract(contract)
                         print(f"DEBUG: Contract {contract.id} has {len(objects)} objects")
                         for obj in objects:
@@ -176,7 +177,26 @@ class ReviewPermissionService:
                                     "contract_number": contract.contract_number,
                                     "contract_title": contract.title
                                 })
-                                print(f"DEBUG: Added object {obj.id} ({obj.name}) to available targets")
+                                print(f"DEBUG: Added employee object {obj.id} ({obj.name}) to available targets")
+                    
+                    elif contract.owner_id == user_id:  # Владелец договора
+                        objects = await self._get_objects_by_contract(contract)
+                        print(f"DEBUG: Owner contract {contract.id} has {len(objects)} objects")
+                        for obj in objects:
+                            # Проверяем, что отзыв еще не оставлен
+                            existing_review = await self._get_existing_review(
+                                user_id, contract.id, target_type, obj.id
+                            )
+                            if not existing_review:
+                                available_targets.append({
+                                    "id": obj.id,
+                                    "name": obj.name,
+                                    "address": obj.address,
+                                    "contract_id": contract.id,
+                                    "contract_number": contract.contract_number,
+                                    "contract_title": contract.title
+                                })
+                                print(f"DEBUG: Added owner object {obj.id} ({obj.name}) to available targets")
             
             # Дополнительная логика для управляющих
             if user.is_manager():
