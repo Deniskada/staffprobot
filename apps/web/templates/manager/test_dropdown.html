@@ -1,0 +1,41 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}Тест Dropdown - StaffProBot{% endblock %}
+
+{% block manager_content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1>Тест Dropdown меню</h1>
+            
+            <div class="card">
+                <div class="card-body">
+                    <h5>Проверка dropdown меню</h5>
+                    <p>Если вы видите это сообщение, значит страница загружается.</p>
+                    <p>Проверьте, работают ли dropdown меню в верхней навигации.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block manager_extra_js %}
+<script>
+console.log('Тестовая страница загружена');
+console.log('Bootstrap объект:', typeof bootstrap);
+console.log('jQuery объект:', typeof $);
+
+// Проверяем, есть ли dropdown элементы
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM загружен');
+    
+    const dropdownElements = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+    console.log('Найдено dropdown элементов:', dropdownElements.length);
+    
+    dropdownElements.forEach((element, index) => {
+        console.log(`Dropdown ${index + 1}:`, element);
+    });
+});
+</script>
+{% endblock %}
