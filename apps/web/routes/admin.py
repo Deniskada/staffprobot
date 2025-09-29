@@ -81,10 +81,19 @@ async def admin_dashboard(request: Request):
         
         # Получаем данные для переключения интерфейсов
         from shared.services.role_based_login_service import RoleBasedLoginService
+        
         async with get_async_session() as session:
-            user_id = current_user.get("id")  # Это telegram_id
-            login_service = RoleBasedLoginService(session)
-            available_interfaces = await login_service.get_available_interfaces(user_id)
+            # Получаем внутренний ID пользователя
+            telegram_id = current_user.get("id")  # Это telegram_id
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await session.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            
+            if user_obj:
+                login_service = RoleBasedLoginService(session)
+                available_interfaces = await login_service.get_available_interfaces(user_obj.id)
+            else:
+                available_interfaces = []
         
         return templates.TemplateResponse("admin/dashboard.html", {
             "request": request,
@@ -311,10 +320,19 @@ async def admin_system_settings(request: Request):
         
         # Получаем данные для переключения интерфейсов
         from shared.services.role_based_login_service import RoleBasedLoginService
+        
         async with get_async_session() as session:
-            user_id = current_user.get("id")  # Это telegram_id
-            login_service = RoleBasedLoginService(session)
-            available_interfaces = await login_service.get_available_interfaces(user_id)
+            # Получаем внутренний ID пользователя
+            telegram_id = current_user.get("id")  # Это telegram_id
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await session.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            
+            if user_obj:
+                login_service = RoleBasedLoginService(session)
+                available_interfaces = await login_service.get_available_interfaces(user_obj.id)
+            else:
+                available_interfaces = []
         
         return templates.TemplateResponse("admin/system_settings.html", {
             "request": request,

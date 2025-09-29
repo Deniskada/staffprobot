@@ -23,6 +23,18 @@ async def moderator_dashboard_page(
     })
 
 
+@router.get("/dashboard", response_class=HTMLResponse)
+async def moderator_dashboard_page_alt(
+    request: Request,
+    current_user: dict = Depends(require_moderator_or_superadmin)
+):
+    """Альтернативный роут для дашборда модератора."""
+    return templates.TemplateResponse("moderator/dashboard.html", {
+        "request": request,
+        "current_user": current_user
+    })
+
+
 @router.get("/reviews", response_class=HTMLResponse)
 async def moderator_reviews_page(
     request: Request,
