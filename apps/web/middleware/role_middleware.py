@@ -35,9 +35,13 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession) -> 
 
 def require_any_role(roles: List[UserRole]):
     """Декоратор для проверки наличия любой из указанных ролей."""
-    async def role_checker(request: Request, current_user: dict = Depends(get_current_user_dependency())):
+    async def role_checker(request: Request, current_user = Depends(get_current_user_dependency())):
         if isinstance(current_user, RedirectResponse):
             return current_user
+        
+        # Если пользователь не аутентифицирован
+        if current_user is None:
+            return RedirectResponse(url="/auth/login", status_code=302)
         
         from core.database.session import get_async_session
         async with get_async_session() as session:
@@ -52,7 +56,18 @@ def require_any_role(roles: List[UserRole]):
                 logger.warning(f"User {user_id} does not have any of required roles: {[r.value for r in roles]}")
                 raise HTTPException(status_code=403, detail="Недостаточно прав доступа")
             
-            return current_user
+            # Возвращаем словарь для совместимости с API
+            if isinstance(current_user, dict):
+                return current_user
+            else:
+                return {
+                    "id": current_user.telegram_id,
+                    "username": current_user.username,
+                    "first_name": current_user.first_name,
+                    "last_name": current_user.last_name,
+                    "role": current_user.role,
+                    "roles": current_user.roles
+                }
     
     return role_checker
 
