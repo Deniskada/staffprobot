@@ -12,8 +12,8 @@ async def create_token():
         auth_service = AuthService()
         # Создаем токен для пользователя 5577223137 с ролью manager
         user_data = {
-            'id': '5577223137',
-            'telegram_id': '5577223137',
+            'id': 5577223137,
+            'telegram_id': 5577223137,
             'username': 'techpodru',
             'first_name': 'Петр',
             'last_name': 'Петров',

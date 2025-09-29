@@ -184,11 +184,6 @@
                             <i class="fas fa-users"></i> О сотрудниках
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" onclick="filterReviews('about-objects')">
-                            <i class="fas fa-building"></i> Об объектах
-                        </a>
-                    </li>
                 </ul>
             </div>
             <div class="col-md-6 text-end">
@@ -234,25 +229,12 @@
                 </div>
                 <div class="modal-body">
                     <form id="create-review-form">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="target-type" class="form-label">Тип отзыва</label>
-                                    <select class="form-select" id="target-type" required>
-                                        <option value="">Выберите тип</option>
-                                        <option value="employee">О сотруднике</option>
-                                        <option value="object">Об объекте</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="target-id" class="form-label">Цель отзыва</label>
-                                    <select class="form-select" id="target-id" required>
-                                        <option value="">Сначала выберите тип</option>
-                                    </select>
-                                </div>
-                            </div>
+                        <div class="mb-3">
+                            <label for="target-id" class="form-label">Сотрудник *</label>
+                            <select class="form-select" id="target-id" required>
+                                <option value="">Выберите сотрудника</option>
+                            </select>
+                            <input type="hidden" id="target-type" value="employee">
                         </div>
                         
                         <div class="mb-3">
@@ -715,31 +697,34 @@
 
         // Показ модального окна создания отзыва
         function showCreateReviewModal() {
+            loadAvailableEmployees();
             const modal = new bootstrap.Modal(document.getElementById('createReviewModal'));
             modal.show();
         }
 
-        // Обработка изменения типа отзыва
-        document.getElementById('target-type').addEventListener('change', function() {
-            const targetType = this.value;
-            const targetSelect = document.getElementById('target-id');
-            
-            if (targetType === 'employee') {
-                targetSelect.innerHTML = `
-                    <option value="">Выберите сотрудника</option>
-                    <option value="1">Иванов Иван Иванович</option>
-                    <option value="2">Петров Петр Петрович</option>
-                `;
-            } else if (targetType === 'object') {
-                targetSelect.innerHTML = `
-                    <option value="">Выберите объект</option>
-                    <option value="1">Офис на Тверской</option>
-                    <option value="2">Склад в Подольске</option>
-                `;
-            } else {
-                targetSelect.innerHTML = '<option value="">Сначала выберите тип</option>';
+        async function loadAvailableEmployees() {
+            try {
+                const response = await fetch('/api/reviews/targets/employee', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                const select = document.getElementById('target-id');
+                select.innerHTML = '<option value="">Выберите сотрудника</option>';
+                
+                if (data.success && data.available_targets) {
+                    data.available_targets.forEach(target => {
+                        const option = document.createElement('option');
+                        option.value = target.id;
+                        option.textContent = target.name;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки сотрудников:', error);
+                showAlert('Ошибка загрузки сотрудников', 'danger');
             }
-        });
+        }
 
         // Обработка звездного рейтинга
         document.getElementById('rating-stars').addEventListener('click', function(e) {
