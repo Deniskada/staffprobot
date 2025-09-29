@@ -5407,3 +5407,133 @@ async def owner_finalize_contract(
     except Exception as e:
         logger.error(f"Ошибка одобрения заявки владельцем: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка одобрения заявки: {e}")
+
+
+@router.get("/tariff/change", response_class=HTMLResponse, name="owner_change_tariff")
+async def owner_change_tariff_page(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin)
+):
+    """Страница смены тарифа для владельца."""
+    try:
+        # Получаем user_id из current_user
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("telegram_id")
+            if not telegram_id:
+                raise HTTPException(status_code=400, detail="Не удалось определить пользователя")
+            
+            async with get_async_session() as session:
+                from sqlalchemy import select
+                from domain.entities.user import User
+                
+                user_query = select(User).where(User.telegram_id == telegram_id)
+                user_result = await session.execute(user_query)
+                user_obj = user_result.scalar_one_or_none()
+                user_id = user_obj.id if user_obj else None
+        else:
+            user_id = current_user.id
+            
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Не удалось определить пользователя")
+        
+        async with get_async_session() as session:
+            from apps.web.services.tariff_service import TariffService
+            from apps.web.services.limits_service import LimitsService
+            
+            # Получаем доступные тарифы
+            tariff_service = TariffService(session)
+            tariff_plans = await tariff_service.get_all_tariff_plans(active_only=True)
+            
+            # Получаем текущую подписку
+            limits_service = LimitsService(session)
+            limits_summary = await limits_service.get_user_limits_summary(user_id)
+        
+        return templates.TemplateResponse("owner/change_tariff.html", {
+            "request": request,
+            "current_user": current_user,
+            "title": "Смена тарифа",
+            "tariff_plans": tariff_plans,
+            "limits_summary": limits_summary,
+            "user_id": user_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading change tariff page: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки страницы: {str(e)}")
+
+
+@router.post("/tariff/change", name="owner_change_tariff_post")
+async def owner_change_tariff_post(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin)
+):
+    """Смена тарифа для владельца."""
+    try:
+        # Получаем данные из запроса
+        data = await request.json()
+        tariff_plan_id = data.get("tariff_plan_id")
+        
+        if not tariff_plan_id:
+            raise HTTPException(status_code=400, detail="Не указан тариф")
+        
+        # Получаем user_id из current_user
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("telegram_id")
+            if not telegram_id:
+                raise HTTPException(status_code=400, detail="Не удалось определить пользователя")
+            
+            async with get_async_session() as session:
+                from sqlalchemy import select
+                from domain.entities.user import User
+                
+                user_query = select(User).where(User.telegram_id == telegram_id)
+                user_result = await session.execute(user_query)
+                user_obj = user_result.scalar_one_or_none()
+                user_id = user_obj.id if user_obj else None
+        else:
+            user_id = current_user.id
+            
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Не удалось определить пользователя")
+        
+        async with get_async_session() as session:
+            from apps.web.services.subscription_service import SubscriptionService
+            from domain.entities.subscription import UserSubscription, SubscriptionStatus
+            from datetime import datetime, timedelta
+            
+            # Создаем сервис подписок
+            subscription_service = SubscriptionService(session)
+            
+            # Отменяем текущую активную подписку
+            current_subscription = await subscription_service.get_active_subscription(user_id)
+            if current_subscription:
+                current_subscription.status = SubscriptionStatus.CANCELLED
+                current_subscription.updated_at = datetime.utcnow()
+            
+            # Создаем новую подписку
+            new_subscription = UserSubscription(
+                user_id=user_id,
+                tariff_plan_id=tariff_plan_id,
+                status=SubscriptionStatus.ACTIVE,
+                started_at=datetime.utcnow(),
+                expires_at=datetime.utcnow() + timedelta(days=30),  # 30 дней по умолчанию
+                auto_renewal=True,
+                payment_method="manual",
+                notes="Смена тарифа владельцем"
+            )
+            
+            session.add(new_subscription)
+            await session.commit()
+            
+            logger.info(f"Tariff changed for user {user_id} to tariff {tariff_plan_id}")
+            
+            return {
+                "success": True,
+                "message": "Тариф успешно изменен"
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error changing tariff: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка смены тарифа: {str(e)}")
