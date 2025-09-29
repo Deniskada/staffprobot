@@ -74,9 +74,9 @@ class LimitsService:
             
             # Получаем текущее количество сотрудников по всем объектам пользователя
             employees_count_result = await self.session.execute(
-                select(func.count(Contract.id.distinct())).join(Object).where(
-                    Object.owner_id == user_id,
-                    Object.is_active == True
+                select(func.count(Contract.id.distinct())).where(
+                    Contract.owner_id == user_id,
+                    Contract.is_active == True
                 )
             )
             current_employees = employees_count_result.scalar() or 0
@@ -195,6 +195,11 @@ class LimitsService:
             object_limit = await self.check_object_creation_limit(user_id)
             employee_limit = await self.check_employee_creation_limit(user_id, 0)
             manager_limit = await self.check_manager_assignment_limit(user_id)
+            
+            # Отладочная информация
+            logger.debug(f"Object limit: {object_limit}")
+            logger.debug(f"Employee limit: {employee_limit}")
+            logger.debug(f"Manager limit: {manager_limit}")
             
             # Получаем доступные функции
             available_features = subscription.tariff_plan.features or []

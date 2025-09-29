@@ -14,7 +14,7 @@ async def create_token():
         user_data = {
             'id': 1220971779,
             'telegram_id': 1220971779,
-            'username': 'Deniskada00',
+            'username': 'denisinovikov',
             'first_name': 'Den',
             'last_name': 'Novikov',
             'role': 'owner'
