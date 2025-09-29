@@ -422,6 +422,7 @@
 
         // Загрузка отзывов
         async function loadReviews() {
+            console.log('Loading reviews with filter:', currentFilter);
             try {
                 // Определяем параметр фильтрации на основе currentFilter
                 let targetType = null;
@@ -442,27 +443,34 @@
                     url += '?' + params.toString();
                 }
                 
+                console.log('Fetching URL:', url);
                 const response = await fetch(url);
+                console.log('Response status:', response.status);
+                
                 if (!response.ok) {
-                    throw new Error('Ошибка загрузки отзывов');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
                 const data = await response.json();
+                console.log('Response data:', data);
                 const reviews = data.reviews || []; // Извлекаем массив отзывов из ответа
+                console.log('Reviews count:', reviews.length);
                 displayReviews(reviews);
             } catch (error) {
                 console.error('Error loading reviews:', error);
-                showAlert('Ошибка загрузки отзывов', 'danger');
+                console.error('Response status:', error.status);
+                console.error('Response text:', error.message);
+                showAlert('Ошибка загрузки отзывов: ' + error.message, 'danger');
                 
                 // Показываем пустое состояние
                 const container = document.getElementById('reviews-container');
                 container.innerHTML = `
                     <div class="text-center py-5">
-                        <i class="fas fa-comments fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">Нет отзывов</h5>
-                        <p class="text-muted">Создайте первый отзыв о сотруднике или объекте</p>
-                        <button class="btn btn-primary" onclick="showCreateReviewModal()">
-                            <i class="fas fa-plus"></i> Создать первый отзыв
+                        <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                        <h5 class="text-warning">Ошибка загрузки</h5>
+                        <p class="text-muted">Не удалось загрузить отзывы. Проверьте подключение к интернету.</p>
+                        <button class="btn btn-primary" onclick="loadReviews()">
+                            <i class="fas fa-refresh"></i> Попробовать снова
                         </button>
                     </div>
                 `;
@@ -688,6 +696,11 @@
                 console.error('Error submitting appeal:', error);
                 showAlert(error.message || 'Ошибка подачи обжалования', 'danger');
             }
+        }
+
+        // Показ модального окна создания отзыва
+        function showCreateReviewModal() {
+            showAlert('Функция создания отзывов будет реализована в следующих этапах', 'info');
         }
 
         async function loadStatistics() {
