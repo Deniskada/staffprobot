@@ -789,22 +789,19 @@
         // Отправка отзыва
         async function submitReview() {
             try {
-                const reviewData = {
-                    target_type: document.getElementById('target-type').value,
-                    target_id: parseInt(document.getElementById('target-id').value),
-                    contract_id: parseInt(document.getElementById('contract-id').value),
-                    rating: parseInt(document.getElementById('review-rating').value),
-                    text: document.getElementById('review-content').value,
-                    is_anonymous: document.getElementById('is-anonymous').checked
-                };
+                const formData = new FormData();
+                formData.append('target_type', document.getElementById('target-type').value);
+                formData.append('target_id', document.getElementById('target-id').value);
+                formData.append('contract_id', document.getElementById('contract-id').value);
+                formData.append('title', 'Отзыв'); // Заголовок обязателен
+                formData.append('rating', document.getElementById('review-rating').value);
+                formData.append('content', document.getElementById('review-content').value);
+                formData.append('is_anonymous', document.getElementById('is-anonymous').checked);
 
                 const response = await fetch('/api/reviews/create', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
                     credentials: 'include',
-                    body: JSON.stringify(reviewData)
+                    body: formData
                 });
                 
                 const result = await response.json();
