@@ -42,13 +42,21 @@ class RoleBasedLoginService:
                 "url": "/admin/dashboard",
                 "priority": 1
             },
+            "moderator": {
+                "name": "moderator",
+                "title": "Модератор",
+                "description": "Модерация отзывов и контента",
+                "icon": "🛡️",
+                "url": "/moderator/dashboard",
+                "priority": 2
+            },
             "owner": {
                 "name": "owner",
                 "title": "Владелец",
                 "description": "Управление объектами и сотрудниками",
                 "icon": "🏢",
                 "url": "/owner/dashboard",
-                "priority": 2
+                "priority": 3
             },
             "manager": {
                 "name": "manager",
@@ -56,7 +64,7 @@ class RoleBasedLoginService:
                 "description": "Управление по правам",
                 "icon": "👨‍💼",
                 "url": "/manager/dashboard",
-                "priority": 3
+                "priority": 4
             },
             "employee": {
                 "name": "employee",
@@ -64,7 +72,7 @@ class RoleBasedLoginService:
                 "description": "Работа на объектах",
                 "icon": "👷",
                 "url": "/employee/",
-                "priority": 4
+                "priority": 5
             }
         }
         
