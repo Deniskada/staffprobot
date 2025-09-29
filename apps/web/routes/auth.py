@@ -237,3 +237,14 @@ async def profile_page(request: Request):
         "request": request,
         "title": "Профиль пользователя"
     })
+
+
+@router.get("/politic.html", response_class=HTMLResponse)
+async def politic_page(request: Request):
+    """Страница политики конфиденциальности"""
+    from datetime import datetime
+    return templates.TemplateResponse("politic.html", {
+        "request": request,
+        "title": "Политика конфиденциальности",
+        "current_year": datetime.now().year
+    })

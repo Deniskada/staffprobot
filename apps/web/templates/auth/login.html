@@ -38,7 +38,7 @@
                                placeholder="Введите ваш Telegram ID"
                                required>
                         <div class="form-text">
-                            Ваш Telegram ID можно узнать у бота @StaffProBot командой /start
+                            <strong>Ваш Telegram ID можно узнать у бота @StaffProBot командой /start</strong>
                         </div>
                     </div>
                     
@@ -56,10 +56,7 @@
                                    required>
                             <button type="button" 
                                     class="btn btn-outline-secondary" 
-                                    id="sendPinBtn"
-                                    hx-post="/api/send-pin"
-                                    hx-vals='{"telegram_id": document.getElementById("telegram_id").value}'
-                                    hx-target="#pinResult">
+                                    id="sendPinBtn">
                                 <i class="bi bi-send"></i> Получить код
                             </button>
                         </div>
@@ -118,10 +115,35 @@ document.addEventListener('DOMContentLoaded', function() {
         this.innerHTML = '<i class="bi bi-hourglass-split"></i> Отправка...';
         this.disabled = true;
         
-        setTimeout(() => {
+        // Отправка запроса
+        fetch('/api/send-pin', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `telegram_id=${telegramIdInput.value}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Успешная отправка - не показываем сообщение
+                this.innerHTML = '<i class="bi bi-check-circle text-success"></i> Отправлено';
+                setTimeout(() => {
+                    this.innerHTML = '<i class="bi bi-send"></i> Получить код';
+                    this.disabled = false;
+                }, 2000);
+            } else {
+                alert('Ошибка отправки: ' + (data.message || 'Неизвестная ошибка'));
+                this.innerHTML = '<i class="bi bi-send"></i> Получить код';
+                this.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка отправки PIN-кода');
             this.innerHTML = '<i class="bi bi-send"></i> Получить код';
             this.disabled = false;
-        }, 3000);
+        });
     });
 });
 </script>
