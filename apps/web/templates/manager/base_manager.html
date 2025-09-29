@@ -63,6 +63,11 @@
                                 </a>
                             </li>
                             <li class="nav-item">
+                                <a class="nav-link {% if request.url.path.startswith('/manager/reviews') %}active{% endif %}" href="/manager/reviews">
+                                    <i class="bi bi-star"></i> Отзывы
+                                </a>
+                            </li>
+                            <li class="nav-item">
                                 <a class="nav-link {% if request.url.path.startswith('/manager/applications') %}active{% endif %}" href="/manager/applications">
                                     <i class="bi bi-file-text"></i> Заявки
                                     <span

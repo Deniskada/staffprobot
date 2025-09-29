@@ -6,7 +6,8 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Form, File, Uplo
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database.session import get_db_session
-from apps.web.middleware.role_middleware import require_employee_or_applicant, require_owner_or_superadmin
+from apps.web.middleware.role_middleware import require_employee_or_applicant, require_owner_or_superadmin, require_any_role
+from domain.entities.user import UserRole
 from core.logging.logger import logger
 from typing import Optional, List
 import json
@@ -25,7 +26,7 @@ async def create_review(
     content: Optional[str] = Form(None, description="Содержание отзыва"),
     is_anonymous: bool = Form(False, description="Анонимный отзыв"),
     media_files: Optional[List[UploadFile]] = File(None, description="Медиа-файлы"),
-    current_user: dict = Depends(require_employee_or_applicant),
+    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPERADMIN])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -140,7 +141,7 @@ async def get_my_reviews(
     target_type: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
-    current_user: dict = Depends(require_employee_or_applicant),
+    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPERADMIN])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -222,7 +223,7 @@ async def get_my_reviews(
 async def get_available_targets(
     request: Request,
     target_type: str,
-    current_user: dict = Depends(require_employee_or_applicant),
+    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPERADMIN])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -285,7 +286,7 @@ async def get_available_targets(
 async def get_review_details(
     request: Request,
     review_id: int,
-    current_user: dict = Depends(require_employee_or_applicant),
+    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPERADMIN])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
