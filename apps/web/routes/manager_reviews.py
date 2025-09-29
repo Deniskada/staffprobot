@@ -22,7 +22,7 @@ async def manager_reviews_page(
         "current_user": current_user,
         "available_interfaces": [
             {"title": "Управляющий", "url": "/manager/", "icon": "bi-person-gear"},
-            {"title": "Администратор", "url": "/admin/", "icon": "bi-shield-fill-check"}
+            {"title": "Сотрудник", "url": "/employee/", "icon": "bi-person-badge"}
         ],
         "applications_count": 0,
         "new_applications_count": 0
