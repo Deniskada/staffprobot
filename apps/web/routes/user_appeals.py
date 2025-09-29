@@ -7,8 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database.session import get_db_session
-from apps.web.middleware.role_middleware import require_any_role
-from domain.entities.user import UserRole
+from apps.web.middleware.role_middleware import require_owner_or_superadmin
 from core.logging.logger import logger
 
 router = APIRouter()
@@ -18,7 +17,7 @@ templates = Jinja2Templates(directory="apps/web/templates")
 @router.get("/appeals", response_class=HTMLResponse)
 async def appeals_page(
     request: Request,
-    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPERADMIN])),
+    current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -53,7 +52,9 @@ async def appeals_page(
                 "request": request,
                 "current_user": current_user,
                 "user_role": user_role,
-                "base_template": base_template
+                "base_template": base_template,
+                "applications_count": 0,  # Добавляем обязательную переменную
+                "new_applications_count": 0  # Добавляем обязательную переменную
             }
         )
         
