@@ -345,7 +345,25 @@
         // Загрузка отзывов
         async function loadReviews() {
             try {
-                const response = await fetch('/api/reviews/my-reviews');
+                // Определяем параметр фильтрации на основе currentFilter
+                let targetType = null;
+                if (currentFilter === 'about-employees') {
+                    targetType = 'employee';
+                } else if (currentFilter === 'about-objects') {
+                    targetType = 'object';
+                }
+                
+                // Формируем URL с параметрами
+                let url = '/api/reviews/my-reviews';
+                const params = new URLSearchParams();
+                if (targetType) {
+                    params.append('target_type', targetType);
+                }
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+                
+                const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error('Ошибка загрузки отзывов');
                 }
