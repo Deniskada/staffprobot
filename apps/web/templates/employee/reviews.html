@@ -796,8 +796,8 @@
             const select = document.getElementById('targetObject');
             select.innerHTML = '<option value="">Выберите объект</option>';
             
-            if (data.success && data.targets) {
-                data.targets.forEach(target => {
+            if (data.success && data.available_targets) {
+                data.available_targets.forEach(target => {
                     const option = document.createElement('option');
                     option.value = target.id;
                     option.textContent = target.name;
