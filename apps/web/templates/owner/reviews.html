@@ -714,7 +714,9 @@
         // Показ модального окна создания отзыва
         function showCreateReviewModal() {
             loadAvailableEmployees();
-            loadContracts(); // Загружаем все договоры
+            // Инициализируем поле договоров без загрузки
+            const contractSelect = document.getElementById('contract-id');
+            contractSelect.innerHTML = '<option value="">Сначала выберите сотрудника</option>';
             const modal = new bootstrap.Modal(document.getElementById('createReviewModal'));
             modal.show();
         }
@@ -742,12 +744,14 @@
                 // Добавляем обработчик изменения выбора сотрудника
                 select.addEventListener('change', function() {
                     const selectedOption = this.options[this.selectedIndex];
+                    const contractSelect = document.getElementById('contract-id');
+                    
                     if (selectedOption.value) {
                         // Фильтруем договоры по выбранному сотруднику
                         loadContracts(selectedOption.value);
                     } else {
-                        // Показываем все договоры
-                        loadContracts();
+                        // Сбрасываем поле договоров
+                        contractSelect.innerHTML = '<option value="">Сначала выберите сотрудника</option>';
                     }
                 });
                 
