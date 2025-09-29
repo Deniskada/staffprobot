@@ -76,6 +76,83 @@
             border: 1px solid #ffeaa7;
         }
         
+        .rating-input .stars {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .rating-input .stars i {
+            font-size: 24px;
+            color: #ddd;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        
+        .rating-input .stars i.active {
+            color: #ffc107;
+        }
+        
+        .rating-input .stars i:hover {
+            color: #ffc107;
+        }
+        
+        .media-upload-container {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+        
+        .media-upload-container:hover {
+            border-color: #6f42c1;
+        }
+        
+        .drop-area {
+            cursor: pointer;
+        }
+        
+        .preview-container {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .preview-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .preview-item .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .preview-item .file-icon {
+            font-size: 20px;
+            color: #6f42c1;
+        }
+        
+        .preview-item .remove-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
         .navbar-manager {
             background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%);
         }
@@ -880,11 +957,89 @@
             }
         });
 
+        // Инициализация медиа-загрузки
+        function initMediaUpload() {
+            const dropArea = document.getElementById('mediaDropArea');
+            const fileInput = document.getElementById('mediaFiles');
+            const previewContainer = document.getElementById('mediaPreview');
+            const previewItems = document.getElementById('previewItems');
+            let selectedFiles = [];
+
+            // Клик по области загрузки
+            dropArea.addEventListener('click', () => fileInput.click());
+
+            // Обработка выбора файлов
+            fileInput.addEventListener('change', handleFiles);
+
+            // Drag & Drop
+            dropArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropArea.style.borderColor = '#6f42c1';
+            });
+
+            dropArea.addEventListener('dragleave', () => {
+                dropArea.style.borderColor = '#dee2e6';
+            });
+
+            dropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropArea.style.borderColor = '#dee2e6';
+                handleFiles({ target: { files: e.dataTransfer.files } });
+            });
+
+            function handleFiles(e) {
+                const files = Array.from(e.target.files);
+                selectedFiles = [...selectedFiles, ...files];
+                updatePreview();
+            }
+
+            function updatePreview() {
+                if (selectedFiles.length === 0) {
+                    previewContainer.style.display = 'none';
+                    return;
+                }
+
+                previewContainer.style.display = 'block';
+                previewItems.innerHTML = '';
+
+                selectedFiles.forEach((file, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'preview-item';
+                    
+                    const fileIcon = getFileIcon(file.type);
+                    const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                    
+                    fileItem.innerHTML = `
+                        <div class="file-info">
+                            <i class="${fileIcon}"></i>
+                            <span>${file.name} (${fileSize} МБ)</span>
+                        </div>
+                        <button type="button" class="remove-btn" onclick="removeFile(${index})">×</button>
+                    `;
+                    
+                    previewItems.appendChild(fileItem);
+                });
+            }
+
+            window.removeFile = function(index) {
+                selectedFiles.splice(index, 1);
+                updatePreview();
+            };
+
+            function getFileIcon(type) {
+                if (type.startsWith('image/')) return 'fas fa-image file-icon';
+                if (type.startsWith('video/')) return 'fas fa-video file-icon';
+                if (type.startsWith('audio/')) return 'fas fa-music file-icon';
+                if (type.includes('pdf')) return 'fas fa-file-pdf file-icon';
+                if (type.includes('word') || type.includes('document')) return 'fas fa-file-word file-icon';
+                return 'fas fa-file file-icon';
+            }
+        }
+
         // Отправка отзыва
         async function submitReview() {
             try {
                 const form = document.getElementById('createReviewForm');
-                const formData = new FormData(form);
                 
                 const reviewData = {
                     target_type: document.getElementById('targetType').value,
@@ -893,25 +1048,60 @@
                     text: document.getElementById('reviewText').value
                 };
                 
-                const response = await fetch('/api/reviews/create', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify(reviewData)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showAlert('Отзыв отправлен на модерацию', 'success');
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('createReviewModal'));
-                    modal.hide();
-                    form.reset();
-                    loadReviews(); // Перезагружаем список отзывов
+                // Если есть медиа-файлы, отправляем через FormData
+                const fileInput = document.getElementById('mediaFiles');
+                if (fileInput.files.length > 0) {
+                    const formData = new FormData();
+                    formData.append('target_type', reviewData.target_type);
+                    formData.append('target_id', reviewData.target_id);
+                    formData.append('rating', reviewData.rating);
+                    formData.append('text', reviewData.text);
+                    
+                    // Добавляем медиа-файлы
+                    for (let i = 0; i < fileInput.files.length; i++) {
+                        formData.append('media_files', fileInput.files[i]);
+                    }
+                    
+                    const response = await fetch('/api/reviews/create', {
+                        method: 'POST',
+                        credentials: 'include',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        showAlert('Отзыв с медиа-файлами отправлен на модерацию', 'success');
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('createReviewModal'));
+                        modal.hide();
+                        form.reset();
+                        document.getElementById('mediaPreview').style.display = 'none';
+                        loadReviews();
+                    } else {
+                        showAlert(result.message || 'Ошибка отправки отзыва', 'danger');
+                    }
                 } else {
-                    showAlert(result.message || 'Ошибка отправки отзыва', 'danger');
+                    // Отправка без медиа-файлов
+                    const response = await fetch('/api/reviews/create', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(reviewData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        showAlert('Отзыв отправлен на модерацию', 'success');
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('createReviewModal'));
+                        modal.hide();
+                        form.reset();
+                        loadReviews();
+                    } else {
+                        showAlert(result.message || 'Ошибка отправки отзыва', 'danger');
+                    }
                 }
                 
             } catch (error) {
@@ -919,6 +1109,11 @@
                 showAlert('Ошибка отправки отзыва', 'danger');
             }
         }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            initMediaUpload();
+        });
     </script>
 
     <!-- Модальное окно для создания отзыва -->
@@ -969,6 +1164,23 @@
                             <label for="reviewText" class="form-label">Текст отзыва *</label>
                             <textarea class="form-control" id="reviewText" name="text" rows="4" 
                                       placeholder="Опишите ваш опыт..." required></textarea>
+                        </div>
+                        
+                        <!-- Медиа-файлы -->
+                        <div class="mb-3">
+                            <label class="form-label">Медиа-файлы (необязательно)</label>
+                            <div class="media-upload-container">
+                                <div class="drop-area" id="mediaDropArea">
+                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                    <p class="mb-2">Перетащите файлы сюда или нажмите для выбора</p>
+                                    <p class="text-muted small">Поддерживаются: фото, видео, аудио, документы (до 10 МБ)</p>
+                                    <input type="file" id="mediaFiles" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx" style="display: none;">
+                                </div>
+                                <div class="preview-container" id="mediaPreview" style="display: none;">
+                                    <h6>Выбранные файлы:</h6>
+                                    <div class="preview-items" id="previewItems"></div>
+                                </div>
+                            </div>
                         </div>
                     </form>
                 </div>
