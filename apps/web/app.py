@@ -160,6 +160,17 @@ async def login_redirect():
     return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
 
 
+@app.get("/politic.html", response_class=HTMLResponse)
+async def politic_page(request: Request):
+    """Страница политики конфиденциальности"""
+    from datetime import datetime
+    return templates.TemplateResponse("politic.html", {
+        "request": request,
+        "title": "Политика конфиденциальности",
+        "current_year": datetime.now().year
+    })
+
+
 @app.get("/test-page")
 async def test_page():
     """Тестовая страница для проверки загрузки"""
