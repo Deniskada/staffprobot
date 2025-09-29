@@ -260,7 +260,7 @@ async def get_my_reviews(
         raise HTTPException(status_code=500, detail=f"Ошибка получения отзывов: {str(e)}")
 
 
-@router.get("/available-targets/{target_type}")
+@router.get("/targets/{target_type}")
 async def get_available_targets(
     request: Request,
     target_type: str,
@@ -286,19 +286,20 @@ async def get_available_targets(
         from sqlalchemy import select
         from domain.entities.user import User
         
-        if hasattr(current_user, 'telegram_id'):
-            user_id = current_user.telegram_id  # Объект User
+        if hasattr(current_user, 'id'):
+            # current_user - это объект User
+            user_obj = current_user
         elif isinstance(current_user, dict):
-            user_id = current_user.get('id')  # Словарь с Telegram ID
+            # current_user - это словарь, нужно получить объект User
+            telegram_id = current_user.get('id')
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await db.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            
+            if not user_obj:
+                raise HTTPException(status_code=404, detail="Пользователь не найден")
         else:
             raise HTTPException(status_code=401, detail="Пользователь не аутентифицирован")
-        
-        user_query = select(User).where(User.telegram_id == user_id)
-        user_result = await db.execute(user_query)
-        user_obj = user_result.scalar_one_or_none()
-        
-        if not user_obj:
-            raise HTTPException(status_code=404, detail="Пользователь не найден")
         
         # Получаем доступные цели
         from shared.services.review_permission_service import ReviewPermissionService

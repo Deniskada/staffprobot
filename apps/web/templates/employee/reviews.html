@@ -722,7 +722,7 @@
 
     async function loadAvailableObjects() {
         try {
-            const response = await fetch('/api/reviews/available-targets?target_type=object', {
+            const response = await fetch('/api/reviews/targets/object', {
                 credentials: 'include'
             });
             const data = await response.json();
