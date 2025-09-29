@@ -5497,15 +5497,15 @@ async def owner_change_tariff_post(
             raise HTTPException(status_code=400, detail="Не удалось определить пользователя")
         
         async with get_async_session() as session:
-            from apps.web.services.subscription_service import SubscriptionService
-            from domain.entities.subscription import UserSubscription, SubscriptionStatus
+            from apps.web.services.limits_service import LimitsService
+            from domain.entities.user_subscription import UserSubscription, SubscriptionStatus
             from datetime import datetime, timedelta
             
-            # Создаем сервис подписок
-            subscription_service = SubscriptionService(session)
+            # Создаем сервис лимитов для работы с подписками
+            limits_service = LimitsService(session)
             
             # Отменяем текущую активную подписку
-            current_subscription = await subscription_service.get_active_subscription(user_id)
+            current_subscription = await limits_service._get_active_subscription(user_id)
             if current_subscription:
                 current_subscription.status = SubscriptionStatus.CANCELLED
                 current_subscription.updated_at = datetime.utcnow()
