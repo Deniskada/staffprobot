@@ -30,7 +30,7 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession) -> 
         return current_user.id
 
 
-async def require_any_role(roles: List[UserRole]):
+def require_any_role(roles: List[UserRole]):
     """Декоратор для проверки наличия любой из указанных ролей."""
     async def role_checker(request: Request, current_user: dict = Depends(require_owner_or_superadmin)):
         if isinstance(current_user, RedirectResponse):
