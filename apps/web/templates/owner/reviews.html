@@ -678,19 +678,22 @@
         // Загрузка договоров
         async function loadContracts(employeeId = null) {
             try {
+                console.log('Loading contracts for employeeId:', employeeId);
                 const contractSelect = document.getElementById('contract-id');
                 contractSelect.innerHTML = '<option value="">Загрузка договоров...</option>';
                 
                 // Загружаем договоры владельца
-                const response = await fetch('/api/contracts/my-contracts', {
+                const response = await fetch('/owner/api/contracts/my-contracts', {
                     credentials: 'include'
                 });
                 
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('Contracts data:', data);
                     contractSelect.innerHTML = '<option value="">Выберите договор</option>';
                     
                     if (data.success && data.contracts) {
+                        let filteredCount = 0;
                         data.contracts.forEach(contract => {
                             // Если указан employeeId, фильтруем только договоры с этим сотрудником
                             if (!employeeId || contract.employee_id == employeeId) {
@@ -698,10 +701,17 @@
                                 option.value = contract.id;
                                 option.textContent = `${contract.contract_number} - ${contract.title}`;
                                 contractSelect.appendChild(option);
+                                filteredCount++;
                             }
                         });
+                        console.log(`Filtered ${filteredCount} contracts for employee ${employeeId}`);
+                        
+                        if (filteredCount === 0 && employeeId) {
+                            contractSelect.innerHTML = '<option value="">Нет договоров с выбранным сотрудником</option>';
+                        }
                     }
                 } else {
+                    console.error('API response not ok:', response.status, response.statusText);
                     contractSelect.innerHTML = '<option value="">Ошибка загрузки договоров</option>';
                 }
             } catch (error) {
