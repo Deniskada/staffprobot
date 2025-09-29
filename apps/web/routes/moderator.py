@@ -610,6 +610,38 @@ async def get_appeals_for_moderation(
         raise HTTPException(status_code=500, detail=f"Ошибка получения обжалований: {str(e)}")
 
 
+@router.get("/appeals/statistics")
+async def get_appeal_statistics(
+    request: Request,
+    current_user: dict = Depends(require_moderator_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Получение статистики обжалований.
+    
+    Args:
+        current_user: Текущий пользователь
+        db: Сессия базы данных
+        
+    Returns:
+        JSONResponse: Статистика обжалований
+    """
+    try:
+        from shared.services.appeal_service import AppealService
+        
+        appeal_service = AppealService(db)
+        statistics = await appeal_service.get_appeal_statistics()
+        
+        return JSONResponse(content={
+            "success": True,
+            "statistics": statistics
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting appeal statistics: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения статистики обжалований: {str(e)}")
+
+
 @router.get("/appeals/{appeal_id}")
 async def get_appeal_details_for_moderation(
     request: Request,
@@ -767,33 +799,3 @@ async def get_overdue_appeals(
         raise HTTPException(status_code=500, detail=f"Ошибка получения просроченных обжалований: {str(e)}")
 
 
-@router.get("/appeals/statistics")
-async def get_appeal_statistics(
-    request: Request,
-    current_user: dict = Depends(require_moderator_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """
-    Получение статистики обжалований.
-    
-    Args:
-        current_user: Текущий пользователь
-        db: Сессия базы данных
-        
-    Returns:
-        JSONResponse: Статистика обжалований
-    """
-    try:
-        from shared.services.appeal_service import AppealService
-        
-        appeal_service = AppealService(db)
-        statistics = await appeal_service.get_appeal_statistics()
-        
-        return JSONResponse(content={
-            "success": True,
-            "statistics": statistics
-        })
-        
-    except Exception as e:
-        logger.error(f"Error getting appeal statistics: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения статистики обжалований: {str(e)}")

@@ -234,7 +234,7 @@
                 if (dateFrom) params.append('date_from', dateFrom);
                 if (dateTo) params.append('date_to', dateTo);
 
-                const response = await fetch(`/api/appeals/moderator?${params}`, {
+                const response = await fetch(`/moderator/api/appeals?${params}`, {
                     credentials: 'include'
                 });
 
@@ -253,16 +253,17 @@
         // Загрузка статистики
         async function loadStatistics() {
             try {
-                const response = await fetch('/api/appeals/moderator/statistics', {
+                const response = await fetch('/moderator/api/appeals/statistics', {
                     credentials: 'include'
                 });
 
                 if (response.ok) {
                     const data = await response.json();
-                    document.getElementById('pending-appeals').textContent = data.pending || 0;
-                    document.getElementById('approved-appeals').textContent = data.approved || 0;
-                    document.getElementById('rejected-appeals').textContent = data.rejected || 0;
-                    document.getElementById('total-appeals').textContent = data.total || 0;
+                    const stats = data.statistics || {};
+                    document.getElementById('pending-appeals').textContent = stats.pending || 0;
+                    document.getElementById('approved-appeals').textContent = stats.approved || 0;
+                    document.getElementById('rejected-appeals').textContent = stats.rejected || 0;
+                    document.getElementById('total-appeals').textContent = stats.total || 0;
                 }
             } catch (error) {
                 console.error('Error loading statistics:', error);
@@ -332,9 +333,16 @@
         async function approveAppeal(appealId) {
             if (confirm('Удовлетворить обжалование?')) {
                 try {
-                    const response = await fetch(`/api/appeals/${appealId}/approve`, {
+                    const response = await fetch(`/moderator/api/appeals/${appealId}/review`, {
                         method: 'POST',
-                        credentials: 'include'
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            decision: 'approved',
+                            moderator_comment: 'Обжалование удовлетворено'
+                        })
                     });
 
                     if (response.ok) {
@@ -355,9 +363,16 @@
         async function rejectAppeal(appealId) {
             if (confirm('Отклонить обжалование?')) {
                 try {
-                    const response = await fetch(`/api/appeals/${appealId}/reject`, {
+                    const response = await fetch(`/moderator/api/appeals/${appealId}/review`, {
                         method: 'POST',
-                        credentials: 'include'
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            decision: 'rejected',
+                            moderator_comment: 'Обжалование отклонено'
+                        })
                     });
 
                     if (response.ok) {
