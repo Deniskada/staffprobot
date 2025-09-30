@@ -120,10 +120,37 @@ async def owner_dashboard(request: Request):
             
             # Последние объекты
             recent_objects_result = await session.execute(
-                select(Object).where(Object.owner_id == user_id)
-                .order_by(desc(Object.created_at)).limit(5)
+                select(
+                    Object.id,
+                    Object.name,
+                    Object.address,
+                    ShiftSchedule.id.label("schedule_id"),
+                    ShiftSchedule.planned_start,
+                    ShiftSchedule.planned_end,
+                    User.first_name.label("employee_first_name"),
+                    User.last_name.label("employee_last_name"),
+                    ShiftSchedule.status.label("schedule_status"),
+                )
+                .join(ShiftSchedule, ShiftSchedule.object_id == Object.id, isouter=True)
+                .join(User, ShiftSchedule.user_id == User.id, isouter=True)
+                .where(Object.owner_id == user_id)
+                .order_by(desc(ShiftSchedule.planned_start.nullslast()), desc(Object.created_at))
+                .limit(5)
             )
-            recent_objects = recent_objects_result.scalars().all()
+
+            recent_objects = []
+            for row in recent_objects_result:
+                recent_objects.append(
+                    type("RecentObject", (), {
+                        "name": row.name,
+                        "address": row.address,
+                        "first_shift_start": row.planned_start,
+                        "first_shift_end": row.planned_end,
+                        "first_name": row.employee_first_name,
+                        "last_name": row.employee_last_name,
+                        "schedule_status": row.schedule_status,
+                    })
+                )
             
             # Получаем данные для переключения интерфейсов
             available_interfaces = await get_available_interfaces_for_user(user_id)
