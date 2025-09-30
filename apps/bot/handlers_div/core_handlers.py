@@ -378,10 +378,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await handle_close_schedule(update, context)
         return
     elif query.data == "get_report":
-        # Аналитика и отчеты: сразу запускаем мастер создания отчета
-        from .analytics_handlers import AnalyticsHandlers
-        analytics = AnalyticsHandlers()
-        await analytics.start_report_creation(update, context)
+        # Отчет по заработку: запускаем новый обработчик
+        from .earnings_report_handlers import EarningsReportHandlers
+        earnings_handler = EarningsReportHandlers()
+        await earnings_handler.start_earnings_report(update, context)
+        return
+    elif query.data.startswith("week_") or query.data == "custom_dates" or query.data == "cancel_report":
+        # Обработка выбора недели для отчета
+        from .earnings_report_handlers import EarningsReportHandlers
+        earnings_handler = EarningsReportHandlers()
+        if query.data.startswith("week_") or query.data == "custom_dates" or query.data == "cancel_report":
+            await earnings_handler.handle_week_selection(update, context)
         return
     elif query.data.startswith("report_object_") or query.data == "report_all_objects":
         # Выбор объекта для отчета

@@ -21,6 +21,7 @@ class UserAction(str, Enum):
     EDIT_TIMESLOT_RATE = "edit_timeslot_rate"
     EDIT_TIMESLOT_EMPLOYEES = "edit_timeslot_employees"
     EDIT_TIMESLOT_NOTES = "edit_timeslot_notes"
+    REPORT_DATES = "report_dates"
 
 
 class UserStep(str, Enum):
