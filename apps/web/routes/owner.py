@@ -3134,17 +3134,26 @@ async def owner_timeslots_bulk_edit(
         # Подготовка данных для обновления
         update_data = {}
         
-        if start_time and end_time:
+        from datetime import time
+
+        start_time_obj = None
+        if start_time:
             try:
-                from datetime import time
-                start = time.fromisoformat(start_time)
-                end = time.fromisoformat(end_time)
-                if start >= end:
-                    raise HTTPException(status_code=400, detail="Время начала должно быть меньше времени окончания")
+                start_time_obj = time.fromisoformat(start_time)
                 update_data["start_time"] = start_time
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат времени начала")
+
+        end_time_obj = None
+        if end_time:
+            try:
+                end_time_obj = time.fromisoformat(end_time)
                 update_data["end_time"] = end_time
             except ValueError:
-                raise HTTPException(status_code=400, detail="Неверный формат времени")
+                raise HTTPException(status_code=400, detail="Неверный формат времени окончания")
+
+        if start_time_obj and end_time_obj and start_time_obj >= end_time_obj:
+            raise HTTPException(status_code=400, detail="Время начала должно быть меньше времени окончания")
         
         if hourly_rate_str:
             try:
@@ -3220,17 +3229,27 @@ async def owner_timeslots_bulk_edit(
         # Обновляем каждый тайм-слот
         updated_count = 0
         for timeslot in timeslots:
-            # Проверяем права доступа
-            if not await timeslot_service.get_timeslot_by_id(timeslot.id, telegram_id):
+            slot = await timeslot_service.get_timeslot_by_id(timeslot.id, telegram_id)
+            if not slot:
                 continue
-                
-            # Обновляем поля
-            for field, value in update_data.items():
-                setattr(timeslot, field, value)
-            
-            updated_count += 1
-        
-        await db.commit()
+
+            slot_data = {
+                "slot_date": timeslot.slot_date,
+                "start_time": update_data.get("start_time", timeslot.start_time.strftime("%H:%M")),
+                "end_time": update_data.get("end_time", timeslot.end_time.strftime("%H:%M")),
+                "hourly_rate": update_data.get("hourly_rate", timeslot.hourly_rate),
+                "max_employees": update_data.get("max_employees", timeslot.max_employees),
+                "is_active": update_data.get("is_active", timeslot.is_active),
+                "notes": timeslot.notes or ""
+            }
+
+            try:
+                await timeslot_service.update_timeslot(timeslot.id, slot_data, telegram_id)
+                updated_count += 1
+            except Exception as update_error:
+                logger.warning(
+                    "Bulk update skipped for timeslot %s: %s", timeslot.id, update_error
+                )
         
         logger.info(f"Bulk updated {updated_count} timeslots for user {telegram_id}")
         

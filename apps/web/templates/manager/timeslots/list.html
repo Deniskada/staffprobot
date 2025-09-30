@@ -2,7 +2,7 @@
 
 {% block title %}Тайм-слоты - {{ object.name }}{% endblock %}
 
-{% block content %}
+{% block manager_content %}
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
@@ -43,10 +43,20 @@
             </div>
             
             <!-- Фильтры и действия -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <form method="post" action="/manager/timeslots/bulk-delete" id="bulk-form">
+            {% if request.query_params.get('success') == 'bulk_updated' %}
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle"></i>
+                Успешно обновлено {{ request.query_params.get('count', 0) }} тайм-слотов
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+            </div>
+            {% endif %}
+
+            <form method="post" action="/manager/timeslots/bulk-delete" id="bulk-form">
+                <div class="card mb-4">
+                    <div class="card-body">
                         <div class="row align-items-center">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token | default('') }}">
+                            <input type="hidden" name="object_id" value="{{ object.id }}">
                             <div class="col-md-6">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="select-all">
@@ -55,90 +65,177 @@
                                     </label>
                                 </div>
                             </div>
-                            <div class="col-md-6 text-end">
+                            <div class="col-md-6 text-end d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-outline-primary" id="bulk-edit-btn" disabled data-bs-toggle="modal" data-bs-target="#bulkEditModal">
+                                    <i class="fas fa-edit"></i> Редактировать выбранные
+                                </button>
                                 <button type="submit" class="btn btn-danger" id="bulk-delete-btn" disabled>
                                     <i class="fas fa-trash"></i> Удалить выбранные
                                 </button>
                             </div>
                         </div>
-                    </form>
+                    </div>
                 </div>
-            </div>
             
-            <!-- Список тайм-слотов -->
-            {% if timeslots %}
-                <div class="card">
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th width="50">
-                                            <input type="checkbox" class="form-check-input" id="select-all-header">
-                                        </th>
-                                        <th>Дата</th>
-                                        <th>Время</th>
-                                        <th>Ставка</th>
-                                        <th>Сотрудники</th>
-                                        <th>Статус</th>
-                                        <th width="120">Действия</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for timeslot in timeslots %}
-                                    <tr>
-                                        <td>
-                                            <input type="checkbox" class="form-check-input timeslot-checkbox" 
-                                                   name="timeslot_ids" value="{{ timeslot.id }}">
-                                        </td>
-                                        <td>
-                                            <div class="fw-bold">{{ timeslot.slot_date.strftime('%d.%m.%Y') }}</div>
-                                            <small class="text-muted">{{ timeslot.slot_date.strftime('%A') }}</small>
-                                        </td>
-                                        <td>
-                                            <div class="fw-bold">{{ timeslot.start_time.strftime('%H:%M') }} - {{ timeslot.end_time.strftime('%H:%M') }}</div>
-                                            {% if timeslot.is_additional %}
-                                                <span class="badge bg-info">Дополнительный</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <div class="fw-bold">{{ timeslot.hourly_rate }} ₽/час</div>
-                                        </td>
-                                        <td>
-                                            <div class="fw-bold">{{ timeslot.max_employees }}</div>
-                                        </td>
-                                        <td>
-                                            {% if timeslot.is_active %}
-                                                <span class="badge bg-success">Активен</span>
-                                            {% else %}
-                                                <span class="badge bg-secondary">Неактивен</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm" role="group">
-                                                <a href="/manager/timeslots/{{ timeslot.id }}/edit" 
-                                                   class="btn btn-outline-primary" title="Редактировать">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                <!-- Список тайм-слотов -->
+                {% if timeslots %}
+                    <div class="card">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th width="50">
+                                                <input type="checkbox" class="form-check-input" id="select-all-header">
+                                            </th>
+                                            <th>Дата</th>
+                                            <th>Время</th>
+                                            <th>Ставка</th>
+                                            <th>Сотрудники</th>
+                                            <th>Статус</th>
+                                            <th width="120">Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for timeslot in timeslots %}
+                                        <tr>
+                                            <td>
+                                                <input type="checkbox" class="form-check-input timeslot-checkbox"
+                                                       name="timeslot_ids" value="{{ timeslot.id }}">
+                                            </td>
+                                            <td>
+                                                <div class="fw-bold">{{ timeslot.slot_date.strftime('%d.%m.%Y') }}</div>
+                                                <small class="text-muted">{{ timeslot.slot_date.strftime('%A') }}</small>
+                                            </td>
+                                            <td>
+                                                <div class="fw-bold">{{ timeslot.start_time.strftime('%H:%M') }} - {{ timeslot.end_time.strftime('%H:%M') }}</div>
+                                                {% if timeslot.is_additional %}
+                                                    <span class="badge bg-info">Дополнительный</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="fw-bold">{{ timeslot.hourly_rate }} ₽/час</div>
+                                            </td>
+                                            <td>
+                                                <div class="fw-bold">{{ timeslot.max_employees }}</div>
+                                            </td>
+                                            <td>
+                                                {% if timeslot.is_active %}
+                                                    <span class="badge bg-success">Активен</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Неактивен</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <a href="/manager/timeslots/{{ timeslot.id }}/edit"
+                                                       class="btn btn-outline-primary" title="Редактировать">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted">Нет тайм-слотов</h4>
+                        <p class="text-muted">Для этого объекта еще не созданы тайм-слоты.</p>
+                        <a href="/manager/timeslots/object/{{ object.id }}/create" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Создать первый тайм-слот
+                        </a>
+                    </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно массового редактирования -->
+<div class="modal fade" id="bulkEditModal" tabindex="-1" aria-labelledby="bulkEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkEditModalLabel"><i class="fas fa-edit"></i> Массовое редактирование тайм-слотов</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <form method="post" action="/manager/timeslots/bulk-edit" id="bulk-edit-form">
+                <div class="modal-body">
+                    <input type="hidden" name="object_id" value="{{ object.id }}">
+                    <input type="hidden" name="timeslot_ids" id="bulk-edit-ids">
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="bulk-date-from" class="form-label">Период с</label>
+                            <input type="date" class="form-control" id="bulk-date-from" name="date_from">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="bulk-date-to" class="form-label">Период по</label>
+                            <input type="date" class="form-control" id="bulk-date-to" name="date_to">
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Будут изменены выбранные тайм-слоты. Если указан период, изменения затронут только тайм-слоты внутри периода. Дата слотов не меняется.
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="bulk-start-time" class="form-label">Время начала</label>
+                            <input type="time" class="form-control" id="bulk-start-time" name="start_time">
+                            <div class="form-text">Оставьте пустым, чтобы не изменять</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="bulk-end-time" class="form-label">Время окончания</label>
+                            <input type="time" class="form-control" id="bulk-end-time" name="end_time">
+                            <div class="form-text">Оставьте пустым, чтобы не изменять</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="bulk-hourly-rate" class="form-label">Ставка за час</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="bulk-hourly-rate" name="hourly_rate" min="0" step="0.01">
+                                <span class="input-group-text">₽/час</span>
+                            </div>
+                            <div class="form-text">Оставьте пустым, чтобы не изменять</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="bulk-max-employees" class="form-label">Максимум сотрудников</label>
+                            <input type="number" class="form-control" id="bulk-max-employees" name="max_employees" min="1" step="1">
+                            <div class="form-text">Оставьте пустым, чтобы не изменять</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="bulk-set-active" name="is_active">
+                                <label class="form-check-label" for="bulk-set-active">Сделать активными</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="bulk-set-inactive" name="is_inactive">
+                                <label class="form-check-label" for="bulk-set-inactive">Сделать неактивными</label>
+                            </div>
                         </div>
                     </div>
                 </div>
-            {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
-                    <h4 class="text-muted">Нет тайм-слотов</h4>
-                    <p class="text-muted">Для этого объекта еще не созданы тайм-слоты.</p>
-                    <a href="/manager/timeslots/object/{{ object.id }}/create" class="btn btn-primary">
-                        <i class="fas fa-plus"></i> Создать первый тайм-слот
-                    </a>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary" id="bulk-edit-submit">
+                        <i class="fas fa-save"></i> Применить изменения
+                    </button>
                 </div>
-            {% endif %}
+            </form>
         </div>
     </div>
 </div>
@@ -149,10 +246,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectAllHeaderCheckbox = document.getElementById('select-all-header');
     const timeslotCheckboxes = document.querySelectorAll('.timeslot-checkbox');
     const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+    const bulkEditBtn = document.getElementById('bulk-edit-btn');
+    const bulkEditIdsInput = document.getElementById('bulk-edit-ids');
     
     function updateBulkDeleteButton() {
         const checkedBoxes = document.querySelectorAll('.timeslot-checkbox:checked');
-        bulkDeleteBtn.disabled = checkedBoxes.length === 0;
+        const hasSelection = checkedBoxes.length > 0;
+        bulkDeleteBtn.disabled = !hasSelection;
+        if (bulkEditBtn) {
+            bulkEditBtn.disabled = !hasSelection;
+        }
     }
     
     function updateSelectAll() {
@@ -201,6 +304,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Инициализация
     updateBulkDeleteButton();
+
+    if (bulkEditBtn) {
+        bulkEditBtn.addEventListener('click', function() {
+            const checkedIds = Array.from(document.querySelectorAll('.timeslot-checkbox:checked'))
+                .map(cb => cb.value);
+            bulkEditIdsInput.value = checkedIds.join(',');
+        });
+    }
 });
 </script>
 {% endblock %}
