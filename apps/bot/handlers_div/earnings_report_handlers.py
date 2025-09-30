@@ -48,6 +48,7 @@ class EarningsReportHandlers:
         """Начало создания отчета по заработку."""
         query = update.callback_query
         user_id = query.from_user.id
+        logger.info(f"Starting earnings report for user {user_id}")
         
         try:
             # Получаем внутренний user_id
@@ -200,11 +201,16 @@ class EarningsReportHandlers:
     
     async def generate_earnings_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Генерация отчета по заработку."""
+        logger.info(f"Starting earnings report generation")
+        
         user_id = context.user_data.get('user_id')
         start_date = context.user_data.get('start_date')
         end_date = context.user_data.get('end_date')
         
+        logger.info(f"Report data: user_id={user_id}, start_date={start_date}, end_date={end_date}")
+        
         if not user_id or not start_date or not end_date:
+            logger.error(f"Missing report data: user_id={user_id}, start_date={start_date}, end_date={end_date}")
             if hasattr(update, 'callback_query') and update.callback_query:
                 await update.callback_query.edit_message_text("❌ Ошибка: не найдены данные для отчета.")
             else:
@@ -320,7 +326,7 @@ class EarningsReportHandlers:
                 
                 # Очищаем состояние пользователя
                 from core.state import user_state_manager
-                user_state_manager.clear_state(user_id)
+                user_state_manager.clear_state(update.effective_user.id)
                 
                 return ConversationHandler.END
                 
