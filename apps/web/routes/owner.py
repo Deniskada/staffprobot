@@ -3045,6 +3045,7 @@ async def owner_timeslot_create_form(
         
         # Получение информации об объекте из базы данных
         object_service = ObjectService(db)
+        template_service = TemplateService(db)
         
         # Получаем объект (как в старом коде)
         obj = await object_service.get_object_by_id(object_id, telegram_id)
