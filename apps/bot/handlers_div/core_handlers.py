@@ -102,10 +102,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
         ],
         [
-            InlineKeyboardButton("🏢 Создать объект", callback_data="create_object"),
-            InlineKeyboardButton("⚙️ Управление объектами", callback_data="manage_objects")
-        ],
-        [
             InlineKeyboardButton("📊 Отчет", callback_data="get_report"),
             InlineKeyboardButton("❓ Помощь", callback_data="help")
         ],
@@ -601,10 +597,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         [
             InlineKeyboardButton("📅 Запланировать смену", callback_data="schedule_shift"),
             InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
-        ],
-        [
-            InlineKeyboardButton("🏢 Создать объект", callback_data="create_object"),
-            InlineKeyboardButton("⚙️ Управление объектами", callback_data="manage_objects")
         ],
         [
             InlineKeyboardButton("📊 Отчет", callback_data="get_report"),
