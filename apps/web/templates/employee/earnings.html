@@ -1,39 +1,182 @@
 {% extends "employee/base_employee.html" %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}Мой заработок{% endblock %}
 
 {% block extra_css %}
 <style>
-.coming-soon {
-    background: linear-gradient(135deg, #17a2b8 0%, #007bff 100%);
-    color: white;
-    padding: 60px;
-    border-radius: 20px;
-    text-align: center;
-    margin: 40px 0;
+.earnings-summary-card {
+    border-left: 4px solid #0d6efd;
+}
+.earnings-summary-card .card-body {
+    background: linear-gradient(135deg, rgba(13, 110, 253, 0.1), rgba(13, 110, 253, 0.05));
+}
+.earnings-table thead th {
+    background-color: #f2f6ff;
+}
+.earnings-table tfoot td {
+    font-weight: 600;
+}
+.btn-export {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.badge-hours {
+    font-size: 0.85rem;
 }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
-            <h2>💰 Мой заработок</h2>
+            <h2 class="mb-1">💰 Мой заработок</h2>
             <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item">
-                        <a href="/employee">Дашборд</a>
-                    </li>
-                    <li class="breadcrumb-item active">Заработок</li>
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="/employee">Главная</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Мой заработок</li>
                 </ol>
             </nav>
         </div>
+
+        <form class="d-flex align-items-end gap-3" method="get" action="/employee/earnings">
+            <div>
+                <label class="form-label">Дата начала</label>
+                <input type="date" class="form-control" name="date_from" value="{{ start_date.isoformat() }}">
+            </div>
+            <div>
+                <label class="form-label">Дата окончания</label>
+                <input type="date" class="form-control" name="date_to" value="{{ end_date.isoformat() }}">
+            </div>
+            <div class="d-flex gap-2 align-items-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i>
+                    Показать
+                </button>
+                <a
+                    class="btn btn-outline-primary btn-export"
+                    href="/employee/earnings/export?date_from={{ start_date.isoformat() }}&date_to={{ end_date.isoformat() }}"
+                >
+                    <i class="bi bi-file-earmark-excel"></i>
+                    Экспорт
+                </a>
+            </div>
+        </form>
     </div>
 
-    <div class="coming-soon">
-        <h1>🚧 В разработке</h1>
-        <p>Детальная статистика заработка и выплат</p>
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card earnings-summary-card h-100">
+                <div class="card-body">
+                    <div class="text-muted mb-2">Заработано за период</div>
+                    <div class="fs-3 fw-bold">{{ '%.2f'|format(total_amount) }} ₽</div>
+                    <div class="text-muted">c {{ start_date.strftime('%d.%m.%Y') }} по {{ end_date.strftime('%d.%m.%Y') }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted mb-2">Смен</div>
+                    <div class="fs-3 fw-bold">{{ earnings|length }}</div>
+                    <div class="text-muted">Завершенные смены за выбранный период</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted mb-2">Общее число часов</div>
+                    <div class="fs-3 fw-bold">{{ '%.2f'|format(total_hours) }}</div>
+                    <div class="text-muted">Фактически отработанные часы</div>
+                </div>
+            </div>
+        </div>
     </div>
+
+    {% if earnings %}
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-bar-chart"></i>
+                        Разбивка по объектам
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        {% for item in summary_by_object %}
+                        <div class="list-group-item d-flex justify-content-between">
+                            <div>
+                                <div class="fw-semibold">{{ item.object_name }}</div>
+                                <div class="text-muted small">{{ item.shifts }} смен · {{ '%.2f'|format(item.hours) }} ч</div>
+                            </div>
+                            <span class="fw-bold">{{ '%.2f'|format(item.amount) }} ₽</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-table"></i>
+                        Детализация смен
+                    </h5>
+                    <span class="badge bg-primary badge-hours">{{ earnings|length }} записей</span>
+                </div>
+                <div class="card-body table-responsive">
+                    <table class="table table-striped table-hover earnings-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Объект</th>
+                                <th>Начало</th>
+                                <th>Окончание</th>
+                                <th class="text-center">Часы</th>
+                                <th class="text-end">Ставка, ₽</th>
+                                <th class="text-end">Итого, ₽</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in earnings %}
+                            <tr>
+                                <td>{{ row.date_label }}</td>
+                                <td>{{ row.object_name }}</td>
+                                <td>{{ row.start_label }}</td>
+                                <td>{{ row.end_label }}</td>
+                                <td class="text-center">{{ '%.2f'|format(row.duration_hours) }}</td>
+                                <td class="text-end">{{ '%.2f'|format(row.hourly_rate) }}</td>
+                                <td class="text-end fw-semibold">{{ '%.2f'|format(row.amount) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4" class="text-end">Итого за период:</td>
+                                <td class="text-center">{{ '%.2f'|format(total_hours) }}</td>
+                                <td></td>
+                                <td class="text-end">{{ '%.2f'|format(total_amount) }} ₽</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-5">
+            <div class="display-6 mb-3">🤔</div>
+            <h5 class="mb-2">Нет данных за выбранный период</h5>
+            <p class="text-muted mb-0">Попробуйте выбрать другой период или уточните фильтры.</p>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

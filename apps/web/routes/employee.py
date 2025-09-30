@@ -3,14 +3,15 @@
 """
 
 from fastapi import APIRouter, Request, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 from typing import List, Dict, Any, Optional
 import logging
+from io import BytesIO
 
 from apps.web.dependencies import get_current_user_dependency
 from core.database.session import get_db_session
@@ -19,9 +20,7 @@ from domain.entities import User, Object, Application, Interview, ShiftSchedule,
 from domain.entities.application import ApplicationStatus
 from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
-from apps.web.dependencies import get_async_session
-from shared.services.manager_permission_service import ManagerPermissionService
-from domain.entities.application import ApplicationStatus
+from openpyxl import Workbook
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -29,6 +28,105 @@ templates = Jinja2Templates(directory="apps/web/templates")
 
 # Инициализируем помощник для работы с временными зонами
 web_timezone_helper = WebTimezoneHelper()
+
+
+def parse_date_or_default(value: Optional[str], default: date) -> date:
+    """Преобразует строку даты в объект date, возвращает default при ошибке."""
+    if not value:
+        return default
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return default
+
+
+async def load_employee_earnings(
+    db: AsyncSession,
+    user_id: int,
+    start_date: date,
+    end_date: date
+) -> tuple[List[Dict[str, Any]], float, float, List[Dict[str, Any]]]:
+    """Загружает завершенные смены сотрудника и агрегирует данные."""
+
+    query = (
+        select(Shift, Object)
+        .join(Object, Shift.object_id == Object.id)
+        .where(
+            Shift.user_id == user_id,
+            Shift.status == "completed",
+            func.date(Shift.start_time) >= start_date,
+            func.date(Shift.start_time) <= end_date,
+        )
+        .order_by(Shift.start_time.asc())
+    )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    earnings: List[Dict[str, Any]] = []
+    total_hours = 0.0
+    total_amount = 0.0
+    summary_by_object: Dict[int, Dict[str, Any]] = {}
+
+    for shift, obj in rows:
+        timezone_str = getattr(obj, "timezone", None) or "Europe/Moscow"
+        date_label = web_timezone_helper.format_datetime_with_timezone(
+            shift.start_time, timezone_str, "%d.%m.%Y"
+        )
+        start_label = web_timezone_helper.format_datetime_with_timezone(
+            shift.start_time, timezone_str, "%H:%M"
+        )
+        end_label = (
+            web_timezone_helper.format_datetime_with_timezone(
+                shift.end_time, timezone_str, "%H:%M"
+            )
+            if shift.end_time
+            else "—"
+        )
+
+        duration_hours = float(shift.total_hours or 0)
+        if not duration_hours and shift.start_time and shift.end_time:
+            seconds = max((shift.end_time - shift.start_time).total_seconds(), 0)
+            duration_hours = round(seconds / 3600, 2)
+
+        hourly_rate = float(shift.hourly_rate or obj.hourly_rate or 0)
+        amount = float(shift.total_payment or (duration_hours * hourly_rate))
+
+        total_hours += duration_hours
+        total_amount += amount
+
+        earnings.append(
+            {
+                "shift_id": shift.id,
+                "object_name": obj.name,
+                "date_label": date_label,
+                "start_label": start_label,
+                "end_label": end_label,
+                "duration_hours": duration_hours,
+                "hourly_rate": hourly_rate,
+                "amount": amount,
+            }
+        )
+
+        summary_entry = summary_by_object.setdefault(
+            obj.id,
+            {
+                "object_name": obj.name,
+                "hours": 0.0,
+                "amount": 0.0,
+                "shifts": 0,
+            },
+        )
+        summary_entry["hours"] += duration_hours
+        summary_entry["amount"] += amount
+        summary_entry["shifts"] += 1
+
+    summary_list = sorted(
+        summary_by_object.values(), key=lambda item: item["amount"], reverse=True
+    )
+
+    return earnings, total_hours, total_amount, summary_list
+
 
 async def get_user_id_from_current_user(current_user, session):
     """Получает внутренний ID пользователя из current_user"""
@@ -48,6 +146,141 @@ async def get_available_interfaces_for_user(current_user, db):
     user_id = await get_user_id_from_current_user(current_user, db)
     login_service = RoleBasedLoginService(db)
     return await login_service.get_available_interfaces(user_id)
+
+
+@router.get("/earnings", response_class=HTMLResponse)
+async def employee_earnings(
+    request: Request,
+    date_from: Optional[str] = Query(None, description="Дата начала периода (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Дата окончания периода (YYYY-MM-DD)"),
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница заработка сотрудника."""
+
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=30)
+
+    start_date = parse_date_or_default(date_from, start_default)
+    end_date = parse_date_or_default(date_to, end_default)
+
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    earnings, total_hours, total_amount, summary_by_object = await load_employee_earnings(
+        db, user_id, start_date, end_date
+    )
+
+    available_interfaces = await get_available_interfaces_for_user(current_user, db)
+    applications_count_result = await db.execute(
+        select(func.count(Application.id)).where(Application.applicant_id == user_id)
+    )
+    applications_count = applications_count_result.scalar() or 0
+
+    return templates.TemplateResponse(
+        "employee/earnings.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "available_interfaces": available_interfaces,
+            "applications_count": applications_count,
+            "start_date": start_date,
+            "end_date": end_date,
+            "earnings": earnings,
+            "total_hours": total_hours,
+            "total_amount": total_amount,
+            "summary_by_object": summary_by_object,
+        },
+    )
+
+
+@router.get("/earnings/export")
+async def employee_earnings_export(
+    date_from: Optional[str] = Query(None, description="Дата начала периода (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Дата окончания периода (YYYY-MM-DD)"),
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Экспорт заработка в Excel."""
+
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=30)
+
+    start_date = parse_date_or_default(date_from, start_default)
+    end_date = parse_date_or_default(date_to, end_default)
+
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    earnings, total_hours, total_amount, summary_by_object = await load_employee_earnings(
+        db, user_id, start_date, end_date
+    )
+
+    workbook = Workbook()
+    summary_sheet = workbook.active
+    summary_sheet.title = "Сводка"
+    summary_sheet.append(["Период", f"{start_date.strftime('%d.%m.%Y')} — {end_date.strftime('%d.%m.%Y')}"])
+    summary_sheet.append(["Всего смен", len(earnings)])
+    summary_sheet.append(["Общее число часов", total_hours])
+    summary_sheet.append(["Заработано, ₽", total_amount])
+    summary_sheet.append([])
+    summary_sheet.append(["Объект", "Смен", "Часы", "Сумма, ₽"])
+
+    for item in summary_by_object:
+        summary_sheet.append([
+            item["object_name"],
+            item["shifts"],
+            round(item["hours"], 2),
+            round(item["amount"], 2),
+        ])
+
+    detail_sheet = workbook.create_sheet("Детализация")
+    detail_sheet.append([
+        "Дата",
+        "Объект",
+        "Время начала",
+        "Время окончания",
+        "Часы",
+        "Ставка, ₽",
+        "Сумма, ₽",
+    ])
+
+    for row in earnings:
+        detail_sheet.append([
+            row["date_label"],
+            row["object_name"],
+            row["start_label"],
+            row["end_label"],
+            round(row["duration_hours"], 2),
+            round(row["hourly_rate"], 2),
+            round(row["amount"], 2),
+        ])
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+
+    filename = f"earnings_{start_date.isoformat()}_{end_date.isoformat()}.xlsx"
+    headers = {
+        "Content-Disposition": f"attachment; filename={filename}",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+
+    return StreamingResponse(buffer, media_type=headers["Content-Type"], headers=headers)
 
 @router.get("/", response_class=HTMLResponse)
 async def employee_index(
