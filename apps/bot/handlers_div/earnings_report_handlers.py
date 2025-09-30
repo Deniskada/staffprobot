@@ -24,7 +24,7 @@ class EarningsReportHandlers:
         logger.info("EarningsReportHandlers initialized")
     
     def get_last_4_weeks(self) -> List[Dict[str, Any]]:
-        """Получить 4 последние недели (с понедельника по воскресенье)."""
+        """Получить текущую и 3 предыдущие недели (с понедельника по воскресенье)."""
         today = date.today()
         
         # Находим понедельник текущей недели
@@ -32,14 +32,19 @@ class EarningsReportHandlers:
         current_monday = today - timedelta(days=days_since_monday)
         
         weeks = []
+        # Сначала текущая неделя, потом 3 предыдущие
         for i in range(4):
             week_start = current_monday - timedelta(weeks=i)
             week_end = week_start + timedelta(days=6)
             
+            label = f"{week_start.strftime('%d.%m')} - {week_end.strftime('%d.%m.%Y')}"
+            if i == 0:
+                label = f"📍 Текущая ({label})"
+            
             weeks.append({
                 'start': week_start,
                 'end': week_end,
-                'label': f"{week_start.strftime('%d.%m')} - {week_end.strftime('%d.%m.%Y')}"
+                'label': label
             })
         
         return weeks
