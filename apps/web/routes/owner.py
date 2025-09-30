@@ -2716,6 +2716,116 @@ async def owner_create_contract_template(request: Request):
         raise HTTPException(status_code=400, detail=f"Ошибка создания шаблона: {str(e)}")
 
 
+@router.get("/templates/contracts/{template_id}", response_class=HTMLResponse)
+async def owner_contract_template_detail(request: Request, template_id: int):
+    """Просмотр шаблона договора владельцем."""
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+
+    from apps.web.services.contract_service import ContractService
+
+    contract_service = ContractService()
+    template = await contract_service.get_contract_template(template_id)
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Шаблон не найден")
+
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        owner_context = await get_owner_context(user_id, session)
+
+    context = {
+        "request": request,
+        "current_user": current_user,
+        "template": template,
+        "title": template.name,
+        **owner_context,
+    }
+
+    return templates.TemplateResponse("owner/templates/contracts/detail.html", context)
+
+
+@router.get("/templates/contracts/{template_id}/edit", response_class=HTMLResponse)
+async def owner_contract_template_edit_form(request: Request, template_id: int):
+    """Форма редактирования шаблона договора владельцем."""
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+
+    from apps.web.services.contract_service import ContractService
+
+    contract_service = ContractService()
+    template = await contract_service.get_contract_template(template_id)
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Шаблон не найден")
+
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        owner_context = await get_owner_context(user_id, session)
+
+    context = {
+        "request": request,
+        "current_user": current_user,
+        "template": template,
+        "title": "Редактирование шаблона",
+        **owner_context,
+    }
+
+    return templates.TemplateResponse("owner/templates/contracts/edit.html", context)
+
+
+@router.post("/templates/contracts/{template_id}/edit")
+async def owner_update_contract_template(request: Request, template_id: int):
+    """Обновление шаблона договора владельцем."""
+    current_user = await get_current_user(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+
+    form_data = await request.form()
+
+    name = form_data.get("name", "").strip()
+    description = form_data.get("description", "").strip()
+    content = form_data.get("content", "").strip()
+    version = form_data.get("version", "1.0").strip()
+    is_public = form_data.get("is_public") == "on"
+    fields_schema_raw = form_data.get("fields_schema")
+
+    if not name or not content:
+        raise HTTPException(status_code=400, detail="Название и содержимое обязательны")
+
+    from apps.web.services.contract_service import ContractService
+    import json
+
+    contract_service = ContractService()
+
+    template_data = {
+        "name": name,
+        "description": description,
+        "content": content,
+        "version": version,
+        "is_public": is_public,
+        "fields_schema": None,
+    }
+
+    if fields_schema_raw:
+        try:
+            template_data["fields_schema"] = json.loads(fields_schema_raw)
+        except json.JSONDecodeError:
+            template_data["fields_schema"] = None
+
+    success = await contract_service.update_contract_template(template_id, template_data)
+
+    if success:
+        return RedirectResponse(url=f"/owner/templates/contracts/{template_id}", status_code=303)
+
+    raise HTTPException(status_code=400, detail="Ошибка обновления шаблона")
+
+
 # ===============================
 # ТАЙМ-СЛОТЫ
 # ===============================
