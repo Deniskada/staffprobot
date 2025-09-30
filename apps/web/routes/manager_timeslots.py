@@ -34,12 +34,12 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession):
 
 
 @router.get("/manager/timeslots", response_class=HTMLResponse)
-async def manager_timeslots_index(request: Request):
+async def manager_timeslots_index(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
     """Главная страница управления тайм-слотами для менеджера"""
     try:
-        current_user = await require_manager_or_owner(request)
-        if isinstance(current_user, RedirectResponse):
-            return current_user
         
         async with get_async_session() as session:
             object_service = ObjectService(session)
@@ -60,12 +60,13 @@ async def manager_timeslots_index(request: Request):
 
 
 @router.get("/manager/timeslots/object/{object_id}", response_class=HTMLResponse)
-async def manager_timeslots_list(request: Request, object_id: int):
+async def manager_timeslots_list(
+    request: Request, 
+    object_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
     """Список тайм-слотов объекта для менеджера"""
     try:
-        current_user = await require_manager_or_owner(request)
-        if isinstance(current_user, RedirectResponse):
-            return current_user
         
         telegram_id = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
         
@@ -96,12 +97,13 @@ async def manager_timeslots_list(request: Request, object_id: int):
 
 
 @router.get("/manager/timeslots/object/{object_id}/create", response_class=HTMLResponse)
-async def manager_timeslots_create_form(request: Request, object_id: int):
+async def manager_timeslots_create_form(
+    request: Request, 
+    object_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
     """Форма создания тайм-слота для менеджера"""
     try:
-        current_user = await require_manager_or_owner(request)
-        if isinstance(current_user, RedirectResponse):
-            return current_user
         
         telegram_id = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
         
@@ -133,12 +135,13 @@ async def manager_timeslots_create_form(request: Request, object_id: int):
 
 
 @router.post("/manager/timeslots/object/{object_id}/create")
-async def manager_timeslots_create(request: Request, object_id: int):
+async def manager_timeslots_create(
+    request: Request, 
+    object_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
     """Создание тайм-слота для менеджера"""
     try:
-        current_user = await require_manager_or_owner(request)
-        if isinstance(current_user, RedirectResponse):
-            return current_user
         
         telegram_id = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
         
@@ -208,12 +211,13 @@ async def manager_timeslots_create(request: Request, object_id: int):
 
 
 @router.get("/manager/timeslots/{timeslot_id}/edit", response_class=HTMLResponse)
-async def manager_timeslots_edit_form(request: Request, timeslot_id: int):
+async def manager_timeslots_edit_form(
+    request: Request, 
+    timeslot_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
     """Форма редактирования тайм-слота для менеджера"""
     try:
-        current_user = await require_manager_or_owner(request)
-        if isinstance(current_user, RedirectResponse):
-            return current_user
         
         telegram_id = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
         
@@ -240,12 +244,13 @@ async def manager_timeslots_edit_form(request: Request, timeslot_id: int):
 
 
 @router.post("/manager/timeslots/{timeslot_id}/edit")
-async def manager_timeslots_edit(request: Request, timeslot_id: int):
+async def manager_timeslots_edit(
+    request: Request, 
+    timeslot_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
     """Редактирование тайм-слота для менеджера"""
     try:
-        current_user = await require_manager_or_owner(request)
-        if isinstance(current_user, RedirectResponse):
-            return current_user
         
         telegram_id = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
         
@@ -281,12 +286,12 @@ async def manager_timeslots_edit(request: Request, timeslot_id: int):
 
 
 @router.post("/manager/timeslots/bulk-delete")
-async def manager_timeslots_bulk_delete(request: Request):
+async def manager_timeslots_bulk_delete(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
     """Массовое удаление тайм-слотов для менеджера"""
     try:
-        current_user = await require_manager_or_owner(request)
-        if isinstance(current_user, RedirectResponse):
-            return current_user
         
         telegram_id = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
         
