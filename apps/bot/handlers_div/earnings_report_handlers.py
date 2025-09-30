@@ -256,7 +256,7 @@ class EarningsReportHandlers:
                 for shift, object_obj in shifts_data:
                     shift_date = shift.start_time.date()
                     object_name = object_obj.name
-                    hourly_rate = shift.hourly_rate or 0
+                    hourly_rate = float(shift.hourly_rate or 0)
                     
                     # Вычисляем часы работы
                     if shift.start_time and shift.end_time:
