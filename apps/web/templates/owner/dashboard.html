@@ -130,7 +130,7 @@
                                 <thead class="table-light">
                                     <tr>
                                         <th>Объект</th>
-                                        <th>Начало</th>
+                                        <th>Дата и время открытия</th>
                                         <th>Сотрудник</th>
                                     </tr>
                                 </thead>
@@ -139,12 +139,10 @@
                                     <tr>
                                         <td>
                                             <strong>{{ shift.object_name }}</strong><br>
-                                            <small class="text-muted">{{ shift.object_address or 'Адрес не указан' }}</small>
+                                            <small class="text-muted">{{ shift.object_address }}</small>
                                         </td>
                                         <td>
-                                            <span class="badge bg-success">
-                                                {{ shift.date_label }} {{ shift.time_label }}
-                                            </span>
+                                            <span class="badge bg-success">{{ shift.date_time_label }}</span>
                                         </td>
                                         <td>
                                             <span class="fw-semibold">{{ shift.employee_name }}</span>
@@ -153,11 +151,6 @@
                                     {% endfor %}
                                 </tbody>
                             </table>
-                        </div>
-                        <div class="mt-3 text-end">
-                            <a href="/owner/calendar" class="btn btn-success">
-                                Перейти к календарю →
-                            </a>
                         </div>
                     {% else %}
                         <div class="text-center py-4">
