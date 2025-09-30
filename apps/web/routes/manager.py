@@ -1272,12 +1272,9 @@ async def manager_calendar(
                 objects_map = {obj.id: obj for obj in accessible_objects}
             
             if object_ids:
-                # Получаем тайм-слоты за месяц
+                # Получаем тайм-слоты с текущего месяца до конца года (как у владельца)
                 start_date = date(year, month, 1)
-                if month == 12:
-                    end_date = date(year + 1, 1, 1)
-                else:
-                    end_date = date(year, month + 1, 1)
+                end_date = date(year, 12, 31)
                 
                 timeslots_query = select(TimeSlot).options(
                     selectinload(TimeSlot.object)
@@ -1560,12 +1557,9 @@ async def get_timeslots_status_manager(
                 raise HTTPException(status_code=403, detail="Нет доступа к объекту")
             object_ids = [object_id]
         
-        # Получаем тайм-слоты за месяц
+        # Получаем тайм-слоты с текущего месяца до конца года (как у владельца)
         start_date = date(year, month, 1)
-        if month == 12:
-            end_date = date(year + 1, 1, 1)
-        else:
-            end_date = date(year, month + 1, 1)
+        end_date = date(year, 12, 31)
         
         timeslots_query = select(TimeSlot).options(
             selectinload(TimeSlot.object)
@@ -2355,8 +2349,15 @@ def _create_calendar_grid_manager(
     first_day = date(year, month, 1)
     last_day = date(year, month, py_calendar.monthrange(year, month)[1])
     
-    # Находим первый понедельник для отображения
-    first_monday = first_day - timedelta(days=first_day.weekday())
+    # Находим понедельник для начала календаря
+    today = date.today()
+    if today.year == year and today.month == month:
+        # Если смотрим текущий месяц - начинаем за 2 недели до текущей
+        current_monday = today - timedelta(days=today.weekday())
+        first_monday = current_monday - timedelta(weeks=2)
+    else:
+        # Для других месяцев - начинаем с первого понедельника месяца
+        first_monday = first_day - timedelta(days=first_day.weekday())
     
     # Создаем сетку 6x7 (6 недель, 7 дней)
     calendar_grid = []

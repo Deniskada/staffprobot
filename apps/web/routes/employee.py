@@ -863,11 +863,11 @@ async def employee_calendar(
             objs = (await db.execute(objs_q)).scalars().all()
             objects_map = {o.id: o for o in objs}
 
-        # Тайм-слоты за месяц
+        # Тайм-слоты с текущего месяца до конца года (как у владельца)
         timeslots_data = []
         if object_ids:
             start_date = date(year, month, 1)
-            end_date = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+            end_date = date(year, 12, 31)
 
             ts_q = select(TimeSlot).options(selectinload(TimeSlot.object)).where(
                 and_(
@@ -1064,7 +1064,16 @@ def _create_calendar_grid_employee(
 
     first_day = date(year, month, 1)
     last_day = date(year, month, _cal.monthrange(year, month)[1])
-    first_monday = first_day - timedelta(days=first_day.weekday())
+    
+    # Находим понедельник для начала календаря
+    today = date.today()
+    if today.year == year and today.month == month:
+        # Если смотрим текущий месяц - начинаем за 2 недели до текущей
+        current_monday = today - timedelta(days=today.weekday())
+        first_monday = current_monday - timedelta(weeks=2)
+    else:
+        # Для других месяцев - начинаем с первого понедельника месяца
+        first_monday = first_day - timedelta(days=first_day.weekday())
 
     calendar_grid: List[List[Dict[str, Any]]] = []
     current_date = first_monday
