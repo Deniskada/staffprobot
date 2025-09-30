@@ -909,6 +909,7 @@ async def owner_calendar(
             for week in calendar_data:
                 week_data = []
                 for day in week:
+                    logger.info(f"Processing day {day.get('date')}: timeslots={len(day.get('timeslots', []))}, shifts={len(day.get('shifts', []))}")
                     # Обрабатываем смены
                     shifts = []
                     for shift in day.get("shifts", []):
