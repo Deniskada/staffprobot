@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from core.logging.logger import logger
 from core.database.connection import get_sync_session
 from domain.entities.user import User
-from domain.entities.shift_schedule import ShiftSchedule
+from domain.entities.shift import Shift
 from domain.entities.object import Object
 from sqlalchemy import select, and_, func
 from datetime import datetime, timedelta, date
@@ -220,16 +220,16 @@ class EarningsReportHandlers:
         try:
             with get_sync_session() as session:
                 # Получаем все завершенные смены пользователя за период
-                shifts_query = select(ShiftSchedule, Object).join(
-                    Object, ShiftSchedule.object_id == Object.id
+                shifts_query = select(Shift, Object).join(
+                    Object, Shift.object_id == Object.id
                 ).where(
                     and_(
-                        ShiftSchedule.user_id == user_id,
-                        ShiftSchedule.status == 'completed',
-                        func.date(ShiftSchedule.planned_start) >= start_date,
-                        func.date(ShiftSchedule.planned_start) <= end_date
+                        Shift.user_id == user_id,
+                        Shift.status == 'completed',
+                        func.date(Shift.start_time) >= start_date,
+                        func.date(Shift.start_time) <= end_date
                     )
-                ).order_by(ShiftSchedule.planned_start)
+                ).order_by(Shift.start_time)
                 
                 shifts_result = session.execute(shifts_query)
                 shifts_data = shifts_result.all()
@@ -251,14 +251,14 @@ class EarningsReportHandlers:
                 total_earnings = 0
                 total_hours = 0
                 
-                for shift_schedule, object_obj in shifts_data:
-                    shift_date = shift_schedule.planned_start.date()
+                for shift, object_obj in shifts_data:
+                    shift_date = shift.start_time.date()
                     object_name = object_obj.name
-                    hourly_rate = shift_schedule.hourly_rate or 0
+                    hourly_rate = shift.hourly_rate or 0
                     
                     # Вычисляем часы работы
-                    if shift_schedule.planned_start and shift_schedule.planned_end:
-                        duration = shift_schedule.planned_end - shift_schedule.planned_start
+                    if shift.start_time and shift.end_time:
+                        duration = shift.end_time - shift.start_time
                         hours = duration.total_seconds() / 3600
                     else:
                         hours = 0
