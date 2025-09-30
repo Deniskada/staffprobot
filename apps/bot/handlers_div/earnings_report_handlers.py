@@ -226,10 +226,10 @@ class EarningsReportHandlers:
                     and_(
                         ShiftSchedule.user_id == user_id,
                         ShiftSchedule.status == 'completed',
-                        func.date(ShiftSchedule.start_time) >= start_date,
-                        func.date(ShiftSchedule.start_time) <= end_date
+                        func.date(ShiftSchedule.planned_start) >= start_date,
+                        func.date(ShiftSchedule.planned_start) <= end_date
                     )
-                ).order_by(ShiftSchedule.start_time)
+                ).order_by(ShiftSchedule.planned_start)
                 
                 shifts_result = session.execute(shifts_query)
                 shifts_data = shifts_result.all()
@@ -252,13 +252,13 @@ class EarningsReportHandlers:
                 total_hours = 0
                 
                 for shift_schedule, object_obj in shifts_data:
-                    shift_date = shift_schedule.start_time.date()
+                    shift_date = shift_schedule.planned_start.date()
                     object_name = object_obj.name
                     hourly_rate = shift_schedule.hourly_rate or 0
                     
                     # Вычисляем часы работы
-                    if shift_schedule.actual_end_time and shift_schedule.start_time:
-                        duration = shift_schedule.actual_end_time - shift_schedule.start_time
+                    if shift_schedule.planned_start and shift_schedule.planned_end:
+                        duration = shift_schedule.planned_end - shift_schedule.planned_start
                         hours = duration.total_seconds() / 3600
                     else:
                         hours = 0
