@@ -523,6 +523,73 @@ class ObjectService:
             logger.error(f"Error checking owner role for user {owner_id}: {e}")
             # Не поднимаем исключение, чтобы не сломать удаление объекта
 
+    # === МЕТОДЫ ДЛЯ МЕНЕДЖЕРОВ ===
+    
+    async def get_objects_by_manager(self, telegram_id: int) -> List[Object]:
+        """Получить объекты, доступные менеджеру"""
+        try:
+            from shared.services.manager_permission_service import ManagerPermissionService
+            
+            permission_service = ManagerPermissionService(self.db)
+            object_ids = await permission_service.get_manager_object_ids(telegram_id)
+            
+            if not object_ids:
+                return []
+            
+            query = select(Object).where(
+                Object.id.in_(object_ids),
+                Object.is_active == True
+            ).order_by(Object.created_at.desc())
+            
+            result = await self.db.execute(query)
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error getting objects for manager {telegram_id}: {e}")
+            return []
+    
+    async def get_object_by_id_for_manager(self, object_id: int, telegram_id: int) -> Optional[Object]:
+        """Получить объект по ID для менеджера с проверкой доступа"""
+        try:
+            from shared.services.manager_permission_service import ManagerPermissionService
+            
+            permission_service = ManagerPermissionService(self.db)
+            has_access = await permission_service.check_manager_object_access(telegram_id, object_id)
+            
+            if not has_access:
+                return None
+            
+            query = select(Object).where(Object.id == object_id)
+            result = await self.db.execute(query)
+            return result.scalar_one_or_none()
+            
+        except Exception as e:
+            logger.error(f"Error getting object {object_id} for manager {telegram_id}: {e}")
+            return None
+    
+    async def get_timeslots_by_object_for_manager(self, object_id: int, telegram_id: int) -> List[TimeSlot]:
+        """Получить тайм-слоты объекта для менеджера"""
+        try:
+            from shared.services.manager_permission_service import ManagerPermissionService
+            
+            permission_service = ManagerPermissionService(self.db)
+            has_access = await permission_service.check_manager_object_access(telegram_id, object_id)
+            
+            if not has_access:
+                return []
+            
+            query = select(TimeSlot).where(
+                TimeSlot.object_id == object_id,
+                TimeSlot.is_active == True
+            ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
+            
+            result = await self.db.execute(query)
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error getting timeslots for object {object_id} for manager {telegram_id}: {e}")
+            return []
+
 
 class TimeSlotService:
     """Сервис для работы с тайм-слотами"""
@@ -776,3 +843,145 @@ class TimeSlotService:
         except Exception as e:
             logger.error(f"Error getting timeslots by month: {e}")
             return []
+    
+    # === МЕТОДЫ ДЛЯ МЕНЕДЖЕРОВ ===
+    
+    async def create_timeslot_for_manager(self, timeslot_data: Dict[str, Any], object_id: int, telegram_id: int) -> Optional[TimeSlot]:
+        """Создать тайм-слот для менеджера"""
+        try:
+            from shared.services.manager_permission_service import ManagerPermissionService
+            
+            permission_service = ManagerPermissionService(self.db)
+            has_access = await permission_service.check_manager_object_access(telegram_id, object_id)
+            
+            if not has_access:
+                return None
+            
+            # Получаем внутренний ID пользователя
+            internal_id = await self._get_user_internal_id(telegram_id)
+            if not internal_id:
+                return None
+            
+            # Создаем тайм-слот
+            new_timeslot = TimeSlot(
+                object_id=object_id,
+                slot_date=timeslot_data.get('slot_date', datetime.now().date()),
+                start_time=time.fromisoformat(timeslot_data['start_time']),
+                end_time=time.fromisoformat(timeslot_data['end_time']),
+                hourly_rate=timeslot_data.get('hourly_rate'),
+                max_employees=timeslot_data.get('max_employees', 1),
+                is_additional=timeslot_data.get('is_additional', False),
+                is_active=timeslot_data.get('is_active', True),
+                notes=timeslot_data.get('notes', '')
+            )
+            
+            self.db.add(new_timeslot)
+            await self.db.commit()
+            await self.db.refresh(new_timeslot)
+            
+            logger.info(f"Created timeslot {new_timeslot.id} for object {object_id} by manager {telegram_id}")
+            return new_timeslot
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error creating timeslot for object {object_id} by manager {telegram_id}: {e}")
+            raise
+    
+    async def get_timeslot_by_id_for_manager(self, timeslot_id: int, telegram_id: int) -> Optional[TimeSlot]:
+        """Получить тайм-слот по ID для менеджера"""
+        try:
+            from shared.services.manager_permission_service import ManagerPermissionService
+            
+            # Получаем тайм-слот
+            query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
+            result = await self.db.execute(query)
+            timeslot = result.scalar_one_or_none()
+            
+            if not timeslot:
+                return None
+            
+            # Проверяем доступ к объекту
+            permission_service = ManagerPermissionService(self.db)
+            has_access = await permission_service.check_manager_object_access(telegram_id, timeslot.object_id)
+            
+            if not has_access:
+                return None
+            
+            return timeslot
+            
+        except Exception as e:
+            logger.error(f"Error getting timeslot {timeslot_id} for manager {telegram_id}: {e}")
+            raise
+    
+    async def update_timeslot_for_manager(self, timeslot_id: int, timeslot_data: Dict[str, Any], telegram_id: int) -> Optional[TimeSlot]:
+        """Обновить тайм-слот для менеджера"""
+        try:
+            from shared.services.manager_permission_service import ManagerPermissionService
+            
+            # Получаем тайм-слот
+            query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
+            result = await self.db.execute(query)
+            timeslot = result.scalar_one_or_none()
+            
+            if not timeslot:
+                return None
+            
+            # Проверяем доступ к объекту
+            permission_service = ManagerPermissionService(self.db)
+            has_access = await permission_service.check_manager_object_access(telegram_id, timeslot.object_id)
+            
+            if not has_access:
+                return None
+            
+            # Обновляем поля
+            timeslot.slot_date = timeslot_data.get('slot_date', timeslot.slot_date)
+            timeslot.start_time = time.fromisoformat(timeslot_data['start_time'])
+            timeslot.end_time = time.fromisoformat(timeslot_data['end_time'])
+            timeslot.hourly_rate = timeslot_data.get('hourly_rate', timeslot.hourly_rate)
+            timeslot.max_employees = timeslot_data.get('max_employees', timeslot.max_employees)
+            timeslot.is_additional = timeslot_data.get('is_additional', timeslot.is_additional)
+            timeslot.is_active = timeslot_data.get('is_active', timeslot.is_active)
+            timeslot.notes = timeslot_data.get('notes', timeslot.notes)
+            
+            await self.db.commit()
+            await self.db.refresh(timeslot)
+            
+            logger.info(f"Updated timeslot {timeslot_id} by manager {telegram_id}")
+            return timeslot
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error updating timeslot {timeslot_id} by manager {telegram_id}: {e}")
+            raise
+    
+    async def delete_timeslot_for_manager(self, timeslot_id: int, telegram_id: int) -> bool:
+        """Удалить тайм-слот для менеджера"""
+        try:
+            from shared.services.manager_permission_service import ManagerPermissionService
+            
+            # Получаем тайм-слот
+            query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
+            result = await self.db.execute(query)
+            timeslot = result.scalar_one_or_none()
+            
+            if not timeslot:
+                return False
+            
+            # Проверяем доступ к объекту
+            permission_service = ManagerPermissionService(self.db)
+            has_access = await permission_service.check_manager_object_access(telegram_id, timeslot.object_id)
+            
+            if not has_access:
+                return False
+            
+            # Мягкое удаление
+            timeslot.is_active = False
+            await self.db.commit()
+            
+            logger.info(f"Soft deleted timeslot {timeslot_id} by manager {telegram_id}")
+            return True
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error deleting timeslot {timeslot_id} by manager {telegram_id}: {e}")
+            raise

@@ -1,0 +1,119 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}Редактировать тайм-слот{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Редактировать тайм-слот</h1>
+                    <p class="text-muted mb-0">{{ timeslot.slot_date.strftime('%d.%m.%Y') }}</p>
+                </div>
+                <div>
+                    <a href="/manager/timeslots/object/{{ timeslot.object_id }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Назад к списку
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Информация о тайм-слоте -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <small class="text-muted">Дата</small>
+                            <div class="fw-bold">{{ timeslot.slot_date.strftime('%d.%m.%Y') }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Время</small>
+                            <div class="fw-bold">{{ timeslot.start_time.strftime('%H:%M') }} - {{ timeslot.end_time.strftime('%H:%M') }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Ставка</small>
+                            <div class="fw-bold">{{ timeslot.hourly_rate }} ₽/час</div>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Статус</small>
+                            <div class="fw-bold">
+                                {% if timeslot.is_active %}
+                                    <span class="badge bg-success">Активен</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Неактивен</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Форма редактирования -->
+            <div class="card">
+                <div class="card-body">
+                    <form method="post" action="/manager/timeslots/{{ timeslot.id }}/edit">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="slot_date" class="form-label">Дата <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="slot_date" name="slot_date" 
+                                       value="{{ timeslot.slot_date.strftime('%Y-%m-%d') }}" required>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="start_time" class="form-label">Время начала <span class="text-danger">*</span></label>
+                                <input type="time" class="form-control" id="start_time" name="start_time" 
+                                       value="{{ timeslot.start_time.strftime('%H:%M') }}" required>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="end_time" class="form-label">Время окончания <span class="text-danger">*</span></label>
+                                <input type="time" class="form-control" id="end_time" name="end_time" 
+                                       value="{{ timeslot.end_time.strftime('%H:%M') }}" required>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="hourly_rate" class="form-label">Ставка за час (₽) <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="hourly_rate" name="hourly_rate" 
+                                       value="{{ timeslot.hourly_rate }}" min="0" step="0.01" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="max_employees" class="form-label">Максимум сотрудников</label>
+                                <input type="number" class="form-control" id="max_employees" name="max_employees" 
+                                       value="{{ timeslot.max_employees }}" min="1" max="10">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label for="notes" class="form-label">Примечания</label>
+                                <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                          placeholder="Дополнительная информация о тайм-слоте">{{ timeslot.notes or '' }}</textarea>
+                            </div>
+                        </div>
+                        
+                        <!-- Кнопки -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="d-flex justify-content-end gap-2">
+                                    <a href="/manager/timeslots/object/{{ timeslot.object_id }}" class="btn btn-outline-secondary">
+                                        Отмена
+                                    </a>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save"></i> Сохранить изменения
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Установка минимальной даты на сегодня
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('slot_date').setAttribute('min', today);
+});
+</script>
+{% endblock %}

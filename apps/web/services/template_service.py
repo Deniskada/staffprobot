@@ -347,3 +347,127 @@ class TemplateService:
         except Exception as e:
             logger.error(f"Error getting user internal ID: {e}")
             return telegram_id
+    
+    # === МЕТОДЫ ДЛЯ МЕНЕДЖЕРОВ ===
+    
+    async def get_public_templates(self) -> List[PlanningTemplate]:
+        """Получить все публичные шаблоны для менеджеров"""
+        try:
+            query = select(PlanningTemplate).where(
+                and_(
+                    PlanningTemplate.is_public == True,
+                    PlanningTemplate.is_active == True
+                )
+            ).options(
+                selectinload(PlanningTemplate.template_slots)
+            ).order_by(PlanningTemplate.name)
+            
+            result = await self.db.execute(query)
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error getting public templates: {e}")
+            return []
+    
+    async def get_public_template_by_id(self, template_id: int) -> Optional[PlanningTemplate]:
+        """Получить публичный шаблон по ID для менеджера"""
+        try:
+            query = select(PlanningTemplate).where(
+                and_(
+                    PlanningTemplate.id == template_id,
+                    PlanningTemplate.is_public == True,
+                    PlanningTemplate.is_active == True
+                )
+            ).options(
+                selectinload(PlanningTemplate.template_slots)
+            )
+            
+            result = await self.db.execute(query)
+            return result.scalar_one_or_none()
+            
+        except Exception as e:
+            logger.error(f"Error getting public template {template_id}: {e}")
+            return None
+    
+    async def apply_template_to_objects_for_manager(
+        self, 
+        template_id: int, 
+        start_date: date, 
+        end_date: date,
+        object_ids: List[int],
+        telegram_id: int,
+        start_time_override: Optional[str] = None,
+        end_time_override: Optional[str] = None,
+        hourly_rate_override: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Применение публичного шаблона к объектам для менеджера"""
+        try:
+            from shared.services.manager_permission_service import ManagerPermissionService
+            
+            # Получаем публичный шаблон
+            template = await self.get_public_template_by_id(template_id)
+            if not template:
+                return {"success": False, "error": "Публичный шаблон не найден"}
+            
+            permission_service = ManagerPermissionService(self.db)
+            created_slots = []
+            total_created = 0
+            
+            # Применяем шаблон к каждому объекту
+            for object_id in object_ids:
+                # Проверяем доступ менеджера к объекту
+                has_access = await permission_service.check_manager_object_access(telegram_id, object_id)
+                if not has_access:
+                    logger.warning(f"Manager {telegram_id} has no access to object {object_id}")
+                    continue
+                
+                # Получаем объект
+                from apps.web.services.object_service import ObjectService
+                object_service = ObjectService(self.db)
+                obj = await object_service.get_object_by_id_for_manager(object_id, telegram_id)
+                if not obj:
+                    logger.warning(f"Object {object_id} not found for manager {telegram_id}")
+                    continue
+                
+                # Создаем слоты для этого объекта
+                current_date = start_date
+                while current_date <= end_date:
+                    if self._should_create_slots_for_date(template, current_date):
+                        # Создаем тайм-слот для объекта
+                        timeslot_data = {
+                            "slot_date": current_date,
+                            "start_time": start_time_override or template.start_time,
+                            "end_time": end_time_override or template.end_time,
+                            "hourly_rate": hourly_rate_override if hourly_rate_override is not None else template.hourly_rate,
+                            "is_active": True
+                        }
+                        
+                        # Создаем тайм-слот через TimeSlotService
+                        from apps.web.services.object_service import TimeSlotService
+                        timeslot_service = TimeSlotService(self.db)
+                        timeslot = await timeslot_service.create_timeslot_for_manager(timeslot_data, object_id, telegram_id)
+                        
+                        if timeslot:
+                            created_slots.append({
+                                "id": timeslot.id,
+                                "object_id": object_id,
+                                "object_name": obj.name,
+                                "slot_date": current_date.isoformat(),
+                                "start_time": template.start_time,
+                                "end_time": template.end_time,
+                                "hourly_rate": template.hourly_rate
+                            })
+                            total_created += 1
+                    
+                    current_date += timedelta(days=1)
+            
+            return {
+                "success": True,
+                "created_slots_count": total_created,
+                "created_slots": created_slots,
+                "message": f"Шаблон применен к {len(object_ids)} объектам. Создано {total_created} тайм-слотов."
+            }
+            
+        except Exception as e:
+            logger.error(f"Error applying template to objects for manager: {e}")
+            return {"success": False, "error": f"Ошибка применения шаблона: {str(e)}"}
