@@ -121,7 +121,7 @@
         <div class="col-md-6">
             <div class="card owner-card">
                 <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">🏢 Мои объекты</h5>
+                    <h5 class="mb-0">🏢 Активность по объектам</h5>
                 </div>
                 <div class="card-body">
                     {% if recent_objects %}
@@ -129,49 +129,35 @@
                             <table class="table table-hover">
                                 <thead class="table-light">
                                     <tr>
-                                        <th><i class="bi bi-building"></i> Объект</th>
-                                        <th><i class="bi bi-calendar-event"></i> Дата открытия</th>
-                                        <th><i class="bi bi-clock"></i> Время открытия</th>
-                                        <th><i class="bi bi-person"></i> Сотрудник</th>
+                                        <th>Объект</th>
+                                        <th>Ближайшая смена</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for object in recent_objects %}
                                     <tr>
                                         <td>
-                                            <div>
-                                                <strong>{{ object.name }}</strong>
-                                                <br>
-                                                <small class="text-muted">{{ object.address }}</small>
-                                            </div>
+                                            <strong>{{ object.name }}</strong><br>
+                                            <small class="text-muted">{{ object.address or 'Адрес не указан' }}</small>
                                         </td>
                                         <td>
                                             {% if object.first_shift_start %}
-                                                <span class="badge bg-success">
-                                                    {{ object.first_shift_start.strftime('%d.%m.%Y') }}
-                                                </span>
+                                                <div class="d-flex flex-column">
+                                                    <span class="badge bg-success mb-1">
+                                                        {{ object.first_shift_start.strftime('%d.%m.%Y') }}
+                                                        {{ object.first_shift_start.strftime('%H:%M') }}
+                                                        {% if object.first_shift_end %}- {{ object.first_shift_end.strftime('%H:%M') }}{% endif %}
+                                                    </span>
+                                                    {% if object.first_name or object.last_name %}
+                                                    <small class="text-muted">
+                                                        👤 {{ object.first_name or '' }} {{ object.last_name or '' }}
+                                                    </small>
+                                                    {% endif %}
+                                                </div>
                                             {% else %}
                                                 <span class="text-muted">
-                                                    <i class="bi bi-dash-circle"></i> Нет смены
+                                                    <i class="bi bi-dash-circle"></i> Нет будущих смен
                                                 </span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if object.first_shift_start %}
-                                                <span class="fw-bold">
-                                                    {{ object.first_shift_start.strftime('%H:%M') }}
-                                                </span>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if object.first_name and object.last_name %}
-                                                <span class="fw-bold">
-                                                    {{ object.first_name }} {{ object.last_name }}
-                                                </span>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                     </tr>
@@ -179,7 +165,7 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div class="mt-3">
+                        <div class="mt-3 text-end">
                             <a href="/owner/objects" class="btn btn-success">
                                 Все объекты →
                             </a>
