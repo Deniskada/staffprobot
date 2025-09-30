@@ -32,17 +32,19 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" action="/owner/timeslots/object/{{ object_id }}/create" id="createForm">
+                        <input type="hidden" name="creation_mode" id="creation_mode" value="single">
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">
                                     <i class="bi bi-calendar-event"></i> Режим создания
                                 </label>
                                 <div class="btn-group w-100" role="group">
-                                    <input type="radio" class="btn-check" name="creation_mode" id="mode-single" value="single" checked>
-                                    <label class="btn btn-outline-primary" for="mode-single">Один тайм-слот</label>
-
-                                    <input type="radio" class="btn-check" name="creation_mode" id="mode-template" value="template">
-                                    <label class="btn btn-outline-primary" for="mode-template">По шаблону</label>
+                                    <button type="button" class="btn btn-outline-primary active" id="btn-single">
+                                        Один тайм-слот
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary" id="btn-template">
+                                        По шаблону
+                                    </button>
                                 </div>
                                 <div class="form-text">Выберите режим создания тайм-слотов</div>
                             </div>
@@ -54,7 +56,11 @@
                                     <label for="slot_date" class="form-label">
                                         <i class="bi bi-calendar-event"></i> Дата тайм-слота *
                                     </label>
-                                    <input type="date" class="form-control" id="slot_date" name="slot_date" required>
+                                    <input type="date"
+                                           class="form-control"
+                                           id="slot_date"
+                                           name="slot_date"
+                                           required>
                                     <div class="form-text">Дата для создания тайм-слота</div>
                                 </div>
 
@@ -63,7 +69,14 @@
                                         <i class="bi bi-currency-dollar"></i> Ставка за час *
                                     </label>
                                     <div class="input-group">
-                                        <input type="number" class="form-control" id="hourly_rate" name="hourly_rate" min="0" step="0.01" required value="{{ object.hourly_rate }}">
+                                        <input type="number"
+                                               class="form-control"
+                                               id="hourly_rate"
+                                               name="hourly_rate"
+                                               min="0"
+                                               step="0.01"
+                                               required
+                                               value="{{ object.hourly_rate }}">
                                         <span class="input-group-text">₽/час</span>
                                     </div>
                                     <div class="form-text">Почасовая ставка для этого тайм-слота</div>
@@ -75,16 +88,27 @@
                                     <label for="max_employees" class="form-label">
                                         <i class="bi bi-people"></i> Лимит сотрудников *
                                     </label>
-                                    <input type="number" class="form-control" id="max_employees" name="max_employees" min="1" step="1" value="1" required>
+                                    <input type="number"
+                                           class="form-control"
+                                           id="max_employees"
+                                           name="max_employees"
+                                           min="1"
+                                           step="1"
+                                           value="1"
+                                           required>
                                     <div class="form-text">Максимальное количество сотрудников</div>
                                 </div>
+                            </div>
+                        </div>
 
+                        <div id="mode-template-fields" style="display: none;">
+                            <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label">
-                                        <i class="bi bi-blockquote-left"></i> По шаблону (опционально)
+                                    <label for="template_id" class="form-label">
+                                        <i class="bi bi-blockquote-left"></i> Шаблон планирования *
                                     </label>
                                     <select class="form-select" id="template_id" name="template_id">
-                                        <option value="">Не использовать шаблон</option>
+                                        <option value="">Выберите шаблон</option>
                                         {% for template in templates %}
                                         <option value="{{ template.id }}"
                                                 data-start-time="{{ template.start_time }}"
@@ -94,8 +118,47 @@
                                         </option>
                                         {% endfor %}
                                     </select>
-                                    <div class="form-text">Выберите шаблон для автозаполнения полей</div>
+                                    <div class="form-text">Выберите шаблон, чтобы создать серию тайм-слотов</div>
                                 </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="template_hourly_rate" class="form-label">
+                                        <i class="bi bi-currency-dollar"></i> Ставка (опционально)
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number"
+                                               class="form-control"
+                                               id="template_hourly_rate"
+                                               name="template_hourly_rate"
+                                               min="0"
+                                               step="0.01"
+                                               placeholder="Использовать из шаблона">
+                                        <span class="input-group-text">₽/час</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="template_start_date" class="form-label">
+                                        <i class="bi bi-calendar-event"></i> Дата начала *
+                                    </label>
+                                    <input type="date"
+                                           class="form-control"
+                                           id="template_start_date"
+                                           name="template_start_date">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="template_end_date" class="form-label">
+                                        <i class="bi bi-calendar-event"></i> Дата окончания *
+                                    </label>
+                                    <input type="date"
+                                           class="form-control"
+                                           id="template_end_date"
+                                           name="template_end_date">
+                                </div>
+                            </div>
+                            <div class="alert alert-info" id="template-info" style="display: none;">
+                                <i class="bi bi-info-circle"></i>
+                                <span id="template-details"></span>
                             </div>
                         </div>
 
@@ -104,39 +167,49 @@
                                 <label for="start_time" class="form-label">
                                     <i class="bi bi-clock"></i> Время начала *
                                 </label>
-                                <input type="time" class="form-control" id="start_time" name="start_time" required>
+                                <input type="time"
+                                       class="form-control"
+                                       id="start_time"
+                                       name="start_time"
+                                       required>
                                 <div class="form-text">Время начала тайм-слота</div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label for="end_time" class="form-label">
                                     <i class="bi bi-clock-fill"></i> Время окончания *
                                 </label>
-                                <input type="time" class="form-control" id="end_time" name="end_time" required>
+                                <input type="time"
+                                       class="form-control"
+                                       id="end_time"
+                                       name="end_time"
+                                       required>
                                 <div class="form-text">Время окончания тайм-слота</div>
                             </div>
                         </div>
 
                         <div class="row">
                             <div class="col-12">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="is_active"
+                                           name="is_active"
+                                           checked>
                                     <label class="form-check-label" for="is_active">
                                         <i class="bi bi-check-circle"></i> Активный тайм-слот
                                     </label>
                                     <div class="form-text">Неактивные тайм-слоты не будут доступны для планирования</div>
                                 </div>
+
+                                <div class="d-flex justify-content-between flex-wrap gap-2">
+                                    <a href="/owner/timeslots/object/{{ object_id }}" class="btn btn-outline-secondary">
+                                        <i class="bi bi-arrow-left"></i> Отмена
+                                    </a>
+                                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                                        <i class="bi bi-check-circle"></i> Создать тайм-слот
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-
-                        <hr class="my-4">
-
-                        <div class="d-flex justify-content-between flex-wrap gap-2">
-                            <a href="/owner/timeslots/object/{{ object_id }}" class="btn btn-outline-secondary">
-                                <i class="bi bi-arrow-left"></i> Отмена
-                            </a>
-                            <button type="submit" class="btn btn-primary" id="submitBtn">
-                                <i class="bi bi-check-circle"></i> Создать тайм-слот
-                            </button>
                         </div>
                     </form>
                 </div>
@@ -216,40 +289,66 @@
 </div>
 
 <script>
-const modeSingleRadio = document.getElementById('mode-single');
-const modeTemplateRadio = document.getElementById('mode-template');
+const modeSingleBtn = document.getElementById('btn-single');
+const modeTemplateBtn = document.getElementById('btn-template');
+const creationModeInput = document.getElementById('creation_mode');
 const singleFields = document.getElementById('mode-single-fields');
+const templateFields = document.getElementById('mode-template-fields');
 const templateSelect = document.getElementById('template_id');
+const templateInfo = document.getElementById('template-info');
+const templateDetails = document.getElementById('template-details');
+
 const slotDateInput = document.getElementById('slot_date');
 const hourlyRateInput = document.getElementById('hourly_rate');
 const startTimeInput = document.getElementById('start_time');
 const endTimeInput = document.getElementById('end_time');
+const templateHourlyRate = document.getElementById('template_hourly_rate');
+const templateStartDate = document.getElementById('template_start_date');
+const templateEndDate = document.getElementById('template_end_date');
 
-function toggleMode() {
-    const isTemplate = modeTemplateRadio.checked;
-    templateSelect.disabled = !isTemplate;
+function setMode(newMode) {
+    creationModeInput.value = newMode;
+    const isTemplate = newMode === 'template';
+
+    singleFields.style.display = isTemplate ? 'none' : 'block';
+    templateFields.style.display = isTemplate ? 'block' : 'none';
+
     slotDateInput.required = !isTemplate;
     hourlyRateInput.required = !isTemplate;
+    templateSelect.required = isTemplate;
+    templateStartDate.required = isTemplate;
+    templateEndDate.required = isTemplate;
+
+    modeSingleBtn.classList.toggle('active', !isTemplate);
+    modeTemplateBtn.classList.toggle('active', isTemplate);
 }
 
-function applyTemplate(templateOption) {
-    const startTime = templateOption.dataset.startTime || '';
-    const endTime = templateOption.dataset.endTime || '';
-    const hourlyRate = templateOption.dataset.hourlyRate || '';
+modeSingleBtn.addEventListener('click', () => setMode('single'));
+modeTemplateBtn.addEventListener('click', () => setMode('template'));
 
-    startTimeInput.value = startTime;
-    endTimeInput.value = endTime;
-    if (hourlyRate) {
-        hourlyRateInput.value = hourlyRate;
-    }
-}
-
-modeSingleRadio.addEventListener('change', toggleMode);
-modeTemplateRadio.addEventListener('change', toggleMode);
 templateSelect.addEventListener('change', function() {
-    if (this.selectedIndex > 0) {
-        applyTemplate(this.options[this.selectedIndex]);
+    if (!this.value) {
+        templateInfo.style.display = 'none';
+        return;
     }
+
+    const option = this.options[this.selectedIndex];
+    const startTime = option.dataset.startTime;
+    const endTime = option.dataset.endTime;
+    const hourlyRate = option.dataset.hourlyRate;
+
+    if (startTime) {
+        startTimeInput.value = startTime;
+    }
+    if (endTime) {
+        endTimeInput.value = endTime;
+    }
+    if (hourlyRate) {
+        templateHourlyRate.placeholder = `Ставка из шаблона: ${hourlyRate} ₽`;
+    }
+
+    templateDetails.textContent = `Время: ${startTime || '—'} - ${endTime || '—'}, ставка: ${hourlyRate || 'из шаблона'}₽`;
+    templateInfo.style.display = 'block';
 });
 
 document.getElementById('createForm').addEventListener('submit', function(e) {
@@ -266,7 +365,8 @@ document.getElementById('createForm').addEventListener('submit', function(e) {
 document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
     slotDateInput.value = today;
-    toggleMode();
+    templateStartDate.setAttribute('min', today);
+    templateEndDate.setAttribute('min', today);
 });
 </script>
 {% endblock %}
