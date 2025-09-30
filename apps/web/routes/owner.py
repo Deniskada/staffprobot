@@ -2602,6 +2602,9 @@ async def owner_contract_templates(request: Request):
     """Список шаблонов договоров."""
     # Проверяем авторизацию и роль владельца
     current_user = await get_current_user(request)
+    if not current_user:
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
     user_role = current_user.get("role", "employee")
     if user_role != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
