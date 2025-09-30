@@ -3,6 +3,150 @@
 ## 📋 Обзор процесса
 Развертывание происходит через сборку Docker образов на локальной машине, их передачу на сервер и запуск там. Это обеспечивает полную изоляцию production и dev окружений.
 
+## 🧹 Очистка production перед развертыванием
+
+### Этап 0: Подготовка production сервера
+
+#### 0.1 Остановка текущего production
+```bash
+# Подключаемся к серверу
+ssh user@yourdomain.com
+
+# Переходим в рабочую директорию
+cd /opt
+
+# Останавливаем текущее production окружение
+docker compose -f docker-compose.prod.yml down
+
+# Удаляем остановленные контейнеры
+docker container prune -f
+
+# Удаляем неиспользуемые образы (ОСТОРОЖНО!)
+docker image prune -a -f
+
+# Удаляем неиспользуемые volumes (ОСТОРОЖНО!)
+docker volume prune -f
+
+# Удаляем неиспользуемые сети
+docker network prune -f
+
+# Проверяем освобожденное место
+df -h
+```
+
+#### 0.2 Создание бэкапов production
+```bash
+# Создаем бэкап production базы данных
+docker compose -f docker-compose.prod.yml up -d postgres
+sleep 10
+docker compose -f docker-compose.prod.yml exec postgres pg_dump -U postgres staffprobot_prod > prod_backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Создаем бэкап production конфигураций
+tar -czf prod_config_backup_$(date +%Y%m%d_%H%M%S).tar.gz .env docker-compose.prod.yml
+
+# Создаем бэкап загруженных файлов (если есть)
+if [ -d "uploads/" ]; then
+    tar -czf prod_uploads_backup_$(date +%Y%m%d_%H%M%S).tar.gz uploads/
+fi
+
+# Останавливаем postgres после бэкапа
+docker compose -f docker-compose.prod.yml down
+
+# Проверяем созданные бэкапы
+ls -la prod_backup_*.sql prod_config_backup_*.tar.gz prod_uploads_backup_*.tar.gz
+```
+
+#### 0.3 Очистка Docker системы
+```bash
+# Показываем использование места Docker
+docker system df
+
+# Очищаем все неиспользуемые ресурсы (ОСТОРОЖНО!)
+docker system prune -a --volumes -f
+
+# Проверяем освобожденное место
+df -h
+```
+
+## 👑 Создание суперадминистратора
+
+### Создание суперадмина через миграцию
+```bash
+# На сервере - запускаем только postgres для создания суперадмина
+docker compose -f docker-compose.prod.yml up -d postgres
+sleep 10
+
+# Создаем SQL скрипт для суперадмина
+cat > create_superadmin.sql << 'EOF'
+-- Создание суперадминистратора
+INSERT INTO users (
+    telegram_id, 
+    first_name, 
+    last_name, 
+    username, 
+    phone, 
+    email, 
+    role, 
+    is_active, 
+    created_at, 
+    updated_at
+) VALUES (
+    123456789,  -- Замените на ваш Telegram ID
+    'Super', 
+    'Admin', 
+    'superadmin', 
+    '+1234567890', 
+    'admin@yourdomain.com', 
+    'superadmin', 
+    true, 
+    NOW(), 
+    NOW()
+) ON CONFLICT (telegram_id) DO UPDATE SET
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    username = EXCLUDED.username,
+    phone = EXCLUDED.phone,
+    email = EXCLUDED.email,
+    role = EXCLUDED.role,
+    is_active = EXCLUDED.is_active,
+    updated_at = NOW();
+
+-- Добавляем роль superadmin в user_roles
+INSERT INTO user_roles (user_id, roles) 
+SELECT id, '["superadmin"]'::jsonb 
+FROM users 
+WHERE telegram_id = 123456789
+ON CONFLICT (user_id) DO UPDATE SET 
+    roles = '["superadmin"]'::jsonb;
+
+-- Показываем созданного суперадмина
+SELECT id, telegram_id, first_name, last_name, username, role, is_active 
+FROM users 
+WHERE telegram_id = 123456789;
+EOF
+
+# Выполняем скрипт
+docker compose -f docker-compose.prod.yml exec postgres psql -U postgres -d staffprobot_prod -f /tmp/create_superadmin.sql
+
+# Останавливаем postgres
+docker compose -f docker-compose.prod.yml down
+```
+
+### Создание суперадмина через API (альтернативный способ)
+```bash
+# После запуска полного production окружения
+curl -X POST "http://localhost:8001/api/admin/create-superadmin" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "telegram_id": 123456789,
+    "first_name": "Super",
+    "last_name": "Admin",
+    "username": "superadmin",
+    "phone": "+1234567890",
+    "email": "admin@yourdomain.com"
+  }'
+```
+
 ## 🔄 Полный цикл развертывания
 
 ### Этап 1: Подготовка локальной среды
@@ -210,6 +354,11 @@ docker compose -f docker-compose.prod.yml exec postgres psql -U postgres -d staf
 SELECT COUNT(*) FROM users;
 SELECT COUNT(*) FROM objects;
 SELECT COUNT(*) FROM shifts;
+
+# Проверка суперадмина
+SELECT id, telegram_id, first_name, last_name, role, is_active 
+FROM users 
+WHERE role = 'superadmin' OR roles::text LIKE '%superadmin%';
 ```
 
 ## 🚨 Устранение неполадок
@@ -245,6 +394,18 @@ netstat -tlnp | grep 8001
 docker compose -f docker-compose.prod.yml logs web
 ```
 
+### Проблема: Суперадмин не создается
+```bash
+# Проверяем существующих пользователей
+docker compose -f docker-compose.prod.yml exec postgres psql -U postgres -d staffprobot_prod -c "SELECT telegram_id, first_name, last_name, role FROM users;"
+
+# Проверяем user_roles
+docker compose -f docker-compose.prod.yml exec postgres psql -U postgres -d staffprobot_prod -c "SELECT user_id, roles FROM user_roles;"
+
+# Создаем суперадмина вручную
+docker compose -f docker-compose.prod.yml exec postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO users (telegram_id, first_name, last_name, role, is_active) VALUES (123456789, 'Super', 'Admin', 'superadmin', true) ON CONFLICT (telegram_id) DO UPDATE SET role = 'superadmin';"
+```
+
 ## 📝 Чек-лист развертывания
 
 ### Перед развертыванием:
@@ -265,6 +426,8 @@ docker compose -f docker-compose.prod.yml logs web
 - [ ] Загружены новые образы
 - [ ] Запущено новое production окружение
 - [ ] Проверены все сервисы
+- [ ] Создан суперадминистратор
+- [ ] Проверен доступ суперадмина
 - [ ] Восстановлено dev окружение
 
 ## 🔄 Откат на предыдущую версию
