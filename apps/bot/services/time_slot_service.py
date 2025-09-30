@@ -2,6 +2,7 @@
 
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, date, time, timedelta
+import pytz
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from core.database.connection import get_sync_session
@@ -505,21 +506,34 @@ class TimeSlotService:
                     try:
                         # Проверяем, прошло ли достаточно времени для авто-закрытия
                         object_auto_close_minutes = getattr(shift.object, 'auto_close_minutes', 60)
-                        time_since_end = now - shift.end_time
-                        
-                        if time_since_end.total_seconds() / 60 >= object_auto_close_minutes:
-                            # Закрываем смену
-                            shift.status = 'completed'
-                            shift.actual_end_time = now
-                            # Добавляем поле auto_closed если его нет
-                            if not hasattr(shift, 'auto_closed'):
-                                shift.auto_closed = True
-                            
-                            closed_count += 1
-                            logger.info(f"Auto-closed expired shift {shift.id} for user {shift.user_id}")
-                        else:
+                        close_deadline = shift.end_time + timedelta(minutes=object_auto_close_minutes)
+                        if now < close_deadline:
                             logger.debug(f"Shift {shift.id} not ready for auto-close yet")
-                            
+                            continue
+
+                        # Определяем локальное время закрытия объекта
+                        timezone = shift.object.timezone if shift.object and shift.object.timezone else 'Europe/Moscow'
+                        local_tz = pytz.timezone(timezone)
+
+                        # Находим конец рабочего дня (используем время окончания тайм-слота)
+                        if shift.object and shift.object.closing_time:
+                            closing_dt = datetime.combine(shift.end_time.date(), shift.object.closing_time)
+                            closing_dt = local_tz.localize(closing_dt).astimezone(pytz.UTC)
+                        else:
+                            closing_dt = shift.end_time
+
+                        # Смена может закончиться либо по времени объекта, либо по дедлайну
+                        actual_end_time = max(closing_dt, close_deadline)
+                        actual_end_time = min(actual_end_time, now)
+
+                        shift.status = 'completed'
+                        shift.actual_end_time = actual_end_time
+                        if not hasattr(shift, 'auto_closed'):
+                            shift.auto_closed = True
+
+                        closed_count += 1
+                        logger.info(f"Auto-closed expired shift {shift.id} for user {shift.user_id}")
+                        
                     except Exception as e:
                         error_msg = f"Error auto-closing shift {shift.id}: {e}"
                         logger.error(error_msg)
