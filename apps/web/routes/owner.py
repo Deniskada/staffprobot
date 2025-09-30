@@ -2498,8 +2498,14 @@ def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]]
     first_day = date(year, month, 1)
     last_day = date(year, month, py_calendar.monthrange(year, month)[1])
     
-    # Находим первый понедельник для отображения
-    first_monday = first_day - timedelta(days=first_day.weekday())
+    # Находим понедельник текущей недели
+    today = date.today()
+    if today.year == year and today.month == month:
+        # Если смотрим текущий месяц - начинаем с текущей недели
+        first_monday = today - timedelta(days=today.weekday())
+    else:
+        # Для других месяцев - начинаем с первого понедельника месяца
+        first_monday = first_day - timedelta(days=first_day.weekday())
     
     # Создаем сетку 6x7 (6 недель, 7 дней)
     calendar_grid = []
