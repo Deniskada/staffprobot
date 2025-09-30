@@ -2244,12 +2244,11 @@ async def api_calendar_plan_shift(
             if not employee:
                 raise HTTPException(status_code=404, detail="Сотрудник не найден")
             
-            # Проверяем, что у сотрудника есть роль employee
+            # Проверяем роли; владельцу разрешаем планирование независимо от employee-роли
             employee_roles = employee.roles if isinstance(employee.roles, list) else [employee.role]
-            if "employee" not in employee_roles:
+            is_owner_assignee = employee_id == user_id or "owner" in employee_roles
+            if "employee" not in employee_roles and not is_owner_assignee:
                 raise HTTPException(status_code=400, detail="Пользователь не является сотрудником")
-
-            is_owner_assignee = employee_id == user_id
 
             # Проверяем, что у сотрудника есть договор с владельцем (кроме случая, когда сотрудник — это сам владелец)
             contract = None
