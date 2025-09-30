@@ -3058,10 +3058,18 @@ async def owner_timeslot_create_form(
             return RedirectResponse(url=f"/owner/timeslots/object/{first_object.id}/create", status_code=302)
         
         # Информация об объекте
+        planning_templates = await template_service.get_templates_by_owner(
+            telegram_id, include_public=True
+        )
+
         object_data = {
             "id": obj.id,
             "name": obj.name,
-            "address": obj.address or ""
+            "address": obj.address or "",
+            "opening_time": obj.opening_time,
+            "closing_time": obj.closing_time,
+            "hourly_rate": obj.hourly_rate,
+            "max_distance": getattr(obj, "max_distance_meters", None)
         }
         
         # Получаем данные для переключения интерфейсов
@@ -3072,6 +3080,7 @@ async def owner_timeslot_create_form(
             "title": f"Создание тайм-слота: {object_data['name']}",
             "object_id": object_id,
             "object": object_data,
+            "templates": planning_templates,
             "current_user": current_user,
             "available_interfaces": available_interfaces
         })
