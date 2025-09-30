@@ -5,6 +5,7 @@
 from typing import List, Optional
 from datetime import date, time, datetime
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
+from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database.session import get_async_session
@@ -15,6 +16,7 @@ from apps.web.middleware.role_middleware import require_manager_or_owner
 from core.logging.logger import logger
 
 router = APIRouter()
+template_env = Jinja2Templates(directory="apps/web/templates")
 
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession):
@@ -45,7 +47,7 @@ async def manager_timeslots_index(
             object_service = ObjectService(session)
             objects = await object_service.get_objects_by_manager(current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id)
             
-            return request.app.state.templates.TemplateResponse(
+            return template_env.TemplateResponse(
                 "manager/timeslots/index.html",
                 {
                     "request": request,
@@ -81,7 +83,10 @@ async def manager_timeslots_list(
             # Получаем тайм-слоты
             timeslots = await object_service.get_timeslots_by_object_for_manager(object_id, telegram_id)
             
-            return request.app.state.templates.TemplateResponse(
+            templates_env = request.app.state.templates if hasattr(request.app.state, "templates") else None
+            template_renderer = templates_env or templates
+            
+            return template_renderer.TemplateResponse(
                 "manager/timeslots/list.html",
                 {
                     "request": request,
@@ -119,7 +124,10 @@ async def manager_timeslots_create_form(
             # Получаем публичные шаблоны
             templates = await template_service.get_public_templates()
             
-            return request.app.state.templates.TemplateResponse(
+            templates_env = request.app.state.templates if hasattr(request.app.state, "templates") else None
+            template_renderer = templates_env or template_env
+            
+            return template_renderer.TemplateResponse(
                 "manager/timeslots/create.html",
                 {
                     "request": request,
@@ -229,7 +237,10 @@ async def manager_timeslots_edit_form(
             if not timeslot:
                 raise HTTPException(status_code=404, detail="Тайм-слот не найден или доступ запрещен")
             
-            return request.app.state.templates.TemplateResponse(
+            templates_env = request.app.state.templates if hasattr(request.app.state, "templates") else None
+            template_renderer = templates_env or template_env
+            
+            return template_renderer.TemplateResponse(
                 "manager/timeslots/edit.html",
                 {
                     "request": request,
@@ -305,6 +316,7 @@ async def manager_timeslots_bulk_delete(
         async with get_async_session() as session:
             timeslot_service = TimeSlotService(session)
             deleted_count = 0
+            object_id = form_data.get("object_id")
             
             for timeslot_id_str in timeslot_ids:
                 try:
@@ -312,17 +324,167 @@ async def manager_timeslots_bulk_delete(
                     success = await timeslot_service.delete_timeslot_for_manager(timeslot_id, telegram_id)
                     if success:
                         deleted_count += 1
+                        if not object_id:
+                            object_id = str((await timeslot_service.get_timeslot_by_id_for_manager(timeslot_id, telegram_id)).object_id)
                 except (ValueError, TypeError):
                     logger.warning(f"Invalid timeslot_id: {timeslot_id_str}")
                     continue
             
             logger.info(f"Bulk deleted {deleted_count} timeslots by manager {telegram_id}")
+            redirect_url = f"/manager/timeslots/object/{object_id}" if object_id else "/manager/timeslots"
             
             return RedirectResponse(
-                url="/manager/timeslots",
+                url=redirect_url,
                 status_code=303
             )
             
     except Exception as e:
         logger.error(f"Error in manager_timeslots_bulk_delete: {e}")
         raise HTTPException(status_code=500, detail="Ошибка удаления тайм-слотов")
+
+
+@router.post("/manager/timeslots/bulk-edit")
+async def manager_timeslots_bulk_edit(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Массовое редактирование тайм-слотов для менеджера"""
+    try:
+        telegram_id = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
+        form_data = await request.form()
+
+        object_id = form_data.get("object_id")
+        timeslot_ids_str = form_data.get("timeslot_ids", "")
+        date_from = form_data.get("date_from", "").strip()
+        date_to = form_data.get("date_to", "").strip()
+
+        start_time = form_data.get("start_time", "").strip()
+        end_time = form_data.get("end_time", "").strip()
+        hourly_rate_str = form_data.get("hourly_rate", "").strip()
+        max_employees_str = form_data.get("max_employees", "").strip()
+        set_active = "is_active" in form_data
+        set_inactive = "is_inactive" in form_data
+
+        date_from_obj = None
+        date_to_obj = None
+
+        if date_from and date_to:
+            from datetime import date
+            try:
+                date_from_obj = date.fromisoformat(date_from)
+                date_to_obj = date.fromisoformat(date_to)
+                if date_from_obj > date_to_obj:
+                    raise HTTPException(status_code=400, detail="Дата начала не может быть больше даты окончания")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат даты")
+        elif date_from or date_to:
+            raise HTTPException(status_code=400, detail="Укажите обе даты периода или оставьте пустыми")
+
+        update_params = {}
+
+        from datetime import time
+        if start_time:
+            try:
+                time.fromisoformat(start_time)
+                update_params["start_time"] = start_time
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат времени начала")
+
+        if end_time:
+            try:
+                time.fromisoformat(end_time)
+                update_params["end_time"] = end_time
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат времени окончания")
+
+        if start_time and end_time:
+            if time.fromisoformat(start_time) >= time.fromisoformat(end_time):
+                raise HTTPException(status_code=400, detail="Время начала должно быть меньше времени окончания")
+
+        if hourly_rate_str:
+            try:
+                hourly_rate = float(hourly_rate_str)
+                if hourly_rate <= 0:
+                    raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+                update_params["hourly_rate"] = hourly_rate
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат ставки")
+
+        if max_employees_str:
+            try:
+                max_employees = int(max_employees_str)
+                if max_employees < 1:
+                    raise HTTPException(status_code=400, detail="Лимит должен быть больше 0")
+                update_params["max_employees"] = max_employees
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат лимита")
+
+        if set_active and not set_inactive:
+            update_params["is_active"] = True
+        elif set_inactive and not set_active:
+            update_params["is_active"] = False
+
+        if not update_params:
+            raise HTTPException(status_code=400, detail="Не указано ни одного параметра для изменения")
+
+        if not object_id:
+            raise HTTPException(status_code=400, detail="Не указан объект")
+
+        async with get_async_session() as session:
+            object_service = ObjectService(session)
+            has_access = await object_service.get_object_by_id_for_manager(int(object_id), telegram_id)
+            if not has_access:
+                raise HTTPException(status_code=403, detail="Нет доступа к объекту")
+
+            timeslot_service = TimeSlotService(session)
+
+            if timeslot_ids_str:
+                timeslot_ids = [int(ts_id.strip()) for ts_id in timeslot_ids_str.split(",") if ts_id.strip()]
+                applicable_ids = []
+                for ts_id in timeslot_ids:
+                    slot = await timeslot_service.get_timeslot_by_id_for_manager(ts_id, telegram_id)
+                    if not slot or slot.object_id != int(object_id):
+                        continue
+                    if date_from_obj and date_to_obj:
+                        if not (date_from_obj <= slot.slot_date <= date_to_obj):
+                            continue
+                    applicable_ids.append((ts_id, slot.slot_date))
+            else:
+                raise HTTPException(status_code=400, detail="Не выбраны тайм-слоты для обновления")
+
+            if not applicable_ids:
+                raise HTTPException(status_code=400, detail="Нет подходящих тайм-слотов для обновления")
+
+            updated_count = 0
+            for ts_id, slot_date in applicable_ids:
+                try:
+                    slot = await timeslot_service.get_timeslot_by_id_for_manager(ts_id, telegram_id)
+                    if not slot:
+                        continue
+
+                    slot_data = {
+                        "slot_date": slot_date,
+                        "start_time": update_params.get("start_time", slot.start_time.strftime("%H:%M")),
+                        "end_time": update_params.get("end_time", slot.end_time.strftime("%H:%M")),
+                        "hourly_rate": update_params.get("hourly_rate", slot.hourly_rate),
+                        "max_employees": update_params.get("max_employees", slot.max_employees),
+                        "is_active": update_params.get("is_active", slot.is_active),
+                        "notes": slot.notes or ""
+                    }
+                    await timeslot_service.update_timeslot_for_manager(ts_id, slot_data, telegram_id)
+                    updated_count += 1
+                except Exception as ex:
+                    logger.warning(f"Bulk update skipped for timeslot {ts_id}: {ex}")
+                    continue
+
+            logger.info(f"Bulk updated {updated_count} timeslots by manager {telegram_id}")
+
+            return RedirectResponse(
+                url=f"/manager/timeslots/object/{object_id}?success=bulk_updated&count={updated_count}",
+                status_code=303
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in manager_timeslots_bulk_edit: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка массового редактирования")

@@ -268,6 +268,58 @@ class ManagerPermissionService:
             logger.error(f"Failed to get manager contracts for user {user_id}: {e}", exc_info=True)
             return []
     
+    async def get_manager_object_ids(self, telegram_id: int) -> List[int]:
+        """Получить идентификаторы объектов, доступных менеджеру."""
+        try:
+            # Получаем внутренний ID пользователя
+            user_query = select(User.id).where(User.telegram_id == telegram_id)
+            user_result = await self.session.execute(user_query)
+            user_id = user_result.scalar_one_or_none()
+            if not user_id:
+                return []
+
+            # Получаем договоры управляющего
+            contracts = await self.get_manager_contracts_for_user(user_id)
+            object_ids: set[int] = set()
+            for contract in contracts:
+                permissions = await self.get_contract_permissions(contract.id)
+                for perm in permissions:
+                    permissions_dict = perm.get_permissions_dict()
+                    if permissions_dict.get("can_view", False) or permissions_dict.get("can_edit_schedule", False):
+                        object_ids.add(perm.object_id)
+            return list(object_ids)
+        except Exception as e:
+            logger.error(f"Failed to get manager object ids for {telegram_id}: {e}")
+            return []
+
+    async def check_manager_object_access(self, telegram_id: int, object_id: int) -> bool:
+        """Проверка доступа менеджера к объекту."""
+        try:
+            # Получаем внутренний ID пользователя
+            user_query = select(User.id).where(User.telegram_id == telegram_id)
+            user_result = await self.session.execute(user_query)
+            user_id = user_result.scalar_one_or_none()
+            if not user_id:
+                return False
+
+            # Получаем договоры управляющего
+            contracts = await self.get_manager_contracts_for_user(user_id)
+            for contract in contracts:
+                permissions = await self.get_contract_permissions(contract.id)
+                for perm in permissions:
+                    if perm.object_id != object_id:
+                        continue
+                    permissions_dict = perm.get_permissions_dict()
+                    if permissions_dict.get("can_view", False) or permissions_dict.get("can_edit_schedule", False):
+                        return True
+            return False
+        except Exception as e:
+            logger.error(
+                f"Failed to check manager access for telegram_id {telegram_id} and object {object_id}: {e}"
+            )
+            return False
+
+
     async def get_user_accessible_objects(self, user_id: int) -> List[Object]:
         """Получение всех объектов, доступных пользователю как управляющему."""
         try:
