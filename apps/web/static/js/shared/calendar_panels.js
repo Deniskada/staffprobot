@@ -153,6 +153,14 @@ class CalendarPanels {
         const employeesList = document.getElementById('employeesList');
         if (!employeesList) return;
         
+        const roleLabels = {
+            owner: 'Владелец',
+            manager: 'Управляющий',
+            employee: 'Сотрудник',
+            applicant: 'Соискатель',
+            superadmin: 'Администратор',
+        };
+        
         try {
             const response = await fetch(`${this.baseUrl}/employees`);
             const employees = await response.json();
@@ -169,13 +177,15 @@ class CalendarPanels {
                 employeeItem.className = `employee-item ${employee.is_owner ? 'owner-item' : ''}`;
                 employeeItem.draggable = true;
                 employeeItem.dataset.employeeId = employee.id;
+                const primaryRole = employee.is_owner ? 'owner' : (employee.role || 'employee');
+                const roleLabel = roleLabels[primaryRole] || 'Сотрудник';
                 employeeItem.innerHTML = `
                     <div class="employee-name">
                         ${employee.name}
                         ${employee.is_owner ? '<i class="bi bi-crown text-warning ms-1" title="Владелец"></i>' : ''}
                     </div>
                     <div class="employee-role ${employee.is_owner ? 'owner-role' : ''}">
-                        ${employee.is_owner ? 'Владелец' : (employee.role || 'Сотрудник')}
+                        ${roleLabel}
                     </div>
                 `;
                 
@@ -199,7 +209,7 @@ class CalendarPanels {
                     `;
                     dragPreview.innerHTML = `
                         <div style="font-weight: 600; color: #2c3e50;">${employee.name}</div>
-                        <div style="font-size: 12px; color: #6c757d;">${employee.role || 'Сотрудник'}</div>
+                        <div style="font-size: 12px; color: #6c757d;">${roleLabel}</div>
                     `;
                     document.body.appendChild(dragPreview);
                     e.dataTransfer.setDragImage(dragPreview, 10, 10);
