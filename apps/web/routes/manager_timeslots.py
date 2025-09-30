@@ -16,7 +16,7 @@ from apps.web.middleware.role_middleware import require_manager_or_owner
 from core.logging.logger import logger
 
 router = APIRouter()
-template_env = Jinja2Templates(directory="apps/web/templates")
+templates = Jinja2Templates(directory="apps/web/templates")
 
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession):
@@ -47,7 +47,7 @@ async def manager_timeslots_index(
             object_service = ObjectService(session)
             objects = await object_service.get_objects_by_manager(current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id)
             
-            return template_env.TemplateResponse(
+            return templates.TemplateResponse(
                 "manager/timeslots/index.html",
                 {
                     "request": request,
@@ -83,10 +83,7 @@ async def manager_timeslots_list(
             # Получаем тайм-слоты
             timeslots = await object_service.get_timeslots_by_object_for_manager(object_id, telegram_id)
             
-            templates_env = request.app.state.templates if hasattr(request.app.state, "templates") else None
-            template_renderer = templates_env or templates
-            
-            return template_renderer.TemplateResponse(
+            return templates.TemplateResponse(
                 "manager/timeslots/list.html",
                 {
                     "request": request,
@@ -122,17 +119,14 @@ async def manager_timeslots_create_form(
                 raise HTTPException(status_code=404, detail="Объект не найден или доступ запрещен")
             
             # Получаем публичные шаблоны
-            templates = await template_service.get_public_templates()
+            planning_templates = await template_service.get_public_templates()
             
-            templates_env = request.app.state.templates if hasattr(request.app.state, "templates") else None
-            template_renderer = templates_env or template_env
-            
-            return template_renderer.TemplateResponse(
+            return templates.TemplateResponse(
                 "manager/timeslots/create.html",
                 {
                     "request": request,
                     "object": obj,
-                    "templates": templates,
+                    "templates": planning_templates,
                     "current_user": current_user
                 }
             )
@@ -237,10 +231,7 @@ async def manager_timeslots_edit_form(
             if not timeslot:
                 raise HTTPException(status_code=404, detail="Тайм-слот не найден или доступ запрещен")
             
-            templates_env = request.app.state.templates if hasattr(request.app.state, "templates") else None
-            template_renderer = templates_env or template_env
-            
-            return template_renderer.TemplateResponse(
+            return templates.TemplateResponse(
                 "manager/timeslots/edit.html",
                 {
                     "request": request,

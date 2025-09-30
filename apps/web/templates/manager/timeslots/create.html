@@ -2,6 +2,18 @@
 
 {% block title %}Создать тайм-слот - {{ object.name }}{% endblock %}
 
+{% macro format_time(value) %}
+    {% if value is not none %}
+        {% if value is string %}
+            {{ value }}
+        {% else %}
+            {{ value.strftime('%H:%M') }}
+        {% endif %}
+    {% else %}
+        —
+    {% endif %}
+{% endmacro %}
+
 {% block manager_content %}
 <div class="container-fluid">
     <div class="row">
@@ -28,7 +40,7 @@
                         </div>
                         <div class="col-md-3">
                             <small class="text-muted">Время работы</small>
-                            <div class="fw-bold">{{ object.opening_time.strftime('%H:%M') }} - {{ object.closing_time.strftime('%H:%M') }}</div>
+                            <div class="fw-bold">{{ format_time(object.opening_time) }} - {{ format_time(object.closing_time) }}</div>
                         </div>
                         <div class="col-md-3">
                             <small class="text-muted">Ставка</small>
@@ -110,8 +122,8 @@
                                         <option value="">Выберите шаблон</option>
                                         {% for template in templates %}
                                         <option value="{{ template.id }}" 
-                                                data-start-time="{{ template.start_time.strftime('%H:%M') }}"
-                                                data-end-time="{{ template.end_time.strftime('%H:%M') }}"
+                                                data-start-time="{{ format_time(template.start_time) }}"
+                                                data-end-time="{{ format_time(template.end_time) }}"
                                                 data-hourly-rate="{{ template.hourly_rate }}">
                                             {{ template.name }}
                                         </option>
@@ -183,23 +195,50 @@ document.addEventListener('DOMContentLoaded', function() {
     const templateMode = document.getElementById('template-mode');
     const templateSelect = document.getElementById('template_id');
     const templateInfo = document.getElementById('template-info');
-    
+
+    const singleDateInput = document.getElementById('slot_date');
+    const singleStartInput = document.getElementById('start_time');
+    const singleEndInput = document.getElementById('end_time');
+
+    const templateStartDate = document.getElementById('start_date');
+    const templateEndDate = document.getElementById('end_date');
+
+    function setTemplateFieldsRequired(isRequired) {
+        if (isRequired) {
+            templateSelect.setAttribute('required', 'required');
+            templateStartDate.setAttribute('required', 'required');
+            templateEndDate.setAttribute('required', 'required');
+        } else {
+            templateSelect.removeAttribute('required');
+            templateStartDate.removeAttribute('required');
+            templateEndDate.removeAttribute('required');
+        }
+    }
+
+    function setSingleFieldsRequired(isRequired) {
+        if (isRequired) {
+            singleDateInput.setAttribute('required', 'required');
+            singleStartInput.setAttribute('required', 'required');
+            singleEndInput.setAttribute('required', 'required');
+        } else {
+            singleDateInput.removeAttribute('required');
+            singleStartInput.removeAttribute('required');
+            singleEndInput.removeAttribute('required');
+        }
+    }
+
     // Переключение режимов
     function toggleModes() {
         if (modeSingle.checked) {
             singleMode.style.display = 'block';
             templateMode.style.display = 'none';
-            // Делаем поля шаблона необязательными
-            templateSelect.removeAttribute('required');
-            document.getElementById('start_date').removeAttribute('required');
-            document.getElementById('end_date').removeAttribute('required');
+            setSingleFieldsRequired(true);
+            setTemplateFieldsRequired(false);
         } else {
             singleMode.style.display = 'none';
             templateMode.style.display = 'block';
-            // Делаем поля шаблона обязательными
-            templateSelect.setAttribute('required', 'required');
-            document.getElementById('start_date').setAttribute('required', 'required');
-            document.getElementById('end_date').setAttribute('required', 'required');
+            setSingleFieldsRequired(false);
+            setTemplateFieldsRequired(true);
         }
     }
     
