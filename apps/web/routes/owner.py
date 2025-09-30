@@ -21,7 +21,6 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
-import pytz
 
 from core.database.session import get_async_session, get_db_session
 from apps.web.middleware.auth_middleware import get_current_user
@@ -36,6 +35,7 @@ from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.application import Application, ApplicationStatus
 from core.logging.logger import logger
 from apps.web.services.template_service import TemplateService
+import pytz
 
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
