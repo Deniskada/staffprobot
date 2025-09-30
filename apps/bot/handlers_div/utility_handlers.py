@@ -171,6 +171,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await handle_custom_date_input(update, context)
             return
     
+    # Проверяем состояние пользователя для ввода дат отчета
+    if user_state and user_state.action == UserAction.REPORT_DATES:
+        from .earnings_report_handlers import EarningsReportHandlers
+        earnings_handler = EarningsReportHandlers()
+        await earnings_handler.handle_custom_dates(update, context)
+        return
+    
     # Проверяем состояние пользователя для создания тайм-слотов
     if user_state and user_state.action == UserAction.CREATE_TIMESLOT:
         if user_state.step == UserStep.INPUT_DATE:
