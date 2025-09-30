@@ -234,6 +234,8 @@ class EarningsReportHandlers:
                 shifts_result = session.execute(shifts_query)
                 shifts_data = shifts_result.all()
                 
+                logger.info(f"Found {len(shifts_data)} completed shifts for period {start_date} - {end_date}")
+                
                 if not shifts_data:
                     message_text = (
                         f"📊 **Отчет по заработку**\n\n"
