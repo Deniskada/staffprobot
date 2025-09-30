@@ -34,6 +34,7 @@ from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.application import Application, ApplicationStatus
 from core.logging.logger import logger
+from apps.web.services.template_service import TemplateService
 
 router = APIRouter()
 templates = Jinja2Templates(directory="apps/web/templates")
