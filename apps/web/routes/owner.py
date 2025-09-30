@@ -2262,18 +2262,15 @@ async def api_calendar_plan_shift(
                 if not contracts:
                     raise HTTPException(status_code=400, detail="У сотрудника нет активного договора с вами")
                 contract = contracts[0]
+                logger.info(f"Found contract {contract.id} for employee {employee_id}")
+                logger.info(f"Contract allowed_objects type: {type(contract.allowed_objects)}")
+                logger.info(f"Contract allowed_objects value: {contract.allowed_objects}")
             else:
                 logger.info("Assigning owner to own timeslot without contract check")
             
-            # Берем первый договор (если их несколько)
-            contract = contracts[0]
-            logger.info(f"Found contract {contract.id} for employee {employee_id}")
-            logger.info(f"Contract allowed_objects type: {type(contract.allowed_objects)}")
-            logger.info(f"Contract allowed_objects value: {contract.allowed_objects}")
-            
             # Проверяем, что сотрудник имеет доступ к объекту тайм-слота (для владельца пропускаем проверку)
             allowed_objects = []
-            if not is_owner_assignee:
+            if not is_owner_assignee and contract:
                 allowed_objects = contract.allowed_objects if contract.allowed_objects else []
                 logger.info(f"Contract {contract.id} allowed_objects: {allowed_objects}")
                 logger.info(f"Timeslot object_id: {timeslot.object_id}")
