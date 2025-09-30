@@ -2249,15 +2249,22 @@ async def api_calendar_plan_shift(
             if "employee" not in employee_roles:
                 raise HTTPException(status_code=400, detail="Пользователь не является сотрудником")
 
-            # Проверяем, что у сотрудника есть договор с владельцем
-            contract_query = select(Contract).where(
-                Contract.employee_id == employee_id,
-                Contract.owner_id == user_id,
-                Contract.status == "active"
-            )
-            contracts = (await session.execute(contract_query)).scalars().all()
-            if not contracts:
-                raise HTTPException(status_code=400, detail="У сотрудника нет активного договора с вами")
+            is_owner_assignee = employee_id == user_id
+
+            # Проверяем, что у сотрудника есть договор с владельцем (кроме случая, когда сотрудник — это сам владелец)
+            contract = None
+            if not is_owner_assignee:
+                contract_query = select(Contract).where(
+                    Contract.employee_id == employee_id,
+                    Contract.owner_id == user_id,
+                    Contract.status == "active"
+                )
+                contracts = (await session.execute(contract_query)).scalars().all()
+                if not contracts:
+                    raise HTTPException(status_code=400, detail="У сотрудника нет активного договора с вами")
+                contract = contracts[0]
+            else:
+                logger.info("Assigning owner to own timeslot without contract check")
             
             # Берем первый договор (если их несколько)
             contract = contracts[0]
@@ -2265,20 +2272,22 @@ async def api_calendar_plan_shift(
             logger.info(f"Contract allowed_objects type: {type(contract.allowed_objects)}")
             logger.info(f"Contract allowed_objects value: {contract.allowed_objects}")
             
-            # Проверяем, что сотрудник имеет доступ к объекту тайм-слота
-            allowed_objects = contract.allowed_objects if contract.allowed_objects else []
-            logger.info(f"Contract {contract.id} allowed_objects: {allowed_objects}")
-            logger.info(f"Timeslot object_id: {timeslot.object_id}")
-            logger.info(f"Timeslot object_id type: {type(timeslot.object_id)}")
-            logger.info(f"Timeslot object_id in allowed_objects: {timeslot.object_id in allowed_objects}")
-            
-            # Дополнительная проверка типов
-            if allowed_objects:
-                logger.info(f"allowed_objects elements types: {[type(x) for x in allowed_objects]}")
-                logger.info(f"Comparison: {timeslot.object_id} in {allowed_objects} = {timeslot.object_id in allowed_objects}")
-            
-            if timeslot.object_id not in allowed_objects:
-                raise HTTPException(status_code=400, detail=f"У сотрудника нет доступа к объекту ID {timeslot.object_id}")
+            # Проверяем, что сотрудник имеет доступ к объекту тайм-слота (для владельца пропускаем проверку)
+            allowed_objects = []
+            if not is_owner_assignee:
+                allowed_objects = contract.allowed_objects if contract.allowed_objects else []
+                logger.info(f"Contract {contract.id} allowed_objects: {allowed_objects}")
+                logger.info(f"Timeslot object_id: {timeslot.object_id}")
+                logger.info(f"Timeslot object_id type: {type(timeslot.object_id)}")
+                logger.info(f"Timeslot object_id in allowed_objects: {timeslot.object_id in allowed_objects}")
+                
+                # Дополнительная проверка типов
+                if allowed_objects:
+                    logger.info(f"allowed_objects elements types: {[type(x) for x in allowed_objects]}")
+                    logger.info(f"Comparison: {timeslot.object_id} in {allowed_objects} = {timeslot.object_id in allowed_objects}")
+                
+                if timeslot.object_id not in allowed_objects:
+                    raise HTTPException(status_code=400, detail=f"У сотрудника нет доступа к объекту ID {timeslot.object_id}")
 
             # Создаем datetime объекты для planned_start и planned_end
             from datetime import datetime, time, date
