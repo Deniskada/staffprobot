@@ -38,11 +38,6 @@
                     {% if current_user %}
                         {% if current_user.role == 'owner' %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/dashboard">
-                                <i class="bi bi-speedometer2"></i> Дашборд
-                            </a>
-                        </li>
-                        <li class="nav-item">
                             <a class="nav-link" href="/objects">
                                 <i class="bi bi-building"></i> Объекты
                             </a>
@@ -58,11 +53,6 @@
                             </a>
                         </li>
                         {% elif current_user.role == 'superadmin' %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin">
-                                <i class="bi bi-speedometer2"></i> Дашборд
-                            </a>
-                        </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/admin/users">
                                 <i class="bi bi-people"></i> Пользователи
