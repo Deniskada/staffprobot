@@ -387,8 +387,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Обработка выбора недели для отчета
         from .earnings_report_handlers import EarningsReportHandlers
         earnings_handler = EarningsReportHandlers()
-        if query.data.startswith("week_") or query.data == "custom_dates" or query.data == "cancel_report":
-            await earnings_handler.handle_week_selection(update, context)
+        await earnings_handler.handle_week_selection(update, context)
         return
     elif query.data.startswith("report_object_") or query.data == "report_all_objects":
         # Выбор объекта для отчета
