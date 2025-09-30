@@ -9,6 +9,17 @@
             <i class="bi bi-person me-2"></i>
             Профиль управляющего
         </h2>
+        {% if success_message %}
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle me-1"></i>{{ success_message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% elif error_message %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle me-1"></i>{{ error_message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -22,77 +33,112 @@
                     Личная информация
                 </h5>
             </div>
-            <div class="card-body">
-                <div class="row">
+            <form method="post" class="card-body">
+                <div class="row g-3">
                     <div class="col-md-6">
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Имя</label>
-                            <p class="form-control-plaintext">{{ user.first_name or 'Не указано' }}</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Фамилия</label>
-                            <p class="form-control-plaintext">{{ user.last_name or 'Не указано' }}</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Username</label>
-                            <p class="form-control-plaintext">{{ user.username or 'Не указано' }}</p>
-                        </div>
+                        <label class="form-label">Имя</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="first_name"
+                            value="{{ user.first_name or '' }}"
+                            maxlength="150"
+                        >
                     </div>
                     <div class="col-md-6">
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Telegram ID</label>
-                            <p class="form-control-plaintext">{{ user.telegram_id }}</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Телефон</label>
-                            <p class="form-control-plaintext">{{ user.phone or 'Не указан' }}</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Статус</label>
-                            <span class="badge {% if user.is_active %}bg-success{% else %}bg-danger{% endif %}">
-                                {% if user.is_active %}Активен{% else %}Неактивен{% endif %}
-                            </span>
-                        </div>
+                        <label class="form-label">Фамилия</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="last_name"
+                            value="{{ user.last_name or '' }}"
+                            maxlength="150"
+                        >
                     </div>
-                </div>
-                
-                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label">Username</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="username"
+                            value="{{ user.username or '' }}"
+                            maxlength="150"
+                        >
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Телефон</label>
+                        <input
+                            type="tel"
+                            class="form-control"
+                            name="phone"
+                            value="{{ user.phone or '' }}"
+                            maxlength="32"
+                            placeholder="+7 999 123-45-67"
+                        >
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Email</label>
+                        <input
+                            type="email"
+                            class="form-control"
+                            name="email"
+                            value="{{ user.email or '' }}"
+                            maxlength="255"
+                        >
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Telegram ID</label>
+                        <input type="text" class="form-control" value="{{ user.telegram_id }}" readonly>
+                    </div>
                     <div class="col-12">
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Роли</label>
-                            <div class="mt-2">
-                                {% for role in user.roles %}
-                                    {% if role == 'manager' %}
-                                        <span class="badge bg-primary me-1">
-                                            <i class="bi bi-person-gear me-1"></i>Управляющий
-                                        </span>
-                                    {% elif role == 'employee' %}
-                                        <span class="badge bg-info me-1">
-                                            <i class="bi bi-person me-1"></i>Сотрудник
-                                        </span>
-                                    {% elif role == 'applicant' %}
-                                        <span class="badge bg-warning me-1">
-                                            <i class="bi bi-person-plus me-1"></i>Соискатель
-                                        </span>
-                                    {% endif %}
-                                {% endfor %}
-                            </div>
-                        </div>
+                        <label class="form-label">О себе</label>
+                        <textarea
+                            class="form-control"
+                            name="about"
+                            rows="3"
+                            maxlength="1000"
+                            placeholder="Кратко расскажите о себе"
+                        >{{ user.about or '' }}</textarea>
                     </div>
-                </div>
-                
-                <div class="row">
                     <div class="col-12">
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Дата регистрации</label>
-                            <p class="form-control-plaintext">{{ user.created_at.strftime('%d.%m.%Y %H:%M') if user.created_at else 'Не указано' }}</p>
+                        <label class="form-label">Роли</label>
+                        <div class="mt-2">
+                            {% for role in user.roles %}
+                                {% if role == 'manager' %}
+                                    <span class="badge bg-primary me-1">
+                                        <i class="bi bi-person-gear me-1"></i>Управляющий
+                                    </span>
+                                {% elif role == 'employee' %}
+                                    <span class="badge bg-info me-1">
+                                        <i class="bi bi-person me-1"></i>Сотрудник
+                                    </span>
+                                {% elif role == 'applicant' %}
+                                    <span class="badge bg-warning me-1">
+                                        <i class="bi bi-person-plus me-1"></i>Соискатель
+                                    </span>
+                                {% endif %}
+                            {% endfor %}
                         </div>
                     </div>
+                    <div class="col-12">
+                        <label class="form-label">Дата регистрации</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            value="{{ user.created_at.strftime('%d.%m.%Y %H:%M') if user.created_at else 'Не указано' }}"
+                            readonly
+                        >
+                    </div>
                 </div>
-            </div>
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-2"></i>
+                        Сохранить изменения
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
-    
     <div class="col-md-4">
         <div class="card">
             <div class="card-header">
@@ -128,8 +174,7 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Быстрые действия -->
+
         <div class="card mt-3">
             <div class="card-header">
                 <h5 class="mb-0">
