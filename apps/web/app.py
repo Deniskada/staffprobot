@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 import os
@@ -92,6 +93,28 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Настройка для работы за HTTPS
+app.add_middleware(
+    TrustedHostMiddleware, 
+    allowed_hosts=["staffprobot.ru", "*.staffprobot.ru", "localhost", "127.0.0.1"]
+)
+
+# Middleware для принудительного HTTPS
+@app.middleware("http")
+async def force_https(request: Request, call_next):
+    # Проверяем заголовки от прокси (Nginx)
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    forwarded_host = request.headers.get("x-forwarded-host")
+    
+    if forwarded_proto == "https" or request.url.scheme == "https":
+        # Устанавливаем HTTPS в URL для генерации статических файлов
+        request.url = request.url.replace(scheme="https")
+        if forwarded_host:
+            request.url = request.url.replace(netloc=forwarded_host)
+    
+    response = await call_next(request)
+    return response
 
 # Настройка статических файлов
 app.mount("/static", StaticFiles(directory="apps/web/static"), name="static")
