@@ -1,0 +1,237 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}Создать тайм-слот - {{ object.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Создать тайм-слот</h1>
+                    <p class="text-muted mb-0">{{ object.name }}</p>
+                </div>
+                <div>
+                    <a href="/manager/timeslots/object/{{ object.id }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Назад к списку
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Информация об объекте -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <small class="text-muted">Адрес</small>
+                            <div class="fw-bold">{{ object.address or "Не указан" }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Время работы</small>
+                            <div class="fw-bold">{{ object.opening_time.strftime('%H:%M') }} - {{ object.closing_time.strftime('%H:%M') }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Ставка</small>
+                            <div class="fw-bold">{{ object.hourly_rate }} ₽/час</div>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Макс. расстояние</small>
+                            <div class="fw-bold">{{ object.max_distance_meters }} м</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Форма создания -->
+            <div class="card">
+                <div class="card-body">
+                    <form method="post" action="/manager/timeslots/object/{{ object.id }}/create">
+                        <!-- Режим создания -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Режим создания</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="creation_mode" id="mode-single" value="single" checked>
+                                    <label class="btn btn-outline-primary" for="mode-single">
+                                        <i class="fas fa-calendar-day"></i> Один тайм-слот
+                                    </label>
+                                    
+                                    <input type="radio" class="btn-check" name="creation_mode" id="mode-template" value="template">
+                                    <label class="btn btn-outline-primary" for="mode-template">
+                                        <i class="fas fa-calendar-week"></i> По шаблону
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Режим: Один тайм-слот -->
+                        <div id="single-mode" class="creation-mode">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="slot_date" class="form-label">Дата <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="slot_date" name="slot_date" required>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="start_time" class="form-label">Время начала <span class="text-danger">*</span></label>
+                                    <input type="time" class="form-control" id="start_time" name="start_time" required>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="end_time" class="form-label">Время окончания <span class="text-danger">*</span></label>
+                                    <input type="time" class="form-control" id="end_time" name="end_time" required>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="hourly_rate" class="form-label">Ставка за час (₽) <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" id="hourly_rate" name="hourly_rate" 
+                                           value="{{ object.hourly_rate }}" min="0" step="0.01" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="max_employees" class="form-label">Максимум сотрудников</label>
+                                    <input type="number" class="form-control" id="max_employees" name="max_employees" 
+                                           value="1" min="1" max="10">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-12 mb-3">
+                                    <label for="notes" class="form-label">Примечания</label>
+                                    <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                              placeholder="Дополнительная информация о тайм-слоте"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Режим: По шаблону -->
+                        <div id="template-mode" class="creation-mode" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="template_id" class="form-label">Шаблон планирования <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="template_id" name="template_id">
+                                        <option value="">Выберите шаблон</option>
+                                        {% for template in templates %}
+                                        <option value="{{ template.id }}" 
+                                                data-start-time="{{ template.start_time.strftime('%H:%M') }}"
+                                                data-end-time="{{ template.end_time.strftime('%H:%M') }}"
+                                                data-hourly-rate="{{ template.hourly_rate }}">
+                                            {{ template.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="hourly_rate_override" class="form-label">Ставка за час (₽) - переопределить</label>
+                                    <input type="number" class="form-control" id="hourly_rate_override" name="hourly_rate_override" 
+                                           min="0" step="0.01" placeholder="Оставьте пустым для использования ставки из шаблона">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="start_date" class="form-label">Дата начала <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="start_date" name="start_date" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="end_date" class="form-label">Дата окончания <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="end_date" name="end_date" required>
+                                </div>
+                            </div>
+                            
+                            <!-- Информация о шаблоне -->
+                            <div id="template-info" class="alert alert-info" style="display: none;">
+                                <h6 class="alert-heading">Информация о шаблоне</h6>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <small class="text-muted">Время:</small>
+                                        <div id="template-time" class="fw-bold">-</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <small class="text-muted">Ставка:</small>
+                                        <div id="template-rate" class="fw-bold">-</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <small class="text-muted">Повторение:</small>
+                                        <div id="template-repeat" class="fw-bold">-</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Кнопки -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="d-flex justify-content-end gap-2">
+                                    <a href="/manager/timeslots/object/{{ object.id }}" class="btn btn-outline-secondary">
+                                        Отмена
+                                    </a>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save"></i> Создать тайм-слот
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modeSingle = document.getElementById('mode-single');
+    const modeTemplate = document.getElementById('mode-template');
+    const singleMode = document.getElementById('single-mode');
+    const templateMode = document.getElementById('template-mode');
+    const templateSelect = document.getElementById('template_id');
+    const templateInfo = document.getElementById('template-info');
+    
+    // Переключение режимов
+    function toggleModes() {
+        if (modeSingle.checked) {
+            singleMode.style.display = 'block';
+            templateMode.style.display = 'none';
+            // Делаем поля шаблона необязательными
+            templateSelect.removeAttribute('required');
+            document.getElementById('start_date').removeAttribute('required');
+            document.getElementById('end_date').removeAttribute('required');
+        } else {
+            singleMode.style.display = 'none';
+            templateMode.style.display = 'block';
+            // Делаем поля шаблона обязательными
+            templateSelect.setAttribute('required', 'required');
+            document.getElementById('start_date').setAttribute('required', 'required');
+            document.getElementById('end_date').setAttribute('required', 'required');
+        }
+    }
+    
+    modeSingle.addEventListener('change', toggleModes);
+    modeTemplate.addEventListener('change', toggleModes);
+    
+    // Обработка выбора шаблона
+    templateSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (selectedOption.value) {
+            const startTime = selectedOption.dataset.startTime;
+            const endTime = selectedOption.dataset.endTime;
+            const hourlyRate = selectedOption.dataset.hourlyRate;
+            
+            document.getElementById('template-time').textContent = `${startTime} - ${endTime}`;
+            document.getElementById('template-rate').textContent = `${hourlyRate} ₽/час`;
+            document.getElementById('template-repeat').textContent = 'Ежедневно';
+            
+            templateInfo.style.display = 'block';
+        } else {
+            templateInfo.style.display = 'none';
+        }
+    });
+    
+    // Установка минимальной даты на сегодня
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('slot_date').setAttribute('min', today);
+    document.getElementById('start_date').setAttribute('min', today);
+    document.getElementById('end_date').setAttribute('min', today);
+    
+    // Инициализация
+    toggleModes();
+});
+</script>
+{% endblock %}
