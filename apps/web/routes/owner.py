@@ -3288,36 +3288,19 @@ async def owner_timeslot_create(
             telegram_id = current_user.get("id")
         else:
             telegram_id = current_user.telegram_id
-            
+
         logger.info(f"Creating timeslot for object {object_id}")
-        
+
         # Получение данных формы
         form_data = await request.form()
-        slot_date = form_data.get("slot_date", "")
+        creation_mode = form_data.get("creation_mode", "single")
         start_time = form_data.get("start_time", "")
         end_time = form_data.get("end_time", "")
-        hourly_rate_str = form_data.get("hourly_rate", "0")
         is_active = "is_active" in form_data
-        
-        # Логирование для отладки
-        logger.info(f"Form data: slot_date={slot_date}, start_time={start_time}, end_time={end_time}, hourly_rate_str='{hourly_rate_str}', is_active={is_active}")
-        
-        # Валидация и преобразование данных
-        try:
-            # Очищаем строку от пробелов и проверяем на пустоту
-            hourly_rate_str = hourly_rate_str.strip()
-            if not hourly_rate_str:
-                raise ValueError("Пустое значение ставки")
-            hourly_rate = float(hourly_rate_str)
-        except ValueError as e:
-            logger.error(f"Error parsing hourly_rate '{hourly_rate_str}': {e}")
-            raise HTTPException(status_code=400, detail=f"Неверный формат ставки: '{hourly_rate_str}'")
-        
-        if hourly_rate <= 0:
-            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
-        
-        # Валидация времени
+
         from datetime import time, date
+
+        # Валидация времени (общее для обоих режимов)
         try:
             start = time.fromisoformat(start_time)
             end = time.fromisoformat(end_time)
@@ -3325,33 +3308,115 @@ async def owner_timeslot_create(
                 raise HTTPException(status_code=400, detail="Время начала должно быть меньше времени окончания")
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат времени")
-        
-        # Валидация даты
+
+        if creation_mode == "template":
+            template_id = form_data.get("template_id")
+            template_start_date = form_data.get("template_start_date")
+            template_end_date = form_data.get("template_end_date")
+
+            if not template_id or not template_start_date or not template_end_date:
+                raise HTTPException(status_code=400, detail="Необходимо выбрать шаблон и указать период")
+
+            try:
+                start_date_obj = date.fromisoformat(template_start_date)
+                end_date_obj = date.fromisoformat(template_end_date)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат дат периода")
+
+            if start_date_obj > end_date_obj:
+                raise HTTPException(status_code=400, detail="Дата начала не может быть больше даты окончания")
+
+            hourly_rate_override = form_data.get("template_hourly_rate")
+            try:
+                hourly_rate_override_value = None
+                if hourly_rate_override and hourly_rate_override.strip():
+                    hourly_rate_override_value = float(hourly_rate_override)
+                    if hourly_rate_override_value <= 0:
+                        raise ValueError("Hourly rate must be positive")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат ставки для шаблона")
+
+            template_service = TemplateService(db)
+            apply_result = await template_service.apply_template_to_objects(
+                template_id=int(template_id),
+                start_date=start_date_obj,
+                end_date=end_date_obj,
+                object_ids=[object_id],
+                owner_telegram_id=telegram_id,
+                start_time_override=start_time,
+                end_time_override=end_time,
+                hourly_rate_override=hourly_rate_override_value,
+            )
+
+            if not apply_result.get("success"):
+                raise HTTPException(status_code=400, detail=apply_result.get("error", "Ошибка применения шаблона"))
+
+            logger.info(
+                "Template applied successfully",
+                extra={
+                    "template_id": template_id,
+                    "object_id": object_id,
+                "created_slots_count": apply_result.get("created_slots_count"),
+                },
+            )
+
+            return RedirectResponse(
+                url=f"/owner/timeslots/object/{object_id}",
+                status_code=status.HTTP_302_FOUND,
+            )
+
+        # Режим одиночного тайм-слота
+        slot_date = form_data.get("slot_date", "")
+        hourly_rate_str = form_data.get("hourly_rate", "0")
+
+        # Логирование для отладки
+        logger.info(
+            "Form data (single mode): slot_date=%s, start_time=%s, end_time=%s, hourly_rate_str='%s', is_active=%s",
+            slot_date,
+            start_time,
+            end_time,
+            hourly_rate_str,
+            is_active,
+        )
+
+        # Валидация и преобразование данных
+        try:
+            hourly_rate_str = hourly_rate_str.strip()
+            if not hourly_rate_str:
+                raise ValueError("empty")
+            hourly_rate = float(hourly_rate_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Неверный формат ставки: '{hourly_rate_str}'")
+
+        if hourly_rate <= 0:
+            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+
         try:
             slot_date_obj = date.fromisoformat(slot_date)
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат даты")
-        
-        # Создание тайм-слота в базе данных
+
         timeslot_service = TimeSlotService(db)
         timeslot_data = {
             "object_id": object_id,
-            "slot_date": slot_date,
+            "slot_date": slot_date_obj,
             "start_time": start_time,
             "end_time": end_time,
             "hourly_rate": hourly_rate,
-            # Новое поле лимита сотрудников
             "max_employees": int(form_data.get("max_employees", 1)),
-            "is_active": is_active
+            "is_active": is_active,
         }
-        
-        created_timeslot = await timeslot_service.create_timeslot(timeslot_data, telegram_id)
+
+        created_timeslot = await timeslot_service.create_timeslot(timeslot_data, object_id, telegram_id)
         if not created_timeslot:
             raise HTTPException(status_code=400, detail="Ошибка создания тайм-слота")
-        
+
         logger.info(f"Timeslot created successfully with ID: {created_timeslot.id}")
-        
-        return RedirectResponse(url=f"/owner/timeslots/object/{object_id}", status_code=status.HTTP_302_FOUND)
+
+        return RedirectResponse(
+            url=f"/owner/timeslots/object/{object_id}",
+            status_code=status.HTTP_302_FOUND,
+        )
         
     except HTTPException:
         raise
