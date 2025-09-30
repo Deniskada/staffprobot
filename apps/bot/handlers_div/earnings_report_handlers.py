@@ -1,6 +1,6 @@
 """Обработчики для отчетов по заработку сотрудника."""
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import ContextTypes, ConversationHandler
 from core.logging.logger import logger
 from core.database.connection import get_sync_session
@@ -144,7 +144,16 @@ class EarningsReportHandlers:
         text = update.message.text.strip().lower()
         
         if text == "отмена":
-            return await self.start_earnings_report(update, context)
+            # Создаем callback_query для совместимости
+            fake_query = CallbackQuery(
+                id="fake",
+                from_user=update.effective_user,
+                chat_instance="fake",
+                data="get_report"
+            )
+            fake_query.message = update.message
+            fake_update = Update(update_id=update.update_id, callback_query=fake_query)
+            return await self.start_earnings_report(fake_update, context)
         
         try:
             # Парсим даты в формате "01.01.2024 - 07.01.2024"
@@ -159,6 +168,18 @@ class EarningsReportHandlers:
                 
                 context.user_data['start_date'] = start_date
                 context.user_data['end_date'] = end_date
+                
+                # Получаем user_id из базы данных
+                with get_sync_session() as session:
+                    user_query = select(User).where(User.telegram_id == update.effective_user.id)
+                    user_result = session.execute(user_query)
+                    user = user_result.scalar_one_or_none()
+                    
+                    if not user:
+                        await update.message.reply_text("❌ Пользователь не найден в базе данных.")
+                        return ConversationHandler.END
+                    
+                    context.user_data['user_id'] = user.id
                 
                 return await self.generate_earnings_report(update, context)
             else:
@@ -179,9 +200,16 @@ class EarningsReportHandlers:
     
     async def generate_earnings_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Генерация отчета по заработку."""
-        user_id = context.user_data['user_id']
-        start_date = context.user_data['start_date']
-        end_date = context.user_data['end_date']
+        user_id = context.user_data.get('user_id')
+        start_date = context.user_data.get('start_date')
+        end_date = context.user_data.get('end_date')
+        
+        if not user_id or not start_date or not end_date:
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.edit_message_text("❌ Ошибка: не найдены данные для отчета.")
+            else:
+                await update.message.reply_text("❌ Ошибка: не найдены данные для отчета.")
+            return ConversationHandler.END
         
         try:
             with get_sync_session() as session:
@@ -201,12 +229,15 @@ class EarningsReportHandlers:
                 shifts_data = shifts_result.all()
                 
                 if not shifts_data:
-                    await update.callback_query.edit_message_text(
+                    message_text = (
                         f"📊 **Отчет по заработку**\n\n"
                         f"📅 Период: {start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}\n\n"
-                        f"❌ За этот период у вас не было завершенных смен.",
-                        parse_mode='Markdown'
+                        f"❌ За этот период у вас не было завершенных смен."
                     )
+                    if hasattr(update, 'callback_query') and update.callback_query:
+                        await update.callback_query.edit_message_text(message_text, parse_mode='Markdown')
+                    else:
+                        await update.message.reply_text(message_text, parse_mode='Markdown')
                     return ConversationHandler.END
                 
                 # Группируем смены по дням и объектам
@@ -274,11 +305,18 @@ class EarningsReportHandlers:
                 ]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                await update.callback_query.edit_message_text(
-                    report_text,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
+                if hasattr(update, 'callback_query') and update.callback_query:
+                    await update.callback_query.edit_message_text(
+                        report_text,
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
+                    )
+                else:
+                    await update.message.reply_text(
+                        report_text,
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
+                    )
                 
                 # Очищаем состояние пользователя
                 from core.state import user_state_manager
@@ -288,5 +326,8 @@ class EarningsReportHandlers:
                 
         except Exception as e:
             logger.error(f"Error generating earnings report: {e}")
-            await update.callback_query.edit_message_text("❌ Ошибка генерации отчета. Попробуйте позже.")
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.edit_message_text("❌ Ошибка генерации отчета. Попробуйте позже.")
+            else:
+                await update.message.reply_text("❌ Ошибка генерации отчета. Попробуйте позже.")
             return ConversationHandler.END
