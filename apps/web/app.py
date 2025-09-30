@@ -107,11 +107,11 @@ async def force_https(request: Request, call_next):
     forwarded_proto = request.headers.get("x-forwarded-proto")
     forwarded_host = request.headers.get("x-forwarded-host")
     
+    # Устанавливаем HTTPS в scope для корректной генерации URL
     if forwarded_proto == "https" or request.url.scheme == "https":
-        # Устанавливаем HTTPS в URL для генерации статических файлов
-        request.url = request.url.replace(scheme="https")
+        request.scope["scheme"] = "https"
         if forwarded_host:
-            request.url = request.url.replace(netloc=forwarded_host)
+            request.scope["server"] = (forwarded_host.split(":")[0], 443)
     
     response = await call_next(request)
     return response
