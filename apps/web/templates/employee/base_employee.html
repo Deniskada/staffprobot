@@ -56,6 +56,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.url.path.startswith('/employee/earnings') %}active{% endif %}" href="/employee/earnings">
+                            <i class="bi bi-cash-stack"></i> Мой заработок
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/employee/reviews">
                             <i class="bi bi-star"></i> Отзывы
                         </a>
