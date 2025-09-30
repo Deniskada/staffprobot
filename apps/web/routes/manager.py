@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any, Optional
 from datetime import date, datetime, time, timedelta
-from fastapi import APIRouter, Request, Depends, HTTPException, Query, Form
+from fastapi import APIRouter, Request, Depends, HTTPException, Query, Form, status
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from core.logging.logger import logger
 from apps.web.utils.applications_utils import get_new_applications_count
 from domain.entities.manager_object_permission import ManagerObjectPermission
 from domain.entities.contract import Contract
+from urllib.parse import quote
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 templates = Jinja2Templates(directory="apps/web/templates")
@@ -3187,7 +3188,9 @@ async def manager_profile(
             "user": user,
             "profile_stats": profile_stats,
             "accessible_objects": accessible_objects,
-            "available_interfaces": available_interfaces
+            "available_interfaces": available_interfaces,
+            "success_message": request.query_params.get("success"),
+            "error_message": request.query_params.get("error"),
         })
         
     except HTTPException:
@@ -3197,67 +3200,55 @@ async def manager_profile(
         raise HTTPException(status_code=500, detail="Ошибка загрузки профиля")
 
 
-@router.get("/settings", response_class=HTMLResponse)
-async def manager_settings(
+@router.post("/profile")
+async def manager_profile_update(
     request: Request,
+    first_name: Optional[str] = Form(None),
+    last_name: Optional[str] = Form(None),
+    username: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    about: Optional[str] = Form(None),
     current_user: dict = Depends(require_manager_or_owner),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """Страница настроек управляющего"""
+    """Обновление профиля управляющего."""
+
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+    user_query = select(User).where(User.id == user_id)
+    user_result = await db.execute(user_query)
+    user = user_result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
     try:
-        if isinstance(current_user, RedirectResponse):
-            return current_user
-            
-        user_id = await get_user_id_from_current_user(current_user, db)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Пользователь не найден")
-        
-        # Получаем данные пользователя
-        user_query = select(User).where(User.id == user_id)
-        user_result = await db.execute(user_query)
-        user = user_result.scalar_one_or_none()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="Пользователь не найден")
-        
-        # Получаем данные для переключения интерфейсов
-        login_service = RoleBasedLoginService(db)
-        available_interfaces = await login_service.get_available_interfaces(user_id)
-        
-        # Настройки по умолчанию
-        settings = {
-            'notifications': {
-                'email_notifications': True,
-                'shift_reminders': True,
-                'object_updates': True,
-                'employee_changes': False
-            },
-            'display': {
-                'theme': 'light',
-                'language': 'ru',
-                'timezone': 'Europe/Moscow'
-            },
-            'calendar': {
-                'default_view': 'month',
-                'show_weekends': True,
-                'working_hours_start': '09:00',
-                'working_hours_end': '21:00'
-            }
-        }
-        
-        return templates.TemplateResponse("manager/settings.html", {
-            "request": request,
-            "current_user": current_user,
-            "user": user,
-            "settings": settings,
-            "available_interfaces": available_interfaces
-        })
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in manager settings: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки настроек")
+        user.first_name = (first_name or "").strip() or None
+        user.last_name = (last_name or "").strip() or None
+        user.username = (username or "").strip() or None
+        user.phone = (phone or "").strip() or None
+        user.email = (email or "").strip() or None
+        user.about = (about or "").strip() or None
+
+        await db.commit()
+        success_message = quote("Профиль успешно обновлён")
+        return RedirectResponse(
+            url=f"/manager/profile?success={success_message}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+    except Exception as exc:
+        await db.rollback()
+        error_message = quote("Не удалось сохранить изменения")
+        return RedirectResponse(
+            url=f"/manager/profile?error={error_message}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
 
 async def get_manager_context(user_id: int, session: AsyncSession):
     """Получает общий контекст для страниц управляющего"""
