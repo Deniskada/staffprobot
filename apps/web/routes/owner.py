@@ -134,7 +134,7 @@ async def owner_dashboard(request: Request):
                 .join(ShiftSchedule, ShiftSchedule.object_id == Object.id, isouter=True)
                 .join(User, ShiftSchedule.user_id == User.id, isouter=True)
                 .where(Object.owner_id == user_id)
-                .order_by(desc(ShiftSchedule.planned_start.nullslast()), desc(Object.created_at))
+                .order_by(ShiftSchedule.planned_start.asc().nulls_last(), desc(Object.created_at))
                 .limit(5)
             )
 
