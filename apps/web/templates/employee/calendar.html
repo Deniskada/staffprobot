@@ -75,7 +75,7 @@ calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId
         const self = Array.isArray(list) && list.length ? list[0] : null;
         if (!self) throw new Error('Профиль сотрудника не найден');
 
-        const planResp = await fetch('/manager/api/calendar/plan-shift', {
+        const planResp = await fetch('/employee/api/calendar/plan-shift', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ timeslot_id: Number(timeslotId), employee_id: Number(self.id) })

@@ -1608,6 +1608,116 @@ async def employee_history(
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки истории: {e}")
 
 
+@router.post("/api/calendar/plan-shift")
+async def employee_plan_shift(
+    request: Request,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: сотрудник планирует смену для себя на тайм-слот."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+        
+        data = await request.json()
+        timeslot_id = data.get('timeslot_id')
+        employee_id = data.get('employee_id')
+        
+        if not timeslot_id:
+            raise HTTPException(status_code=400, detail="Не указан ID тайм-слота")
+        
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Проверяем что сотрудник планирует смену только для себя
+        if int(employee_id) != int(user_id):
+            raise HTTPException(status_code=403, detail="Можно планировать смену только для себя")
+        
+        # Получаем тайм-слот
+        from domain.entities.time_slot import TimeSlot
+        from domain.entities.contract import Contract
+        timeslot = (await db.execute(select(TimeSlot).options(selectinload(TimeSlot.object)).where(TimeSlot.id == timeslot_id))).scalar_one_or_none()
+        
+        if not timeslot:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+        
+        # Проверяем что у сотрудника есть активный договор с доступом к этому объекту
+        contracts = (await db.execute(
+            select(Contract).where(
+                and_(
+                    Contract.employee_id == user_id,
+                    Contract.is_active == True,
+                    Contract.status == 'active'
+                )
+            )
+        )).scalars().all()
+        
+        has_access = False
+        import json as _json
+        for contract in contracts:
+            if contract.allowed_objects:
+                allowed = contract.allowed_objects if isinstance(contract.allowed_objects, list) else _json.loads(contract.allowed_objects)
+                if timeslot.object_id in allowed:
+                    has_access = True
+                    break
+        
+        if not has_access:
+            raise HTTPException(status_code=403, detail="Нет доступа к объекту")
+        
+        # Проверяем что тайм-слот еще не занят
+        existing_schedules = (await db.execute(
+            select(ShiftSchedule).where(
+                and_(
+                    ShiftSchedule.time_slot_id == timeslot_id,
+                    ShiftSchedule.status.in_(['planned', 'confirmed'])
+                )
+            )
+        )).scalars().all()
+        
+        if len(existing_schedules) >= (timeslot.max_employees or 1):
+            raise HTTPException(status_code=400, detail="Тайм-слот уже занят")
+        
+        # Создаем запланированную смену
+        import pytz
+        object_timezone = timeslot.object.timezone if timeslot.object and timeslot.object.timezone else 'Europe/Moscow'
+        tz = pytz.timezone(object_timezone)
+        
+        slot_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.start_time)
+        end_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.end_time)
+        
+        slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+        end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+        
+        shift_schedule = ShiftSchedule(
+            user_id=user_id,
+            object_id=timeslot.object_id,
+            time_slot_id=timeslot_id,
+            planned_start=slot_datetime,
+            planned_end=end_datetime,
+            status='planned',
+            hourly_rate=float(timeslot.hourly_rate) if timeslot.hourly_rate else float(timeslot.object.hourly_rate) if timeslot.object else 0,
+            notes=''
+        )
+        
+        db.add(shift_schedule)
+        await db.commit()
+        await db.refresh(shift_schedule)
+        
+        logger.info(f"Employee {user_id} successfully planned shift {shift_schedule.id} for timeslot {timeslot_id}")
+        return {
+            "success": True,
+            "message": "Смена успешно запланирована",
+            "shift_id": shift_schedule.id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error planning shift for employee: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
+
+
 @router.post("/api/shifts/cancel")
 async def employee_cancel_planned_shift(
     request: Request,
