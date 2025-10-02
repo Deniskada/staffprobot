@@ -715,7 +715,8 @@ async def manager_employee_add(
             # Данные договора
             contract_template_id = form_data.get("contract_template")
             contract_objects = form_data.getlist("contract_objects")
-            hourly_rate = int(form_data.get("hourly_rate", 500))
+            hourly_rate_str = form_data.get("hourly_rate", "500")
+            hourly_rate = int(hourly_rate_str) if hourly_rate_str and hourly_rate_str.strip() else 500
             start_date_str = form_data.get("start_date")
             end_date_str = form_data.get("end_date")
             
@@ -723,7 +724,7 @@ async def manager_employee_add(
             if not first_name:
                 raise HTTPException(status_code=400, detail="Имя обязательно")
             
-            # Проверяем, не существует ли уже пользователь с таким telegram_id
+            # Проверяем, существует ли уже пользователь с таким telegram_id
             from sqlalchemy import select
             from domain.entities.user import User
             
@@ -732,60 +733,118 @@ async def manager_employee_add(
             existing_user = existing_user_result.scalar_one_or_none()
             
             if existing_user:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Пользователь с Telegram ID {telegram_id} уже существует"
+                # Пользователь уже существует - обновляем его данные и создаем договор
+                logger.info(f"User {telegram_id} already exists, updating data and creating contract")
+                
+                # Импорты для обновления пользователя
+                from shared.services.role_service import RoleService
+                from apps.web.services.contract_service import ContractService
+                from datetime import datetime, date
+                
+                # Обновляем данные пользователя
+                existing_user.first_name = first_name
+                existing_user.last_name = last_name
+                existing_user.username = username
+                existing_user.phone = phone
+                existing_user.email = email if email else existing_user.email
+                
+                # Обработка даты рождения
+                if birth_date_str:
+                    try:
+                        from datetime import datetime
+                        existing_user.birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
+                    except ValueError:
+                        pass
+                
+                # Обновляем профиль сотрудника
+                if role == "employee":
+                    existing_user.work_experience = work_experience if work_experience else existing_user.work_experience
+                    existing_user.education = education if education else existing_user.education
+                    existing_user.skills = skills if skills else existing_user.skills
+                    existing_user.about = about if about else existing_user.about
+                    existing_user.preferred_schedule = preferred_schedule if preferred_schedule else existing_user.preferred_schedule
+                    existing_user.availability_notes = availability_notes if availability_notes else existing_user.availability_notes
+                    
+                    # Обработка минимальной зарплаты
+                    if min_salary_str and min_salary_str.isdigit():
+                        existing_user.min_salary = int(min_salary_str)
+                
+                existing_user.is_active = is_active
+                
+                # Обновляем роли - добавляем employee если его нет
+                if hasattr(existing_user, 'roles') and existing_user.roles:
+                    if "employee" not in existing_user.roles:
+                        existing_user.roles.append("employee")
+                else:
+                    existing_user.roles = ["applicant", "employee"]
+                
+                await db.commit()
+                user = existing_user
+                
+            else:
+                # Пользователь не существует - создаем нового
+                logger.info(f"Creating new user {telegram_id}")
+                
+                # Создаем пользователя
+                from shared.services.role_service import RoleService
+                from apps.web.services.contract_service import ContractService
+                from datetime import datetime, date
+                
+                # Обработка даты рождения
+                birth_date = None
+                if birth_date_str:
+                    try:
+                        birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
+                    except ValueError:
+                        birth_date = None
+                
+                # Обработка минимальной зарплаты
+                min_salary = None
+                if min_salary_str and min_salary_str.isdigit():
+                    min_salary = int(min_salary_str)
+                
+                user = User(
+                    telegram_id=telegram_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    username=username,
+                    phone=phone,
+                    email=email if email else None,
+                    birth_date=birth_date,
+                    work_experience=work_experience if work_experience else None,
+                    education=education if education else None,
+                    skills=skills if skills else None,
+                    about=about if about else None,
+                    preferred_schedule=preferred_schedule if preferred_schedule else None,
+                    min_salary=min_salary,
+                    availability_notes=availability_notes if availability_notes else None,
+                    role=role,
+                    roles=[role],
+                    is_active=is_active
                 )
-            
-            # Создаем пользователя
-            from shared.services.role_service import RoleService
-            from apps.web.services.contract_service import ContractService
-            from datetime import datetime, date
-            
-            # Обработка даты рождения
-            birth_date = None
-            if birth_date_str:
-                try:
-                    birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
-                except ValueError:
-                    birth_date = None
-            
-            # Обработка минимальной зарплаты
-            min_salary = None
-            if min_salary_str and min_salary_str.isdigit():
-                min_salary = int(min_salary_str)
-            
-            user = User(
-                telegram_id=telegram_id,
-                first_name=first_name,
-                last_name=last_name,
-                username=username,
-                phone=phone,
-                email=email if email else None,
-                birth_date=birth_date,
-                work_experience=work_experience if work_experience else None,
-                education=education if education else None,
-                skills=skills if skills else None,
-                about=about if about else None,
-                preferred_schedule=preferred_schedule if preferred_schedule else None,
-                min_salary=min_salary,
-                availability_notes=availability_notes if availability_notes else None,
-                role=role,
-                roles=[role],
-                is_active=is_active
-            )
-            
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
-            
-            # Добавляем роль
-            role_service = RoleService(db)
-            from domain.entities.user import UserRole
-            await role_service.add_role(user.id, UserRole(role))
+                
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+                
+                # Добавляем роль
+                role_service = RoleService(db)
+                from domain.entities.user import UserRole
+                await role_service.add_role(user.id, UserRole(role))
             
             # Создаем договор (обязательно для сотрудников)
             if contract_objects:
+                # Получаем доступные объекты для проверки владельца
+                permission_service = ManagerPermissionService(db)
+                accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+                
+                if not accessible_objects:
+                    raise HTTPException(status_code=403, detail="Нет доступных объектов")
+                
+                # Получаем владельца первого объекта
+                first_object = accessible_objects[0]
+                owner_id = first_object.owner_id
+                
                 # Парсим даты
                 start_date = None
                 end_date = None
@@ -797,14 +856,23 @@ async def manager_employee_add(
                 # Создаем договор напрямую
                 from domain.entities.contract import Contract
                 
+                # Генерируем номер договора
+                contract_service = ContractService()
+                contract_number = await contract_service._generate_contract_number(owner_id)
+                
+                # Генерируем заголовок договора
+                title = f"Трудовой Договор с {first_name} {last_name}".strip()
+                
                 contract = Contract(
+                    contract_number=contract_number,
                     employee_id=user.id,
-                    owner_id=user_id,
-                    template_id=int(contract_template_id),
+                    owner_id=owner_id,  # Используем владельца объекта, а не управляющего
+                    template_id=int(contract_template_id) if contract_template_id and contract_template_id.strip() else None,
+                    title=title,
                     hourly_rate=hourly_rate,
                     start_date=start_date,
                     end_date=end_date,
-                    allowed_objects=[int(obj_id) for obj_id in contract_objects],
+                    allowed_objects=[int(obj_id) for obj_id in contract_objects if obj_id and obj_id.strip()],
                     is_active=True,
                     status="active"
                 )
@@ -812,6 +880,10 @@ async def manager_employee_add(
                 db.add(contract)
                 await db.commit()
                 await db.refresh(contract)
+                
+                # Обновляем роль пользователя на employee
+                contract_service = ContractService()
+                await contract_service._update_employee_role(db, user.id)
                 
                 # Создаем права управляющего на объекты если роль manager
                 if role == "manager":
