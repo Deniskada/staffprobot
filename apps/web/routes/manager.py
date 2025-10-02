@@ -2565,18 +2565,25 @@ async def manager_plan_shift(
     current_user: dict = Depends(require_manager_or_owner)
 ):
     """API для создания запланированной смены"""
+    logger.info("=== MANAGER PLAN SHIFT API CALLED ===")
     try:
         if isinstance(current_user, RedirectResponse):
+            logger.error("User not authenticated")
             raise HTTPException(status_code=401, detail="Необходима авторизация")
         
         data = await request.json()
+        logger.info(f"Received data: {data}")
+        
         employee_id = data.get('employee_id')
         timeslot_id = data.get('timeslot_id')
         planned_start = data.get('planned_start')
         planned_end = data.get('planned_end')
         is_planned = data.get('is_planned', True)
         
+        logger.info(f"Parsed data: employee_id={employee_id}, timeslot_id={timeslot_id}, planned_start={planned_start}, planned_end={planned_end}")
+        
         if not all([employee_id, timeslot_id, planned_start, planned_end]):
+            logger.error("Missing required fields")
             raise HTTPException(status_code=400, detail="Не все обязательные поля заполнены")
         
         async with get_async_session() as db:
