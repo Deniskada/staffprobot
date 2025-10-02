@@ -107,6 +107,8 @@ class CalendarFilterService:
                 user_telegram_id, user_role
             )
             
+            logger.info(f"CalendarFilterService: Found {len(accessible_objects)} accessible objects for user {user_telegram_id}, role {user_role}")
+            
             if not accessible_objects:
                 logger.warning(f"No accessible objects for user {user_telegram_id}")
                 return CalendarData(
@@ -199,10 +201,13 @@ class CalendarFilterService:
             timeslots_result = await self.db.execute(timeslots_query)
             timeslots = timeslots_result.scalars().all()
             
+            logger.info(f"CalendarFilterService: Found {len(timeslots)} timeslots in database for objects {object_ids}")
+            
             calendar_timeslots = []
             for slot in timeslots:
                 obj_info = objects_map.get(slot.object_id)
                 if not obj_info:
+                    logger.warning(f"Timeslot {slot.id} references object {slot.object_id} not in accessible objects")
                     continue
                 
                 calendar_timeslots.append(CalendarTimeslot(

@@ -104,8 +104,10 @@ class ObjectAccessService:
     async def _get_manager_objects(self, user_id: int) -> List[Dict[str, Any]]:
         """Получить объекты управляющего через права доступа."""
         try:
+            logger.info(f"Getting manager objects for user_id: {user_id}")
             permission_service = ManagerPermissionService(self.db)
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            logger.info(f"ManagerPermissionService returned {len(accessible_objects)} objects")
             
             accessible_objects_list = []
             for obj in accessible_objects:
@@ -122,6 +124,7 @@ class ObjectAccessService:
                     'work_conditions': obj.work_conditions,
                     'shift_tasks': obj.shift_tasks,
                     'available_for_applicants': obj.available_for_applicants,
+                    'timezone': obj.timezone or 'Europe/Moscow',
                     'can_view': permissions.get('can_view', False),
                     'can_edit': permissions.get('can_edit', False),
                     'can_delete': permissions.get('can_delete', False),
