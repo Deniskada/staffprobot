@@ -288,7 +288,7 @@
                 <ul class="pagination justify-content-center">
                     {% if pagination.page > 1 %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ pagination.page - 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <a class="page-link" href="?page={{ pagination.page - 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">
                             Предыдущая
                         </a>
                     </li>
@@ -301,7 +301,7 @@
                     </li>
                     {% else %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_num }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <a class="page-link" href="?page={{ page_num }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">
                             {{ page_num }}
                         </a>
                     </li>
@@ -310,7 +310,7 @@
                     
                     {% if pagination.page < pagination.pages %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ pagination.page + 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <a class="page-link" href="?page={{ pagination.page + 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">
                             Следующая
                         </a>
                     </li>
@@ -715,6 +715,16 @@ function createBeautifulCalendar(container, monthYearEl) {
 
 // Инициализация сортировки
 function initializeSorting() {
+    // Инициализируем текущие параметры сортировки из URL
+    const url = new URL(window.location);
+    currentSortField = url.searchParams.get('sort');
+    currentSortOrder = url.searchParams.get('order') || 'asc';
+    
+    // Обновляем иконки сортировки для текущего поля
+    if (currentSortField) {
+        updateSortIcons(currentSortField, currentSortOrder);
+    }
+    
     const sortableHeaders = document.querySelectorAll('.sortable');
     
     sortableHeaders.forEach(header => {
