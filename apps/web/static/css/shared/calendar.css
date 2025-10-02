@@ -20,6 +20,22 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
+.nav-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.legend-left {
+    flex: 1;
+}
+
+.month-selector {
+    flex: 0 0 auto;
+    margin: 0 auto;
+}
+
 .calendar-scrollable {
     flex: 1;
     overflow-y: auto;
