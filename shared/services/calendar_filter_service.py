@@ -1,8 +1,10 @@
 """Универсальный сервис фильтрации данных календаря."""
 
 import logging
+import hashlib
+import json
 from typing import List, Dict, Any, Optional
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
@@ -33,6 +35,39 @@ class CalendarFilterService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.object_access_service = ObjectAccessService(db)
+        # Простой кэш в памяти (в продакшене лучше использовать Redis)
+        self._cache: Dict[str, Any] = {}
+        self._cache_ttl: Dict[str, datetime] = {}
+    
+    def _generate_cache_key(self, user_telegram_id: int, user_role: str, 
+                           date_range_start: date, date_range_end: date, 
+                           object_filter: Optional[List[int]] = None) -> str:
+        """Генерирует ключ кэша для запроса."""
+        cache_data = {
+            'user_telegram_id': user_telegram_id,
+            'user_role': user_role,
+            'date_range_start': date_range_start.isoformat(),
+            'date_range_end': date_range_end.isoformat(),
+            'object_filter': sorted(object_filter) if object_filter else None
+        }
+        cache_str = json.dumps(cache_data, sort_keys=True)
+        return hashlib.md5(cache_str.encode()).hexdigest()
+    
+    def _get_from_cache(self, cache_key: str) -> Optional[Any]:
+        """Получает данные из кэша."""
+        if cache_key in self._cache and cache_key in self._cache_ttl:
+            if datetime.now() < self._cache_ttl[cache_key]:
+                return self._cache[cache_key]
+            else:
+                # Удаляем устаревшие данные
+                del self._cache[cache_key]
+                del self._cache_ttl[cache_key]
+        return None
+    
+    def _set_cache(self, cache_key: str, data: Any, ttl_minutes: int = 5):
+        """Сохраняет данные в кэш."""
+        self._cache[cache_key] = data
+        self._cache_ttl[cache_key] = datetime.now() + timedelta(minutes=ttl_minutes)
     
     async def get_calendar_data(
         self,
@@ -56,6 +91,15 @@ class CalendarFilterService:
             CalendarData с тайм-слотами и сменами
         """
         try:
+            # Проверяем кэш
+            cache_key = self._generate_cache_key(
+                user_telegram_id, user_role, date_range_start, date_range_end, object_filter
+            )
+            cached_data = self._get_from_cache(cache_key)
+            if cached_data:
+                logger.debug(f"Cache hit for user {user_telegram_id}")
+                return cached_data
+            
             logger.info(f"Getting calendar data for user {user_telegram_id}, role {user_role}, period {date_range_start} to {date_range_end}")
             
             # Получаем доступные объекты
@@ -102,7 +146,8 @@ class CalendarFilterService:
             
             logger.info(f"Found {len(timeslots)} timeslots and {len(shifts)} shifts for user {user_telegram_id}")
             
-            return CalendarData(
+            # Создаем результат
+            result = CalendarData(
                 timeslots=timeslots,
                 shifts=shifts,
                 date_range_start=date_range_start,
@@ -110,6 +155,11 @@ class CalendarFilterService:
                 user_role=user_role,
                 accessible_objects=accessible_objects
             )
+            
+            # Сохраняем в кэш
+            self._set_cache(cache_key, result, ttl_minutes=5)
+            
+            return result
             
         except Exception as e:
             logger.error(f"Error getting calendar data for user {user_telegram_id}: {e}", exc_info=True)
@@ -134,6 +184,7 @@ class CalendarFilterService:
             # Создаем словарь объектов для быстрого доступа
             objects_map = {obj['id']: obj for obj in accessible_objects}
             
+            # Оптимизированный запрос с индексами
             timeslots_query = select(TimeSlot).options(
                 selectinload(TimeSlot.object)
             ).where(
