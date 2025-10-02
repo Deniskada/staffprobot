@@ -2068,18 +2068,29 @@ async def manager_timeslot_detail(
             raise HTTPException(status_code=403, detail="Нет доступа к тайм-слоту")
         
         # Получаем связанные смены и расписания
-        # Запланированные смены
+        from sqlalchemy import and_
+        # Запланированные смены (исключаем отмененные)
         scheduled_query = select(ShiftSchedule).options(
             selectinload(ShiftSchedule.user)
-        ).where(ShiftSchedule.time_slot_id == timeslot_id).order_by(ShiftSchedule.planned_start)
+        ).where(
+            and_(
+                ShiftSchedule.time_slot_id == timeslot_id,
+                ShiftSchedule.status != "cancelled"
+            )
+        ).order_by(ShiftSchedule.planned_start)
         
         scheduled_result = await db.execute(scheduled_query)
         scheduled_shifts = scheduled_result.scalars().all()
         
-        # Фактические смены
+        # Фактические смены (исключаем отмененные)
         actual_query = select(Shift).options(
             selectinload(Shift.user)
-        ).where(Shift.time_slot_id == timeslot_id).order_by(Shift.start_time)
+        ).where(
+            and_(
+                Shift.time_slot_id == timeslot_id,
+                Shift.status != "cancelled"
+            )
+        ).order_by(Shift.start_time)
         
         actual_result = await db.execute(actual_query)
         actual_shifts = actual_result.scalars().all()
