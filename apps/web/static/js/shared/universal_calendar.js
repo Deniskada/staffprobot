@@ -105,14 +105,19 @@ class UniversalCalendarManager {
     }
     
     checkAndLoadAdjacentMonths(visibleMonth) {
-        // Поскольку мы загружаем весь год сразу, динамическая загрузка не нужна
+        // Поскольку мы загружаем диапазон 13 месяцев, динамическая загрузка не нужна
         // Просто обновляем текущий видимый месяц
         const { year, month } = visibleMonth;
         const monthKey = `${year}-${month}`;
         
-        // Проверяем, что месяц входит в загруженный год
-        const currentYear = new Date().getFullYear();
-        if (year === currentYear) {
+        // Проверяем, что месяц входит в загруженный диапазон
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth() + 1;
+        const currentYear = currentDate.getFullYear();
+        
+        // Проверяем, находится ли видимый месяц в диапазоне ±6 месяцев
+        const monthsDiff = (year - currentYear) * 12 + (month - currentMonth);
+        if (Math.abs(monthsDiff) <= 6) {
             this.currentVisibleMonth = monthKey;
         }
     }
@@ -212,16 +217,31 @@ class UniversalCalendarManager {
     initializeLoadedMonthsCache() {
         if (!this.calendarData) return;
         
-        // Помечаем все месяцы текущего года как загруженные
-        const currentYear = new Date().getFullYear();
-        for (let month = 1; month <= 12; month++) {
-            const monthKey = `${currentYear}-${month}`;
+        // Помечаем все месяцы в диапазоне 13 месяцев как загруженные
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth() + 1; // 1-based
+        const currentYear = currentDate.getFullYear();
+        
+        for (let i = -6; i <= 6; i++) {
+            const targetMonth = currentMonth + i;
+            let targetYear = currentYear;
+            let monthNumber = targetMonth;
+            
+            // Корректируем год и месяц
+            if (targetMonth <= 0) {
+                monthNumber = 12 + targetMonth;
+                targetYear = currentYear - 1;
+            } else if (targetMonth > 12) {
+                monthNumber = targetMonth - 12;
+                targetYear = currentYear + 1;
+            }
+            
+            const monthKey = `${targetYear}-${monthNumber}`;
             this.loadedMonths.add(monthKey);
         }
         
         // Устанавливаем текущий видимый месяц
-        const today = new Date();
-        this.currentVisibleMonth = `${today.getFullYear()}-${today.getMonth() + 1}`;
+        this.currentVisibleMonth = `${currentYear}-${currentMonth}`;
     }
     
     bindEvents() {
@@ -324,10 +344,18 @@ class UniversalCalendarManager {
         const end = endDate || new Date(this.currentDate);
         
         if (this.viewType === 'month') {
-            // Загружаем весь текущий год
-            const currentYear = start.getFullYear();
-            start.setFullYear(currentYear, 0, 1); // 1 января текущего года
-            end.setFullYear(currentYear, 11, 31); // 31 декабря текущего года
+            // Загружаем 13 месяцев: 6 до текущего + текущий + 6 после
+            const currentDate = new Date(start);
+            const currentMonth = currentDate.getMonth();
+            const currentYear = currentDate.getFullYear();
+            
+            // 6 месяцев назад
+            start.setMonth(currentMonth - 6);
+            start.setDate(1);
+            
+            // 6 месяцев вперед
+            end.setMonth(currentMonth + 6);
+            end.setDate(0); // Последний день 6-го месяца вперед
         } else if (this.viewType === 'week') {
             // Start from Monday of current week
             const dayOfWeek = start.getDay();
