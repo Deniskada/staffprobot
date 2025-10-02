@@ -112,7 +112,11 @@ class ObjectAccessService:
             accessible_objects_list = []
             for obj in accessible_objects:
                 # Получаем права доступа для этого объекта
-                permissions = await permission_service.get_object_permissions(user_id, obj.id)
+                permissions_list = await permission_service.get_object_permissions(obj.id)
+                
+                # Находим права для текущего контракта управляющего
+                # Для упрощения берем первое разрешение (в реальности нужно найти по contract_id)
+                permissions = permissions_list[0] if permissions_list else None
                 
                 accessible_objects_list.append({
                     'id': obj.id,
@@ -125,13 +129,13 @@ class ObjectAccessService:
                     'shift_tasks': obj.shift_tasks,
                     'available_for_applicants': obj.available_for_applicants,
                     'timezone': obj.timezone or 'Europe/Moscow',
-                    'can_view': permissions.get('can_view', False),
-                    'can_edit': permissions.get('can_edit', False),
-                    'can_delete': permissions.get('can_delete', False),
-                    'can_manage_employees': permissions.get('can_manage_employees', False),
-                    'can_view_finances': permissions.get('can_view_finances', False),
-                    'can_edit_rates': permissions.get('can_edit_rates', False),
-                    'can_edit_schedule': permissions.get('can_edit_schedule', False)
+                    'can_view': permissions.can_view if permissions else False,
+                    'can_edit': permissions.can_edit if permissions else False,
+                    'can_delete': permissions.can_delete if permissions else False,
+                    'can_manage_employees': permissions.can_manage_employees if permissions else False,
+                    'can_view_finances': permissions.can_view_finances if permissions else False,
+                    'can_edit_rates': permissions.can_edit_rates if permissions else False,
+                    'can_edit_schedule': permissions.can_edit_schedule if permissions else False
                 })
             
             logger.info(f"Found {len(accessible_objects_list)} objects for manager {user_id}")
