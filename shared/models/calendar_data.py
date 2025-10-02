@@ -79,26 +79,22 @@ class CalendarTimeslot:
 class CalendarShift:
     """Унифицированная модель смены для календаря."""
     
-    # Основные данные
+    # Основные данные (обязательные поля)
     id: int
     user_id: int
     user_name: str  # "Имя Фамилия"
     object_id: int
     object_name: str
-    time_slot_id: Optional[int] = None
-    
-    # Время
     start_time: datetime
+    shift_type: ShiftType
+    status: ShiftStatus
+    hourly_rate: float
+    
+    # Опциональные поля
+    time_slot_id: Optional[int] = None
     end_time: Optional[datetime] = None
     planned_start: Optional[datetime] = None
     planned_end: Optional[datetime] = None
-    
-    # Тип и статус
-    shift_type: ShiftType = ShiftType.PLANNED
-    status: ShiftStatus = ShiftStatus.PLANNED
-    
-    # Финансы
-    hourly_rate: Optional[float] = None
     total_hours: Optional[float] = None
     total_payment: Optional[float] = None
     

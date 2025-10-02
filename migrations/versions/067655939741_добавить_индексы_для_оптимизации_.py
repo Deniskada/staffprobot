@@ -20,44 +20,60 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Индексы для таблицы time_slots
-    op.create_index('ix_time_slots_object_date_active', 'time_slots', 
-                   ['object_id', 'slot_date', 'is_active'], 
-                   unique=False)
+    # Проверяем и создаем индексы только если они не существуют
+    connection = op.get_bind()
     
-    op.create_index('ix_time_slots_date_range', 'time_slots', 
-                   ['slot_date'], 
-                   unique=False)
+    # Индексы для таблицы time_slots
+    try:
+        op.create_index('ix_time_slots_object_date_active', 'time_slots', 
+                       ['object_id', 'slot_date', 'is_active'], 
+                       unique=False, if_not_exists=True)
+    except Exception:
+        pass  # Индекс уже существует
+    
+    try:
+        op.create_index('ix_time_slots_date_range', 'time_slots', 
+                       ['slot_date'], 
+                       unique=False, if_not_exists=True)
+    except Exception:
+        pass  # Индекс уже существует
     
     # Индексы для таблицы shift_schedules
-    op.create_index('ix_shift_schedules_object_planned_start', 'shift_schedules', 
-                   ['object_id', 'planned_start'], 
-                   unique=False)
+    try:
+        op.create_index('ix_shift_schedules_object_planned_start', 'shift_schedules', 
+                       ['object_id', 'planned_start'], 
+                       unique=False, if_not_exists=True)
+    except Exception:
+        pass  # Индекс уже существует
     
-    op.create_index('ix_shift_schedules_status_actual_shift', 'shift_schedules', 
-                   ['status', 'actual_shift_id'], 
-                   unique=False)
+    try:
+        op.create_index('ix_shift_schedules_status_actual_shift', 'shift_schedules', 
+                       ['status', 'actual_shift_id'], 
+                       unique=False, if_not_exists=True)
+    except Exception:
+        pass  # Индекс уже существует
     
-    op.create_index('ix_shift_schedules_planned_start_range', 'shift_schedules', 
-                   ['planned_start'], 
-                   unique=False)
+    try:
+        op.create_index('ix_shift_schedules_planned_start_range', 'shift_schedules', 
+                       ['planned_start'], 
+                       unique=False, if_not_exists=True)
+    except Exception:
+        pass  # Индекс уже существует
     
-    # Индексы для таблицы shifts
-    op.create_index('ix_shifts_object_start_time', 'shifts', 
-                   ['object_id', 'start_time'], 
-                   unique=False)
+    # Индексы для таблицы shifts (некоторые уже существуют)
+    try:
+        op.create_index('ix_shifts_object_start_time', 'shifts', 
+                       ['object_id', 'start_time'], 
+                       unique=False, if_not_exists=True)
+    except Exception:
+        pass  # Индекс уже существует
     
-    op.create_index('ix_shifts_status_start_time', 'shifts', 
-                   ['status', 'start_time'], 
-                   unique=False)
-    
-    op.create_index('ix_shifts_schedule_id', 'shifts', 
-                   ['schedule_id'], 
-                   unique=False)
-    
-    op.create_index('ix_shifts_start_time_range', 'shifts', 
-                   ['start_time'], 
-                   unique=False)
+    try:
+        op.create_index('ix_shifts_status_start_time', 'shifts', 
+                       ['status', 'start_time'], 
+                       unique=False, if_not_exists=True)
+    except Exception:
+        pass  # Индекс уже существует
 
 
 def downgrade() -> None:

@@ -16,14 +16,14 @@ from domain.entities.shift import Shift
 
 
 @pytest.fixture
-async def mock_db_session():
+def mock_db_session():
     """Мок сессии базы данных."""
     session = AsyncMock(spec=AsyncSession)
     return session
 
 
 @pytest.fixture
-async def calendar_service(mock_db_session):
+def calendar_service(mock_db_session):
     """Экземпляр сервиса календаря."""
     return CalendarFilterService(mock_db_session)
 
@@ -115,6 +115,7 @@ def sample_shift():
 class TestCalendarFilterService:
     """Тесты для CalendarFilterService."""
 
+    @pytest.mark.asyncio
     async def test_get_calendar_data_empty_result(self, calendar_service, mock_db_session):
         """Тест получения пустых данных календаря."""
         # Настраиваем моки
@@ -134,6 +135,7 @@ class TestCalendarFilterService:
         assert len(result.shifts) == 0
         assert result.user_role == "owner"
 
+    @pytest.mark.asyncio
     async def test_get_calendar_data_with_timeslots(self, calendar_service, mock_db_session, 
                                                    sample_user, sample_object, sample_timeslot):
         """Тест получения данных календаря с тайм-слотами."""
@@ -185,6 +187,7 @@ class TestCalendarFilterService:
         assert timeslot.max_employees == 2
         assert timeslot.status == TimeslotStatus.EMPTY
 
+    @pytest.mark.asyncio
     async def test_get_calendar_data_with_shifts(self, calendar_service, mock_db_session,
                                                sample_user, sample_object, sample_shift_schedule):
         """Тест получения данных календаря со сменами."""
@@ -235,6 +238,7 @@ class TestCalendarFilterService:
         assert shift.shift_type == ShiftType.SCHEDULED
         assert shift.status == ShiftStatus.PLANNED
 
+    @pytest.mark.asyncio
     async def test_cache_functionality(self, calendar_service, mock_db_session, sample_user):
         """Тест функциональности кэширования."""
         # Настраиваем моки
@@ -277,6 +281,7 @@ class TestCalendarFilterService:
         # Проверяем, что второй вызов не обращался к БД
         assert mock_db_session.execute.call_count == 3  # Только первый вызов
 
+    @pytest.mark.asyncio
     async def test_filter_cancelled_shifts(self, calendar_service, mock_db_session,
                                          sample_user, sample_object):
         """Тест фильтрации отменённых смен."""
@@ -330,6 +335,7 @@ class TestCalendarFilterService:
         # Проверяем, что отменённая смена не попала в результат
         assert len(result.shifts) == 0
 
+    @pytest.mark.asyncio
     async def test_timeslot_status_calculation(self, calendar_service):
         """Тест расчёта статуса тайм-слотов."""
         # Создаем тестовые данные
@@ -367,6 +373,7 @@ class TestCalendarFilterService:
         assert len(updated_timeslots) == 1
         assert updated_timeslots[0].status == TimeslotStatus.EMPTY
 
+    @pytest.mark.asyncio
     async def test_cache_key_generation(self, calendar_service):
         """Тест генерации ключей кэша."""
         # Тест без фильтра объектов
@@ -391,6 +398,7 @@ class TestCalendarFilterService:
         assert len(key1) == 32  # MD5 hash length
         assert len(key2) == 32
 
+    @pytest.mark.asyncio
     async def test_cache_ttl(self, calendar_service):
         """Тест TTL кэша."""
         # Сохраняем данные в кэш
@@ -408,6 +416,7 @@ class TestCalendarFilterService:
 class TestObjectAccessService:
     """Тесты для ObjectAccessService."""
 
+    @pytest.mark.asyncio
     async def test_get_accessible_objects_owner(self, mock_db_session):
         """Тест получения объектов для владельца."""
         # Создаем тестовые объекты
@@ -437,6 +446,7 @@ class TestObjectAccessService:
         assert accessible_objects[0]['id'] == 1
         assert accessible_objects[1]['id'] == 2
 
+    @pytest.mark.asyncio
     async def test_get_accessible_objects_manager(self, mock_db_session):
         """Тест получения объектов для управляющего."""
         # Настраиваем мок для пустого результата
@@ -453,6 +463,7 @@ class TestObjectAccessService:
         # Проверяем результат
         assert len(accessible_objects) == 0
 
+    @pytest.mark.asyncio
     async def test_get_accessible_objects_employee(self, mock_db_session):
         """Тест получения объектов для сотрудника."""
         # Настраиваем мок для пустого результата
@@ -469,6 +480,7 @@ class TestObjectAccessService:
         # Проверяем результат
         assert len(accessible_objects) == 0
 
+    @pytest.mark.asyncio
     async def test_get_accessible_objects_superadmin(self, mock_db_session):
         """Тест получения объектов для суперадмина."""
         # Создаем тестовые объекты
