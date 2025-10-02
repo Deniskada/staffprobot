@@ -67,97 +67,10 @@
         <div class="calendar-day-header">Вс</div>
 
         <!-- Calendar days -->
-        {% for week in calendar_weeks %}
-            {% for day in week %}
-                <div class="calendar-day {% if day.is_other_month %}other-month{% endif %} {% if day.is_today %}today{% endif %}" 
-                     data-date="{{ day.date }}" 
-                     data-day="{{ day.day }}">
-                    <div class="day-number">{{ day.day }}</div>
-                    
-                    <!-- Day content -->
-                    <div class="day-content">
-                        {% if day.shifts %}
-                            {% for shift in day.shifts %}
-                                {% set shift_class = "shift-item" %}
-                                {% if shift.status == "completed" %}
-                                    {% set shift_class = shift_class + " shift-completed-positive" %}
-                                {% elif shift.status == "active" %}
-                                    {% set shift_class = shift_class + " shift-active-positive" %}
-                                {% elif shift.status == "planned" %}
-                                    {% set shift_class = shift_class + " shift-planned" %}
-                                {% else %}
-                                    {% set shift_class = shift_class + " shift-" + shift.status %}
-                                {% endif %}
-                                <div class="{{ shift_class }}" 
-                                     data-shift-id="{{ shift.id }}"
-                                     onclick="showShiftDetails('{{ shift.id }}')">
-                                    <div class="shift-time">{{ shift.start_time }} - {{ shift.end_time }}</div>
-                                    <div class="shift-employee">{{ shift.employee_name }}</div>
-                                    {% if shift.object_name %}
-                                    <div class="shift-object">{{ shift.object_name }}</div>
-                                    {% endif %}
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-                        
-                        {% if day.timeslots %}
-                            {% for timeslot in day.timeslots %}
-                                {% set timeslot_class = "timeslot-item" %}
-                                {% if timeslot.status == "available" %}
-                                    {% set timeslot_class = timeslot_class + " timeslot-free" %}
-                                {% else %}
-                                    {% set timeslot_class = timeslot_class + " timeslot-" + timeslot.status %}
-                                {% endif %}
-                                <div class="{{ timeslot_class }}" 
-                                     data-timeslot-id="{{ timeslot.id }}"
-                                     data-object-id="{{ timeslot.object_id }}"
-                                     data-max-employees="{{ timeslot.max_employees or 1 }}"
-                                     onclick="showTimeslotDetails({{ timeslot.id }})">
-                                    <div class="timeslot-time">{{ timeslot.start_time }} - {{ timeslot.end_time }}</div>
-                                    <div class="timeslot-object">{{ timeslot.object_name }}</div>
-                                    {% if timeslot.employee_count %}
-                                    <div class="timeslot-employees">{{ timeslot.employee_count }} сотрудников</div>
-                                    {% endif %}
-                                    
-                                    <!-- Shifts within timeslot -->
-                                    {% if timeslot.scheduled_shifts %}
-                                        <div class="timeslot-shifts">
-                                            {% for shift in timeslot.scheduled_shifts %}
-                                                {% set shift_class = "shift-item" %}
-                                                {% if shift.status == "completed" %}
-                                                    {% set shift_class = shift_class + " shift-completed-positive" %}
-                                                {% elif shift.status == "active" %}
-                                                    {% set shift_class = shift_class + " shift-active-positive" %}
-                                                {% elif shift.status == "planned" %}
-                                                    {% set shift_class = shift_class + " shift-planned" %}
-                                                {% else %}
-                                                    {% set shift_class = shift_class + " shift-" + shift.status %}
-                                                {% endif %}
-                                                <div class="{{ shift_class }}" 
-                                                     data-shift-id="{{ shift.id }}"
-                                                     onclick="showShiftDetails('{{ shift.id }}')">
-                                                    <div class="shift-time">{{ shift.start_time }} - {{ shift.end_time }}</div>
-                                                    <div class="shift-employee">{{ shift.user_name }}</div>
-                                                </div>
-                                            {% endfor %}
-                                        </div>
-                                    {% endif %}
-                                    
-                                    <!-- Occupancy Indicator -->
-                                    <div class="timeslot-occupancy" 
-                                         data-timeslot-id="{{ timeslot.id }}"
-                                         data-object-id="{{ timeslot.object_id }}"
-                                         data-max-employees="{{ timeslot.max_employees or 1 }}"
-                                         data-planned-employees="0">
-                                        <span class="occupancy-text">0/{{ timeslot.max_employees or 1 }}</span>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-                    </div>
-                </div>
-            {% endfor %}
-        {% endfor %}
+        <!-- Calendar days -->
+        <div id="calendar-days-container">
+            <!-- Календарная сетка будет создана JavaScript -->
+        </div>
     </div>
 </div>
 
@@ -227,6 +140,10 @@ function renderCalendarGrid(calendarData) {
     }
     
     try {
+        console.log('About to call createCalendarGrid');
+        // Создаем календарную сетку
+        createCalendarGrid(calendarData);
+        
         console.log('About to call updateCalendarStatistics');
         // Обновляем статистику
         updateCalendarStatistics(calendarData);
@@ -239,6 +156,76 @@ function renderCalendarGrid(calendarData) {
     } catch (error) {
         console.error('Error in renderCalendarGrid:', error);
     }
+}
+
+function createCalendarGrid(calendarData) {
+    console.log('createCalendarGrid called');
+    
+    const container = document.getElementById('calendar-days-container');
+    if (!container) {
+        console.error('Calendar days container not found');
+        return;
+    }
+    
+    // Очищаем контейнер
+    container.innerHTML = '';
+    
+    // Получаем текущую дату из календарных данных
+    const currentDate = new Date(calendarData.date_range.start);
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    // Создаем календарную сетку
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const firstWeekday = (firstDay.getDay() + 6) % 7; // Понедельник = 0
+    
+    // Создаем дни предыдущего месяца
+    const prevMonth = new Date(year, month - 1, 0);
+    for (let i = firstWeekday - 1; i >= 0; i--) {
+        const day = prevMonth.getDate() - i;
+        const date = new Date(year, month - 1, day);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        const dayElement = createDayElement(dateStr, day, true, false);
+        container.appendChild(dayElement);
+    }
+    
+    // Создаем дни текущего месяца
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+        const date = new Date(year, month, day);
+        const dateStr = date.toISOString().split('T')[0];
+        const isToday = dateStr === new Date().toISOString().split('T')[0];
+        
+        const dayElement = createDayElement(dateStr, day, false, isToday);
+        container.appendChild(dayElement);
+    }
+    
+    // Создаем дни следующего месяца
+    const remainingDays = 42 - container.children.length; // 6 недель * 7 дней
+    for (let day = 1; day <= remainingDays; day++) {
+        const date = new Date(year, month + 1, day);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        const dayElement = createDayElement(dateStr, day, true, false);
+        container.appendChild(dayElement);
+    }
+    
+    console.log(`Created calendar grid with ${container.children.length} days`);
+}
+
+function createDayElement(dateStr, day, isOtherMonth, isToday) {
+    const dayElement = document.createElement('div');
+    dayElement.className = `calendar-day ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''}`;
+    dayElement.setAttribute('data-date', dateStr);
+    dayElement.setAttribute('data-day', day);
+    
+    dayElement.innerHTML = `
+        <div class="day-number">${day}</div>
+        <div class="day-content"></div>
+    `;
+    
+    return dayElement;
 }
 
 function updateCalendarStatistics(calendarData) {
