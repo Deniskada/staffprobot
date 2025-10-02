@@ -1,6 +1,7 @@
 <!-- Shared Calendar Grid Component -->
-<div class="calendar-container">
-    <div class="calendar-header">
+<div class="calendar-wrapper">
+    <!-- Фиксированная верхняя часть -->
+    <div class="calendar-header-fixed">
         <div class="calendar-legend mb-2" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
             <div style="display:flex; align-items:center; gap:6px;">
                 <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#e3f2fd; border:1px solid #2196f3;"></span>
@@ -82,20 +83,24 @@
                 {% endif %}
             </div>
         </div>
+        
+        <!-- Заголовки дней недели (фиксированные) -->
+        <div class="calendar-day-headers">
+            <div class="calendar-day-header">Пн</div>
+            <div class="calendar-day-header">Вт</div>
+            <div class="calendar-day-header">Ср</div>
+            <div class="calendar-day-header">Чт</div>
+            <div class="calendar-day-header">Пт</div>
+            <div class="calendar-day-header">Сб</div>
+            <div class="calendar-day-header">Вс</div>
+        </div>
     </div>
 
-
-    <div class="calendar-grid">
-        <!-- Day headers -->
-        <div class="calendar-day-header">Пн</div>
-        <div class="calendar-day-header">Вт</div>
-        <div class="calendar-day-header">Ср</div>
-        <div class="calendar-day-header">Чт</div>
-        <div class="calendar-day-header">Пт</div>
-        <div class="calendar-day-header">Сб</div>
-        <div class="calendar-day-header">Вс</div>
-
-        <!-- Calendar days will be created by JavaScript -->
+    <!-- Скроллируемая часть с днями календаря -->
+    <div class="calendar-scrollable">
+        <div class="calendar-grid">
+            <!-- Calendar days will be created by JavaScript -->
+        </div>
     </div>
 </div>
 
