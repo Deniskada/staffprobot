@@ -238,42 +238,27 @@ function createCalendarGrid(calendarData) {
     const year = yearParam ? parseInt(yearParam) : today.getFullYear();
     const month = monthParam ? parseInt(monthParam) - 1 : today.getMonth(); // monthParam 1-based, month 0-based
     
-    // Создаем сетку для 12 месяцев: 6 предыдущих, текущий, 5 следующих
-    const months = [
-        { year: year, month: month - 6, label: 'prev6' },    // 6 месяцев назад
-        { year: year, month: month - 5, label: 'prev5' },    // 5 месяцев назад
-        { year: year, month: month - 4, label: 'prev4' },    // 4 месяца назад
-        { year: year, month: month - 3, label: 'prev3' },    // 3 месяца назад
-        { year: year, month: month - 2, label: 'prev2' },    // 2 месяца назад
-        { year: year, month: month - 1, label: 'prev' },      // Предыдущий месяц
-        { year: year, month: month, label: 'current' },      // Текущий месяц
-        { year: year, month: month + 1, label: 'next' },     // Следующий месяц
-        { year: year, month: month + 2, label: 'next2' },    // 2 месяца вперед
-        { year: year, month: month + 3, label: 'next3' },    // 3 месяца вперед
-        { year: year, month: month + 4, label: 'next4' },    // 4 месяца вперед
-        { year: year, month: month + 5, label: 'next5' }     // 5 месяцев вперед
-    ];
+    // Создаем сетку для всего года: все 12 месяцев
+    const months = [];
+    for (let i = 1; i <= 12; i++) {
+        months.push({ 
+            year: year, 
+            month: i, 
+            label: `month${i}` 
+        });
+    }
     
-    // Корректируем год для месяцев < 0 или > 11
-    months.forEach(m => {
-        if (m.month < 0) {
-            m.month = 11;
-            m.year--;
-        } else if (m.month > 11) {
-            m.month = 0;
-            m.year++;
-        }
-    });
+    // Все месяцы уже корректны для одного года
     
-    // Находим понедельник первой недели ПЕРВОГО месяца (6 месяцев назад)
-    const firstMonth = months[0]; // 6 месяцев назад
-    const firstMonthFirstDay = new Date(firstMonth.year, firstMonth.month, 1);
+    // Находим понедельник первой недели ПЕРВОГО месяца (январь)
+    const firstMonth = months[0]; // Январь
+    const firstMonthFirstDay = new Date(firstMonth.year, firstMonth.month - 1, 1);
     const firstMonday = new Date(firstMonthFirstDay);
     firstMonday.setDate(firstMonthFirstDay.getDate() - firstMonthFirstDay.getDay() + 1);
     
-    // Находим воскресенье последней недели последнего месяца (5 месяцев вперед)
-    const lastMonth = months[11]; // 5 месяцев вперед
-    const lastMonthLastDay = new Date(lastMonth.year, lastMonth.month + 1, 0);
+    // Находим воскресенье последней недели последнего месяца (декабрь)
+    const lastMonth = months[11]; // Декабрь
+    const lastMonthLastDay = new Date(lastMonth.year, lastMonth.month, 0); // Последний день декабря
     const lastSunday = new Date(lastMonthLastDay);
     lastSunday.setDate(lastMonthLastDay.getDate() + (6 - lastMonthLastDay.getDay()));
     
