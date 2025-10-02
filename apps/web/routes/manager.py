@@ -3308,17 +3308,45 @@ async def manager_shift_detail(
                 if schedule.object_id not in accessible_object_ids:
                     raise HTTPException(status_code=403, detail="Нет доступа к объекту")
                 
+                # Получаем информацию о тайм-слоте
+                timeslot_info = None
+                if schedule.timeslot_id:
+                    timeslot_query = select(TimeSlot).where(TimeSlot.id == schedule.timeslot_id)
+                    timeslot_result = await db.execute(timeslot_query)
+                    timeslot = timeslot_result.scalar_one_or_none()
+                    if timeslot:
+                        # Подсчитываем количество запланированных смен для этого тайм-слота
+                        scheduled_count_query = select(ShiftSchedule).where(
+                            ShiftSchedule.timeslot_id == timeslot.id,
+                            ShiftSchedule.status == 'planned'
+                        )
+                        scheduled_count_result = await db.execute(scheduled_count_query)
+                        scheduled_count = len(scheduled_count_result.scalars().all())
+                        
+                        timeslot_info = {
+                            'id': timeslot.id,
+                            'start_time': timeslot.start_time.strftime('%H:%M') if timeslot.start_time else '-',
+                            'end_time': timeslot.end_time.strftime('%H:%M') if timeslot.end_time else '-',
+                            'max_employees': timeslot.max_employees,
+                            'scheduled_count': scheduled_count
+                        }
+
                 shift_data = {
                     'id': schedule.id,
                     'type': 'schedule',
+                    'object_id': schedule.object_id,
                     'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
+                    'user_id': schedule.user_id,
                     'user_name': f"{schedule.user.first_name} {schedule.user.last_name or ''}".strip() if schedule.user else 'Неизвестный пользователь',
                     'start_time': schedule.planned_start.strftime('%Y-%m-%d %H:%M') if schedule.planned_start else '-',
                     'end_time': schedule.planned_end.strftime('%Y-%m-%d %H:%M') if schedule.planned_end else '-',
                     'status': schedule.status,
                     'hourly_rate': schedule.hourly_rate,
                     'notes': schedule.notes,
-                    'created_at': schedule.created_at
+                    'created_at': schedule.created_at,
+                    'timeslot_info': timeslot_info,
+                    'cancelled_at': schedule.cancelled_at,
+                    'cancelled_by': schedule.cancelled_by
                 }
             else:
                 # Обычная смена
