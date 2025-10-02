@@ -232,6 +232,10 @@
                                             <span class="badge bg-danger">
                                                 <i class="bi bi-x-circle"></i> Отменена
                                             </span>
+                                        {% elif shift.status == 'planned' %}
+                                            <span class="badge bg-warning">
+                                                <i class="bi bi-calendar-check"></i> Запланирована
+                                            </span>
                                         {% else %}
                                             <span class="badge bg-light text-dark">{{ shift.status }}</span>
                                         {% endif %}
@@ -255,6 +259,12 @@
                                             {% if shift.type == 'schedule' and shift.status == 'planned' %}
                                             <button class="btn btn-outline-danger" 
                                                     onclick="cancelShift({{ shift.id }}, 'schedule')" 
+                                                    title="Отменить">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                            {% elif shift.status == 'planned' %}
+                                            <button class="btn btn-outline-danger" 
+                                                    onclick="cancelShift({{ shift.id }}, 'shift')" 
                                                     title="Отменить">
                                                 <i class="bi bi-x-circle"></i>
                                             </button>
@@ -366,6 +376,7 @@ function toggleFilters() {
         filtersCard.style.display = 'block';
         toggleBtn.innerHTML = '<i class="bi bi-funnel-fill"></i> Скрыть фильтры';
     } else {
+        // Только при явном нажатии кнопки "Скрыть фильтры"
         clearAllFiltersAndRedirect();
     }
 }
@@ -674,6 +685,12 @@ function getMonthName(monthIndex) {
     return months[monthIndex];
 }
 
+// Смена месяца в календаре
+function changeMonth(direction) {
+    // Простая реализация - пересоздаем календарь
+    createBeautifulCalendar();
+}
+
 // Инициализация сортировки
 function initializeSorting() {
     // Инициализируем текущие параметры сортировки из URL
@@ -735,6 +752,15 @@ function updateSortIcons(field, order) {
 function initializeFilters() {
     initializeDateRangePicker();
     initializeSorting();
+    
+    // Обработчик отправки формы фильтров
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            // Не закрываем панель фильтров при отправке формы
+            // Панель должна оставаться открытой
+        });
+    }
 }
 
 // Отмена смены
