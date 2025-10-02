@@ -1230,7 +1230,15 @@ function handleEmployeeDropOnTimeslot(timeslotElement, employeeId) {
 }
 
 // Создание запланированной смены
+let isCreatingShift = false; // Флаг для предотвращения двойного выполнения
+
 async function createPlannedShift(data) {
+    if (isCreatingShift) {
+        console.log('Shift creation already in progress, skipping...');
+        return;
+    }
+    
+    isCreatingShift = true;
     console.log('Creating planned shift with data:', data);
     
     try {
@@ -1283,6 +1291,8 @@ async function createPlannedShift(data) {
                 'error'
             );
         }
+    } finally {
+        isCreatingShift = false;
     }
 }
 
