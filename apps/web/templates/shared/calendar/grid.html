@@ -490,7 +490,7 @@ function initMonthSelector() {
     const monthParam = urlParams.get('month');
     
     if (yearParam) currentYear = parseInt(yearParam);
-    if (monthParam) currentMonth = parseInt(monthParam);
+    if (monthParam) currentMonth = parseInt(monthParam); // monthParam уже 1-based
     
     // Обновляем отображение
     updateMonthDisplay();
@@ -564,6 +564,9 @@ function changeYear(delta) {
 }
 
 function selectMonth(month) {
+    console.log('selectMonth called with month:', month);
+    console.log('currentYear before:', currentYear, 'currentMonth before:', currentMonth);
+    
     currentMonth = month;
     closeMonthDropdown();
     updateMonthDisplay();
@@ -571,6 +574,7 @@ function selectMonth(month) {
     
     // Перезагружаем календарь
     const newDate = new Date(currentYear, currentMonth - 1, 1);
+    console.log('Created newDate:', newDate, 'getMonth():', newDate.getMonth(), 'getMonth()+1:', newDate.getMonth() + 1);
     loadCalendar(newDate);
 }
 
