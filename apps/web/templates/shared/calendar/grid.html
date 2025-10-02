@@ -190,19 +190,19 @@ function createCalendarGrid(calendarData) {
     }
     
     // Создаем сетку 6x7 (6 недель, 7 дней) - текущая неделя будет 3-й строкой
-    const currentDate = new Date(firstMonday);
+    let workingDate = new Date(firstMonday);
     
     for (let week = 0; week < 6; week++) {
         for (let day = 0; day < 7; day++) {
-            const dateStr = currentDate.toISOString().split('T')[0];
-            const dayNumber = currentDate.getDate();
-            const isOtherMonth = currentDate.getMonth() !== month;
+            const dateStr = workingDate.toISOString().split('T')[0];
+            const dayNumber = workingDate.getDate();
+            const isOtherMonth = workingDate.getMonth() !== month;
             const isToday = dateStr === today.toISOString().split('T')[0];
             
             const dayElement = createDayElement(dateStr, dayNumber, isOtherMonth, isToday);
             calendarGrid.appendChild(dayElement);
             
-            currentDate.setDate(currentDate.getDate() + 1);
+            workingDate.setDate(workingDate.getDate() + 1);
         }
     }
     
