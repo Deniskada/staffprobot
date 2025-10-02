@@ -137,4 +137,176 @@ function initializeTimeslotOccupancy() {
     });
 }
 </script>
+
+<!-- Universal Calendar Integration -->
+<script src="{{ url_for('static', path='js/shared/universal_calendar.js') }}"></script>
+<script>
+    // Инициализация универсального календаря для сотрудника
+    document.addEventListener('DOMContentLoaded', function() {
+        // Создаем экземпляр универсального календаря
+        if (typeof UniversalCalendarManager !== 'undefined') {
+            window.universalCalendar = new UniversalCalendarManager({
+                currentDate: new Date(),
+                viewType: 'month',
+                baseUrl: '/employee/calendar',
+                userRole: 'employee',
+                apiEndpoint: '/employee/api/calendar/data',
+                onShiftClick: function(shiftId) {
+                    console.log('Employee - Shift clicked:', shiftId);
+                    showShiftDetails(shiftId);
+                },
+                onTimeslotClick: function(timeslotId) {
+                    console.log('Employee - Timeslot clicked:', timeslotId);
+                    showTimeslotDetails(timeslotId);
+                },
+                onDataLoaded: function(calendarData) {
+                    console.log('Employee - Calendar data loaded:', calendarData);
+                    // Обновляем отображение с новыми данными
+                    updateEmployeeCalendarDisplay(calendarData);
+                }
+            });
+        }
+    });
+
+    // Функция для обновления отображения календаря сотрудника
+    function updateEmployeeCalendarDisplay(calendarData) {
+        // Обновляем статистику
+        if (calendarData.stats) {
+            const statsElement = document.getElementById('calendar-stats');
+            if (statsElement) {
+                statsElement.innerHTML = `
+                    <div class="stat-item">
+                        <span class="stat-label">Мои смены:</span>
+                        <span class="stat-value">${calendarData.stats.total_shifts}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Запланировано:</span>
+                        <span class="stat-value">${calendarData.stats.planned_shifts}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Активно:</span>
+                        <span class="stat-value">${calendarData.stats.active_shifts}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Завершено:</span>
+                        <span class="stat-value">${calendarData.stats.completed_shifts}</span>
+                    </div>
+                `;
+            }
+        }
+
+        // Обновляем индикаторы занятости тайм-слотов
+        calendarData.timeslots.forEach(timeslot => {
+            const timeslotElement = document.querySelector(`[data-timeslot-id="${timeslot.id}"]`);
+            if (timeslotElement) {
+                // Обновляем данные атрибуты
+                timeslotElement.setAttribute('data-current-employees', timeslot.current_employees);
+                timeslotElement.setAttribute('data-available-slots', timeslot.available_slots);
+                
+                // Обновляем классы статуса
+                timeslotElement.className = timeslotElement.className.replace(/timeslot-\w+/g, '');
+                timeslotElement.classList.add(`timeslot-${timeslot.status}`);
+                
+                // Обновляем индикатор занятости
+                const occupancyElement = timeslotElement.querySelector('.timeslot-occupancy');
+                if (occupancyElement) {
+                    const occupancyText = occupancyElement.querySelector('.occupancy-text');
+                    if (occupancyText) {
+                        occupancyText.textContent = `${timeslot.current_employees}/${timeslot.max_employees}`;
+                    }
+                    
+                    // Обновляем классы занятости
+                    occupancyElement.className = 'timeslot-occupancy';
+                    if (timeslot.available_slots === 0) {
+                        occupancyElement.classList.add('full');
+                    } else if (timeslot.current_employees > 0) {
+                        occupancyElement.classList.add('partial');
+                    } else {
+                        occupancyElement.classList.add('available');
+                    }
+                }
+                
+                // Скрываем полностью заполненные тайм-слоты
+                if (timeslot.available_slots === 0) {
+                    timeslotElement.style.display = 'none';
+                } else {
+                    timeslotElement.style.display = '';
+                }
+            }
+        });
+
+        // Обновляем отображение смен
+        calendarData.shifts.forEach(shift => {
+            const shiftElement = document.querySelector(`[data-shift-id="${shift.id}"]`);
+            if (shiftElement) {
+                // Обновляем классы типа смены
+                shiftElement.className = shiftElement.className.replace(/shift-\w+/g, '');
+                shiftElement.classList.add(`shift-${shift.shift_type}`);
+                shiftElement.classList.add(`shift-status-${shift.status}`);
+                
+                // Обновляем индикатор статуса
+                const statusIndicator = shiftElement.querySelector('.shift-status-indicator');
+                if (statusIndicator) {
+                    let statusText = '';
+                    let statusClass = '';
+                    
+                    switch (shift.shift_type) {
+                        case 'planned':
+                            statusText = 'Запланировано';
+                            statusClass = 'status-planned';
+                            break;
+                        case 'active':
+                            statusText = 'В процессе';
+                            statusClass = 'status-active';
+                            break;
+                        case 'completed':
+                            statusText = 'Завершено';
+                            statusClass = 'status-completed';
+                            break;
+                    }
+                    
+                    statusIndicator.innerHTML = `<span class="${statusClass}">${statusText}</span>`;
+                }
+            }
+        });
+
+        // Обновляем данные для существующей логики drag&drop
+        if (window.calendar_weeks) {
+            // Обновляем данные календаря с новыми данными
+            updateEmployeeCalendarWeeksData(calendarData);
+        }
+    }
+
+    // Функция для обновления данных календаря сотрудника для совместимости с drag&drop
+    function updateEmployeeCalendarWeeksData(calendarData) {
+        // Группируем данные по датам для совместимости с существующей логикой
+        const shiftsByDate = {};
+        calendarData.shifts.forEach(shift => {
+            const date = shift.planned_start ? 
+                shift.planned_start.split('T')[0] : 
+                shift.start_time.split('T')[0];
+            
+            if (!shiftsByDate[date]) {
+                shiftsByDate[date] = [];
+            }
+            shiftsByDate[date].push(shift);
+        });
+
+        // Обновляем window.calendar_weeks с новыми данными
+        if (window.calendar_weeks) {
+            window.calendar_weeks.forEach(week => {
+                week.forEach(day => {
+                    if (day.date && shiftsByDate[day.date]) {
+                        day.shifts = shiftsByDate[day.date];
+                    }
+                });
+            });
+        }
+
+        console.log('Employee - Updated calendar weeks data:', window.calendar_weeks);
+        
+        // Переинициализируем занятость тайм-слотов с новыми данными
+        initializeTimeslotOccupancy();
+    }
+</script>
 {% endblock %}
