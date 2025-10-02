@@ -319,11 +319,12 @@ class CalendarFilterService:
                     obj_info = objects_map.get(shift_schedule.object_id)
                     if obj_info and shift_schedule.user:
                         filtered_planned_shifts.append(CalendarShift(
-                            id=shift_schedule.id,
+                            id=f"schedule_{shift_schedule.id}",  # Добавляем префикс для запланированных смен
                             user_id=shift_schedule.user_id,
                             user_name=f"{shift_schedule.user.first_name or ''} {shift_schedule.user.last_name or ''}".strip(),
                             object_id=shift_schedule.object_id,
                             object_name=obj_info['name'],
+                            start_time=shift_schedule.planned_start,  # Добавляем обязательный start_time
                             time_slot_id=shift_schedule.time_slot_id,
                             planned_start=shift_schedule.planned_start,
                             planned_end=shift_schedule.planned_end,
