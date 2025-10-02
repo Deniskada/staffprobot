@@ -157,8 +157,8 @@ class UniversalCalendarManager {
             // Помечаем месяц как загруженный
             this.loadedMonths.add(monthKey);
             
-            // Обновляем отображение
-            this.renderCalendar();
+            // Обновляем отображение без сброса позиции скролла
+            this.renderCalendar(true);
             
         } catch (error) {
             console.error(`Error loading month ${monthKey}:`, error);
@@ -392,7 +392,16 @@ class UniversalCalendarManager {
         });
     }
     
-    renderCalendar() {
+    renderCalendar(preserveScrollPosition = false) {
+        // Сохраняем позицию скролла если нужно
+        let scrollPosition = null;
+        if (preserveScrollPosition) {
+            const scrollableContainer = document.querySelector('.calendar-scrollable');
+            if (scrollableContainer) {
+                scrollPosition = scrollableContainer.scrollTop;
+            }
+        }
+        
         // This will be implemented by the specific calendar grid component
         if (typeof window.renderCalendarGrid === 'function') {
             window.renderCalendarGrid(this.calendarData);
@@ -403,6 +412,14 @@ class UniversalCalendarManager {
         
         // Update statistics
         this.updateStatistics();
+        
+        // Восстанавливаем позицию скролла если нужно
+        if (preserveScrollPosition && scrollPosition !== null) {
+            const scrollableContainer = document.querySelector('.calendar-scrollable');
+            if (scrollableContainer) {
+                scrollableContainer.scrollTop = scrollPosition;
+            }
+        }
     }
     
     updateOccupancyIndicators() {
@@ -518,9 +535,31 @@ class UniversalCalendarManager {
     }
     
     async loadMonthRange(year, month) {
-        // Загружаем 3 месяца: предыдущий, текущий, следующий
-        const prevMonth = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
-        const nextMonth = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+        // Определяем, насколько далеко выбранный месяц от текущего
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1;
+        
+        const selectedDate = new Date(year, month - 1, 1);
+        const currentDateObj = new Date(currentYear, currentMonth - 1, 1);
+        
+        const monthsDiff = (year - currentYear) * 12 + (month - currentMonth);
+        
+        // Если выбранный месяц далеко от текущего, загружаем больше данных
+        let rangeMonths = 3; // По умолчанию 3 месяца
+        if (Math.abs(monthsDiff) > 6) {
+            rangeMonths = 7; // Если далеко, загружаем 7 месяцев
+        }
+        
+        const halfRange = Math.floor(rangeMonths / 2);
+        
+        // Загружаем диапазон месяцев вокруг выбранного месяца
+        const prevMonth = month - halfRange <= 0 ? 
+            { year: year - 1, month: 12 + (month - halfRange) } : 
+            { year, month: month - halfRange };
+        const nextMonth = month + halfRange > 12 ? 
+            { year: year + 1, month: (month + halfRange) - 12 } : 
+            { year, month: month + halfRange };
         
         const startDate = new Date(prevMonth.year, prevMonth.month - 1, 1);
         const endDate = new Date(nextMonth.year, nextMonth.month, 0);
@@ -558,7 +597,7 @@ class UniversalCalendarManager {
             // Позиционируемся на выбранный месяц
             setTimeout(() => {
                 this.scrollToMonth(year, month);
-            }, 100);
+            }, 200); // Увеличиваем задержку для больших диапазонов
             
         } catch (error) {
             console.error(`Error loading month range for ${year}-${month}:`, error);
