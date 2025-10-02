@@ -167,10 +167,14 @@ function createCalendarGrid(calendarData) {
     const existingDays = calendarGrid.querySelectorAll('.calendar-day');
     existingDays.forEach(day => day.remove());
     
-    // Получаем текущую дату из календарных данных
-    const currentDate = new Date(calendarData.date_range.start);
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
+    // Получаем текущую дату из URL параметров или используем сегодняшнюю дату
+    const urlParams = new URLSearchParams(window.location.search);
+    const yearParam = urlParams.get('year');
+    const monthParam = urlParams.get('month');
+    
+    const today = new Date();
+    const year = yearParam ? parseInt(yearParam) : today.getFullYear();
+    const month = monthParam ? parseInt(monthParam) - 1 : today.getMonth(); // monthParam 1-based, month 0-based
     
     // Создаем сетку для 3 месяцев: предыдущий, текущий, следующий
     const months = [
@@ -189,8 +193,6 @@ function createCalendarGrid(calendarData) {
             m.year++;
         }
     });
-    
-    const today = new Date();
     
     // Создаем дни для каждого месяца
     months.forEach(monthData => {
