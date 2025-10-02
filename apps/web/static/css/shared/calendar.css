@@ -1282,6 +1282,209 @@ html {
     pointer-events: none;
 }
 
+/* Сезонное оформление месяцев */
+.calendar-day {
+    position: relative;
+    overflow: hidden;
+}
+
+/* Зима (декабрь, январь, февраль) */
+.calendar-day.winter {
+    background: linear-gradient(135deg, 
+        rgba(173, 216, 230, 0.3) 0%, 
+        rgba(135, 206, 235, 0.4) 50%, 
+        rgba(176, 224, 230, 0.3) 100%);
+    border: 1px solid rgba(135, 206, 235, 0.2);
+}
+
+.calendar-day.winter::before {
+    content: '❄️';
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    font-size: 12px;
+    opacity: 0.6;
+    z-index: 1;
+}
+
+.calendar-day.winter.december::before {
+    content: '🎄';
+}
+
+.calendar-day.winter.january::before {
+    content: '🎊';
+}
+
+.calendar-day.winter.february::before {
+    content: '💝';
+}
+
+/* Весна (март, апрель, май) */
+.calendar-day.spring {
+    background: linear-gradient(135deg, 
+        rgba(144, 238, 144, 0.3) 0%, 
+        rgba(152, 251, 152, 0.4) 50%, 
+        rgba(173, 255, 173, 0.3) 100%);
+    border: 1px solid rgba(152, 251, 152, 0.2);
+}
+
+.calendar-day.spring::before {
+    content: '🌸';
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    font-size: 12px;
+    opacity: 0.6;
+    z-index: 1;
+}
+
+.calendar-day.spring.march::before {
+    content: '🌱';
+}
+
+.calendar-day.spring.april::before {
+    content: '🌷';
+}
+
+.calendar-day.spring.may::before {
+    content: '🌺';
+}
+
+/* Лето (июнь, июль, август) */
+.calendar-day.summer {
+    background: linear-gradient(135deg, 
+        rgba(255, 218, 185, 0.3) 0%, 
+        rgba(255, 228, 196, 0.4) 50%, 
+        rgba(255, 239, 213, 0.3) 100%);
+    border: 1px solid rgba(255, 228, 196, 0.2);
+}
+
+.calendar-day.summer::before {
+    content: '☀️';
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    font-size: 12px;
+    opacity: 0.6;
+    z-index: 1;
+}
+
+.calendar-day.summer.june::before {
+    content: '🌻';
+}
+
+.calendar-day.summer.july::before {
+    content: '🏖️';
+}
+
+.calendar-day.summer.august::before {
+    content: '🌞';
+}
+
+/* Осень (сентябрь, октябрь, ноябрь) */
+.calendar-day.autumn {
+    background: linear-gradient(135deg, 
+        rgba(255, 165, 0, 0.2) 0%, 
+        rgba(255, 140, 0, 0.3) 50%, 
+        rgba(255, 69, 0, 0.2) 100%);
+    border: 1px solid rgba(255, 140, 0, 0.2);
+}
+
+.calendar-day.autumn::before {
+    content: '🍂';
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    font-size: 12px;
+    opacity: 0.6;
+    z-index: 1;
+}
+
+.calendar-day.autumn.september::before {
+    content: '🍁';
+}
+
+.calendar-day.autumn.october::before {
+    content: '🎃';
+}
+
+.calendar-day.autumn.november::before {
+    content: '🦃';
+}
+
+/* Улучшенные стили для элементов внутри дней */
+.calendar-day .timeslot-item,
+.calendar-day .shift-item {
+    position: relative;
+    z-index: 2;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 4px;
+    margin: 2px;
+    padding: 2px 4px;
+    font-size: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-day .timeslot-item:hover,
+.calendar-day .shift-item:hover {
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
+}
+
+/* Стили для дат в днях */
+.calendar-day .day-number {
+    position: relative;
+    z-index: 2;
+    font-weight: bold;
+    color: #333;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Анимации для сезонных переходов */
+@keyframes seasonTransition {
+    0% { opacity: 0.7; transform: scale(0.95); }
+    50% { opacity: 1; transform: scale(1.02); }
+    100% { opacity: 0.8; transform: scale(1); }
+}
+
+@keyframes fadeOut {
+    0% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.95); }
+}
+
+@keyframes fadeInUp {
+    0% { opacity: 0; transform: translateY(20px) scale(0.95); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.calendar-day.season-transition {
+    animation: seasonTransition 0.5s ease-in-out;
+}
+
+.calendar-day.day-appear {
+    animation: fadeInUp 0.4s ease-out;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .calendar-day.winter::before,
+    .calendar-day.spring::before,
+    .calendar-day.summer::before,
+    .calendar-day.autumn::before {
+        font-size: 10px;
+        top: 3px;
+        right: 3px;
+    }
+    
+    .calendar-day .timeslot-item,
+    .calendar-day .shift-item {
+        font-size: 0.7rem;
+        padding: 1px 3px;
+    }
+}
+
 /* Keyframe Animations */
 @keyframes fadeInUp {
     from {

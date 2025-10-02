@@ -315,12 +315,46 @@ function createDayElement(dateStr, day, isOtherMonth, isToday) {
     dayElement.setAttribute('data-date', dateStr);
     dayElement.setAttribute('data-day', day);
     
+    // Добавляем сезонные классы
+    const date = new Date(dateStr);
+    const month = date.getMonth() + 1; // 1-12
+    const monthName = getMonthName(month);
+    const season = getSeason(month);
+    
+    dayElement.classList.add(season);
+    dayElement.classList.add(monthName.toLowerCase());
+    
     dayElement.innerHTML = `
         <div class="day-number">${day}</div>
         <div class="day-content"></div>
     `;
     
+    // Добавляем анимацию появления
+    dayElement.classList.add('day-appear');
+    
     return dayElement;
+}
+
+// Функция для получения названия месяца
+function getMonthName(month) {
+    const monthNames = [
+        'january', 'february', 'march', 'april', 'may', 'june',
+        'july', 'august', 'september', 'october', 'november', 'december'
+    ];
+    return monthNames[month - 1];
+}
+
+// Функция для определения сезона
+function getSeason(month) {
+    if (month === 12 || month === 1 || month === 2) {
+        return 'winter';
+    } else if (month >= 3 && month <= 5) {
+        return 'spring';
+    } else if (month >= 6 && month <= 8) {
+        return 'summer';
+    } else {
+        return 'autumn';
+    }
 }
 
 function updateCalendarStatistics(calendarData) {
