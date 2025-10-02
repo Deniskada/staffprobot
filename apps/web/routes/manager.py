@@ -3089,6 +3089,8 @@ async def manager_shifts_list(
             
             # Базовый запрос для смен
             from sqlalchemy import select, desc, asc
+            from domain.entities.user import User
+            from domain.entities.object import Object
             shifts_query = select(Shift).options(
                 selectinload(Shift.object),
                 selectinload(Shift.user)
@@ -3152,11 +3154,11 @@ async def manager_shifts_list(
             # Применяем сортировку к запросам
             if sort:
                 if sort == "user_name":
-                    shifts_query = shifts_query.order_by(asc(Shift.user.first_name) if order == "asc" else desc(Shift.user.first_name))
-                    schedules_query = schedules_query.order_by(asc(ShiftSchedule.user.first_name) if order == "asc" else desc(ShiftSchedule.user.first_name))
+                    shifts_query = shifts_query.order_by(asc(User.first_name) if order == "asc" else desc(User.first_name))
+                    schedules_query = schedules_query.order_by(asc(User.first_name) if order == "asc" else desc(User.first_name))
                 elif sort == "object_name":
-                    shifts_query = shifts_query.order_by(asc(Shift.object.name) if order == "asc" else desc(Shift.object.name))
-                    schedules_query = schedules_query.order_by(asc(ShiftSchedule.object.name) if order == "asc" else desc(ShiftSchedule.object.name))
+                    shifts_query = shifts_query.order_by(asc(Object.name) if order == "asc" else desc(Object.name))
+                    schedules_query = schedules_query.order_by(asc(Object.name) if order == "asc" else desc(Object.name))
                 elif sort == "start_time":
                     shifts_query = shifts_query.order_by(asc(Shift.start_time) if order == "asc" else desc(Shift.start_time))
                     schedules_query = schedules_query.order_by(asc(ShiftSchedule.planned_start) if order == "asc" else desc(ShiftSchedule.planned_start))

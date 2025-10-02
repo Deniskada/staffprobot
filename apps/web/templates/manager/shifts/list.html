@@ -159,7 +159,7 @@
                                         <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
                                     </th>
                                     <th class="sortable" data-sort="start_time">
-                                        Время
+                                        Дата
                                         <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
                                     </th>
                                     <th class="sortable" data-sort="status">
@@ -423,7 +423,7 @@ function initializeDateRangePicker() {
     });
 }
 
-// Создание календаря для выбора диапазона дат
+// Создание красивого календаря для выбора диапазона дат
 function createDateRangePicker() {
     const dateRangeInput = document.getElementById('dateRange');
     const dateFromInput = document.getElementById('date_from');
@@ -433,29 +433,43 @@ function createDateRangePicker() {
     let endDate = null;
     let isSelectingStart = true;
     
-    // Создаем модальное окно с календарем
+    // Создаем красивое модальное окно с календарем
     const modal = document.createElement('div');
     modal.className = 'modal fade';
     modal.innerHTML = `
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Выберите период</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-calendar-range"></i> Выберите период
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="calendar-container">
-                        <div class="calendar" id="datePickerCalendar"></div>
-                        <div class="mt-3">
-                            <small class="text-muted">
-                                <span id="datePickerHint">Выберите дату начала</span>
-                            </small>
+                <div class="modal-body p-4">
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="calendar-container mx-auto" style="max-width: 350px;">
+                                <div class="calendar-header text-center mb-3">
+                                    <h6 class="mb-0 text-primary" id="calendarMonthYear"></h6>
+                                </div>
+                                <div class="calendar-grid" id="datePickerCalendar"></div>
+                                <div class="mt-3 text-center">
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle"></i>
+                                        <span id="datePickerHint">Выберите дату начала</span>
+                                    </small>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="button" class="btn btn-primary" id="confirmDateRange">Применить</button>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> Отмена
+                    </button>
+                    <button type="button" class="btn btn-primary" id="confirmDateRange">
+                        <i class="bi bi-check-circle"></i> Применить
+                    </button>
                 </div>
             </div>
         </div>
@@ -464,9 +478,10 @@ function createDateRangePicker() {
     document.body.appendChild(modal);
     const bootstrapModal = new bootstrap.Modal(modal);
     
-    // Создаем календарь
+    // Создаем красивый календарь
     const calendarEl = modal.querySelector('#datePickerCalendar');
-    const calendar = createSimpleCalendar(calendarEl);
+    const monthYearEl = modal.querySelector('#calendarMonthYear');
+    const calendar = createBeautifulCalendar(calendarEl, monthYearEl);
     
     // Обработчик выбора даты
     calendarEl.addEventListener('click', function(e) {
@@ -540,8 +555,8 @@ function createDateRangePicker() {
     }
 }
 
-// Создание простого календаря
-function createSimpleCalendar(container) {
+// Создание красивого календаря
+function createBeautifulCalendar(container, monthYearEl) {
     const today = new Date();
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
@@ -553,10 +568,9 @@ function createSimpleCalendar(container) {
     
     const daysOfWeek = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
     
+    monthYearEl.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+    
     let html = `
-        <div class="calendar-header">
-            <h6>${monthNames[currentMonth]} ${currentYear}</h6>
-        </div>
         <div class="calendar-grid">
             <div class="calendar-weekdays">
                 ${daysOfWeek.map(day => `<div class="calendar-weekday">${day}</div>`).join('')}
@@ -591,25 +605,88 @@ function createSimpleCalendar(container) {
     
     container.innerHTML = html;
     
-    // Добавляем стили
+    // Добавляем красивые стили
     const style = document.createElement('style');
     style.textContent = `
-        .calendar-container { max-width: 300px; }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-        .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 8px; }
-        .calendar-weekday { text-align: center; font-weight: bold; font-size: 0.8em; color: #666; }
-        .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-        .calendar-day { 
-            aspect-ratio: 1; display: flex; align-items: center; justify-content: center; 
-            cursor: pointer; border-radius: 4px; font-size: 0.9em;
+        .calendar-container { 
+            background: #fff; 
+            border-radius: 12px; 
+            padding: 20px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         }
-        .calendar-day:hover { background-color: #e9ecef; }
-        .calendar-day.disabled { color: #ccc; cursor: not-allowed; }
-        .calendar-day.today { background-color: #007bff; color: white; }
-        .calendar-day.selected { background-color: #007bff; color: white; }
-        .calendar-day.range-start { background-color: #007bff; color: white; }
-        .calendar-day.range-end { background-color: #007bff; color: white; }
-        .calendar-day.in-range { background-color: #e3f2fd; }
+        .calendar-grid { 
+            display: grid; 
+            grid-template-columns: repeat(7, 1fr); 
+            gap: 4px; 
+        }
+        .calendar-weekdays { 
+            display: grid; 
+            grid-template-columns: repeat(7, 1fr); 
+            gap: 4px; 
+            margin-bottom: 12px; 
+        }
+        .calendar-weekday { 
+            text-align: center; 
+            font-weight: 600; 
+            font-size: 0.85em; 
+            color: #6c757d; 
+            padding: 8px 4px;
+        }
+        .calendar-days { 
+            display: grid; 
+            grid-template-columns: repeat(7, 1fr); 
+            gap: 4px; 
+        }
+        .calendar-day { 
+            aspect-ratio: 1; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            cursor: pointer; 
+            border-radius: 8px; 
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+        .calendar-day:hover { 
+            background-color: #e3f2fd; 
+            border-color: #2196f3;
+            transform: scale(1.05);
+        }
+        .calendar-day.disabled { 
+            color: #dee2e6; 
+            cursor: not-allowed; 
+            background-color: #f8f9fa;
+        }
+        .calendar-day.today { 
+            background-color: #007bff; 
+            color: white; 
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,123,255,0.3);
+        }
+        .calendar-day.range-start { 
+            background-color: #28a745; 
+            color: white; 
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(40,167,69,0.3);
+        }
+        .calendar-day.range-end { 
+            background-color: #dc3545; 
+            color: white; 
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(220,53,69,0.3);
+        }
+        .calendar-day.in-range { 
+            background-color: #e3f2fd; 
+            color: #1976d2;
+            font-weight: 500;
+        }
+        .calendar-day.range-start.in-range,
+        .calendar-day.range-end.in-range {
+            background: linear-gradient(45deg, #28a745, #dc3545);
+            color: white;
+        }
     `;
     document.head.appendChild(style);
 }
@@ -658,8 +735,9 @@ function updateSortIcons(activeField, order) {
         
         if (field === activeField) {
             icon.className = `bi bi-arrow-${order === 'asc' ? 'up' : 'down'} ms-1 sort-icon`;
+            icon.style.display = 'inline';
         } else {
-            icon.className = 'bi bi-arrow-down-up ms-1 sort-icon';
+            icon.style.display = 'none';
         }
     });
 }
