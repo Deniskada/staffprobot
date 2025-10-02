@@ -3161,7 +3161,7 @@ async def quick_create_timeslot_manager(
 async def manager_create_contract_form(
     request: Request,
     current_user: dict = Depends(require_manager_or_owner),
-    employee_telegram_id: int = Query(None, description="Telegram ID сотрудника для предзаполнения")
+    employee_telegram_id: Optional[int] = Query(None, description="Telegram ID сотрудника для предзаполнения")
 ):
     """Форма создания договора с сотрудником для управляющего."""
     try:
