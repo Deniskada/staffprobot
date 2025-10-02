@@ -3165,7 +3165,9 @@ async def manager_shifts_list(
                 all_shifts.append({
                     'id': shift.id,
                     'type': 'shift',
+                    'object_id': shift.object_id,
                     'object_name': shift.object.name if shift.object else 'Неизвестный объект',
+                    'user_id': shift.user_id,
                     'user_name': f"{shift.user.first_name} {shift.user.last_name or ''}".strip() if shift.user else 'Неизвестный пользователь',
                     'start_time': web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.start_time else '-',
                     'end_time': web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.end_time else '-',
@@ -3178,7 +3180,9 @@ async def manager_shifts_list(
                 all_shifts.append({
                     'id': schedule.id,
                     'type': 'schedule',
+                    'object_id': schedule.object_id,
                     'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
+                    'user_id': schedule.user_id,
                     'user_name': f"{schedule.user.first_name} {schedule.user.last_name or ''}".strip() if schedule.user else 'Неизвестный пользователь',
                     'start_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_start, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_start else '-',
                     'end_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_end, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_end else '-',
