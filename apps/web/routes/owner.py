@@ -3705,10 +3705,12 @@ async def owner_timeslot_create(
 @router.get("/shifts", response_class=HTMLResponse, name="owner_shifts")
 async def owner_shifts_list(
     request: Request,
-    status: Optional[str] = Query(None, description="Фильтр по статусу: active, planned, completed"),
+    status: Optional[str] = Query(None, description="Фильтр по статусу: active, planned, completed, cancelled"),
     date_from: Optional[str] = Query(None, description="Дата начала (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
     object_id: Optional[str] = Query(None, description="ID объекта"),
+    sort: Optional[str] = Query(None, description="Поле для сортировки"),
+    order: Optional[str] = Query("asc", description="Порядок сортировки: asc, desc"),
     page: int = Query(1, ge=1, description="Номер страницы"),
     per_page: int = Query(20, ge=1, le=100, description="Количество на странице"),
     current_user: dict = Depends(require_owner_or_superadmin),
@@ -3761,6 +3763,38 @@ async def owner_shifts_list(
             shifts_query = shifts_query.where(Shift.object_id == int(object_id))
             schedules_query = schedules_query.where(ShiftSchedule.object_id == int(object_id))
         
+        # Фильтрация по статусу
+        if status:
+            if status == "active":
+                shifts_query = shifts_query.where(Shift.status == "active")
+                schedules_query = schedules_query.where(False)  # Исключаем запланированные
+            elif status == "planned":
+                shifts_query = shifts_query.where(False)  # Исключаем обычные
+                schedules_query = schedules_query.where(ShiftSchedule.status == "planned")
+            elif status == "completed":
+                shifts_query = shifts_query.where(Shift.status == "completed")
+                schedules_query = schedules_query.where(False)  # Исключаем запланированные
+            elif status == "cancelled":
+                shifts_query = shifts_query.where(Shift.status == "cancelled")
+                schedules_query = schedules_query.where(ShiftSchedule.status == "cancelled")
+        
+        # Фильтрация по датам
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+                shifts_query = shifts_query.where(Shift.start_time >= from_date)
+                schedules_query = schedules_query.where(ShiftSchedule.planned_start >= from_date)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+                shifts_query = shifts_query.where(Shift.start_time <= to_date)
+                schedules_query = schedules_query.where(ShiftSchedule.planned_start <= to_date)
+            except ValueError:
+                pass
+        
         # Получение данных
         shifts_result = await db.execute(shifts_query.order_by(desc(Shift.created_at)))
         shifts = shifts_result.scalars().all()
@@ -3776,11 +3810,16 @@ async def owner_shifts_list(
             all_shifts.append({
                 'id': shift.id,
                 'type': 'shift',
+                'object_id': shift.object_id,
                 'object_name': shift.object.name if shift.object else 'Неизвестный объект',
+                'user_id': shift.user_id,
                 'user_name': f"{shift.user.first_name} {shift.user.last_name or ''}".strip() if shift.user else 'Неизвестный пользователь',
                 'start_time': web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.start_time else '-',
                 'end_time': web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.end_time else '-',
                 'status': shift.status,
+                'total_hours': shift.total_hours,
+                'total_payment': shift.total_payment,
+                'is_planned': shift.is_planned,
                 'created_at': shift.created_at
             })
         
@@ -3789,16 +3828,38 @@ async def owner_shifts_list(
             all_shifts.append({
                 'id': schedule.id,
                 'type': 'schedule',
+                'object_id': schedule.object_id,
                 'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
+                'user_id': schedule.user_id,
                 'user_name': f"{schedule.user.first_name} {schedule.user.last_name or ''}".strip() if schedule.user else 'Неизвестный пользователь',
                 'start_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_start, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_start else '-',
                 'end_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_end, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_end else '-',
                 'status': schedule.status,
+                'total_hours': None,
+                'total_payment': None,
+                'is_planned': True,
                 'created_at': schedule.created_at
             })
         
-        # Сортировка по дате создания
-        all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
+        # Сортировка данных
+        if sort:
+            reverse = order == 'desc'
+            if sort == "user_name":
+                all_shifts.sort(key=lambda x: x['user_name'].lower(), reverse=reverse)
+            elif sort == "object_name":
+                all_shifts.sort(key=lambda x: x['object_name'].lower(), reverse=reverse)
+            elif sort == "start_time":
+                all_shifts.sort(key=lambda x: x['start_time'], reverse=reverse)
+            elif sort == "status":
+                all_shifts.sort(key=lambda x: x['status'], reverse=reverse)
+            elif sort == "created_at":
+                all_shifts.sort(key=lambda x: x['created_at'], reverse=reverse)
+            else:
+                # По умолчанию сортируем по дате создания
+                all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
+        else:
+            # По умолчанию сортируем по дате создания
+            all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
         
         # Пагинация
         total_shifts = len(all_shifts)
@@ -3810,7 +3871,7 @@ async def owner_shifts_list(
         stats = {
             'total': total_shifts,
             'active': len([s for s in all_shifts if s['status'] == 'active']),
-            'planned': len([s for s in all_shifts if s['type'] == 'schedule']),
+            'planned': len([s for s in all_shifts if s['type'] == 'schedule' and s['status'] == 'planned']),
             'completed': len([s for s in all_shifts if s['status'] == 'completed'])
         }
         
@@ -3829,6 +3890,10 @@ async def owner_shifts_list(
                 "date_from": date_from,
                 "date_to": date_to,
                 "object_id": object_id
+            },
+            "sort": {
+                "field": sort,
+                "order": order
             },
             "pagination": {
                 "page": page,
