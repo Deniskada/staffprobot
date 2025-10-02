@@ -131,6 +131,11 @@ function navigateCalendar(direction) {
 function goToToday() {
     const today = new Date();
     loadCalendar(today);
+    
+    // Автопрокрутка к текущей дате после загрузки
+    setTimeout(() => {
+        scrollToCurrentDate();
+    }, 200);
 }
 
 function filterByObject() {
@@ -270,6 +275,11 @@ function createCalendarGrid(calendarData) {
     }
     
     console.log(`Created multi-month calendar grid with ${calendarGrid.querySelectorAll('.calendar-day').length} days`);
+    
+    // Автопрокрутка к текущей дате после создания сетки
+    setTimeout(() => {
+        scrollToCurrentDate();
+    }, 100);
 }
 
 function createDayElement(dateStr, day, isOtherMonth, isToday) {
@@ -576,6 +586,79 @@ function selectMonth(month) {
     const newDate = new Date(currentYear, currentMonth - 1, 1);
     console.log('Created newDate:', newDate, 'getMonth():', newDate.getMonth(), 'getMonth()+1:', newDate.getMonth() + 1);
     loadCalendar(newDate);
+    
+    // Автопрокрутка к выбранному месяцу после загрузки
+    setTimeout(() => {
+        scrollToSelectedMonth();
+    }, 200);
+}
+
+// Автопрокрутка к текущей дате
+function scrollToCurrentDate() {
+    const scrollableContainer = document.querySelector('.calendar-scrollable');
+    if (!scrollableContainer) return;
+    
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    // Находим элемент с текущей датой
+    const todayElement = document.querySelector(`.calendar-day[data-date="${todayStr}"]`);
+    if (!todayElement) {
+        console.log('Today element not found for date:', todayStr);
+        return;
+    }
+    
+    // Получаем позицию элемента относительно контейнера
+    const containerRect = scrollableContainer.getBoundingClientRect();
+    const elementRect = todayElement.getBoundingClientRect();
+    
+    // Вычисляем позицию для прокрутки (центрируем элемент)
+    const elementTop = elementRect.top - containerRect.top + scrollableContainer.scrollTop;
+    const containerHeight = scrollableContainer.clientHeight;
+    const elementHeight = elementRect.height;
+    
+    // Прокручиваем так, чтобы элемент был в центре видимой области
+    const scrollTo = elementTop - (containerHeight / 2) + (elementHeight / 2);
+    
+    console.log('Scrolling to current date:', todayStr, 'scrollTo:', scrollTo);
+    
+    // Плавная прокрутка
+    scrollableContainer.scrollTo({
+        top: Math.max(0, scrollTo),
+        behavior: 'smooth'
+    });
+}
+
+// Автопрокрутка к выбранному месяцу
+function scrollToSelectedMonth() {
+    const scrollableContainer = document.querySelector('.calendar-scrollable');
+    if (!scrollableContainer) return;
+    
+    // Находим первый день выбранного месяца
+    const selectedMonthFirstDay = new Date(currentYear, currentMonth - 1, 1);
+    const selectedMonthStr = selectedMonthFirstDay.toISOString().split('T')[0];
+    
+    // Находим элемент с первым днем выбранного месяца
+    const monthElement = document.querySelector(`.calendar-day[data-date="${selectedMonthStr}"]`);
+    if (!monthElement) {
+        console.log('Selected month element not found for date:', selectedMonthStr);
+        return;
+    }
+    
+    // Получаем позицию элемента относительно контейнера
+    const containerRect = scrollableContainer.getBoundingClientRect();
+    const elementRect = monthElement.getBoundingClientRect();
+    
+    // Вычисляем позицию для прокрутки (показываем элемент в верхней части)
+    const elementTop = elementRect.top - containerRect.top + scrollableContainer.scrollTop;
+    
+    console.log('Scrolling to selected month:', selectedMonthStr, 'scrollTo:', elementTop);
+    
+    // Плавная прокрутка к началу выбранного месяца
+    scrollableContainer.scrollTo({
+        top: Math.max(0, elementTop - 20), // Небольшой отступ сверху
+        behavior: 'smooth'
+    });
 }
 
 // Инициализация при загрузке DOM
