@@ -3211,6 +3211,7 @@ async def manager_create_contract(
     current_user: dict = Depends(require_manager_or_owner)
 ):
     """Создание договора с сотрудником для управляющего."""
+    logger.info("Manager create contract function called!")
     try:
         if isinstance(current_user, RedirectResponse):
             return current_user
