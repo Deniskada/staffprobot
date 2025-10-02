@@ -217,8 +217,172 @@ function filterByObject() {
     window.location.href = newUrl;
 }
 
+// Universal Calendar Integration
+function renderCalendarGrid(calendarData) {
+    console.log('renderCalendarGrid called with data:', calendarData);
+    
+    if (!calendarData) {
+        console.log('No calendar data provided');
+        return;
+    }
+    
+    try {
+        console.log('About to call updateCalendarStatistics');
+        // Обновляем статистику
+        updateCalendarStatistics(calendarData);
+        
+        console.log('About to call updateCalendarDisplay');
+        // Обновляем отображение смен и тайм-слотов
+        updateCalendarDisplay(calendarData);
+        
+        console.log('renderCalendarGrid completed');
+    } catch (error) {
+        console.error('Error in renderCalendarGrid:', error);
+    }
+}
+
+function updateCalendarStatistics(calendarData) {
+    console.log('updateCalendarStatistics called');
+    try {
+        // Обновляем статистику в шапке календаря
+        const statsElement = document.getElementById('calendar-stats');
+        console.log('statsElement found:', statsElement);
+        if (statsElement && calendarData.stats) {
+            console.log('Updating stats with data:', calendarData.stats);
+            statsElement.innerHTML = `
+                <div class="stat-item">
+                    <span class="stat-label">Тайм-слоты:</span>
+                    <span class="stat-value">${calendarData.stats.total_timeslots || calendarData.total_timeslots || 0}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Смены:</span>
+                    <span class="stat-value">${calendarData.stats.total_shifts || calendarData.total_shifts || 0}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Запланировано:</span>
+                    <span class="stat-value">${calendarData.stats.planned_shifts || 0}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Активные:</span>
+                    <span class="stat-value">${calendarData.stats.active_shifts || 0}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Завершено:</span>
+                    <span class="stat-value">${calendarData.stats.completed_shifts || 0}</span>
+                </div>
+            `;
+        } else {
+            console.log('No stats element or stats data');
+        }
+        console.log('updateCalendarStatistics completed successfully');
+    } catch (error) {
+        console.error('Error in updateCalendarStatistics:', error);
+    }
+}
+
+function updateCalendarDisplay(calendarData) {
+    console.log('updateCalendarDisplay called');
+    try {
+        console.log('Updating calendar display with:', calendarData);
+        console.log('timeslotsByDate keys:', Object.keys(calendarData.timeslotsByDate || {}));
+        console.log('shiftsByDate keys:', Object.keys(calendarData.shiftsByDate || {}));
+        
+        // Обновляем отображение для каждого дня
+        Object.keys(calendarData.timeslotsByDate || {}).forEach(date => {
+            console.log(`Looking for day element with date: ${date}`);
+            const dayElement = document.querySelector(`[data-date="${date}"]`);
+            console.log(`Found day element for ${date}:`, dayElement);
+            if (dayElement) {
+                updateDayDisplay(dayElement, date, calendarData);
+            } else {
+                console.log(`No day element found for date: ${date}`);
+            }
+        });
+        
+        Object.keys(calendarData.shiftsByDate || {}).forEach(date => {
+            console.log(`Looking for day element with date: ${date}`);
+            const dayElement = document.querySelector(`[data-date="${date}"]`);
+            console.log(`Found day element for ${date}:`, dayElement);
+            if (dayElement) {
+                updateDayDisplay(dayElement, date, calendarData);
+            } else {
+                console.log(`No day element found for date: ${date}`);
+            }
+        });
+        
+        console.log('updateCalendarDisplay completed successfully');
+    } catch (error) {
+        console.error('Error in updateCalendarDisplay:', error);
+    }
+}
+
+function updateDayDisplay(dayElement, date, calendarData) {
+    console.log(`Updating day display for ${date}`);
+    const dayContent = dayElement.querySelector('.day-content');
+    console.log(`Day content element:`, dayContent);
+    if (!dayContent) {
+        console.log(`No day-content found for date ${date}`);
+        return;
+    }
+    
+    // Очищаем существующий контент
+    dayContent.innerHTML = '';
+    console.log(`Cleared day content for ${date}`);
+    
+    // Добавляем тайм-слоты
+    const timeslots = calendarData.timeslotsByDate[date] || [];
+    console.log(`Adding ${timeslots.length} timeslots for ${date}`);
+    timeslots.forEach(timeslot => {
+        const timeslotElement = createTimeslotElement(timeslot);
+        dayContent.appendChild(timeslotElement);
+        console.log(`Added timeslot ${timeslot.id} to ${date}`);
+    });
+    
+    // Добавляем смены
+    const shifts = calendarData.shiftsByDate[date] || [];
+    console.log(`Adding ${shifts.length} shifts for ${date}`);
+    shifts.forEach(shift => {
+        const shiftElement = createShiftElement(shift);
+        dayContent.appendChild(shiftElement);
+        console.log(`Added shift ${shift.id} to ${date}`);
+    });
+}
+
+function createTimeslotElement(timeslot) {
+    const div = document.createElement('div');
+    div.className = 'timeslot-item timeslot-free';
+    div.setAttribute('data-timeslot-id', timeslot.id);
+    div.onclick = () => showTimeslotDetails(timeslot.id);
+    
+    div.innerHTML = `
+        <div class="timeslot-time">${timeslot.start_time} - ${timeslot.end_time}</div>
+        <div class="timeslot-object">${timeslot.object_name}</div>
+        <div class="timeslot-rate">${timeslot.hourly_rate}₽/ч</div>
+    `;
+    
+    return div;
+}
+
+function createShiftElement(shift) {
+    const div = document.createElement('div');
+    div.className = `shift-item shift-${shift.shift_type}`;
+    div.setAttribute('data-shift-id', shift.id);
+    div.onclick = () => showShiftDetails(shift.id);
+    
+    const startTime = shift.start_time ? shift.start_time.split('T')[1].substring(0, 5) : '';
+    const endTime = shift.end_time ? shift.end_time.split('T')[1].substring(0, 5) : '';
+    
+    div.innerHTML = `
+        <div class="shift-time">${startTime} - ${endTime}</div>
+        <div class="shift-employee">${shift.user_name}</div>
+        <div class="shift-object">${shift.object_name}</div>
+    `;
+    
+    return div;
+}
+
 // Делаем функцию доступной глобально
-window.filterByObject = filterByObject;
+window.renderCalendarGrid = renderCalendarGrid;
 
 // Проверяем что функция доступна после загрузки и привязываем события
 document.addEventListener('DOMContentLoaded', function() {

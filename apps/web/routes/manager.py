@@ -1606,7 +1606,7 @@ async def manager_calendar_api_data(
     start_date: str = Query(..., description="Начальная дата в формате YYYY-MM-DD"),
     end_date: str = Query(..., description="Конечная дата в формате YYYY-MM-DD"),
     object_ids: Optional[str] = Query(None, description="ID объектов через запятую"),
-    current_user: dict = Depends(get_current_user_dependency()),
+    current_user: dict = Depends(require_manager_or_owner),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -1614,6 +1614,8 @@ async def manager_calendar_api_data(
     Использует CalendarFilterService для правильной фильтрации смен.
     """
     try:
+        logger.info(f"Manager calendar API called: start_date={start_date}, end_date={end_date}, object_ids={object_ids}")
+        
         # Парсим даты
         try:
             start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -1630,14 +1632,27 @@ async def manager_calendar_api_data(
                 raise HTTPException(status_code=400, detail="Неверный формат ID объектов")
         
         # Получаем роль пользователя
-        user_role = current_user.get("role", "manager")
-        user_telegram_id = current_user.get("id")
+        if isinstance(current_user, dict):
+            user_role = current_user.get("role", "manager")
+            user_telegram_id = current_user.get("id")
+        else:
+            # current_user - это объект User
+            user_role = current_user.role
+            user_telegram_id = current_user.telegram_id
+        
+        # Если пользователь - владелец, используем роль owner для CalendarFilterService
+        if user_role == "owner":
+            user_role = "owner"
+        else:
+            user_role = "manager"
         
         if not user_telegram_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
         
         # Получаем данные календаря через универсальный сервис
         calendar_service = CalendarFilterService(db)
+        logger.info(f"Calling CalendarFilterService with user_telegram_id={user_telegram_id}, user_role={user_role}")
+        
         calendar_data = await calendar_service.get_calendar_data(
             user_telegram_id=user_telegram_id,
             user_role=user_role,
@@ -1645,6 +1660,8 @@ async def manager_calendar_api_data(
             date_range_end=end_date_obj,
             object_filter=object_filter
         )
+        
+        logger.info(f"CalendarFilterService returned: {len(calendar_data.timeslots)} timeslots, {len(calendar_data.shifts)} shifts")
         
         # Преобразуем в формат, совместимый с существующим JavaScript
         timeslots_data = []
