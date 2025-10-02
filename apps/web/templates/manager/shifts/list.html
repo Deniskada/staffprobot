@@ -119,10 +119,13 @@
                                 <div class="input-group">
                                     <input type="text" class="form-control" id="dateRange" name="dateRange" 
                                            placeholder="Выберите период" readonly>
-                                    <button class="btn btn-outline-secondary" type="button" id="clearDateRange">
-                                        <i class="bi bi-x"></i>
+                                    <button class="btn btn-outline-primary" type="button" id="openDateRange">
+                                        <i class="bi bi-calendar-range"></i>
                                     </button>
-                                </div>
+                                    <button class="btn btn-outline-secondary" type="button" id="clearDateRange">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                            </div>
                                 <input type="hidden" id="date_from" name="date_from" value="{{ filters.date_from or '' }}">
                                 <input type="hidden" id="date_to" name="date_to" value="{{ filters.date_to or '' }}">
                             </div>
@@ -417,6 +420,7 @@ function initializeDateRangePicker() {
     const dateRangeInput = document.getElementById('dateRange');
     const dateFromInput = document.getElementById('date_from');
     const dateToInput = document.getElementById('date_to');
+    const openBtn = document.getElementById('openDateRange');
     const clearBtn = document.getElementById('clearDateRange');
     
     // Устанавливаем начальные значения если есть
@@ -424,12 +428,23 @@ function initializeDateRangePicker() {
     const dateTo = dateToInput.value;
     
     if (dateFrom && dateTo) {
-        const fromDate = new Date(dateFrom);
-        const toDate = new Date(dateTo);
+        // Исправляем проблему с временными зонами при инициализации
+        const [fromYear, fromMonth, fromDay] = dateFrom.split('-').map(Number);
+        const [toYear, toMonth, toDay] = dateTo.split('-').map(Number);
+        const fromDate = new Date(fromYear, fromMonth - 1, fromDay);
+        const toDate = new Date(toYear, toMonth - 1, toDay);
         dateRangeInput.value = `${formatDate(fromDate)} - ${formatDate(toDate)}`;
     }
     
-    // Обработчик клика по полю даты
+    // Обработчик клика по кнопке календаря
+    openBtn.addEventListener('click', function() {
+        if (!dateRangePicker) {
+            createDateRangePicker();
+        }
+        dateRangePicker.show();
+    });
+    
+    // Обработчик клика по полю даты (для совместимости)
     dateRangeInput.addEventListener('click', function() {
         if (!dateRangePicker) {
             createDateRangePicker();
@@ -801,7 +816,11 @@ function formatDate(date) {
 }
 
 function formatDateForInput(date) {
-    return date.toISOString().split('T')[0];
+    // Исправляем проблему с временными зонами - форматируем вручную
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 // Функции для отмены смен
