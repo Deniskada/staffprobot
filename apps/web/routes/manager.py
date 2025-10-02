@@ -3359,7 +3359,8 @@ async def manager_shift_detail(
                 "request": request,
                 "current_user": current_user,
                 "available_interfaces": available_interfaces,
-                "shift": shift_data
+                "shift": shift_data,
+                "shift_type": actual_shift_type
             })
             
     except HTTPException:
