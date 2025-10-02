@@ -3218,13 +3218,25 @@ async def manager_create_contract(
         form_data = await request.form()
         
         # Получаем данные формы
-        employee_telegram_id = int(form_data.get("employee_telegram_id"))
+        employee_telegram_id_str = form_data.get("employee_telegram_id", "").strip()
+        if not employee_telegram_id_str:
+            raise HTTPException(status_code=400, detail="Telegram ID сотрудника обязателен")
+        
+        try:
+            employee_telegram_id = int(employee_telegram_id_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Telegram ID должен быть числом")
+        
         title = form_data.get("title", "").strip()
         content = form_data.get("content", "").strip()
-        hourly_rate = int(form_data.get("hourly_rate", 500)) if form_data.get("hourly_rate") else None
-        start_date_str = form_data.get("start_date")
-        end_date_str = form_data.get("end_date")
-        template_id = int(form_data.get("template_id")) if form_data.get("template_id") else None
+        hourly_rate_str = form_data.get("hourly_rate", "").strip()
+        hourly_rate = int(hourly_rate_str) if hourly_rate_str else None
+        
+        start_date_str = form_data.get("start_date", "").strip()
+        end_date_str = form_data.get("end_date", "").strip()
+        
+        template_id_str = form_data.get("template_id", "").strip()
+        template_id = int(template_id_str) if template_id_str else None
         allowed_objects = [int(obj_id) for obj_id in form_data.getlist("allowed_objects")]
         
         # Валидация
