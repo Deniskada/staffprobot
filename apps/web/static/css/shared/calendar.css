@@ -944,3 +944,141 @@ html {
     border-radius: 3px;
     font-weight: bold;
 }
+
+/* Month Selector Styles */
+.month-selector {
+    position: relative;
+    display: inline-block;
+}
+
+.month-picker {
+    position: relative;
+}
+
+.month-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    min-width: 200px;
+    justify-content: center;
+}
+
+.month-display:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+}
+
+.month-name {
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.dropdown-icon {
+    font-size: 14px;
+    transition: transform 0.3s ease;
+}
+
+.month-display.active .dropdown-icon {
+    transform: rotate(180deg);
+}
+
+.month-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    margin-top: 8px;
+    min-width: 280px;
+}
+
+.month-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.dropdown-content {
+    padding: 20px;
+}
+
+.year-selector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #f8f9fa;
+}
+
+.year-btn {
+    width: 35px;
+    height: 35px;
+    border: none;
+    background: #f8f9fa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #495057;
+}
+
+.year-btn:hover {
+    background: #007bff;
+    color: white;
+    transform: scale(1.1);
+}
+
+.year-display {
+    font-size: 20px;
+    font-weight: 700;
+    color: #495057;
+    min-width: 80px;
+    text-align: center;
+}
+
+.months-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.month-option {
+    padding: 12px 8px;
+    text-align: center;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    color: #495057;
+    background: #f8f9fa;
+}
+
+.month-option:hover {
+    background: #007bff;
+    color: white;
+    transform: translateY(-2px);
+}
+
+.month-option.active {
+    background: #0056b3;
+    color: white;
+    font-weight: 600;
+}
