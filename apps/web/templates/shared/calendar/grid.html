@@ -172,40 +172,38 @@ function createCalendarGrid(calendarData) {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     
-    // Создаем календарную сетку
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const firstWeekday = (firstDay.getDay() + 6) % 7; // Понедельник = 0
+    // Создаем календарную сетку как у владельца
+    const today = new Date();
+    let firstMonday;
     
-    // Создаем дни предыдущего месяца
-    const prevMonth = new Date(year, month - 1, 0);
-    for (let i = firstWeekday - 1; i >= 0; i--) {
-        const day = prevMonth.getDate() - i;
-        const date = new Date(year, month - 1, day);
-        const dateStr = date.toISOString().split('T')[0];
-        
-        const dayElement = createDayElement(dateStr, day, true, false);
-        calendarGrid.appendChild(dayElement);
+    if (today.getFullYear() === year && today.getMonth() === month) {
+        // Если смотрим текущий месяц - начинаем за 2 недели до текущей
+        const currentMonday = new Date(today);
+        currentMonday.setDate(today.getDate() - today.getDay() + 1); // Понедельник текущей недели
+        firstMonday = new Date(currentMonday);
+        firstMonday.setDate(currentMonday.getDate() - 14); // За 2 недели
+    } else {
+        // Для других месяцев - начинаем с первого понедельника месяца
+        const firstDay = new Date(year, month, 1);
+        firstMonday = new Date(firstDay);
+        firstMonday.setDate(firstDay.getDate() - firstDay.getDay() + 1); // Понедельник первой недели
     }
     
-    // Создаем дни текущего месяца
-    for (let day = 1; day <= lastDay.getDate(); day++) {
-        const date = new Date(year, month, day);
-        const dateStr = date.toISOString().split('T')[0];
-        const isToday = dateStr === new Date().toISOString().split('T')[0];
-        
-        const dayElement = createDayElement(dateStr, day, false, isToday);
-        calendarGrid.appendChild(dayElement);
-    }
+    // Создаем сетку 6x7 (6 недель, 7 дней) - текущая неделя будет 3-й строкой
+    const currentDate = new Date(firstMonday);
     
-    // Создаем дни следующего месяца
-    const remainingDays = 42 - calendarGrid.querySelectorAll('.calendar-day').length; // 6 недель * 7 дней
-    for (let day = 1; day <= remainingDays; day++) {
-        const date = new Date(year, month + 1, day);
-        const dateStr = date.toISOString().split('T')[0];
-        
-        const dayElement = createDayElement(dateStr, day, true, false);
-        calendarGrid.appendChild(dayElement);
+    for (let week = 0; week < 6; week++) {
+        for (let day = 0; day < 7; day++) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            const dayNumber = currentDate.getDate();
+            const isOtherMonth = currentDate.getMonth() !== month;
+            const isToday = dateStr === today.toISOString().split('T')[0];
+            
+            const dayElement = createDayElement(dateStr, dayNumber, isOtherMonth, isToday);
+            calendarGrid.appendChild(dayElement);
+            
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
     }
     
     console.log(`Created calendar grid with ${calendarGrid.querySelectorAll('.calendar-day').length} days`);
