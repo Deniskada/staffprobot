@@ -2516,6 +2516,47 @@ async def get_objects_for_manager_calendar(
         raise HTTPException(status_code=500, detail="Ошибка загрузки объектов")
 
 
+@router.get("/calendar/api/employees")
+async def manager_calendar_api_employees(
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """API для получения сотрудников для drag&drop панели"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем всех сотрудников
+            user_service = UserService(db)
+            employees = await user_service.get_all_users()
+            
+            # Формируем список сотрудников для панели
+            employees_data = []
+            for emp in employees:
+                # Исключаем владельца и неактивных пользователей
+                if emp.is_owner or not emp.is_active:
+                    continue
+                    
+                employees_data.append({
+                    "id": emp.id,
+                    "name": emp.name or emp.username,
+                    "username": emp.username,
+                    "role": emp.role,
+                    "is_active": emp.is_active,
+                    "is_owner": emp.is_owner
+                })
+            
+            return employees_data
+            
+    except Exception as e:
+        logger.error(f"Error getting employees for calendar: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения сотрудников")
+
+
 @router.get("/api/employees/for-object/{object_id}")
 async def get_employees_for_object_manager(
     object_id: int,
