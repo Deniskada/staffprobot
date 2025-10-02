@@ -444,13 +444,8 @@ function initializeDateRangePicker() {
         dateRangePicker.show();
     });
     
-    // Обработчик клика по полю даты (для совместимости)
-    dateRangeInput.addEventListener('click', function() {
-        if (!dateRangePicker) {
-            createDateRangePicker();
-        }
-        dateRangePicker.show();
-    });
+    // Убираем автоматическое открытие при клике на поле
+    // dateRangeInput.addEventListener('click', function() { ... });
     
     // Обработчик очистки
     clearBtn.addEventListener('click', function() {
@@ -808,11 +803,11 @@ function initializeFilters() {
 
 // Функции для работы с датами
 function formatDate(date) {
-    return date.toLocaleDateString('ru-RU', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-    });
+    // Исправляем проблему с временными зонами - форматируем вручную
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${day}.${month}.${year}`;
 }
 
 function formatDateForInput(date) {
