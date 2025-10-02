@@ -3202,7 +3202,7 @@ async def manager_shifts_list(
 @router.get("/shifts/{shift_id}", response_class=HTMLResponse)
 async def manager_shift_detail(
     request: Request, 
-    shift_id: int, 
+    shift_id: str,  # Изменено на str для поддержки префикса schedule_
     shift_type: Optional[str] = Query("shift"),
     current_user: dict = Depends(require_manager_or_owner),
 ):
@@ -3211,6 +3211,14 @@ async def manager_shift_detail(
         # Проверяем, что current_user - это словарь, а не RedirectResponse
         if isinstance(current_user, RedirectResponse):
             return current_user
+        
+        # Определяем тип смены по ID
+        if shift_id.startswith('schedule_'):
+            actual_shift_id = int(shift_id.replace('schedule_', ''))
+            actual_shift_type = "schedule"
+        else:
+            actual_shift_id = int(shift_id)
+            actual_shift_type = shift_type or "shift"
         
         async with get_async_session() as db:
             # Получаем внутренний ID пользователя
@@ -3231,12 +3239,12 @@ async def manager_shift_detail(
             # Импортируем select для запросов
             from sqlalchemy import select
             
-            if shift_type == "schedule":
+            if actual_shift_type == "schedule":
                 # Запланированная смена
                 query = select(ShiftSchedule).options(
                     selectinload(ShiftSchedule.object),
                     selectinload(ShiftSchedule.user)
-                ).where(ShiftSchedule.id == shift_id)
+                ).where(ShiftSchedule.id == actual_shift_id)
                 
                 result = await db.execute(query)
                 schedule = result.scalar_one_or_none()
@@ -3265,7 +3273,7 @@ async def manager_shift_detail(
                 query = select(Shift).options(
                     selectinload(Shift.object),
                     selectinload(Shift.user)
-                ).where(Shift.id == shift_id)
+                ).where(Shift.id == actual_shift_id)
                 
                 result = await db.execute(query)
                 shift = result.scalar_one_or_none()
