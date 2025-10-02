@@ -230,7 +230,9 @@ class CalendarFilterService:
                     ShiftSchedule.planned_start < datetime.combine(date_range_end, time.max),
                     ShiftSchedule.status.in_(["planned", "confirmed"]),
                     # ИСКЛЮЧАЕМ смены, которые уже начались
-                    ShiftSchedule.actual_shift_id.is_(None)
+                    ShiftSchedule.actual_shift_id.is_(None),
+                    # ИСКЛЮЧАЕМ отменённые смены
+                    ShiftSchedule.status != "cancelled"
                 )
             ).order_by(ShiftSchedule.planned_start)
             
@@ -296,7 +298,9 @@ class CalendarFilterService:
                 and_(
                     Shift.object_id.in_(object_ids),
                     Shift.start_time >= datetime.combine(date_range_start, time.min),
-                    Shift.start_time < datetime.combine(date_range_end, time.max)
+                    Shift.start_time < datetime.combine(date_range_end, time.max),
+                    # ИСКЛЮЧАЕМ отменённые смены
+                    Shift.status.in_(["active", "completed"])
                 )
             ).order_by(Shift.start_time)
             
