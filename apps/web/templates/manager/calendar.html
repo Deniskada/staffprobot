@@ -20,11 +20,19 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Calendar Panels -->
+<script src="{{ url_for('static', path='js/shared/calendar_panels.js') }}"></script>
 <!-- Universal Calendar Integration -->
 <script src="{{ url_for('static', path='js/shared/universal_calendar.js') }}"></script>
 <script>
     // Инициализация универсального календаря для управляющего
     document.addEventListener('DOMContentLoaded', function() {
+        // Инициализируем панели drag&drop
+        if (typeof CalendarPanels !== 'undefined') {
+            window.calendarPanels = new CalendarPanels('manager');
+            window.calendarPanels.init();
+        }
+        
         // Создаем экземпляр универсального календаря
         if (typeof UniversalCalendarManager !== 'undefined') {
             window.universalCalendar = new UniversalCalendarManager({

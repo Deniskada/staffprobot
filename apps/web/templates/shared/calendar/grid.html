@@ -323,6 +323,8 @@ function createCalendarGrid(calendarData) {
     // Добавляем все дни одним операцией
     calendarGrid.appendChild(fragment);
     
+    // Инициализируем drag&drop для календарных дней
+    initializeDragAndDrop();
     
     // Автопрокрутка к текущей дате после создания сетки
     setTimeout(() => {
@@ -426,12 +428,58 @@ function updateCalendarDisplay(calendarData) {
         console.log('timeslotsByDate keys:', Object.keys(calendarData.timeslotsByDate || {}));
         console.log('shiftsByDate keys:', Object.keys(calendarData.shiftsByDate || {}));
         
-        // Временно отключаем виртуализацию для отладки
-        // Обновляем все дни календаря
+        // Умная виртуализация: обновляем видимые дни + текущую неделю
+        const scrollableContainer = document.querySelector('.calendar-scrollable');
+        if (!scrollableContainer) {
+            // Fallback: обновляем все дни
+            const allDayElements = document.querySelectorAll('.calendar-day[data-date]');
+            console.log(`Fallback: Found ${allDayElements.length} day elements to update`);
+            allDayElements.forEach(dayElement => {
+                const date = dayElement.dataset.date;
+                updateDayDisplay(dayElement, date, calendarData);
+            });
+            return;
+        }
+        
+        const containerRect = scrollableContainer.getBoundingClientRect();
+        const visibleTop = scrollableContainer.scrollTop;
+        const visibleBottom = visibleTop + containerRect.height;
+        
+        // Находим видимые дни
         const allDayElements = document.querySelectorAll('.calendar-day[data-date]');
-        console.log(`Found ${allDayElements.length} day elements to update`);
+        let visibleElements = [];
+        let currentWeekElements = [];
+        
+        // Получаем текущую дату для определения текущей недели
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
         
         allDayElements.forEach(dayElement => {
+            const dayRect = dayElement.getBoundingClientRect();
+            const dayTop = dayRect.top - containerRect.top + scrollableContainer.scrollTop;
+            const dayBottom = dayTop + dayRect.height;
+            const date = dayElement.dataset.date;
+            
+            // Проверяем, пересекается ли день с видимой областью
+            if (dayBottom >= visibleTop && dayTop <= visibleBottom) {
+                visibleElements.push(dayElement);
+            }
+            
+            // Проверяем, относится ли день к текущей неделе
+            const dayDate = new Date(date);
+            const todayDate = new Date(todayStr);
+            const daysDiff = Math.abs((dayDate - todayDate) / (1000 * 60 * 60 * 24));
+            if (daysDiff <= 7) { // В пределах недели
+                currentWeekElements.push(dayElement);
+            }
+        });
+        
+        // Объединяем видимые дни и дни текущей недели
+        const elementsToUpdate = new Set([...visibleElements, ...currentWeekElements]);
+        
+        // Обновляем объединенный набор дней
+        console.log(`Smart virtualization: Found ${elementsToUpdate.size}/${allDayElements.length} elements to update (${visibleElements.length} visible + ${currentWeekElements.length} current week)`);
+        elementsToUpdate.forEach(dayElement => {
             const date = dayElement.dataset.date;
             updateDayDisplay(dayElement, date, calendarData);
         });
@@ -1037,6 +1085,91 @@ function showShiftDetails(shiftId) {
 function showTimeslotDetails(timeslotId) {
     console.log('Timeslot clicked:', timeslotId);
     window.location.href = `/manager/timeslots/${timeslotId}`;
+}
+
+// Инициализация drag&drop для календарных дней
+function initializeDragAndDrop() {
+    console.log('Initializing drag&drop for calendar days');
+    
+    // Обработчики для календарных дней
+    document.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        const dayElement = e.target.closest('.calendar-day');
+        if (dayElement) {
+            dayElement.classList.add('drag-over');
+        }
+    });
+    
+    document.addEventListener('dragleave', function(e) {
+        const dayElement = e.target.closest('.calendar-day');
+        if (dayElement) {
+            dayElement.classList.remove('drag-over');
+        }
+    });
+    
+    document.addEventListener('drop', function(e) {
+        e.preventDefault();
+        const dayElement = e.target.closest('.calendar-day');
+        if (dayElement) {
+            dayElement.classList.remove('drag-over');
+            
+            const data = e.dataTransfer.getData('text/plain');
+            if (data.startsWith('object:')) {
+                const objectId = data.replace('object:', '');
+                handleObjectDropOnDay(dayElement, objectId);
+            } else if (data.startsWith('employee:')) {
+                const employeeId = data.replace('employee:', '');
+                handleEmployeeDropOnDay(dayElement, employeeId);
+            }
+        }
+    });
+}
+
+// Обработка перетаскивания объекта на день
+function handleObjectDropOnDay(dayElement, objectId) {
+    const date = dayElement.dataset.date;
+    console.log(`Object ${objectId} dropped on day ${date}`);
+    
+    // Открываем форму быстрого создания с предзаполненными данными
+    if (window.calendarPanels && window.calendarPanels.showQuickCreateForm) {
+        // Найдем данные объекта
+        const objectItem = document.querySelector(`[data-object-id="${objectId}"]`);
+        if (objectItem) {
+            const object = {
+                id: objectId,
+                name: objectItem.dataset.objectName,
+                hourlyRate: objectItem.dataset.hourlyRate,
+                openingTime: objectItem.dataset.openingTime,
+                closingTime: objectItem.dataset.closingTime
+            };
+            window.calendarPanels.showQuickCreateForm(object, date);
+        }
+    }
+}
+
+// Обработка перетаскивания сотрудника на день
+function handleEmployeeDropOnDay(dayElement, employeeId) {
+    const date = dayElement.dataset.date;
+    console.log(`Employee ${employeeId} dropped on day ${date}`);
+    
+    // Найдем данные сотрудника
+    const employeeItem = document.querySelector(`[data-employee-id="${employeeId}"]`);
+    if (employeeItem) {
+        const employee = {
+            id: employeeId,
+            name: employeeItem.dataset.employeeName,
+            role: employeeItem.dataset.employeeRole,
+            status: employeeItem.dataset.employeeStatus
+        };
+        
+        // Показываем уведомление
+        if (window.calendarPanels && window.calendarPanels.showNotification) {
+            window.calendarPanels.showNotification(
+                `Сотрудник ${employee.name} перетащен на ${date}. Используйте форму планирования для создания смены.`, 
+                'info'
+            );
+        }
+    }
 }
 
 </script>
