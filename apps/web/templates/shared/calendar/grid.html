@@ -228,34 +228,41 @@ function createCalendarGrid(calendarData) {
         }
     });
     
-    // Создаем дни для каждого месяца
-    months.forEach(monthData => {
-        const firstDay = new Date(monthData.year, monthData.month, 1);
-        const lastDay = new Date(monthData.year, monthData.month + 1, 0);
+    // Находим понедельник первой недели ВЫБРАННОГО месяца (текущий месяц)
+    const selectedMonthFirstDay = new Date(year, month, 1);
+    const firstMonday = new Date(selectedMonthFirstDay);
+    firstMonday.setDate(selectedMonthFirstDay.getDate() - selectedMonthFirstDay.getDay() + 1);
+    
+    // Находим воскресенье последней недели последнего месяца
+    const lastMonth = months[2]; // Следующий месяц
+    const lastMonthLastDay = new Date(lastMonth.year, lastMonth.month + 1, 0);
+    const lastSunday = new Date(lastMonthLastDay);
+    lastSunday.setDate(lastMonthLastDay.getDate() + (6 - lastMonthLastDay.getDay()));
+    
+    // Создаем дни от первого понедельника до последнего воскресенья
+    let workingDate = new Date(firstMonday);
+    
+    while (workingDate <= lastSunday) {
+        const dateStr = workingDate.toISOString().split('T')[0];
+        const dayNumber = workingDate.getDate();
+        const workingMonth = workingDate.getMonth();
+        const workingYear = workingDate.getFullYear();
         
-        // Находим понедельник первой недели месяца
-        const firstMonday = new Date(firstDay);
-        firstMonday.setDate(firstDay.getDate() - firstDay.getDay() + 1);
+        // Определяем, к какому месяцу относится день
+        let isOtherMonth = true;
+        months.forEach(monthData => {
+            if (workingMonth === monthData.month && workingYear === monthData.year) {
+                isOtherMonth = false;
+            }
+        });
         
-        // Находим воскресенье последней недели месяца
-        const lastSunday = new Date(lastDay);
-        lastSunday.setDate(lastDay.getDate() + (6 - lastDay.getDay()));
+        const isToday = dateStr === today.toISOString().split('T')[0];
         
-        // Создаем дни для этого месяца
-        let workingDate = new Date(firstMonday);
+        const dayElement = createDayElement(dateStr, dayNumber, isOtherMonth, isToday);
+        calendarGrid.appendChild(dayElement);
         
-        while (workingDate <= lastSunday) {
-            const dateStr = workingDate.toISOString().split('T')[0];
-            const dayNumber = workingDate.getDate();
-            const isOtherMonth = workingDate.getMonth() !== monthData.month;
-            const isToday = dateStr === today.toISOString().split('T')[0];
-            
-            const dayElement = createDayElement(dateStr, dayNumber, isOtherMonth, isToday);
-            calendarGrid.appendChild(dayElement);
-            
-            workingDate.setDate(workingDate.getDate() + 1);
-        }
-    });
+        workingDate.setDate(workingDate.getDate() + 1);
+    }
     
     console.log(`Created multi-month calendar grid with ${calendarGrid.querySelectorAll('.calendar-day').length} days`);
 }
@@ -531,6 +538,7 @@ function updateMonthDisplay() {
         'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
     ];
     
+    // currentMonth уже 1-based (1-12), поэтому используем currentMonth - 1 для массива
     monthName.textContent = `${monthNames[currentMonth - 1]} ${currentYear}`;
     yearDisplay.textContent = currentYear;
 }
