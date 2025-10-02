@@ -3157,7 +3157,7 @@ async def quick_create_timeslot_manager(
         raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слота: {str(e)}")
 
 
-@router.get("/employees/create", response_class=HTMLResponse)
+@router.get("/employees/create-contract", response_class=HTMLResponse)
 async def manager_create_contract_form(
     request: Request,
     current_user: dict = Depends(require_manager_or_owner),
@@ -3205,7 +3205,7 @@ async def manager_create_contract_form(
         raise HTTPException(status_code=500, detail="Ошибка загрузки формы")
 
 
-@router.post("/employees/create")
+@router.post("/employees/create-contract")
 async def manager_create_contract(
     request: Request,
     current_user: dict = Depends(require_manager_or_owner)
