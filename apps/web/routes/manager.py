@@ -3208,45 +3208,25 @@ async def manager_create_contract_form(
 @router.post("/employees/create-contract")
 async def manager_create_contract(
     request: Request,
+    employee_telegram_id: int = Form(...),
+    title: str = Form(...),
+    content: str = Form(""),
+    hourly_rate: Optional[int] = Form(None),
+    start_date: str = Form(...),
+    end_date: Optional[str] = Form(None),
+    template_id: Optional[int] = Form(None),
+    allowed_objects: List[int] = Form(default=[]),
     current_user: dict = Depends(require_manager_or_owner)
 ):
     """Создание договора с сотрудником для управляющего."""
-    logger.info("Manager create contract function called!")
     try:
         if isinstance(current_user, RedirectResponse):
             return current_user
         
-        form_data = await request.form()
-        
-        # Логируем все данные формы для отладки
-        logger.info(f"Form data received: {dict(form_data)}")
-        
-        # Получаем данные формы
-        employee_telegram_id_str = form_data.get("employee_telegram_id", "").strip()
-        if not employee_telegram_id_str:
-            raise HTTPException(status_code=400, detail="Telegram ID сотрудника обязателен")
-        
-        try:
-            employee_telegram_id = int(employee_telegram_id_str)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Telegram ID должен быть числом")
-        
-        title = form_data.get("title", "").strip()
-        content = form_data.get("content", "").strip()
-        hourly_rate_str = form_data.get("hourly_rate", "").strip()
-        hourly_rate = int(hourly_rate_str) if hourly_rate_str else None
-        
-        start_date_str = form_data.get("start_date", "").strip()
-        end_date_str = form_data.get("end_date", "").strip()
-        
-        template_id_str = form_data.get("template_id", "").strip()
-        template_id = int(template_id_str) if template_id_str else None
-        allowed_objects = [int(obj_id) for obj_id in form_data.getlist("allowed_objects")]
-        
         # Валидация
         if not title:
             raise HTTPException(status_code=400, detail="Название договора обязательно")
-        if not start_date_str:
+        if not start_date:
             raise HTTPException(status_code=400, detail="Дата начала обязательна")
         if not allowed_objects:
             raise HTTPException(status_code=400, detail="Необходимо выбрать хотя бы один объект")
@@ -3276,8 +3256,8 @@ async def manager_create_contract(
             
             # Парсим даты
             from datetime import datetime
-            start_date_obj = datetime.strptime(start_date_str, "%Y-%m-%d")
-            end_date_obj = datetime.strptime(end_date_str, "%Y-%m-%d") if end_date_str else None
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
             
             # Создаем договор через ContractService
             from apps.web.services.contract_service import ContractService
