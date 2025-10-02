@@ -225,7 +225,7 @@ app.include_router(billing.router, prefix="/admin/billing", tags=["Систем�
 app.include_router(limits.router, prefix="/owner/limits", tags=["Контроль лимитов"])
 app.include_router(admin_reports.router, prefix="/admin/reports", tags=["Административные отчеты"])
 app.include_router(owner.router, prefix="/owner", tags=["Владелец"])
-app.include_router(manager.router, tags=["Управляющий"])
+app.include_router(manager.router, prefix="/manager", tags=["Управляющий"])
 app.include_router(manager_timeslots.router, tags=["Управляющий - Тайм-слоты"])
 app.include_router(test_calendar.router, tags=["Тест календаря"])
 app.include_router(employee.router, prefix="/employee", tags=["Сотрудник"])
