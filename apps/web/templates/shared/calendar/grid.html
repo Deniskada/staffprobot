@@ -274,7 +274,6 @@ function createCalendarGrid(calendarData) {
         workingDate.setDate(workingDate.getDate() + 1);
     }
     
-    console.log(`Created multi-month calendar grid with ${calendarGrid.querySelectorAll('.calendar-day').length} days`);
     
     // Автопрокрутка к текущей дате после создания сетки
     setTimeout(() => {
@@ -490,11 +489,8 @@ let isUserScrolling = false; // Флаг для отслеживания пол�
 
 // Оптимизированная логика определения месяца
 function determineCurrentMonth() {
-    console.log('=== Determining current month ===');
-    
     // ПРИОРИТЕТ 1: Если пользователь выбрал месяц вручную
     if (window.userSelectedMonth) {
-        console.log('Priority 1: User selected month:', window.userSelectedMonth);
         return window.userSelectedMonth;
     }
     
@@ -505,20 +501,17 @@ function determineCurrentMonth() {
     
     if (yearParam && monthParam) {
         const urlMonth = parseInt(monthParam);
-        console.log('Priority 2: URL parameters - year:', yearParam, 'month:', urlMonth);
         return { year: parseInt(yearParam), month: urlMonth };
     }
     
     // ПРИОРИТЕТ 3: Определение по видимой области календаря
     const visibleMonth = getVisibleMonthFromScroll();
     if (visibleMonth) {
-        console.log('Priority 3: Visible month from scroll:', visibleMonth);
         return visibleMonth;
     }
     
     // ПРИОРИТЕТ 4: Текущая дата
     const today = new Date();
-    console.log('Priority 4: Current date - year:', today.getFullYear(), 'month:', today.getMonth() + 1);
     return { year: today.getFullYear(), month: today.getMonth() + 1 };
 }
 
@@ -568,7 +561,6 @@ function initMonthSelector() {
     currentYear = monthInfo.year;
     currentMonth = monthInfo.month;
     
-    console.log('Initialized with year:', currentYear, 'month:', currentMonth);
     
     // Обновляем отображение
     updateMonthDisplay();
@@ -642,8 +634,6 @@ function changeYear(delta) {
 }
 
 function selectMonth(month) {
-    console.log('=== User selected month ===', month);
-    
     // Устанавливаем флаг пользовательского выбора
     window.userSelectedMonth = { year: currentYear, month: month };
     
@@ -654,7 +644,6 @@ function selectMonth(month) {
     
     // Перезагружаем календарь
     const newDate = new Date(currentYear, currentMonth - 1, 1);
-    console.log('Created newDate:', newDate, 'getMonth():', newDate.getMonth(), 'getMonth()+1:', newDate.getMonth() + 1);
     loadCalendar(newDate);
     
     // Автопрокрутка к выбранному месяцу после загрузки
@@ -678,7 +667,6 @@ function scrollToCurrentDate() {
     // Находим элемент с текущей датой
     const todayElement = document.querySelector(`.calendar-day[data-date="${todayStr}"]`);
     if (!todayElement) {
-        console.log('Today element not found for date:', todayStr);
         return;
     }
     
@@ -693,8 +681,6 @@ function scrollToCurrentDate() {
     
     // Прокручиваем так, чтобы элемент был в центре видимой области
     const scrollTo = elementTop - (containerHeight / 2) + (elementHeight / 2);
-    
-    console.log('Scrolling to current date:', todayStr, 'scrollTo:', scrollTo);
     
     // Плавная прокрутка
     scrollableContainer.scrollTo({
@@ -715,7 +701,6 @@ function scrollToSelectedMonth() {
     // Находим элемент с первым днем выбранного месяца
     const monthElement = document.querySelector(`.calendar-day[data-date="${selectedMonthStr}"]`);
     if (!monthElement) {
-        console.log('Selected month element not found for date:', selectedMonthStr);
         return;
     }
     
@@ -726,8 +711,6 @@ function scrollToSelectedMonth() {
     // Вычисляем позицию для прокрутки (показываем элемент в верхней части)
     const elementTop = elementRect.top - containerRect.top + scrollableContainer.scrollTop;
     
-    console.log('Scrolling to selected month:', selectedMonthStr, 'scrollTo:', elementTop);
-    
     // Плавная прокрутка к началу выбранного месяца
     scrollableContainer.scrollTo({
         top: Math.max(0, elementTop - 20), // Небольшой отступ сверху
@@ -735,10 +718,28 @@ function scrollToSelectedMonth() {
     });
 }
 
+// Безопасная инициализация календаря
+function safeInitCalendar() {
+    try {
+        initMonthSelector();
+        initScrollTracking();
+    } catch (error) {
+        console.error('Calendar initialization error:', error);
+        // Fallback к базовой функциональности
+        setTimeout(() => {
+            try {
+                initMonthSelector();
+                initScrollTracking();
+            } catch (retryError) {
+                console.error('Calendar retry initialization failed:', retryError);
+            }
+        }, 1000);
+    }
+}
+
 // Инициализация при загрузке DOM
 document.addEventListener('DOMContentLoaded', function() {
-    initMonthSelector();
-    initScrollTracking();
+    safeInitCalendar();
 });
 
 // Отслеживание прокрутки для обновления переключателя месяцев
@@ -747,24 +748,31 @@ function initScrollTracking() {
     if (!scrollableContainer) return;
     
     let scrollTimeout;
+    let isScrolling = false;
+    
+    // Оптимизированный обработчик прокрутки с дебаунсингом
     scrollableContainer.addEventListener('scroll', function() {
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-            updateMonthDisplayFromScroll();
-        }, 150); // Задержка для оптимизации
-    });
+        if (!isScrolling) {
+            isScrolling = true;
+            requestAnimationFrame(() => {
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(() => {
+                    updateMonthDisplayFromScroll();
+                    isScrolling = false;
+                }, 100); // Уменьшена задержка для лучшей отзывчивости
+            });
+        }
+    }, { passive: true });
 }
 
 function updateMonthDisplayFromScroll() {
     // Не обновляем, если пользователь недавно выбрал месяц вручную
     if (window.userSelectedMonth) {
-        console.log('Skipping scroll update - user recently selected month');
         return;
     }
     
     const visibleMonth = getVisibleMonthFromScroll();
     if (visibleMonth && (visibleMonth.year !== currentYear || visibleMonth.month !== currentMonth)) {
-        console.log('Updating month from scroll:', visibleMonth);
         currentYear = visibleMonth.year;
         currentMonth = visibleMonth.month;
         updateMonthDisplay();
@@ -774,22 +782,15 @@ function updateMonthDisplayFromScroll() {
 
 // Проверяем что функция доступна после загрузки и привязываем события
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, filterByObject available:', typeof window.filterByObject === 'function');
     
     // Привязываем событие к фильтру объектов
     const objectFilter = document.getElementById('objectFilter');
     if (objectFilter) {
-        console.log('Object filter element found, binding change event');
         objectFilter.addEventListener('change', function() {
-            console.log('Object filter change event triggered, value:', this.value);
             if (typeof window.filterByObject === 'function') {
                 window.filterByObject();
-            } else {
-                console.error('filterByObject function not available');
             }
         });
-    } else {
-        console.log('Object filter element not found');
     }
 });
 
