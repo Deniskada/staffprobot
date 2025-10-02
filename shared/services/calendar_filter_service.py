@@ -375,8 +375,6 @@ class CalendarFilterService:
                         shift_type = ShiftType.ACTIVE
                     elif shift.status == "completed":
                         shift_type = ShiftType.COMPLETED
-                    elif shift.status == "cancelled":
-                        shift_type = ShiftType.CANCELLED
                     else:
                         shift_type = ShiftType.ACTIVE  # По умолчанию
                     
