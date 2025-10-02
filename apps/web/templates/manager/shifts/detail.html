@@ -159,9 +159,6 @@
                                     
                                     <div class="text-muted">
                                         <small>Создана: {{ shift.created_at.strftime('%d.%m.%Y %H:%M') if shift.created_at else 'Не указана' }}</small>
-                                        {% if shift_type == 'schedule' and shift.status == 'cancelled' and shift.cancelled_at %}
-                                        <br><small class="text-danger">Отменена: {{ shift.cancelled_at.strftime('%d.%m.%Y %H:%M') if shift.cancelled_at else 'Не указана' }}</small>
-                                        {% endif %}
                                     </div>
                                 </div>
                             </div>

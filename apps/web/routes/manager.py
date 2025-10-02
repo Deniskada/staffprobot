@@ -3310,14 +3310,14 @@ async def manager_shift_detail(
                 
                 # Получаем информацию о тайм-слоте
                 timeslot_info = None
-                if schedule.timeslot_id:
-                    timeslot_query = select(TimeSlot).where(TimeSlot.id == schedule.timeslot_id)
+                if schedule.time_slot_id:
+                    timeslot_query = select(TimeSlot).where(TimeSlot.id == schedule.time_slot_id)
                     timeslot_result = await db.execute(timeslot_query)
                     timeslot = timeslot_result.scalar_one_or_none()
                     if timeslot:
                         # Подсчитываем количество запланированных смен для этого тайм-слота
                         scheduled_count_query = select(ShiftSchedule).where(
-                            ShiftSchedule.timeslot_id == timeslot.id,
+                            ShiftSchedule.time_slot_id == timeslot.id,
                             ShiftSchedule.status == 'planned'
                         )
                         scheduled_count_result = await db.execute(scheduled_count_query)
@@ -3344,9 +3344,7 @@ async def manager_shift_detail(
                     'hourly_rate': schedule.hourly_rate,
                     'notes': schedule.notes,
                     'created_at': schedule.created_at,
-                    'timeslot_info': timeslot_info,
-                    'cancelled_at': schedule.cancelled_at,
-                    'cancelled_by': schedule.cancelled_by
+                    'timeslot_info': timeslot_info
                 }
             else:
                 # Обычная смена
