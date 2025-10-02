@@ -513,7 +513,10 @@ function createDateRangePicker() {
         const cell = e.target.closest('.calendar-day');
         if (!cell || cell.classList.contains('disabled')) return;
         
-        const date = new Date(cell.dataset.date);
+        // Исправляем проблему с временными зонами - создаем дату в локальной зоне
+        const dateString = cell.dataset.date; // "2025-10-01"
+        const [year, month, day] = dateString.split('-').map(Number);
+        const date = new Date(year, month - 1, day); // month - 1 потому что месяцы в JS начинаются с 0
         
         if (isSelectingStart) {
             startDate = date;
@@ -565,7 +568,11 @@ function createDateRangePicker() {
         const cells = calendarEl.querySelectorAll('.calendar-day');
         cells.forEach(cell => {
             cell.classList.remove('selected', 'range-start', 'range-end', 'in-range');
-            const cellDate = new Date(cell.dataset.date);
+            
+            // Используем тот же способ создания даты, что и при клике
+            const dateString = cell.dataset.date;
+            const [year, month, day] = dateString.split('-').map(Number);
+            const cellDate = new Date(year, month - 1, day);
             
             if (startDate && cellDate.getTime() === startDate.getTime()) {
                 cell.classList.add('range-start');
