@@ -11,7 +11,7 @@
                     <i class="bi bi-clock-history"></i> Управление сменами
                 </h1>
                 <div class="d-flex gap-2">
-                    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#filterModal">
+                    <button class="btn btn-outline-primary" id="toggleFiltersBtn" onclick="toggleFilters()">
                         <i class="bi bi-funnel"></i> Фильтры
                     </button>
                     <button class="btn btn-primary" onclick="refreshData()">
@@ -85,7 +85,7 @@
             </div>
 
             <!-- Фильтры -->
-            <div class="card mb-4">
+            <div class="card mb-4" id="filtersCard" style="display: none;">
                 <div class="card-body">
                     <form method="GET" id="filterForm">
                         <div class="row">
@@ -114,15 +114,17 @@
                                     {% endif %}
                                 </select>
                             </div>
-                            <div class="col-md-2">
-                                <label for="date_from" class="form-label">С даты</label>
-                                <input type="date" class="form-control" id="date_from" name="date_from" 
-                                       value="{{ filters.date_from or '' }}">
-                            </div>
-                            <div class="col-md-2">
-                                <label for="date_to" class="form-label">По дату</label>
-                                <input type="date" class="form-control" id="date_to" name="date_to" 
-                                       value="{{ filters.date_to or '' }}">
+                            <div class="col-md-4">
+                                <label for="dateRange" class="form-label">Период</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="dateRange" name="dateRange" 
+                                           placeholder="Выберите период" readonly>
+                                    <button class="btn btn-outline-secondary" type="button" id="clearDateRange">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
+                                <input type="hidden" id="date_from" name="date_from" value="{{ filters.date_from or '' }}">
+                                <input type="hidden" id="date_to" name="date_to" value="{{ filters.date_to or '' }}">
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">&nbsp;</label>
@@ -148,11 +150,26 @@
                         <table class="table table-hover mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Сотрудник</th>
-                                    <th>Объект</th>
-                                    <th>Время</th>
-                                    <th>Статус</th>
-                                    <th>Часы/Оплата</th>
+                                    <th class="sortable" data-sort="user_name">
+                                        Сотрудник
+                                        <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
+                                    </th>
+                                    <th class="sortable" data-sort="object_name">
+                                        Объект
+                                        <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
+                                    </th>
+                                    <th class="sortable" data-sort="start_time">
+                                        Время
+                                        <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
+                                    </th>
+                                    <th class="sortable" data-sort="status">
+                                        Статус
+                                        <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
+                                    </th>
+                                    <th class="sortable" data-sort="created_at">
+                                        Часы/Оплата
+                                        <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
+                                    </th>
                                     <th>Действия</th>
                                 </tr>
                             </thead>
@@ -331,7 +348,359 @@
 <script>
 let currentShiftId = null;
 let currentShiftType = null;
+let currentSortField = null;
+let currentSortOrder = 'asc';
+let dateRangePicker = null;
 
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    initializeDateRangePicker();
+    initializeSorting();
+    initializeFilters();
+});
+
+// Функция переключения видимости фильтров
+function toggleFilters() {
+    const filtersCard = document.getElementById('filtersCard');
+    const toggleBtn = document.getElementById('toggleFiltersBtn');
+    
+    if (filtersCard.style.display === 'none') {
+        filtersCard.style.display = 'block';
+        toggleBtn.innerHTML = '<i class="bi bi-funnel-fill"></i> Скрыть фильтры';
+    } else {
+        filtersCard.style.display = 'none';
+        toggleBtn.innerHTML = '<i class="bi bi-funnel"></i> Фильтры';
+        clearAllFilters();
+    }
+}
+
+// Очистка всех фильтров
+function clearAllFilters() {
+    document.getElementById('status').value = '';
+    document.getElementById('object_id').value = '';
+    document.getElementById('dateRange').value = '';
+    document.getElementById('date_from').value = '';
+    document.getElementById('date_to').value = '';
+    
+    if (dateRangePicker) {
+        dateRangePicker.clear();
+    }
+}
+
+// Инициализация выбора диапазона дат
+function initializeDateRangePicker() {
+    const dateRangeInput = document.getElementById('dateRange');
+    const dateFromInput = document.getElementById('date_from');
+    const dateToInput = document.getElementById('date_to');
+    const clearBtn = document.getElementById('clearDateRange');
+    
+    // Устанавливаем начальные значения если есть
+    const dateFrom = dateFromInput.value;
+    const dateTo = dateToInput.value;
+    
+    if (dateFrom && dateTo) {
+        const fromDate = new Date(dateFrom);
+        const toDate = new Date(dateTo);
+        dateRangeInput.value = `${formatDate(fromDate)} - ${formatDate(toDate)}`;
+    }
+    
+    // Обработчик клика по полю даты
+    dateRangeInput.addEventListener('click', function() {
+        if (!dateRangePicker) {
+            createDateRangePicker();
+        }
+        dateRangePicker.show();
+    });
+    
+    // Обработчик очистки
+    clearBtn.addEventListener('click', function() {
+        dateRangeInput.value = '';
+        dateFromInput.value = '';
+        dateToInput.value = '';
+        if (dateRangePicker) {
+            dateRangePicker.clear();
+        }
+    });
+}
+
+// Создание календаря для выбора диапазона дат
+function createDateRangePicker() {
+    const dateRangeInput = document.getElementById('dateRange');
+    const dateFromInput = document.getElementById('date_from');
+    const dateToInput = document.getElementById('date_to');
+    
+    let startDate = null;
+    let endDate = null;
+    let isSelectingStart = true;
+    
+    // Создаем модальное окно с календарем
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Выберите период</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="calendar-container">
+                        <div class="calendar" id="datePickerCalendar"></div>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <span id="datePickerHint">Выберите дату начала</span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" id="confirmDateRange">Применить</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    const bootstrapModal = new bootstrap.Modal(modal);
+    
+    // Создаем календарь
+    const calendarEl = modal.querySelector('#datePickerCalendar');
+    const calendar = createSimpleCalendar(calendarEl);
+    
+    // Обработчик выбора даты
+    calendarEl.addEventListener('click', function(e) {
+        const cell = e.target.closest('.calendar-day');
+        if (!cell || cell.classList.contains('disabled')) return;
+        
+        const date = new Date(cell.dataset.date);
+        
+        if (isSelectingStart) {
+            startDate = date;
+            endDate = null;
+            isSelectingStart = false;
+            updateCalendarDisplay();
+            document.getElementById('datePickerHint').textContent = 'Выберите дату окончания';
+        } else {
+            if (date < startDate) {
+                endDate = startDate;
+                startDate = date;
+            } else {
+                endDate = date;
+            }
+            updateCalendarDisplay();
+            document.getElementById('datePickerHint').textContent = 'Период выбран';
+        }
+    });
+    
+    // Обработчик подтверждения
+    modal.querySelector('#confirmDateRange').addEventListener('click', function() {
+        if (startDate && endDate) {
+            dateRangeInput.value = `${formatDate(startDate)} - ${formatDate(endDate)}`;
+            dateFromInput.value = formatDateForInput(startDate);
+            dateToInput.value = formatDateForInput(endDate);
+        }
+        bootstrapModal.hide();
+    });
+    
+    // Обработчик закрытия модального окна
+    modal.addEventListener('hidden.bs.modal', function() {
+        document.body.removeChild(modal);
+        dateRangePicker = null;
+    });
+    
+    dateRangePicker = {
+        show: () => bootstrapModal.show(),
+        clear: () => {
+            startDate = null;
+            endDate = null;
+            isSelectingStart = true;
+            dateRangeInput.value = '';
+            dateFromInput.value = '';
+            dateToInput.value = '';
+        }
+    };
+    
+    function updateCalendarDisplay() {
+        const cells = calendarEl.querySelectorAll('.calendar-day');
+        cells.forEach(cell => {
+            cell.classList.remove('selected', 'range-start', 'range-end', 'in-range');
+            const cellDate = new Date(cell.dataset.date);
+            
+            if (startDate && cellDate.getTime() === startDate.getTime()) {
+                cell.classList.add('range-start');
+            }
+            if (endDate && cellDate.getTime() === endDate.getTime()) {
+                cell.classList.add('range-end');
+            }
+            if (startDate && endDate && cellDate > startDate && cellDate < endDate) {
+                cell.classList.add('in-range');
+            }
+        });
+    }
+}
+
+// Создание простого календаря
+function createSimpleCalendar(container) {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    const monthNames = [
+        'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+        'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+    ];
+    
+    const daysOfWeek = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    
+    let html = `
+        <div class="calendar-header">
+            <h6>${monthNames[currentMonth]} ${currentYear}</h6>
+        </div>
+        <div class="calendar-grid">
+            <div class="calendar-weekdays">
+                ${daysOfWeek.map(day => `<div class="calendar-weekday">${day}</div>`).join('')}
+            </div>
+            <div class="calendar-days">
+    `;
+    
+    const firstDay = new Date(currentYear, currentMonth, 1);
+    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay() + 1);
+    
+    for (let i = 0; i < 42; i++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + i);
+        
+        const isCurrentMonth = date.getMonth() === currentMonth;
+        const isToday = date.toDateString() === today.toDateString();
+        
+        html += `
+            <div class="calendar-day ${isCurrentMonth ? '' : 'disabled'} ${isToday ? 'today' : ''}" 
+                 data-date="${date.toISOString().split('T')[0]}">
+                ${date.getDate()}
+            </div>
+        `;
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Добавляем стили
+    const style = document.createElement('style');
+    style.textContent = `
+        .calendar-container { max-width: 300px; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+        .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 8px; }
+        .calendar-weekday { text-align: center; font-weight: bold; font-size: 0.8em; color: #666; }
+        .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+        .calendar-day { 
+            aspect-ratio: 1; display: flex; align-items: center; justify-content: center; 
+            cursor: pointer; border-radius: 4px; font-size: 0.9em;
+        }
+        .calendar-day:hover { background-color: #e9ecef; }
+        .calendar-day.disabled { color: #ccc; cursor: not-allowed; }
+        .calendar-day.today { background-color: #007bff; color: white; }
+        .calendar-day.selected { background-color: #007bff; color: white; }
+        .calendar-day.range-start { background-color: #007bff; color: white; }
+        .calendar-day.range-end { background-color: #007bff; color: white; }
+        .calendar-day.in-range { background-color: #e3f2fd; }
+    `;
+    document.head.appendChild(style);
+}
+
+// Инициализация сортировки
+function initializeSorting() {
+    const sortableHeaders = document.querySelectorAll('.sortable');
+    
+    sortableHeaders.forEach(header => {
+        header.style.cursor = 'pointer';
+        header.addEventListener('click', function() {
+            const sortField = this.dataset.sort;
+            sortTable(sortField);
+        });
+    });
+}
+
+// Сортировка таблицы
+function sortTable(field) {
+    const url = new URL(window.location);
+    
+    if (currentSortField === field) {
+        currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortField = field;
+        currentSortOrder = 'asc';
+    }
+    
+    url.searchParams.set('sort', field);
+    url.searchParams.set('order', currentSortOrder);
+    
+    // Обновляем иконки сортировки
+    updateSortIcons(field, currentSortOrder);
+    
+    // Переходим на новую страницу с параметрами сортировки
+    window.location.href = url.toString();
+}
+
+// Обновление иконок сортировки
+function updateSortIcons(activeField, order) {
+    const headers = document.querySelectorAll('.sortable');
+    
+    headers.forEach(header => {
+        const icon = header.querySelector('.sort-icon');
+        const field = header.dataset.sort;
+        
+        if (field === activeField) {
+            icon.className = `bi bi-arrow-${order === 'asc' ? 'up' : 'down'} ms-1 sort-icon`;
+        } else {
+            icon.className = 'bi bi-arrow-down-up ms-1 sort-icon';
+        }
+    });
+}
+
+// Инициализация фильтров
+function initializeFilters() {
+    // Устанавливаем текущую сортировку если есть
+    const urlParams = new URLSearchParams(window.location.search);
+    const sortField = urlParams.get('sort');
+    const sortOrder = urlParams.get('order');
+    
+    if (sortField && sortOrder) {
+        currentSortField = sortField;
+        currentSortOrder = sortOrder;
+        updateSortIcons(sortField, sortOrder);
+    }
+    
+    // Показываем фильтры если есть активные
+    const hasActiveFilters = urlParams.get('status') || urlParams.get('object_id') || 
+                           urlParams.get('date_from') || urlParams.get('date_to');
+    
+    if (hasActiveFilters) {
+        document.getElementById('filtersCard').style.display = 'block';
+        document.getElementById('toggleFiltersBtn').innerHTML = '<i class="bi bi-funnel-fill"></i> Скрыть фильтры';
+    }
+}
+
+// Функции для работы с датами
+function formatDate(date) {
+    return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
+
+function formatDateForInput(date) {
+    return date.toISOString().split('T')[0];
+}
+
+// Функции для отмены смен
 function cancelShift(shiftId, shiftType) {
     currentShiftId = shiftId;
     currentShiftType = shiftType;
@@ -354,9 +723,7 @@ document.getElementById('confirmCancel').addEventListener('click', async functio
         const result = await response.json();
         
         if (result.success) {
-            // Показываем уведомление об успехе
             showNotification(result.message, 'success');
-            // Перезагружаем страницу
             setTimeout(() => {
                 window.location.reload();
             }, 1000);
@@ -368,7 +735,6 @@ document.getElementById('confirmCancel').addEventListener('click', async functio
         showNotification('Ошибка отмены смены', 'error');
     }
     
-    // Закрываем модальное окно
     const modal = bootstrap.Modal.getInstance(document.getElementById('cancelModal'));
     modal.hide();
 });
@@ -378,7 +744,6 @@ function refreshData() {
 }
 
 function showNotification(message, type) {
-    // Создаем уведомление
     const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
     const icon = type === 'success' ? 'bi-check-circle' : 'bi-exclamation-triangle';
     
@@ -392,7 +757,6 @@ function showNotification(message, type) {
     
     document.body.appendChild(notification);
     
-    // Автоматически скрываем через 5 секунд
     setTimeout(() => {
         if (notification.parentNode) {
             notification.remove();
