@@ -571,11 +571,10 @@ function createBeautifulCalendar(container, monthYearEl) {
     monthYearEl.textContent = `${monthNames[currentMonth]} ${currentYear}`;
     
     let html = `
-        <div class="calendar-grid">
-            <div class="calendar-weekdays">
-                ${daysOfWeek.map(day => `<div class="calendar-weekday">${day}</div>`).join('')}
-            </div>
-            <div class="calendar-days">
+        <div class="calendar-weekdays">
+            ${daysOfWeek.map(day => `<div class="calendar-weekday">${day}</div>`).join('')}
+        </div>
+        <div class="calendar-days">
     `;
     
     const firstDay = new Date(currentYear, currentMonth, 1);
@@ -613,11 +612,6 @@ function createBeautifulCalendar(container, monthYearEl) {
             border-radius: 12px; 
             padding: 20px; 
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        }
-        .calendar-grid { 
-            display: grid; 
-            grid-template-columns: repeat(7, 1fr); 
-            gap: 4px; 
         }
         .calendar-weekdays { 
             display: grid; 
