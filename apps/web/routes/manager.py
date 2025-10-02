@@ -1703,17 +1703,21 @@ async def manager_calendar_api_data(
         return {
             "timeslots": timeslots_data,
             "shifts": shifts_data,
-            "metadata": {
-                "date_range_start": calendar_data.date_range_start.isoformat(),
-                "date_range_end": calendar_data.date_range_end.isoformat(),
-                "user_role": calendar_data.user_role,
-                "total_timeslots": calendar_data.total_timeslots,
-                "total_shifts": calendar_data.total_shifts,
-                "planned_shifts": calendar_data.planned_shifts,
-                "active_shifts": calendar_data.active_shifts,
-                "completed_shifts": calendar_data.completed_shifts,
-                "accessible_objects": calendar_data.accessible_objects
-            }
+            "objects": [
+                {
+                    "id": obj.id,
+                    "name": obj.name,
+                    "timezone": obj.timezone or "Europe/Moscow"
+                }
+                for obj in calendar_data.objects
+            ],
+            "date_range": {
+                "start": start_date_obj.isoformat(),
+                "end": end_date_obj.isoformat()
+            },
+            "user_role": user_role,
+            "total_timeslots": len(timeslots_data),
+            "total_shifts": len(shifts_data)
         }
         
     except HTTPException:
