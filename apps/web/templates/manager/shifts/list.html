@@ -368,13 +368,38 @@ function toggleFilters() {
         filtersCard.style.display = 'block';
         toggleBtn.innerHTML = '<i class="bi bi-funnel-fill"></i> Скрыть фильтры';
     } else {
+        // Скрываем панель и очищаем все фильтры
         filtersCard.style.display = 'none';
         toggleBtn.innerHTML = '<i class="bi bi-funnel"></i> Фильтры';
-        clearAllFilters();
+        clearAllFiltersAndRedirect();
     }
 }
 
-// Очистка всех фильтров
+// Очистка всех фильтров и перенаправление
+function clearAllFiltersAndRedirect() {
+    // Очищаем поля формы
+    document.getElementById('status').value = '';
+    document.getElementById('object_id').value = '';
+    document.getElementById('dateRange').value = '';
+    document.getElementById('date_from').value = '';
+    document.getElementById('date_to').value = '';
+    
+    if (dateRangePicker) {
+        dateRangePicker.clear();
+    }
+    
+    // Перенаправляем на страницу без фильтров
+    const url = new URL(window.location);
+    url.searchParams.delete('status');
+    url.searchParams.delete('object_id');
+    url.searchParams.delete('date_from');
+    url.searchParams.delete('date_to');
+    url.searchParams.delete('page'); // Сбрасываем страницу на первую
+    
+    window.location.href = url.toString();
+}
+
+// Очистка всех фильтров (без перенаправления)
 function clearAllFilters() {
     document.getElementById('status').value = '';
     document.getElementById('object_id').value = '';
