@@ -1,13 +1,9 @@
-"""Общие сервисы для всех приложений."""
+"""Shared services package."""
 
-from .role_service import RoleService
-from .manager_permission_service import ManagerPermissionService
-from .role_based_login_service import RoleBasedLoginService
-from .notification_service import NotificationService
+from .object_access_service import ObjectAccessService
+from .calendar_filter_service import CalendarFilterService
 
 __all__ = [
-    "RoleService",
-    "ManagerPermissionService",
-    "RoleBasedLoginService",
-    "NotificationService",
+    'ObjectAccessService',
+    'CalendarFilterService'
 ]
