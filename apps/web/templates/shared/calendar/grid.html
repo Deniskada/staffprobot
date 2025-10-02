@@ -238,11 +238,13 @@ function createCalendarGrid(calendarData) {
     const year = yearParam ? parseInt(yearParam) : today.getFullYear();
     const month = monthParam ? parseInt(monthParam) - 1 : today.getMonth(); // monthParam 1-based, month 0-based
     
-    // Создаем сетку для 3 месяцев: предыдущий, текущий, следующий
+    // Создаем сетку для 5 месяцев: 2 предыдущих, текущий, 2 следующих
     const months = [
-        { year: year, month: month - 1, label: 'prev' },    // Предыдущий месяц
+        { year: year, month: month - 2, label: 'prev2' },    // 2 месяца назад
+        { year: year, month: month - 1, label: 'prev' },      // Предыдущий месяц
         { year: year, month: month, label: 'current' },      // Текущий месяц
-        { year: year, month: month + 1, label: 'next' }     // Следующий месяц
+        { year: year, month: month + 1, label: 'next' },     // Следующий месяц
+        { year: year, month: month + 2, label: 'next2' }     // 2 месяца вперед
     ];
     
     // Корректируем год для месяцев < 0 или > 11
@@ -256,14 +258,14 @@ function createCalendarGrid(calendarData) {
         }
     });
     
-    // Находим понедельник первой недели ПЕРВОГО месяца (предыдущий месяц)
-    const firstMonth = months[0]; // Предыдущий месяц
+    // Находим понедельник первой недели ПЕРВОГО месяца (2 месяца назад)
+    const firstMonth = months[0]; // 2 месяца назад
     const firstMonthFirstDay = new Date(firstMonth.year, firstMonth.month, 1);
     const firstMonday = new Date(firstMonthFirstDay);
     firstMonday.setDate(firstMonthFirstDay.getDate() - firstMonthFirstDay.getDay() + 1);
     
-    // Находим воскресенье последней недели последнего месяца
-    const lastMonth = months[2]; // Следующий месяц
+    // Находим воскресенье последней недели последнего месяца (2 месяца вперед)
+    const lastMonth = months[4]; // 2 месяца вперед
     const lastMonthLastDay = new Date(lastMonth.year, lastMonth.month + 1, 0);
     const lastSunday = new Date(lastMonthLastDay);
     lastSunday.setDate(lastMonthLastDay.getDate() + (6 - lastMonthLastDay.getDay()));
@@ -363,26 +365,14 @@ function updateCalendarDisplay(calendarData) {
         console.log('shiftsByDate keys:', Object.keys(calendarData.shiftsByDate || {}));
         
         // Обновляем отображение для каждого дня
-        Object.keys(calendarData.timeslotsByDate || {}).forEach(date => {
-            console.log(`Looking for day element with date: ${date}`);
-            const dayElement = document.querySelector(`[data-date="${date}"]`);
-            console.log(`Found day element for ${date}:`, dayElement);
-            if (dayElement) {
-                updateDayDisplay(dayElement, date, calendarData);
-            } else {
-                console.log(`No day element found for date: ${date}`);
-            }
-        });
+        // Обновляем отображение всех дней календаря
+        const allDayElements = document.querySelectorAll('.calendar-day[data-date]');
+        console.log(`Found ${allDayElements.length} day elements to update`);
         
-        Object.keys(calendarData.shiftsByDate || {}).forEach(date => {
-            console.log(`Looking for day element with date: ${date}`);
-            const dayElement = document.querySelector(`[data-date="${date}"]`);
-            console.log(`Found day element for ${date}:`, dayElement);
-            if (dayElement) {
-                updateDayDisplay(dayElement, date, calendarData);
-            } else {
-                console.log(`No day element found for date: ${date}`);
-            }
+        allDayElements.forEach(dayElement => {
+            const date = dayElement.dataset.date;
+            console.log(`Updating day element for date: ${date}`);
+            updateDayDisplay(dayElement, date, calendarData);
         });
         
         console.log('updateCalendarDisplay completed successfully');

@@ -574,8 +574,24 @@ class UniversalCalendarManager {
         const monthFirstDayStr = monthFirstDay.toISOString().split('T')[0];
         
         // Находим элемент с первым днем месяца
-        const monthElement = document.querySelector(`.calendar-day[data-date="${monthFirstDayStr}"]`);
-        if (!monthElement) return;
+        let monthElement = document.querySelector(`.calendar-day[data-date="${monthFirstDayStr}"]`);
+        
+        // Если не нашли первый день, ищем любой день этого месяца
+        if (!monthElement) {
+            const monthElements = document.querySelectorAll('.calendar-day[data-date]');
+            for (let element of monthElements) {
+                const elementDate = new Date(element.dataset.date);
+                if (elementDate.getFullYear() === year && elementDate.getMonth() === month - 1) {
+                    monthElement = element;
+                    break;
+                }
+            }
+        }
+        
+        if (!monthElement) {
+            console.warn(`Could not find element for month ${year}-${month}`);
+            return;
+        }
         
         // Получаем позицию элемента относительно контейнера
         const containerRect = scrollableContainer.getBoundingClientRect();
