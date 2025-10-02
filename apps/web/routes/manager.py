@@ -16,7 +16,6 @@ from shared.services.role_based_login_service import RoleBasedLoginService
 from apps.web.middleware.role_middleware import require_manager_or_owner
 from apps.web.dependencies import get_current_user_dependency
 from shared.services.calendar_filter_service import CalendarFilterService
-from apps.web.utils.calendar_utils import create_calendar_grid
 from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
@@ -1304,8 +1303,7 @@ async def manager_calendar(
 ):
     """Календарь управляющего."""
     try:
-        from datetime import date, datetime
-        import json
+        from datetime import date, timedelta
         
         logger.info("Starting manager_calendar function")
         
@@ -1314,299 +1312,51 @@ async def manager_calendar(
             logger.info("Current user is RedirectResponse, redirecting")
             return current_user
         
-        async with get_async_session() as db:
-            logger.info("Got database session")
-            
-            user_id = await get_user_id_from_current_user(current_user, db)
-            logger.info(f"User ID: {user_id}")
-            if not user_id:
-                raise HTTPException(status_code=401, detail="Пользователь не найден")
-            
-            # Получаем сервисы
-            logger.info("Creating services")
-            permission_service = ManagerPermissionService(db)
-            login_service = RoleBasedLoginService(db)
-            
-            # Получаем доступные объекты управляющего
-            logger.info("Getting accessible objects")
-            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            logger.info(f"Accessible objects count: {len(accessible_objects)}")
-            
-            # Определяем текущую дату или переданные параметры
-            today = date.today()
-            if year is None:
-                year = today.year
-            if month is None:
-                month = today.month
-            
-            # Валидация даты
-            if not (1 <= month <= 12):
-                month = today.month
-            if year < 2020 or year > 2030:
-                year = today.year
-            
-            # Если выбран конкретный объект, проверяем доступ
-            selected_object = None
-            if object_id:
-                for obj in accessible_objects:
-                    if obj.id == object_id:
-                        selected_object = obj
-                        break
-                if not selected_object:
-                    raise HTTPException(status_code=404, detail="Объект не найден")
-            
-            # Получаем тайм-слоты для выбранного объекта или всех объектов
-            from sqlalchemy import select, and_
-            from sqlalchemy.orm import selectinload
-            from domain.entities.time_slot import TimeSlot
-            
-            timeslots_data = []
-            
-            # Определяем объекты для запроса
-            if selected_object:
-                object_ids = [selected_object.id]
-                objects_map = {selected_object.id: selected_object}
-            else:
-                object_ids = [obj.id for obj in accessible_objects]
-                objects_map = {obj.id: obj for obj in accessible_objects}
-            
-            if object_ids:
-                # Получаем тайм-слоты с текущего месяца до конца года (как у владельца)
-                start_date = date(year, month, 1)
-                end_date = date(year, 12, 31)
-                
-                timeslots_query = select(TimeSlot).options(
-                    selectinload(TimeSlot.object)
-                ).where(
-                    and_(
-                        TimeSlot.object_id.in_(object_ids),
-                        TimeSlot.slot_date >= start_date,
-                        TimeSlot.slot_date < end_date,
-                        TimeSlot.is_active == True
-                    )
-                ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
-                
-                timeslots_result = await db.execute(timeslots_query)
-                timeslots = timeslots_result.scalars().all()
-                
-                logger.info(f"Found {len(timeslots)} timeslots for manager calendar")
-                
-                for slot in timeslots:
-                    obj = objects_map.get(slot.object_id)
-                    if obj:
-                        timeslots_data.append({
-                            "id": slot.id,
-                            "object_id": slot.object_id,
-                            "object_name": obj.name,
-                            "date": slot.slot_date.isoformat(),
-                            "start_time": slot.start_time.strftime("%H:%M"),
-                            "end_time": slot.end_time.strftime("%H:%M"),
-                            "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate),
-                            "max_employees": slot.max_employees or 1,
-                            "is_active": slot.is_active,
-                            "notes": slot.notes or ""
-                        })
-            
-            # Получаем данные о сменах за месяц
-            shifts_data = []
-            logger.info(f"Getting shifts for object_ids: {object_ids}, period: {start_date} to {end_date}")
-            if object_ids:
-                # Получаем запланированные смены
-                from domain.entities.shift_schedule import ShiftSchedule
-                scheduled_shifts_query = select(ShiftSchedule).where(
-                    and_(
-                        ShiftSchedule.object_id.in_(object_ids),
-                        ShiftSchedule.planned_start >= start_date,
-                        ShiftSchedule.planned_start < end_date
-                    )
-                ).order_by(ShiftSchedule.planned_start)
-                
-                scheduled_shifts_result = await db.execute(scheduled_shifts_query)
-                scheduled_shifts = scheduled_shifts_result.scalars().all()
-                logger.info(f"Found {len(scheduled_shifts)} scheduled shifts")
-                
-                # Получаем отработанные смены
-                from domain.entities.shift import Shift
-                actual_shifts_query = select(Shift).options(
-                    selectinload(Shift.user)
-                ).where(
-                    and_(
-                        Shift.object_id.in_(object_ids),
-                        Shift.start_time >= start_date,
-                        Shift.start_time < end_date
-                    )
-                ).order_by(Shift.start_time)
-                
-                actual_shifts_result = await db.execute(actual_shifts_query)
-                actual_shifts = actual_shifts_result.scalars().all()
-                
-                # Получаем информацию о пользователях для запланированных смен
-                user_ids = list(set(shift.user_id for shift in scheduled_shifts))
-                users_query = select(User).where(User.id.in_(user_ids))
-                users_result = await db.execute(users_query)
-                users = {user.id: user for user in users_result.scalars().all()}
-                
-                # Преобразуем запланированные смены в формат для календаря
-                for shift in scheduled_shifts:
-                    obj = objects_map.get(shift.object_id)
-                    if obj:
-                        user = users.get(shift.user_id)
-                        employee_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {shift.user_id}"
-                        
-                        shift_data = {
-                            "id": f"schedule_{shift.id}",
-                            "object_id": shift.object_id,
-                            "object_name": obj.name,
-                            "date": shift.planned_start.date(),  # date object, not isoformat
-                            "start_time": web_timezone_helper.format_time_with_timezone(shift.planned_start, obj.timezone if obj else 'Europe/Moscow'),
-                            "end_time": web_timezone_helper.format_time_with_timezone(shift.planned_end, obj.timezone if obj else 'Europe/Moscow'),
-                            "status": shift.status,
-                            "time_slot_id": shift.time_slot_id,
-                            "employee_name": employee_name,
-                            "notes": shift.notes or ""
-                        }
-                        shifts_data.append(shift_data)
-                        
-                        # Логируем смену на 23 сентября
-                        if shift.planned_start.date().isoformat() == "2025-09-23":
-                            logger.info(f"Found shift on 23.09: {shift_data}")
-                
-                # Преобразуем отработанные смены в формат для календаря
-                for shift in actual_shifts:
-                    obj = objects_map.get(shift.object_id)
-                    if obj:
-                        shifts_data.append({
-                            "id": shift.id,
-                            "object_id": shift.object_id,
-                            "object_name": obj.name,
-                            "date": shift.start_time.date(),  # date object, not isoformat
-                            "start_time": web_timezone_helper.format_time_with_timezone(shift.start_time, obj.timezone if obj else 'Europe/Moscow'),
-                            "end_time": web_timezone_helper.format_time_with_timezone(shift.end_time, obj.timezone if obj else 'Europe/Moscow') if shift.end_time else None,
-                            "status": shift.status,
-                            "time_slot_id": shift.time_slot_id,
-                            "employee_name": f"{shift.user.first_name} {shift.user.last_name or ''}".strip(),
-                            "notes": shift.notes or ""
-                        })
-            
-            # Создаем календарную сетку
-            logger.info(f"Creating calendar grid with {len(timeslots_data)} timeslots and {len(shifts_data)} shifts")
-            logger.info(f"Sample timeslots_data: {timeslots_data[:3] if timeslots_data else 'No timeslots'}")
-            logger.info(f"Sample shifts_data: {shifts_data[:3] if shifts_data else 'No shifts'}")
-            
-            try:
-                calendar_data = create_calendar_grid(year, month, timeslots_data, shifts_data)
-                logger.info(f"Calendar grid created successfully with {len(calendar_data) if calendar_data else 0} weeks")
-                if calendar_data and len(calendar_data) > 0:
-                    logger.info(f"First week has {len(calendar_data[0])} days")
-                else:
-                    logger.warning("calendar_data is None or empty!")
-            except Exception as e:
-                logger.error(f"Error creating calendar grid: {e}", exc_info=True)
-                calendar_data = []
-            
-            # Проверяем структуру calendar_data
-            if calendar_data and len(calendar_data) > 0:
-                first_week = calendar_data[0]
-                if first_week and len(first_week) > 0:
-                    first_day = first_week[0]
-                    logger.info(f"First day structure: {first_day.keys() if hasattr(first_day, 'keys') else type(first_day)}")
-                    if hasattr(first_day, 'get'):
-                        logger.info(f"First day timeslots_count: {first_day.get('timeslots_count', 'N/A')}")
-                        logger.info(f"First day timeslots: {len(first_day.get('timeslots', []))}")
-            
-            # Подготавливаем данные для шаблона
-            objects_list = [{"id": obj.id, "name": obj.name} for obj in accessible_objects]
-            
-            # Навигация по месяцам
-            prev_month = month - 1 if month > 1 else 12
-            prev_year = year if month > 1 else year - 1
-            next_month = month + 1 if month < 12 else 1
-            next_year = year if month < 12 else year + 1
-            
-            # Русские названия месяцев
-            RU_MONTHS = [
-                "", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-                "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
-            ]
-            
-            # Получаем данные для переключения интерфейсов
-            logger.info("Getting available interfaces")
-            available_interfaces = await login_service.get_available_interfaces(user_id)
-            logger.info(f"Available interfaces: {available_interfaces}")
-            
-            # Получаем список сотрудников для drag&drop панели
-            employees_list = []
-            # TODO: Реализовать загрузку сотрудников через ContractService
-            # try:
-            #     from apps.web.services.contract_service import ContractService
-            #     contract_service = ContractService(session)
-            #     # Получаем сотрудников для всех доступных объектов
-            #     for obj in objects_list:
-            #         employees = await contract_service.get_employees_by_object(obj["id"])
-            #         for emp in employees:
-            #             if not any(e["id"] == emp.id for e in employees_list):
-            #                 employees_list.append({
-            #                     "id": emp.id,
-            #                     "name": emp.name,
-            #                     "role": "employee"
-            #                 })
-            # except Exception as e:
-            #     logger.warning(f"Could not load employees for manager calendar: {e}")
-            #     employees_list = []
-            
-            # Подготавливаем данные для shared компонентов календаря
-            calendar_title = f"{RU_MONTHS[month]} {year}"
-            current_date = f"{year}-{month:02d}-01"
-            
-            # Используем calendar_data напрямую как calendar_weeks
-            calendar_weeks = calendar_data
-            if not calendar_weeks:
-                logger.warning("calendar_data is None or empty, creating empty calendar")
-                calendar_weeks = []
-            
-            # Сериализуем объекты date для JSON
-            
-            def serialize_date_objects(obj):
-                if isinstance(obj, date):
-                    return obj.isoformat()
-                if isinstance(obj, datetime):
-                    return obj.isoformat()
-                raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
-            
-            # Конвертируем calendar_weeks для передачи в шаблон
-            calendar_weeks_json = json.dumps(calendar_weeks, default=serialize_date_objects)
-            
-            logger.info("Rendering template")
-            manager_context = await get_manager_context(user_id, db)
-            return templates.TemplateResponse("manager/calendar.html", {
-                "request": request,
-                "title": "Календарное планирование",
-                "current_user": current_user,
-                "year": year,
-                "month": month,
-                "month_name": RU_MONTHS[month],
-                "calendar_title": calendar_title,
-                "current_date": current_date,
-                "view_type": "month",
-                "show_today_button": True,
-                "show_view_switcher": True,
-                "show_filters": True,
-                "show_refresh": True,
-                "calendar_weeks": calendar_weeks,
-                "calendar_weeks_json": calendar_weeks_json,
-                "objects": objects_list,  # Переименовано для совместимости с shared компонентом
-                "accessible_objects": objects_list,
-                "employees": employees_list,
-                "selected_object_id": object_id,
-                "selected_object": selected_object,
-                "timeslots": timeslots_data,
-                "prev_month": prev_month,
-                "prev_year": prev_year,
-                "next_month": next_month,
-                "next_year": next_year,
-                "today": today,
-                **manager_context
+        # Получаем доступные интерфейсы
+        available_interfaces = []
+        if current_user.get("role") == "owner":
+            available_interfaces.append({
+                'name': 'owner',
+                'title': 'Владелец',
+                'description': 'Полное управление',
+                'icon': '👑',
+                'url': '/owner/dashboard',
+                'priority': 1
             })
+        if current_user.get("role") == "manager" or "manager" in current_user.get("roles", []):
+            available_interfaces.append({
+                'name': 'manager',
+                'title': 'Управляющий',
+                'description': 'Управление по правам',
+                'icon': '👨‍💼',
+                'url': '/manager/dashboard',
+                'priority': 4
+            })
+        if current_user.get("role") == "employee" or "employee" in current_user.get("roles", []):
+            available_interfaces.append({
+                'name': 'employee',
+                'title': 'Сотрудник',
+                'description': 'Работа на объектах',
+                'icon': '👷',
+                'url': '/employee/',
+                'priority': 5
+            })
+        
+        logger.info(f"Available interfaces: {available_interfaces}")
+        logger.info("Rendering template")
+        
+        return templates.TemplateResponse("manager/calendar.html", {
+            "request": request,
+            "current_user": current_user,
+            "available_interfaces": available_interfaces,
+            "object_id": object_id,
+            "year": year or date.today().year,
+            "month": month or date.today().month,
+            "date_range": {
+                "start": (date.today().replace(day=1) - timedelta(days=30)).isoformat(),
+                "end": (date.today().replace(day=1) + timedelta(days=60)).isoformat()
+            }
+        })
         
     except Exception as e:
         logger.error(f"Error in manager calendar: {e}", exc_info=True)
@@ -2584,107 +2334,6 @@ async def _create_excel_file_manager(data: List[dict], filename: str):
     except Exception as e:
         logger.error(f"Error creating Excel file for manager: {e}")
         return {"error": f"Ошибка создания Excel файла: {str(e)}"}
-
-
-def _create_calendar_grid_manager(
-    year: int,
-    month: int,
-    timeslots: List[Dict[str, Any]],
-    shifts: List[Dict[str, Any]] | None = None,
-) -> List[List[Dict[str, Any]]]:
-    """Создает календарную сетку с тайм-слотами и сменами для управляющего"""
-    import calendar as py_calendar
-    from datetime import date, timedelta
-    if shifts is None:
-        shifts = []
-    
-    # Получаем первый день месяца и количество дней
-    first_day = date(year, month, 1)
-    last_day = date(year, month, py_calendar.monthrange(year, month)[1])
-    
-    # Находим понедельник для начала календаря
-    today = date.today()
-    if today.year == year and today.month == month:
-        # Если смотрим текущий месяц - начинаем за 2 недели до текущей
-        current_monday = today - timedelta(days=today.weekday())
-        first_monday = current_monday - timedelta(weeks=2)
-    else:
-        # Для других месяцев - начинаем с первого понедельника месяца
-        first_monday = first_day - timedelta(days=first_day.weekday())
-    
-    # Создаем сетку 6x7 (6 недель, 7 дней)
-    calendar_grid = []
-    current_date = first_monday
-    
-    for week in range(6):
-        week_data = []
-        for day in range(7):
-            # Преобразуем current_date в строку для сравнения
-            current_date_str = current_date.isoformat()
-            
-            # Смены за день
-            all_day_shifts = [s for s in shifts if s.get("date") == current_date_str]
-            
-            # Логируем для отладки 23 сентября
-            if current_date_str == "2025-09-23":
-                logger.info(f"DEBUG 23.09: Found {len(all_day_shifts)} shifts for this day")
-                logger.info(f"DEBUG 23.09: current_date_str={current_date_str}")
-                logger.info(f"DEBUG 23.09: Total shifts in data: {len(shifts)}")
-                for i, s in enumerate(shifts):
-                    if s.get("date") == "2025-09-23":
-                        logger.info(f"DEBUG 23.09: Shift {i}: {s}")
-                for s in all_day_shifts:
-                    logger.info(f"DEBUG 23.09 shift: {s}")
-            active_by_object: Dict[int, Dict[str, Any]] = {}
-            completed_by_object: Dict[int, Dict[str, Any]] = {}
-            for s in all_day_shifts:
-                oid = s.get("object_id")
-                if not oid:
-                    continue
-                if s.get("status") == "active":
-                    active_by_object[oid] = s
-                elif s.get("status") == "completed":
-                    completed_by_object[oid] = s
-
-            # Показываем все смены, кроме отмененных
-            day_shifts = []
-            for s in all_day_shifts:
-                # Исключаем только отмененные смены
-                if s.get("status") == "cancelled":
-                    continue
-                day_shifts.append(s)
-            
-            # Логируем для отладки 23 сентября
-            if current_date_str == "2025-09-23":
-                logger.info(f"DEBUG 23.09: all_day_shifts={len(all_day_shifts)}, day_shifts={len(day_shifts)}")
-                for s in day_shifts:
-                    logger.info(f"DEBUG 23.09 shift: {s}")
-
-            # Тайм-слоты за день: показываем все активные тайм-слоты
-            day_timeslots = []
-            for slot in timeslots:
-                if slot.get("date") == current_date_str and slot.get("is_active", True):
-                    # Добавляем поле status для тайм-слота
-                    slot_with_status = slot.copy()
-                    slot_with_status["status"] = "available"
-                    day_timeslots.append(slot_with_status)
-            
-            week_data.append({
-                "date": current_date,
-                "day": current_date.day,
-                "is_current_month": current_date.month == month,
-                "is_other_month": current_date.month != month,
-                "is_today": current_date == date.today(),
-                "timeslots": day_timeslots,
-                "timeslots_count": len(day_timeslots),
-                "shifts": day_shifts,
-                "shifts_count": len(day_shifts),
-            })
-            current_date += timedelta(days=1)
-        
-        calendar_grid.append(week_data)
-    
-    return calendar_grid
 
 
 @router.get("/api/employees")
