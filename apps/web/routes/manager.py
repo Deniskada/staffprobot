@@ -3099,6 +3099,31 @@ async def manager_shifts_list(
             ).where(ShiftSchedule.object_id.in_(accessible_object_ids))
             
             # Применение фильтров
+            if status:
+                if status == "active":
+                    shifts_query = shifts_query.where(Shift.status == "active")
+                elif status == "planned":
+                    # Для запланированных смен фильтруем только ShiftSchedule
+                    schedules_query = schedules_query.where(ShiftSchedule.status == "planned")
+                elif status == "completed":
+                    shifts_query = shifts_query.where(Shift.status == "completed")
+                elif status == "cancelled":
+                    # Фильтруем отмененные смены
+                    shifts_query = shifts_query.where(Shift.status == "cancelled")
+                    schedules_query = schedules_query.where(ShiftSchedule.status == "cancelled")
+            
+            if date_from:
+                from datetime import datetime
+                date_from_obj = datetime.strptime(date_from, "%Y-%m-%d").date()
+                shifts_query = shifts_query.where(Shift.start_time >= date_from_obj)
+                schedules_query = schedules_query.where(ShiftSchedule.planned_start >= date_from_obj)
+            
+            if date_to:
+                from datetime import datetime
+                date_to_obj = datetime.strptime(date_to, "%Y-%m-%d").date()
+                shifts_query = shifts_query.where(Shift.start_time <= date_to_obj)
+                schedules_query = schedules_query.where(ShiftSchedule.planned_start <= date_to_obj)
+            
             if object_id:
                 if int(object_id) in accessible_object_ids:
                     shifts_query = shifts_query.where(Shift.object_id == int(object_id))
