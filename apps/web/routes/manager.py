@@ -35,14 +35,26 @@ templates = Jinja2Templates(directory="apps/web/templates")
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:
     """Получает внутренний ID пользователя из current_user."""
+    logger.info(f"get_user_id_from_current_user: current_user type = {type(current_user)}")
+    logger.info(f"get_user_id_from_current_user: current_user = {current_user}")
+    
     if isinstance(current_user, dict):
         from sqlalchemy import select
-        telegram_id = current_user.get("telegram_id")  # Исправлено: используем telegram_id вместо id
+        # Пробуем получить telegram_id из разных полей
+        telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        logger.info(f"get_user_id_from_current_user: telegram_id = {telegram_id}")
+        
+        if not telegram_id:
+            logger.error("telegram_id is None or empty")
+            return None
+            
         user_query = select(User).where(User.telegram_id == telegram_id)
         user_result = await session.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
+        logger.info(f"get_user_id_from_current_user: user_obj = {user_obj}")
         return user_obj.id if user_obj else None
     else:
+        logger.info(f"get_user_id_from_current_user: returning current_user.id = {current_user.id}")
         return current_user.id
 
 
