@@ -281,7 +281,9 @@ function updateCalendarStatistics(calendarData) {
 }
 
 function updateCalendarDisplay(calendarData) {
-    console.log('updateCalendarDisplay called');
+    console.log('updateCalendarDisplay called - START');
+    console.log('calendarData:', calendarData);
+    console.log('calendarData type:', typeof calendarData);
     try {
         console.log('Updating calendar display with:', calendarData);
         console.log('timeslotsByDate keys:', Object.keys(calendarData.timeslotsByDate || {}));
@@ -343,8 +345,12 @@ function updateDayDisplay(dayElement, date, calendarData) {
     console.log(`Adding ${shifts.length} shifts for ${date}`);
     shifts.forEach(shift => {
         const shiftElement = createShiftElement(shift);
-        dayContent.appendChild(shiftElement);
-        console.log(`Added shift ${shift.id} to ${date}`);
+        if (shiftElement) {  // Проверяем, что элемент не null (не отмененная смена)
+            dayContent.appendChild(shiftElement);
+            console.log(`Added shift ${shift.id} to ${date}`);
+        } else {
+            console.log(`Skipped cancelled shift ${shift.id} for ${date}`);
+        }
     });
 }
 
@@ -354,28 +360,55 @@ function createTimeslotElement(timeslot) {
     div.setAttribute('data-timeslot-id', timeslot.id);
     div.onclick = () => showTimeslotDetails(timeslot.id);
     
+    // Определяем занятость тайм-слота
+    const currentEmployees = timeslot.current_employees || 0;
+    const maxEmployees = timeslot.max_employees || 1;
+    const occupancyBadge = `<div class="timeslot-badge">${currentEmployees}/${maxEmployees}</div>`;
+    
     div.innerHTML = `
         <div class="timeslot-time">${timeslot.start_time} - ${timeslot.end_time}</div>
         <div class="timeslot-object">${timeslot.object_name}</div>
         <div class="timeslot-rate">${timeslot.hourly_rate}₽/ч</div>
+        ${occupancyBadge}
     `;
     
     return div;
 }
 
 function createShiftElement(shift) {
+    // Не отображаем отмененные смены
+    if (shift.status === 'cancelled') {
+        console.log(`Skipping cancelled shift ${shift.id}`);
+        return null;
+    }
+    
     const div = document.createElement('div');
     div.className = `shift-item shift-${shift.shift_type}`;
     div.setAttribute('data-shift-id', shift.id);
     div.onclick = () => showShiftDetails(shift.id);
     
-    const startTime = shift.start_time ? shift.start_time.split('T')[1].substring(0, 5) : '';
-    const endTime = shift.end_time ? shift.end_time.split('T')[1].substring(0, 5) : '';
+    // Определяем время начала и окончания
+    let startTime = '';
+    let endTime = '';
+    
+    if (shift.shift_type === 'planned') {
+        // Для запланированных смен используем planned_start и planned_end
+        startTime = shift.planned_start ? shift.planned_start.split('T')[1].substring(0, 5) : '';
+        endTime = shift.planned_end ? shift.planned_end.split('T')[1].substring(0, 5) : '';
+    } else {
+        // Для активных/завершенных смен используем start_time и end_time
+        startTime = shift.start_time ? shift.start_time.split('T')[1].substring(0, 5) : '';
+        endTime = shift.end_time ? shift.end_time.split('T')[1].substring(0, 5) : '';
+    }
+    
+    // Добавляем стикер для запланированных смен
+    const sticker = shift.shift_type === 'planned' ? '<div class="shift-sticker">1/1</div>' : '';
     
     div.innerHTML = `
         <div class="shift-time">${startTime} - ${endTime}</div>
         <div class="shift-employee">${shift.user_name}</div>
         <div class="shift-object">${shift.object_name}</div>
+        ${sticker}
     `;
     
     return div;
@@ -421,17 +454,18 @@ function loadCalendar(date) {
 
 // Shift and timeslot details
 function showShiftDetails(shiftId) {
-    // This will be implemented by the parent template
-    if (typeof window.showShiftDetails === 'function') {
-        window.showShiftDetails(shiftId);
+    console.log('Shift clicked:', shiftId);
+    if (shiftId.toString().startsWith('schedule_')) {
+        const scheduleId = shiftId.toString().replace('schedule_', '');
+        window.location.href = `/manager/shifts/${scheduleId}?shift_type=schedule`;
+    } else {
+        window.location.href = `/manager/shifts/${shiftId}`;
     }
 }
 
 function showTimeslotDetails(timeslotId) {
-    // This will be implemented by the parent template
-    if (typeof window.showTimeslotDetails === 'function') {
-        window.showTimeslotDetails(timeslotId);
-    }
+    console.log('Timeslot clicked:', timeslotId);
+    window.location.href = `/manager/timeslots/${timeslotId}`;
 }
 
 </script>
