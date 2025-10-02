@@ -3101,14 +3101,19 @@ async def manager_shifts_list(
             # Применение фильтров
             if status:
                 if status == "active":
+                    # Только активные смены из таблицы shifts
                     shifts_query = shifts_query.where(Shift.status == "active")
+                    schedules_query = schedules_query.where(False)  # Исключаем все запланированные
                 elif status == "planned":
-                    # Для запланированных смен фильтруем только ShiftSchedule
+                    # Только запланированные смены из таблицы shift_schedules
+                    shifts_query = shifts_query.where(False)  # Исключаем все обычные смены
                     schedules_query = schedules_query.where(ShiftSchedule.status == "planned")
                 elif status == "completed":
+                    # Только завершенные смены из таблицы shifts
                     shifts_query = shifts_query.where(Shift.status == "completed")
+                    schedules_query = schedules_query.where(False)  # Исключаем все запланированные
                 elif status == "cancelled":
-                    # Фильтруем отмененные смены
+                    # Отмененные смены из обеих таблиц
                     shifts_query = shifts_query.where(Shift.status == "cancelled")
                     schedules_query = schedules_query.where(ShiftSchedule.status == "cancelled")
             
