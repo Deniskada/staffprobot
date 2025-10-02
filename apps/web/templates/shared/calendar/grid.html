@@ -65,19 +65,38 @@
             </div>
             <div class="nav-actions">
                 {% if objects and objects|length > 1 %}
-                <div class="object-filter me-3">
-                    <script>console.log('Object filter HTML rendered, objects count:', {{ objects|length }});</script>
-                    <select class="form-select form-select-sm" id="objectFilter" style="min-width: 200px;">
-                        <option value="">Все объекты</option>
-                        {% for obj in objects %}
-                        <option value="{{ obj.id }}" {% if selected_object_id and selected_object_id == obj.id %}selected{% endif %}>
-                            {{ obj.name }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                <div class="object-filter">
+                    <div class="object-picker">
+                        <div class="object-display" id="objectDisplay">
+                            <span class="object-name" id="objectName">
+                                {% if selected_object_id %}
+                                    {% for obj in objects %}
+                                        {% if obj.id == selected_object_id %}{{ obj.name }}{% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    Все объекты
+                                {% endif %}
+                            </span>
+                            <i class="bi bi-chevron-down dropdown-icon"></i>
+                        </div>
+                        <div class="object-dropdown" id="objectDropdown">
+                            <div class="dropdown-content">
+                                <div class="object-options">
+                                    <div class="object-option" data-object-id="" data-object-name="Все объекты">
+                                        <i class="bi bi-grid-3x3-gap"></i>
+                                        <span>Все объекты</span>
+                                    </div>
+                                    {% for obj in objects %}
+                                    <div class="object-option" data-object-id="{{ obj.id }}" data-object-name="{{ obj.name }}">
+                                        <i class="bi bi-building"></i>
+                                        <span>{{ obj.name }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                {% else %}
-                <script>console.log('Object filter not shown - objects count:', {{ objects|length if objects else 0 }});</script>
                 {% endif %}
                 
                 {% if show_today_button %}
@@ -737,9 +756,117 @@ function safeInitCalendar() {
     }
 }
 
+// Object Filter JavaScript
+let currentObjectId = null;
+
+// Инициализация фильтра объектов
+function initObjectFilter() {
+    const objectDisplay = document.getElementById('objectDisplay');
+    const objectDropdown = document.getElementById('objectDropdown');
+    const objectOptions = document.querySelectorAll('.object-option');
+    
+    if (!objectDisplay || !objectDropdown) return;
+    
+    // Получаем текущий объект из URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const objectIdParam = urlParams.get('object_id');
+    currentObjectId = objectIdParam ? parseInt(objectIdParam) : null;
+    
+    // Обновляем отображение
+    updateObjectDisplay();
+    
+    // Обработчики событий
+    objectDisplay.addEventListener('click', toggleObjectDropdown);
+    
+    // Закрытие при клике вне элемента
+    document.addEventListener('click', (e) => {
+        if (!objectDisplay.contains(e.target) && !objectDropdown.contains(e.target)) {
+            closeObjectDropdown();
+        }
+    });
+    
+    // Обработчики для объектов
+    objectOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            const objectId = option.dataset.objectId ? parseInt(option.dataset.objectId) : null;
+            const objectName = option.dataset.objectName;
+            selectObject(objectId, objectName);
+        });
+    });
+}
+
+function toggleObjectDropdown() {
+    const objectDisplay = document.getElementById('objectDisplay');
+    const objectDropdown = document.getElementById('objectDropdown');
+    
+    objectDisplay.classList.toggle('active');
+    objectDropdown.classList.toggle('show');
+    
+    if (objectDropdown.classList.contains('show')) {
+        updateObjectOptions();
+    }
+}
+
+function closeObjectDropdown() {
+    const objectDisplay = document.getElementById('objectDisplay');
+    const objectDropdown = document.getElementById('objectDropdown');
+    
+    objectDisplay.classList.remove('active');
+    objectDropdown.classList.remove('show');
+}
+
+function updateObjectDisplay() {
+    const objectName = document.getElementById('objectName');
+    const objectOptions = document.querySelectorAll('.object-option');
+    
+    // Находим название текущего объекта
+    let displayName = 'Все объекты';
+    objectOptions.forEach(option => {
+        const optionId = option.dataset.objectId ? parseInt(option.dataset.objectId) : null;
+        if (optionId === currentObjectId) {
+            displayName = option.dataset.objectName;
+        }
+    });
+    
+    objectName.textContent = displayName;
+}
+
+function updateObjectOptions() {
+    const objectOptions = document.querySelectorAll('.object-option');
+    
+    objectOptions.forEach(option => {
+        const optionId = option.dataset.objectId ? parseInt(option.dataset.objectId) : null;
+        option.classList.toggle('active', optionId === currentObjectId);
+    });
+}
+
+function selectObject(objectId, objectName) {
+    currentObjectId = objectId;
+    closeObjectDropdown();
+    updateObjectDisplay();
+    updateObjectOptions();
+    
+    // Применяем фильтр
+    applyObjectFilter();
+}
+
+function applyObjectFilter() {
+    const params = new URLSearchParams(window.location.search);
+    
+    if (currentObjectId) {
+        params.set('object_id', currentObjectId);
+    } else {
+        params.delete('object_id');
+    }
+    
+    // Перезагружаем страницу с новым фильтром
+    window.location.href = window.location.pathname + '?' + params.toString();
+}
+
 // Инициализация при загрузке DOM
 document.addEventListener('DOMContentLoaded', function() {
     safeInitCalendar();
+    initObjectFilter();
 });
 
 // Отслеживание прокрутки для обновления переключателя месяцев

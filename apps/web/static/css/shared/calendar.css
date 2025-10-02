@@ -1176,6 +1176,100 @@ html {
     font-weight: 600;
 }
 
+/* Object Filter Styles */
+.object-filter {
+    position: relative;
+    display: inline-block;
+}
+
+.object-picker {
+    position: relative;
+}
+
+.object-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    min-width: 180px;
+    justify-content: center;
+}
+
+.object-display:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+}
+
+.object-name {
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.object-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    margin-top: 8px;
+    min-width: 250px;
+}
+
+.object-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.object-options {
+    padding: 15px;
+}
+
+.object-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    color: #495057;
+    background: #f8f9fa;
+    margin-bottom: 5px;
+}
+
+.object-option:hover {
+    background: #28a745;
+    color: white;
+    transform: translateY(-2px);
+}
+
+.object-option.active {
+    background: #20c997;
+    color: white;
+    font-weight: 600;
+}
+
+.object-option i {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+}
+
 /* Keyframe Animations */
 @keyframes fadeInUp {
     from {
