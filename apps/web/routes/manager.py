@@ -2532,8 +2532,9 @@ async def manager_calendar_api_employees(
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
             # Получаем всех сотрудников
-            user_service = UserService(db)
-            employees = await user_service.get_all_users()
+            employees_query = select(User).where(User.is_active == True)
+            employees_result = await db.execute(employees_query)
+            employees = employees_result.scalars().all()
             
             # Формируем список сотрудников для панели
             employees_data = []
