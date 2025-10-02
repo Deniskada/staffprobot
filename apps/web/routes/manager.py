@@ -723,8 +723,21 @@ async def manager_employee_add(
             if not first_name:
                 raise HTTPException(status_code=400, detail="Имя обязательно")
             
-            # Создаем пользователя
+            # Проверяем, не существует ли уже пользователь с таким telegram_id
+            from sqlalchemy import select
             from domain.entities.user import User
+            
+            existing_user_query = select(User).where(User.telegram_id == telegram_id)
+            existing_user_result = await db.execute(existing_user_query)
+            existing_user = existing_user_result.scalar_one_or_none()
+            
+            if existing_user:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Пользователь с Telegram ID {telegram_id} уже существует"
+                )
+            
+            # Создаем пользователя
             from shared.services.role_service import RoleService
             from apps.web.services.contract_service import ContractService
             from datetime import datetime, date
