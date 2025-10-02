@@ -1,9 +1,13 @@
 <!-- Shared Timeslot Component -->
 <div class="timeslot-item timeslot-{{ timeslot.status }}" 
      data-timeslot-id="{{ timeslot.id }}"
+     data-object-id="{{ timeslot.object_id }}"
      data-date="{{ timeslot.date }}"
      data-start-time="{{ timeslot.start_time }}"
-     data-end-time="{{ timeslot.end_time }}">
+     data-end-time="{{ timeslot.end_time }}"
+     data-max-employees="{{ timeslot.max_employees }}"
+     data-current-employees="{{ timeslot.current_employees }}"
+     data-available-slots="{{ timeslot.available_slots }}">
     
     <div class="timeslot-header">
         <div class="timeslot-time">
@@ -11,7 +15,11 @@
             {{ timeslot.start_time }} - {{ timeslot.end_time }}
         </div>
         <div class="timeslot-status">
-            <span class="badge badge-{{ timeslot.status_class }}">{{ timeslot.status_text }}</span>
+            <span class="badge badge-{{ timeslot.status }}">{{ timeslot.status|title }}</span>
+        </div>
+        <div class="timeslot-rate">
+            <i class="bi bi-currency-dollar"></i>
+            {{ timeslot.hourly_rate }}₽/час
         </div>
     </div>
     
@@ -35,10 +43,20 @@
         </div>
         {% endif %}
         
-        {% if timeslot.employee_count %}
         <div class="timeslot-employees">
             <i class="bi bi-people"></i>
-            {{ timeslot.employee_count }} сотрудников
+            <span class="employee-count">{{ timeslot.current_employees }}/{{ timeslot.max_employees }} сотрудников</span>
+        </div>
+        
+        {% if timeslot.available_slots > 0 %}
+        <div class="timeslot-availability">
+            <i class="bi bi-check-circle text-success"></i>
+            <span class="available-slots">{{ timeslot.available_slots }} свободных мест</span>
+        </div>
+        {% else %}
+        <div class="timeslot-availability">
+            <i class="bi bi-x-circle text-danger"></i>
+            <span class="no-slots">Нет свободных мест</span>
         </div>
         {% endif %}
     </div>
@@ -50,9 +68,9 @@
         </button>
         {% endif %}
         
-        {% if timeslot.can_assign %}
-        <button type="button" class="btn btn-sm btn-outline-success" onclick="assignEmployee({{ timeslot.id }})">
-            <i class="bi bi-person-plus"></i> Назначить
+        {% if timeslot.can_plan %}
+        <button type="button" class="btn btn-sm btn-outline-success" onclick="planShift({{ timeslot.id }})">
+            <i class="bi bi-calendar-plus"></i> Запланировать
         </button>
         {% endif %}
         
@@ -66,9 +84,13 @@
     <!-- Occupancy Indicator -->
     <div class="timeslot-occupancy" 
          data-timeslot-id="{{ timeslot.id }}"
-         data-max-employees="{{ timeslot.max_employees or 1 }}"
-         data-planned-employees="0">
-        <span class="occupancy-text">0/{{ timeslot.max_employees or 1 }}</span>
+         data-max-employees="{{ timeslot.max_employees }}"
+         data-current-employees="{{ timeslot.current_employees }}"
+         data-available-slots="{{ timeslot.available_slots }}">
+        <span class="occupancy-text">{{ timeslot.current_employees }}/{{ timeslot.max_employees }}</span>
+        {% if timeslot.available_slots == 0 %}
+        <span class="occupancy-full">Полностью занят</span>
+        {% endif %}
     </div>
 </div>
 
@@ -81,10 +103,10 @@ function editTimeslot(timeslotId) {
     }
 }
 
-function assignEmployee(timeslotId) {
+function planShift(timeslotId) {
     // This will be implemented by the parent template
-    if (typeof window.assignEmployee === 'function') {
-        window.assignEmployee(timeslotId);
+    if (typeof window.planShift === 'function') {
+        window.planShift(timeslotId);
     }
 }
 
@@ -92,6 +114,33 @@ function viewTimeslot(timeslotId) {
     // This will be implemented by the parent template
     if (typeof window.viewTimeslot === 'function') {
         window.viewTimeslot(timeslotId);
+    }
+}
+
+// Update occupancy indicator
+function updateTimeslotOccupancy(timeslotId, currentEmployees, maxEmployees) {
+    const occupancyElement = document.querySelector(`[data-timeslot-id="${timeslotId}"] .timeslot-occupancy`);
+    if (occupancyElement) {
+        const occupancyText = occupancyElement.querySelector('.occupancy-text');
+        if (occupancyText) {
+            occupancyText.textContent = `${currentEmployees}/${maxEmployees}`;
+        }
+        
+        const availableSlots = maxEmployees - currentEmployees;
+        const availabilityElement = occupancyElement.closest('.timeslot-item').querySelector('.timeslot-availability');
+        if (availabilityElement) {
+            if (availableSlots > 0) {
+                availabilityElement.innerHTML = `
+                    <i class="bi bi-check-circle text-success"></i>
+                    <span class="available-slots">${availableSlots} свободных мест</span>
+                `;
+            } else {
+                availabilityElement.innerHTML = `
+                    <i class="bi bi-x-circle text-danger"></i>
+                    <span class="no-slots">Нет свободных мест</span>
+                `;
+            }
+        }
     }
 }
 </script>
