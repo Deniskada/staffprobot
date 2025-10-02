@@ -20,221 +20,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', path='js/shared/calendar.js') }}"></script>
-<script src="{{ url_for('static', path='js/shared/calendar_panels.js') }}"></script>
-<script>
-// Экспорт данных календаря для JS-логики занятости
-window.calendar_weeks = {{ calendar_weeks_json | safe }};
-
-// Define callback functions before using them
-function showShiftDetails(shiftId) {
-    if (shiftId.toString().startsWith('schedule_')) {
-        const scheduleId = shiftId.toString().replace('schedule_', '');
-        window.location.href = `/manager/shifts/${scheduleId}?shift_type=schedule`;
-    } else {
-        window.location.href = `/manager/shifts/${shiftId}`;
-    }
-}
-
-function showTimeslotDetails(timeslotId) {
-    window.location.href = `/manager/timeslots/${timeslotId}`;
-}
-
-function showDateDetails(date) {}
-
-const calendarManager = new CalendarManager({
-    currentDate: new Date('{{ current_date }}'),
-    viewType: '{{ view_type }}',
-    baseUrl: '{{ request.url.path }}',
-    onShiftClick: showShiftDetails,
-    onTimeslotClick: showTimeslotDetails,
-    onDateClick: showDateDetails
-});
-const calendarPanels = new CalendarPanels('manager');
-
-calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId) {
-    try {
-        const employeeResponse = await fetch(`/manager/api/employees`);
-        if (!employeeResponse.ok) throw new Error(`HTTP ${employeeResponse.status}`);
-        const employees = await employeeResponse.json();
-        const employee = employees.find(e => e.id == parseInt(employeeId));
-        if (!employee) return calendarPanels.showNotification('Сотрудник не найден', 'error');
-
-        const tsResp = await fetch(`/manager/calendar/api/timeslot/${timeslotId}`);
-        if (!tsResp.ok) throw new Error(`HTTP ${tsResp.status}`);
-        const timeslot = await tsResp.json();
-        if (!timeslot || !timeslot.slot) return calendarPanels.showNotification('Тайм-слот не найден', 'error');
-        const timeStr = `${timeslot.slot.start_time} - ${timeslot.slot.end_time}`;
-
-        const planResp = await fetch('/manager/api/calendar/plan-shift', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ timeslot_id: Number(timeslotId), employee_id: Number(employeeId) })
-        });
-        const planData = await planResp.json().catch(() => ({}));
-        if (!planResp.ok || planData.success === false) {
-            const detail = planData && (planData.detail || planData.message);
-            throw new Error(detail || `HTTP ${planResp.status}`);
-        }
-        calendarPanels.showNotification(`Сотрудник ${employee.name} назначен на тайм-слот ${timeStr}`, 'success');
-        setTimeout(() => calendarManager.refresh(), 300);
-    } catch (err) {
-        console.error(err);
-        calendarPanels.showNotification(`Ошибка назначения: ${err.message}`, 'error');
-    }
-};
-
-calendarManager.createTimeslotFromObject = async function(objectId, date) {
-    try {
-        const objResp = await fetch(`/manager/calendar/api/objects`);
-        const objects = await objResp.json();
-        const object = objects.find(o => o.id == objectId);
-        if (!object) return calendarPanels.showNotification('Объект не найден', 'error');
-        await calendarPanels.showQuickCreateForm({
-            id: objectId, name: object.name,
-            hourlyRate: object.hourly_rate || 0,
-            openingTime: object.opening_time || '09:00',
-            closingTime: object.closing_time || '18:00'
-        }, date);
-    } catch (err) {
-        console.error(err);
-        calendarPanels.showNotification('Ошибка создания тайм-слота', 'error');
-    }
-};
-
-
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Initializing manager calendar...');
-    try {
-        calendarPanels.init();
-        console.log('Calendar panels initialized');
-        setTimeout(() => { 
-            calendarManager.setupDragDrop();
-            console.log('Drag&drop setup completed');
-            // Initialize timeslot occupancy
-            initializeTimeslotOccupancy();
-        }, 1000);
-    } catch (error) {
-        console.error('Error initializing calendar:', error);
-    }
-});
-
-// Initialize timeslot occupancy
-function initializeTimeslotOccupancy() {
-    // Собираем смены только из данных страницы, не из DOM
-    const scheduledShifts = [];
-
-    // Из window.calendar_weeks (если есть)
-    if (window.calendar_weeks && Array.isArray(window.calendar_weeks)) {
-        window.calendar_weeks.forEach(week => {
-            week.forEach(day => {
-                if (day && Array.isArray(day.shifts)) {
-                    day.shifts.forEach(shift => {
-                        if (shift && shift.time_slot_id && shift.status && shift.status !== 'cancelled') {
-                            scheduledShifts.push({
-                                id: shift.id,
-                                time_slot_id: Number(shift.time_slot_id),
-                                status: shift.status
-                            });
-                        }
-                    });
-                }
-            });
-        });
-    }
-
-    // Если смен нет в данных — подтягиваем с сервера статусы тайм-слотов как fallback
-    const applyOccupancy = (shifts) => {
-        // ПРАВИЛЬНАЯ ЛОГИКА: Группируем тайм-слоты по объектам и считаем смены для каждого
-        const timeslotElements = document.querySelectorAll('.timeslot-item[data-timeslot-id]');
-        const timeslotsByObject = {};
-
-        // Группируем тайм-слоты по объектам
-        timeslotElements.forEach(timeslot => {
-            const timeslotId = parseInt(timeslot.dataset.timeslotId);
-            const objectId = parseInt(timeslot.dataset.objectId);
-            const maxEmployees = parseInt(timeslot.dataset.maxEmployees) || 1;
-
-            if (!timeslotsByObject[objectId]) {
-                timeslotsByObject[objectId] = [];
-            }
-
-            timeslotsByObject[objectId].push({
-                element: timeslot,
-                id: timeslotId,
-                maxEmployees: maxEmployees
-            });
-        });
-
-        // Для каждого объекта обрабатываем его тайм-слоты
-        Object.keys(timeslotsByObject).forEach(objectId => {
-            const objectTimeslots = timeslotsByObject[objectId];
-
-            objectTimeslots.forEach(timeslot => {
-                const timeslotId = timeslot.id;
-                const maxEmployees = timeslot.maxEmployees;
-
-                // Считаем смены ПРИВЯЗАННЫЕ к этому конкретному тайм-слоту (кроме cancelled)
-                const shiftsForThisTimeslot = shifts.filter(shift =>
-                    Number(shift.time_slot_id) === Number(timeslotId) && shift.status !== 'cancelled'
-                );
-
-                const currentShifts = shiftsForThisTimeslot.length;
-
-                // Отладка для тайм-слота 181 (17 сентября)
-                if (timeslotId === 181) {
-                    console.log(`DEBUG Manager Timeslot 181:`, {
-                        timeslotId,
-                        maxEmployees,
-                        currentShifts,
-                        shiftsForThisTimeslot,
-                        willHide: currentShifts >= maxEmployees
-                    });
-                }
-
-                if (currentShifts >= maxEmployees) {
-                    // Скрываем заполненные тайм-слоты
-                    timeslot.element.style.display = 'none';
-                } else {
-                    // Показываем незаполненные тайм-слоты
-                    timeslot.element.style.display = '';
-                    const occupancyIndicator = timeslot.element.querySelector('.timeslot-occupancy');
-                    if (occupancyIndicator) {
-                        occupancyIndicator.querySelector('.occupancy-text').textContent = `${currentShifts}/${maxEmployees}`;
-                        if (currentShifts === 0) {
-                            occupancyIndicator.className = 'timeslot-occupancy available';
-                        } else {
-                            occupancyIndicator.className = 'timeslot-occupancy partial';
-                        }
-                    }
-                }
-            });
-        });
-    };
-
-    console.log('Manager - Found scheduledShifts:', scheduledShifts.length);
-    console.log('Manager - window.calendar_weeks exists:', !!window.calendar_weeks);
-    if (window.calendar_weeks && window.calendar_weeks.length > 0) {
-        console.log('Manager - First week shifts:', window.calendar_weeks[0].map(day => day.shifts ? day.shifts.length : 0));
-        // Проверим 17 сентября (3-я неделя, 3-й день)
-        if (window.calendar_weeks[2] && window.calendar_weeks[2][3]) {
-            console.log('Manager - 17 September data:', window.calendar_weeks[2][3]);
-        }
-    }
-
-    // Всегда применяем логику к найденным сменам
-    if (scheduledShifts.length > 0) {
-        applyOccupancy(scheduledShifts);
-    } else {
-        // Если смен нет в данных — подтягиваем с сервера статусы тайм-слотов как fallback
-        const year = {{ year }};
-        const month = {{ month }};
-        // Отключаем проблемный API, используем только данные из window.calendar_weeks
-        // Применяем логику к пустому массиву смен (показываем все тайм-слоты как 0/max)
-        applyOccupancy([]);
-    }
-}
-</script>
-
 <!-- Universal Calendar Integration -->
 <script src="{{ url_for('static', path='js/shared/universal_calendar.js') }}"></script>
 <script>
@@ -243,164 +28,34 @@ function initializeTimeslotOccupancy() {
         // Создаем экземпляр универсального календаря
         if (typeof UniversalCalendarManager !== 'undefined') {
             window.universalCalendar = new UniversalCalendarManager({
-                currentDate: new Date('{{ current_date }}'),
-                viewType: '{{ view_type }}',
-                baseUrl: '{{ request.url.path }}',
+                currentDate: new Date({{ year }}, {{ month - 1 }}, 1),
+                viewType: 'month',
+                baseUrl: '/manager/calendar',
                 userRole: 'manager',
                 apiEndpoint: '/manager/calendar/api/data',
                 onShiftClick: function(shiftId) {
-                    console.log('Manager - Shift clicked:', shiftId);
-                    showShiftDetails(shiftId);
+                    console.log('Shift clicked:', shiftId);
+                    if (shiftId.toString().startsWith('schedule_')) {
+                        const scheduleId = shiftId.toString().replace('schedule_', '');
+                        window.location.href = `/manager/shifts/${scheduleId}?shift_type=schedule`;
+                    } else {
+                        window.location.href = `/manager/shifts/${shiftId}`;
+                    }
                 },
                 onTimeslotClick: function(timeslotId) {
-                    console.log('Manager - Timeslot clicked:', timeslotId);
-                    showTimeslotDetails(timeslotId);
+                    console.log('Timeslot clicked:', timeslotId);
+                    window.location.href = `/manager/timeslots/${timeslotId}`;
                 },
                 onDataLoaded: function(calendarData) {
-                    console.log('Manager - Calendar data loaded:', calendarData);
+                    console.log('Manager calendar data loaded:', calendarData);
                     // Обновляем отображение с новыми данными
-                    updateManagerCalendarDisplay(calendarData);
+                    if (typeof window.renderCalendarGrid === 'function') {
+                        window.renderCalendarGrid(calendarData);
+                    }
                 }
             });
         }
     });
 
-    // Функция для обновления отображения календаря управляющего
-    function updateManagerCalendarDisplay(calendarData) {
-        // Обновляем статистику
-        if (calendarData.stats) {
-            const statsElement = document.getElementById('calendar-stats');
-            if (statsElement) {
-                statsElement.innerHTML = `
-                    <div class="stat-item">
-                        <span class="stat-label">Тайм-слоты:</span>
-                        <span class="stat-value">${calendarData.stats.total_timeslots}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Запланировано:</span>
-                        <span class="stat-value">${calendarData.stats.planned_shifts}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Активно:</span>
-                        <span class="stat-value">${calendarData.stats.active_shifts}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Завершено:</span>
-                        <span class="stat-value">${calendarData.stats.completed_shifts}</span>
-                    </div>
-                `;
-            }
-        }
-
-        // Обновляем индикаторы занятости тайм-слотов
-        calendarData.timeslots.forEach(timeslot => {
-            const timeslotElement = document.querySelector(`[data-timeslot-id="${timeslot.id}"]`);
-            if (timeslotElement) {
-                // Обновляем данные атрибуты
-                timeslotElement.setAttribute('data-current-employees', timeslot.current_employees);
-                timeslotElement.setAttribute('data-available-slots', timeslot.available_slots);
-                
-                // Обновляем классы статуса
-                timeslotElement.className = timeslotElement.className.replace(/timeslot-\w+/g, '');
-                timeslotElement.classList.add(`timeslot-${timeslot.status}`);
-                
-                // Обновляем индикатор занятости
-                const occupancyElement = timeslotElement.querySelector('.timeslot-occupancy');
-                if (occupancyElement) {
-                    const occupancyText = occupancyElement.querySelector('.occupancy-text');
-                    if (occupancyText) {
-                        occupancyText.textContent = `${timeslot.current_employees}/${timeslot.max_employees}`;
-                    }
-                    
-                    // Обновляем классы занятости
-                    occupancyElement.className = 'timeslot-occupancy';
-                    if (timeslot.available_slots === 0) {
-                        occupancyElement.classList.add('full');
-                    } else if (timeslot.current_employees > 0) {
-                        occupancyElement.classList.add('partial');
-                    } else {
-                        occupancyElement.classList.add('available');
-                    }
-                }
-                
-                // Скрываем полностью заполненные тайм-слоты
-                if (timeslot.available_slots === 0) {
-                    timeslotElement.style.display = 'none';
-                } else {
-                    timeslotElement.style.display = '';
-                }
-            }
-        });
-
-        // Обновляем отображение смен
-        calendarData.shifts.forEach(shift => {
-            const shiftElement = document.querySelector(`[data-shift-id="${shift.id}"]`);
-            if (shiftElement) {
-                // Обновляем классы типа смены
-                shiftElement.className = shiftElement.className.replace(/shift-\w+/g, '');
-                shiftElement.classList.add(`shift-${shift.shift_type}`);
-                shiftElement.classList.add(`shift-status-${shift.status}`);
-                
-                // Обновляем индикатор статуса
-                const statusIndicator = shiftElement.querySelector('.shift-status-indicator');
-                if (statusIndicator) {
-                    let statusText = '';
-                    let statusClass = '';
-                    
-                    switch (shift.shift_type) {
-                        case 'planned':
-                            statusText = 'Запланировано';
-                            statusClass = 'status-planned';
-                            break;
-                        case 'active':
-                            statusText = 'В процессе';
-                            statusClass = 'status-active';
-                            break;
-                        case 'completed':
-                            statusText = 'Завершено';
-                            statusClass = 'status-completed';
-                            break;
-                    }
-                    
-                    statusIndicator.innerHTML = `<span class="${statusClass}">${statusText}</span>`;
-                }
-            }
-        });
-
-        // Обновляем данные для существующей логики drag&drop
-        if (window.calendar_weeks) {
-            // Обновляем данные календаря с новыми данными
-            updateCalendarWeeksData(calendarData);
-        }
-    }
-
-    // Функция для обновления данных календаря для совместимости с drag&drop
-    function updateCalendarWeeksData(calendarData) {
-        // Группируем данные по датам для совместимости с существующей логикой
-        const shiftsByDate = {};
-        calendarData.shifts.forEach(shift => {
-            const date = shift.planned_start ? 
-                shift.planned_start.split('T')[0] : 
-                shift.start_time.split('T')[0];
-            
-            if (!shiftsByDate[date]) {
-                shiftsByDate[date] = [];
-            }
-            shiftsByDate[date].push(shift);
-        });
-
-        // Обновляем window.calendar_weeks с новыми данными
-        if (window.calendar_weeks) {
-            window.calendar_weeks.forEach(week => {
-                week.forEach(day => {
-                    if (day.date && shiftsByDate[day.date]) {
-                        day.shifts = shiftsByDate[day.date];
-                    }
-                });
-            });
-        }
-
-        console.log('Manager - Updated calendar weeks data:', window.calendar_weeks);
-    }
 </script>
 {% endblock %}
