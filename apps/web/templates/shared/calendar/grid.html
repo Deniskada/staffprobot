@@ -132,6 +132,13 @@
 <script>
 console.log('Shared calendar grid script loading...');
 
+// Кэш для оптимизации производительности
+const calendarCache = {
+    dayElements: new Map(),
+    lastUpdateTime: 0,
+    updateThreshold: 100 // Минимальный интервал между обновлениями (мс)
+};
+
 // Calendar navigation
 function navigateCalendar(direction) {
     const currentDate = new Date('{{ current_date }}');
@@ -287,6 +294,8 @@ function createCalendarGrid(calendarData) {
     lastSunday.setDate(lastMonthLastDay.getDate() + (6 - lastMonthLastDay.getDay()));
     
     // Создаем дни от первого понедельника до последнего воскресенья
+    // Используем DocumentFragment для оптимизации DOM операций
+    const fragment = document.createDocumentFragment();
     let workingDate = new Date(firstMonday);
     
     while (workingDate <= lastSunday) {
@@ -306,10 +315,13 @@ function createCalendarGrid(calendarData) {
         const isToday = dateStr === today.toISOString().split('T')[0];
         
         const dayElement = createDayElement(dateStr, dayNumber, isOtherMonth, isToday);
-        calendarGrid.appendChild(dayElement);
+        fragment.appendChild(dayElement);
         
         workingDate.setDate(workingDate.getDate() + 1);
     }
+    
+    // Добавляем все дни одним операцией
+    calendarGrid.appendChild(fragment);
     
     
     // Автопрокрутка к текущей дате после создания сетки
@@ -414,14 +426,42 @@ function updateCalendarDisplay(calendarData) {
         console.log('timeslotsByDate keys:', Object.keys(calendarData.timeslotsByDate || {}));
         console.log('shiftsByDate keys:', Object.keys(calendarData.shiftsByDate || {}));
         
-        // Обновляем отображение для каждого дня
-        // Обновляем отображение всех дней календаря
+        // Виртуализация: обновляем только видимые дни
+        const scrollableContainer = document.querySelector('.calendar-scrollable');
+        if (!scrollableContainer) {
+            // Fallback: обновляем все дни
+            const allDayElements = document.querySelectorAll('.calendar-day[data-date]');
+            console.log(`Fallback: Found ${allDayElements.length} day elements to update`);
+            allDayElements.forEach(dayElement => {
+                const date = dayElement.dataset.date;
+                updateDayDisplay(dayElement, date, calendarData);
+            });
+            return;
+        }
+        
+        const containerRect = scrollableContainer.getBoundingClientRect();
+        const visibleTop = scrollableContainer.scrollTop;
+        const visibleBottom = visibleTop + containerRect.height;
+        
+        // Находим видимые дни
         const allDayElements = document.querySelectorAll('.calendar-day[data-date]');
-        console.log(`Found ${allDayElements.length} day elements to update`);
+        let visibleElements = [];
         
         allDayElements.forEach(dayElement => {
+            const dayRect = dayElement.getBoundingClientRect();
+            const dayTop = dayRect.top - containerRect.top + scrollableContainer.scrollTop;
+            const dayBottom = dayTop + dayRect.height;
+            
+            // Проверяем, пересекается ли день с видимой областью
+            if (dayBottom >= visibleTop && dayTop <= visibleBottom) {
+                visibleElements.push(dayElement);
+            }
+        });
+        
+        // Обновляем только видимые дни
+        console.log(`Virtuallization: Found ${visibleElements.length}/${allDayElements.length} visible day elements`);
+        visibleElements.forEach(dayElement => {
             const date = dayElement.dataset.date;
-            console.log(`Updating day element for date: ${date}`);
             updateDayDisplay(dayElement, date, calendarData);
         });
         
@@ -432,6 +472,15 @@ function updateCalendarDisplay(calendarData) {
 }
 
 function updateDayDisplay(dayElement, date, calendarData) {
+    // Проверяем кэш для избежания повторных обновлений
+    const cacheKey = `${date}-${dayElement.dataset.lastUpdate || 0}`;
+    const now = Date.now();
+    
+    if (calendarCache.dayElements.has(cacheKey) && 
+        (now - calendarCache.lastUpdateTime) < calendarCache.updateThreshold) {
+        return; // Пропускаем обновление, если данные не изменились
+    }
+    
     console.log(`Updating day display for ${date}`);
     const dayContent = dayElement.querySelector('.day-content');
     console.log(`Day content element:`, dayContent);
@@ -485,6 +534,11 @@ function updateDayDisplay(dayElement, date, calendarData) {
             console.log(`Skipped cancelled shift ${shift.id} for ${date}`);
         }
     });
+    
+    // Обновляем кэш
+    calendarCache.dayElements.set(cacheKey, true);
+    calendarCache.lastUpdateTime = now;
+    dayElement.dataset.lastUpdate = now;
 }
 
 function createTimeslotElement(timeslot) {

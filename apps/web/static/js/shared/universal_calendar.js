@@ -40,17 +40,28 @@ class UniversalCalendarManager {
         if (!scrollableContainer) return;
         
         let scrollTimeout;
+        let isScrolling = false;
+        let lastScrollTime = 0;
         
+        // Оптимизированный обработчик прокрутки с дебаунсингом и throttling
         scrollableContainer.addEventListener('scroll', () => {
+            const now = Date.now();
+            
+            // Throttling: не чаще чем раз в 16ms (60fps)
+            if (now - lastScrollTime < 16) return;
+            lastScrollTime = now;
+            
             if (!this.isScrolling && !this.isUserNavigating) {
                 this.isScrolling = true;
-                requestAnimationFrame(() => {
-                    clearTimeout(scrollTimeout);
-                    scrollTimeout = setTimeout(() => {
+                
+                // Debouncing: выполняем обработку через 100ms после последнего скролла
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(() => {
+                    requestAnimationFrame(() => {
                         this.handleScroll();
                         this.isScrolling = false;
-                    }, 100);
-                });
+                    });
+                }, 100);
             }
         }, { passive: true });
     }
