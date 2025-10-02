@@ -3217,6 +3217,9 @@ async def manager_create_contract(
         
         form_data = await request.form()
         
+        # Логируем все данные формы для отладки
+        logger.info(f"Form data received: {dict(form_data)}")
+        
         # Получаем данные формы
         employee_telegram_id_str = form_data.get("employee_telegram_id", "").strip()
         if not employee_telegram_id_str:
