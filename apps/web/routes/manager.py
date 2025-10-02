@@ -3157,6 +3157,142 @@ async def quick_create_timeslot_manager(
         raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слота: {str(e)}")
 
 
+@router.get("/employees/create", response_class=HTMLResponse)
+async def manager_create_contract_form(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner),
+    employee_telegram_id: int = Query(None, description="Telegram ID сотрудника для предзаполнения")
+):
+    """Форма создания договора с сотрудником для управляющего."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем доступные объекты для управляющего
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            
+            # Получаем публичные шаблоны договоров
+            from sqlalchemy import select, and_
+            from domain.entities.contract import ContractTemplate
+            
+            templates_query = select(ContractTemplate).where(
+                and_(ContractTemplate.is_active == True, ContractTemplate.is_public == True)
+            )
+            result = await db.execute(templates_query)
+            contract_templates = result.scalars().all()
+            
+            # Текущая дата для шаблона
+            from datetime import date
+            current_date = date.today().strftime("%Y-%m-%d")
+            
+            return templates.TemplateResponse("manager/employees/create_contract.html", {
+                "request": request,
+                "current_user": current_user,
+                "contract_templates": contract_templates,
+                "accessible_objects": accessible_objects,
+                "employee_telegram_id": employee_telegram_id,
+                "current_date": current_date
+            })
+        
+    except Exception as e:
+        logger.error(f"Error in manager create contract form: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки формы")
+
+
+@router.post("/employees/create")
+async def manager_create_contract(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Создание договора с сотрудником для управляющего."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        form_data = await request.form()
+        
+        # Получаем данные формы
+        employee_telegram_id = int(form_data.get("employee_telegram_id"))
+        title = form_data.get("title", "").strip()
+        content = form_data.get("content", "").strip()
+        hourly_rate = int(form_data.get("hourly_rate", 500)) if form_data.get("hourly_rate") else None
+        start_date_str = form_data.get("start_date")
+        end_date_str = form_data.get("end_date")
+        template_id = int(form_data.get("template_id")) if form_data.get("template_id") else None
+        allowed_objects = [int(obj_id) for obj_id in form_data.getlist("allowed_objects")]
+        
+        # Валидация
+        if not title:
+            raise HTTPException(status_code=400, detail="Название договора обязательно")
+        if not start_date_str:
+            raise HTTPException(status_code=400, detail="Дата начала обязательна")
+        if not allowed_objects:
+            raise HTTPException(status_code=400, detail="Необходимо выбрать хотя бы один объект")
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Проверяем доступ к объектам
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            for obj_id in allowed_objects:
+                if obj_id not in accessible_object_ids:
+                    raise HTTPException(status_code=403, detail=f"Нет доступа к объекту {obj_id}")
+            
+            # Получаем владельца первого объекта для создания договора
+            first_object = accessible_objects[0]
+            owner_query = select(User).where(User.id == first_object.owner_id)
+            owner_result = await db.execute(owner_query)
+            owner_obj = owner_result.scalar_one_or_none()
+            
+            if not owner_obj:
+                raise HTTPException(status_code=404, detail="Владелец объектов не найден")
+            
+            # Парсим даты
+            from datetime import datetime
+            start_date_obj = datetime.strptime(start_date_str, "%Y-%m-%d")
+            end_date_obj = datetime.strptime(end_date_str, "%Y-%m-%d") if end_date_str else None
+            
+            # Создаем договор через ContractService
+            from apps.web.services.contract_service import ContractService
+            contract_service = ContractService()
+            
+            contract_data = {
+                "employee_telegram_id": employee_telegram_id,
+                "title": title,
+                "content": content if content else None,
+                "hourly_rate": hourly_rate,
+                "start_date": start_date_obj,
+                "end_date": end_date_obj,
+                "template_id": template_id,
+                "allowed_objects": allowed_objects,
+                "values": {}
+            }
+            
+            contract = await contract_service.create_contract(owner_obj.telegram_id, contract_data)
+            
+            if contract:
+                return RedirectResponse(url="/manager/employees?success=Договор%20создан%20успешно", status_code=303)
+            else:
+                raise HTTPException(status_code=400, detail="Ошибка создания договора")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating contract: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка создания договора: {str(e)}")
+
+
 @router.get("/profile", response_class=HTMLResponse)
 async def manager_profile(
     request: Request,
