@@ -1,0 +1,247 @@
+<!-- Shared Shift Component -->
+<div class="shift-item shift-{{ shift.shift_type }} shift-status-{{ shift.status }}" 
+     data-shift-id="{{ shift.id }}"
+     data-user-id="{{ shift.user_id }}"
+     data-object-id="{{ shift.object_id }}"
+     data-time-slot-id="{{ shift.time_slot_id }}"
+     data-shift-type="{{ shift.shift_type }}"
+     data-status="{{ shift.status }}"
+     data-is-planned="{{ shift.is_planned }}">
+    
+    <div class="shift-header">
+        <div class="shift-user">
+            <i class="bi bi-person"></i>
+            <span class="user-name">{{ shift.user_name }}</span>
+        </div>
+        <div class="shift-type">
+            <span class="badge badge-{{ shift.shift_type }}">
+                {% if shift.shift_type == 'planned' %}
+                    <i class="bi bi-calendar-event"></i> Запланировано
+                {% elif shift.shift_type == 'active' %}
+                    <i class="bi bi-play-circle"></i> Активно
+                {% elif shift.shift_type == 'completed' %}
+                    <i class="bi bi-check-circle"></i> Завершено
+                {% elif shift.shift_type == 'cancelled' %}
+                    <i class="bi bi-x-circle"></i> Отменено
+                {% endif %}
+            </span>
+        </div>
+    </div>
+    
+    <div class="shift-content">
+        <div class="shift-object">
+            <i class="bi bi-geo-alt"></i>
+            {{ shift.object_name }}
+        </div>
+        
+        {% if shift.time_slot_id %}
+        <div class="shift-timeslot">
+            <i class="bi bi-clock"></i>
+            <span class="timeslot-info">Привязано к тайм-слоту</span>
+        </div>
+        {% endif %}
+        
+        {% if shift.planned_start %}
+        <div class="shift-planned-time">
+            <i class="bi bi-calendar"></i>
+            <span class="planned-time">
+                Запланировано: {{ shift.planned_start.strftime('%H:%M') }} - {{ shift.planned_end.strftime('%H:%M') if shift.planned_end else '?' }}
+            </span>
+        </div>
+        {% endif %}
+        
+        {% if shift.start_time %}
+        <div class="shift-actual-time">
+            <i class="bi bi-play"></i>
+            <span class="actual-time">
+                Фактически: {{ shift.start_time.strftime('%H:%M') }} - {{ shift.end_time.strftime('%H:%M') if shift.end_time else 'в процессе' }}
+            </span>
+        </div>
+        {% endif %}
+        
+        {% if shift.hourly_rate %}
+        <div class="shift-rate">
+            <i class="bi bi-currency-dollar"></i>
+            <span class="rate">{{ shift.hourly_rate }}₽/час</span>
+        </div>
+        {% endif %}
+        
+        {% if shift.total_hours %}
+        <div class="shift-hours">
+            <i class="bi bi-clock-history"></i>
+            <span class="hours">{{ shift.total_hours }}ч</span>
+        </div>
+        {% endif %}
+        
+        {% if shift.total_payment %}
+        <div class="shift-payment">
+            <i class="bi bi-cash"></i>
+            <span class="payment">{{ shift.total_payment }}₽</span>
+        </div>
+        {% endif %}
+        
+        {% if shift.notes %}
+        <div class="shift-notes">
+            <i class="bi bi-chat-text"></i>
+            <span class="notes">{{ shift.notes }}</span>
+        </div>
+        {% endif %}
+        
+        {% if shift.start_coordinates %}
+        <div class="shift-location">
+            <i class="bi bi-geo"></i>
+            <span class="location">С геолокацией</span>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="shift-actions">
+        {% if shift.can_edit %}
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="editShift({{ shift.id }})">
+            <i class="bi bi-pencil"></i> Редактировать
+        </button>
+        {% endif %}
+        
+        {% if shift.can_cancel and shift.shift_type == 'planned' %}
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="cancelShift({{ shift.id }})">
+            <i class="bi bi-x-circle"></i> Отменить
+        </button>
+        {% endif %}
+        
+        {% if shift.can_view %}
+        <button type="button" class="btn btn-sm btn-outline-info" onclick="viewShift({{ shift.id }})">
+            <i class="bi bi-eye"></i> Подробнее
+        </button>
+        {% endif %}
+        
+        {% if shift.shift_type == 'planned' and shift.can_edit %}
+        <button type="button" class="btn btn-sm btn-outline-success" onclick="startShift({{ shift.id }})">
+            <i class="bi bi-play"></i> Начать
+        </button>
+        {% endif %}
+        
+        {% if shift.shift_type == 'active' and shift.can_edit %}
+        <button type="button" class="btn btn-sm btn-outline-warning" onclick="endShift({{ shift.id }})">
+            <i class="bi bi-stop"></i> Завершить
+        </button>
+        {% endif %}
+    </div>
+    
+    <!-- Shift Status Indicator -->
+    <div class="shift-status-indicator" data-shift-id="{{ shift.id }}">
+        {% if shift.shift_type == 'planned' %}
+            <span class="status-planned">Запланировано</span>
+        {% elif shift.shift_type == 'active' %}
+            <span class="status-active">В процессе</span>
+        {% elif shift.shift_type == 'completed' %}
+            <span class="status-completed">Завершено</span>
+        {% elif shift.shift_type == 'cancelled' %}
+            <span class="status-cancelled">Отменено</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Shift JavaScript -->
+<script>
+function editShift(shiftId) {
+    // This will be implemented by the parent template
+    if (typeof window.editShift === 'function') {
+        window.editShift(shiftId);
+    }
+}
+
+function cancelShift(shiftId) {
+    // This will be implemented by the parent template
+    if (typeof window.cancelShift === 'function') {
+        window.cancelShift(shiftId);
+    }
+}
+
+function viewShift(shiftId) {
+    // This will be implemented by the parent template
+    if (typeof window.viewShift === 'function') {
+        window.viewShift(shiftId);
+    }
+}
+
+function startShift(shiftId) {
+    // This will be implemented by the parent template
+    if (typeof window.startShift === 'function') {
+        window.startShift(shiftId);
+    }
+}
+
+function endShift(shiftId) {
+    // This will be implemented by the parent template
+    if (typeof window.endShift === 'function') {
+        window.endShift(shiftId);
+    }
+}
+
+// Update shift status
+function updateShiftStatus(shiftId, newStatus, newShiftType) {
+    const shiftElement = document.querySelector(`[data-shift-id="${shiftId}"]`);
+    if (shiftElement) {
+        // Update classes
+        shiftElement.className = shiftElement.className.replace(/shift-\w+/g, '');
+        shiftElement.classList.add(`shift-${newShiftType}`);
+        shiftElement.classList.add(`shift-status-${newStatus}`);
+        
+        // Update data attributes
+        shiftElement.setAttribute('data-status', newStatus);
+        shiftElement.setAttribute('data-shift-type', newShiftType);
+        
+        // Update status indicator
+        const statusIndicator = shiftElement.querySelector('.shift-status-indicator');
+        if (statusIndicator) {
+            let statusText = '';
+            let statusClass = '';
+            
+            switch (newShiftType) {
+                case 'planned':
+                    statusText = 'Запланировано';
+                    statusClass = 'status-planned';
+                    break;
+                case 'active':
+                    statusText = 'В процессе';
+                    statusClass = 'status-active';
+                    break;
+                case 'completed':
+                    statusText = 'Завершено';
+                    statusClass = 'status-completed';
+                    break;
+                case 'cancelled':
+                    statusText = 'Отменено';
+                    statusClass = 'status-cancelled';
+                    break;
+            }
+            
+            statusIndicator.innerHTML = `<span class="${statusClass}">${statusText}</span>`;
+        }
+        
+        // Update actions based on new status
+        const actionsElement = shiftElement.querySelector('.shift-actions');
+        if (actionsElement) {
+            // This would need to be implemented based on the specific requirements
+            // For now, we'll just update the visual state
+        }
+    }
+}
+
+// Format time for display
+function formatShiftTime(timeString) {
+    if (!timeString) return '';
+    const time = new Date(timeString);
+    return time.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Calculate shift duration
+function calculateShiftDuration(startTime, endTime) {
+    if (!startTime || !endTime) return null;
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const durationMs = end - start;
+    const durationHours = durationMs / (1000 * 60 * 60);
+    return Math.round(durationHours * 100) / 100; // Round to 2 decimal places
+}
+</script>
