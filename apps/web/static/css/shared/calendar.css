@@ -1270,6 +1270,18 @@ html {
     text-align: center;
 }
 
+/* No Data Message */
+.no-data-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    opacity: 0.6;
+    font-style: italic;
+    pointer-events: none;
+}
+
 /* Keyframe Animations */
 @keyframes fadeInUp {
     from {

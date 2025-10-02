@@ -404,8 +404,25 @@ function updateDayDisplay(dayElement, date, calendarData) {
     dayContent.innerHTML = '';
     console.log(`Cleared day content for ${date}`);
     
-    // Добавляем тайм-слоты
+    // Получаем данные для дня
     const timeslots = calendarData.timeslotsByDate[date] || [];
+    const shifts = calendarData.shiftsByDate[date] || [];
+    
+    // Проверяем, есть ли данные для дня
+    const hasTimeslots = timeslots.length > 0;
+    const hasShifts = shifts.length > 0;
+    
+    if (!hasTimeslots && !hasShifts) {
+        // Показываем сообщение "Нет тайм-слотов!"
+        const noDataElement = document.createElement('div');
+        noDataElement.className = 'no-data-message';
+        noDataElement.innerHTML = '<small class="text-muted">Нет тайм-слотов!</small>';
+        dayContent.appendChild(noDataElement);
+        console.log(`Added no-data message for ${date}`);
+        return;
+    }
+    
+    // Добавляем тайм-слоты
     console.log(`Adding ${timeslots.length} timeslots for ${date}`);
     timeslots.forEach(timeslot => {
         const timeslotElement = createTimeslotElement(timeslot);
@@ -418,7 +435,6 @@ function updateDayDisplay(dayElement, date, calendarData) {
     });
     
     // Добавляем смены
-    const shifts = calendarData.shiftsByDate[date] || [];
     console.log(`Adding ${shifts.length} shifts for ${date}`);
     shifts.forEach(shift => {
         const shiftElement = createShiftElement(shift);
@@ -661,18 +677,21 @@ function selectMonth(month) {
     updateMonthDisplay();
     updateMonthOptions();
     
-    // Перезагружаем календарь
-    const newDate = new Date(currentYear, currentMonth - 1, 1);
-    loadCalendar(newDate);
-    
-    // Автопрокрутка к выбранному месяцу после загрузки
-    setTimeout(() => {
-        scrollToSelectedMonth();
-        // Сбрасываем флаг после прокрутки
+    // Используем новый метод динамической загрузки
+    if (window.universalCalendar && typeof window.universalCalendar.selectMonth === 'function') {
+        window.universalCalendar.selectMonth(currentYear, currentMonth);
+    } else {
+        // Fallback к старому методу
+        const newDate = new Date(currentYear, currentMonth - 1, 1);
+        loadCalendar(newDate);
+        
         setTimeout(() => {
-            window.userSelectedMonth = null;
-        }, 1000);
-    }, 200);
+            scrollToSelectedMonth();
+            setTimeout(() => {
+                window.userSelectedMonth = null;
+            }, 1000);
+        }, 200);
+    }
 }
 
 // Автопрокрутка к текущей дате
