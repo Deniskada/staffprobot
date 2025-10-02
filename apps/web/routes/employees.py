@@ -60,7 +60,8 @@ async def create_contract_form(
 ):
     """Форма создания договора с сотрудником."""
     # Проверяем авторизацию
-    current_user = await require_owner_or_superadmin(request)
+    from apps.web.app import require_manager_or_owner
+    current_user = await require_manager_or_owner(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
     
@@ -68,23 +69,46 @@ async def create_contract_form(
     contract_service = ContractService()
     # Используем telegram_id для поиска пользователя в БД
     user_id = current_user["id"]  # Это telegram_id из токена
-    available_employees = await contract_service.get_available_employees(user_id)
-    objects = await contract_service.get_owner_objects(user_id)
     
-    # Получаем внутренний ID пользователя для шаблонов
+    # Получаем внутренний ID пользователя для проверки роли
     async with get_async_session() as session:
         user_query = select(User).where(User.telegram_id == user_id)
         user_result = await session.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
         internal_user_id = user_obj.id if user_obj else None
+        user_role = user_obj.role if user_obj else None
+    
+    # В зависимости от роли получаем объекты
+    if user_role == "owner":
+        available_employees = await contract_service.get_available_employees(user_id)
+        objects = await contract_service.get_owner_objects(user_id)
+    else:  # manager
+        from apps.web.services.manager_permission_service import ManagerPermissionService
+        permission_service = ManagerPermissionService(session)
+        available_employees = await contract_service.get_available_employees(user_id)
+        objects = await permission_service.get_user_accessible_objects(internal_user_id)
+    
+    # Получаем профиль владельца для тегов
+    async with get_async_session() as session:
         
         # Получаем профиль владельца для тегов
         from apps.web.services.tag_service import TagService
         tag_service = TagService()
         owner_profile = await tag_service.get_owner_profile(session, internal_user_id)
     
-    # Получаем шаблоны с учетом владельца и публичных
-    templates_list = await contract_service.get_contract_templates_for_user(internal_user_id)
+    # Получаем шаблоны с учетом роли пользователя
+    if user_role == "owner":
+        templates_list = await contract_service.get_contract_templates_for_user(internal_user_id)
+    else:  # manager
+        # Для управляющего получаем только публичные шаблоны
+        from sqlalchemy import select, and_
+        from domain.entities.contract import ContractTemplate
+        async with get_async_session() as session:
+            templates_query = select(ContractTemplate).where(
+                and_(ContractTemplate.is_active == True, ContractTemplate.is_public == True)
+            )
+            result = await session.execute(templates_query)
+            templates_list = result.scalars().all()
     
     # Текущая дата для шаблона (формат YYYY-MM-DD)
     from datetime import date
@@ -144,7 +168,8 @@ async def create_contract(
 ):
     """Создание договора с сотрудником."""
     # Проверяем авторизацию
-    current_user = await require_owner_or_superadmin(request)
+    from apps.web.app import require_manager_or_owner
+    current_user = await require_manager_or_owner(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
     
@@ -165,6 +190,35 @@ async def create_contract(
                 field_key = key[6:]  # Убираем префикс "field_"
                 dynamic_values[field_key] = value
         
+        # Получаем владельца объектов для создания договора
+        async with get_async_session() as session:
+            user_query = select(User).where(User.telegram_id == current_user["id"])
+            user_result = await session.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            user_role = user_obj.role if user_obj else None
+            
+            if user_role == "manager":
+                # Для управляющего находим владельца объектов
+                from apps.web.services.manager_permission_service import ManagerPermissionService
+                permission_service = ManagerPermissionService(session)
+                accessible_objects = await permission_service.get_user_accessible_objects(user_obj.id)
+                
+                if not accessible_objects:
+                    raise HTTPException(status_code=403, detail="У вас нет доступа к объектам")
+                
+                # Получаем владельца первого объекта
+                first_object = accessible_objects[0]
+                owner_query = select(User).where(User.id == first_object.owner_id)
+                owner_result = await session.execute(owner_query)
+                owner_obj = owner_result.scalar_one_or_none()
+                
+                if not owner_obj:
+                    raise HTTPException(status_code=404, detail="Владелец объектов не найден")
+                
+                owner_telegram_id = owner_obj.telegram_id
+            else:
+                owner_telegram_id = current_user["id"]
+        
         # Создаем договор
         contract_data = {
             "employee_telegram_id": employee_telegram_id,
@@ -178,7 +232,7 @@ async def create_contract(
             "values": dynamic_values if dynamic_values else None
         }
         
-        contract = await contract_service.create_contract(current_user["id"], contract_data)
+        contract = await contract_service.create_contract(owner_telegram_id, contract_data)
         
         if contract:
             return RedirectResponse(url="/employees", status_code=303)
