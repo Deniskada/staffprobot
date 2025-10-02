@@ -177,11 +177,15 @@ class CalendarPanels {
                 employeeItem.className = `employee-item ${employee.is_owner ? 'owner-item' : ''}`;
                 employeeItem.draggable = true;
                 employeeItem.dataset.employeeId = employee.id;
+                employeeItem.dataset.employeeName = employee.name || employee.username;
+                employeeItem.dataset.employeeRole = employee.is_owner ? 'owner' : (employee.role || 'employee');
+                employeeItem.dataset.employeeStatus = employee.is_active ? 'Активен' : 'Неактивен';
+                
                 const primaryRole = employee.is_owner ? 'owner' : (employee.role || 'employee');
                 const roleLabel = roleLabels[primaryRole] || 'Сотрудник';
                 employeeItem.innerHTML = `
                     <div class="employee-name">
-                        ${employee.name}
+                        ${employee.name || employee.username}
                         ${employee.is_owner ? '<i class="bi bi-crown text-warning ms-1" title="Владелец"></i>' : ''}
                     </div>
                     <div class="employee-role ${employee.is_owner ? 'owner-role' : ''}">
@@ -208,7 +212,7 @@ class CalendarPanels {
                         z-index: 9999;
                     `;
                     dragPreview.innerHTML = `
-                        <div style="font-weight: 600; color: #2c3e50;">${employee.name}</div>
+                        <div style="font-weight: 600; color: #2c3e50;">${employee.name || employee.username}</div>
                         <div style="font-size: 12px; color: #6c757d;">${roleLabel}</div>
                     `;
                     document.body.appendChild(dragPreview);

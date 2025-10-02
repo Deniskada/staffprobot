@@ -1154,6 +1154,9 @@ function handleEmployeeDropOnDay(dayElement, employeeId) {
     
     // Найдем данные сотрудника
     const employeeItem = document.querySelector(`[data-employee-id="${employeeId}"]`);
+    console.log('Found employee item:', employeeItem);
+    console.log('Employee item dataset:', employeeItem ? employeeItem.dataset : 'null');
+    
     if (employeeItem) {
         const employee = {
             id: employeeId,
@@ -1162,11 +1165,21 @@ function handleEmployeeDropOnDay(dayElement, employeeId) {
             status: employeeItem.dataset.employeeStatus
         };
         
+        console.log('Employee data:', employee);
+        
         // Показываем уведомление
         if (window.calendarPanels && window.calendarPanels.showNotification) {
             window.calendarPanels.showNotification(
                 `Сотрудник ${employee.name} перетащен на ${date}. Используйте форму планирования для создания смены.`, 
                 'info'
+            );
+        }
+    } else {
+        console.error('Employee item not found for ID:', employeeId);
+        if (window.calendarPanels && window.calendarPanels.showNotification) {
+            window.calendarPanels.showNotification(
+                `Ошибка: сотрудник с ID ${employeeId} не найден`, 
+                'error'
             );
         }
     }
