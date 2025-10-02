@@ -16,6 +16,7 @@ from shared.services.role_based_login_service import RoleBasedLoginService
 from apps.web.middleware.role_middleware import require_manager_or_owner
 from apps.web.dependencies import get_current_user_dependency
 from shared.services.calendar_filter_service import CalendarFilterService
+from apps.web.utils.calendar_utils import create_calendar_grid
 from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
@@ -1444,7 +1445,7 @@ async def manager_calendar(
                             "id": f"schedule_{shift.id}",
                             "object_id": shift.object_id,
                             "object_name": obj.name,
-                            "date": shift.planned_start.date().isoformat(),
+                            "date": shift.planned_start.date(),  # date object, not isoformat
                             "start_time": web_timezone_helper.format_time_with_timezone(shift.planned_start, obj.timezone if obj else 'Europe/Moscow'),
                             "end_time": web_timezone_helper.format_time_with_timezone(shift.planned_end, obj.timezone if obj else 'Europe/Moscow'),
                             "status": shift.status,
@@ -1466,7 +1467,7 @@ async def manager_calendar(
                             "id": shift.id,
                             "object_id": shift.object_id,
                             "object_name": obj.name,
-                            "date": shift.start_time.date().isoformat(),
+                            "date": shift.start_time.date(),  # date object, not isoformat
                             "start_time": web_timezone_helper.format_time_with_timezone(shift.start_time, obj.timezone if obj else 'Europe/Moscow'),
                             "end_time": web_timezone_helper.format_time_with_timezone(shift.end_time, obj.timezone if obj else 'Europe/Moscow') if shift.end_time else None,
                             "status": shift.status,
@@ -1481,7 +1482,7 @@ async def manager_calendar(
             logger.info(f"Sample shifts_data: {shifts_data[:3] if shifts_data else 'No shifts'}")
             
             try:
-                calendar_data = _create_calendar_grid_manager(year, month, timeslots_data, shifts_data)
+                calendar_data = create_calendar_grid(year, month, timeslots_data, shifts_data)
                 logger.info(f"Calendar grid created successfully with {len(calendar_data) if calendar_data else 0} weeks")
                 if calendar_data and len(calendar_data) > 0:
                     logger.info(f"First week has {len(calendar_data[0])} days")
