@@ -245,13 +245,15 @@ class CalendarFilterService:
             
             calendar_shifts = []
             
-            # 1. Получаем запланированные смены (только те, которые НЕ начались)
-            planned_shifts = await self._get_planned_shifts(object_ids, date_range_start, date_range_end, objects_map)
-            calendar_shifts.extend(planned_shifts)
-            
-            # 2. Получаем фактические смены (активные и завершенные)
+            # 1. Получаем фактические смены (активные и завершенные)
             actual_shifts = await self._get_actual_shifts(object_ids, date_range_start, date_range_end, objects_map)
             calendar_shifts.extend(actual_shifts)
+            
+            # 2. Получаем запланированные смены (только те, которые НЕ начались)
+            # Исключаем те, для которых уже есть фактические смены
+            actual_shift_ids = {shift.schedule_id for shift in actual_shifts if shift.schedule_id}
+            planned_shifts = await self._get_planned_shifts(object_ids, date_range_start, date_range_end, objects_map, exclude_schedule_ids=actual_shift_ids)
+            calendar_shifts.extend(planned_shifts)
             
             logger.info(f"Found {len(planned_shifts)} planned shifts and {len(actual_shifts)} actual shifts")
             return calendar_shifts
@@ -265,27 +267,32 @@ class CalendarFilterService:
         object_ids: List[int],
         date_range_start: date,
         date_range_end: date,
-        objects_map: Dict[int, Dict[str, Any]]
+        objects_map: Dict[int, Dict[str, Any]],
+        exclude_schedule_ids: Optional[set] = None
     ) -> List[CalendarShift]:
         """Получить запланированные смены, исключая те, которые уже начались."""
         try:
             # КРИТИЧЕСКИ ВАЖНО: Исключаем запланированные смены, которые уже начались
             # Используем LEFT JOIN для проверки отсутствия фактических смен
+            conditions = [
+                ShiftSchedule.object_id.in_(object_ids),
+                ShiftSchedule.planned_start >= datetime.combine(date_range_start, time.min),
+                ShiftSchedule.planned_start < datetime.combine(date_range_end, time.max),
+                ShiftSchedule.status.in_(["planned", "confirmed"]),
+                # ИСКЛЮЧАЕМ смены, которые уже начались
+                ShiftSchedule.actual_shift_id.is_(None),
+                # ИСКЛЮЧАЕМ отменённые смены
+                ShiftSchedule.status != "cancelled"
+            ]
+            
+            # Исключаем запланированные смены, для которых уже есть фактические
+            if exclude_schedule_ids:
+                conditions.append(ShiftSchedule.id.notin_(exclude_schedule_ids))
+            
             planned_query = select(ShiftSchedule).options(
                 selectinload(ShiftSchedule.user),
                 selectinload(ShiftSchedule.object)
-            ).where(
-                and_(
-                    ShiftSchedule.object_id.in_(object_ids),
-                    ShiftSchedule.planned_start >= datetime.combine(date_range_start, time.min),
-                    ShiftSchedule.planned_start < datetime.combine(date_range_end, time.max),
-                    ShiftSchedule.status.in_(["planned", "confirmed"]),
-                    # ИСКЛЮЧАЕМ смены, которые уже начались
-                    ShiftSchedule.actual_shift_id.is_(None),
-                    # ИСКЛЮЧАЕМ отменённые смены
-                    ShiftSchedule.status != "cancelled"
-                )
-            ).order_by(ShiftSchedule.planned_start)
+            ).where(and_(*conditions)).order_by(ShiftSchedule.planned_start)
             
             planned_result = await self.db.execute(planned_query)
             planned_shifts = planned_result.scalars().all()
@@ -323,7 +330,8 @@ class CalendarFilterService:
                             schedule_id=shift_schedule.id,
                             can_edit=obj_info.get('can_edit', False),
                             can_cancel=obj_info.get('can_edit_schedule', False),
-                            can_view=obj_info.get('can_view', True)
+                            can_view=obj_info.get('can_view', True),
+                            timezone=obj_info.get('timezone', 'Europe/Moscow')
                         ))
             
             logger.info(f"Found {len(filtered_planned_shifts)} planned shifts (after filtering)")
@@ -394,7 +402,8 @@ class CalendarFilterService:
                         end_coordinates=shift.end_coordinates,
                         can_edit=obj_info.get('can_edit', False),
                         can_cancel=obj_info.get('can_edit_schedule', False),
-                        can_view=obj_info.get('can_view', True)
+                        can_view=obj_info.get('can_view', True),
+                        timezone=obj_info.get('timezone', 'Europe/Moscow')
                     ))
             
             logger.info(f"Found {len(calendar_shifts)} actual shifts")

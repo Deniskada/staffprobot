@@ -112,6 +112,7 @@ class CalendarShift:
     can_edit: bool = False
     can_cancel: bool = False
     can_view: bool = True
+    timezone: str = "Europe/Moscow"
     
     @property
     def duration_hours(self) -> Optional[float]:

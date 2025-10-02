@@ -18,23 +18,15 @@
                 <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#f3e5f5; border:1px solid #9c27b0;"></span>
                 <small>Свободный тайм‑слот</small>
             </div>
-            <div style="display:flex; align-items:center; gap:6px;">
-                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#e8f5e8; border:1px solid #4caf50;"></span>
-                <small>Частично заполненный тайм‑слот</small>
-            </div>
-            <div style="display:flex; align-items:center; gap:6px;">
-                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#ffebee; border:1px solid #f44336;"></span>
-                <small>Полностью заполненный тайм‑слот</small>
-            </div>
         </div>
         <div class="calendar-navigation">
             <div class="nav-group">
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="navigateCalendar('prev')">
-                    <i class="bi bi-chevron-left"></i> Предыдущий
+                <button type="button" class="btn btn-primary btn-sm calendar-nav-btn" onclick="navigateCalendar('prev')">
+                    <i class="bi bi-chevron-left"></i>
                 </button>
                 <h4 class="calendar-title mb-0">{{ calendar_title }}</h4>
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="navigateCalendar('next')">
-                    Следующий <i class="bi bi-chevron-right"></i>
+                <button type="button" class="btn btn-primary btn-sm calendar-nav-btn" onclick="navigateCalendar('next')">
+                    <i class="bi bi-chevron-right"></i>
                 </button>
             </div>
             <div class="nav-actions">
