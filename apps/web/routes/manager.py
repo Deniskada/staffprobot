@@ -3366,7 +3366,9 @@ async def manager_shift_detail(
                 shift_data = {
                     'id': shift.id,
                     'type': 'shift',
+                    'object_id': shift.object_id,
                     'object_name': shift.object.name if shift.object else 'Неизвестный объект',
+                    'user_id': shift.user_id,
                     'user_name': f"{shift.user.first_name} {shift.user.last_name or ''}".strip() if shift.user else 'Неизвестный пользователь',
                     'start_time': web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.start_time else '-',
                     'end_time': web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.end_time else '-',
