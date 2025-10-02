@@ -66,11 +66,7 @@
         <div class="calendar-day-header">Сб</div>
         <div class="calendar-day-header">Вс</div>
 
-        <!-- Calendar days -->
-        <!-- Calendar days -->
-        <div id="calendar-days-container">
-            <!-- Календарная сетка будет создана JavaScript -->
-        </div>
+        <!-- Calendar days will be created by JavaScript -->
     </div>
 </div>
 
@@ -161,14 +157,15 @@ function renderCalendarGrid(calendarData) {
 function createCalendarGrid(calendarData) {
     console.log('createCalendarGrid called');
     
-    const container = document.getElementById('calendar-days-container');
-    if (!container) {
-        console.error('Calendar days container not found');
+    const calendarGrid = document.querySelector('.calendar-grid');
+    if (!calendarGrid) {
+        console.error('Calendar grid not found');
         return;
     }
     
-    // Очищаем контейнер
-    container.innerHTML = '';
+    // Удаляем существующие дни (оставляем только заголовки)
+    const existingDays = calendarGrid.querySelectorAll('.calendar-day');
+    existingDays.forEach(day => day.remove());
     
     // Получаем текущую дату из календарных данных
     const currentDate = new Date(calendarData.date_range.start);
@@ -188,7 +185,7 @@ function createCalendarGrid(calendarData) {
         const dateStr = date.toISOString().split('T')[0];
         
         const dayElement = createDayElement(dateStr, day, true, false);
-        container.appendChild(dayElement);
+        calendarGrid.appendChild(dayElement);
     }
     
     // Создаем дни текущего месяца
@@ -198,20 +195,20 @@ function createCalendarGrid(calendarData) {
         const isToday = dateStr === new Date().toISOString().split('T')[0];
         
         const dayElement = createDayElement(dateStr, day, false, isToday);
-        container.appendChild(dayElement);
+        calendarGrid.appendChild(dayElement);
     }
     
     // Создаем дни следующего месяца
-    const remainingDays = 42 - container.children.length; // 6 недель * 7 дней
+    const remainingDays = 42 - calendarGrid.querySelectorAll('.calendar-day').length; // 6 недель * 7 дней
     for (let day = 1; day <= remainingDays; day++) {
         const date = new Date(year, month + 1, day);
         const dateStr = date.toISOString().split('T')[0];
         
         const dayElement = createDayElement(dateStr, day, true, false);
-        container.appendChild(dayElement);
+        calendarGrid.appendChild(dayElement);
     }
     
-    console.log(`Created calendar grid with ${container.children.length} days`);
+    console.log(`Created calendar grid with ${calendarGrid.querySelectorAll('.calendar-day').length} days`);
 }
 
 function createDayElement(dateStr, day, isOtherMonth, isToday) {
