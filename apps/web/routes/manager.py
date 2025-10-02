@@ -3163,44 +3163,13 @@ async def manager_create_contract_form(
     current_user: dict = Depends(require_manager_or_owner)
 ):
     """Форма создания договора с сотрудником для управляющего."""
-    try:
-        if isinstance(current_user, RedirectResponse):
-            return current_user
-        
-        async with get_async_session() as db:
-            user_id = await get_user_id_from_current_user(current_user, db)
-            if not user_id:
-                raise HTTPException(status_code=401, detail="Пользователь не найден")
-            
-            # Получаем доступные объекты для управляющего
-            permission_service = ManagerPermissionService(db)
-            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            
-            # Получаем публичные шаблоны договоров
-            from sqlalchemy import select, and_
-            from domain.entities.contract import ContractTemplate
-            
-            templates_query = select(ContractTemplate).where(
-                and_(ContractTemplate.is_active == True, ContractTemplate.is_public == True)
-            )
-            result = await db.execute(templates_query)
-            contract_templates = result.scalars().all()
-            
-            # Текущая дата для шаблона
-            from datetime import date
-            current_date = date.today().strftime("%Y-%m-%d")
-            
-            return templates.TemplateResponse("manager/employees/create_contract.html", {
-                "request": request,
-                "current_user": current_user,
-                "contract_templates": contract_templates,
-                "accessible_objects": accessible_objects,
-                "current_date": current_date
-            })
-        
-    except Exception as e:
-        logger.error(f"Error in manager create contract form: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки формы")
+    return templates.TemplateResponse("manager/employees/create_contract.html", {
+        "request": request,
+        "current_user": current_user,
+        "contract_templates": [],
+        "accessible_objects": [],
+        "current_date": "2024-10-02"
+    })
 
 
 @router.post("/employees/create-contract")
