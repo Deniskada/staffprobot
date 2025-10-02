@@ -18,12 +18,213 @@ class UniversalCalendarManager {
         this.calendarData = null;
         this.loading = false;
         
+        // Dynamic loading
+        this.loadedMonths = new Set(); // Кэш загруженных месяцев
+        this.currentVisibleMonth = null; // Текущий видимый месяц
+        this.scrollDirection = null; // Направление скролла
+        this.isScrolling = false;
+        
         this.init();
     }
     
     init() {
         this.bindEvents();
         this.loadCalendarData();
+        this.initScrollTracking();
+    }
+    
+    initScrollTracking() {
+        const scrollableContainer = document.querySelector('.calendar-scrollable');
+        if (!scrollableContainer) return;
+        
+        let scrollTimeout;
+        
+        scrollableContainer.addEventListener('scroll', () => {
+            if (!this.isScrolling) {
+                this.isScrolling = true;
+                requestAnimationFrame(() => {
+                    clearTimeout(scrollTimeout);
+                    scrollTimeout = setTimeout(() => {
+                        this.handleScroll();
+                        this.isScrolling = false;
+                    }, 100);
+                });
+            }
+        }, { passive: true });
+    }
+    
+    handleScroll() {
+        const visibleMonth = this.getVisibleMonthFromScroll();
+        if (!visibleMonth) return;
+        
+        const monthKey = `${visibleMonth.year}-${visibleMonth.month}`;
+        
+        // Если месяц изменился
+        if (this.currentVisibleMonth !== monthKey) {
+            this.currentVisibleMonth = monthKey;
+            this.checkAndLoadAdjacentMonths(visibleMonth);
+        }
+    }
+    
+    getVisibleMonthFromScroll() {
+        const scrollableContainer = document.querySelector('.calendar-scrollable');
+        if (!scrollableContainer) return null;
+        
+        const containerRect = scrollableContainer.getBoundingClientRect();
+        const containerCenter = containerRect.top + (containerRect.height / 2);
+        
+        // Находим все дни календаря
+        const dayElements = document.querySelectorAll('.calendar-day[data-date]');
+        let closestDay = null;
+        let minDistance = Infinity;
+        
+        // Ищем день, ближайший к центру контейнера
+        dayElements.forEach(dayElement => {
+            const dayRect = dayElement.getBoundingClientRect();
+            const dayCenter = dayRect.top + (dayRect.height / 2);
+            const distance = Math.abs(dayCenter - containerCenter);
+            
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestDay = dayElement;
+            }
+        });
+        
+        if (closestDay) {
+            const dateStr = closestDay.dataset.date;
+            const date = new Date(dateStr);
+            return { year: date.getFullYear(), month: date.getMonth() + 1 };
+        }
+        
+        return null;
+    }
+    
+    checkAndLoadAdjacentMonths(visibleMonth) {
+        const { year, month } = visibleMonth;
+        
+        // Определяем предыдущий и следующий месяцы
+        const prevMonth = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+        const nextMonth = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+        
+        const prevMonthKey = `${prevMonth.year}-${prevMonth.month}`;
+        const nextMonthKey = `${nextMonth.year}-${nextMonth.month}`;
+        
+        // Проверяем, нужно ли загружать предыдущий месяц
+        if (!this.loadedMonths.has(prevMonthKey)) {
+            this.loadMonthData(prevMonth);
+        }
+        
+        // Проверяем, нужно ли загружать следующий месяц
+        if (!this.loadedMonths.has(nextMonthKey)) {
+            this.loadMonthData(nextMonth);
+        }
+    }
+    
+    async loadMonthData(monthInfo) {
+        const { year, month } = monthInfo;
+        const monthKey = `${year}-${month}`;
+        
+        if (this.loadedMonths.has(monthKey)) return;
+        
+        try {
+            // Определяем диапазон дат для месяца
+            const startDate = new Date(year, month - 1, 1);
+            const endDate = new Date(year, month, 0); // Последний день месяца
+            
+            // Получаем object_id из URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const objectIdFromUrl = urlParams.get('object_id');
+            
+            const params = new URLSearchParams({
+                start_date: startDate.toISOString().split('T')[0],
+                end_date: endDate.toISOString().split('T')[0]
+            });
+            
+            if (objectIdFromUrl) {
+                params.append('object_ids', objectIdFromUrl);
+            }
+            
+            const response = await fetch(`${this.apiEndpoint}?${params}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const monthData = await response.json();
+            
+            // Объединяем данные с существующими
+            this.mergeMonthData(monthData);
+            
+            // Помечаем месяц как загруженный
+            this.loadedMonths.add(monthKey);
+            
+            // Обновляем отображение
+            this.renderCalendar();
+            
+        } catch (error) {
+            console.error(`Error loading month ${monthKey}:`, error);
+        }
+    }
+    
+    mergeMonthData(newData) {
+        if (!this.calendarData) {
+            this.calendarData = newData;
+            return;
+        }
+        
+        // Объединяем тайм-слоты
+        const existingTimeslots = new Map();
+        this.calendarData.timeslots.forEach(ts => {
+            existingTimeslots.set(`${ts.date}-${ts.id}`, ts);
+        });
+        
+        newData.timeslots.forEach(ts => {
+            const key = `${ts.date}-${ts.id}`;
+            if (!existingTimeslots.has(key)) {
+                this.calendarData.timeslots.push(ts);
+            }
+        });
+        
+        // Объединяем смены
+        const existingShifts = new Map();
+        this.calendarData.shifts.forEach(shift => {
+            existingShifts.set(shift.id, shift);
+        });
+        
+        newData.shifts.forEach(shift => {
+            if (!existingShifts.has(shift.id)) {
+                this.calendarData.shifts.push(shift);
+            }
+        });
+        
+        // Обновляем диапазон дат
+        const newStartDate = new Date(newData.date_range.start);
+        const newEndDate = new Date(newData.date_range.end);
+        const currentStartDate = new Date(this.calendarData.date_range.start);
+        const currentEndDate = new Date(this.calendarData.date_range.end);
+        
+        this.calendarData.date_range.start = newStartDate < currentStartDate ? 
+            newData.date_range.start : this.calendarData.date_range.start;
+        this.calendarData.date_range.end = newEndDate > currentEndDate ? 
+            newData.date_range.end : this.calendarData.date_range.end;
+    }
+    
+    initializeLoadedMonthsCache() {
+        if (!this.calendarData) return;
+        
+        const startDate = new Date(this.calendarData.date_range.start);
+        const endDate = new Date(this.calendarData.date_range.end);
+        
+        // Помечаем все месяцы в диапазоне как загруженные
+        const currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+            const monthKey = `${currentDate.getFullYear()}-${currentDate.getMonth() + 1}`;
+            this.loadedMonths.add(monthKey);
+            currentDate.setMonth(currentDate.getMonth() + 1);
+        }
+        
+        // Устанавливаем текущий видимый месяц
+        const today = new Date();
+        this.currentVisibleMonth = `${today.getFullYear()}-${today.getMonth() + 1}`;
     }
     
     bindEvents() {
@@ -103,6 +304,9 @@ class UniversalCalendarManager {
             }
             
             this.calendarData = await response.json();
+            
+            // Инициализируем кэш загруженных месяцев
+            this.initializeLoadedMonthsCache();
             
             // Process and display data
             this.processCalendarData();
@@ -298,6 +502,93 @@ class UniversalCalendarManager {
         setTimeout(() => {
             this.scrollToToday();
         }, 100);
+    }
+    
+    selectMonth(year, month) {
+        // Определяем, нужно ли загружать новые данные
+        const targetMonthKey = `${year}-${month}`;
+        
+        // Если выбранный месяц не загружен, загружаем диапазон
+        if (!this.loadedMonths.has(targetMonthKey)) {
+            this.loadMonthRange(year, month);
+        } else {
+            // Если месяц уже загружен, просто позиционируемся на него
+            this.scrollToMonth(year, month);
+        }
+    }
+    
+    async loadMonthRange(year, month) {
+        // Загружаем 3 месяца: предыдущий, текущий, следующий
+        const prevMonth = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+        const nextMonth = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+        
+        const startDate = new Date(prevMonth.year, prevMonth.month - 1, 1);
+        const endDate = new Date(nextMonth.year, nextMonth.month, 0);
+        
+        // Получаем object_id из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const objectIdFromUrl = urlParams.get('object_id');
+        
+        const params = new URLSearchParams({
+            start_date: startDate.toISOString().split('T')[0],
+            end_date: endDate.toISOString().split('T')[0]
+        });
+        
+        if (objectIdFromUrl) {
+            params.append('object_ids', objectIdFromUrl);
+        }
+        
+        try {
+            const response = await fetch(`${this.apiEndpoint}?${params}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const newData = await response.json();
+            
+            // Объединяем данные
+            this.mergeMonthData(newData);
+            
+            // Обновляем кэш
+            this.initializeLoadedMonthsCache();
+            
+            // Обновляем отображение
+            this.renderCalendar();
+            
+            // Позиционируемся на выбранный месяц
+            setTimeout(() => {
+                this.scrollToMonth(year, month);
+            }, 100);
+            
+        } catch (error) {
+            console.error(`Error loading month range for ${year}-${month}:`, error);
+        }
+    }
+    
+    scrollToMonth(year, month) {
+        const scrollableContainer = document.querySelector('.calendar-scrollable');
+        if (!scrollableContainer) return;
+        
+        // Находим первый день выбранного месяца
+        const monthFirstDay = new Date(year, month - 1, 1);
+        const monthFirstDayStr = monthFirstDay.toISOString().split('T')[0];
+        
+        // Находим элемент с первым днем месяца
+        const monthElement = document.querySelector(`.calendar-day[data-date="${monthFirstDayStr}"]`);
+        if (!monthElement) return;
+        
+        // Получаем позицию элемента относительно контейнера
+        const containerRect = scrollableContainer.getBoundingClientRect();
+        const elementRect = monthElement.getBoundingClientRect();
+        
+        // Вычисляем позицию для прокрутки (показываем элемент в верхней части)
+        const elementTop = elementRect.top - containerRect.top + scrollableContainer.scrollTop;
+        
+        // Плавная прокрутка к началу выбранного месяца
+        scrollableContainer.scrollTo({
+            top: Math.max(0, elementTop - 20),
+            behavior: 'smooth'
+        });
     }
     
     scrollToToday() {
