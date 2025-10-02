@@ -7,23 +7,23 @@
                 <!-- Легенда слева -->
                 <div class="legend-left">
                     <div class="calendar-legend" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#e3f2fd; border:1px solid #2196f3;"></span>
-                            <small>Запланированная смена</small>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:6px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#e3f2fd; border:1px solid #2196f3;"></span>
+                <small>Запланированная смена</small>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
                             <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#fff3e0; border:1px solid #ff9800;"></span>
                             <small>Активная смена</small>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#c8e6c9; border:2px solid #2e7d32;"></span>
-                            <small>Завершённая смена</small>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:6px;">
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#c8e6c9; border:2px solid #2e7d32;"></span>
+                <small>Завершённая смена</small>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
                             <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#f3e5f5; border:1px solid #9c27b0;"></span>
-                            <small>Свободный тайм‑слот</small>
-                        </div>
-                    </div>
+                <small>Свободный тайм‑слот</small>
+            </div>
+        </div>
                 </div>
                 
                 <!-- Переключатель месяцев в центре -->
@@ -38,11 +38,11 @@
                                 <div class="year-selector">
                                     <button type="button" class="year-btn" onclick="changeYear(-1)">
                                         <i class="bi bi-chevron-left"></i>
-                                    </button>
+                </button>
                                     <span class="year-display" id="yearDisplay">2025</span>
                                     <button type="button" class="year-btn" onclick="changeYear(1)">
                                         <i class="bi bi-chevron-right"></i>
-                                    </button>
+                </button>
                                 </div>
                                 <div class="months-grid" id="monthsGrid">
                                     <div class="month-option" data-month="1">Янв</div>
@@ -85,26 +85,26 @@
                     <i class="bi bi-calendar-today"></i> Сегодня
                 </button>
                 {% endif %}
-            </div>
-        </div>
-        
-        <!-- Заголовки дней недели (фиксированные) -->
-        <div class="calendar-day-headers">
-            <div class="calendar-day-header">Пн</div>
-            <div class="calendar-day-header">Вт</div>
-            <div class="calendar-day-header">Ср</div>
-            <div class="calendar-day-header">Чт</div>
-            <div class="calendar-day-header">Пт</div>
-            <div class="calendar-day-header">Сб</div>
-            <div class="calendar-day-header">Вс</div>
         </div>
     </div>
+
+        <!-- Заголовки дней недели (фиксированные) -->
+        <div class="calendar-day-headers">
+        <div class="calendar-day-header">Пн</div>
+        <div class="calendar-day-header">Вт</div>
+        <div class="calendar-day-header">Ср</div>
+        <div class="calendar-day-header">Чт</div>
+        <div class="calendar-day-header">Пт</div>
+        <div class="calendar-day-header">Сб</div>
+        <div class="calendar-day-header">Вс</div>
+                                    </div>
+                                </div>
 
     <!-- Скроллируемая часть с днями календаря -->
     <div class="calendar-scrollable">
         <div class="calendar-grid">
             <!-- Calendar days will be created by JavaScript -->
-        </div>
+                </div>
     </div>
 </div>
 
@@ -486,6 +486,75 @@ window.renderCalendarGrid = renderCalendarGrid;
 // Month Selector JavaScript
 let currentYear = new Date().getFullYear();
 let currentMonth = new Date().getMonth() + 1;
+let isUserScrolling = false; // Флаг для отслеживания пользовательской прокрутки
+
+// Оптимизированная логика определения месяца
+function determineCurrentMonth() {
+    console.log('=== Determining current month ===');
+    
+    // ПРИОРИТЕТ 1: Если пользователь выбрал месяц вручную
+    if (window.userSelectedMonth) {
+        console.log('Priority 1: User selected month:', window.userSelectedMonth);
+        return window.userSelectedMonth;
+    }
+    
+    // ПРИОРИТЕТ 2: URL параметры (если есть)
+    const urlParams = new URLSearchParams(window.location.search);
+    const yearParam = urlParams.get('year');
+    const monthParam = urlParams.get('month');
+    
+    if (yearParam && monthParam) {
+        const urlMonth = parseInt(monthParam);
+        console.log('Priority 2: URL parameters - year:', yearParam, 'month:', urlMonth);
+        return { year: parseInt(yearParam), month: urlMonth };
+    }
+    
+    // ПРИОРИТЕТ 3: Определение по видимой области календаря
+    const visibleMonth = getVisibleMonthFromScroll();
+    if (visibleMonth) {
+        console.log('Priority 3: Visible month from scroll:', visibleMonth);
+        return visibleMonth;
+    }
+    
+    // ПРИОРИТЕТ 4: Текущая дата
+    const today = new Date();
+    console.log('Priority 4: Current date - year:', today.getFullYear(), 'month:', today.getMonth() + 1);
+    return { year: today.getFullYear(), month: today.getMonth() + 1 };
+}
+
+// Определение видимого месяца по прокрутке
+function getVisibleMonthFromScroll() {
+    const scrollableContainer = document.querySelector('.calendar-scrollable');
+    if (!scrollableContainer) return null;
+    
+    const containerRect = scrollableContainer.getBoundingClientRect();
+    const containerCenter = containerRect.top + (containerRect.height / 2);
+    
+    // Находим все дни календаря
+    const dayElements = document.querySelectorAll('.calendar-day[data-date]');
+    let closestDay = null;
+    let minDistance = Infinity;
+    
+    // Ищем день, ближайший к центру контейнера
+    dayElements.forEach(dayElement => {
+        const dayRect = dayElement.getBoundingClientRect();
+        const dayCenter = dayRect.top + (dayRect.height / 2);
+        const distance = Math.abs(dayCenter - containerCenter);
+        
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestDay = dayElement;
+        }
+    });
+    
+    if (closestDay) {
+        const dateStr = closestDay.dataset.date;
+        const date = new Date(dateStr);
+        return { year: date.getFullYear(), month: date.getMonth() + 1 };
+    }
+    
+    return null;
+}
 
 // Инициализация переключателя месяцев
 function initMonthSelector() {
@@ -494,13 +563,12 @@ function initMonthSelector() {
     const yearDisplay = document.getElementById('yearDisplay');
     const monthOptions = document.querySelectorAll('.month-option');
     
-    // Получаем текущие значения из URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const yearParam = urlParams.get('year');
-    const monthParam = urlParams.get('month');
+    // Определяем текущий месяц по оптимизированной логике
+    const monthInfo = determineCurrentMonth();
+    currentYear = monthInfo.year;
+    currentMonth = monthInfo.month;
     
-    if (yearParam) currentYear = parseInt(yearParam);
-    if (monthParam) currentMonth = parseInt(monthParam); // monthParam уже 1-based
+    console.log('Initialized with year:', currentYear, 'month:', currentMonth);
     
     // Обновляем отображение
     updateMonthDisplay();
@@ -574,8 +642,10 @@ function changeYear(delta) {
 }
 
 function selectMonth(month) {
-    console.log('selectMonth called with month:', month);
-    console.log('currentYear before:', currentYear, 'currentMonth before:', currentMonth);
+    console.log('=== User selected month ===', month);
+    
+    // Устанавливаем флаг пользовательского выбора
+    window.userSelectedMonth = { year: currentYear, month: month };
     
     currentMonth = month;
     closeMonthDropdown();
@@ -590,6 +660,10 @@ function selectMonth(month) {
     // Автопрокрутка к выбранному месяцу после загрузки
     setTimeout(() => {
         scrollToSelectedMonth();
+        // Сбрасываем флаг после прокрутки
+        setTimeout(() => {
+            window.userSelectedMonth = null;
+        }, 1000);
     }, 200);
 }
 
@@ -682,42 +756,17 @@ function initScrollTracking() {
 }
 
 function updateMonthDisplayFromScroll() {
-    const scrollableContainer = document.querySelector('.calendar-scrollable');
-    if (!scrollableContainer) return;
-    
-    const scrollTop = scrollableContainer.scrollTop;
-    const containerHeight = scrollableContainer.clientHeight;
-    const scrollPercent = scrollTop / (scrollableContainer.scrollHeight - containerHeight);
-    
-    // Определяем, какой месяц сейчас виден в центре экрана
-    const centerOffset = scrollTop + (containerHeight / 2);
-    const dayElements = document.querySelectorAll('.calendar-day');
-    
-    let visibleMonth = null;
-    let visibleYear = null;
-    
-    for (let dayElement of dayElements) {
-        const dayRect = dayElement.getBoundingClientRect();
-        const containerRect = scrollableContainer.getBoundingClientRect();
-        
-        // Проверяем, находится ли день в центре видимой области
-        if (dayRect.top <= containerRect.top + containerHeight/2 && 
-            dayRect.bottom >= containerRect.top + containerHeight/2) {
-            
-            const dateStr = dayElement.dataset.date;
-            if (dateStr) {
-                const date = new Date(dateStr);
-                visibleMonth = date.getMonth() + 1; // 1-based
-                visibleYear = date.getFullYear();
-                break;
-            }
-        }
+    // Не обновляем, если пользователь недавно выбрал месяц вручную
+    if (window.userSelectedMonth) {
+        console.log('Skipping scroll update - user recently selected month');
+        return;
     }
     
-    // Обновляем переключатель, если нашли видимый месяц
-    if (visibleMonth && visibleYear) {
-        currentMonth = visibleMonth;
-        currentYear = visibleYear;
+    const visibleMonth = getVisibleMonthFromScroll();
+    if (visibleMonth && (visibleMonth.year !== currentYear || visibleMonth.month !== currentMonth)) {
+        console.log('Updating month from scroll:', visibleMonth);
+        currentYear = visibleMonth.year;
+        currentMonth = visibleMonth.month;
         updateMonthDisplay();
         updateMonthOptions();
     }
