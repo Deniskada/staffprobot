@@ -428,12 +428,8 @@ function initializeDateRangePicker() {
     const dateTo = dateToInput.value;
     
     if (dateFrom && dateTo) {
-        // Исправляем проблему с временными зонами при инициализации
-        const [fromYear, fromMonth, fromDay] = dateFrom.split('-').map(Number);
-        const [toYear, toMonth, toDay] = dateTo.split('-').map(Number);
-        const fromDate = new Date(fromYear, fromMonth - 1, fromDay);
-        const toDate = new Date(toYear, toMonth - 1, toDay);
-        dateRangeInput.value = `${formatDate(fromDate)} - ${formatDate(toDate)}`;
+        // Используем строки напрямую - никаких проблем с временными зонами!
+        dateRangeInput.value = `${formatDate(dateFrom)} - ${formatDate(dateTo)}`;
     }
     
     // Обработчик клика по кнопке календаря
@@ -523,23 +519,21 @@ function createDateRangePicker() {
         const cell = e.target.closest('.calendar-day');
         if (!cell || cell.classList.contains('disabled')) return;
         
-        // Исправляем проблему с временными зонами - создаем дату в локальной зоне
+        // Используем строки вместо Date объектов - никаких проблем с временными зонами!
         const dateString = cell.dataset.date; // "2025-10-01"
-        const [year, month, day] = dateString.split('-').map(Number);
-        const date = new Date(year, month - 1, day); // month - 1 потому что месяцы в JS начинаются с 0
         
         if (isSelectingStart) {
-            startDate = date;
+            startDate = dateString;
             endDate = null;
             isSelectingStart = false;
             updateCalendarDisplay();
             document.getElementById('datePickerHint').textContent = 'Выберите дату окончания';
         } else {
-            if (date < startDate) {
+            if (dateString < startDate) {
                 endDate = startDate;
-                startDate = date;
+                startDate = dateString;
             } else {
-                endDate = date;
+                endDate = dateString;
             }
             updateCalendarDisplay();
             document.getElementById('datePickerHint').textContent = 'Период выбран';
@@ -579,18 +573,16 @@ function createDateRangePicker() {
         cells.forEach(cell => {
             cell.classList.remove('selected', 'range-start', 'range-end', 'in-range');
             
-            // Используем тот же способ создания даты, что и при клике
-            const dateString = cell.dataset.date;
-            const [year, month, day] = dateString.split('-').map(Number);
-            const cellDate = new Date(year, month - 1, day);
+            // Используем строки для сравнения - никаких проблем с временными зонами!
+            const cellDateString = cell.dataset.date;
             
-            if (startDate && cellDate.getTime() === startDate.getTime()) {
+            if (startDate && cellDateString === startDate) {
                 cell.classList.add('range-start');
             }
-            if (endDate && cellDate.getTime() === endDate.getTime()) {
+            if (endDate && cellDateString === endDate) {
                 cell.classList.add('range-end');
             }
-            if (startDate && endDate && cellDate > startDate && cellDate < endDate) {
+            if (startDate && endDate && cellDateString > startDate && cellDateString < endDate) {
                 cell.classList.add('in-range');
             }
         });
@@ -802,20 +794,15 @@ function initializeFilters() {
 }
 
 // Функции для работы с датами
-function formatDate(date) {
-    // Исправляем проблему с временными зонами - форматируем вручную
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+function formatDate(dateString) {
+    // Простое форматирование строки даты - никаких проблем с временными зонами!
+    const [year, month, day] = dateString.split('-');
     return `${day}.${month}.${year}`;
 }
 
-function formatDateForInput(date) {
-    // Исправляем проблему с временными зонами - форматируем вручную
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+function formatDateForInput(dateString) {
+    // Возвращаем строку как есть - она уже в правильном формате!
+    return dateString;
 }
 
 // Функции для отмены смен
