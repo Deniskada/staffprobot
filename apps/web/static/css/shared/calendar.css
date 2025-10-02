@@ -74,16 +74,35 @@
     background: white;
     min-height: 120px;
     padding: 8px;
-    border: none;
+    border: 1px solid #e9ecef;
     position: relative;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: fadeInUp 0.5s ease-out;
 }
 
 .calendar-day:hover {
     background: #f8f9fa;
-    transform: scale(1.02);
+    border-color: #007bff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
     z-index: 1;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.calendar-day.today {
+    background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+    border-color: #2196f3;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.3);
+    animation: todayPulse 2s ease-in-out infinite;
+}
+
+.calendar-day.other-month {
+    opacity: 0.6;
+    background: #f8f9fa;
+}
+
+.calendar-day.other-month:hover {
+    opacity: 0.8;
+    background: #e9ecef;
 }
 
 .calendar-day.other-month {
@@ -273,7 +292,15 @@
 /* Timeslot status styles */
 .timeslot-item.timeslot-empty {
     border-left: 4px solid #9c27b0;
-    background: #f3e5f5;
+    background: linear-gradient(135deg, #f3e5f5, #e1bee7);
+    animation: slideInLeft 0.4s ease-out;
+    box-shadow: 0 2px 4px rgba(156, 39, 176, 0.2);
+}
+
+.timeslot-item.timeslot-empty:hover {
+    background: linear-gradient(135deg, #e1bee7, #ce93d8);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 4px 12px rgba(156, 39, 176, 0.3);
 }
 
 .timeslot-item.timeslot-partially_filled {
@@ -799,17 +826,41 @@
 /* Shift type styles */
 .shift-item.shift-planned {
     border-left: 4px solid #2196f3;
-    background: #e3f2fd;
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    animation: slideInRight 0.4s ease-out;
+    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.2);
+}
+
+.shift-item.shift-planned:hover {
+    background: linear-gradient(135deg, #bbdefb, #90caf9);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
 }
 
 .shift-item.shift-active {
     border-left: 4px solid #ff9800;
-    background: #fff3e0;
+    background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+    animation: slideInRight 0.4s ease-out;
+    box-shadow: 0 2px 4px rgba(255, 152, 0, 0.2);
+}
+
+.shift-item.shift-active:hover {
+    background: linear-gradient(135deg, #ffe0b2, #ffcc02);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
 }
 
 .shift-item.shift-completed {
     border-left: 4px solid #2e7d32;
-    background: #c8e6c9;
+    background: linear-gradient(135deg, #c8e6c9, #a5d6a7);
+    animation: slideInRight 0.4s ease-out;
+    box-shadow: 0 2px 4px rgba(46, 125, 50, 0.2);
+}
+
+.shift-item.shift-completed:hover {
+    background: linear-gradient(135deg, #a5d6a7, #81c784);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3);
 }
 
 .shift-header {
@@ -960,12 +1011,14 @@ html {
     position: absolute;
     top: 4px;
     right: 4px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(33, 150, 243, 0.9);
     color: white;
     font-size: 10px;
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    animation: bounceIn 0.5s ease-out;
 }
 
 /* Timeslot badges */
@@ -973,12 +1026,14 @@ html {
     position: absolute;
     bottom: 4px;
     right: 4px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(156, 39, 176, 0.9);
     color: white;
     font-size: 10px;
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    animation: bounceIn 0.5s ease-out;
 }
 
 /* Month Selector Styles */
@@ -1118,3 +1173,109 @@ html {
     color: white;
     font-weight: 600;
 }
+
+/* Keyframe Animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes todayPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(33, 150, 243, 0.6);
+    }
+}
+
+@keyframes bounceIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+    70% {
+        transform: scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Smooth scrolling for calendar */
+.calendar-scrollable {
+    scroll-behavior: smooth;
+}
+
+/* Loading animation for calendar days */
+.calendar-day.loading {
+    opacity: 0.5;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 0.5;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+/* Enhanced month selector animations */
+.month-dropdown {
+    animation: dropdownSlide 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes dropdownSlide {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* Staggered animation for calendar days */
+.calendar-day:nth-child(1) { animation-delay: 0.1s; }
+.calendar-day:nth-child(2) { animation-delay: 0.2s; }
+.calendar-day:nth-child(3) { animation-delay: 0.3s; }
+.calendar-day:nth-child(4) { animation-delay: 0.4s; }
+.calendar-day:nth-child(5) { animation-delay: 0.5s; }
+.calendar-day:nth-child(6) { animation-delay: 0.6s; }
+.calendar-day:nth-child(7) { animation-delay: 0.7s; }
