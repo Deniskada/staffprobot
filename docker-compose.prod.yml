@@ -87,7 +87,7 @@ services:
           cpus: '0.1'
 
   bot:
-    image: staffprobot:latest
+    image: staffprobot-bot:latest
     container_name: staffprobot_bot_prod
     command: python main.py
     volumes:
@@ -129,7 +129,7 @@ services:
           cpus: '0.25'
 
   web:
-    image: staffprobot:latest
+    image: staffprobot-web:latest
     container_name: staffprobot_web_prod
     ports:
       - "8001:8001"
@@ -171,7 +171,7 @@ services:
           cpus: '0.1'
 
   celery_worker:
-    image: staffprobot:latest
+    image: staffprobot-celery_worker:latest
     container_name: staffprobot_celery_worker_prod
     command: python scripts/start_celery_worker.py
     volumes:
@@ -206,7 +206,7 @@ services:
           cpus: '0.1'
 
   celery_beat:
-    image: staffprobot:latest
+    image: staffprobot-celery_beat:latest
     container_name: staffprobot_celery_beat_prod
     command: python scripts/start_celery_beat.py
     volumes:
@@ -332,7 +332,7 @@ services:
           cpus: '0.05'
 
   migrator:
-    image: staffprobot:latest
+    image: staffprobot-web:latest
     container_name: staffprobot_migrator_prod
     command: alembic upgrade head
     volumes:
