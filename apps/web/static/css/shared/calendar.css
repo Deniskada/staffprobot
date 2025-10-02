@@ -142,6 +142,32 @@
     transform: translateY(-1px);
 }
 
+/* Timeslot status styles */
+.timeslot-item.timeslot-empty {
+    border-left: 4px solid #9c27b0;
+    background: #f3e5f5;
+}
+
+.timeslot-item.timeslot-partially_filled {
+    border-left: 4px solid #4caf50;
+    background: #e8f5e8;
+}
+
+.timeslot-item.timeslot-filled {
+    border-left: 4px solid #f44336;
+    background: #ffebee;
+}
+
+.timeslot-item.timeslot-active {
+    border-left: 4px solid #ff9800;
+    background: #fff3e0;
+}
+
+.timeslot-item.timeslot-completed {
+    border-left: 4px solid #2e7d32;
+    background: #c8e6c9;
+}
+
 .timeslot-header {
     display: flex;
     justify-content: space-between;
@@ -588,4 +614,187 @@
     opacity: 1;
     transform: scale(1);
     transition: all 0.3s ease;
+}
+
+/* New timeslot elements */
+.timeslot-rate {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.timeslot-employees {
+    font-size: 0.8rem;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.timeslot-availability {
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.timeslot-availability .available-slots {
+    color: #28a745;
+    font-weight: 500;
+}
+
+.timeslot-availability .no-slots {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+/* Shift styles */
+.shift-item {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.shift-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+}
+
+/* Shift type styles */
+.shift-item.shift-planned {
+    border-left: 4px solid #2196f3;
+    background: #e3f2fd;
+}
+
+.shift-item.shift-active {
+    border-left: 4px solid #ff9800;
+    background: #fff3e0;
+}
+
+.shift-item.shift-completed {
+    border-left: 4px solid #2e7d32;
+    background: #c8e6c9;
+}
+
+.shift-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.shift-user {
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.shift-type {
+    font-size: 0.75rem;
+}
+
+.shift-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.shift-object,
+.shift-timeslot,
+.shift-planned-time,
+.shift-actual-time,
+.shift-rate,
+.shift-hours,
+.shift-payment,
+.shift-notes,
+.shift-location {
+    font-size: 0.8rem;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.shift-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.shift-status-indicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+.shift-status-indicator .status-planned {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.shift-status-indicator .status-active {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.shift-status-indicator .status-completed {
+    background: #c8e6c9;
+    color: #2e7d32;
+}
+
+/* Badge styles for shifts */
+.badge-planned {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.badge-active {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.badge-completed {
+    background: #c8e6c9;
+    color: #2e7d32;
+}
+
+/* Badge styles for timeslots */
+.badge-empty {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.badge-partially_filled {
+    background: #e8f5e8;
+    color: #388e3c;
+}
+
+.badge-filled {
+    background: #ffebee;
+    color: #d32f2f;
+}
+
+.badge-active {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.badge-completed {
+    background: #c8e6c9;
+    color: #2e7d32;
 }
