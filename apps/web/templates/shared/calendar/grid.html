@@ -21,13 +21,42 @@
         </div>
         <div class="calendar-navigation">
             <div class="nav-group">
-                <button type="button" class="btn btn-primary btn-sm calendar-nav-btn" onclick="navigateCalendar('prev')">
-                    <i class="bi bi-chevron-left"></i>
-                </button>
-                <h4 class="calendar-title mb-0">{{ calendar_title }}</h4>
-                <button type="button" class="btn btn-primary btn-sm calendar-nav-btn" onclick="navigateCalendar('next')">
-                    <i class="bi bi-chevron-right"></i>
-                </button>
+                <!-- Новый красивый переключатель месяцев -->
+                <div class="month-selector">
+                    <div class="month-picker">
+                        <div class="month-display" id="monthDisplay">
+                            <span class="month-name" id="monthName">{{ calendar_title }}</span>
+                            <i class="bi bi-chevron-down dropdown-icon"></i>
+                        </div>
+                        <div class="month-dropdown" id="monthDropdown">
+                            <div class="dropdown-content">
+                                <div class="year-selector">
+                                    <button type="button" class="year-btn" onclick="changeYear(-1)">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </button>
+                                    <span class="year-display" id="yearDisplay">2025</span>
+                                    <button type="button" class="year-btn" onclick="changeYear(1)">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </button>
+                                </div>
+                                <div class="months-grid" id="monthsGrid">
+                                    <div class="month-option" data-month="1">Янв</div>
+                                    <div class="month-option" data-month="2">Фев</div>
+                                    <div class="month-option" data-month="3">Мар</div>
+                                    <div class="month-option" data-month="4">Апр</div>
+                                    <div class="month-option" data-month="5">Май</div>
+                                    <div class="month-option" data-month="6">Июн</div>
+                                    <div class="month-option" data-month="7">Июл</div>
+                                    <div class="month-option" data-month="8">Авг</div>
+                                    <div class="month-option" data-month="9">Сен</div>
+                                    <div class="month-option" data-month="10">Окт</div>
+                                    <div class="month-option" data-month="11">Ноя</div>
+                                    <div class="month-option" data-month="12">Дек</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="nav-actions">
                 {% if objects and objects|length > 1 %}
@@ -426,6 +455,111 @@ function createShiftElement(shift) {
 
 // Делаем функцию доступной глобально
 window.renderCalendarGrid = renderCalendarGrid;
+
+// Month Selector JavaScript
+let currentYear = new Date().getFullYear();
+let currentMonth = new Date().getMonth() + 1;
+
+// Инициализация переключателя месяцев
+function initMonthSelector() {
+    const monthDisplay = document.getElementById('monthDisplay');
+    const monthDropdown = document.getElementById('monthDropdown');
+    const yearDisplay = document.getElementById('yearDisplay');
+    const monthOptions = document.querySelectorAll('.month-option');
+    
+    // Получаем текущие значения из URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const yearParam = urlParams.get('year');
+    const monthParam = urlParams.get('month');
+    
+    if (yearParam) currentYear = parseInt(yearParam);
+    if (monthParam) currentMonth = parseInt(monthParam);
+    
+    // Обновляем отображение
+    updateMonthDisplay();
+    
+    // Обработчики событий
+    monthDisplay.addEventListener('click', toggleMonthDropdown);
+    
+    // Закрытие при клике вне элемента
+    document.addEventListener('click', (e) => {
+        if (!monthDisplay.contains(e.target) && !monthDropdown.contains(e.target)) {
+            closeMonthDropdown();
+        }
+    });
+    
+    // Обработчики для месяцев
+    monthOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            const month = parseInt(option.dataset.month);
+            selectMonth(month);
+        });
+    });
+}
+
+function toggleMonthDropdown() {
+    const monthDisplay = document.getElementById('monthDisplay');
+    const monthDropdown = document.getElementById('monthDropdown');
+    
+    monthDisplay.classList.toggle('active');
+    monthDropdown.classList.toggle('show');
+    
+    if (monthDropdown.classList.contains('show')) {
+        updateMonthOptions();
+    }
+}
+
+function closeMonthDropdown() {
+    const monthDisplay = document.getElementById('monthDisplay');
+    const monthDropdown = document.getElementById('monthDropdown');
+    
+    monthDisplay.classList.remove('active');
+    monthDropdown.classList.remove('show');
+}
+
+function updateMonthDisplay() {
+    const monthName = document.getElementById('monthName');
+    const yearDisplay = document.getElementById('yearDisplay');
+    
+    const monthNames = [
+        'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+        'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+    ];
+    
+    monthName.textContent = `${monthNames[currentMonth - 1]} ${currentYear}`;
+    yearDisplay.textContent = currentYear;
+}
+
+function updateMonthOptions() {
+    const monthOptions = document.querySelectorAll('.month-option');
+    
+    monthOptions.forEach(option => {
+        const month = parseInt(option.dataset.month);
+        option.classList.toggle('active', month === currentMonth);
+    });
+}
+
+function changeYear(delta) {
+    currentYear += delta;
+    updateMonthDisplay();
+    updateMonthOptions();
+}
+
+function selectMonth(month) {
+    currentMonth = month;
+    closeMonthDropdown();
+    updateMonthDisplay();
+    updateMonthOptions();
+    
+    // Перезагружаем календарь
+    const newDate = new Date(currentYear, currentMonth - 1, 1);
+    loadCalendar(newDate);
+}
+
+// Инициализация при загрузке DOM
+document.addEventListener('DOMContentLoaded', function() {
+    initMonthSelector();
+});
 
 // Проверяем что функция доступна после загрузки и привязываем события
 document.addEventListener('DOMContentLoaded', function() {
