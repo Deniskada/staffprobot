@@ -116,16 +116,13 @@
                             </div>
                             <div class="col-md-4">
                                 <label for="dateRange" class="form-label">Период</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="dateRange" name="dateRange" 
-                                           placeholder="Выберите период" readonly>
-                                    <button class="btn btn-outline-primary" type="button" id="openDateRange">
-                                        <i class="bi bi-calendar-range"></i>
-                                    </button>
-                                    <button class="btn btn-outline-secondary" type="button" id="clearDateRange">
-                                        <i class="bi bi-x-circle"></i>
-                                    </button>
-                            </div>
+        <div class="input-group">
+            <input type="text" class="form-control" id="dateRange" name="dateRange" 
+                   placeholder="Выберите период" readonly>
+            <button class="btn btn-outline-secondary" type="button" id="clearDateRange">
+                <i class="bi bi-x-circle"></i>
+            </button>
+        </div>
                                 <input type="hidden" id="date_from" name="date_from" value="{{ filters.date_from or '' }}">
                                 <input type="hidden" id="date_to" name="date_to" value="{{ filters.date_to or '' }}">
                             </div>
@@ -420,7 +417,6 @@ function initializeDateRangePicker() {
     const dateRangeInput = document.getElementById('dateRange');
     const dateFromInput = document.getElementById('date_from');
     const dateToInput = document.getElementById('date_to');
-    const openBtn = document.getElementById('openDateRange');
     const clearBtn = document.getElementById('clearDateRange');
     
     // Устанавливаем начальные значения если есть
@@ -432,16 +428,14 @@ function initializeDateRangePicker() {
         dateRangeInput.value = `${formatDate(dateFrom)} - ${formatDate(dateTo)}`;
     }
     
-    // Обработчик клика по кнопке календаря
-    openBtn.addEventListener('click', function() {
+    // Обработчик клика по полю ввода даты
+    dateRangeInput.addEventListener('click', function() {
         if (!dateRangePicker) {
             createDateRangePicker();
         }
         dateRangePicker.show();
     });
     
-    // Убираем автоматическое открытие при клике на поле
-    // dateRangeInput.addEventListener('click', function() { ... });
     
     // Обработчик очистки
     clearBtn.addEventListener('click', function() {
@@ -543,19 +537,9 @@ function createDateRangePicker() {
     // Обработчик подтверждения
     modal.querySelector('#confirmDateRange').addEventListener('click', function() {
         if (startDate && endDate) {
-            console.log('DEBUG: startDate =', startDate, 'endDate =', endDate);
-            console.log('DEBUG: formatDate(startDate) =', formatDate(startDate));
-            console.log('DEBUG: formatDate(endDate) =', formatDate(endDate));
-            console.log('DEBUG: formatDateForInput(startDate) =', formatDateForInput(startDate));
-            console.log('DEBUG: formatDateForInput(endDate) =', formatDateForInput(endDate));
-            
             dateRangeInput.value = `${formatDate(startDate)} - ${formatDate(endDate)}`;
             dateFromInput.value = formatDateForInput(startDate);
             dateToInput.value = formatDateForInput(endDate);
-            
-            console.log('DEBUG: Final values - dateRangeInput.value =', dateRangeInput.value);
-            console.log('DEBUG: Final values - dateFromInput.value =', dateFromInput.value);
-            console.log('DEBUG: Final values - dateToInput.value =', dateToInput.value);
         }
         bootstrapModal.hide();
     });
