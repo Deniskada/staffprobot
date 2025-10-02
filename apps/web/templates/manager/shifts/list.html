@@ -343,7 +343,7 @@ document.getElementById('confirmCancel').addEventListener('click', async functio
     if (!currentShiftId || !currentShiftType) return;
     
     try {
-        const response = await fetch(`/owner/shifts/${currentShiftId}/cancel?shift_type=${currentShiftType}`, {
+        const response = await fetch(`/manager/shifts/${currentShiftId}/cancel?shift_type=${currentShiftType}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

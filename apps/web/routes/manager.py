@@ -3898,3 +3898,114 @@ async def manager_finalize_contract(
     except Exception as e:
         logger.error(f"Ошибка завершения заявки управляющим: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка обработки заявки: {e}")
+
+
+@router.post("/shifts/{shift_id}/cancel")
+async def manager_cancel_shift(
+    request: Request, 
+    shift_id: str,  # Поддержка префикса schedule_
+    shift_type: Optional[str] = Query("shift"),
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Отмена смены управляющим"""
+    from fastapi.responses import JSONResponse
+    from datetime import datetime
+    
+    try:
+        # Определяем тип смены по ID
+        if shift_id.startswith('schedule_'):
+            actual_shift_id = int(shift_id.replace('schedule_', ''))
+            actual_shift_type = "schedule"
+        else:
+            actual_shift_id = int(shift_id)
+            actual_shift_type = shift_type or "shift"
+        
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"success": False, "message": "Пользователь не найден"}
+            )
+        
+        # Получаем доступные объекты управляющего
+        permission_service = ManagerPermissionService(db)
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        accessible_object_ids = [obj.id for obj in accessible_objects]
+        
+        if not accessible_object_ids:
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "message": "Нет доступа к объектам"}
+            )
+        
+        if actual_shift_type == "schedule":
+            # Отмена запланированной смены
+            query = select(ShiftSchedule).options(
+                selectinload(ShiftSchedule.object)
+            ).where(ShiftSchedule.id == actual_shift_id)
+            result = await db.execute(query)
+            shift = result.scalar_one_or_none()
+            
+            if shift and shift.status == "planned":
+                # Проверяем доступ к объекту
+                if shift.object_id not in accessible_object_ids:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"success": False, "message": "Нет доступа к объекту"}
+                    )
+                
+                # Отменяем смену
+                shift.status = "cancelled"
+                shift.updated_at = datetime.utcnow()
+                await db.commit()
+                
+                return JSONResponse(
+                    status_code=200,
+                    content={"success": True, "message": "Смена отменена"}
+                )
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "message": "Смена не найдена или уже отменена"}
+                )
+        else:
+            # Отмена реальной смены
+            query = select(Shift).options(
+                selectinload(Shift.object)
+            ).where(Shift.id == actual_shift_id)
+            result = await db.execute(query)
+            shift = result.scalar_one_or_none()
+            
+            if shift and shift.status == "active":
+                # Проверяем доступ к объекту
+                if shift.object_id not in accessible_object_ids:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"success": False, "message": "Нет доступа к объекту"}
+                    )
+                
+                # Отменяем смену
+                shift.status = "cancelled"
+                shift.updated_at = datetime.utcnow()
+                await db.commit()
+                
+                return JSONResponse(
+                    status_code=200,
+                    content={"success": True, "message": "Смена отменена"}
+                )
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "message": "Смена не найдена или уже завершена"}
+                )
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка отмены смены управляющим: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": "Ошибка отмены смены"}
+        )

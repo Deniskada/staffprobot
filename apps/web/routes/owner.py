@@ -3929,7 +3929,7 @@ async def owner_shift_detail(
 @router.post("/shifts/{shift_id}/cancel")
 async def owner_cancel_shift(
     request: Request, 
-    shift_id: int, 
+    shift_id: str,  # Изменено на str для поддержки префикса schedule_
     shift_type: Optional[str] = Query("shift"),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
@@ -3939,6 +3939,14 @@ async def owner_cancel_shift(
     from datetime import datetime
     
     try:
+        # Определяем тип смены по ID
+        if shift_id.startswith('schedule_'):
+            actual_shift_id = int(shift_id.replace('schedule_', ''))
+            actual_shift_type = "schedule"
+        else:
+            actual_shift_id = int(shift_id)
+            actual_shift_type = shift_type or "shift"
+        
         # Получаем роль пользователя
         user_role = current_user.get("role")
         
@@ -3949,11 +3957,11 @@ async def owner_cancel_shift(
         user_obj = user_result.scalar_one_or_none()
         user_id = user_obj.id if user_obj else None
         
-        if shift_type == "schedule":
+        if actual_shift_type == "schedule":
             # Отмена запланированной смены
             query = select(ShiftSchedule).options(
                 selectinload(ShiftSchedule.object)
-            ).where(ShiftSchedule.id == shift_id)
+            ).where(ShiftSchedule.id == actual_shift_id)
             result = await db.execute(query)
             shift = result.scalar_one_or_none()
             
@@ -3984,7 +3992,7 @@ async def owner_cancel_shift(
             # Отмена реальной смены
             query = select(Shift).options(
                 selectinload(Shift.object)
-            ).where(Shift.id == shift_id)
+            ).where(Shift.id == actual_shift_id)
             result = await db.execute(query)
             shift = result.scalar_one_or_none()
             
