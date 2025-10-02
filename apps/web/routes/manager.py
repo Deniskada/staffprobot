@@ -1312,6 +1312,16 @@ async def manager_calendar(
             logger.info("Current user is RedirectResponse, redirecting")
             return current_user
         
+        async with get_async_session() as db:
+            # Получаем доступные объекты
+            from shared.services.object_access_service import ObjectAccessService
+            object_service = ObjectAccessService(db)
+            accessible_objects = await object_service.get_accessible_objects(
+                user_telegram_id=current_user.get("telegram_id") or current_user.get("id"),
+                user_role=current_user.get("role")
+            )
+            logger.info(f"Found {len(accessible_objects)} accessible objects")
+        
         # Получаем доступные интерфейсы
         available_interfaces = []
         if current_user.get("role") == "owner":
@@ -1342,6 +1352,15 @@ async def manager_calendar(
                 'priority': 5
             })
         
+        # Формируем заголовок календаря
+        current_year = year or date.today().year
+        current_month = month or date.today().month
+        month_names = [
+            "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+            "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+        ]
+        calendar_title = f"{month_names[current_month - 1]} {current_year}"
+        
         logger.info(f"Available interfaces: {available_interfaces}")
         logger.info("Rendering template")
         
@@ -1349,9 +1368,13 @@ async def manager_calendar(
             "request": request,
             "current_user": current_user,
             "available_interfaces": available_interfaces,
+            "objects": accessible_objects,
+            "selected_object_id": object_id,
+            "calendar_title": calendar_title,
+            "show_today_button": True,
             "object_id": object_id,
-            "year": year or date.today().year,
-            "month": month or date.today().month,
+            "year": current_year,
+            "month": current_month,
             "date_range": {
                 "start": (date.today().replace(day=1) - timedelta(days=30)).isoformat(),
                 "end": (date.today().replace(day=1) + timedelta(days=60)).isoformat()
