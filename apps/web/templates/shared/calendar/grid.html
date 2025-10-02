@@ -336,8 +336,12 @@ function updateDayDisplay(dayElement, date, calendarData) {
     console.log(`Adding ${timeslots.length} timeslots for ${date}`);
     timeslots.forEach(timeslot => {
         const timeslotElement = createTimeslotElement(timeslot);
-        dayContent.appendChild(timeslotElement);
-        console.log(`Added timeslot ${timeslot.id} to ${date}`);
+        if (timeslotElement) {  // Проверяем, что элемент не null (не полностью занятый тайм-слот)
+            dayContent.appendChild(timeslotElement);
+            console.log(`Added timeslot ${timeslot.id} to ${date}`);
+        } else {
+            console.log(`Skipped fully occupied timeslot ${timeslot.id} for ${date}`);
+        }
     });
     
     // Добавляем смены
@@ -355,14 +359,21 @@ function updateDayDisplay(dayElement, date, calendarData) {
 }
 
 function createTimeslotElement(timeslot) {
+    // Определяем занятость тайм-слота
+    const currentEmployees = timeslot.current_employees || 0;
+    const maxEmployees = timeslot.max_employees || 1;
+    
+    // Не отображаем полностью занятые тайм-слоты
+    if (currentEmployees >= maxEmployees) {
+        console.log(`Skipping fully occupied timeslot ${timeslot.id} (${currentEmployees}/${maxEmployees})`);
+        return null;
+    }
+    
     const div = document.createElement('div');
     div.className = 'timeslot-item timeslot-free';
     div.setAttribute('data-timeslot-id', timeslot.id);
     div.onclick = () => showTimeslotDetails(timeslot.id);
     
-    // Определяем занятость тайм-слота
-    const currentEmployees = timeslot.current_employees || 0;
-    const maxEmployees = timeslot.max_employees || 1;
     const occupancyBadge = `<div class="timeslot-badge">${currentEmployees}/${maxEmployees}</div>`;
     
     div.innerHTML = `
