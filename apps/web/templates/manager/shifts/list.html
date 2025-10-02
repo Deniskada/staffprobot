@@ -183,14 +183,14 @@
                                             </div>
                                             <div>
                                                 <div class="fw-bold">{{ shift.user_name }}</div>
-                                                <small class="text-muted">ID: {{ shift.id }}</small>
+                                                <small class="text-muted">ID: {{ shift.user_id or 'Не указан' }}</small>
                                             </div>
                                         </div>
                                     </td>
                                     <td>
                                         <div>
                                             <div class="fw-bold">{{ shift.object_name }}</div>
-                                            <small class="text-muted">Объект ID: {{ shift.id }}</small>
+                                            <small class="text-muted">Объект ID: {{ shift.object_id or 'Не указан' }}</small>
                                         </div>
                                     </td>
                                     <td>
