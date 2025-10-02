@@ -21,6 +21,7 @@ from domain.entities.application import ApplicationStatus
 from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from shared.services.calendar_filter_service import CalendarFilterService
+from apps.web.utils.calendar_utils import create_calendar_grid
 from openpyxl import Workbook
 
 logger = logging.getLogger(__name__)
@@ -888,7 +889,7 @@ async def employee_calendar(
                     "id": slot.id,
                     "object_id": slot.object_id,
                     "object_name": obj.name,
-                    "date": slot.slot_date.isoformat(),
+                    "date": slot.slot_date,  # date object, not isoformat
                     "start_time": slot.start_time.strftime("%H:%M"),
                     "end_time": slot.end_time.strftime("%H:%M"),
                     "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else float(obj.hourly_rate) if obj.hourly_rate else 0,
@@ -941,7 +942,7 @@ async def employee_calendar(
                     "id": f"schedule_{s.id}",
                     "object_id": s.object_id,
                     "object_name": obj.name,
-                    "date": s.planned_start.date().isoformat(),
+                    "date": s.planned_start.date(),  # date object, not isoformat
                     "start_time": web_timezone_helper.format_time_with_timezone(s.planned_start, obj.timezone if obj else 'Europe/Moscow'),
                     "end_time": web_timezone_helper.format_time_with_timezone(s.planned_end, obj.timezone if obj else 'Europe/Moscow'),
                     "status": s.status,
@@ -967,7 +968,7 @@ async def employee_calendar(
                     "id": sh.id,
                     "object_id": sh.object_id,
                     "object_name": obj.name,
-                    "date": sh.start_time.date().isoformat(),
+                    "date": sh.start_time.date(),  # date object, not isoformat
                     "start_time": web_timezone_helper.format_time_with_timezone(sh.start_time, obj.timezone if obj else 'Europe/Moscow'),
                     "end_time": web_timezone_helper.format_time_with_timezone(sh.end_time, obj.timezone if obj else 'Europe/Moscow') if sh.end_time else None,
                     "status": sh.status,
@@ -977,7 +978,7 @@ async def employee_calendar(
                 })
 
         # Сетка календаря
-        calendar_weeks = _create_calendar_grid_employee(year, month, timeslots_data, shifts_data)
+        calendar_weeks = create_calendar_grid(year, month, timeslots_data, shifts_data)
 
         # JSON для шаблона
         def _serialize(obj):
