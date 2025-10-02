@@ -7,7 +7,8 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    max-height: 80vh;
+    height: 100vh;
+    max-height: 100vh;
 }
 
 .calendar-header-fixed {
@@ -40,6 +41,7 @@
     flex: 1;
     overflow-y: auto;
     padding: 0 20px 20px 20px;
+    min-height: 0;
 }
 
 .calendar-day-headers {
