@@ -1390,7 +1390,7 @@ async def manager_calendar(
 async def manager_calendar_api_data(
     start_date: str = Query(..., description="Начальная дата в формате YYYY-MM-DD"),
     end_date: str = Query(..., description="Конечная дата в формате YYYY-MM-DD"),
-    object_filter: Optional[int] = Query(None, description="ID объекта для фильтрации"),
+    object_ids: Optional[str] = Query(None, description="ID объектов для фильтрации через запятую"),
     current_user: dict = Depends(require_manager_or_owner),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -1399,7 +1399,7 @@ async def manager_calendar_api_data(
     Использует CalendarFilterService для правильной фильтрации смен.
     """
     try:
-        logger.info(f"Manager calendar API called: start_date={start_date}, end_date={end_date}, object_filter={object_filter}")
+        logger.info(f"Manager calendar API called: start_date={start_date}, end_date={end_date}, object_ids={object_ids}")
         
         # Парсим даты
         try:
@@ -1407,6 +1407,14 @@ async def manager_calendar_api_data(
             end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат даты. Используйте YYYY-MM-DD")
+        
+        # Парсим object_ids
+        object_filter_list = None
+        if object_ids:
+            try:
+                object_filter_list = [int(obj_id.strip()) for obj_id in object_ids.split(',') if obj_id.strip()]
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат object_ids. Используйте числа через запятую")
         
         # Получаем роль пользователя
         if isinstance(current_user, dict):
@@ -1440,7 +1448,7 @@ async def manager_calendar_api_data(
             user_role=user_role,
             date_range_start=start_date_obj,
             date_range_end=end_date_obj,
-            object_filter=object_filter
+            object_filter=object_filter_list
         )
         
         logger.info(f"CalendarFilterService returned: {len(calendar_data.timeslots)} timeslots, {len(calendar_data.shifts)} shifts")
