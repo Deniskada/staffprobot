@@ -543,9 +543,19 @@ function createDateRangePicker() {
     // Обработчик подтверждения
     modal.querySelector('#confirmDateRange').addEventListener('click', function() {
         if (startDate && endDate) {
+            console.log('DEBUG: startDate =', startDate, 'endDate =', endDate);
+            console.log('DEBUG: formatDate(startDate) =', formatDate(startDate));
+            console.log('DEBUG: formatDate(endDate) =', formatDate(endDate));
+            console.log('DEBUG: formatDateForInput(startDate) =', formatDateForInput(startDate));
+            console.log('DEBUG: formatDateForInput(endDate) =', formatDateForInput(endDate));
+            
             dateRangeInput.value = `${formatDate(startDate)} - ${formatDate(endDate)}`;
             dateFromInput.value = formatDateForInput(startDate);
             dateToInput.value = formatDateForInput(endDate);
+            
+            console.log('DEBUG: Final values - dateRangeInput.value =', dateRangeInput.value);
+            console.log('DEBUG: Final values - dateFromInput.value =', dateFromInput.value);
+            console.log('DEBUG: Final values - dateToInput.value =', dateToInput.value);
         }
         bootstrapModal.hide();
     });
@@ -625,7 +635,7 @@ function createBeautifulCalendar(container, monthYearEl) {
         
         html += `
             <div class="calendar-day ${isCurrentMonth ? '' : 'disabled'} ${isToday ? 'today' : ''}" 
-                 data-date="${date.toISOString().split('T')[0]}">
+                 data-date="${String(date.getFullYear()).padStart(4, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}">
                 ${date.getDate()}
             </div>
         `;
