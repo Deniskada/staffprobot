@@ -87,8 +87,14 @@ class UniversalCalendarManager {
                 end_date: dateRange.end.toISOString().split('T')[0]
             });
             
+            // Получаем object_id из URL параметров
+            const urlParams = new URLSearchParams(window.location.search);
+            const objectIdFromUrl = urlParams.get('object_id');
+            
             if (objectIds && objectIds.length > 0) {
                 params.append('object_ids', objectIds.join(','));
+            } else if (objectIdFromUrl) {
+                params.append('object_ids', objectIdFromUrl);
             }
             
             const response = await fetch(`${this.apiEndpoint}?${params}`);
