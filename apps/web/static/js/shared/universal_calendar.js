@@ -121,9 +121,14 @@ class UniversalCalendarManager {
         const end = endDate || new Date(this.currentDate);
         
         if (this.viewType === 'month') {
-            // Start from first day of month, end at last day
+            // Для много-месячного календаря загружаем данные за 3 месяца
+            // Предыдущий месяц
+            start.setMonth(start.getMonth() - 1);
             start.setDate(1);
-            end.setMonth(end.getMonth() + 1, 0);
+            
+            // Следующий месяц
+            end.setMonth(end.getMonth() + 1);
+            end.setDate(0); // Последний день следующего месяца
         } else if (this.viewType === 'week') {
             // Start from Monday of current week
             const dayOfWeek = start.getDay();
