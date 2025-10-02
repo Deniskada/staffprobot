@@ -3160,8 +3160,7 @@ async def quick_create_timeslot_manager(
 @router.get("/employees/create-contract", response_class=HTMLResponse)
 async def manager_create_contract_form(
     request: Request,
-    current_user: dict = Depends(require_manager_or_owner),
-    employee_telegram_id: Optional[int] = Query(None, description="Telegram ID сотрудника для предзаполнения")
+    current_user: dict = Depends(require_manager_or_owner)
 ):
     """Форма создания договора с сотрудником для управляющего."""
     try:
@@ -3196,7 +3195,6 @@ async def manager_create_contract_form(
                 "current_user": current_user,
                 "contract_templates": contract_templates,
                 "accessible_objects": accessible_objects,
-                "employee_telegram_id": employee_telegram_id,
                 "current_date": current_date
             })
         
