@@ -37,7 +37,7 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession) -> 
     """Получает внутренний ID пользователя из current_user."""
     if isinstance(current_user, dict):
         from sqlalchemy import select
-        telegram_id = current_user.get("id")
+        telegram_id = current_user.get("telegram_id")  # Исправлено: используем telegram_id вместо id
         user_query = select(User).where(User.telegram_id == telegram_id)
         user_result = await session.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
@@ -1605,7 +1605,7 @@ async def manager_calendar(
 async def manager_calendar_api_data(
     start_date: str = Query(..., description="Начальная дата в формате YYYY-MM-DD"),
     end_date: str = Query(..., description="Конечная дата в формате YYYY-MM-DD"),
-    object_ids: Optional[str] = Query(None, description="ID объектов через запятую"),
+    object_filter: Optional[int] = Query(None, description="ID объекта для фильтрации"),
     current_user: dict = Depends(require_manager_or_owner),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -1614,7 +1614,7 @@ async def manager_calendar_api_data(
     Использует CalendarFilterService для правильной фильтрации смен.
     """
     try:
-        logger.info(f"Manager calendar API called: start_date={start_date}, end_date={end_date}, object_ids={object_ids}")
+        logger.info(f"Manager calendar API called: start_date={start_date}, end_date={end_date}, object_filter={object_filter}")
         
         # Парсим даты
         try:
@@ -1623,22 +1623,17 @@ async def manager_calendar_api_data(
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат даты. Используйте YYYY-MM-DD")
         
-        # Парсим фильтр объектов
-        object_filter = None
-        if object_ids:
-            try:
-                object_filter = [int(obj_id.strip()) for obj_id in object_ids.split(",") if obj_id.strip()]
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Неверный формат ID объектов")
-        
         # Получаем роль пользователя
         if isinstance(current_user, dict):
             user_role = current_user.get("role", "manager")
             user_telegram_id = current_user.get("id")
-        else:
+        elif hasattr(current_user, 'role'):
             # current_user - это объект User
             user_role = current_user.role
             user_telegram_id = current_user.telegram_id
+        else:
+            # current_user - это RedirectResponse (не аутентифицирован)
+            raise HTTPException(status_code=401, detail="Требуется аутентификация")
         
         # Если пользователь - владелец, используем роль owner для CalendarFilterService
         if user_role == "owner":
@@ -1648,6 +1643,8 @@ async def manager_calendar_api_data(
         
         if not user_telegram_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        logger.info(f"Using user_telegram_id={user_telegram_id}, user_role={user_role}")
         
         # Получаем данные календаря через универсальный сервис
         calendar_service = CalendarFilterService(db)
@@ -1664,6 +1661,7 @@ async def manager_calendar_api_data(
         logger.info(f"CalendarFilterService returned: {len(calendar_data.timeslots)} timeslots, {len(calendar_data.shifts)} shifts")
         
         # Преобразуем в формат, совместимый с существующим JavaScript
+        logger.info("Converting timeslots to API format")
         timeslots_data = []
         for ts in calendar_data.timeslots:
             timeslots_data.append({
@@ -1688,6 +1686,7 @@ async def manager_calendar_api_data(
                 "can_view": ts.can_view
             })
         
+        logger.info("Converting shifts to API format")
         shifts_data = []
         for s in calendar_data.shifts:
             shifts_data.append({
@@ -1717,16 +1716,17 @@ async def manager_calendar_api_data(
                 "can_view": s.can_view
             })
         
+        logger.info("Preparing response")
         return {
             "timeslots": timeslots_data,
             "shifts": shifts_data,
             "objects": [
                 {
-                    "id": obj.id,
-                    "name": obj.name,
-                    "timezone": obj.timezone or "Europe/Moscow"
+                    "id": obj['id'],
+                    "name": obj['name'],
+                    "timezone": obj.get('timezone', 'Europe/Moscow')
                 }
-                for obj in calendar_data.objects
+                for obj in calendar_data.accessible_objects
             ],
             "date_range": {
                 "start": start_date_obj.isoformat(),
