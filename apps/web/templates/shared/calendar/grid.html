@@ -2,27 +2,31 @@
 <div class="calendar-wrapper">
     <!-- Фиксированная верхняя часть -->
     <div class="calendar-header-fixed">
-        <div class="calendar-legend mb-2" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-            <div style="display:flex; align-items:center; gap:6px;">
-                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#e3f2fd; border:1px solid #2196f3;"></span>
-                <small>Запланированная смена</small>
-            </div>
-            <div style="display:flex; align-items:center; gap:6px;">
-                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#fff3e0; border:1px solid #ff9800;"></span>
-                <small>Активная смена</small>
-            </div>
-            <div style="display:flex; align-items:center; gap:6px;">
-                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#c8e6c9; border:2px solid #2e7d32;"></span>
-                <small>Завершённая смена</small>
-            </div>
-            <div style="display:flex; align-items:center; gap:6px;">
-                <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#f3e5f5; border:1px solid #9c27b0;"></span>
-                <small>Свободный тайм‑слот</small>
-            </div>
-        </div>
         <div class="calendar-navigation">
             <div class="nav-group">
-                <!-- Новый красивый переключатель месяцев -->
+                <!-- Легенда слева -->
+                <div class="legend-left">
+                    <div class="calendar-legend" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#e3f2fd; border:1px solid #2196f3;"></span>
+                            <small>Запланированная смена</small>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#fff3e0; border:1px solid #ff9800;"></span>
+                            <small>Активная смена</small>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#c8e6c9; border:2px solid #2e7d32;"></span>
+                            <small>Завершённая смена</small>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#f3e5f5; border:1px solid #9c27b0;"></span>
+                            <small>Свободный тайм‑слот</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Переключатель месяцев в центре -->
                 <div class="month-selector">
                     <div class="month-picker">
                         <div class="month-display" id="monthDisplay">
@@ -228,10 +232,11 @@ function createCalendarGrid(calendarData) {
         }
     });
     
-    // Находим понедельник первой недели ВЫБРАННОГО месяца (текущий месяц)
-    const selectedMonthFirstDay = new Date(year, month, 1);
-    const firstMonday = new Date(selectedMonthFirstDay);
-    firstMonday.setDate(selectedMonthFirstDay.getDate() - selectedMonthFirstDay.getDay() + 1);
+    // Находим понедельник первой недели ПЕРВОГО месяца (предыдущий месяц)
+    const firstMonth = months[0]; // Предыдущий месяц
+    const firstMonthFirstDay = new Date(firstMonth.year, firstMonth.month, 1);
+    const firstMonday = new Date(firstMonthFirstDay);
+    firstMonday.setDate(firstMonthFirstDay.getDate() - firstMonthFirstDay.getDay() + 1);
     
     // Находим воскресенье последней недели последнего месяца
     const lastMonth = months[2]; // Следующий месяц
@@ -572,7 +577,64 @@ function selectMonth(month) {
 // Инициализация при загрузке DOM
 document.addEventListener('DOMContentLoaded', function() {
     initMonthSelector();
+    initScrollTracking();
 });
+
+// Отслеживание прокрутки для обновления переключателя месяцев
+function initScrollTracking() {
+    const scrollableContainer = document.querySelector('.calendar-scrollable');
+    if (!scrollableContainer) return;
+    
+    let scrollTimeout;
+    scrollableContainer.addEventListener('scroll', function() {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            updateMonthDisplayFromScroll();
+        }, 150); // Задержка для оптимизации
+    });
+}
+
+function updateMonthDisplayFromScroll() {
+    const scrollableContainer = document.querySelector('.calendar-scrollable');
+    if (!scrollableContainer) return;
+    
+    const scrollTop = scrollableContainer.scrollTop;
+    const containerHeight = scrollableContainer.clientHeight;
+    const scrollPercent = scrollTop / (scrollableContainer.scrollHeight - containerHeight);
+    
+    // Определяем, какой месяц сейчас виден в центре экрана
+    const centerOffset = scrollTop + (containerHeight / 2);
+    const dayElements = document.querySelectorAll('.calendar-day');
+    
+    let visibleMonth = null;
+    let visibleYear = null;
+    
+    for (let dayElement of dayElements) {
+        const dayRect = dayElement.getBoundingClientRect();
+        const containerRect = scrollableContainer.getBoundingClientRect();
+        
+        // Проверяем, находится ли день в центре видимой области
+        if (dayRect.top <= containerRect.top + containerHeight/2 && 
+            dayRect.bottom >= containerRect.top + containerHeight/2) {
+            
+            const dateStr = dayElement.dataset.date;
+            if (dateStr) {
+                const date = new Date(dateStr);
+                visibleMonth = date.getMonth() + 1; // 1-based
+                visibleYear = date.getFullYear();
+                break;
+            }
+        }
+    }
+    
+    // Обновляем переключатель, если нашли видимый месяц
+    if (visibleMonth && visibleYear) {
+        currentMonth = visibleMonth;
+        currentYear = visibleYear;
+        updateMonthDisplay();
+        updateMonthOptions();
+    }
+}
 
 // Проверяем что функция доступна после загрузки и привязываем события
 document.addEventListener('DOMContentLoaded', function() {
