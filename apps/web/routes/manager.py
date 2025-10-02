@@ -3150,33 +3150,11 @@ async def manager_shifts_list(
                         "pagination": {"page": 1, "per_page": 20, "total": 0, "pages": 0}
                     })
             
-            # Получение данных
-            # Применяем сортировку к запросам
-            if sort:
-                if sort == "user_name":
-                    shifts_query = shifts_query.order_by(asc(User.first_name) if order == "asc" else desc(User.first_name))
-                    schedules_query = schedules_query.order_by(asc(User.first_name) if order == "asc" else desc(User.first_name))
-                elif sort == "object_name":
-                    shifts_query = shifts_query.order_by(asc(Object.name) if order == "asc" else desc(Object.name))
-                    schedules_query = schedules_query.order_by(asc(Object.name) if order == "asc" else desc(Object.name))
-                elif sort == "start_time":
-                    shifts_query = shifts_query.order_by(asc(Shift.start_time) if order == "asc" else desc(Shift.start_time))
-                    schedules_query = schedules_query.order_by(asc(ShiftSchedule.planned_start) if order == "asc" else desc(ShiftSchedule.planned_start))
-                elif sort == "status":
-                    shifts_query = shifts_query.order_by(asc(Shift.status) if order == "asc" else desc(Shift.status))
-                    schedules_query = schedules_query.order_by(asc(ShiftSchedule.status) if order == "asc" else desc(ShiftSchedule.status))
-                elif sort == "created_at":
-                    shifts_query = shifts_query.order_by(asc(Shift.created_at) if order == "asc" else desc(Shift.created_at))
-                    schedules_query = schedules_query.order_by(asc(ShiftSchedule.created_at) if order == "asc" else desc(ShiftSchedule.created_at))
-            else:
-                # Сортировка по умолчанию
-                shifts_query = shifts_query.order_by(desc(Shift.created_at))
-                schedules_query = schedules_query.order_by(desc(ShiftSchedule.created_at))
-            
-            shifts_result = await db.execute(shifts_query)
+            # Получение данных (без сортировки на уровне БД)
+            shifts_result = await db.execute(shifts_query.order_by(desc(Shift.created_at)))
             shifts = shifts_result.scalars().all()
             
-            schedules_result = await db.execute(schedules_query)
+            schedules_result = await db.execute(schedules_query.order_by(desc(ShiftSchedule.created_at)))
             schedules = schedules_result.scalars().all()
             
             # Объединение и форматирование данных
@@ -3208,8 +3186,22 @@ async def manager_shifts_list(
                     'created_at': schedule.created_at
                 })
             
-            # Сортировка по дате создания
-            all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
+            # Сортировка данных
+            if sort:
+                reverse = order == 'desc'
+                if sort == "user_name":
+                    all_shifts.sort(key=lambda x: x['user_name'].lower(), reverse=reverse)
+                elif sort == "object_name":
+                    all_shifts.sort(key=lambda x: x['object_name'].lower(), reverse=reverse)
+                elif sort == "start_time":
+                    all_shifts.sort(key=lambda x: x['start_time'], reverse=reverse)
+                elif sort == "status":
+                    all_shifts.sort(key=lambda x: x['status'], reverse=reverse)
+                elif sort == "created_at":
+                    all_shifts.sort(key=lambda x: x['created_at'], reverse=reverse)
+            else:
+                # Сортировка по умолчанию
+                all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
             
             # Пагинация
             total_shifts = len(all_shifts)
