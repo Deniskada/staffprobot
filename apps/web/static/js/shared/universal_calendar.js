@@ -282,6 +282,33 @@ class UniversalCalendarManager {
         this.currentDate = new Date();
         this.loadCalendarData();
         this.updateNavigationTitle();
+        
+        // Скролл к текущему дню после загрузки данных
+        setTimeout(() => {
+            this.scrollToToday();
+        }, 100);
+    }
+    
+    scrollToToday() {
+        const today = new Date();
+        const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+        
+        // Ищем элемент с текущей датой
+        const todayElement = document.querySelector(`[data-date="${todayString}"]`);
+        if (todayElement) {
+            // Плавный скролл к элементу
+            todayElement.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+                inline: 'center'
+            });
+            
+            // Добавляем подсветку на 2 секунды
+            todayElement.classList.add('today-highlight');
+            setTimeout(() => {
+                todayElement.classList.remove('today-highlight');
+            }, 2000);
+        }
     }
     
     switchView(viewType) {
