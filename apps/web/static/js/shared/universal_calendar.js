@@ -1,4 +1,4 @@
-// Universal Calendar JavaScript for new API
+// Universal Calendar JavaScript for new API - FIXED VERSION
 
 class UniversalCalendarManager {
     constructor(options = {}) {
@@ -23,6 +23,8 @@ class UniversalCalendarManager {
         this.currentVisibleMonth = null; // Текущий видимый месяц
         this.scrollDirection = null; // Направление скролла
         this.isScrolling = false;
+        this.isLoadingMonth = false; // Флаг загрузки месяца
+        this.isUserNavigating = false; // Флаг пользовательской навигации
         
         this.init();
     }
@@ -40,7 +42,7 @@ class UniversalCalendarManager {
         let scrollTimeout;
         
         scrollableContainer.addEventListener('scroll', () => {
-            if (!this.isScrolling) {
+            if (!this.isScrolling && !this.isUserNavigating) {
                 this.isScrolling = true;
                 requestAnimationFrame(() => {
                     clearTimeout(scrollTimeout);
@@ -54,6 +56,9 @@ class UniversalCalendarManager {
     }
     
     handleScroll() {
+        // Защита от рекурсивных вызовов
+        if (this.isLoadingMonth || this.isUserNavigating) return;
+        
         const visibleMonth = this.getVisibleMonthFromScroll();
         if (!visibleMonth) return;
         
@@ -124,7 +129,9 @@ class UniversalCalendarManager {
         const { year, month } = monthInfo;
         const monthKey = `${year}-${month}`;
         
-        if (this.loadedMonths.has(monthKey)) return;
+        if (this.loadedMonths.has(monthKey) || this.isLoadingMonth) return;
+        
+        this.isLoadingMonth = true;
         
         try {
             // Определяем диапазон дат для месяца
@@ -162,6 +169,8 @@ class UniversalCalendarManager {
             
         } catch (error) {
             console.error(`Error loading month ${monthKey}:`, error);
+        } finally {
+            this.isLoadingMonth = false;
         }
     }
     
@@ -251,25 +260,21 @@ class UniversalCalendarManager {
         // Shift and timeslot clicks
         document.addEventListener('click', (e) => {
             if (e.target.closest('.shift-item')) {
-                e.preventDefault();
-                const shiftId = e.target.closest('.shift-item').dataset.shiftId;
-                this.handleShiftClick(shiftId);
+                const shiftElement = e.target.closest('.shift-item');
+                const shiftId = shiftElement.dataset.shiftId;
+                if (shiftId && this.onShiftClick) {
+                    this.onShiftClick(shiftId);
+                }
             }
             
             if (e.target.closest('.timeslot-item')) {
-                e.preventDefault();
-                const timeslotId = e.target.closest('.timeslot-item').dataset.timeslotId;
-                this.handleTimeslotClick(timeslotId);
+                const timeslotElement = e.target.closest('.timeslot-item');
+                const timeslotId = timeslotElement.dataset.timeslotId;
+                if (timeslotId && this.onTimeslotClick) {
+                    this.onTimeslotClick(timeslotId);
+                }
             }
         });
-        
-        // Object filter changes
-        const objectFilter = document.getElementById('objectFilter');
-        if (objectFilter) {
-            objectFilter.addEventListener('change', (e) => {
-                this.filterByObject(e.target.value);
-            });
-        }
     }
     
     async loadCalendarData(startDate = null, endDate = null, objectIds = null) {
@@ -319,7 +324,7 @@ class UniversalCalendarManager {
             
         } catch (error) {
             console.error('Error loading calendar data:', error);
-            this.showError('Ошибка загрузки данных календаря');
+            this.showNotification('Ошибка загрузки данных календаря', 'error');
         } finally {
             this.loading = false;
             this.showLoading(false);
@@ -357,8 +362,12 @@ class UniversalCalendarManager {
     processCalendarData() {
         if (!this.calendarData) return;
         
-        // Group timeslots by date
+        // Group data by date for easier rendering
         this.calendarData.timeslotsByDate = {};
+        this.calendarData.shiftsByDate = {};
+        this.calendarData.shiftsByTimeslot = {};
+        
+        // Process timeslots
         this.calendarData.timeslots.forEach(timeslot => {
             const date = timeslot.date;
             if (!this.calendarData.timeslotsByDate[date]) {
@@ -367,22 +376,17 @@ class UniversalCalendarManager {
             this.calendarData.timeslotsByDate[date].push(timeslot);
         });
         
-        // Group shifts by date
-        this.calendarData.shiftsByDate = {};
+        // Process shifts
         this.calendarData.shifts.forEach(shift => {
-            const date = shift.planned_start ? 
-                shift.planned_start.split('T')[0] : 
-                shift.start_time.split('T')[0];
-            
-            if (!this.calendarData.shiftsByDate[date]) {
-                this.calendarData.shiftsByDate[date] = [];
+            const date = shift.start_time ? shift.start_time.split('T')[0] : null;
+            if (date) {
+                if (!this.calendarData.shiftsByDate[date]) {
+                    this.calendarData.shiftsByDate[date] = [];
+                }
+                this.calendarData.shiftsByDate[date].push(shift);
             }
-            this.calendarData.shiftsByDate[date].push(shift);
-        });
-        
-        // Group shifts by timeslot
-        this.calendarData.shiftsByTimeslot = {};
-        this.calendarData.shifts.forEach(shift => {
+            
+            // Group by timeslot
             if (shift.time_slot_id) {
                 if (!this.calendarData.shiftsByTimeslot[shift.time_slot_id]) {
                     this.calendarData.shiftsByTimeslot[shift.time_slot_id] = [];
@@ -426,63 +430,47 @@ class UniversalCalendarManager {
         if (!this.calendarData) return;
         
         // Update timeslot occupancy based on shifts
-        Object.keys(this.calendarData.shiftsByTimeslot).forEach(timeslotId => {
-            const shifts = this.calendarData.shiftsByTimeslot[timeslotId];
-            const activeShifts = shifts.filter(shift => 
-                shift.status !== 'cancelled' && shift.shift_type !== 'cancelled'
-            );
-            
-            // Find timeslot element
-            const timeslotElement = document.querySelector(`[data-timeslot-id="${timeslotId}"]`);
-            if (timeslotElement) {
-                const maxEmployees = parseInt(timeslotElement.dataset.maxEmployees) || 1;
-                const currentEmployees = activeShifts.length;
-                
-                // Update occupancy
-                if (typeof window.updateTimeslotOccupancy === 'function') {
-                    window.updateTimeslotOccupancy(timeslotId, currentEmployees, maxEmployees);
-                }
-                
-                // Hide if fully occupied
-                if (currentEmployees >= maxEmployees) {
-                    timeslotElement.style.display = 'none';
-                } else {
-                    timeslotElement.style.display = '';
-                }
-            }
+        this.calendarData.timeslots.forEach(timeslot => {
+            const shifts = this.calendarData.shiftsByTimeslot[timeslot.id] || [];
+            timeslot.current_employees = shifts.length;
+            timeslot.available_slots = Math.max(0, timeslot.max_employees - shifts.length);
         });
     }
     
     updateStatistics() {
         if (!this.calendarData) return;
         
+        // Calculate statistics
         const stats = {
-            totalTimeslots: this.calendarData.timeslots.length,
-            totalShifts: this.calendarData.shifts.length,
-            plannedShifts: this.calendarData.shifts.filter(s => s.shift_type === 'planned').length,
-            activeShifts: this.calendarData.shifts.filter(s => s.shift_type === 'active').length,
-            completedShifts: this.calendarData.shifts.filter(s => s.shift_type === 'completed').length
+            total_timeslots: this.calendarData.timeslots.length,
+            total_shifts: this.calendarData.shifts.length,
+            planned: this.calendarData.shifts.filter(s => s.status === 'planned').length,
+            active: this.calendarData.shifts.filter(s => s.status === 'active').length,
+            completed: this.calendarData.shifts.filter(s => s.status === 'completed').length,
+            cancelled: this.calendarData.shifts.filter(s => s.status === 'cancelled').length
         };
         
-        // Update statistics display if exists
+        // Update UI if statistics element exists
         const statsElement = document.getElementById('calendar-stats');
         if (statsElement) {
             statsElement.innerHTML = `
-                <div class="stat-item">
-                    <span class="stat-label">Тайм-слоты:</span>
-                    <span class="stat-value">${stats.totalTimeslots}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Запланировано:</span>
-                    <span class="stat-value">${stats.plannedShifts}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Активно:</span>
-                    <span class="stat-value">${stats.activeShifts}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Завершено:</span>
-                    <span class="stat-value">${stats.completedShifts}</span>
+                <div class="row text-center">
+                    <div class="col-3">
+                        <small class="text-muted">Тайм-слоты</small><br>
+                        <strong>${stats.total_timeslots}</strong>
+                    </div>
+                    <div class="col-3">
+                        <small class="text-muted">Запланировано</small><br>
+                        <strong>${stats.planned}</strong>
+                    </div>
+                    <div class="col-3">
+                        <small class="text-muted">Активные</small><br>
+                        <strong>${stats.active}</strong>
+                    </div>
+                    <div class="col-3">
+                        <small class="text-muted">Завершено</small><br>
+                        <strong>${stats.completed}</strong>
+                    </div>
                 </div>
             `;
         }
@@ -491,15 +479,15 @@ class UniversalCalendarManager {
     navigate(direction) {
         const currentDate = new Date(this.currentDate);
         
-        if (this.viewType === 'month') {
-            if (direction === 'prev') {
+        if (direction === 'prev') {
+            if (this.viewType === 'month') {
                 currentDate.setMonth(currentDate.getMonth() - 1);
             } else {
-                currentDate.setMonth(currentDate.getMonth() + 1);
-            }
-        } else if (this.viewType === 'week') {
-            if (direction === 'prev') {
                 currentDate.setDate(currentDate.getDate() - 7);
+            }
+        } else {
+            if (this.viewType === 'month') {
+                currentDate.setMonth(currentDate.getMonth() + 1);
             } else {
                 currentDate.setDate(currentDate.getDate() + 7);
             }
@@ -508,6 +496,47 @@ class UniversalCalendarManager {
         this.currentDate = currentDate;
         this.loadCalendarData();
         this.updateNavigationTitle();
+    }
+    
+    switchView(viewType) {
+        this.viewType = viewType;
+        this.loadCalendar(this.currentDate);
+    }
+    
+    loadCalendar(date) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('year', date.getFullYear());
+        params.set('month', date.getMonth() + 1);
+        params.set('day', date.getDate());
+        params.set('view', this.viewType);
+        
+        window.location.search = params.toString();
+    }
+    
+    handleShiftClick(shiftId) {
+        if (this.onShiftClick) {
+            this.onShiftClick(shiftId);
+        }
+    }
+    
+    handleTimeslotClick(timeslotId) {
+        if (this.onTimeslotClick) {
+            this.onTimeslotClick(timeslotId);
+        }
+    }
+    
+    updateNavigationTitle() {
+        const titleElement = document.getElementById('calendar-title');
+        if (titleElement) {
+            const monthNames = [
+                'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+            ];
+            
+            const monthName = monthNames[this.currentDate.getMonth()];
+            const year = this.currentDate.getFullYear();
+            titleElement.textContent = `${monthName} ${year}`;
+        }
     }
     
     goToToday() {
@@ -522,6 +551,9 @@ class UniversalCalendarManager {
     }
     
     selectMonth(year, month) {
+        // Устанавливаем флаг пользовательской навигации
+        this.isUserNavigating = true;
+        
         // Определяем, нужно ли загружать новые данные
         const targetMonthKey = `${year}-${month}`;
         
@@ -531,6 +563,10 @@ class UniversalCalendarManager {
         } else {
             // Если месяц уже загружен, просто позиционируемся на него
             this.scrollToMonth(year, month);
+            // Сбрасываем флаг после позиционирования
+            setTimeout(() => {
+                this.isUserNavigating = false;
+            }, 500);
         }
     }
     
@@ -539,9 +575,6 @@ class UniversalCalendarManager {
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth() + 1;
-        
-        const selectedDate = new Date(year, month - 1, 1);
-        const currentDateObj = new Date(currentYear, currentMonth - 1, 1);
         
         const monthsDiff = (year - currentYear) * 12 + (month - currentMonth);
         
@@ -597,10 +630,15 @@ class UniversalCalendarManager {
             // Позиционируемся на выбранный месяц
             setTimeout(() => {
                 this.scrollToMonth(year, month);
+                // Сбрасываем флаг после позиционирования
+                setTimeout(() => {
+                    this.isUserNavigating = false;
+                }, 500);
             }, 200); // Увеличиваем задержку для больших диапазонов
             
         } catch (error) {
             console.error(`Error loading month range for ${year}-${month}:`, error);
+            this.isUserNavigating = false;
         }
     }
     
@@ -650,80 +688,25 @@ class UniversalCalendarManager {
         const today = new Date();
         const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD format
         
-        // Ищем элемент с текущей датой
-        const todayElement = document.querySelector(`[data-date="${todayString}"]`);
-        if (todayElement) {
-            // Плавный скролл к элементу
-            todayElement.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-                inline: 'center'
-            });
-            
-            // Добавляем подсветку на 2 секунды
-            todayElement.classList.add('today-highlight');
-            setTimeout(() => {
-                todayElement.classList.remove('today-highlight');
-            }, 2000);
-        }
-    }
-    
-    switchView(viewType) {
-        this.viewType = viewType;
-        this.loadCalendarData();
-        this.updateNavigationTitle();
-    }
-    
-    filterByObject(objectId) {
-        const objectIds = objectId ? [parseInt(objectId)] : null;
-        this.loadCalendarData(null, null, objectIds);
-    }
-    
-    updateNavigationTitle() {
-        const titleElement = document.querySelector('.calendar-title');
-        if (titleElement) {
-            if (this.viewType === 'month') {
-                const monthNames = [
-                    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-                    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
-                ];
-                const year = this.currentDate.getFullYear();
-                const month = monthNames[this.currentDate.getMonth()];
-                titleElement.textContent = `${month} ${year}`;
-            } else if (this.viewType === 'week') {
-                const startOfWeek = new Date(this.currentDate);
-                const dayOfWeek = startOfWeek.getDay();
-                const monday = new Date(startOfWeek);
-                monday.setDate(startOfWeek.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-                
-                const endOfWeek = new Date(monday);
-                endOfWeek.setDate(monday.getDate() + 6);
-                
-                const formatDate = (date) => {
-                    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-                };
-                
-                titleElement.textContent = `${formatDate(monday)} - ${formatDate(endOfWeek)}`;
-            }
-        }
-    }
-    
-    handleShiftClick(shiftId) {
-        if (this.onShiftClick) {
-            this.onShiftClick(shiftId);
-        } else {
-            // Default behavior
-            console.log('Shift clicked:', shiftId);
-        }
-    }
-    
-    handleTimeslotClick(timeslotId) {
-        if (this.onTimeslotClick) {
-            this.onTimeslotClick(timeslotId);
-        } else {
-            // Default behavior
-            console.log('Timeslot clicked:', timeslotId);
-        }
+        const todayElement = document.querySelector(`.calendar-day[data-date="${todayString}"]`);
+        if (!todayElement) return;
+        
+        const scrollableContainer = document.querySelector('.calendar-scrollable');
+        if (!scrollableContainer) return;
+        
+        const containerRect = scrollableContainer.getBoundingClientRect();
+        const elementRect = todayElement.getBoundingClientRect();
+        
+        const elementTop = elementRect.top - containerRect.top + scrollableContainer.scrollTop;
+        const containerHeight = scrollableContainer.clientHeight;
+        const elementHeight = elementRect.height;
+        
+        const scrollTo = elementTop - (containerHeight / 2) + (elementHeight / 2);
+        
+        scrollableContainer.scrollTo({
+            top: Math.max(0, scrollTo),
+            behavior: 'smooth'
+        });
     }
     
     showLoading(show) {
@@ -733,40 +716,31 @@ class UniversalCalendarManager {
         }
     }
     
-    showError(message) {
-        const errorElement = document.getElementById('calendar-error');
-        if (errorElement) {
-            errorElement.textContent = message;
-            errorElement.style.display = 'block';
-        } else {
-            console.error('Calendar error:', message);
-        }
-    }
-    
-    // Utility methods
-    getTimeslotsForDate(date) {
-        if (!this.calendarData || !this.calendarData.timeslotsByDate) return [];
-        return this.calendarData.timeslotsByDate[date] || [];
-    }
-    
-    getShiftsForDate(date) {
-        if (!this.calendarData || !this.calendarData.shiftsByDate) return [];
-        return this.calendarData.shiftsByDate[date] || [];
-    }
-    
-    getShiftsForTimeslot(timeslotId) {
-        if (!this.calendarData || !this.calendarData.shiftsByTimeslot) return [];
-        return this.calendarData.shiftsByTimeslot[timeslotId] || [];
-    }
-    
-    refresh() {
-        this.loadCalendarData();
+    showNotification(message, type = 'info') {
+        // Simple notification implementation
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show`;
+        notification.style.position = 'fixed';
+        notification.style.top = '20px';
+        notification.style.right = '20px';
+        notification.style.zIndex = '9999';
+        notification.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
     }
 }
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = UniversalCalendarManager;
-} else {
-    window.UniversalCalendarManager = UniversalCalendarManager;
 }
