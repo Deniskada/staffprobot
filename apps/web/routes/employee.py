@@ -1013,6 +1013,7 @@ async def employee_calendar(
             "calendar_weeks_json": calendar_weeks_json,
             "available_interfaces": available_interfaces,
             "applications_count": applications_count,
+            "show_today_button": True,
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки календаря: {e}", exc_info=True)
