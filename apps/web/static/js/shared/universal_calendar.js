@@ -288,6 +288,16 @@ class UniversalCalendarManager {
         
         // Shift and timeslot clicks
         document.addEventListener('click', (e) => {
+            // Временно отключаем клики для сотрудников
+            if (this.userRole === 'employee') {
+                if (e.target.closest('.shift-item') || e.target.closest('.timeslot-item')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Клики по сменам и тайм-слотам временно отключены для сотрудников');
+                    return;
+                }
+            }
+            
             if (e.target.closest('.shift-item')) {
                 const shiftElement = e.target.closest('.shift-item');
                 const shiftId = shiftElement.dataset.shiftId;
