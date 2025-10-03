@@ -2559,6 +2559,13 @@ async def manager_calendar_api_employees(
         raise HTTPException(status_code=500, detail="Ошибка получения сотрудников")
 
 
+@router.post("/api/shifts/plan/test")
+async def manager_plan_shift_test():
+    """Простой тестовый роутер"""
+    logger.info("=== TEST ROUTE CALLED ===")
+    return {"status": "success", "message": "Test route works!"}
+
+
 @router.post("/api/shifts/plan")
 async def manager_plan_shift(
     request: Request,
@@ -2586,71 +2593,18 @@ async def manager_plan_shift(
             logger.error("Missing required fields")
             raise HTTPException(status_code=400, detail="Не все обязательные поля заполнены")
         
-        async with get_async_session() as db:
-            user_id = await get_user_id_from_current_user(current_user, db)
-            if not user_id:
-                raise HTTPException(status_code=401, detail="Пользователь не найден")
-            
-            logger.info(f"User ID: {user_id}")
-            
-            # Проверяем, что тайм-слот существует и доступен
-            timeslot_query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
-            timeslot_result = await db.execute(timeslot_query)
-            timeslot = timeslot_result.scalar_one_or_none()
-            
-            if not timeslot:
-                logger.error(f"Timeslot {timeslot_id} not found")
-                raise HTTPException(status_code=404, detail="Тайм-слот не найден")
-            
-            logger.info(f"Timeslot found: {timeslot.id}, object_id: {timeslot.object_id}")
-            
-            # Проверяем права доступа к объекту
-            permission_service = ManagerPermissionService(db)
-            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            accessible_object_ids = [obj.id for obj in accessible_objects]
-            
-            logger.info(f"Accessible objects: {accessible_object_ids}")
-            
-            if timeslot.object_id not in accessible_object_ids:
-                logger.error(f"User {user_id} has no access to object {timeslot.object_id}")
-                raise HTTPException(status_code=403, detail="Нет доступа к объекту")
-            
-            # Проверяем, что сотрудник существует
-            employee_query = select(User).where(User.id == employee_id)
-            employee_result = await db.execute(employee_query)
-            employee = employee_result.scalar_one_or_none()
-            
-            if not employee:
-                logger.error(f"Employee {employee_id} not found")
-                raise HTTPException(status_code=404, detail="Сотрудник не найден")
-            
-            logger.info(f"Employee found: {employee.id}, name: {employee.name or employee.username}")
-            
-            # Создаем запланированную смену
-            shift_schedule = ShiftSchedule(
-                timeslot_id=timeslot_id,
-                employee_id=employee_id,
-                planned_start=datetime.fromisoformat(planned_start.replace('Z', '+00:00')),
-                planned_end=datetime.fromisoformat(planned_end.replace('Z', '+00:00')),
-                is_planned=is_planned,
-                created_by=user_id
-            )
-            
-            db.add(shift_schedule)
-            await db.commit()
-            await db.refresh(shift_schedule)
-            
-            logger.info(f"Planned shift created: {shift_schedule.id} for employee {employee_id} on timeslot {timeslot_id}")
-            
-            return {
-                "id": shift_schedule.id,
+        # Простой тест - возвращаем успех с данными
+        logger.info("=== SIMPLE TEST SUCCESS ===")
+        return {
+            "status": "success",
+            "message": "Тест успешен",
+            "data": {
                 "employee_id": employee_id,
-                "employee_name": employee.name or employee.username,
                 "timeslot_id": timeslot_id,
                 "planned_start": planned_start,
-                "planned_end": planned_end,
-                "is_planned": is_planned
+                "planned_end": planned_end
             }
+        }
             
     except HTTPException:
         raise
