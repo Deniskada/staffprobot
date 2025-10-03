@@ -3044,7 +3044,6 @@ async def manager_shift_detail(
     request: Request, 
     shift_id: str,  # Изменено на str для поддержки префикса schedule_
     shift_type: Optional[str] = Query("shift"),
-    return_to: Optional[str] = Query(None, description="Куда вернуться: calendar или shifts"),
     current_user: dict = Depends(require_manager_or_owner),
 ):
     """Детали смены управляющего"""
@@ -3177,8 +3176,7 @@ async def manager_shift_detail(
                 "current_user": current_user,
                 "available_interfaces": available_interfaces,
                 "shift": shift_data,
-                "shift_type": actual_shift_type,
-                "return_to": return_to or "shifts"
+                "shift_type": actual_shift_type
             })
             
     except HTTPException:

@@ -11,15 +11,9 @@
                     <i class="bi bi-clock-history"></i> Детали смены
                 </h1>
                 <div class="d-flex gap-2">
-                    {% if return_to == 'calendar' %}
-                    <a href="/manager/calendar" class="btn btn-outline-primary">
+                    <a href="/manager/calendar" class="btn btn-outline-primary" onclick="goToCalendarWithDate()">
                         <i class="bi bi-calendar3"></i> В календарь
                     </a>
-                    {% else %}
-                    <a href="/manager/shifts" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left"></i> Назад к списку
-                    </a>
-                    {% endif %}
                     {% if shift_type == 'schedule' and shift.status == 'planned' %}
                     <button class="btn btn-outline-danger" onclick="cancelShift()">
                         <i class="bi bi-x-circle"></i> Отменить смену
@@ -378,6 +372,23 @@ function showNotification(message, type) {
             notification.remove();
         }
     }, 5000);
+}
+
+function goToCalendarWithDate() {
+    // Получаем дату смены
+    {% if shift_type == 'schedule' %}
+        const shiftDate = '{{ shift.planned_start.strftime("%Y-%m-%d") if shift.planned_start else "" }}';
+    {% else %}
+        const shiftDate = '{{ shift.start_time.strftime("%Y-%m-%d") if shift.start_time else "" }}';
+    {% endif %}
+    
+    if (shiftDate) {
+        // Переходим в календарь с параметром даты
+        window.location.href = `/manager/calendar?date=${shiftDate}`;
+    } else {
+        // Если дата не найдена, просто переходим в календарь
+        window.location.href = '/manager/calendar';
+    }
 }
 </script>
 {% endblock %}
