@@ -1840,8 +1840,15 @@ async def employee_shift_detail(
             # Получаем доступные объекты сотрудника через контракты
             from shared.services.object_access_service import ObjectAccessService
             object_access_service = ObjectAccessService(db)
-            accessible_objects = await object_access_service.get_accessible_objects_for_user(user_id, "employee")
-            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            # Получаем telegram_id для ObjectAccessService
+            if isinstance(current_user, dict):
+                telegram_id = current_user.get("telegram_id") or current_user.get("id")
+            else:
+                telegram_id = getattr(current_user, "telegram_id", None)
+            
+            accessible_objects = await object_access_service.get_accessible_objects(telegram_id, "employee")
+            accessible_object_ids = [obj["id"] for obj in accessible_objects]
             
             if not accessible_object_ids:
                 raise HTTPException(status_code=403, detail="Нет доступа к объектам")
@@ -1957,8 +1964,15 @@ async def employee_timeslot_detail(
         # Получаем доступные объекты сотрудника через контракты
         from shared.services.object_access_service import ObjectAccessService
         object_access_service = ObjectAccessService(db)
-        accessible_objects = await object_access_service.get_accessible_objects_for_user(user_id, "employee")
-        accessible_object_ids = [obj.id for obj in accessible_objects]
+        
+        # Получаем telegram_id для ObjectAccessService
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        else:
+            telegram_id = getattr(current_user, "telegram_id", None)
+        
+        accessible_objects = await object_access_service.get_accessible_objects(telegram_id, "employee")
+        accessible_object_ids = [obj["id"] for obj in accessible_objects]
         
         if not accessible_object_ids:
             raise HTTPException(status_code=403, detail="Нет доступа к объектам")
