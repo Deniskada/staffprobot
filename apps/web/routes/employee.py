@@ -14,9 +14,9 @@ import logging
 from io import BytesIO
 
 from apps.web.dependencies import get_current_user_dependency
-from core.database.session import get_db_session
+from core.database.session import get_db_session, get_async_session
 from apps.web.middleware.role_middleware import require_employee_or_applicant
-from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift
+from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift, TimeSlot
 from domain.entities.application import ApplicationStatus
 from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
