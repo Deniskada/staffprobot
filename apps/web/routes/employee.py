@@ -1800,6 +1800,7 @@ async def employee_plan_shift(
     db: AsyncSession = Depends(get_db_session)
 ):
     """API: сотрудник планирует смену для себя на тайм-слот."""
+    logger.info("Employee plan shift endpoint called")
     try:
         if isinstance(current_user, RedirectResponse):
             raise HTTPException(status_code=401, detail="Необходима авторизация")
