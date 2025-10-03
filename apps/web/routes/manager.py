@@ -800,51 +800,51 @@ async def manager_employee_add(
                 logger.info(f"Creating new user {telegram_id}")
                 
                 # Создаем пользователя
-                from shared.services.role_service import RoleService
-                from apps.web.services.contract_service import ContractService
-                from datetime import datetime, date
-                
-                # Обработка даты рождения
-                birth_date = None
-                if birth_date_str:
-                    try:
-                        birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
-                    except ValueError:
-                        birth_date = None
-                
-                # Обработка минимальной зарплаты
-                min_salary = None
-                if min_salary_str and min_salary_str.isdigit():
-                    min_salary = int(min_salary_str)
-                
-                user = User(
-                    telegram_id=telegram_id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    username=username,
-                    phone=phone,
-                    email=email if email else None,
-                    birth_date=birth_date,
-                    work_experience=work_experience if work_experience else None,
-                    education=education if education else None,
-                    skills=skills if skills else None,
-                    about=about if about else None,
-                    preferred_schedule=preferred_schedule if preferred_schedule else None,
-                    min_salary=min_salary,
-                    availability_notes=availability_notes if availability_notes else None,
-                    role=role,
-                    roles=[role],
-                    is_active=is_active
-                )
-                
-                db.add(user)
-                await db.commit()
-                await db.refresh(user)
-                
-                # Добавляем роль
-                role_service = RoleService(db)
-                from domain.entities.user import UserRole
-                await role_service.add_role(user.id, UserRole(role))
+            from shared.services.role_service import RoleService
+            from apps.web.services.contract_service import ContractService
+            from datetime import datetime, date
+            
+            # Обработка даты рождения
+            birth_date = None
+            if birth_date_str:
+                try:
+                    birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
+                except ValueError:
+                    birth_date = None
+            
+            # Обработка минимальной зарплаты
+            min_salary = None
+            if min_salary_str and min_salary_str.isdigit():
+                min_salary = int(min_salary_str)
+            
+            user = User(
+                telegram_id=telegram_id,
+                first_name=first_name,
+                last_name=last_name,
+                username=username,
+                phone=phone,
+                email=email if email else None,
+                birth_date=birth_date,
+                work_experience=work_experience if work_experience else None,
+                education=education if education else None,
+                skills=skills if skills else None,
+                about=about if about else None,
+                preferred_schedule=preferred_schedule if preferred_schedule else None,
+                min_salary=min_salary,
+                availability_notes=availability_notes if availability_notes else None,
+                role=role,
+                roles=[role],
+                is_active=is_active
+            )
+            
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+            
+            # Добавляем роль
+            role_service = RoleService(db)
+            from domain.entities.user import UserRole
+            await role_service.add_role(user.id, UserRole(role))
             
             # Создаем договор (обязательно для сотрудников)
             if contract_objects:
@@ -1425,14 +1425,14 @@ async def manager_calendar_api_data(
             # current_user - это объект User
             user_role = current_user.role
             user_telegram_id = current_user.telegram_id
-        else:
+            else:
             # current_user - это RedirectResponse (не аутентифицирован)
             raise HTTPException(status_code=401, detail="Требуется аутентификация")
         
         # Если пользователь - владелец, используем роль owner для CalendarFilterService
         if user_role == "owner":
             user_role = "owner"
-        else:
+                else:
             user_role = "manager"
         
         if not user_telegram_id:
@@ -1483,7 +1483,7 @@ async def manager_calendar_api_data(
         logger.info("Converting shifts to API format")
         shifts_data = []
         for s in calendar_data.shifts:
-            shifts_data.append({
+                        shifts_data.append({
                 "id": s.id,
                 "user_id": s.user_id,
                 "user_name": s.user_name,
@@ -1512,7 +1512,7 @@ async def manager_calendar_api_data(
         
         logger.info("Preparing response")
         return {
-            "timeslots": timeslots_data,
+                "timeslots": timeslots_data,
             "shifts": shifts_data,
             "objects": [
                 {
@@ -2654,6 +2654,7 @@ async def plan_shift_manager(
 ):
     """Планирование смены управляющим"""
     logger.info("=== STARTING plan_shift_manager ===")
+    logger.info("=== ENDPOINT HIT: /manager/api/calendar/plan-shift ===")
     try:
         if isinstance(current_user, RedirectResponse):
             raise HTTPException(status_code=401, detail="Необходима авторизация")
@@ -2744,8 +2745,8 @@ async def plan_shift_manager(
             end_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.end_time)
             
             # Локализуем в временную зону объекта, затем конвертируем в UTC для сравнения
-            slot_datetime_utc = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
-            end_datetime_utc = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+            slot_datetime_utc = tz.localize(slot_datetime_naive).astimezone(pytz.UTC)
+            end_datetime_utc = tz.localize(end_datetime_naive).astimezone(pytz.UTC)
             
             logger.info(f"Timezone conversion: {object_timezone} -> UTC")
             logger.info(f"Slot time: {slot_datetime_naive} -> {slot_datetime_utc}")
@@ -2764,8 +2765,8 @@ async def plan_shift_manager(
                 shift_times = []
                 for shift in active_shifts:
                     # Конвертируем обратно в локальное время для отображения
-                    local_start = pytz.UTC.localize(shift.start_time).astimezone(tz).strftime('%H:%M')
-                    local_end = pytz.UTC.localize(shift.end_time).astimezone(tz).strftime('%H:%M')
+                    local_start = shift.start_time.astimezone(tz).strftime('%H:%M')
+                    local_end = shift.end_time.astimezone(tz).strftime('%H:%M')
                     shift_times.append(f"{local_start}-{local_end}")
                 
                 raise HTTPException(
@@ -2786,8 +2787,8 @@ async def plan_shift_manager(
                 shift_times = []
                 for shift in planned_shifts:
                     # Конвертируем обратно в локальное время для отображения
-                    local_start = pytz.UTC.localize(shift.planned_start).astimezone(tz).strftime('%H:%M')
-                    local_end = pytz.UTC.localize(shift.planned_end).astimezone(tz).strftime('%H:%M')
+                    local_start = shift.planned_start.astimezone(tz).strftime('%H:%M')
+                    local_end = shift.planned_end.astimezone(tz).strftime('%H:%M')
                     shift_times.append(f"{local_start}-{local_end}")
                 
                 raise HTTPException(
@@ -2988,7 +2989,7 @@ async def manager_shifts_list(
                     all_shifts.sort(key=lambda x: x['created_at'], reverse=reverse)
             else:
                 # Сортировка по умолчанию
-                all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
+            all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
             
             # Пагинация
             total_shifts = len(all_shifts)
@@ -3117,7 +3118,7 @@ async def manager_shift_detail(
                             'max_employees': timeslot.max_employees,
                             'scheduled_count': scheduled_count
                         }
-
+                
                 shift_data = {
                     'id': schedule.id,
                     'type': 'schedule',
@@ -3344,20 +3345,20 @@ async def manager_profile_update(
 ):
     """Обновление профиля управляющего."""
 
-    if isinstance(current_user, RedirectResponse):
-        return current_user
-
-    user_id = await get_user_id_from_current_user(current_user, db)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Пользователь не найден")
-
-    user_query = select(User).where(User.id == user_id)
-    user_result = await db.execute(user_query)
-    user = user_result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        user_query = select(User).where(User.id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
     try:
         user.first_name = (first_name or "").strip() or None
         user.last_name = (last_name or "").strip() or None
