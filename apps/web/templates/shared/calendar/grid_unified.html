@@ -65,7 +65,7 @@
                 </div>
             </div>
             <div class="nav-actions">
-                {% if objects and objects|length > 1 %}
+                {% if objects and objects|length > 1 and current_user.role != 'employee' %}
                 <div class="object-filter">
                     <div class="object-picker">
                         <div class="object-display" id="objectDisplay">
