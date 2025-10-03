@@ -25,8 +25,19 @@ from shared.models.calendar_data import (
     TimeslotStatus
 )
 from shared.services.object_access_service import ObjectAccessService
+from apps.web.utils.timezone_utils import WebTimezoneHelper
 
 logger = logging.getLogger(__name__)
+
+# Инициализируем помощник для работы с временными зонами
+web_timezone_helper = WebTimezoneHelper()
+
+
+def convert_datetime_to_local(dt: datetime, object_timezone: str = 'Europe/Moscow') -> str:
+    """Конвертировать datetime в локальную временную зону объекта."""
+    if not dt:
+        return ''
+    return web_timezone_helper.format_datetime_with_timezone(dt, object_timezone, '%Y-%m-%dT%H:%M:%S')
 
 
 class CalendarFilterService:
@@ -241,6 +252,20 @@ class CalendarFilterService:
             logger.error(f"Error getting timeslots: {e}", exc_info=True)
             return []
     
+    async def _get_object_timezones(self, object_ids: List[int]) -> Dict[int, str]:
+        """Получить временные зоны объектов."""
+        try:
+            from domain.entities.object import Object
+            query = select(Object.id, Object.timezone).where(Object.id.in_(object_ids))
+            result = await self.db.execute(query)
+            timezones = {}
+            for row in result:
+                timezones[row.id] = row.timezone or 'Europe/Moscow'
+            return timezones
+        except Exception as e:
+            logger.error(f"Error getting object timezones: {e}", exc_info=True)
+            return {obj_id: 'Europe/Moscow' for obj_id in object_ids}
+    
     async def _get_shifts(
         self,
         object_ids: List[int],
@@ -253,16 +278,19 @@ class CalendarFilterService:
             # Создаем словарь объектов для быстрого доступа
             objects_map = {obj['id']: obj for obj in accessible_objects}
             
+            # Получаем временные зоны объектов
+            object_timezones = await self._get_object_timezones(object_ids)
+            
             calendar_shifts = []
             
             # 1. Получаем фактические смены (активные и завершенные)
-            actual_shifts = await self._get_actual_shifts(object_ids, date_range_start, date_range_end, objects_map)
+            actual_shifts = await self._get_actual_shifts(object_ids, date_range_start, date_range_end, objects_map, object_timezones)
             calendar_shifts.extend(actual_shifts)
             
             # 2. Получаем запланированные смены (только те, которые НЕ начались)
             # Исключаем те, для которых уже есть фактические смены
             actual_shift_ids = {shift.schedule_id for shift in actual_shifts if shift.schedule_id}
-            planned_shifts = await self._get_planned_shifts(object_ids, date_range_start, date_range_end, objects_map, exclude_schedule_ids=actual_shift_ids)
+            planned_shifts = await self._get_planned_shifts(object_ids, date_range_start, date_range_end, objects_map, object_timezones, exclude_schedule_ids=actual_shift_ids)
             calendar_shifts.extend(planned_shifts)
             
             logger.info(f"Found {len(planned_shifts)} planned shifts and {len(actual_shifts)} actual shifts")
@@ -278,6 +306,7 @@ class CalendarFilterService:
         date_range_start: date,
         date_range_end: date,
         objects_map: Dict[int, Dict[str, Any]],
+        object_timezones: Dict[int, str],
         exclude_schedule_ids: Optional[set] = None
     ) -> List[CalendarShift]:
         """Получить запланированные смены, исключая те, которые уже начались."""
@@ -323,16 +352,17 @@ class CalendarFilterService:
                 if not actual_shift:  # Нет связанной фактической смены - показываем
                     obj_info = objects_map.get(shift_schedule.object_id)
                     if obj_info and shift_schedule.user:
+                        object_timezone = object_timezones.get(shift_schedule.object_id, 'Europe/Moscow')
                         filtered_planned_shifts.append(CalendarShift(
                             id=f"schedule_{shift_schedule.id}",  # Добавляем префикс для запланированных смен
                             user_id=shift_schedule.user_id,
                             user_name=f"{shift_schedule.user.first_name or ''} {shift_schedule.user.last_name or ''}".strip(),
                             object_id=shift_schedule.object_id,
                             object_name=obj_info['name'],
-                            start_time=shift_schedule.planned_start,  # Добавляем обязательный start_time
+                            start_time=convert_datetime_to_local(shift_schedule.planned_start, object_timezone),  # Конвертируем время
                             time_slot_id=shift_schedule.time_slot_id,
-                            planned_start=shift_schedule.planned_start,
-                            planned_end=shift_schedule.planned_end,
+                            planned_start=convert_datetime_to_local(shift_schedule.planned_start, object_timezone),
+                            planned_end=convert_datetime_to_local(shift_schedule.planned_end, object_timezone),
                             shift_type=ShiftType.PLANNED,
                             status=ShiftStatus(shift_schedule.status),
                             hourly_rate=float(shift_schedule.hourly_rate) if shift_schedule.hourly_rate else None,
@@ -357,7 +387,8 @@ class CalendarFilterService:
         object_ids: List[int],
         date_range_start: date,
         date_range_end: date,
-        objects_map: Dict[int, Dict[str, Any]]
+        objects_map: Dict[int, Dict[str, Any]],
+        object_timezones: Dict[int, str]
     ) -> List[CalendarShift]:
         """Получить фактические смены (активные и завершенные)."""
         try:
@@ -389,6 +420,7 @@ class CalendarFilterService:
                     else:
                         shift_type = ShiftType.ACTIVE  # По умолчанию
                     
+                    object_timezone = object_timezones.get(shift.object_id, 'Europe/Moscow')
                     calendar_shifts.append(CalendarShift(
                         id=shift.id,
                         user_id=shift.user_id,
@@ -396,8 +428,8 @@ class CalendarFilterService:
                         object_id=shift.object_id,
                         object_name=obj_info['name'],
                         time_slot_id=shift.time_slot_id,
-                        start_time=shift.start_time,
-                        end_time=shift.end_time,
+                        start_time=convert_datetime_to_local(shift.start_time, object_timezone),
+                        end_time=convert_datetime_to_local(shift.end_time, object_timezone),
                         shift_type=shift_type,
                         status=ShiftStatus(shift.status),
                         hourly_rate=float(shift.hourly_rate) if shift.hourly_rate else None,
