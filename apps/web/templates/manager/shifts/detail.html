@@ -11,9 +11,15 @@
                     <i class="bi bi-clock-history"></i> Детали смены
                 </h1>
                 <div class="d-flex gap-2">
+                    {% if return_to == 'calendar' %}
+                    <a href="/manager/calendar" class="btn btn-outline-primary">
+                        <i class="bi bi-calendar3"></i> В календарь
+                    </a>
+                    {% else %}
                     <a href="/manager/shifts" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-left"></i> Назад к списку
                     </a>
+                    {% endif %}
                     {% if shift_type == 'schedule' and shift.status == 'planned' %}
                     <button class="btn btn-outline-danger" onclick="cancelShift()">
                         <i class="bi bi-x-circle"></i> Отменить смену

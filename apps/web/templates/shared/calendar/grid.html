@@ -1080,9 +1080,9 @@ function showShiftDetails(shiftId) {
     console.log('Shift clicked:', shiftId);
     if (shiftId.toString().startsWith('schedule_')) {
         const scheduleId = shiftId.toString().replace('schedule_', '');
-        window.location.href = `/manager/shifts/${scheduleId}?shift_type=schedule`;
+        window.location.href = `/manager/shifts/${scheduleId}?shift_type=schedule&return_to=calendar`;
     } else {
-        window.location.href = `/manager/shifts/${shiftId}`;
+        window.location.href = `/manager/shifts/${shiftId}?return_to=calendar`;
     }
 }
 
