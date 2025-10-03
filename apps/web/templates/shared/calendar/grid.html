@@ -1242,22 +1242,20 @@ async function createPlannedShift(data) {
     console.log('Creating planned shift with data:', data);
     
     try {
-        const response = await fetch('/manager/api/shifts/plan', {
+        const response = await fetch('/manager/api/calendar/plan-shift', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                employee_id: parseInt(data.employeeId),
                 timeslot_id: parseInt(data.timeslotId),
-                planned_start: `${data.timeslotDate}T${data.timeslotStartTime}:00`,
-                planned_end: `${data.timeslotDate}T${data.timeslotEndTime}:00`,
-                is_planned: true
+                employee_id: parseInt(data.employeeId)
             })
         });
         
-        if (response.ok) {
-            const result = await response.json();
+        const result = await response.json();
+        
+        if (result.success) {
             console.log('Planned shift created:', result);
             
             if (window.calendarPanels && window.calendarPanels.showNotification) {
@@ -1268,18 +1266,20 @@ async function createPlannedShift(data) {
             }
             
             // Обновляем календарь
-            if (window.universalCalendar && window.universalCalendar.loadCalendarData) {
-                window.universalCalendar.loadCalendarData();
-            }
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
         } else {
-            const error = await response.json();
-            console.error('Error creating planned shift:', error);
+            console.error('Error creating planned shift:', result);
+            
+            // Показываем конкретное сообщение об ошибке
+            let errorMessage = result.message || 'Ошибка планирования смены';
+            if (result.detail) {
+                errorMessage = result.detail;
+            }
             
             if (window.calendarPanels && window.calendarPanels.showNotification) {
-                window.calendarPanels.showNotification(
-                    `Ошибка создания смены: ${error.detail || 'Неизвестная ошибка'}`, 
-                    'error'
-                );
+                window.calendarPanels.showNotification(errorMessage, 'error');
             }
         }
     } catch (error) {
