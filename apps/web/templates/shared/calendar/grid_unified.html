@@ -506,11 +506,12 @@ window.unifiedCalendar = {
     // Создание запланированной смены
     createPlannedShift: function(timeslotId, employeeId) {
         console.log(`Creating planned shift for timeslot ${timeslotId} and employee ${employeeId}`);
+        console.log('Current isCreatingShift flag:', window.isCreatingShift);
         
         // Проверяем, не создается ли уже смена
         if (window.isCreatingShift) {
-            console.log('Shift creation already in progress');
-            return;
+            console.log('Shift creation already in progress, resetting flag');
+            window.isCreatingShift = false; // Сбрасываем флаг при повторной попытке
         }
         
         window.isCreatingShift = true;
@@ -518,6 +519,10 @@ window.unifiedCalendar = {
         // Определяем правильный endpoint в зависимости от роли пользователя
         const baseUrl = window.universalCalendar ? window.universalCalendar.baseUrl : '/manager';
         const endpoint = `${baseUrl}/api/calendar/plan-shift`;
+        
+        console.log('Base URL:', baseUrl);
+        console.log('Endpoint:', endpoint);
+        console.log('Universal Calendar:', window.universalCalendar);
         
         fetch(endpoint, {
             method: 'POST',
