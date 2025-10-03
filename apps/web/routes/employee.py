@@ -1837,6 +1837,15 @@ async def employee_shift_detail(
             if not user_id:
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
+            # Получаем доступные объекты сотрудника через контракты
+            from shared.services.object_access_service import ObjectAccessService
+            object_access_service = ObjectAccessService(db)
+            accessible_objects = await object_access_service.get_accessible_objects_for_user(user_id, "employee")
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if not accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступа к объектам")
+            
             shift_data = None
             
             # Импортируем select для запросов
@@ -1856,9 +1865,9 @@ async def employee_shift_detail(
                 if not schedule:
                     raise HTTPException(status_code=404, detail="Запланированная смена не найдена")
                 
-                # Проверяем, что смена принадлежит текущему пользователю
-                if schedule.user_id != user_id:
-                    raise HTTPException(status_code=403, detail="Нет доступа к смене")
+                # Проверяем доступ к объекту
+                if schedule.object_id not in accessible_object_ids:
+                    raise HTTPException(status_code=403, detail="Нет доступа к объекту")
                 
                 shift_data = {
                     "id": f"schedule_{schedule.id}",
@@ -1887,9 +1896,9 @@ async def employee_shift_detail(
                 if not shift:
                     raise HTTPException(status_code=404, detail="Смена не найдена")
                 
-                # Проверяем, что смена принадлежит текущему пользователю
-                if shift.user_id != user_id:
-                    raise HTTPException(status_code=403, detail="Нет доступа к смене")
+                # Проверяем доступ к объекту
+                if shift.object_id not in accessible_object_ids:
+                    raise HTTPException(status_code=403, detail="Нет доступа к объекту")
                 
                 shift_data = {
                     "id": shift.id,
@@ -1945,6 +1954,15 @@ async def employee_timeslot_detail(
         if not user_id:
             raise HTTPException(status_code=400, detail="Пользователь не найден")
         
+        # Получаем доступные объекты сотрудника через контракты
+        from shared.services.object_access_service import ObjectAccessService
+        object_access_service = ObjectAccessService(db)
+        accessible_objects = await object_access_service.get_accessible_objects_for_user(user_id, "employee")
+        accessible_object_ids = [obj.id for obj in accessible_objects]
+        
+        if not accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступа к объектам")
+        
         # Получаем тайм-слот
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
@@ -1958,6 +1976,10 @@ async def employee_timeslot_detail(
         
         if not timeslot:
             raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+        
+        # Проверяем доступ к объекту
+        if timeslot.object_id not in accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступа к объекту")
         
         # Получаем связанные смены и расписания
         from sqlalchemy import and_
