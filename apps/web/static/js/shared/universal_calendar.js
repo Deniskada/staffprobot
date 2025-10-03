@@ -306,7 +306,7 @@ class UniversalCalendarManager {
         });
     }
     
-    async loadCalendarData(startDate = null, endDate = null, objectIds = null) {
+    async loadCalendarData(startDate = null, endDate = null, objectIds = null, skipAutoScroll = false) {
         if (this.loading) return;
         
         this.loading = true;
@@ -349,6 +349,13 @@ class UniversalCalendarManager {
             // Call callback if provided
             if (this.onDataLoaded) {
                 this.onDataLoaded(this.calendarData);
+            }
+            
+            // Автоскролл к текущему дню при первой загрузке (если не отключен)
+            if (!skipAutoScroll) {
+                setTimeout(() => {
+                    this.scrollToToday();
+                }, 200);
             }
             
         } catch (error) {
@@ -747,6 +754,28 @@ class UniversalCalendarManager {
             top: Math.max(0, scrollTo),
             behavior: 'smooth'
         });
+    }
+    
+    filterByObject(objectId) {
+        console.log('filterByObject called with:', objectId);
+        
+        // Получаем текущие параметры из URL
+        const currentSearch = window.location.search;
+        const params = new URLSearchParams(currentSearch);
+        
+        if (objectId) {
+            params.set('object_id', objectId);
+        } else {
+            params.delete('object_id');
+        }
+        
+        const newSearch = params.toString();
+        const newUrl = newSearch ? `${window.location.pathname}?${newSearch}` : window.location.pathname;
+        
+        console.log('Filtering by object:', objectId, 'New URL:', newUrl);
+        
+        // Перезагружаем страницу с новыми параметрами
+        window.location.href = newUrl;
     }
     
     showLoading(show) {

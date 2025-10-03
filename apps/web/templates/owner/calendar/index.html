@@ -235,12 +235,57 @@
 {% include 'shared/calendar/quick_create_form.html' %}
 
 <!-- Shared Calendar Grid -->
-{% include 'shared/calendar/grid.html' %}
+{% include 'shared/calendar/grid_unified.html' %}
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', path='js/shared/calendar.js') }}"></script>
 <script src="{{ url_for('static', path='js/shared/calendar_panels.js') }}"></script>
+
+<!-- Universal Calendar Integration -->
+<script src="{{ url_for('static', path='js/shared/universal_calendar.js') }}"></script>
+<script>
+    // Инициализация универсального календаря для владельца
+    document.addEventListener('DOMContentLoaded', function() {
+        // Инициализируем панели drag&drop
+        if (typeof CalendarPanels !== 'undefined') {
+            window.calendarPanels = new CalendarPanels('owner');
+            window.calendarPanels.init();
+        }
+        
+        // Создаем экземпляр универсального календаря
+        if (typeof UniversalCalendarManager !== 'undefined') {
+            window.universalCalendar = new UniversalCalendarManager({
+                currentDate: new Date({{ year }}, {{ month - 1 }}, 1),
+                viewType: 'month',
+                baseUrl: '/owner/calendar',
+                userRole: 'owner',
+                apiEndpoint: '/owner/calendar/api/data',
+                onShiftClick: function(shiftId) {
+                    console.log('Shift clicked:', shiftId);
+                    if (shiftId.toString().startsWith('schedule_')) {
+                        const scheduleId = shiftId.toString().replace('schedule_', '');
+                        window.location.href = `/owner/shifts/${scheduleId}?shift_type=schedule`;
+                    } else {
+                        window.location.href = `/owner/shifts/${shiftId}?shift_type=shift`;
+                    }
+                },
+                onTimeslotClick: function(timeslotId) {
+                    console.log('Timeslot clicked:', timeslotId);
+                    window.location.href = `/owner/timeslots/${timeslotId}`;
+                },
+                onDataLoaded: function(calendarData) {
+                    console.log('Calendar data loaded:', calendarData);
+                    // Используем унифицированную функцию отрисовки
+                    if (window.renderCalendarGrid) {
+                        window.renderCalendarGrid(calendarData);
+                    }
+                }
+            });
+        }
+    });
+</script>
+
 <script>
 // Экспорт данных календаря для JS-логики занятости
 window.calendar_weeks = {{ calendar_weeks | tojson }};

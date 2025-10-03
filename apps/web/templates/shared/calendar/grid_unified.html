@@ -1,0 +1,882 @@
+<!-- Unified Calendar Grid Component for UniversalCalendarManager -->
+
+<div class="calendar-wrapper">
+    <!-- Фиксированная верхняя часть -->
+    <div class="calendar-header-fixed">
+        <div class="calendar-navigation">
+            <div class="nav-group">
+                <!-- Легенда слева -->
+                <div class="legend-left">
+                    <div class="calendar-legend" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#e3f2fd; border:1px solid #2196f3;"></span>
+                            <small>Запланированная смена</small>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#fff3e0; border:1px solid #ff9800;"></span>
+                            <small>Активная смена</small>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#c8e6c9; border:2px solid #2e7d32;"></span>
+                            <small>Завершённая смена</small>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#f3e5f5; border:1px solid #9c27b0;"></span>
+                            <small>Свободный тайм‑слот</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Переключатель месяцев в центре -->
+                <div class="month-selector">
+                    <div class="month-picker">
+                        <div class="month-display" id="monthDisplay">
+                            <span class="month-name" id="monthName">{{ calendar_title or 'Календарь' }}</span>
+                            <i class="bi bi-chevron-down dropdown-icon"></i>
+                        </div>
+                        <div class="month-dropdown" id="monthDropdown">
+                            <div class="dropdown-content">
+                                <div class="year-selector">
+                                    <button type="button" class="year-btn" onclick="changeYear(-1)">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </button>
+                                    <span class="year-display" id="yearDisplay">2025</span>
+                                    <button type="button" class="year-btn" onclick="changeYear(1)">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </button>
+                                </div>
+                                <div class="months-grid" id="monthsGrid">
+                                    <div class="month-option" data-month="1">Янв</div>
+                                    <div class="month-option" data-month="2">Фев</div>
+                                    <div class="month-option" data-month="3">Мар</div>
+                                    <div class="month-option" data-month="4">Апр</div>
+                                    <div class="month-option" data-month="5">Май</div>
+                                    <div class="month-option" data-month="6">Июн</div>
+                                    <div class="month-option" data-month="7">Июл</div>
+                                    <div class="month-option" data-month="8">Авг</div>
+                                    <div class="month-option" data-month="9">Сен</div>
+                                    <div class="month-option" data-month="10">Окт</div>
+                                    <div class="month-option" data-month="11">Ноя</div>
+                                    <div class="month-option" data-month="12">Дек</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="nav-actions">
+                {% if objects and objects|length > 1 %}
+                <div class="object-filter">
+                    <div class="object-picker">
+                        <div class="object-display" id="objectDisplay">
+                            <span class="object-name" id="objectName">
+                                {% if selected_object_id %}
+                                    {% for obj in objects %}
+                                        {% if obj.id == selected_object_id %}{{ obj.name }}{% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    Все объекты
+                                {% endif %}
+                            </span>
+                            <i class="bi bi-chevron-down dropdown-icon"></i>
+                        </div>
+                        <div class="object-dropdown" id="objectDropdown">
+                            <div class="dropdown-content">
+                                <div class="object-options">
+                                    <div class="object-option" data-object-id="" data-object-name="Все объекты">
+                                        <i class="bi bi-grid-3x3-gap"></i>
+                                        <span>Все объекты</span>
+                                    </div>
+                                    {% for obj in objects %}
+                                    <div class="object-option" data-object-id="{{ obj.id }}" data-object-name="{{ obj.name }}">
+                                        <i class="bi bi-building"></i>
+                                        <span>{{ obj.name }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if show_today_button %}
+                <button type="button" class="today-btn" onclick="goToToday()">
+                    <i class="bi bi-calendar-today"></i> Сегодня
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Заголовки дней недели (фиксированные) -->
+        <div class="calendar-day-headers">
+            <div class="calendar-day-header">Пн</div>
+            <div class="calendar-day-header">Вт</div>
+            <div class="calendar-day-header">Ср</div>
+            <div class="calendar-day-header">Чт</div>
+            <div class="calendar-day-header">Пт</div>
+            <div class="calendar-day-header">Сб</div>
+            <div class="calendar-day-header">Вс</div>
+        </div>
+    </div>
+
+    <!-- Скроллируемая часть с днями календаря -->
+    <div class="calendar-scrollable">
+        <div class="calendar-grid" id="calendarGrid">
+            <!-- Calendar days will be created by JavaScript -->
+        </div>
+    </div>
+</div>
+
+<!-- Unified Calendar JavaScript -->
+<script>
+console.log('Unified calendar grid script loading...');
+
+// Глобальные переменные для интеграции с UniversalCalendarManager
+window.unifiedCalendar = {
+    // Функция для создания календарной сетки
+    createCalendarGrid: function(calendarData) {
+        console.log('Unified createCalendarGrid called with data:', calendarData);
+        
+        const calendarGrid = document.querySelector('.calendar-grid');
+        if (!calendarGrid) {
+            console.error('Calendar grid not found');
+            return;
+        }
+        
+        // Очищаем существующую сетку
+        calendarGrid.innerHTML = '';
+        
+        // Создаем дни календаря (13 месяцев: 6 до + текущий + 6 после)
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth() + 1;
+        
+        const months = [];
+        for (let i = -6; i <= 6; i++) {
+            const targetMonth = currentMonth + i;
+            let targetYear = currentYear;
+            let monthNumber = targetMonth;
+            
+            if (targetMonth <= 0) {
+                monthNumber = 12 + targetMonth;
+                targetYear = currentYear - 1;
+            } else if (targetMonth > 12) {
+                monthNumber = targetMonth - 12;
+                targetYear = currentYear + 1;
+            }
+            
+            months.push({ year: targetYear, month: monthNumber });
+        }
+        
+        // Создаем дни от первого понедельника первого месяца до последнего воскресенья последнего месяца
+        const firstMonth = months[0];
+        const lastMonth = months[months.length - 1];
+        
+        const firstDay = new Date(firstMonth.year, firstMonth.month - 1, 1);
+        const lastDay = new Date(lastMonth.year, lastMonth.month, 0);
+        
+        const firstMonday = new Date(firstDay);
+        firstMonday.setDate(firstDay.getDate() - firstDay.getDay() + 1);
+        
+        const lastSunday = new Date(lastDay);
+        lastSunday.setDate(lastDay.getDate() + (6 - lastDay.getDay()));
+        
+        // Создаем дни
+        const fragment = document.createDocumentFragment();
+        let workingDate = new Date(firstMonday);
+        
+        while (workingDate <= lastSunday) {
+            const dateStr = this.formatDateLocal(workingDate);
+            const dayNumber = workingDate.getDate();
+            const workingMonth = workingDate.getMonth() + 1;
+            const workingYear = workingDate.getFullYear();
+            
+            // Определяем, к какому месяцу относится день
+            let isOtherMonth = true;
+            months.forEach(monthData => {
+                if (workingMonth === monthData.month && workingYear === monthData.year) {
+                    isOtherMonth = false;
+                }
+            });
+            
+            const isToday = dateStr === this.formatDateLocal(today);
+            
+            const dayElement = this.createDayElement(dateStr, dayNumber, isOtherMonth, isToday);
+            fragment.appendChild(dayElement);
+            
+            workingDate.setDate(workingDate.getDate() + 1);
+        }
+        
+        calendarGrid.appendChild(fragment);
+        
+        // Обновляем отображение данных
+        this.updateCalendarDisplay(calendarData);
+        
+        // Инициализируем drag&drop
+        this.initializeDragAndDrop();
+        
+        console.log('Unified calendar grid created successfully');
+    },
+    
+    // Функция для создания элемента дня
+    createDayElement: function(dateStr, day, isOtherMonth, isToday) {
+        const dayElement = document.createElement('div');
+        dayElement.className = `calendar-day ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''}`;
+        dayElement.setAttribute('data-date', dateStr);
+        dayElement.setAttribute('data-day', day);
+        
+        dayElement.innerHTML = `
+            <div class="day-number">${day}</div>
+            <div class="day-content"></div>
+        `;
+        
+        return dayElement;
+    },
+    
+    // Функция для обновления отображения данных
+    updateCalendarDisplay: function(calendarData) {
+        console.log('Unified updateCalendarDisplay called with data:', calendarData);
+        
+        if (!calendarData) {
+            console.log('No calendar data provided');
+            return;
+        }
+        
+        // Сохраняем данные глобально
+        window.calendarData = calendarData;
+        
+        // Обновляем каждый день
+        const dayElements = document.querySelectorAll('.calendar-day[data-date]');
+        console.log(`Found ${dayElements.length} day elements to update`);
+        
+        dayElements.forEach(dayElement => {
+            const dateStr = dayElement.getAttribute('data-date');
+            const dayContent = dayElement.querySelector('.day-content');
+            
+            if (!dayContent) return;
+            
+            // Очищаем содержимое
+            dayContent.innerHTML = '';
+            
+            // Получаем данные для дня
+            const timeslots = calendarData.timeslotsByDate[dateStr] || [];
+            const shifts = calendarData.shiftsByDate[dateStr] || [];
+            
+            // Добавляем тайм-слоты
+            timeslots.forEach(timeslot => {
+                const timeslotElement = this.createTimeslotElement(timeslot);
+                if (timeslotElement) {
+                    dayContent.appendChild(timeslotElement);
+                }
+            });
+            
+            // Добавляем смены
+            shifts.forEach(shift => {
+                const shiftElement = this.createShiftElement(shift);
+                if (shiftElement) {
+                    dayContent.appendChild(shiftElement);
+                }
+            });
+            
+            // Если нет данных, показываем сообщение
+            if (timeslots.length === 0 && shifts.length === 0) {
+                dayContent.innerHTML = '<div class="no-data-message"><small class="text-muted">Нет тайм-слотов!</small></div>';
+            }
+        });
+        
+        console.log('Unified calendar display updated successfully');
+    },
+    
+    // Функция для создания элемента тайм-слота
+    createTimeslotElement: function(timeslot) {
+        const currentEmployees = timeslot.current_employees || 0;
+        const maxEmployees = timeslot.max_employees || 1;
+        
+        // Не отображаем полностью занятые тайм-слоты
+        if (currentEmployees >= maxEmployees) {
+            return null;
+        }
+        
+        const element = document.createElement('div');
+        element.className = 'timeslot-item timeslot-free';
+        element.setAttribute('data-timeslot-id', timeslot.id);
+        element.setAttribute('data-timeslot-date', timeslot.date);
+        element.setAttribute('data-timeslot-start-time', timeslot.start_time);
+        element.setAttribute('data-timeslot-end-time', timeslot.end_time);
+        element.setAttribute('data-timeslot-object-id', timeslot.object_id);
+        element.onclick = () => showTimeslotDetails(timeslot.id);
+        
+        const occupancyBadge = `<div class="timeslot-badge">${currentEmployees}/${maxEmployees}</div>`;
+        
+        element.innerHTML = `
+            <div class="timeslot-time">${timeslot.start_time} - ${timeslot.end_time}</div>
+            <div class="timeslot-object">${timeslot.object_name}</div>
+            <div class="timeslot-rate">${timeslot.hourly_rate}₽/ч</div>
+            ${occupancyBadge}
+        `;
+        
+        return element;
+    },
+    
+    // Функция для создания элемента смены
+    createShiftElement: function(shift) {
+        if (shift.status === 'cancelled') {
+            return null;
+        }
+        
+        const element = document.createElement('div');
+        element.className = `shift-item shift-${shift.shift_type}`;
+        element.setAttribute('data-shift-id', shift.id);
+        element.onclick = () => showShiftDetails(shift.id);
+        
+        // Определяем время начала и окончания
+        let startTime = '';
+        let endTime = '';
+        
+        if (shift.shift_type === 'planned') {
+            // Для запланированных смен используем planned_start и planned_end
+            startTime = shift.planned_start ? shift.planned_start.split('T')[1].substring(0, 5) : '';
+            endTime = shift.planned_end ? shift.planned_end.split('T')[1].substring(0, 5) : '';
+        } else {
+            // Для активных/завершенных смен используем start_time и end_time
+            startTime = shift.start_time ? shift.start_time.split('T')[1].substring(0, 5) : '';
+            endTime = shift.end_time ? shift.end_time.split('T')[1].substring(0, 5) : '';
+        }
+        
+        // Добавляем стикер для запланированных смен
+        const sticker = shift.shift_type === 'planned' ? '<div class="shift-sticker">1/1</div>' : '';
+        
+        element.innerHTML = `
+            <div class="shift-time">${startTime} - ${endTime}</div>
+            <div class="shift-employee">${shift.user_name}</div>
+            <div class="shift-object">${shift.object_name}</div>
+            ${sticker}
+        `;
+        
+        return element;
+    },
+    
+    // Функция для форматирования даты
+    formatDateLocal: function(date) {
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    },
+    
+    // Функция для обновления статистики
+    updateStatistics: function(calendarData) {
+        console.log('Unified updateStatistics called');
+        // Статистика будет обновлена через UniversalCalendarManager
+    },
+    
+    // Инициализация drag&drop для календарных дней и тайм-слотов
+    initializeDragAndDrop: function() {
+        console.log('Initializing drag&drop for calendar days and timeslots');
+        
+        // Обработчики для календарных дней
+        document.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            const dayElement = e.target.closest('.calendar-day');
+            const timeslotElement = e.target.closest('.timeslot-item, .calendar-timeslot');
+            
+            if (dayElement) {
+                dayElement.classList.add('drag-over');
+            }
+            if (timeslotElement) {
+                timeslotElement.classList.add('drag-over');
+            }
+        });
+        
+        document.addEventListener('dragleave', function(e) {
+            const dayElement = e.target.closest('.calendar-day');
+            const timeslotElement = e.target.closest('.timeslot-item, .calendar-timeslot');
+            
+            if (dayElement) {
+                dayElement.classList.remove('drag-over');
+            }
+            if (timeslotElement) {
+                timeslotElement.classList.remove('drag-over');
+            }
+        });
+        
+        document.addEventListener('drop', function(e) {
+            e.preventDefault();
+            const dayElement = e.target.closest('.calendar-day');
+            const timeslotElement = e.target.closest('.timeslot-item, .calendar-timeslot');
+            
+            if (timeslotElement) {
+                // Приоритет: тайм-слот
+                timeslotElement.classList.remove('drag-over');
+                const data = e.dataTransfer.getData('text/plain');
+                if (data.startsWith('employee:')) {
+                    const employeeId = data.replace('employee:', '');
+                    window.unifiedCalendar.handleEmployeeDropOnTimeslot(timeslotElement, employeeId);
+                }
+            } else if (dayElement) {
+                // Fallback: день календаря
+                dayElement.classList.remove('drag-over');
+                const data = e.dataTransfer.getData('text/plain');
+                if (data.startsWith('object:')) {
+                    const objectId = data.replace('object:', '');
+                    window.unifiedCalendar.handleObjectDropOnDay(dayElement, objectId);
+                } else if (data.startsWith('employee:')) {
+                    const employeeId = data.replace('employee:', '');
+                    window.unifiedCalendar.handleEmployeeDropOnDay(dayElement, employeeId);
+                }
+            }
+        });
+    },
+    
+    // Обработка перетаскивания объекта на день
+    handleObjectDropOnDay: function(dayElement, objectId) {
+        const date = dayElement.dataset.date;
+        console.log(`Object ${objectId} dropped on day ${date}`);
+        
+        // Открываем форму быстрого создания с предзаполненными данными
+        if (window.calendarPanels && window.calendarPanels.showQuickCreateForm) {
+            // Найдем данные объекта
+            const objectItem = document.querySelector(`[data-object-id="${objectId}"]`);
+            if (objectItem) {
+                const object = {
+                    id: objectId,
+                    name: objectItem.dataset.objectName,
+                    hourlyRate: objectItem.dataset.hourlyRate,
+                    openingTime: objectItem.dataset.openingTime,
+                    closingTime: objectItem.dataset.closingTime
+                };
+                window.calendarPanels.showQuickCreateForm(object, date);
+            }
+        }
+    },
+    
+    // Обработка перетаскивания сотрудника на тайм-слот
+    handleEmployeeDropOnTimeslot: function(timeslotElement, employeeId) {
+        console.log(`Employee ${employeeId} dropped on timeslot`);
+        
+        // Получаем данные тайм-слота
+        const timeslotId = timeslotElement.dataset.timeslotId;
+        const timeslotDate = timeslotElement.dataset.timeslotDate;
+        const timeslotStartTime = timeslotElement.dataset.timeslotStartTime;
+        const timeslotEndTime = timeslotElement.dataset.timeslotEndTime;
+        const timeslotObjectId = timeslotElement.dataset.timeslotObjectId;
+        
+        console.log('Timeslot data:', {
+            id: timeslotId,
+            date: timeslotDate,
+            startTime: timeslotStartTime,
+            endTime: timeslotEndTime,
+            objectId: timeslotObjectId
+        });
+        
+        // Создаем запланированную смену
+        this.createPlannedShift(timeslotId, employeeId);
+    },
+    
+    // Обработка перетаскивания сотрудника на день
+    handleEmployeeDropOnDay: function(dayElement, employeeId) {
+        const date = dayElement.dataset.date;
+        console.log(`Employee ${employeeId} dropped on day ${date}`);
+        
+        // Открываем форму быстрого создания с предзаполненными данными
+        if (window.calendarPanels && window.calendarPanels.showQuickCreateForm) {
+            // Найдем данные сотрудника
+            const employeeItem = document.querySelector(`[data-employee-id="${employeeId}"]`);
+            if (employeeItem) {
+                const employee = {
+                    id: employeeId,
+                    name: employeeItem.dataset.employeeName
+                };
+                window.calendarPanels.showQuickCreateForm(null, date, employee);
+            }
+        }
+    },
+    
+    // Создание запланированной смены
+    createPlannedShift: function(timeslotId, employeeId) {
+        console.log(`Creating planned shift for timeslot ${timeslotId} and employee ${employeeId}`);
+        
+        // Проверяем, не создается ли уже смена
+        if (window.isCreatingShift) {
+            console.log('Shift creation already in progress');
+            return;
+        }
+        
+        window.isCreatingShift = true;
+        
+        fetch('/manager/api/calendar/plan-shift', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                timeslot_id: parseInt(timeslotId),
+                employee_id: parseInt(employeeId)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Planned shift creation response:', data);
+            if (data.success) {
+                // Показываем уведомление об успехе
+                if (window.showNotification) {
+                    window.showNotification('Смена успешно запланирована!', 'success');
+                }
+                
+                // Сохраняем текущую позицию скролла
+                const scrollableContainer = document.querySelector('.calendar-scrollable');
+                const currentScrollTop = scrollableContainer ? scrollableContainer.scrollTop : 0;
+                
+                // Перезагружаем данные календаря без автоскролла
+                if (window.universalCalendar) {
+                    window.universalCalendar.loadCalendarData(null, null, null, true); // skipAutoScroll = true
+                    
+                    // Восстанавливаем позицию скролла после загрузки
+                    setTimeout(() => {
+                        if (scrollableContainer) {
+                            scrollableContainer.scrollTop = currentScrollTop;
+                        }
+                    }, 300);
+                }
+            } else {
+                // Показываем ошибку
+                if (window.showNotification) {
+                    window.showNotification(data.detail || 'Ошибка планирования смены', 'error');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error creating planned shift:', error);
+            if (window.showNotification) {
+                window.showNotification('Ошибка создания запланированной смены', 'error');
+            }
+        })
+        .finally(() => {
+            window.isCreatingShift = false;
+        });
+    }
+};
+
+// Функции для интеграции с UniversalCalendarManager
+window.renderCalendarGrid = function(calendarData) {
+    console.log('renderCalendarGrid called (unified)');
+    if (window.unifiedCalendar && window.unifiedCalendar.createCalendarGrid) {
+        window.unifiedCalendar.createCalendarGrid(calendarData);
+    } else {
+        console.error('Unified calendar not available');
+    }
+};
+
+window.updateCalendarDisplay = function(calendarData) {
+    console.log('updateCalendarDisplay called (unified)');
+    if (window.unifiedCalendar && window.unifiedCalendar.updateCalendarDisplay) {
+        window.unifiedCalendar.updateCalendarDisplay(calendarData);
+    } else {
+        console.error('Unified calendar not available');
+    }
+};
+
+// Month Selector JavaScript
+let currentYear = new Date().getFullYear();
+let currentMonth = new Date().getMonth() + 1;
+let isUserScrolling = false; // Флаг для отслеживания пользовательской прокрутки
+let userSelectedMonth = null; // Флаг пользовательского выбора месяца
+
+// Функции для навигации по месяцам
+function changeMonth(delta) {
+    if (window.universalCalendar && window.universalCalendar.changeMonth) {
+        window.universalCalendar.changeMonth(delta);
+    }
+}
+
+function changeYear(delta) {
+    currentYear += delta;
+    updateYearDisplay();
+}
+
+function updateYearDisplay() {
+    const yearDisplay = document.getElementById('yearDisplay');
+    if (yearDisplay) {
+        yearDisplay.textContent = currentYear;
+    }
+}
+
+function onMonthChange() {
+    const monthSelect = document.getElementById('monthSelect');
+    const yearSelect = document.getElementById('yearSelect');
+    
+    if (monthSelect && yearSelect && window.universalCalendar) {
+        const year = parseInt(yearSelect.value);
+        const month = parseInt(monthSelect.value);
+        window.universalCalendar.selectMonth(year, month);
+    }
+}
+
+function goToToday() {
+    if (window.universalCalendar && window.universalCalendar.scrollToToday) {
+        window.universalCalendar.scrollToToday();
+    }
+}
+
+function filterByObject() {
+    const objectFilter = document.getElementById('objectFilter');
+    if (objectFilter && window.universalCalendar) {
+        const objectId = objectFilter.value;
+        window.universalCalendar.filterByObject(objectId);
+    }
+}
+
+// Инициализация month selector
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing calendar UI...');
+    
+    // Инициализируем год
+    updateYearDisplay();
+    
+    // Получаем элементы
+    const monthOptions = document.querySelectorAll('.month-option');
+    const objectOptions = document.querySelectorAll('.object-option');
+    const monthDisplay = document.getElementById('monthDisplay');
+    const monthDropdown = document.getElementById('monthDropdown');
+    const objectDisplay = document.getElementById('objectDisplay');
+    const objectDropdown = document.getElementById('objectDropdown');
+    
+    console.log('Found elements:', {
+        monthOptions: monthOptions.length,
+        objectOptions: objectOptions.length,
+        monthDisplay: !!monthDisplay,
+        monthDropdown: !!monthDropdown,
+        objectDisplay: !!objectDisplay,
+        objectDropdown: !!objectDropdown
+    });
+    
+    // Инициализируем активный месяц
+    monthOptions.forEach(option => {
+        if (parseInt(option.dataset.month) === currentMonth) {
+            option.classList.add('active');
+        }
+    });
+    
+    // Инициализируем активный объект (если есть выбранный)
+    const selectedObjectId = new URLSearchParams(window.location.search).get('object_id');
+    if (selectedObjectId) {
+        objectOptions.forEach(option => {
+            if (option.dataset.objectId === selectedObjectId) {
+                option.classList.add('active');
+            }
+        });
+    } else {
+        // Активируем "Все объекты"
+        const allObjectsOption = document.querySelector('.object-option[data-object-id=""]');
+        if (allObjectsOption) {
+            allObjectsOption.classList.add('active');
+        }
+    }
+    
+    // Обработчики для month picker
+    if (monthDisplay && monthDropdown) {
+        console.log('Setting up month picker handlers');
+        monthDisplay.addEventListener('click', function() {
+            console.log('Month display clicked');
+            const isOpen = monthDropdown.classList.contains('show');
+            if (isOpen) {
+                monthDropdown.classList.remove('show');
+                monthDisplay.classList.remove('active');
+            } else {
+                monthDropdown.classList.add('show');
+                monthDisplay.classList.add('active');
+            }
+            console.log('Month dropdown show class:', monthDropdown.classList.contains('show'));
+        });
+        
+        // Закрытие при клике вне
+        document.addEventListener('click', function(e) {
+            if (!monthDisplay.contains(e.target) && !monthDropdown.contains(e.target)) {
+                monthDropdown.classList.remove('show');
+                monthDisplay.classList.remove('active');
+            }
+        });
+    }
+    
+    // Обработчики для month options
+    monthOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            const month = parseInt(this.dataset.month);
+            currentMonth = month;
+            
+            // Устанавливаем флаг пользовательского выбора
+            userSelectedMonth = { year: currentYear, month: month };
+            
+            updateMonthDisplay();
+            monthDropdown.classList.remove('show');
+            monthDisplay.classList.remove('active');
+            
+            // Обновляем активный месяц
+            monthOptions.forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+            
+            if (window.universalCalendar) {
+                window.universalCalendar.selectMonth(currentYear, currentMonth);
+            }
+            
+            // Сбрасываем флаг через некоторое время
+            setTimeout(() => {
+                userSelectedMonth = null;
+            }, 2000);
+        });
+    });
+    
+    // Обработчики для object picker
+    if (objectDisplay && objectDropdown) {
+        console.log('Setting up object picker handlers');
+        objectDisplay.addEventListener('click', function() {
+            console.log('Object display clicked');
+            const isOpen = objectDropdown.classList.contains('show');
+            if (isOpen) {
+                objectDropdown.classList.remove('show');
+                objectDisplay.classList.remove('active');
+            } else {
+                objectDropdown.classList.add('show');
+                objectDisplay.classList.add('active');
+            }
+            console.log('Object dropdown show class:', objectDropdown.classList.contains('show'));
+        });
+        
+        // Закрытие при клике вне
+        document.addEventListener('click', function(e) {
+            if (!objectDisplay.contains(e.target) && !objectDropdown.contains(e.target)) {
+                objectDropdown.classList.remove('show');
+                objectDisplay.classList.remove('active');
+            }
+        });
+    }
+    
+    // Обработчики для object options
+    objectOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            const objectId = this.dataset.objectId;
+            const objectName = this.dataset.objectName;
+            
+            // Обновляем отображение
+            const objectNameSpan = document.getElementById('objectName');
+            if (objectNameSpan) {
+                objectNameSpan.textContent = objectName;
+            }
+            
+            objectDropdown.classList.remove('show');
+            objectDisplay.classList.remove('active');
+            
+            // Обновляем активный объект
+            objectOptions.forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Применяем фильтр
+            if (window.universalCalendar) {
+                window.universalCalendar.filterByObject(objectId);
+            }
+        });
+    });
+    
+    // Инициализируем обработчик скролла для обновления месяца
+    initScrollTracking();
+});
+
+// Инициализация отслеживания скролла
+function initScrollTracking() {
+    const scrollableContainer = document.querySelector('.calendar-scrollable');
+    if (!scrollableContainer) return;
+    
+    let scrollTimeout;
+    
+    scrollableContainer.addEventListener('scroll', function() {
+        if (!isUserScrolling) {
+            isUserScrolling = true;
+            requestAnimationFrame(() => {
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(() => {
+                    updateMonthDisplayFromScroll();
+                    isUserScrolling = false;
+                }, 100);
+            });
+        }
+    }, { passive: true });
+}
+
+// Определение видимого месяца по прокрутке
+function getVisibleMonthFromScroll() {
+    const scrollableContainer = document.querySelector('.calendar-scrollable');
+    if (!scrollableContainer) return null;
+    
+    const containerRect = scrollableContainer.getBoundingClientRect();
+    const containerCenter = containerRect.top + (containerRect.height / 2);
+    
+    // Находим все дни календаря
+    const dayElements = document.querySelectorAll('.calendar-day[data-date]');
+    let closestDay = null;
+    let minDistance = Infinity;
+    
+    // Ищем день, ближайший к центру контейнера
+    dayElements.forEach(dayElement => {
+        const dayRect = dayElement.getBoundingClientRect();
+        const dayCenter = dayRect.top + (dayRect.height / 2);
+        const distance = Math.abs(dayCenter - containerCenter);
+        
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestDay = dayElement;
+        }
+    });
+    
+    if (closestDay) {
+        const dateStr = closestDay.dataset.date;
+        const date = parseDateLocal(dateStr);
+        return { year: date.getFullYear(), month: date.getMonth() + 1 };
+    }
+    
+    return null;
+}
+
+// Парсинг даты без UTC смещения
+function parseDateLocal(dateStr) {
+    const [y, m, d] = (dateStr || '').split('-').map(Number);
+    return new Date(y || 1970, (m || 1) - 1, d || 1);
+}
+
+// Обновление отображения месяца при скролле
+function updateMonthDisplayFromScroll() {
+    // Не обновляем, если пользователь недавно выбрал месяц вручную
+    if (userSelectedMonth) {
+        return;
+    }
+    
+    const visibleMonth = getVisibleMonthFromScroll();
+    if (visibleMonth && (visibleMonth.year !== currentYear || visibleMonth.month !== currentMonth)) {
+        currentYear = visibleMonth.year;
+        currentMonth = visibleMonth.month;
+        updateMonthDisplay();
+        updateMonthOptions();
+    }
+}
+
+// Обновление активных опций месяцев
+function updateMonthOptions() {
+    const monthOptions = document.querySelectorAll('.month-option');
+    monthOptions.forEach(option => {
+        const month = parseInt(option.dataset.month);
+        option.classList.toggle('active', month === currentMonth);
+    });
+}
+
+function updateMonthDisplay() {
+    const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 
+                       'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+    const monthName = document.getElementById('monthName');
+    if (monthName) {
+        monthName.textContent = `${monthNames[currentMonth - 1]} ${currentYear}`;
+    }
+    updateMonthOptions();
+}
+
+console.log('Unified calendar grid script loaded successfully');
+</script>
