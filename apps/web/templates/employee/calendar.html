@@ -79,8 +79,7 @@
 </script>
 
 <script>
-// Экспорт данных календаря
-window.calendar_weeks = {{ calendar_weeks_json | safe }};
+// Данные календаря загружаются через API endpoint
 
 function showShiftDetails(shiftId) {
     if (shiftId.toString().startsWith('schedule_')) {
