@@ -465,6 +465,19 @@ window.unifiedCalendar = {
     handleEmployeeDropOnTimeslot: function(timeslotElement, employeeId) {
         console.log(`Employee ${employeeId} dropped on timeslot`);
         
+        // Проверяем, не обрабатывается ли уже этот drop
+        const dropKey = `${timeslotElement.dataset.timeslotId}-${employeeId}`;
+        if (window.lastDropKey === dropKey) {
+            console.log('Duplicate drop detected, ignoring');
+            return;
+        }
+        window.lastDropKey = dropKey;
+        
+        // Сбрасываем ключ через 2 секунды
+        setTimeout(() => {
+            window.lastDropKey = null;
+        }, 2000);
+        
         // Получаем данные тайм-слота
         const timeslotId = timeslotElement.dataset.timeslotId;
         const timeslotDate = timeslotElement.dataset.timeslotDate;
@@ -510,11 +523,20 @@ window.unifiedCalendar = {
         
         // Проверяем, не создается ли уже смена
         if (window.isCreatingShift) {
-            console.log('Shift creation already in progress, resetting flag');
-            window.isCreatingShift = false; // Сбрасываем флаг при повторной попытке
+            console.log('Shift creation already in progress, ignoring duplicate call');
+            return; // Просто игнорируем повторные вызовы
         }
         
         window.isCreatingShift = true;
+        
+        // Создаем уникальный ключ для предотвращения дублирования
+        const requestKey = `${timeslotId}-${employeeId}-${Date.now()}`;
+        if (window.lastShiftRequestKey === requestKey) {
+            console.log('Duplicate request detected, ignoring');
+            window.isCreatingShift = false;
+            return;
+        }
+        window.lastShiftRequestKey = requestKey;
         
         // Определяем правильный endpoint в зависимости от роли пользователя
         const baseUrl = window.universalCalendar ? window.universalCalendar.baseUrl : '/manager';
@@ -522,7 +544,7 @@ window.unifiedCalendar = {
         
         console.log('Base URL:', baseUrl);
         console.log('Endpoint:', endpoint);
-        console.log('Universal Calendar:', window.universalCalendar);
+        console.log('Request key:', requestKey);
         
         fetch(endpoint, {
             method: 'POST',
