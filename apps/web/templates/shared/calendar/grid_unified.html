@@ -303,11 +303,14 @@ window.unifiedCalendar = {
         element.setAttribute('data-timeslot-id', timeslot.id);
         element.setAttribute('data-timeslot-date', timeslot.date);
         element.setAttribute('data-timeslot-start-time', timeslot.start_time);
-        element.onclick = () => {
-            if (window.universalCalendar && window.universalCalendar.onTimeslotClick) {
-                window.universalCalendar.onTimeslotClick(timeslot.id);
-            }
-        };
+        // Клики отключены для сотрудников
+        if (!window.universalCalendar || window.universalCalendar.userRole !== 'employee') {
+            element.onclick = () => {
+                if (window.universalCalendar && window.universalCalendar.onTimeslotClick) {
+                    window.universalCalendar.onTimeslotClick(timeslot.id);
+                }
+            };
+        }
         element.setAttribute('data-timeslot-end-time', timeslot.end_time);
         element.setAttribute('data-timeslot-object-id', timeslot.object_id);
         
@@ -332,13 +335,16 @@ window.unifiedCalendar = {
         const element = document.createElement('div');
         element.className = `shift-item shift-${shift.shift_type}`;
         element.setAttribute('data-shift-id', shift.id);
-        element.onclick = () => {
-            if (window.universalCalendar && window.universalCalendar.onShiftClick) {
-                window.universalCalendar.onShiftClick(shift.id);
-            } else {
-                showShiftDetails(shift.id);
-            }
-        };
+        // Клики отключены для сотрудников
+        if (!window.universalCalendar || window.universalCalendar.userRole !== 'employee') {
+            element.onclick = () => {
+                if (window.universalCalendar && window.universalCalendar.onShiftClick) {
+                    window.universalCalendar.onShiftClick(shift.id);
+                } else {
+                    showShiftDetails(shift.id);
+                }
+            };
+        }
         
         // Определяем время начала и окончания
         let startTime = '';
