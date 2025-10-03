@@ -310,6 +310,10 @@ window.unifiedCalendar = {
                     window.universalCalendar.onTimeslotClick(timeslot.id);
                 }
             };
+        } else {
+            // Для сотрудников делаем элементы некликабельными
+            element.style.pointerEvents = 'none';
+            element.style.cursor = 'default';
         }
         element.setAttribute('data-timeslot-end-time', timeslot.end_time);
         element.setAttribute('data-timeslot-object-id', timeslot.object_id);
@@ -344,6 +348,10 @@ window.unifiedCalendar = {
                     showShiftDetails(shift.id);
                 }
             };
+        } else {
+            // Для сотрудников делаем элементы некликабельными
+            element.style.pointerEvents = 'none';
+            element.style.cursor = 'default';
         }
         
         // Определяем время начала и окончания
