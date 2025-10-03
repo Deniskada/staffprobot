@@ -37,6 +37,294 @@
     margin: 0 auto;
 }
 
+/* Month Picker Styles */
+.month-picker {
+    position: relative;
+    display: inline-block;
+}
+
+.month-display {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 16px;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 200px;
+    justify-content: center;
+}
+
+.month-display:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.month-display .dropdown-icon {
+    transition: transform 0.3s ease;
+}
+
+.month-display.active .dropdown-icon {
+    transform: rotate(180deg);
+}
+
+.month-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    min-width: 280px;
+    display: none;
+    margin-top: 8px;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease-out;
+}
+
+.month-dropdown.show {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+    animation: dropdownFadeIn 0.3s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+.dropdown-content {
+    padding: 20px;
+}
+
+.year-selector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.year-btn {
+    background: #f8f9fa;
+    border: none;
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #495057;
+}
+
+.year-btn:hover {
+    background: #e9ecef;
+    transform: scale(1.1);
+}
+
+.year-display {
+    font-size: 18px;
+    font-weight: 700;
+    color: #495057;
+    min-width: 60px;
+    text-align: center;
+}
+
+.months-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.month-option {
+    padding: 12px 8px;
+    text-align: center;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    color: #495057;
+}
+
+.month-option:hover {
+    background: #e3f2fd;
+    color: #1976d2;
+    transform: translateY(-2px);
+}
+
+.month-option.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* Object Filter Styles */
+.object-filter {
+    position: relative;
+    display: inline-block;
+}
+
+.object-picker {
+    position: relative;
+}
+
+.object-display {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    box-shadow: 0 4px 15px rgba(79, 172, 254, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 150px;
+    justify-content: center;
+}
+
+.object-display:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(79, 172, 254, 0.6);
+}
+
+.object-display .dropdown-icon {
+    transition: transform 0.3s ease;
+}
+
+.object-display.active .dropdown-icon {
+    transform: rotate(180deg);
+}
+
+.object-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    min-width: 250px;
+    display: none;
+    margin-top: 8px;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease-out;
+}
+
+.object-dropdown.show {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+    animation: dropdownFadeIn 0.3s ease-out;
+}
+
+.object-options {
+    padding: 15px 0;
+}
+
+.object-option {
+    padding: 12px 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+    color: #495057;
+}
+
+.object-option:hover {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.object-option.active {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+}
+
+.object-option i {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+}
+
+/* Today Button Styles */
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.today-btn {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.today-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6);
+}
+
+.today-btn:active {
+    transform: translateY(0);
+}
+
+.today-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.today-btn:hover::before {
+    left: 100%;
+}
+
+.today-btn i {
+    font-size: 16px;
+}
+
 .calendar-scrollable {
     flex: 1;
     overflow-y: auto;
