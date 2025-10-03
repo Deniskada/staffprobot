@@ -1810,6 +1810,197 @@ async def employee_calendar_api_data(
         raise HTTPException(status_code=500, detail="Ошибка получения данных календаря")
 
 
+@router.get("/shifts/{shift_id}", response_class=HTMLResponse)
+async def employee_shift_detail(
+    request: Request, 
+    shift_id: str,  # Поддержка префикса schedule_
+    shift_type: Optional[str] = Query("shift"),
+    current_user: dict = Depends(require_employee_or_applicant),
+):
+    """Детали смены сотрудника"""
+    try:
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        # Определяем тип смены по ID
+        if shift_id.startswith('schedule_'):
+            actual_shift_id = int(shift_id.replace('schedule_', ''))
+            actual_shift_type = "schedule"
+        else:
+            actual_shift_id = int(shift_id)
+            actual_shift_type = shift_type or "shift"
+        
+        async with get_async_session() as db:
+            # Получаем внутренний ID пользователя
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            shift_data = None
+            
+            # Импортируем select для запросов
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+            
+            if actual_shift_type == "schedule":
+                # Запланированная смена
+                query = select(ShiftSchedule).options(
+                    selectinload(ShiftSchedule.object),
+                    selectinload(ShiftSchedule.user)
+                ).where(ShiftSchedule.id == actual_shift_id)
+                
+                result = await db.execute(query)
+                schedule = result.scalar_one_or_none()
+                
+                if not schedule:
+                    raise HTTPException(status_code=404, detail="Запланированная смена не найдена")
+                
+                # Проверяем, что смена принадлежит текущему пользователю
+                if schedule.user_id != user_id:
+                    raise HTTPException(status_code=403, detail="Нет доступа к смене")
+                
+                shift_data = {
+                    "id": f"schedule_{schedule.id}",
+                    "type": "schedule",
+                    "user_name": f"{schedule.user.first_name or ''} {schedule.user.last_name or ''}".strip(),
+                    "object_name": schedule.object.name,
+                    "object_address": schedule.object.address,
+                    "planned_start": schedule.planned_start,
+                    "planned_end": schedule.planned_end,
+                    "status": schedule.status,
+                    "hourly_rate": schedule.hourly_rate,
+                    "notes": schedule.notes,
+                    "created_at": schedule.created_at,
+                    "updated_at": schedule.updated_at
+                }
+            else:
+                # Фактическая смена
+                query = select(Shift).options(
+                    selectinload(Shift.object),
+                    selectinload(Shift.user)
+                ).where(Shift.id == actual_shift_id)
+                
+                result = await db.execute(query)
+                shift = result.scalar_one_or_none()
+                
+                if not shift:
+                    raise HTTPException(status_code=404, detail="Смена не найдена")
+                
+                # Проверяем, что смена принадлежит текущему пользователю
+                if shift.user_id != user_id:
+                    raise HTTPException(status_code=403, detail="Нет доступа к смене")
+                
+                shift_data = {
+                    "id": shift.id,
+                    "type": "shift",
+                    "user_name": f"{shift.user.first_name or ''} {shift.user.last_name or ''}".strip(),
+                    "object_name": shift.object.name,
+                    "object_address": shift.object.address,
+                    "start_time": shift.start_time,
+                    "end_time": shift.end_time,
+                    "status": shift.status,
+                    "hourly_rate": shift.hourly_rate,
+                    "total_hours": shift.total_hours,
+                    "total_payment": shift.total_payment,
+                    "notes": shift.notes,
+                    "start_coordinates": shift.start_coordinates,
+                    "end_coordinates": shift.end_coordinates,
+                    "created_at": shift.created_at,
+                    "updated_at": shift.updated_at
+                }
+            
+            # Получаем доступные интерфейсы
+            available_interfaces = await get_available_interfaces_for_user(current_user, db)
+            
+            return templates.TemplateResponse("employee/shifts/detail.html", {
+                "request": request,
+                "current_user": current_user,
+                "shift": shift_data,
+                "available_interfaces": available_interfaces
+            })
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in employee shift detail: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
+
+
+@router.get("/timeslots/{timeslot_id}", response_class=HTMLResponse)
+async def employee_timeslot_detail(
+    request: Request,
+    timeslot_id: int,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Детали тайм-слота сотрудника"""
+    try:
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Пользователь не найден")
+        
+        # Получаем тайм-слот
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        
+        timeslot_query = select(TimeSlot).options(
+            selectinload(TimeSlot.object)
+        ).where(TimeSlot.id == timeslot_id)
+        
+        timeslot_result = await db.execute(timeslot_query)
+        timeslot = timeslot_result.scalar_one_or_none()
+        
+        if not timeslot:
+            raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+        
+        # Получаем связанные смены и расписания
+        from sqlalchemy import and_
+        # Запланированные смены (исключаем отмененные)
+        scheduled_query = select(ShiftSchedule).options(
+            selectinload(ShiftSchedule.user)
+        ).where(
+            and_(
+                ShiftSchedule.time_slot_id == timeslot_id,
+                ShiftSchedule.status != "cancelled"
+            )
+        )
+        
+        scheduled_result = await db.execute(scheduled_query)
+        scheduled_shifts = scheduled_result.scalars().all()
+        
+        # Фактические смены
+        actual_query = select(Shift).options(
+            selectinload(Shift.user)
+        ).where(Shift.time_slot_id == timeslot_id)
+        
+        actual_result = await db.execute(actual_query)
+        actual_shifts = actual_result.scalars().all()
+        
+        # Получаем доступные интерфейсы
+        available_interfaces = await get_available_interfaces_for_user(current_user, db)
+        
+        return templates.TemplateResponse("employee/timeslots/detail.html", {
+            "request": request,
+            "current_user": current_user,
+            "timeslot": timeslot,
+            "scheduled_shifts": scheduled_shifts,
+            "actual_shifts": actual_shifts,
+            "available_interfaces": available_interfaces
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in employee timeslot detail: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
+
+
 @router.post("/api/calendar/plan-shift")
 async def employee_plan_shift(
     request: Request,

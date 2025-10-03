@@ -1,0 +1,158 @@
+{% extends "employee/base.html" %}
+
+{% block title %}Детали смены - StaffProBot{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Детали смены</h2>
+                <a href="/employee/calendar" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left"></i> В календарь
+                </a>
+            </div>
+            
+            {% if shift %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        {% if shift.type == "schedule" %}
+                            Запланированная смена
+                        {% else %}
+                            Фактическая смена
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Информация о смене</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Сотрудник:</strong></td>
+                                    <td>{{ shift.user_name }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Объект:</strong></td>
+                                    <td>{{ shift.object_name }}</td>
+                                </tr>
+                                {% if shift.object_address %}
+                                <tr>
+                                    <td><strong>Адрес:</strong></td>
+                                    <td>{{ shift.object_address }}</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <td><strong>Статус:</strong></td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if shift.status == 'planned' %}bg-primary
+                                            {% elif shift.status == 'active' %}bg-success
+                                            {% elif shift.status == 'completed' %}bg-secondary
+                                            {% elif shift.status == 'cancelled' %}bg-danger
+                                            {% else %}bg-light text-dark{% endif %}">
+                                            {{ shift.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Время работы</h6>
+                            <table class="table table-sm">
+                                {% if shift.type == "schedule" %}
+                                <tr>
+                                    <td><strong>Планируемое начало:</strong></td>
+                                    <td>{{ shift.planned_start.strftime('%d.%m.%Y %H:%M') if shift.planned_start else 'Не указано' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Планируемое окончание:</strong></td>
+                                    <td>{{ shift.planned_end.strftime('%d.%m.%Y %H:%M') if shift.planned_end else 'Не указано' }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td><strong>Начало смены:</strong></td>
+                                    <td>{{ shift.start_time.strftime('%d.%m.%Y %H:%M') if shift.start_time else 'Не указано' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Окончание смены:</strong></td>
+                                    <td>{{ shift.end_time.strftime('%d.%m.%Y %H:%M') if shift.end_time else 'Не указано' }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if shift.hourly_rate %}
+                                <tr>
+                                    <td><strong>Почасовая ставка:</strong></td>
+                                    <td>{{ "%.2f"|format(shift.hourly_rate) }} ₽/час</td>
+                                </tr>
+                                {% endif %}
+                                {% if shift.total_hours %}
+                                <tr>
+                                    <td><strong>Общее время:</strong></td>
+                                    <td>{{ "%.2f"|format(shift.total_hours) }} часов</td>
+                                </tr>
+                                {% endif %}
+                                {% if shift.total_payment %}
+                                <tr>
+                                    <td><strong>Общая оплата:</strong></td>
+                                    <td>{{ "%.2f"|format(shift.total_payment) }} ₽</td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+                    
+                    {% if shift.notes %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6>Примечания</h6>
+                            <div class="alert alert-info">
+                                {{ shift.notes }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if shift.start_coordinates or shift.end_coordinates %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6>Координаты</h6>
+                            <table class="table table-sm">
+                                {% if shift.start_coordinates %}
+                                <tr>
+                                    <td><strong>Начало:</strong></td>
+                                    <td>{{ shift.start_coordinates }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if shift.end_coordinates %}
+                                <tr>
+                                    <td><strong>Окончание:</strong></td>
+                                    <td>{{ shift.end_coordinates }}</td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <small class="text-muted">
+                                Создано: {{ shift.created_at.strftime('%d.%m.%Y %H:%M') if shift.created_at else 'Не указано' }}<br>
+                                Обновлено: {{ shift.updated_at.strftime('%d.%m.%Y %H:%M') if shift.updated_at else 'Не указано' }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+                <h4>Смена не найдена</h4>
+                <p>Запрашиваемая смена не найдена или у вас нет доступа к ней.</p>
+                <a href="/employee/calendar" class="btn btn-primary">Вернуться к календарю</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

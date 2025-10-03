@@ -1,0 +1,246 @@
+{% extends "employee/base.html" %}
+
+{% block title %}Детали тайм-слота - StaffProBot{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Детали тайм-слота</h2>
+                <a href="/employee/calendar" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left"></i> В календарь
+                </a>
+            </div>
+            
+            {% if timeslot %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Тайм-слот #{{ timeslot.id }}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Информация о тайм-слоте</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Объект:</strong></td>
+                                    <td>{{ timeslot.object.name }}</td>
+                                </tr>
+                                {% if timeslot.object.address %}
+                                <tr>
+                                    <td><strong>Адрес:</strong></td>
+                                    <td>{{ timeslot.object.address }}</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <td><strong>Дата:</strong></td>
+                                    <td>{{ timeslot.slot_date.strftime('%d.%m.%Y') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Время:</strong></td>
+                                    <td>{{ timeslot.start_time.strftime('%H:%M') }} - {{ timeslot.end_time.strftime('%H:%M') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Статус:</strong></td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if timeslot.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {% if timeslot.is_active %}Активен{% else %}Неактивен{% endif %}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Условия работы</h6>
+                            <table class="table table-sm">
+                                {% if timeslot.hourly_rate %}
+                                <tr>
+                                    <td><strong>Почасовая ставка:</strong></td>
+                                    <td>{{ "%.2f"|format(timeslot.hourly_rate) }} ₽/час</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <td><strong>Максимум сотрудников:</strong></td>
+                                    <td>{{ timeslot.max_employees }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Текущие сотрудники:</strong></td>
+                                    <td>{{ scheduled_shifts|length }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Свободные места:</strong></td>
+                                    <td>{{ timeslot.max_employees - scheduled_shifts|length }}</td>
+                                </tr>
+                                {% if timeslot.is_additional %}
+                                <tr>
+                                    <td><strong>Тип:</strong></td>
+                                    <td><span class="badge bg-info">Дополнительный</span></td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+                    
+                    {% if timeslot.notes %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6>Примечания</h6>
+                            <div class="alert alert-info">
+                                {{ timeslot.notes }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if timeslot.work_conditions %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6>Условия работы</h6>
+                            <div class="alert alert-light">
+                                {{ timeslot.work_conditions }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if timeslot.shift_tasks %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6>Задачи смены</h6>
+                            <ul class="list-group">
+                                {% for task in timeslot.shift_tasks %}
+                                <li class="list-group-item">{{ task }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% if scheduled_shifts %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Запланированные смены</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Сотрудник</th>
+                                    <th>Статус</th>
+                                    <th>Планируемое время</th>
+                                    <th>Почасовая ставка</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for shift in scheduled_shifts %}
+                                <tr>
+                                    <td>{{ shift.user.first_name }} {{ shift.user.last_name }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if shift.status == 'planned' %}bg-primary
+                                            {% elif shift.status == 'active' %}bg-success
+                                            {% elif shift.status == 'completed' %}bg-secondary
+                                            {% elif shift.status == 'cancelled' %}bg-danger
+                                            {% else %}bg-light text-dark{% endif %}">
+                                            {{ shift.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if shift.planned_start and shift.planned_end %}
+                                            {{ shift.planned_start.strftime('%H:%M') }} - {{ shift.planned_end.strftime('%H:%M') }}
+                                        {% else %}
+                                            Не указано
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if shift.hourly_rate %}
+                                            {{ "%.2f"|format(shift.hourly_rate) }} ₽/час
+                                        {% else %}
+                                            Не указано
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if actual_shifts %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Фактические смены</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Сотрудник</th>
+                                    <th>Статус</th>
+                                    <th>Фактическое время</th>
+                                    <th>Общее время</th>
+                                    <th>Оплата</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for shift in actual_shifts %}
+                                <tr>
+                                    <td>{{ shift.user.first_name }} {{ shift.user.last_name }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if shift.status == 'active' %}bg-success
+                                            {% elif shift.status == 'completed' %}bg-secondary
+                                            {% elif shift.status == 'cancelled' %}bg-danger
+                                            {% else %}bg-light text-dark{% endif %}">
+                                            {{ shift.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if shift.start_time and shift.end_time %}
+                                            {{ shift.start_time.strftime('%H:%M') }} - {{ shift.end_time.strftime('%H:%M') }}
+                                        {% else %}
+                                            Не указано
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if shift.total_hours %}
+                                            {{ "%.2f"|format(shift.total_hours) }} часов
+                                        {% else %}
+                                            Не указано
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if shift.total_payment %}
+                                            {{ "%.2f"|format(shift.total_payment) }} ₽
+                                        {% else %}
+                                            Не указано
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% else %}
+            <div class="alert alert-warning">
+                <h4>Тайм-слот не найден</h4>
+                <p>Запрашиваемый тайм-слот не найден или у вас нет доступа к нему.</p>
+                <a href="/employee/calendar" class="btn btn-primary">Вернуться к календарю</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
