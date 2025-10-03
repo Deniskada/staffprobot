@@ -311,8 +311,12 @@ window.unifiedCalendar = {
                 }
             };
         } else {
-            // Для сотрудников делаем элементы некликабельными
-            element.style.pointerEvents = 'none';
+            // Для сотрудников блокируем только клики, но разрешаем drag&drop
+            element.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            };
             element.style.cursor = 'default';
         }
         element.setAttribute('data-timeslot-end-time', timeslot.end_time);
@@ -349,8 +353,12 @@ window.unifiedCalendar = {
                 }
             };
         } else {
-            // Для сотрудников делаем элементы некликабельными
-            element.style.pointerEvents = 'none';
+            // Для сотрудников блокируем только клики, но разрешаем drag&drop
+            element.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            };
             element.style.cursor = 'default';
         }
         
