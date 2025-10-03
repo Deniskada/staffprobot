@@ -25,19 +25,24 @@ from shared.models.calendar_data import (
     TimeslotStatus
 )
 from shared.services.object_access_service import ObjectAccessService
-from apps.web.utils.timezone_utils import WebTimezoneHelper
 
 logger = logging.getLogger(__name__)
-
-# Инициализируем помощник для работы с временными зонами
-web_timezone_helper = WebTimezoneHelper()
-
 
 def convert_datetime_to_local(dt: datetime, object_timezone: str = 'Europe/Moscow') -> str:
     """Конвертировать datetime в локальную временную зону объекта."""
     if not dt:
         return ''
-    return web_timezone_helper.format_datetime_with_timezone(dt, object_timezone, '%Y-%m-%dT%H:%M:%S')
+    
+    try:
+        # Импортируем внутри функции, чтобы избежать циклических импортов
+        from apps.web.utils.timezone_utils import WebTimezoneHelper
+        web_timezone_helper = WebTimezoneHelper()
+        
+        return web_timezone_helper.format_datetime_with_timezone(dt, object_timezone, '%Y-%m-%dT%H:%M:%S')
+    except Exception as e:
+        logger.error(f"Error converting datetime to local timezone: {e}")
+        # Fallback: возвращаем время как есть
+        return dt.strftime('%Y-%m-%dT%H:%M:%S') if dt else ''
 
 
 class CalendarFilterService:
