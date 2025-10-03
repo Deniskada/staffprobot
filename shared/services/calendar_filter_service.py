@@ -43,7 +43,11 @@ def convert_datetime_to_local(dt, object_timezone: str = 'Europe/Moscow') -> str
         from apps.web.utils.timezone_utils import WebTimezoneHelper
         web_timezone_helper = WebTimezoneHelper()
         
-        return web_timezone_helper.format_datetime_with_timezone(dt, object_timezone, '%Y-%m-%dT%H:%M:%S')
+        # Конвертируем в локальную временную зону
+        result = web_timezone_helper.format_datetime_with_timezone(dt, object_timezone, '%Y-%m-%dT%H:%M:%S')
+        logger.debug(f"Converted {dt} to {result} (timezone: {object_timezone})")
+        return result
+        
     except Exception as e:
         logger.error(f"Error converting datetime to local timezone: {e}, dt type: {type(dt)}, dt value: {dt}")
         # Fallback: возвращаем время как есть
@@ -372,10 +376,10 @@ class CalendarFilterService:
                             user_name=f"{shift_schedule.user.first_name or ''} {shift_schedule.user.last_name or ''}".strip(),
                             object_id=shift_schedule.object_id,
                             object_name=obj_info['name'],
-                            start_time=shift_schedule.planned_start,  # Временно отключаем конвертацию
+                            start_time=convert_datetime_to_local(shift_schedule.planned_start, object_timezone),  # Восстанавливаем конвертацию
                             time_slot_id=shift_schedule.time_slot_id,
-                            planned_start=shift_schedule.planned_start,
-                            planned_end=shift_schedule.planned_end,
+                            planned_start=convert_datetime_to_local(shift_schedule.planned_start, object_timezone),
+                            planned_end=convert_datetime_to_local(shift_schedule.planned_end, object_timezone),
                             shift_type=ShiftType.PLANNED,
                             status=ShiftStatus(shift_schedule.status),
                             hourly_rate=float(shift_schedule.hourly_rate) if shift_schedule.hourly_rate else None,
@@ -441,8 +445,8 @@ class CalendarFilterService:
                         object_id=shift.object_id,
                         object_name=obj_info['name'],
                         time_slot_id=shift.time_slot_id,
-                        start_time=shift.start_time,  # Временно отключаем конвертацию
-                        end_time=shift.end_time,  # Временно отключаем конвертацию
+                        start_time=convert_datetime_to_local(shift.start_time, object_timezone),  # Восстанавливаем конвертацию
+                        end_time=convert_datetime_to_local(shift.end_time, object_timezone),  # Восстанавливаем конвертацию
                         shift_type=shift_type,
                         status=ShiftStatus(shift.status),
                         hourly_rate=float(shift.hourly_rate) if shift.hourly_rate else None,
