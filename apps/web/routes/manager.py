@@ -1425,14 +1425,14 @@ async def manager_calendar_api_data(
             # current_user - это объект User
             user_role = current_user.role
             user_telegram_id = current_user.telegram_id
-            else:
+        else:
             # current_user - это RedirectResponse (не аутентифицирован)
             raise HTTPException(status_code=401, detail="Требуется аутентификация")
         
         # Если пользователь - владелец, используем роль owner для CalendarFilterService
         if user_role == "owner":
             user_role = "owner"
-                else:
+        else:
             user_role = "manager"
         
         if not user_telegram_id:
@@ -2989,7 +2989,7 @@ async def manager_shifts_list(
                     all_shifts.sort(key=lambda x: x['created_at'], reverse=reverse)
             else:
                 # Сортировка по умолчанию
-            all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
+                all_shifts.sort(key=lambda x: x['created_at'], reverse=True)
             
             # Пагинация
             total_shifts = len(all_shifts)
@@ -3345,20 +3345,20 @@ async def manager_profile_update(
 ):
     """Обновление профиля управляющего."""
 
-        if isinstance(current_user, RedirectResponse):
-            return current_user
-            
-        user_id = await get_user_id_from_current_user(current_user, db)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Пользователь не найден")
+    if isinstance(current_user, RedirectResponse):
+        return current_user
         
-        user_query = select(User).where(User.id == user_id)
-        user_result = await db.execute(user_query)
-        user = user_result.scalar_one_or_none()
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
         
-        if not user:
-            raise HTTPException(status_code=404, detail="Пользователь не найден")
-        
+    user_query = select(User).where(User.id == user_id)
+    user_result = await db.execute(user_query)
+    user = user_result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
     try:
         user.first_name = (first_name or "").strip() or None
         user.last_name = (last_name or "").strip() or None
