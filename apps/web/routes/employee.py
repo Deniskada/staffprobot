@@ -1662,7 +1662,7 @@ async def employee_calendar_api_data(
     start_date: str = Query(..., description="Начальная дата в формате YYYY-MM-DD"),
     end_date: str = Query(..., description="Конечная дата в формате YYYY-MM-DD"),
     object_ids: Optional[str] = Query(None, description="ID объектов через запятую"),
-    current_user: dict = Depends(get_current_user_dependency()),
+    current_user: dict = Depends(require_employee_or_applicant),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -1670,6 +1670,8 @@ async def employee_calendar_api_data(
     Использует CalendarFilterService для правильной фильтрации смен.
     """
     try:
+        logger.info(f"Employee calendar API called: start_date={start_date}, end_date={end_date}, object_ids={object_ids}")
+        logger.info(f"Current user type: {type(current_user)}, value: {current_user}")
         # Парсим даты
         try:
             start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -1685,9 +1687,14 @@ async def employee_calendar_api_data(
             except ValueError:
                 raise HTTPException(status_code=400, detail="Неверный формат ID объектов")
         
-        # Получаем роль пользователя
-        user_role = current_user.get("role", "employee")
-        user_telegram_id = current_user.get("id")
+        # Получаем роль пользователя и telegram_id
+        if isinstance(current_user, dict):
+            user_role = current_user.get("role", "employee")
+            user_telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        else:
+            # current_user - это объект User
+            user_role = getattr(current_user, "role", "employee")
+            user_telegram_id = getattr(current_user, "telegram_id", None)
         
         if not user_telegram_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
@@ -1776,6 +1783,7 @@ async def employee_calendar_api_data(
         raise
     except Exception as e:
         logger.error(f"Error getting employee calendar data: {e}", exc_info=True)
+        logger.error(f"Exception details: {type(e).__name__}: {str(e)}")
         raise HTTPException(status_code=500, detail="Ошибка получения данных календаря")
 
 
