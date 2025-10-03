@@ -2730,6 +2730,7 @@ async def plan_shift_manager(
             
             # Проверяем пересечение смен сотрудника
             from domain.entities.shift import Shift
+            from domain.entities.shift_schedule import ShiftSchedule
             import pytz
             
             # Получаем временную зону объекта для корректного сравнения времени
@@ -2789,7 +2790,6 @@ async def plan_shift_manager(
                 )
             
             # Создаем запланированную смену
-            from domain.entities.shift_schedule import ShiftSchedule
             
             # Используем уже вычисленные времена в UTC
             slot_datetime = slot_datetime_utc
