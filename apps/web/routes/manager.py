@@ -2664,6 +2664,8 @@ async def plan_shift_manager(
         timeslot_id = data.get('timeslot_id')
         employee_id = data.get('employee_id')
         
+        logger.info(f"Processing: timeslot_id={timeslot_id}, employee_id={employee_id}")
+        
         if not timeslot_id or not employee_id:
             raise HTTPException(status_code=400, detail="Не указан тайм-слот или сотрудник")
         
@@ -2744,6 +2746,10 @@ async def plan_shift_manager(
             # Локализуем в временную зону объекта, затем конвертируем в UTC для сравнения
             slot_datetime_utc = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
             end_datetime_utc = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+            
+            logger.info(f"Timezone conversion: {object_timezone} -> UTC")
+            logger.info(f"Slot time: {slot_datetime_naive} -> {slot_datetime_utc}")
+            logger.info(f"End time: {end_datetime_naive} -> {end_datetime_utc}")
             
             # Проверяем пересечение с активными сменами
             active_shifts_query = select(Shift).where(
