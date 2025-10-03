@@ -139,6 +139,8 @@ class ObjectAccessService:
                 })
             
             logger.info(f"Found {len(accessible_objects_list)} objects for manager {user_id}")
+            for obj in accessible_objects_list:
+                logger.info(f"  - Manager object: {obj['name']} (ID: {obj['id']})")
             return accessible_objects_list
             
         except Exception as e:

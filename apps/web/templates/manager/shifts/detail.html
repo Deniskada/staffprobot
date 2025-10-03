@@ -158,7 +158,7 @@
                                     </div>
                                     
                                     <div class="text-muted">
-                                        <small>Создана: {{ shift.created_at.strftime('%d.%m.%Y %H:%M') if shift.created_at else 'Не указана' }}</small>
+                                        <small>Создана: {{ (shift.created_at.strftime('%d.%m.%Y %H:%M') if shift.created_at.__class__.__name__ != 'str' else shift.created_at) if shift.created_at else 'Не указана' }}</small>
                                     </div>
                                 </div>
                             </div>
@@ -280,7 +280,7 @@
                             {% endif %}
                             
                             <div class="mb-3">
-                                <strong>Создана:</strong> {{ shift.created_at.strftime('%d.%m.%Y %H:%M') if shift.created_at else 'Не указана' }}
+                                <strong>Создана:</strong> {{ (shift.created_at.strftime('%d.%m.%Y %H:%M') if shift.created_at.__class__.__name__ != 'str' else shift.created_at) if shift.created_at else 'Не указана' }}
                             </div>
                         </div>
                     </div>
@@ -377,10 +377,13 @@ function showNotification(message, type) {
 function goToCalendarWithDate() {
     // Получаем дату смены
     {% if shift_type == 'schedule' %}
-        const shiftDate = '{{ shift.planned_start.strftime("%Y-%m-%d") if shift.planned_start else "" }}';
+        // Для запланированных смен время уже строка (локальное), берем начало YYYY-MM-DD
+        const startStr = '{{ shift.start_time or shift.planned_start or "" }}';
     {% else %}
-        const shiftDate = '{{ shift.start_time.strftime("%Y-%m-%d") if shift.start_time else "" }}';
+        // Для реальных смен start_time уже строка с локальным временем
+        const startStr = '{{ shift.start_time or "" }}';
     {% endif %}
+    const shiftDate = startStr ? startStr.substring(0, 10) : '';
     
     if (shiftDate) {
         // Переходим в календарь с параметром даты

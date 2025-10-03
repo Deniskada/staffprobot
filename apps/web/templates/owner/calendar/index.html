@@ -250,8 +250,8 @@ function showShiftDetails(shiftId) {
     if (shiftId.toString().startsWith('schedule_')) {
         const scheduleId = shiftId.toString().replace('schedule_', '');
         window.location.href = `/owner/shifts/${scheduleId}?shift_type=schedule`;
-        } else {
-        window.location.href = `/owner/shifts/${shiftId}`;
+    } else {
+        window.location.href = `/owner/shifts/${shiftId}?shift_type=shift`;
     }
 }
 

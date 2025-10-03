@@ -44,7 +44,7 @@ function showShiftDetails(shiftId) {
         const scheduleId = shiftId.toString().replace('schedule_', '');
         window.location.href = `/employee/shifts/${scheduleId}?shift_type=schedule`;
     } else {
-        window.location.href = `/employee/shifts/${shiftId}`;
+        window.location.href = `/employee/shifts/${shiftId}?shift_type=shift`;
     }
 }
 function showTimeslotDetails(timeslotId) {
