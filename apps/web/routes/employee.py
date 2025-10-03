@@ -1003,6 +1003,7 @@ async def employee_calendar(
 
         return templates.TemplateResponse("employee/calendar.html", {
             "request": request,
+            "current_user": current_user,
             "title": title,
             "calendar_title": title,
             "year": year,
@@ -1017,6 +1018,52 @@ async def employee_calendar(
         logger.error(f"Ошибка загрузки календаря: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки календаря: {e}")
 
+
+@router.get("/calendar/api/objects")
+async def employee_calendar_api_objects(
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API для получения объектов календаря сотрудника - только объекты, где у сотрудника есть контракт."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        # Получаем объекты, где у сотрудника есть активный контракт
+        from domain.entities.contract import Contract
+        contracts_query = select(Contract).where(
+            Contract.employee_id == user_id,
+            Contract.status == "active"
+        )
+        contracts_result = await db.execute(contracts_query)
+        contracts = contracts_result.scalars().all()
+        
+        object_ids = [contract.object_id for contract in contracts]
+        
+        if not object_ids:
+            return []
+        
+        # Получаем объекты по ID
+        objects_query = select(Object).where(Object.id.in_(object_ids))
+        objects_result = await db.execute(objects_query)
+        objects = objects_result.scalars().all()
+        
+        return [{
+            "id": obj.id,
+            "name": obj.name,
+            "address": obj.address,
+            "hourly_rate": float(obj.hourly_rate) if obj.hourly_rate else 0.0,
+            "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "09:00",
+            "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "18:00"
+        } for obj in objects]
+        
+    except Exception as e:
+        logger.error(f"Error getting employee calendar objects: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения объектов календаря")
 
 @router.get("/api/employees")
 async def employee_api_employees(

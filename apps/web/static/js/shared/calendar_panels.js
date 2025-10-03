@@ -42,7 +42,8 @@ class CalendarPanels {
         }
         
         try {
-            const response = await fetch(`/${this.role}/calendar/api/objects`);
+            const endpoint = this.role === 'employee' ? `/${this.role}/calendar/api/objects` : `/${this.role}/calendar/api/objects`;
+            const response = await fetch(endpoint);
             const objects = await response.json();
             
             objectsList.innerHTML = '';
@@ -347,7 +348,15 @@ class CalendarPanels {
     // Initialize panels
     init() {
         // Load initial data
-        this.loadObjects();
+        if (this.role !== 'employee') {
+            this.loadObjects();
+        } else {
+            // Скрываем панель объектов для сотрудников
+            const objectsPanel = document.getElementById('dragDropPanel');
+            if (objectsPanel) {
+                objectsPanel.style.display = 'none';
+            }
+        }
         this.loadEmployees();
         
         // Add click handlers for collapsed panels
@@ -385,7 +394,9 @@ class CalendarPanels {
         
         // Auto refresh counts occasionally
         setInterval(() => {
-            this.loadObjects();
+            if (this.role !== 'employee') {
+                this.loadObjects();
+            }
             this.loadEmployees();
         }, 3000);
         
