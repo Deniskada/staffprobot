@@ -35,6 +35,16 @@ class UniversalCalendarManager {
         this.initScrollTracking();
     }
     
+    // Helpers for local date formatting (avoid UTC shifts)
+    pad2(n) { return n.toString().padStart(2, '0'); }
+    formatDateLocal(d) {
+        return `${d.getFullYear()}-${this.pad2(d.getMonth() + 1)}-${this.pad2(d.getDate())}`;
+    }
+    parseDateLocal(dateStr) {
+        const [y, m, d] = (dateStr || '').split('-').map(Number);
+        return new Date(y || 1970, (m || 1) - 1, d || 1);
+    }
+    
     initScrollTracking() {
         const scrollableContainer = document.querySelector('.calendar-scrollable');
         if (!scrollableContainer) return;
@@ -108,7 +118,7 @@ class UniversalCalendarManager {
         
         if (closestDay) {
             const dateStr = closestDay.dataset.date;
-            const date = new Date(dateStr);
+            const date = this.parseDateLocal(dateStr);
             return { year: date.getFullYear(), month: date.getMonth() + 1 };
         }
         
@@ -151,8 +161,8 @@ class UniversalCalendarManager {
             const objectIdFromUrl = urlParams.get('object_id');
             
             const params = new URLSearchParams({
-                start_date: startDate.toISOString().split('T')[0],
-                end_date: endDate.toISOString().split('T')[0]
+                start_date: this.formatDateLocal(startDate),
+                end_date: this.formatDateLocal(endDate)
             });
             
             if (objectIdFromUrl) {
@@ -308,8 +318,8 @@ class UniversalCalendarManager {
             
             // Build API URL
             const params = new URLSearchParams({
-                start_date: dateRange.start.toISOString().split('T')[0],
-                end_date: dateRange.end.toISOString().split('T')[0]
+                start_date: this.formatDateLocal(dateRange.start),
+                end_date: this.formatDateLocal(dateRange.end)
             });
             
             // Получаем object_id из URL параметров
@@ -401,7 +411,14 @@ class UniversalCalendarManager {
         
         // Process shifts
         this.calendarData.shifts.forEach(shift => {
-            const date = shift.start_time ? shift.start_time.split('T')[0] : null;
+            // Для запланированных смен используем planned_start, для остальных - start_time
+            let date = null;
+            if (shift.shift_type === 'planned' && shift.planned_start) {
+                date = shift.planned_start.split('T')[0];
+            } else if (shift.start_time) {
+                date = shift.start_time.split('T')[0];
+            }
+            
             if (date) {
                 if (!this.calendarData.shiftsByDate[date]) {
                     this.calendarData.shiftsByDate[date] = [];
@@ -671,7 +688,7 @@ class UniversalCalendarManager {
         
         // Находим первый день выбранного месяца
         const monthFirstDay = new Date(year, month - 1, 1);
-        const monthFirstDayStr = monthFirstDay.toISOString().split('T')[0];
+        const monthFirstDayStr = this.formatDateLocal(monthFirstDay);
         
         // Находим элемент с первым днем месяца
         let monthElement = document.querySelector(`.calendar-day[data-date="${monthFirstDayStr}"]`);
@@ -680,7 +697,7 @@ class UniversalCalendarManager {
         if (!monthElement) {
             const monthElements = document.querySelectorAll('.calendar-day[data-date]');
             for (let element of monthElements) {
-                const elementDate = new Date(element.dataset.date);
+                const elementDate = this.parseDateLocal(element.dataset.date);
                 if (elementDate.getFullYear() === year && elementDate.getMonth() === month - 1) {
                     monthElement = element;
                     break;
@@ -709,7 +726,7 @@ class UniversalCalendarManager {
     
     scrollToToday() {
         const today = new Date();
-        const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+        const todayString = this.formatDateLocal(today); // YYYY-MM-DD format
         
         const todayElement = document.querySelector(`.calendar-day[data-date="${todayString}"]`);
         if (!todayElement) return;

@@ -1483,17 +1483,34 @@ async def manager_calendar_api_data(
         logger.info("Converting shifts to API format")
         shifts_data = []
         for s in calendar_data.shifts:
-                        shifts_data.append({
+            # Получаем часовой пояс объекта
+            object_timezone = s.timezone if hasattr(s, 'timezone') and s.timezone else 'Europe/Moscow'
+            import pytz
+            tz = pytz.timezone(object_timezone)
+            
+            # Конвертируем время в локальное время объекта
+            def convert_to_local_time(utc_time):
+                if utc_time:
+                    # Если время уже имеет timezone info, конвертируем
+                    if utc_time.tzinfo:
+                        return utc_time.astimezone(tz).replace(tzinfo=None)
+                    else:
+                        # Если время naive, считаем его UTC и конвертируем
+                        utc_aware = pytz.UTC.localize(utc_time)
+                        return utc_aware.astimezone(tz).replace(tzinfo=None)
+                return None
+            
+            shifts_data.append({
                 "id": s.id,
                 "user_id": s.user_id,
                 "user_name": s.user_name,
                 "object_id": s.object_id,
                 "object_name": s.object_name,
                 "time_slot_id": s.time_slot_id,
-                "start_time": s.start_time.isoformat() if s.start_time else None,
-                "end_time": s.end_time.isoformat() if s.end_time else None,
-                "planned_start": s.planned_start.isoformat() if s.planned_start else None,
-                "planned_end": s.planned_end.isoformat() if s.planned_end else None,
+                "start_time": convert_to_local_time(s.start_time).isoformat() if s.start_time else None,
+                "end_time": convert_to_local_time(s.end_time).isoformat() if s.end_time else None,
+                "planned_start": convert_to_local_time(s.planned_start).isoformat() if s.planned_start else None,
+                "planned_end": convert_to_local_time(s.planned_end).isoformat() if s.planned_end else None,
                 "shift_type": s.shift_type.value,
                 "status": s.status.value,
                 "hourly_rate": s.hourly_rate,
@@ -3150,6 +3167,28 @@ async def manager_shift_detail(
                 # Проверяем доступ к объекту
                 if shift.object_id not in accessible_object_ids:
                     raise HTTPException(status_code=403, detail="Нет доступа к объекту")
+
+                # Безопасное форматирование времени с учётом часового пояса объекта
+                tz_name = 'Europe/Moscow'
+                try:
+                    if getattr(shift, 'object', None) and getattr(shift.object, 'timezone', None):
+                        tz_name = shift.object.timezone
+                except Exception:
+                    tz_name = 'Europe/Moscow'
+
+                def safe_format(dt):
+                    if not dt:
+                        return '-'
+                    try:
+                        return web_timezone_helper.format_datetime_with_timezone(dt, tz_name, '%Y-%m-%d %H:%M')
+                    except Exception:
+                        try:
+                            return dt.strftime('%Y-%m-%d %H:%M')
+                        except Exception:
+                            return str(dt)
+
+                # Приводим статус к строке (если Enum)
+                status_value = getattr(shift.status, 'value', shift.status)
                 
                 shift_data = {
                     'id': shift.id,
@@ -3158,9 +3197,9 @@ async def manager_shift_detail(
                     'object_name': shift.object.name if shift.object else 'Неизвестный объект',
                     'user_id': shift.user_id,
                     'user_name': f"{shift.user.first_name} {shift.user.last_name or ''}".strip() if shift.user else 'Неизвестный пользователь',
-                    'start_time': web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.start_time else '-',
-                    'end_time': web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.end_time else '-',
-                    'status': shift.status,
+                    'start_time': safe_format(shift.start_time),
+                    'end_time': safe_format(shift.end_time),
+                    'status': status_value,
                     'total_hours': shift.total_hours,
                     'total_payment': shift.total_payment,
                     'notes': shift.notes,
@@ -3182,7 +3221,7 @@ async def manager_shift_detail(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error loading manager shift detail: {e}")
+        logger.error(f"Error loading manager shift detail: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
 
 

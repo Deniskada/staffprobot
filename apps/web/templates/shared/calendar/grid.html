@@ -139,6 +139,16 @@ const calendarCache = {
     updateThreshold: 100 // Минимальный интервал между обновлениями (мс)
 };
 
+// Вспомогательные функции работы с датой без UTC-смещения
+function pad2(n) { return n.toString().padStart(2, '0'); }
+function formatDateLocal(d) {
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function parseDateLocal(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1);
+}
+
 // Calendar navigation
 function navigateCalendar(direction) {
     const currentDate = new Date('{{ current_date }}');
@@ -198,6 +208,8 @@ function filterByObject() {
 // Universal Calendar Integration
 function renderCalendarGrid(calendarData) {
     console.log('renderCalendarGrid called with data:', calendarData);
+    // Сохраняем ссылку на последние данные календаря для обновления при скролле
+    window._calendarDataRef = calendarData;
     
     if (!calendarData) {
         console.log('No calendar data provided');
@@ -299,7 +311,7 @@ function createCalendarGrid(calendarData) {
     let workingDate = new Date(firstMonday);
     
     while (workingDate <= lastSunday) {
-        const dateStr = workingDate.toISOString().split('T')[0];
+        const dateStr = formatDateLocal(workingDate);
         const dayNumber = workingDate.getDate();
         const workingMonth = workingDate.getMonth();
         const workingYear = workingDate.getFullYear();
@@ -312,7 +324,7 @@ function createCalendarGrid(calendarData) {
             }
         });
         
-        const isToday = dateStr === today.toISOString().split('T')[0];
+        const isToday = dateStr === formatDateLocal(today);
         
         const dayElement = createDayElement(dateStr, dayNumber, isOtherMonth, isToday);
         fragment.appendChild(dayElement);
@@ -339,7 +351,7 @@ function createDayElement(dateStr, day, isOtherMonth, isToday) {
     dayElement.setAttribute('data-day', day);
     
     // Добавляем сезонные классы
-    const date = new Date(dateStr);
+    const date = parseDateLocal(dateStr);
     const month = date.getMonth() + 1; // 1-12
     const monthName = getMonthName(month);
     const season = getSeason(month);
@@ -424,6 +436,10 @@ function updateCalendarDisplay(calendarData) {
     console.log('calendarData:', calendarData);
     console.log('calendarData type:', typeof calendarData);
     try {
+        if (window._isUpdatingCalendarDisplay) {
+            return;
+        }
+        window._isUpdatingCalendarDisplay = true;
         console.log('Updating calendar display with:', calendarData);
         console.log('timeslotsByDate keys:', Object.keys(calendarData.timeslotsByDate || {}));
         console.log('shiftsByDate keys:', Object.keys(calendarData.shiftsByDate || {}));
@@ -452,7 +468,7 @@ function updateCalendarDisplay(calendarData) {
         
         // Получаем текущую дату для определения текущей недели
         const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
+        const todayStr = formatDateLocal(today);
         
         allDayElements.forEach(dayElement => {
             const dayRect = dayElement.getBoundingClientRect();
@@ -466,8 +482,8 @@ function updateCalendarDisplay(calendarData) {
             }
             
             // Проверяем, относится ли день к текущей неделе
-            const dayDate = new Date(date);
-            const todayDate = new Date(todayStr);
+            const dayDate = parseDateLocal(date);
+            const todayDate = parseDateLocal(todayStr);
             const daysDiff = Math.abs((dayDate - todayDate) / (1000 * 60 * 60 * 24));
             if (daysDiff <= 7) { // В пределах недели
                 currentWeekElements.push(dayElement);
@@ -487,7 +503,15 @@ function updateCalendarDisplay(calendarData) {
         console.log('updateCalendarDisplay completed successfully');
     } catch (error) {
         console.error('Error in updateCalendarDisplay:', error);
+    } finally {
+        window._isUpdatingCalendarDisplay = false;
     }
+}
+
+function computeDaySignature(timeslots, shifts) {
+    const ts = (timeslots || []).map(t => `${t.id}:${t.current_employees || 0}/${t.max_employees || 1}`).sort().join(',');
+    const sh = (shifts || []).map(s => String(s.id)).sort().join(',');
+    return `${ts}|${sh}`;
 }
 
 function updateDayDisplay(dayElement, date, calendarData) {
@@ -508,13 +532,19 @@ function updateDayDisplay(dayElement, date, calendarData) {
         return;
     }
     
-    // Очищаем существующий контент
-    dayContent.innerHTML = '';
-    console.log(`Cleared day content for ${date}`);
-    
     // Получаем данные для дня
     const timeslots = calendarData.timeslotsByDate[date] || [];
     const shifts = calendarData.shiftsByDate[date] || [];
+
+    // Пропускаем перерисовку, если содержимое не изменилось
+    const renderSig = computeDaySignature(timeslots, shifts);
+    if (dayElement.dataset.renderSig === renderSig) {
+        return;
+    }
+
+    // Очищаем существующий контент
+    dayContent.innerHTML = '';
+    console.log(`Cleared day content for ${date}`);
     
     console.log(`Found ${timeslots.length} timeslots and ${shifts.length} shifts for ${date}`);
     console.log(`timeslotsByDate keys:`, Object.keys(calendarData.timeslotsByDate || {}));
@@ -558,10 +588,8 @@ function updateDayDisplay(dayElement, date, calendarData) {
         }
     });
     
-    // Временно отключаем обновление кэша для отладки
-    // calendarCache.dayElements.set(cacheKey, true);
-    // calendarCache.lastUpdateTime = now;
-    // dayElement.dataset.lastUpdate = now;
+    // Сохраняем сигнатуру рендера для предотвращения мерцаний
+    dayElement.dataset.renderSig = renderSig;
 }
 
 function createTimeslotElement(timeslot) {
@@ -698,7 +726,7 @@ function getVisibleMonthFromScroll() {
     
     if (closestDay) {
         const dateStr = closestDay.dataset.date;
-        const date = new Date(dateStr);
+        const date = parseDateLocal(dateStr);
         return { year: date.getFullYear(), month: date.getMonth() + 1 };
     }
     
@@ -821,7 +849,7 @@ function scrollToCurrentDate() {
     if (!scrollableContainer) return;
     
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = formatDateLocal(today);
     
     // Находим элемент с текущей датой
     const todayElement = document.querySelector(`.calendar-day[data-date="${todayStr}"]`);
@@ -855,7 +883,7 @@ function scrollToSelectedMonth() {
     
     // Находим первый день выбранного месяца
     const selectedMonthFirstDay = new Date(currentYear, currentMonth - 1, 1);
-    const selectedMonthStr = selectedMonthFirstDay.toISOString().split('T')[0];
+    const selectedMonthStr = formatDateLocal(selectedMonthFirstDay);
     
     // Находим элемент с первым днем выбранного месяца
     const monthElement = document.querySelector(`.calendar-day[data-date="${selectedMonthStr}"]`);
@@ -1025,6 +1053,15 @@ function initScrollTracking() {
                 clearTimeout(scrollTimeout);
                 scrollTimeout = setTimeout(() => {
                     updateMonthDisplayFromScroll();
+                    // Подгружаем контент для видимых дней при скролле с троттлингом
+                    if (window._calendarDataRef && !window._updateCalendarScheduled) {
+                        window._updateCalendarScheduled = true;
+                        requestAnimationFrame(() => {
+                            try { updateCalendarDisplay(window._calendarDataRef); } finally {
+                                window._updateCalendarScheduled = false;
+                            }
+                        });
+                    }
                     isScrolling = false;
                 }, 100); // Уменьшена задержка для лучшей отзывчивости
             });
@@ -1082,7 +1119,8 @@ function showShiftDetails(shiftId) {
         const scheduleId = shiftId.toString().replace('schedule_', '');
         window.location.href = `/manager/shifts/${scheduleId}?shift_type=schedule`;
     } else {
-        window.location.href = `/manager/shifts/${shiftId}`;
+        // Явно указываем тип shift для реальных (активных/завершённых) смен
+        window.location.href = `/manager/shifts/${shiftId}?shift_type=shift`;
     }
 }
 

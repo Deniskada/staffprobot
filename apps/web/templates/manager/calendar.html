@@ -47,7 +47,7 @@
                         const scheduleId = shiftId.toString().replace('schedule_', '');
                         window.location.href = `/manager/shifts/${scheduleId}?shift_type=schedule`;
                     } else {
-                        window.location.href = `/manager/shifts/${shiftId}`;
+                        window.location.href = `/manager/shifts/${shiftId}?shift_type=shift`;
                     }
                 },
                 onTimeslotClick: function(timeslotId) {

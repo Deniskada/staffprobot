@@ -91,14 +91,14 @@ class CalendarFilterService:
             CalendarData с тайм-слотами и сменами
         """
         try:
-            # Проверяем кэш
-            cache_key = self._generate_cache_key(
-                user_telegram_id, user_role, date_range_start, date_range_end, object_filter
-            )
-            cached_data = self._get_from_cache(cache_key)
-            if cached_data:
-                logger.debug(f"Cache hit for user {user_telegram_id}")
-                return cached_data
+            # Временно отключаем кэш для отладки
+            # cache_key = self._generate_cache_key(
+            #     user_telegram_id, user_role, date_range_start, date_range_end, object_filter
+            # )
+            # cached_data = self._get_from_cache(cache_key)
+            # if cached_data:
+            #     logger.debug(f"Cache hit for user {user_telegram_id}")
+            #     return cached_data
             
             logger.info(f"Getting calendar data for user {user_telegram_id}, role {user_role}, period {date_range_start} to {date_range_end}")
             
@@ -108,6 +108,8 @@ class CalendarFilterService:
             )
             
             logger.info(f"CalendarFilterService: Found {len(accessible_objects)} accessible objects for user {user_telegram_id}, role {user_role}")
+            for obj in accessible_objects:
+                logger.info(f"  - Object: {obj['name']} (ID: {obj['id']})")
             
             if not accessible_objects:
                 logger.warning(f"No accessible objects for user {user_telegram_id}")
@@ -158,8 +160,8 @@ class CalendarFilterService:
                 accessible_objects=accessible_objects
             )
             
-            # Сохраняем в кэш
-            self._set_cache(cache_key, result, ttl_minutes=5)
+            # Временно отключаем сохранение в кэш для отладки
+            # self._set_cache(cache_key, result, ttl_minutes=5)
             
             return result
             
@@ -183,6 +185,7 @@ class CalendarFilterService:
     ) -> List[CalendarTimeslot]:
         """Получить тайм-слоты для объектов."""
         try:
+            logger.info(f"_get_timeslots called with object_ids={object_ids}, date_range={date_range_start} to {date_range_end}")
             # Создаем словарь объектов для быстрого доступа
             objects_map = {obj['id']: obj for obj in accessible_objects}
             
@@ -202,6 +205,8 @@ class CalendarFilterService:
             timeslots = timeslots_result.scalars().all()
             
             logger.info(f"CalendarFilterService: Found {len(timeslots)} timeslots in database for objects {object_ids}")
+            for slot in timeslots:
+                logger.info(f"  - Timeslot {slot.id}: {slot.slot_date} {slot.start_time}-{slot.end_time} (object {slot.object_id})")
             
             calendar_timeslots = []
             for slot in timeslots:
