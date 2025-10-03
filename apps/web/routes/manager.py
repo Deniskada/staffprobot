@@ -2730,6 +2730,7 @@ async def plan_shift_manager(
             
             # Проверяем пересечение смен сотрудника
             from domain.entities.shift import Shift
+            import pytz
             
             # Получаем временную зону объекта для корректного сравнения времени
             object_timezone = timeslot.object.timezone if timeslot.object and timeslot.object.timezone else 'Europe/Moscow'
