@@ -2559,99 +2559,10 @@ async def manager_calendar_api_employees(
         raise HTTPException(status_code=500, detail="Ошибка получения сотрудников")
 
 
-@router.post("/api/shifts/plan/test")
-async def manager_plan_shift_test():
-    """Простой тестовый роутер"""
-    logger.info("=== TEST ROUTE CALLED ===")
-    return {"status": "success", "message": "Test route works!"}
+# Удален тестовый endpoint
 
 
-@router.post("/api/shifts/plan")
-async def manager_plan_shift(
-    request: Request,
-    current_user: dict = Depends(require_manager_or_owner)
-):
-    """API для создания запланированной смены"""
-    logger.info("=== MANAGER PLAN SHIFT API CALLED ===")
-    try:
-        if isinstance(current_user, RedirectResponse):
-            logger.error("User not authenticated")
-            raise HTTPException(status_code=401, detail="Необходима авторизация")
-        
-        data = await request.json()
-        logger.info(f"Received data: {data}")
-        
-        employee_id = data.get('employee_id')
-        timeslot_id = data.get('timeslot_id')
-        planned_start = data.get('planned_start')
-        planned_end = data.get('planned_end')
-        is_planned = data.get('is_planned', True)
-        
-        logger.info(f"Parsed data: employee_id={employee_id}, timeslot_id={timeslot_id}, planned_start={planned_start}, planned_end={planned_end}")
-        
-        if not all([employee_id, timeslot_id, planned_start, planned_end]):
-            logger.error("Missing required fields")
-            raise HTTPException(status_code=400, detail="Не все обязательные поля заполнены")
-        
-        async with get_async_session() as db:
-            user_id = await get_user_id_from_current_user(current_user, db)
-            if not user_id:
-                raise HTTPException(status_code=401, detail="Пользователь не найден")
-            
-            logger.info(f"User ID: {user_id}")
-            
-            # Проверяем, что тайм-слот существует
-            timeslot_query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
-            timeslot_result = await db.execute(timeslot_query)
-            timeslot = timeslot_result.scalar_one_or_none()
-            
-            if not timeslot:
-                logger.error(f"Timeslot {timeslot_id} not found")
-                raise HTTPException(status_code=404, detail="Тайм-слот не найден")
-            
-            logger.info(f"Timeslot found: {timeslot.id}, object_id: {timeslot.object_id}")
-            
-            # Проверяем права доступа к объекту
-            permission_service = ManagerPermissionService(db)
-            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            accessible_object_ids = [obj.id for obj in accessible_objects]
-            
-            logger.info(f"Accessible objects: {accessible_object_ids}")
-            
-            if timeslot.object_id not in accessible_object_ids:
-                logger.error(f"User {user_id} has no access to object {timeslot.object_id}")
-                raise HTTPException(status_code=403, detail="Нет доступа к объекту")
-            
-            # Проверяем, что сотрудник существует
-            employee_query = select(User).where(User.id == employee_id)
-            employee_result = await db.execute(employee_query)
-            employee = employee_result.scalar_one_or_none()
-            
-            if not employee:
-                logger.error(f"Employee {employee_id} not found")
-                raise HTTPException(status_code=404, detail="Сотрудник не найден")
-            
-            logger.info(f"Employee found: {employee.id}, name: {employee.name or employee.username}")
-            
-            # Пока возвращаем успех без создания смены
-            logger.info("=== ALL CHECKS PASSED ===")
-            return {
-                "status": "success",
-                "message": "Все проверки пройдены",
-                "data": {
-                    "employee_id": employee_id,
-                    "employee_name": employee.name or employee.username,
-                    "timeslot_id": timeslot_id,
-                    "planned_start": planned_start,
-                    "planned_end": planned_end
-                }
-            }
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating planned shift: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Ошибка создания запланированной смены")
+# Удален проблемный endpoint - используем рабочий /api/calendar/plan-shift
 
 
 @router.get("/api/employees/for-object/{object_id}")
