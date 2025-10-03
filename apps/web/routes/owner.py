@@ -1924,8 +1924,13 @@ async def owner_calendar_api_data(
                 raise HTTPException(status_code=400, detail="Неверный формат ID объектов")
         
         # Получаем роль пользователя
-        user_role = current_user.get("role", "owner")
-        user_telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        if isinstance(current_user, dict):
+            user_role = current_user.get("role", "owner")
+            user_telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        else:
+            # current_user - это объект User
+            user_role = getattr(current_user, "role", "owner")
+            user_telegram_id = getattr(current_user, "telegram_id", None)
         
         if not user_telegram_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")

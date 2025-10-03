@@ -227,7 +227,12 @@ function renderCalendarGrid(calendarData) {
         
         console.log('About to call updateCalendarDisplay');
         // Обновляем отображение смен и тайм-слотов
-        updateCalendarDisplay(calendarData);
+        console.log('updateCalendarDisplay function exists:', typeof updateCalendarDisplay);
+        if (typeof updateCalendarDisplay === 'function') {
+            updateCalendarDisplay(calendarData);
+        } else {
+            console.error('updateCalendarDisplay function not found!');
+        }
         
         console.log('renderCalendarGrid completed');
     } catch (error) {
@@ -243,6 +248,8 @@ function createCalendarGrid(calendarData) {
         console.error('Calendar grid not found');
         return;
     }
+    
+    console.log('Calendar grid found:', calendarGrid);
     
     // Удаляем существующие дни (оставляем только заголовки)
     const existingDays = calendarGrid.querySelectorAll('.calendar-day');
@@ -334,6 +341,10 @@ function createCalendarGrid(calendarData) {
     
     // Добавляем все дни одним операцией
     calendarGrid.appendChild(fragment);
+    
+    // Проверяем, сколько дней создано
+    const createdDays = calendarGrid.querySelectorAll('.calendar-day');
+    console.log(`Created ${createdDays.length} calendar days`);
     
     // Инициализируем drag&drop для календарных дней
     initializeDragAndDrop();
@@ -437,9 +448,16 @@ function updateCalendarDisplay(calendarData) {
     console.log('calendarData type:', typeof calendarData);
     try {
         if (window._isUpdatingCalendarDisplay) {
+            console.log('Already updating calendar display, skipping');
             return;
         }
         window._isUpdatingCalendarDisplay = true;
+        console.log('Starting calendar display update');
+        
+        // Сохраняем данные календаря глобально
+        window.calendarData = calendarData;
+        console.log('Calendar data saved to window.calendarData');
+        
         console.log('Updating calendar display with:', calendarData);
         console.log('timeslotsByDate keys:', Object.keys(calendarData.timeslotsByDate || {}));
         console.log('shiftsByDate keys:', Object.keys(calendarData.shiftsByDate || {}));
@@ -663,8 +681,9 @@ function createShiftElement(shift) {
     return div;
 }
 
-// Делаем функцию доступной глобально
+// Делаем функции доступными глобально
 window.renderCalendarGrid = renderCalendarGrid;
+window.updateCalendarDisplay = updateCalendarDisplay;
 
 // Month Selector JavaScript
 let currentYear = new Date().getFullYear();
