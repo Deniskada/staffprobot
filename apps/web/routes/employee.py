@@ -1742,6 +1742,23 @@ async def employee_calendar_api_data(
         
         shifts_data = []
         for s in calendar_data.shifts:
+            # Получаем часовой пояс объекта
+            object_timezone = s.timezone if hasattr(s, 'timezone') and s.timezone else 'Europe/Moscow'
+            import pytz
+            tz = pytz.timezone(object_timezone)
+            
+            # Конвертируем время в локальное время объекта
+            def convert_to_local_time(utc_time):
+                if utc_time:
+                    # Если время уже имеет timezone info, конвертируем
+                    if utc_time.tzinfo:
+                        return utc_time.astimezone(tz).replace(tzinfo=None)
+                    else:
+                        # Если время naive, считаем его UTC и конвертируем
+                        utc_aware = pytz.UTC.localize(utc_time)
+                        return utc_aware.astimezone(tz).replace(tzinfo=None)
+                return None
+            
             shifts_data.append({
                 "id": s.id,
                 "user_id": s.user_id,
@@ -1749,10 +1766,10 @@ async def employee_calendar_api_data(
                 "object_id": s.object_id,
                 "object_name": s.object_name,
                 "time_slot_id": s.time_slot_id,
-                "start_time": s.start_time.isoformat() if s.start_time else None,
-                "end_time": s.end_time.isoformat() if s.end_time else None,
-                "planned_start": s.planned_start.isoformat() if s.planned_start else None,
-                "planned_end": s.planned_end.isoformat() if s.planned_end else None,
+                "start_time": convert_to_local_time(s.start_time).isoformat() if s.start_time else None,
+                "end_time": convert_to_local_time(s.end_time).isoformat() if s.end_time else None,
+                "planned_start": convert_to_local_time(s.planned_start).isoformat() if s.planned_start else None,
+                "planned_end": convert_to_local_time(s.planned_end).isoformat() if s.planned_end else None,
                 "shift_type": s.shift_type.value,
                 "status": s.status.value,
                 "hourly_rate": s.hourly_rate,
