@@ -150,10 +150,27 @@ class ObjectAccessService:
     async def _get_employee_objects(self, user_id: int) -> List[Dict[str, Any]]:
         """Получить объекты доступные для сотрудника/соискателя."""
         try:
-            # Для сотрудников показываем только объекты, доступные для заявок
+            # Для сотрудников показываем только объекты, где у них есть активный контракт
+            from domain.entities.contract import Contract
+            
+            contracts_query = select(Contract).where(
+                and_(
+                    Contract.employee_id == user_id,
+                    Contract.status == "active"
+                )
+            )
+            contracts_result = await self.db.execute(contracts_query)
+            contracts = contracts_result.scalars().all()
+            
+            if not contracts:
+                logger.info(f"No active contracts found for employee {user_id}")
+                return []
+            
+            object_ids = [contract.object_id for contract in contracts]
+            
             objects_query = select(Object).where(
                 and_(
-                    Object.available_for_applicants == True,
+                    Object.id.in_(object_ids),
                     Object.is_active == True
                 )
             ).order_by(Object.name)
