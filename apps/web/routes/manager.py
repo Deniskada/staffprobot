@@ -2728,14 +2728,10 @@ async def plan_shift_manager(
             if not has_object_access:
                 raise HTTPException(status_code=400, detail=f"У сотрудника нет доступа к объекту ID {object_id}")
             
-            # Создаем запланированную смену
-            from domain.entities.shift_schedule import ShiftSchedule
-            from datetime import datetime, time, date
+            # Проверяем пересечение смен сотрудника
+            from domain.entities.shift import Shift
             
-            # Создаем datetime объекты для planned_start и planned_end
-            import pytz
-            
-            # Получаем временную зону объекта
+            # Получаем временную зону объекта для корректного сравнения времени
             object_timezone = timeslot.object.timezone if timeslot.object and timeslot.object.timezone else 'Europe/Moscow'
             tz = pytz.timezone(object_timezone)
             
@@ -2743,9 +2739,60 @@ async def plan_shift_manager(
             slot_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.start_time)
             end_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.end_time)
             
-            # Локализуем в временную зону объекта, затем конвертируем в UTC для сохранения
-            slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
-            end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+            # Локализуем в временную зону объекта, затем конвертируем в UTC для сравнения
+            slot_datetime_utc = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+            end_datetime_utc = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+            
+            # Проверяем пересечение с активными сменами
+            active_shifts_query = select(Shift).where(
+                Shift.user_id == employee_id,
+                Shift.status == "active",
+                Shift.start_time < end_datetime_utc,
+                Shift.end_time > slot_datetime_utc
+            )
+            active_shifts = (await db.execute(active_shifts_query)).scalars().all()
+            
+            if active_shifts:
+                shift_times = []
+                for shift in active_shifts:
+                    # Конвертируем обратно в локальное время для отображения
+                    local_start = pytz.UTC.localize(shift.start_time).astimezone(tz).strftime('%H:%M')
+                    local_end = pytz.UTC.localize(shift.end_time).astimezone(tz).strftime('%H:%M')
+                    shift_times.append(f"{local_start}-{local_end}")
+                
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"У сотрудника уже есть активная смена в это время: {', '.join(shift_times)}"
+                )
+            
+            # Проверяем пересечение с запланированными сменами
+            planned_shifts_query = select(ShiftSchedule).where(
+                ShiftSchedule.user_id == employee_id,
+                ShiftSchedule.status == "planned",
+                ShiftSchedule.planned_start < end_datetime_utc,
+                ShiftSchedule.planned_end > slot_datetime_utc
+            )
+            planned_shifts = (await db.execute(planned_shifts_query)).scalars().all()
+            
+            if planned_shifts:
+                shift_times = []
+                for shift in planned_shifts:
+                    # Конвертируем обратно в локальное время для отображения
+                    local_start = pytz.UTC.localize(shift.planned_start).astimezone(tz).strftime('%H:%M')
+                    local_end = pytz.UTC.localize(shift.planned_end).astimezone(tz).strftime('%H:%M')
+                    shift_times.append(f"{local_start}-{local_end}")
+                
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"У сотрудника уже есть запланированная смена в это время: {', '.join(shift_times)}"
+                )
+            
+            # Создаем запланированную смену
+            from domain.entities.shift_schedule import ShiftSchedule
+            
+            # Используем уже вычисленные времена в UTC
+            slot_datetime = slot_datetime_utc
+            end_datetime = end_datetime_utc
             
             shift_schedule = ShiftSchedule(
                 user_id=int(employee_id),
