@@ -152,6 +152,7 @@ class ObjectAccessService:
         try:
             # Для сотрудников показываем только объекты, где у них есть активный контракт
             from domain.entities.contract import Contract
+            import json
             
             contracts_query = select(Contract).where(
                 and_(
@@ -166,7 +167,25 @@ class ObjectAccessService:
                 logger.info(f"No active contracts found for employee {user_id}")
                 return []
             
-            object_ids = [contract.object_id for contract in contracts]
+            # Собираем все object_id из allowed_objects (JSON)
+            object_ids = []
+            for contract in contracts:
+                if contract.allowed_objects:
+                    try:
+                        allowed_objects = json.loads(contract.allowed_objects) if isinstance(contract.allowed_objects, str) else contract.allowed_objects
+                        if isinstance(allowed_objects, list):
+                            object_ids.extend(allowed_objects)
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(f"Error parsing allowed_objects for contract {contract.id}: {e}")
+                        continue
+            
+            if not object_ids:
+                logger.info(f"No allowed objects found in contracts for employee {user_id}")
+                return []
+            
+            # Убираем дубликаты
+            object_ids = list(set(object_ids))
+            logger.info(f"Employee {user_id} has access to objects: {object_ids}")
             
             objects_query = select(Object).where(
                 and_(
