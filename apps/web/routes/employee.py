@@ -1075,11 +1075,16 @@ async def employee_api_employees(
         if isinstance(current_user, RedirectResponse):
             raise HTTPException(status_code=401, detail="Необходима авторизация")
 
-        user_id = await get_user_id_from_current_user(current_user, db)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Пользователь не найден")
-
-        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        # current_user теперь объект User, а не словарь
+        if isinstance(current_user, dict):
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        else:
+            # current_user - это объект User
+            user = current_user
+        
         if not user:
             return []
 
