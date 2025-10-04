@@ -123,6 +123,10 @@ app.mount("/static", StaticFiles(directory="apps/web/static"), name="static")
 # Настройка шаблонов
 templates = Jinja2Templates(directory="apps/web/templates")
 
+# Регистрация Jinja2 фильтров
+from apps.web.utils.jinja_filters import register_filters
+register_filters(app)
+
 # Инициализация сервисов
 auth_service = AuthService()
 user_manager = UserManager()

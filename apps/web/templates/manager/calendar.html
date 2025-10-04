@@ -21,9 +21,9 @@
 
 {% block extra_js %}
 <!-- Calendar Panels -->
-<script src="{{ url_for('static', path='js/shared/calendar_panels.js') }}?v=20251004"></script>
+<script src="{{ 'js/shared/calendar_panels.js' | static_version }}"></script>
 <!-- Universal Calendar Integration -->
-<script src="{{ url_for('static', path='js/shared/universal_calendar.js') }}?v=20251004"></script>
+<script src="{{ 'js/shared/universal_calendar.js' | static_version }}"></script>
 <script>
     // Инициализация универсального календаря для управляющего
     document.addEventListener('DOMContentLoaded', function() {
