@@ -3,7 +3,7 @@
 """
 
 from typing import List, Optional
-from datetime import date, time, datetime
+from datetime import date, time, datetime, timedelta
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -179,28 +179,64 @@ async def manager_timeslots_create(
                 logger.info(f"Created single timeslot {timeslot.id} for object {object_id} by manager {telegram_id}")
                 
             elif creation_mode == "template":
-                # Создание по шаблону
-                template_id = int(form_data.get("template_id"))
+                # Создание множественных тайм-слотов
                 start_date = datetime.strptime(form_data.get("start_date"), "%Y-%m-%d").date()
                 end_date = datetime.strptime(form_data.get("end_date"), "%Y-%m-%d").date()
+                start_time = form_data.get("start_time_multi")
+                end_time = form_data.get("end_time_multi")
+                weekdays = form_data.getlist("weekdays")  # Получаем список выбранных дней недели
+                alternation_type = form_data.get("alternation_type", "daily")
                 
-                hourly_rate_override = None
-                if form_data.get("hourly_rate_override"):
-                    hourly_rate_override = float(form_data.get("hourly_rate_override"))
+                # Валидация
+                if not weekdays:
+                    raise HTTPException(status_code=400, detail="Выберите хотя бы один день недели")
                 
-                result = await template_service.apply_template_to_objects_for_manager(
-                    template_id=template_id,
-                    start_date=start_date,
-                    end_date=end_date,
-                    object_ids=[object_id],
-                    telegram_id=telegram_id,
-                    hourly_rate_override=hourly_rate_override
-                )
+                if not start_time or not end_time:
+                    raise HTTPException(status_code=400, detail="Укажите время начала и окончания")
                 
-                if not result.get("success"):
-                    raise HTTPException(status_code=400, detail=result.get("error", "Ошибка применения шаблона"))
+                # Получаем ставку (используем ставку объекта если не указана)
+                hourly_rate = obj.hourly_rate
+                if form_data.get("hourly_rate_multi"):
+                    hourly_rate = float(form_data.get("hourly_rate_multi"))
                 
-                logger.info(f"Applied template {template_id} to object {object_id} by manager {telegram_id}")
+                max_employees = int(form_data.get("max_employees_multi", 1))
+                notes = form_data.get("notes_multi", "")
+                
+                # Создаем тайм-слоты для выбранных дней недели в указанном диапазоне дат
+                created_count = 0
+                current_date = start_date
+                
+                while current_date <= end_date:
+                    # Проверяем, нужно ли создавать тайм-слот для этого дня
+                    weekday = current_date.weekday()  # 0=понедельник, 6=воскресенье
+                    weekday_str = str(weekday)
+                    
+                    # Преобразуем воскресенье (6) в 0 для соответствия с формой
+                    if weekday == 6:
+                        weekday_str = "0"
+                    
+                    if weekday_str in weekdays:
+                        # Создаем тайм-слот для этого дня
+                        timeslot_data = {
+                            "slot_date": current_date,
+                            "start_time": start_time,
+                            "end_time": end_time,
+                            "hourly_rate": hourly_rate,
+                            "max_employees": max_employees,
+                            "notes": notes
+                        }
+                        
+                        timeslot = await timeslot_service.create_timeslot_for_manager(timeslot_data, object_id, telegram_id)
+                        if timeslot:
+                            created_count += 1
+                    
+                    # Переходим к следующему дню
+                    current_date += timedelta(days=1)
+                
+                if created_count == 0:
+                    raise HTTPException(status_code=400, detail="Не удалось создать ни одного тайм-слота")
+                
+                logger.info(f"Created {created_count} timeslots for object {object_id} by manager {telegram_id}")
             
             return RedirectResponse(
                 url=f"/manager/timeslots/object/{object_id}",

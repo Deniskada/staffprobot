@@ -70,7 +70,7 @@
                                     
                                     <input type="radio" class="btn-check" name="creation_mode" id="mode-template" value="template">
                                     <label class="btn btn-outline-primary" for="mode-template">
-                                        <i class="fas fa-calendar-week"></i> По шаблону
+                                        <i class="fas fa-calendar-week"></i> Много тайм-слотов
                                     </label>
                                 </div>
                             </div>
@@ -97,6 +97,7 @@
                                     <label for="hourly_rate" class="form-label">Ставка за час (₽) <span class="text-danger">*</span></label>
                                     <input type="number" class="form-control" id="hourly_rate" name="hourly_rate" 
                                            value="{{ object.hourly_rate }}" min="0" step="0.01" required>
+                                    <div class="form-text">Оставьте пустым для использования ставки объекта</div>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="max_employees" class="form-label">Максимум сотрудников</label>
@@ -113,27 +114,28 @@
                             </div>
                         </div>
                         
-                        <!-- Режим: По шаблону -->
+                        <!-- Режим: Много тайм-слотов -->
                         <div id="template-mode" class="creation-mode" style="display: none;">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="template_id" class="form-label">Шаблон планирования <span class="text-danger">*</span></label>
-                                    <select class="form-select" id="template_id" name="template_id">
-                                        <option value="">Выберите шаблон</option>
-                                        {% for template in templates %}
-                                        <option value="{{ template.id }}" 
-                                                data-start-time="{{ format_time(template.start_time) }}"
-                                                data-end-time="{{ format_time(template.end_time) }}"
-                                                data-hourly-rate="{{ template.hourly_rate }}">
-                                            {{ template.name }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
+                                    <label for="start_time_multi" class="form-label">Время начала <span class="text-danger">*</span></label>
+                                    <input type="time" class="form-control" id="start_time_multi" name="start_time_multi" required>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label for="hourly_rate_override" class="form-label">Ставка за час (₽) - переопределить</label>
-                                    <input type="number" class="form-control" id="hourly_rate_override" name="hourly_rate_override" 
-                                           min="0" step="0.01" placeholder="Оставьте пустым для использования ставки из шаблона">
+                                    <label for="end_time_multi" class="form-label">Время окончания <span class="text-danger">*</span></label>
+                                    <input type="time" class="form-control" id="end_time_multi" name="end_time_multi" required>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="hourly_rate_multi" class="form-label">Ставка за час (₽)</label>
+                                    <input type="number" class="form-control" id="hourly_rate_multi" name="hourly_rate_multi" 
+                                           min="0" step="0.01" placeholder="Оставьте пустым для использования ставки объекта">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="max_employees_multi" class="form-label">Максимум сотрудников</label>
+                                    <input type="number" class="form-control" id="max_employees_multi" name="max_employees_multi" 
+                                           value="1" min="1" max="10">
                                 </div>
                             </div>
                             <div class="row">
@@ -147,22 +149,49 @@
                                 </div>
                             </div>
                             
-                            <!-- Информация о шаблоне -->
-                            <div id="template-info" class="alert alert-info" style="display: none;">
-                                <h6 class="alert-heading">Информация о шаблоне</h6>
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <small class="text-muted">Время:</small>
-                                        <div id="template-time" class="fw-bold">-</div>
+                            <!-- Выбор дней недели -->
+                            <div class="row mb-3">
+                                <div class="col-12">
+                                    <label class="form-label">Дни недели <span class="text-danger">*</span></label>
+                                    <div class="btn-group w-100" role="group">
+                                        <input type="checkbox" class="btn-check" id="day-monday" name="weekdays" value="1">
+                                        <label class="btn btn-outline-primary" for="day-monday">Пн</label>
+                                        
+                                        <input type="checkbox" class="btn-check" id="day-tuesday" name="weekdays" value="2">
+                                        <label class="btn btn-outline-primary" for="day-tuesday">Вт</label>
+                                        
+                                        <input type="checkbox" class="btn-check" id="day-wednesday" name="weekdays" value="3">
+                                        <label class="btn btn-outline-primary" for="day-wednesday">Ср</label>
+                                        
+                                        <input type="checkbox" class="btn-check" id="day-thursday" name="weekdays" value="4">
+                                        <label class="btn btn-outline-primary" for="day-thursday">Чт</label>
+                                        
+                                        <input type="checkbox" class="btn-check" id="day-friday" name="weekdays" value="5">
+                                        <label class="btn btn-outline-primary" for="day-friday">Пт</label>
+                                        
+                                        <input type="checkbox" class="btn-check" id="day-saturday" name="weekdays" value="6">
+                                        <label class="btn btn-outline-primary" for="day-saturday">Сб</label>
+                                        
+                                        <input type="checkbox" class="btn-check" id="day-sunday" name="weekdays" value="0">
+                                        <label class="btn btn-outline-primary" for="day-sunday">Вс</label>
                                     </div>
-                                    <div class="col-md-4">
-                                        <small class="text-muted">Ставка:</small>
-                                        <div id="template-rate" class="fw-bold">-</div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <small class="text-muted">Повторение:</small>
-                                        <div id="template-repeat" class="fw-bold">-</div>
-                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Чередование дней -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="alternation_type" class="form-label">Чередование</label>
+                                    <select class="form-select" id="alternation_type" name="alternation_type">
+                                        <option value="daily">Ежедневно</option>
+                                        <option value="weekly">Еженедельно</option>
+                                        <option value="biweekly">Раз в две недели</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="notes_multi" class="form-label">Примечания</label>
+                                    <textarea class="form-control" id="notes_multi" name="notes_multi" rows="2" 
+                                              placeholder="Дополнительная информация..."></textarea>
                                 </div>
                             </div>
                         </div>
@@ -193,8 +222,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const modeTemplate = document.getElementById('mode-template');
     const singleMode = document.getElementById('single-mode');
     const templateMode = document.getElementById('template-mode');
-    const templateSelect = document.getElementById('template_id');
-    const templateInfo = document.getElementById('template-info');
+    const multiStartTime = document.getElementById('start_time_multi');
+    const multiEndTime = document.getElementById('end_time_multi');
+    const multiHourlyRate = document.getElementById('hourly_rate_multi');
+    const multiMaxEmployees = document.getElementById('max_employees_multi');
 
     const singleDateInput = document.getElementById('slot_date');
     const singleStartInput = document.getElementById('start_time');
@@ -205,11 +236,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function setTemplateFieldsRequired(isRequired) {
         if (isRequired) {
-            templateSelect.setAttribute('required', 'required');
+            multiStartTime.setAttribute('required', 'required');
+            multiEndTime.setAttribute('required', 'required');
             templateStartDate.setAttribute('required', 'required');
             templateEndDate.setAttribute('required', 'required');
         } else {
-            templateSelect.removeAttribute('required');
+            multiStartTime.removeAttribute('required');
+            multiEndTime.removeAttribute('required');
             templateStartDate.removeAttribute('required');
             templateEndDate.removeAttribute('required');
         }
@@ -245,21 +278,21 @@ document.addEventListener('DOMContentLoaded', function() {
     modeSingle.addEventListener('change', toggleModes);
     modeTemplate.addEventListener('change', toggleModes);
     
-    // Обработка выбора шаблона
-    templateSelect.addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        if (selectedOption.value) {
-            const startTime = selectedOption.dataset.startTime;
-            const endTime = selectedOption.dataset.endTime;
-            const hourlyRate = selectedOption.dataset.hourlyRate;
-            
-            document.getElementById('template-time').textContent = `${startTime} - ${endTime}`;
-            document.getElementById('template-rate').textContent = `${hourlyRate} ₽/час`;
-            document.getElementById('template-repeat').textContent = 'Ежедневно';
-            
-            templateInfo.style.display = 'block';
-        } else {
-            templateInfo.style.display = 'none';
+    // Валидация выбора дней недели
+    function validateWeekdays() {
+        const weekdays = document.querySelectorAll('input[name="weekdays"]:checked');
+        if (weekdays.length === 0) {
+            alert('Выберите хотя бы один день недели');
+            return false;
+        }
+        return true;
+    }
+    
+    // Обработка отправки формы
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (modeTemplate.checked && !validateWeekdays()) {
+            e.preventDefault();
+            return false;
         }
     });
     
