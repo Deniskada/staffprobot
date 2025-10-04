@@ -95,9 +95,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Добавление middleware для обработки заголовков прокси
-from apps.web.middleware.proxy_middleware import ProxyMiddleware
-app.add_middleware(ProxyMiddleware)
+# Middleware для обработки заголовков прокси временно отключен
+# from apps.web.middleware.proxy_middleware import ProxyMiddleware
+# app.add_middleware(ProxyMiddleware)
 
 # Настройка для работы за HTTPS
 app.add_middleware(
