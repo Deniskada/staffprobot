@@ -313,8 +313,8 @@ function showTimeslotDetails(timeslotId) {
 
 function showDateDetails(date) {}
 
-// Initialize calendar panels for owner role
-const calendarPanels = new CalendarPanels('owner');
+// Initialize calendar panels for owner role (use global instance only)
+// Already initialized above as window.calendarPanels
 
 // Override universal calendar manager methods for drag&drop
 if (window.universalCalendar) {
