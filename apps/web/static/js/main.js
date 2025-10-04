@@ -205,35 +205,12 @@ const Modals = {
     }
 };
 
-// Утилиты для работы с календарем
+// Утилиты для работы с календарем (FullCalendar removed)
 const Calendar = {
-    // Инициализация FullCalendar
+    // FullCalendar functionality removed - using custom calendar
     init(elementId, options = {}) {
-        const calendarEl = document.getElementById(elementId);
-        if (!calendarEl) return null;
-        
-        const defaultOptions = {
-            initialView: 'dayGridMonth',
-            locale: 'ru',
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            },
-            buttonText: {
-                today: 'Сегодня',
-                month: 'Месяц',
-                week: 'Неделя',
-                day: 'День'
-            },
-            events: [],
-            eventClick: function(info) {
-                console.log('Event clicked:', info.event);
-            }
-        };
-        
-        const config = { ...defaultOptions, ...options };
-        return new FullCalendar.Calendar(calendarEl, config);
+        console.log('Calendar.init called but FullCalendar is not available');
+        return null;
     }
 };
 
