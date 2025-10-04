@@ -800,128 +800,128 @@ async def manager_employee_add(
                 logger.info(f"Creating new user {telegram_id}")
                 
                 # Создаем пользователя
-            from shared.services.role_service import RoleService
-            from apps.web.services.contract_service import ContractService
-            from datetime import datetime, date
+                from shared.services.role_service import RoleService
+                from apps.web.services.contract_service import ContractService
+                from datetime import datetime, date
             
-            # Обработка даты рождения
-            birth_date = None
-            if birth_date_str:
-                try:
-                    birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
-                except ValueError:
-                    birth_date = None
-            
-            # Обработка минимальной зарплаты
-            min_salary = None
-            if min_salary_str and min_salary_str.isdigit():
-                min_salary = int(min_salary_str)
-            
-            user = User(
-                telegram_id=telegram_id,
-                first_name=first_name,
-                last_name=last_name,
-                username=username,
-                phone=phone,
-                email=email if email else None,
-                birth_date=birth_date,
-                work_experience=work_experience if work_experience else None,
-                education=education if education else None,
-                skills=skills if skills else None,
-                about=about if about else None,
-                preferred_schedule=preferred_schedule if preferred_schedule else None,
-                min_salary=min_salary,
-                availability_notes=availability_notes if availability_notes else None,
-                role=role,
-                roles=[role],
-                is_active=is_active
-            )
-            
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
-            
-            # Добавляем роль
-            role_service = RoleService(db)
-            from domain.entities.user import UserRole
-            await role_service.add_role(user.id, UserRole(role))
-            
-            # Создаем договор (обязательно для сотрудников)
-            if contract_objects:
-                # Получаем доступные объекты для проверки владельца
-                permission_service = ManagerPermissionService(db)
-                accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+                # Обработка даты рождения
+                birth_date = None
+                if birth_date_str:
+                    try:
+                        birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
+                    except ValueError:
+                        birth_date = None
                 
-                if not accessible_objects:
-                    raise HTTPException(status_code=403, detail="Нет доступных объектов")
+                # Обработка минимальной зарплаты
+                min_salary = None
+                if min_salary_str and min_salary_str.isdigit():
+                    min_salary = int(min_salary_str)
                 
-                # Получаем владельца первого объекта
-                first_object = accessible_objects[0]
-                owner_id = first_object.owner_id
-                
-                # Парсим даты
-                start_date = None
-                end_date = None
-                if start_date_str:
-                    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-                if end_date_str:
-                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-                
-                # Создаем договор напрямую
-                from domain.entities.contract import Contract
-                
-                # Генерируем номер договора
-                contract_service = ContractService()
-                contract_number = await contract_service._generate_contract_number(owner_id)
-                
-                # Генерируем заголовок договора
-                title = f"Трудовой Договор с {first_name} {last_name}".strip()
-                
-                contract = Contract(
-                    contract_number=contract_number,
-                    employee_id=user.id,
-                    owner_id=owner_id,  # Используем владельца объекта, а не управляющего
-                    template_id=int(contract_template_id) if contract_template_id and contract_template_id.strip() else None,
-                    title=title,
-                    hourly_rate=hourly_rate,
-                    start_date=start_date,
-                    end_date=end_date,
-                    allowed_objects=[int(obj_id) for obj_id in contract_objects if obj_id and obj_id.strip()],
-                    is_active=True,
-                    status="active"
+                user = User(
+                    telegram_id=telegram_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    username=username,
+                    phone=phone,
+                    email=email if email else None,
+                    birth_date=birth_date,
+                    work_experience=work_experience if work_experience else None,
+                    education=education if education else None,
+                    skills=skills if skills else None,
+                    about=about if about else None,
+                    preferred_schedule=preferred_schedule if preferred_schedule else None,
+                    min_salary=min_salary,
+                    availability_notes=availability_notes if availability_notes else None,
+                    role=role,
+                    roles=[role],
+                    is_active=is_active
                 )
                 
-                db.add(contract)
+                db.add(user)
                 await db.commit()
-                await db.refresh(contract)
+                await db.refresh(user)
                 
-                # Обновляем роль пользователя на employee
-                contract_service = ContractService()
-                await contract_service._update_employee_role(db, user.id)
-                
-                # Создаем права управляющего на объекты если роль manager
-                if role == "manager":
+                # Добавляем роль
+                role_service = RoleService(db)
+                from domain.entities.user import UserRole
+                await role_service.add_role(user.id, UserRole(role))
+            
+                # Создаем договор (обязательно для сотрудников)
+                if contract_objects:
+                    # Получаем доступные объекты для проверки владельца
                     permission_service = ManagerPermissionService(db)
-                    for obj_id in contract_objects:
-                        await permission_service.create_permission(
-                            contract_id=contract.id,
-                            object_id=int(obj_id),
-                            permissions={
-                                "can_view": True,
-                                "can_edit": True,
-                                "can_delete": False,
-                                "can_manage_employees": True,
-                                "can_view_finances": True,
-                                "can_edit_rates": True,
-                                "can_edit_schedule": True
-                            }
-                        )
+                    accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+                    
+                    if not accessible_objects:
+                        raise HTTPException(status_code=403, detail="Нет доступных объектов")
+                    
+                    # Получаем владельца первого объекта
+                    first_object = accessible_objects[0]
+                    owner_id = first_object.owner_id
+                    
+                    # Парсим даты
+                    start_date = None
+                    end_date = None
+                    if start_date_str:
+                        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                    if end_date_str:
+                        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
                 
-                logger.info(f"Created contract {contract.id} for employee {user.id}")
-            
-            logger.info(f"Created new employee {user.id} by manager {user_id}")
-            
-            return RedirectResponse(url=f"/manager/employees/{user.id}", status_code=302)
+                    # Создаем договор напрямую
+                    from domain.entities.contract import Contract
+                    
+                    # Генерируем номер договора
+                    contract_service = ContractService()
+                    contract_number = await contract_service._generate_contract_number(owner_id)
+                    
+                    # Генерируем заголовок договора
+                    title = f"Трудовой Договор с {first_name} {last_name}".strip()
+                    
+                    contract = Contract(
+                        contract_number=contract_number,
+                        employee_id=user.id,
+                        owner_id=owner_id,  # Используем владельца объекта, а не управляющего
+                        template_id=int(contract_template_id) if contract_template_id and contract_template_id.strip() else None,
+                        title=title,
+                        hourly_rate=hourly_rate,
+                        start_date=start_date,
+                        end_date=end_date,
+                        allowed_objects=[int(obj_id) for obj_id in contract_objects if obj_id and obj_id.strip()],
+                        is_active=True,
+                        status="active"
+                    )
+                    
+                    db.add(contract)
+                    await db.commit()
+                    await db.refresh(contract)
+                    
+                    # Обновляем роль пользователя на employee
+                    contract_service = ContractService()
+                    await contract_service._update_employee_role(db, user.id)
+                    
+                    # Создаем права управляющего на объекты если роль manager
+                    if role == "manager":
+                        permission_service = ManagerPermissionService(db)
+                        for obj_id in contract_objects:
+                            await permission_service.create_permission(
+                                contract_id=contract.id,
+                                object_id=int(obj_id),
+                                permissions={
+                                    "can_view": True,
+                                    "can_edit": True,
+                                    "can_delete": False,
+                                    "can_manage_employees": True,
+                                    "can_view_finances": True,
+                                    "can_edit_rates": True,
+                                    "can_edit_schedule": True
+                                }
+                            )
+                    
+                    logger.info(f"Created contract {contract.id} for employee {user.id}")
+                
+                logger.info(f"Created new employee {user.id} by manager {user_id}")
+                
+                return RedirectResponse(url=f"/manager/employees/{user.id}", status_code=302)
         
     except HTTPException:
         raise
@@ -1292,6 +1292,83 @@ async def manager_employee_terminate(
     except Exception as e:
         logger.error(f"Error terminating employee contract: {e}")
         raise HTTPException(status_code=500, detail="Ошибка расторжения договора")
+
+
+@router.post("/employees/{employee_id}/contract/{contract_id}/edit")
+async def manager_contract_edit(
+    employee_id: int,
+    contract_id: int,
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Редактирование договора сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            form_data = await request.form()
+            
+            # Получаем данные формы
+            title = form_data.get("title", "").strip()
+            hourly_rate_str = form_data.get("hourly_rate", "500")
+            hourly_rate = int(hourly_rate_str) if hourly_rate_str and hourly_rate_str.strip() else 500
+            start_date_str = form_data.get("start_date")
+            end_date_str = form_data.get("end_date")
+            
+            # Валидация
+            if not title:
+                raise HTTPException(status_code=400, detail="Название договора обязательно")
+            
+            # Получаем договор
+            from sqlalchemy import select
+            from domain.entities.contract import Contract
+            
+            contract_query = select(Contract).where(
+                Contract.id == contract_id,
+                Contract.employee_id == employee_id
+            )
+            contract_result = await db.execute(contract_query)
+            contract = contract_result.scalar_one_or_none()
+            
+            if not contract:
+                raise HTTPException(status_code=404, detail="Договор не найден")
+            
+            # Обновляем договор
+            contract.title = title
+            contract.hourly_rate = hourly_rate
+            
+            # Обработка дат
+            if start_date_str:
+                try:
+                    from datetime import datetime
+                    contract.start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                except ValueError:
+                    pass
+            
+            if end_date_str:
+                try:
+                    from datetime import datetime
+                    contract.end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                except ValueError:
+                    pass
+            
+            await db.commit()
+            await db.refresh(contract)
+            
+            logger.info(f"Updated contract {contract_id} for employee {employee_id} by manager {user_id}")
+            
+            return RedirectResponse(url=f"/manager/employees/{employee_id}", status_code=302)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating contract: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка обновления договора")
 
 
 @router.get("/calendar", response_class=HTMLResponse)
