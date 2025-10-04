@@ -95,6 +95,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Добавление middleware для обработки заголовков прокси
+from apps.web.middleware.proxy_middleware import ProxyMiddleware
+app.add_middleware(ProxyMiddleware)
+
 # Настройка для работы за HTTPS
 app.add_middleware(
     TrustedHostMiddleware, 
@@ -125,9 +129,7 @@ templates = Jinja2Templates(directory="apps/web/templates")
 
 # Регистрация Jinja2 фильтров
 from apps.web.utils.jinja_filters import register_filters
-print("🔧 Регистрируем Jinja2 фильтры...")
 register_filters(templates)
-print("🔧 Регистрация фильтров завершена")
 
 # Инициализация сервисов
 auth_service = AuthService()
