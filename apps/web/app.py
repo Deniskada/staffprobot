@@ -125,7 +125,9 @@ templates = Jinja2Templates(directory="apps/web/templates")
 
 # Регистрация Jinja2 фильтров
 from apps.web.utils.jinja_filters import register_filters
+print("🔧 Регистрируем Jinja2 фильтры...")
 register_filters(templates)
+print("🔧 Регистрация фильтров завершена")
 
 # Инициализация сервисов
 auth_service = AuthService()
