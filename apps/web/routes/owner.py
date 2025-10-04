@@ -717,13 +717,6 @@ async def owner_calendar(
     if not current_user or current_user.get("role") != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
-    # Временный тест - возвращаем простую страницу
-    return templates.TemplateResponse("owner/calendar/index.html", {
-        "request": request,
-        "title": "Календарь",
-        "current_user": current_user
-    })
-    
     try:
         # Определяем текущую дату или переданные параметры
         today = date.today()

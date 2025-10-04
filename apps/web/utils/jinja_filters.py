@@ -24,4 +24,11 @@ def register_filters(templates):
     Args:
         templates: Экземпляр Jinja2Templates
     """
-    templates.env.filters['static_version'] = static_version_filter
+    try:
+        templates.env.filters['static_version'] = static_version_filter
+        print(f"✅ Фильтр static_version зарегистрирован успешно")
+    except Exception as e:
+        print(f"❌ Ошибка регистрации фильтра static_version: {e}")
+        # Fallback - создаем глобальную функцию
+        templates.env.globals['static_version'] = static_version_filter
+        print(f"✅ Создана глобальная функция static_version")
