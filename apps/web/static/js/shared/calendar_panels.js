@@ -392,13 +392,13 @@ class CalendarPanels {
         window.toggleEmployeesPanel = () => this.toggleEmployeesPanel();
         window.toggleObjectsPanel = () => this.togglePanel();
         
-        // Auto refresh counts occasionally
-        setInterval(() => {
-            if (this.role !== 'employee') {
-                this.loadObjects();
-            }
-            this.loadEmployees();
-        }, 3000);
+        // Auto refresh disabled - was causing excessive API calls
+        // setInterval(() => {
+        //     if (this.role !== 'employee') {
+        //         this.loadObjects();
+        //     }
+        //     this.loadEmployees();
+        // }, 3000);
         
         // Handle object select change
         const quickObjectSelect = document.getElementById('quickObject');
