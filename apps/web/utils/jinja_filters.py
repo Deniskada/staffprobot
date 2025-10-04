@@ -17,11 +17,11 @@ def static_version_filter(file_path: str) -> str:
     return get_static_url_with_version(file_path)
 
 
-def register_filters(app):
+def register_filters(templates):
     """
     Регистрирует фильтры в Jinja2
     
     Args:
-        app: Экземпляр FastAPI приложения
+        templates: Экземпляр Jinja2Templates
     """
-    app.jinja_env.filters['static_version'] = static_version_filter
+    templates.env.filters['static_version'] = static_version_filter
