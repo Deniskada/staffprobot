@@ -86,12 +86,12 @@
                                         <i class="bi bi-grid-3x3-gap"></i>
                                         <span>Все объекты</span>
                                     </div>
-                                    {% for obj in objects %}
+                        {% for obj in objects %}
                                     <div class="object-option" data-object-id="{{ obj.id }}" data-object-name="{{ obj.name }}">
                                         <i class="bi bi-building"></i>
                                         <span>{{ obj.name }}</span>
                                     </div>
-                                    {% endfor %}
+                        {% endfor %}
                                 </div>
                             </div>
                         </div>

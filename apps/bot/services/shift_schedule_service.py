@@ -70,6 +70,7 @@ class ShiftScheduleService:
                         'user_id': shift.user_id,
                         'object_id': shift.object_id,
                         'object_name': obj.name if obj else 'Неизвестно',
+                        'object_timezone': obj.timezone if obj else 'Europe/Moscow',
                         'time_slot_id': shift.time_slot_id,
                         'planned_start': shift.planned_start,
                         'planned_end': shift.planned_end,
@@ -86,6 +87,7 @@ class ShiftScheduleService:
         except Exception as e:
             logger.error(f"Error getting planned shifts for user {user_telegram_id} on {target_date}: {e}")
             return []
+    
     
     async def get_shift_schedule_by_id(self, schedule_id: int) -> Optional[Dict[str, Any]]:
         """
