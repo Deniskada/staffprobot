@@ -43,8 +43,10 @@ class CalendarPanels {
         
         try {
             const endpoint = this.role === 'employee' ? `/${this.role}/calendar/api/objects` : `/${this.role}/calendar/api/objects`;
-            const response = await fetch(endpoint);
+            console.log('[CalendarPanels] Fetching objects:', endpoint);
+            const response = await fetch(endpoint, { credentials: 'same-origin' });
             const objects = await response.json();
+            console.log('[CalendarPanels] Objects loaded:', Array.isArray(objects) ? objects.length : 'n/a');
             
             objectsList.innerHTML = '';
             
@@ -163,8 +165,11 @@ class CalendarPanels {
         };
         
         try {
-            const response = await fetch(`${this.baseUrl}/employees`);
+            const url = `${this.baseUrl}/employees`;
+            console.log('[CalendarPanels] Fetching employees:', url);
+            const response = await fetch(url, { credentials: 'same-origin' });
             const employees = await response.json();
+            console.log('[CalendarPanels] Employees loaded:', Array.isArray(employees) ? employees.length : 'n/a');
             
             employeesList.innerHTML = '';
             
@@ -278,7 +283,7 @@ class CalendarPanels {
         if (!quickObjectSelect) return;
         
         try {
-            const response = await fetch(`/${this.role}/calendar/api/objects`);
+            const response = await fetch(`/${this.role}/calendar/api/objects`, { credentials: 'same-origin' });
             const objects = await response.json();
             
             // Clear and populate list
@@ -309,7 +314,8 @@ class CalendarPanels {
         try {
             const response = await fetch(`/${this.role}/calendar/api/quick-create-timeslot`, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                credentials: 'same-origin'
             });
             
             if (response.ok) {
