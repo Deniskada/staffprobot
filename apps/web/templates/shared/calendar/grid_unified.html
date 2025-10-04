@@ -561,7 +561,16 @@ window.unifiedCalendar = {
         window.lastShiftRequestKey = requestKey;
         
         // Определяем правильный endpoint в зависимости от роли пользователя
-        const baseUrl = window.universalCalendar ? window.universalCalendar.baseUrl : '/manager';
+        let baseUrl = '/manager';
+        if (window.universalCalendar) {
+            // Извлекаем роль из baseUrl (убираем /calendar)
+            const fullBaseUrl = window.universalCalendar.baseUrl;
+            if (fullBaseUrl.includes('/calendar')) {
+                baseUrl = fullBaseUrl.replace('/calendar', '');
+            } else {
+                baseUrl = fullBaseUrl;
+            }
+        }
         const endpoint = `${baseUrl}/api/calendar/plan-shift`;
         
         console.log('Base URL:', baseUrl);
