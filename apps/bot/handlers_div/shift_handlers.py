@@ -71,8 +71,16 @@ async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # Создаем кнопки для выбора запланированной смены
             keyboard = []
             for shift in planned_shifts:
-                start_time = shift['planned_start'].strftime("%H:%M")
-                end_time = shift['planned_end'].strftime("%H:%M")
+                # Получаем часовой пояс объекта
+                object_timezone = shift.get('object_timezone', 'Europe/Moscow')
+                
+                # Конвертируем время в часовой пояс объекта
+                from core.utils.timezone_helper import timezone_helper
+                local_start_time = timezone_helper.utc_to_local(shift['planned_start'], object_timezone)
+                local_end_time = timezone_helper.utc_to_local(shift['planned_end'], object_timezone)
+                
+                start_time = local_start_time.strftime("%H:%M")
+                end_time = local_end_time.strftime("%H:%M")
                 keyboard.append([
                     InlineKeyboardButton(
                         f"📅 {shift['object_name']} {start_time}-{end_time}", 

@@ -1,6 +1,6 @@
 """Утилиты для работы с временными зонами."""
 
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 import pytz
 from core.config.settings import settings
@@ -127,6 +127,24 @@ class TimezoneHelper:
         """
         # TODO: В будущем получать из профиля пользователя
         return self.default_timezone_str
+    
+    def get_today_in_timezone(self, timezone_str: str) -> date:
+        """
+        Получает дату "сегодня" в указанной временной зоне.
+        
+        Args:
+            timezone_str: Временная зона (например, "Europe/Moscow")
+            
+        Returns:
+            Дата "сегодня" в указанной временной зоне
+        """
+        try:
+            target_tz = pytz.timezone(timezone_str)
+            now_in_tz = datetime.now(target_tz)
+            return now_in_tz.date()
+        except pytz.UnknownTimeZoneError:
+            logger.warning(f"Unknown timezone {timezone_str}, using default")
+            return datetime.now(self.default_timezone).date()
 
 
 # Глобальный экземпляр

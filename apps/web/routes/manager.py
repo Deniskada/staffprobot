@@ -2877,17 +2877,24 @@ async def plan_shift_manager(
             )
             planned_shifts = (await db.execute(planned_shifts_query)).scalars().all()
             
+            logger.info(f"Checking planned shifts for employee {employee_id}")
+            logger.info(f"Slot time range: {slot_datetime_utc} - {end_datetime_utc}")
+            logger.info(f"Found {len(planned_shifts)} planned shifts")
+            
             if planned_shifts:
                 shift_times = []
                 for shift in planned_shifts:
+                    logger.info(f"Conflicting shift: {shift.id}, {shift.planned_start} - {shift.planned_end}")
                     # Конвертируем обратно в локальное время для отображения
                     local_start = shift.planned_start.astimezone(tz).strftime('%H:%M')
                     local_end = shift.planned_end.astimezone(tz).strftime('%H:%M')
                     shift_times.append(f"{local_start}-{local_end}")
                 
+                error_msg = f"У сотрудника уже есть запланированная смена в это время: {', '.join(shift_times)}"
+                logger.info(f"Raising HTTPException: {error_msg}")
                 raise HTTPException(
                     status_code=400, 
-                    detail=f"У сотрудника уже есть запланированная смена в это время: {', '.join(shift_times)}"
+                    detail=error_msg
                 )
             
             # Создаем запланированную смену
@@ -2918,9 +2925,168 @@ async def plan_shift_manager(
                 "shift_id": shift_schedule.id
             }
             
+    except HTTPException as e:
+        # Передаем HTTPException как есть, чтобы сохранить детали ошибки
+        logger.error(f"HTTPException in planning shift: {e.detail}")
+        raise e
     except Exception as e:
         logger.error(f"Error planning shift: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
+
+
+@router.post("/api/calendar/check-availability")
+async def check_employee_availability(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Проверка доступности сотрудника для планирования смены"""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+        
+        data = await request.json()
+        timeslot_id = data.get('timeslot_id')
+        employee_id = data.get('employee_id')
+        
+        if not timeslot_id or not employee_id:
+            raise HTTPException(status_code=400, detail="Не указан тайм-слот или сотрудник")
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Получаем тайм-слот и проверяем доступ к объекту
+            from sqlalchemy import select
+            from domain.entities.time_slot import TimeSlot
+            
+            timeslot_query = select(TimeSlot).options(selectinload(TimeSlot.object)).where(TimeSlot.id == timeslot_id)
+            timeslot = (await db.execute(timeslot_query)).scalar_one_or_none()
+            if not timeslot:
+                raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+            
+            object_id = timeslot.object_id
+            
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if object_id not in accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступа к объекту")
+            
+            # Проверяем, что у сотрудника есть договор с управляющим
+            from domain.entities.contract import Contract
+            from domain.entities.user import User
+            
+            # Получаем сотрудника
+            employee_query = select(User).where(User.id == employee_id)
+            employee = (await db.execute(employee_query)).scalar_one_or_none()
+            if not employee:
+                raise HTTPException(status_code=404, detail="Сотрудник не найден")
+            
+            # Получаем договоры управляющего, чтобы узнать владельцев
+            manager_contracts = await permission_service.get_manager_contracts_for_user(user_id)
+            owner_ids = [contract.owner_id for contract in manager_contracts]
+            
+            if not owner_ids:
+                raise HTTPException(status_code=403, detail="У управляющего нет активных договоров")
+            
+            # Проверяем, что сотрудник работает по договорам с владельцами управляющего
+            contract_query = select(Contract).where(
+                Contract.employee_id == employee_id,
+                Contract.owner_id.in_(owner_ids),
+                Contract.is_active == True,
+                Contract.status == "active"
+            )
+            contracts = (await db.execute(contract_query)).scalars().all()
+            if not contracts:
+                return {
+                    "available": False,
+                    "message": "У сотрудника нет договора с владельцами управляющего"
+                }
+            
+            # Проверяем, что у сотрудника есть доступ к объекту тайм-слота
+            has_object_access = False
+            for contract in contracts:
+                if contract.allowed_objects and object_id in contract.allowed_objects:
+                    has_object_access = True
+                    break
+            
+            if not has_object_access:
+                return {
+                    "available": False,
+                    "message": f"У сотрудника нет доступа к объекту"
+                }
+            
+            # Проверяем пересечение с активными сменами
+            from domain.entities.shift import Shift
+            from domain.entities.shift_schedule import ShiftSchedule
+            import pytz
+            
+            # Получаем временную зону объекта для корректного сравнения времени
+            object_timezone = timeslot.object.timezone if timeslot.object and timeslot.object.timezone else 'Europe/Moscow'
+            tz = pytz.timezone(object_timezone)
+            
+            # Создаем naive datetime в локальной временной зоне объекта
+            slot_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.start_time)
+            end_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.end_time)
+            
+            # Локализуем в временную зону объекта, затем конвертируем в UTC для сравнения
+            slot_datetime_utc = tz.localize(slot_datetime_naive).astimezone(pytz.UTC)
+            end_datetime_utc = tz.localize(end_datetime_naive).astimezone(pytz.UTC)
+            
+            # Проверяем пересечение с активными сменами
+            active_shifts_query = select(Shift).where(
+                Shift.user_id == employee_id,
+                Shift.status == "active",
+                Shift.start_time < end_datetime_utc,
+                Shift.end_time > slot_datetime_utc
+            )
+            active_shifts = (await db.execute(active_shifts_query)).scalars().all()
+            
+            if active_shifts:
+                shift_times = []
+                for shift in active_shifts:
+                    local_start = shift.start_time.astimezone(tz).strftime('%H:%M')
+                    local_end = shift.end_time.astimezone(tz).strftime('%H:%M')
+                    shift_times.append(f"{local_start}-{local_end}")
+                
+                return {
+                    "available": False,
+                    "message": f"У сотрудника уже есть активная смена в это время: {', '.join(shift_times)}"
+                }
+            
+            # Проверяем пересечение с запланированными сменами
+            planned_shifts_query = select(ShiftSchedule).where(
+                ShiftSchedule.user_id == employee_id,
+                ShiftSchedule.status == "planned",
+                ShiftSchedule.planned_start < end_datetime_utc,
+                ShiftSchedule.planned_end > slot_datetime_utc
+            )
+            planned_shifts = (await db.execute(planned_shifts_query)).scalars().all()
+            
+            if planned_shifts:
+                shift_times = []
+                for shift in planned_shifts:
+                    local_start = shift.planned_start.astimezone(tz).strftime('%H:%M')
+                    local_end = shift.planned_end.astimezone(tz).strftime('%H:%M')
+                    shift_times.append(f"{local_start}-{local_end}")
+                
+                return {
+                    "available": False,
+                    "message": f"У сотрудника уже есть запланированная смена в это время: {', '.join(shift_times)}"
+                }
+            
+            return {
+                "available": True,
+                "message": "Сотрудник доступен"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking employee availability: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка проверки доступности: {str(e)}")
 
 
 @router.get("/shifts", response_class=HTMLResponse, name="manager_shifts")
