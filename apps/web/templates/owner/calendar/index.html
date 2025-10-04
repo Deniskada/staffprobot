@@ -243,17 +243,21 @@
 {% block extra_js %}
 <!-- Отключен старый calendar.js для тестирования -->
 <!-- <script src="{{ url_for('static', path='js/shared/calendar.js') }}"></script> -->
-<script src="{{ url_for('static', path='js/shared/calendar_panels_v2.js') }}"></script>
+<script src="{{ url_for('static', path='js/shared/calendar_panels_v2.js') }}?v={{ range(1000, 9999) | random }}"></script>
 
 <!-- Universal Calendar Integration -->
 <script src="{{ url_for('static', path='js/shared/universal_calendar.js') }}?v={{ range(1000, 9999) | random }}"></script>
 <script>
     // Инициализация универсального календаря для владельца
     document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, CalendarPanels available:', typeof CalendarPanels !== 'undefined');
         // Инициализируем панели drag&drop
         if (typeof CalendarPanels !== 'undefined') {
+            console.log('Initializing CalendarPanels for owner');
             window.calendarPanels = new CalendarPanels('owner');
             window.calendarPanels.init();
+        } else {
+            console.error('CalendarPanels not available!');
         }
         
         // Создаем экземпляр универсального календаря
