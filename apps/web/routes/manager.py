@@ -1458,7 +1458,7 @@ async def manager_calendar_api_data(
         logger.info("Converting timeslots to API format")
         timeslots_data = []
         for ts in calendar_data.timeslots:
-            timeslots_data.append({
+                        timeslots_data.append({
                 "id": ts.id,
                 "object_id": ts.object_id,
                 "object_name": ts.object_name,
@@ -3390,14 +3390,14 @@ async def manager_profile_update(
     user_id = await get_user_id_from_current_user(current_user, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Пользователь не найден")
-        
+    
     user_query = select(User).where(User.id == user_id)
     user_result = await db.execute(user_query)
     user = user_result.scalar_one_or_none()
     
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
-    
+        
     try:
         user.first_name = (first_name or "").strip() or None
         user.last_name = (last_name or "").strip() or None

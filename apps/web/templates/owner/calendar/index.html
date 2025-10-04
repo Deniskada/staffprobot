@@ -362,38 +362,36 @@ if (window.universalCalendar) {
         calendarPanels.showNotification(`Ошибка назначения сотрудника: ${error.message}`, 'error');
     }
 };
+}
 
 if (window.universalCalendar) {
     window.universalCalendar.createTimeslotFromObject = async function(objectId, date) {
-    try {
-        const objectResponse = await fetch(`/owner/calendar/api/objects`);
-        const objects = await objectResponse.json();
-        const object = objects.find(obj => obj.id == objectId);
-        if (!object) {
-            calendarPanels.showNotification('Объект не найден', 'error');
-            return;
+        try {
+            const objectResponse = await fetch(`/owner/calendar/api/objects`);
+            const objects = await objectResponse.json();
+            const object = objects.find(obj => obj.id == objectId);
+            if (!object) {
+                calendarPanels.showNotification('Объект не найден', 'error');
+                return;
+            }
+            await calendarPanels.showQuickCreateForm({
+                id: objectId,
+                name: object.name,
+                hourlyRate: object.hourly_rate || 0,
+                openingTime: object.opening_time || '09:00',
+                closingTime: object.closing_time || '18:00'
+            }, date);
+        } catch (error) {
+            console.error('Error creating timeslot from object:', error);
+            calendarPanels.showNotification('Ошибка создания тайм-слота', 'error');
         }
-        await calendarPanels.showQuickCreateForm({
-            id: objectId,
-            name: object.name,
-            hourlyRate: object.hourly_rate || 0,
-            openingTime: object.opening_time || '09:00',
-            closingTime: object.closing_time || '18:00'
-        }, date);
-    } catch (error) {
-        console.error('Error creating timeslot from object:', error);
-        calendarPanels.showNotification('Ошибка создания тайм-слота', 'error');
-    }
-};
+    };
 }
 
 // Initialize panels on page load
 document.addEventListener('DOMContentLoaded', function() {
     calendarPanels.init();
     setTimeout(() => {
-        if (window.universalCalendar) {
-            window.universalCalendar.setupDragDrop();
-        }
         // Initialize timeslot occupancy
         initializeTimeslotOccupancy();
     }, 1000);
