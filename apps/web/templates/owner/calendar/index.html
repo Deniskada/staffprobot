@@ -243,10 +243,10 @@
 {% block extra_js %}
 <!-- Отключен старый calendar.js для тестирования -->
 <!-- <script src="{{ url_for('static', path='js/shared/calendar.js') }}"></script> -->
-<script src="{{ 'js/shared/calendar_panels.js' | static_version }}"></script>
+<script src="{{ url_for('static', path='js/shared/calendar_panels.js') }}"></script>
 
 <!-- Universal Calendar Integration -->
-<script src="{{ 'js/shared/universal_calendar.js' | static_version }}"></script>
+<script src="{{ url_for('static', path='js/shared/universal_calendar.js') }}"></script>
 <script>
     // Инициализация универсального календаря для владельца
     document.addEventListener('DOMContentLoaded', function() {
