@@ -307,21 +307,12 @@ function showTimeslotDetails(timeslotId) {
 
 function showDateDetails(date) {}
 
-// Initialize calendar manager
-const calendarManager = new CalendarManager({
-    currentDate: new Date('{{ current_date }}'),
-    viewType: '{{ view_type }}',
-    baseUrl: '{{ request.url.path }}',
-    onShiftClick: showShiftDetails,
-    onTimeslotClick: showTimeslotDetails,
-    onDateClick: showDateDetails
-});
-
 // Initialize calendar panels for owner role
 const calendarPanels = new CalendarPanels('owner');
 
-// Override calendar manager methods for drag&drop
-calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId) {
+// Override universal calendar manager methods for drag&drop
+if (window.universalCalendar) {
+    window.universalCalendar.assignEmployeeToTimeslot = async function(employeeId, timeslotId) {
     try {
         console.log(`Planning shift: employeeId=${employeeId}, timeslotId=${timeslotId}`);
         const employeeResponse = await fetch(`/owner/api/employees`);
@@ -362,7 +353,9 @@ calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId
         }
         calendarPanels.showNotification(`Сотрудник ${employee.name} назначен на тайм-слот ${timeStr}`, 'success');
         setTimeout(() => {
-            calendarManager.refresh();
+            if (window.universalCalendar) {
+                window.universalCalendar.refresh();
+            }
         }, 300);
     } catch (error) {
         console.error('Error assigning employee:', error);
@@ -370,7 +363,8 @@ calendarManager.assignEmployeeToTimeslot = async function(employeeId, timeslotId
     }
 };
 
-calendarManager.createTimeslotFromObject = async function(objectId, date) {
+if (window.universalCalendar) {
+    window.universalCalendar.createTimeslotFromObject = async function(objectId, date) {
     try {
         const objectResponse = await fetch(`/owner/calendar/api/objects`);
         const objects = await objectResponse.json();
@@ -391,12 +385,15 @@ calendarManager.createTimeslotFromObject = async function(objectId, date) {
         calendarPanels.showNotification('Ошибка создания тайм-слота', 'error');
     }
 };
+}
 
 // Initialize panels on page load
 document.addEventListener('DOMContentLoaded', function() {
     calendarPanels.init();
     setTimeout(() => {
-        calendarManager.setupDragDrop();
+        if (window.universalCalendar) {
+            window.universalCalendar.setupDragDrop();
+        }
         // Initialize timeslot occupancy
         initializeTimeslotOccupancy();
     }, 1000);
