@@ -243,7 +243,7 @@
 {% block extra_js %}
 <!-- Отключен старый calendar.js для тестирования -->
 <!-- <script src="{{ url_for('static', path='js/shared/calendar.js') }}"></script> -->
-<script src="{{ url_for('static', path='js/shared/calendar_panels_v2.js') }}?v={{ range(1000, 9999) | random }}"></script>
+<script src="{{ url_for('static', path='js/shared/calendar_panels.js') }}?v={{ range(1000, 9999) | random }}"></script>
 
 <!-- Universal Calendar Integration -->
 <script src="{{ url_for('static', path='js/shared/universal_calendar.js') }}?v={{ range(1000, 9999) | random }}"></script>
