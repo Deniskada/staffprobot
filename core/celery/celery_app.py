@@ -75,6 +75,9 @@ celery_app.conf.update(
         'core.celery.tasks.shift_tasks.*': {'queue': 'shifts'},
         'core.celery.tasks.analytics_tasks.*': {'queue': 'analytics'},
     },
+    # ... расположение файла расписания
+    beat_schedule_filename='/app/celerybeat-schedule',  # ← расположение файла расписания
+
 )
 
 # Автоматическое обнаружение задач
