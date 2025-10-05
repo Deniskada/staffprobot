@@ -1140,128 +1140,73 @@ function createPlanShiftCalendar(container) {
         
         const isCurrentMonth = date.getMonth() === month;
         const dateStr = formatDateForAPI(date);
-        const timeslotsForDate = availableTimeslots.filter(ts => {
-            // Проверяем разные возможные форматы даты
-            const tsDate = ts.date || ts.slot_date || ts.start_date;
-            if (!tsDate) return false;
-            
-            // Проверяем соответствие даты
-            let dateMatches = false;
-            if (typeof tsDate === 'string') {
-                dateMatches = tsDate === dateStr;
-            } else if (tsDate instanceof Date) {
-                dateMatches = formatDateForAPI(tsDate) === dateStr;
-            }
-            
-            if (!dateMatches) return false;
-            
-            // Проверяем, что тайм-слот свободен
-            // Используем available_slots из API ответа
-            const availableSlots = ts.available_slots || 0;
-            const isFree = availableSlots > 0;
-            
-            // Отладочная информация для первых нескольких дней
-            if (i < 10) {
-                console.log(`Timeslot ${ts.id} for ${dateStr}: available_slots=${availableSlots}, max_employees=${ts.max_employees}, current_employees=${ts.current_employees}, free=${isFree}`);
-            }
-            
-            return isFree;
-        });
-        
-        // Отладочная информация для первых нескольких дней
-        if (i < 5 && timeslotsForDate.length > 0) {
-            console.log(`Date ${dateStr}: found ${timeslotsForDate.length} free timeslots`, timeslotsForDate.map(ts => ({
-                id: ts.id,
-                planned: ts.planned_count || ts.planned_shifts_count || 0,
-                max: ts.max_employees || ts.max_employees_count || 1,
-                free: (ts.planned_count || ts.planned_shifts_count || 0) < (ts.max_employees || ts.max_employees_count || 1)
-            })));
-        }
-        
+        const timeslotsForDate = availableTimeslots.filter(ts => (ts.date || ts.slot_date || ts.start_date) === dateStr);
         let dayClass = 'calendar-day';
-        if (!isCurrentMonth) dayClass += ' disabled';
-        
-        let dayContent = date.getDate();
-        let dayStyle = '';
-        
-        if (isCurrentMonth && timeslotsForDate.length > 0) {
-            dayClass += ' available-timeslot';
-            
-            // Подсчитываем общее количество свободных мест
-            let totalFreeSlots = 0;
-            timeslotsForDate.forEach(ts => {
-                totalFreeSlots += (ts.available_slots || 0);
-            });
-            
-            dayContent = `
-                <div class="day-number">${date.getDate()}</div>
-                <div class="timeslot-info">09:00-21:00</div>
-                <div class="free-slots">${totalFreeSlots} мест</div>
-            `;
+        if (!isCurrentMonth) {
+            dayClass += ' disabled';
+        } else if (timeslotsForDate.length > 0) {
+            dayClass += ' has-timeslots';
         }
-        
-        html += `
-            <div class="${dayClass}" data-date="${dateStr}" data-timeslots="${timeslotsForDate.length}">
-                ${dayContent}
-            </div>
-        `;
+        html += `<div class="${dayClass}" data-date="${dateStr}">`;
+        html += `<div class="day-number">${date.getDate()}</div>`;
+        if (isCurrentMonth && timeslotsForDate.length > 0) {
+            const availableSlots = timeslotsForDate.filter(ts => (ts.available_slots || 0) > 0);
+            if (availableSlots.length > 0) {
+                availableSlots.forEach(ts => {
+                    const startTime = ts.start_time || ts.start_time_str || '00:00';
+                    const endTime = ts.end_time || ts.end_time_str || '00:00';
+                    const current = ts.current_employees || 0;
+                    const max = ts.max_employees || 1;
+                    html += `
+                        <div class="timeslot available" data-timeslot-id="${ts.id}">
+                            <div class="timeslot-time">${startTime}-${endTime}</div>
+                        </div>
+                    `;
+                });
+            } else {
+                html += '<div class="no-slots">Нет свободных слотов</div>';
+            }
+        } else if (isCurrentMonth) {
+            html += '<div class="empty-message">Нет тайм-слотов</div>';
+        }
+        html += '</div>';
     }
     
     html += '</div>';
     container.innerHTML = html;
     
-    // Добавляем обработчики кликов
+    // Добавляем обработчики кликов на тайм-слоты
+    container.removeEventListener('click', handleTimeslotClick);
     container.addEventListener('click', handleTimeslotClick);
 }
 
-// Обработка клика по тайм-слоту
+// Обработка клика по конкретному тайм-слоту
 async function handleTimeslotClick(e) {
-    const day = e.target.closest('.calendar-day');
-    if (!day || day.classList.contains('disabled') || !day.classList.contains('available-timeslot')) {
-        return;
-    }
-    
+    const timeslotEl = e.target.closest('.timeslot');
+    if (!timeslotEl || !timeslotEl.classList.contains('available')) return;
+    const timeslotId = timeslotEl.dataset.timeslotId;
+    const day = timeslotEl.closest('.calendar-day');
+    if (!day || day.classList.contains('disabled')) return;
     const date = day.dataset.date;
-    const timeslots = parseInt(day.dataset.timeslots);
-    
-    if (timeslots === 0) return;
-    
     const employeeId = document.getElementById('planEmployeeSelect').value;
-    if (!employeeId) {
-        alert('Сначала выберите сотрудника');
-        return;
-    }
-    
-    // Проверяем доступность сотрудника
-    const isAvailable = await checkEmployeeAvailability(employeeId, date);
-    
+    if (!employeeId) { alert('Сначала выберите сотрудника'); return; }
+    const isAvailable = await checkEmployeeAvailability(employeeId, timeslotId);
     if (isAvailable) {
-        // Переключаем выбор
-        if (selectedTimeslots.has(date)) {
-            selectedTimeslots.delete(date);
-            day.classList.remove('selected');
+        const slotKey = `${date}_${timeslotId}`;
+        if (selectedTimeslots.has(slotKey)) {
+            selectedTimeslots.delete(slotKey);
+            timeslotEl.classList.remove('selected');
         } else {
-            selectedTimeslots.add(date);
-            day.classList.add('selected');
+            selectedTimeslots.add(slotKey);
+            timeslotEl.classList.add('selected');
         }
         updateSelectedSlotsInfo();
     }
 }
 
-// Проверка доступности сотрудника
-async function checkEmployeeAvailability(employeeId, date) {
+// Проверка доступности сотрудника для конкретного тайм-слота
+async function checkEmployeeAvailability(employeeId, timeslotId) {
     try {
-        // Находим тайм-слот для этой даты
-        const timeslot = availableTimeslots.find(ts => {
-            const tsDate = ts.date || ts.slot_date || ts.start_date;
-            return tsDate === date;
-        });
-        
-        if (!timeslot) {
-            alert('Тайм-слот не найден');
-            return false;
-        }
-        
         // Отправляем запрос на проверку доступности
         const response = await fetch('/manager/api/calendar/check-availability', {
             method: 'POST',
@@ -1269,7 +1214,7 @@ async function checkEmployeeAvailability(employeeId, date) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                timeslot_id: parseInt(timeslot.id),
+                timeslot_id: parseInt(timeslotId),
                 employee_id: parseInt(employeeId)
             })
         });
@@ -1332,24 +1277,14 @@ document.getElementById('confirmPlanShift').addEventListener('click', async func
         let successCount = 0;
         let errorCount = 0;
         
-        // Планируем смены для каждого выбранного дня
-        for (const date of selectedTimeslots) {
+        // Планируем смены для каждого выбранного тайм-слота
+        for (const slotKey of selectedTimeslots) {
             try {
-                // Находим тайм-слот для этой даты
-                const timeslot = availableTimeslots.find(ts => {
-                    const tsDate = ts.date || ts.slot_date || ts.start_date;
-                    return tsDate === date;
-                });
-                
-                console.log(`Planning for date ${date}:`, timeslot);
-                
-                if (!timeslot) {
-                    console.error(`No timeslot found for date ${date}`);
-                    continue;
-                }
-                
+                const [date, timeslotId] = slotKey.split('_');
+                const timeslot = availableTimeslots.find(ts => String(ts.id) === String(timeslotId));
+                if (!timeslot) { console.error(`No timeslot ${timeslotId}`); continue; }
                 const requestData = {
-                    timeslot_id: parseInt(timeslot.id),
+                    timeslot_id: parseInt(timeslotId),
                     employee_id: parseInt(employeeId)
                 };
                 
@@ -1375,7 +1310,7 @@ document.getElementById('confirmPlanShift').addEventListener('click', async func
                     
                     // Показываем пользователю конкретную ошибку
                     if (result.detail) {
-                        alert(`Ошибка планирования смены на ${date}: ${result.detail}`);
+                        alert(`Ошибка планирования смены: ${result.detail}`);
                     }
                 }
                 
@@ -1470,46 +1405,24 @@ function formatDateForAPI(date) {
     background-color: #f8f9fa;
 }
 
-.calendar-day.available-timeslot {
-    background-color: #ffebee;
-    color: #c62828;
-    border-color: #ef5350;
-}
 
-.calendar-day.available-timeslot:hover {
-    background-color: #fce4ec;
-    border-color: #e91e63;
-    transform: scale(1.05);
-}
-
-.calendar-day.selected {
-    background-color: #e3f2fd;
-    color: #1976d2;
-    border-color: #2196f3;
-    font-weight: 600;
-}
-
-.calendar-day.selected:hover {
-    background-color: #bbdefb;
-}
+.calendar-day.has-timeslots { background: #f8f9fa; border: 1px solid #dee2e6; }
+.calendar-day.selected { background-color: #e3f2fd; color: #1976d2; border-color: #2196f3; font-weight: 600; }
+.calendar-day.selected:hover { background-color: #bbdefb; }
 
 .day-number {
     font-weight: 600;
     font-size: 1em;
 }
 
-.timeslot-info {
-    font-size: 0.7em;
-    font-weight: 500;
-    margin-top: 2px;
-}
-
-.free-slots {
-    font-size: 0.6em;
-    font-weight: 600;
-    color: #2e7d32;
-    margin-top: 1px;
-}
+/* Тайм-слоты внутри дней */
+.timeslot { position: relative; margin: 2px 0; padding: 2px 6px; border-radius: 4px; font-size: 11px; display: flex; align-items: center; gap: 6px; border: 1px solid #4caf50; background: #e8f5e8; color: #2e7d32; cursor: pointer; }
+.timeslot.available:hover { transform: scale(1.03); }
+.timeslot.selected { background: #2196f3 !important; color: #fff !important; border-color: #1976d2 !important; }
+.timeslot-time { font-weight: 600; }
+.timeslot-badge { position: absolute; right: 4px; bottom: 4px; background: rgba(156, 39, 176, 0.9); color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 600; }
+.empty-message { font-size: 10px; color: #6c757d; text-align: center; margin-top: 4px; }
+.no-slots { font-size: 10px; color: #dc3545; text-align: center; margin-top: 4px; font-weight: bold; }
 
 /* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
