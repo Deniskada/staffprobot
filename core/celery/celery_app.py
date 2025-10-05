@@ -1,5 +1,6 @@
 """Celery приложение для StaffProBot."""
 
+import os
 from celery import Celery
 from celery.schedules import crontab
 from core.config.settings import settings
@@ -24,7 +25,7 @@ celery_app.conf.update(
     enable_utc=True,
     
     # Путь к файлу расписания Beat
-    beat_schedule_filename='/app/celerybeat-schedule',
+    beat_schedule_filename=os.getenv('CELERY_BEAT_SCHEDULE_FILENAME', '/app/celerybeat-schedule'),
     
     # Сериализация
     task_serializer="json",
