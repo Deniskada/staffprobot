@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from apps.web.middleware.role_middleware import require_owner_or_superadmin
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 @router.get("/reviews", response_class=HTMLResponse)

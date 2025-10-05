@@ -16,7 +16,7 @@ from domain.entities.user import User
 from domain.entities.contract import Contract
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 user_manager = UserManager()
 
 

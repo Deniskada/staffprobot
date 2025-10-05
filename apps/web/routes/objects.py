@@ -13,7 +13,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 # Временное хранение объектов в памяти (для демонстрации)
 # TODO: Заменить на работу с базой данных

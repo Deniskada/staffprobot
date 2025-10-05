@@ -12,7 +12,7 @@ from apps.web.services.reports_service import ReportsService
 from core.logging.logger import logger
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 @router.get("/", response_class=HTMLResponse, name="admin_reports_dashboard")

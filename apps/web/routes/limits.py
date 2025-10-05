@@ -11,7 +11,7 @@ from apps.web.services.limits_service import LimitsService
 from core.logging.logger import logger
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 @router.get("/", response_class=HTMLResponse, name="limits_dashboard")

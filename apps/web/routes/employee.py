@@ -26,7 +26,7 @@ from openpyxl import Workbook
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 # Инициализируем помощник для работы с временными зонами
 web_timezone_helper = WebTimezoneHelper()

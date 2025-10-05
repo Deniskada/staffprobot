@@ -39,7 +39,7 @@ from apps.web.services.template_service import TemplateService
 import pytz
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 async def get_available_interfaces_for_user(user_id: int):
