@@ -9,7 +9,7 @@ from apps.web.middleware.role_middleware import require_employee_or_manager
 from typing import Optional
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 @router.get("/reviews", response_class=HTMLResponse)

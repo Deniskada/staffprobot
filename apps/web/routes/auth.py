@@ -17,7 +17,7 @@ from sqlalchemy import select
 from domain.entities.user import User, UserRole
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 user_manager = UserManager()
 auth_service = AuthService()

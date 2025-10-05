@@ -18,7 +18,7 @@ from domain.entities.contract import Contract
 from core.logging.logger import logger
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 async def get_current_user_from_request(request: Request) -> dict:

@@ -11,7 +11,7 @@ from apps.web.middleware.role_middleware import require_owner_or_superadmin
 from core.logging.logger import logger
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 @router.get("/appeals", response_class=HTMLResponse)

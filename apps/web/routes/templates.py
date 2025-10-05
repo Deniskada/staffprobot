@@ -9,7 +9,7 @@ from core.logging.logger import logger
 from core.database.session import get_async_session
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 @router.get("/", response_class=HTMLResponse)

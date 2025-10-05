@@ -14,7 +14,7 @@ from datetime import time, date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 @router.get("/object/{object_id}", response_class=HTMLResponse)

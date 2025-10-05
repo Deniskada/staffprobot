@@ -21,7 +21,7 @@ from domain.entities.tag_reference import TagReference
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/profile", tags=["profile"])
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 @router.get("/", response_class=HTMLResponse)

@@ -16,7 +16,7 @@ from apps.web.middleware.role_middleware import require_manager_or_owner
 from core.logging.logger import logger
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession):

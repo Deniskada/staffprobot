@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 router = APIRouter()
-templates = Jinja2Templates(directory=".")
+from apps.web.jinja import templates
 
 @router.get("/simple-manager-test", response_class=HTMLResponse)
 async def simple_manager_test(request: Request):

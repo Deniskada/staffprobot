@@ -7,7 +7,7 @@ from datetime import date, timedelta
 import calendar as py_calendar
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 # Русские названия месяцев (И.п.)
 RU_MONTHS = [

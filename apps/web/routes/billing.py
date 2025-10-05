@@ -14,7 +14,7 @@ from domain.entities.payment_notification import NotificationType, NotificationC
 from core.logging.logger import logger
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/web/templates")
+from apps.web.jinja import templates
 
 
 @router.get("/", response_class=HTMLResponse, name="billing_dashboard")
