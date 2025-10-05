@@ -5313,6 +5313,13 @@ async def owner_employees_create_contract(
         
         contract_service = ContractService()
         
+        # Валидация
+        if not hourly_rate:
+            raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
+        
+        if hourly_rate <= 0:
+            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+        
         # Парсим даты
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
@@ -5498,6 +5505,13 @@ async def owner_contract_edit(
         from apps.web.services.contract_service import ContractService
         
         contract_service = ContractService()
+        
+        # Валидация
+        if not hourly_rate:
+            raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
+        
+        if hourly_rate <= 0:
+            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
         
         # Парсим даты
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")

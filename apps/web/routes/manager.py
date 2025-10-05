@@ -435,7 +435,7 @@ async def manager_object_edit_post(
             
             name = form_data.get("name", "").strip()
             address = form_data.get("address", "").strip()
-            hourly_rate_str = form_data.get("hourly_rate", "0").strip()
+            hourly_rate_str = form_data.get("hourly_rate", "").strip()
             opening_time = form_data.get("opening_time", "").strip()
             closing_time = form_data.get("closing_time", "").strip()
             timezone = form_data.get("timezone", "Europe/Moscow").strip()
@@ -466,10 +466,15 @@ async def manager_object_edit_post(
                 raise HTTPException(status_code=400, detail="Адрес объекта обязателен")
             
             # Валидация и преобразование числовых полей
+            if not hourly_rate_str:
+                raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
+            
             try:
                 # Поддержка запятой как десятичного разделителя ("500,00")
-                normalized_rate = hourly_rate_str.replace(",", ".") if hourly_rate_str else "0"
-                hourly_rate = int(float(normalized_rate)) if normalized_rate else 0
+                normalized_rate = hourly_rate_str.replace(",", ".")
+                hourly_rate = int(float(normalized_rate))
+                if hourly_rate <= 0:
+                    raise ValueError("Ставка должна быть больше 0")
             except ValueError:
                 raise HTTPException(status_code=400, detail="Неверный формат ставки")
             
@@ -729,14 +734,17 @@ async def manager_employee_add(
             # Данные договора
             contract_template_id = form_data.get("contract_template")
             contract_objects = form_data.getlist("contract_objects")
-            hourly_rate_str = form_data.get("hourly_rate", "500")
-            hourly_rate = int(hourly_rate_str) if hourly_rate_str and hourly_rate_str.strip() else 500
+            hourly_rate_str = form_data.get("hourly_rate", "").strip()
+            hourly_rate = int(hourly_rate_str) if hourly_rate_str else None
             start_date_str = form_data.get("start_date")
             end_date_str = form_data.get("end_date")
             
             # Валидация
             if not first_name:
                 raise HTTPException(status_code=400, detail="Имя обязательно")
+            
+            if not hourly_rate:
+                raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
             
             # Проверяем, существует ли уже пользователь с таким telegram_id
             from sqlalchemy import select
@@ -1315,14 +1323,17 @@ async def manager_contract_edit(
             
             # Получаем данные формы
             title = form_data.get("title", "").strip()
-            hourly_rate_str = form_data.get("hourly_rate", "500")
-            hourly_rate = int(hourly_rate_str) if hourly_rate_str and hourly_rate_str.strip() else 500
+            hourly_rate_str = form_data.get("hourly_rate", "").strip()
+            hourly_rate = int(hourly_rate_str) if hourly_rate_str else None
             start_date_str = form_data.get("start_date")
             end_date_str = form_data.get("end_date")
             
             # Валидация
             if not title:
                 raise HTTPException(status_code=400, detail="Название договора обязательно")
+            
+            if not hourly_rate:
+                raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
             
             # Получаем договор
             from sqlalchemy import select
