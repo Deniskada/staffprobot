@@ -2486,6 +2486,13 @@ async def api_calendar_plan_shift(
             if existing_schedules:
                 raise HTTPException(status_code=400, detail="Сотрудник уже запланирован на это время")
 
+            # Определяем ставку: приоритет тайм-слот > объект
+            effective_rate = None
+            if timeslot.hourly_rate and float(timeslot.hourly_rate) > 0:
+                effective_rate = timeslot.hourly_rate
+            elif timeslot.object and timeslot.object.hourly_rate:
+                effective_rate = timeslot.object.hourly_rate
+            
             # Создаем запланированную смену
             new_schedule = ShiftSchedule(
                 user_id=int(employee_id),
@@ -2494,7 +2501,7 @@ async def api_calendar_plan_shift(
                 planned_start=slot_datetime,
                 planned_end=end_datetime,
                 status="planned",
-                hourly_rate=timeslot.hourly_rate,
+                hourly_rate=effective_rate,
                 notes="Запланировано через drag&drop"
             )
             session.add(new_schedule)
