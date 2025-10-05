@@ -179,7 +179,7 @@
                             <tbody>
                                 {% for shift in shifts %}
                                 {% set is_incomplete = shift.type == 'shift' and shift.status == 'completed' and not (shift.total_hours and shift.total_payment) %}
-                                <tr{% if is_incomplete %} class="table-warning" style="background-color: rgba(255, 193, 7, 0.1);"{% endif %}>
+                                <tr{% if is_incomplete %} style="background-color: rgba(220, 53, 69, 0.15);"{% endif %}>
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
@@ -245,15 +245,25 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if shift.total_hours and shift.total_hours > 0 %}
+                                        {% if shift.type == 'shift' and shift.total_hours and shift.total_hours > 0 %}
                                         <div>
                                             <div class="fw-bold">{{ "%.1f"|format(shift.total_hours) }} ч</div>
                                             <small class="text-muted">{{ "%.0f"|format(shift.total_payment or 0) }} ₽</small>
                                         </div>
-                                        {% elif shift.type == 'schedule' and shift.total_hours and shift.total_hours > 0 %}
+                                        {% elif shift.type == 'schedule' and shift.hourly_rate %}
                                         <div>
-                                            <div class="fw-bold">{{ "%.1f"|format(shift.total_hours) }} ч</div>
-                                            <small class="text-muted">{{ "%.0f"|format(shift.total_payment or 0) }} ₽</small>
+                                            {% set planned_hours = 0 %}
+                                            {% set planned_payment = 0 %}
+                                            {% if shift.end_time and shift.start_time %}
+                                                {% set time_diff = (shift.end_time - shift.start_time).total_seconds() / 3600 %}
+                                                {% set planned_hours = time_diff %}
+                                            {% endif %}
+                                            {% if planned_hours > 0 %}
+                                                {% set hourly_rate_num = shift.hourly_rate|float %}
+                                                {% set planned_payment = planned_hours * hourly_rate_num %}
+                                            {% endif %}
+                                            <div class="fw-bold">{{ "%.1f"|format(planned_hours) }} ч</div>
+                                            <small class="text-muted">{{ "%.0f"|format(planned_payment) }} ₽</small>
                                         </div>
                                         {% elif shift.hourly_rate %}
                                         <div>
