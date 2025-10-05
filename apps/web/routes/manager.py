@@ -2903,6 +2903,39 @@ async def plan_shift_manager(
             slot_datetime = slot_datetime_utc
             end_datetime = end_datetime_utc
             
+            # Вычисляем ставку без дефолта 500: приоритет входного значения > ставка тайм-слота > ставка объекта
+            effective_rate = None
+            try:
+                raw_rate = data.get('hourly_rate')
+                if isinstance(raw_rate, str):
+                    raw_rate = raw_rate.strip()
+                if raw_rate not in (None, ""):
+                    normalized_rate = str(raw_rate).replace(",", ".")
+                    candidate_rate = float(normalized_rate)
+                    if candidate_rate > 0:
+                        effective_rate = candidate_rate
+            except Exception:
+                # Если введено некорректно — игнорируем и перейдем к источникам ниже
+                effective_rate = None
+
+            if effective_rate is None:
+                # Берем ставку из тайм-слота, если она есть и > 0
+                if getattr(timeslot, 'hourly_rate', None):
+                    try:
+                        ts_rate = float(timeslot.hourly_rate)
+                        if ts_rate > 0:
+                            effective_rate = ts_rate
+                    except Exception:
+                        effective_rate = None
+
+            if effective_rate is None:
+                # Фолбэк: ставка объекта
+                try:
+                    obj_rate = float(timeslot.object.hourly_rate) if timeslot.object and timeslot.object.hourly_rate else 0.0
+                except Exception:
+                    obj_rate = 0.0
+                effective_rate = obj_rate
+
             shift_schedule = ShiftSchedule(
                 user_id=int(employee_id),
                 object_id=int(object_id),
@@ -2910,7 +2943,7 @@ async def plan_shift_manager(
                 planned_start=slot_datetime,
                 planned_end=end_datetime,
                 status='planned',
-                hourly_rate=float(data.get('hourly_rate', 500)),
+                hourly_rate=effective_rate,
                 notes=data.get('notes', '')
             )
             
