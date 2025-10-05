@@ -14,6 +14,7 @@ from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.object import Object
 from domain.entities.user import User
+from apps.web.utils.timezone_utils import web_timezone_helper
 
 router = APIRouter()
 from apps.web.jinja import templates
@@ -39,6 +40,8 @@ async def shifts_list(
     date_from: Optional[str] = Query(None, description="Дата начала (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
     object_id: Optional[str] = Query(None, description="ID объекта"),
+    sort: Optional[str] = Query(None, description="Поле сортировки: user_name, object_name, start_time, status, created_at"),
+    order: Optional[str] = Query("asc", description="Порядок сортировки: asc, desc"),
     page: int = Query(1, ge=1, description="Номер страницы"),
     per_page: int = Query(20, ge=1, le=100, description="Количество на странице")
 ):
@@ -121,27 +124,8 @@ async def shifts_list(
         # Объединение и сортировка
         all_shifts = []
         
-        # Добавляем реальные смены (отработанные)
+        # Добавляем реальные смены (отработанные) без динамического перерасчета
         for shift in shifts:
-            # Корректные часы/оплата только для завершённых смен
-            total_hours_val = None
-            total_payment_val = None
-            try:
-                if str(shift.status) == 'completed':
-                    if getattr(shift, 'total_hours', None) is not None:
-                        total_hours_val = float(shift.total_hours)
-                    elif shift.end_time and shift.start_time:
-                        duration = shift.end_time - shift.start_time
-                        total_hours_val = round(duration.total_seconds() / 3600, 2)
-                    if total_hours_val is not None:
-                        if getattr(shift, 'total_payment', None) is not None:
-                            total_payment_val = float(shift.total_payment)
-                        elif getattr(shift, 'hourly_rate', None) is not None:
-                            total_payment_val = round(total_hours_val * float(shift.hourly_rate), 2)
-            except Exception:
-                total_hours_val = None
-                total_payment_val = None
-            
             all_shifts.append({
                 'id': shift.id,
                 'type': 'shift',
@@ -150,9 +134,9 @@ async def shifts_list(
                 'start_time': shift.start_time,
                 'end_time': shift.end_time,
                 'status': shift.status,
-                'total_hours': total_hours_val,
+                'total_hours': getattr(shift, 'total_hours', None),
                 'hourly_rate': shift.hourly_rate,
-                'total_payment': total_payment_val,
+                'total_payment': getattr(shift, 'total_payment', None),
                 'notes': shift.notes,
                 'created_at': shift.created_at,
                 'is_planned': shift.is_planned,
@@ -197,8 +181,27 @@ async def shifts_list(
                     'schedule_id': schedule.id
                 })
         
-        # Сортировка по времени
-        all_shifts.sort(key=lambda x: x['start_time'], reverse=True)
+        # Сортировка
+        if sort:
+            reverse = (order == "desc")
+            def sort_key(item):
+                if sort == "user_name":
+                    u = item.get('user')
+                    return (f"{u.first_name} {u.last_name or ''}".lower() if u else "")
+                if sort == "object_name":
+                    o = item.get('object')
+                    return (o.name.lower() if o and o.name else "")
+                if sort == "start_time":
+                    return item.get('start_time') or datetime.min
+                if sort == "status":
+                    return item.get('status') or ""
+                if sort == "created_at":
+                    return item.get('created_at') or datetime.min
+                return item.get('created_at') or datetime.min
+            all_shifts.sort(key=sort_key, reverse=reverse)
+        else:
+            # По умолчанию сортировка по времени начала (новые сверху)
+            all_shifts.sort(key=lambda x: x['start_time'] or datetime.min, reverse=True)
         
         # Пагинация
         total = len(all_shifts)
@@ -214,9 +217,10 @@ async def shifts_list(
         # Преобразование данных для шаблона
         formatted_shifts = []
         for shift in paginated_shifts:
-            # Форматирование времени
-            start_time_str = shift['start_time'].strftime('%d.%m.%Y %H:%M') if shift['start_time'] else '-'
-            end_time_str = shift['end_time'].strftime('%d.%m.%Y %H:%M') if shift['end_time'] else None
+            # Форматирование времени с учетом часового пояса объекта
+            tz_name = shift['object'].timezone if shift['object'] else 'Europe/Moscow'
+            start_time_str = web_timezone_helper.format_datetime_with_timezone(shift['start_time'], tz_name, '%d.%m.%Y %H:%M') if shift['start_time'] else '-'
+            end_time_str = web_timezone_helper.format_datetime_with_timezone(shift['end_time'], tz_name, '%d.%m.%Y %H:%M') if shift['end_time'] else None
             
             formatted_shifts.append({
                 'id': shift['id'],
@@ -257,6 +261,7 @@ async def shifts_list(
                 "date_to": date_to,
                 "object_id": object_id
             },
+            "sort": {"field": sort, "order": order},
             "pagination": {
                 "page": page,
                 "per_page": per_page,
@@ -313,7 +318,9 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
             "request": request,
             "current_user": current_user,
             "shift": shift,
-            "shift_type": shift_type
+            "shift_type": shift_type,
+            "object": shift.object,
+            "web_timezone_helper": web_timezone_helper
         })
 
 
