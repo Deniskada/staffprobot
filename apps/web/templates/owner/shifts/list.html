@@ -249,6 +249,11 @@
                                             <div class="fw-bold">{{ "%.1f"|format(shift.total_hours) }} ч</div>
                                             <small class="text-muted">{{ "%.0f"|format(shift.total_payment or 0) }} ₽</small>
                                         </div>
+                                        {% elif shift.type == 'schedule' and shift.hourly_rate %}
+                                        <div>
+                                            <div class="fw-bold text-info">Запланировано</div>
+                                            <small class="text-muted">{{ "%.1f"|format(shift.total_hours or 0) }} ч × {{ "%.0f"|format(shift.hourly_rate) }} ₽</small>
+                                        </div>
                                         {% elif shift.hourly_rate %}
                                         <div>
                                             <div class="fw-bold text-warning">В процессе</div>

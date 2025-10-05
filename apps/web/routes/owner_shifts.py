@@ -147,6 +147,10 @@ async def shifts_list(
         # Добавляем запланированные смены (если не отфильтрованы)
         if not status or status == "planned":
             for schedule in schedules:
+                # Рассчитываем часы и оплату для запланированных смен
+                planned_hours = schedule.planned_duration_hours if schedule.planned_duration_hours > 0 else None
+                planned_payment = schedule.planned_payment if schedule.planned_payment else None
+                
                 all_shifts.append({
                     'id': schedule.id,
                     'type': 'schedule',
@@ -155,10 +159,10 @@ async def shifts_list(
                     'start_time': schedule.planned_start,
                     'end_time': schedule.planned_end,
                     'status': schedule.status,
-                    'total_hours': None,
-                    'hourly_rate': None,
-                    'total_payment': None,
-                    'notes': None,
+                    'total_hours': planned_hours,
+                    'hourly_rate': schedule.hourly_rate,
+                    'total_payment': planned_payment,
+                    'notes': schedule.notes,
                     'created_at': schedule.created_at,
                     'is_planned': True,
                     'schedule_id': schedule.id
