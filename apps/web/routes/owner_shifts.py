@@ -167,13 +167,13 @@ async def shifts_list(
                 planned_payment = None
                 try:
                     if str(schedule.status) in ['planned', 'confirmed']:
-                        if getattr(schedule, 'planned_duration_hours', None) is not None:
-                            planned_hours = float(schedule.planned_duration_hours)
-                        elif schedule.planned_end and schedule.planned_start:
+                        # Вычисляем длительность из planned_end - planned_start
+                        if schedule.planned_end and schedule.planned_start:
                             duration = schedule.planned_end - schedule.planned_start
                             planned_hours = round(duration.total_seconds() / 3600, 2)
                         
-                        if planned_hours is not None and getattr(schedule, 'hourly_rate', None) is not None:
+                        # Вычисляем оплату как planned_hours * hourly_rate
+                        if planned_hours is not None and schedule.hourly_rate is not None:
                             planned_payment = round(planned_hours * float(schedule.hourly_rate), 2)
                 except Exception:
                     planned_hours = None
