@@ -178,7 +178,8 @@
                             </thead>
                             <tbody>
                                 {% for shift in shifts %}
-                                <tr>
+                                {% set is_incomplete = shift.type == 'shift' and shift.status == 'completed' and not (shift.total_hours and shift.total_payment) %}
+                                <tr{% if is_incomplete %} class="table-warning" style="background-color: rgba(255, 193, 7, 0.1);"{% endif %}>
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
@@ -249,10 +250,10 @@
                                             <div class="fw-bold">{{ "%.1f"|format(shift.total_hours) }} ч</div>
                                             <small class="text-muted">{{ "%.0f"|format(shift.total_payment or 0) }} ₽</small>
                                         </div>
-                                        {% elif shift.type == 'schedule' and shift.hourly_rate %}
+                                        {% elif shift.type == 'schedule' and shift.total_hours and shift.total_hours > 0 %}
                                         <div>
-                                            <div class="fw-bold text-info">Запланировано</div>
-                                            <small class="text-muted">{{ "%.1f"|format(shift.total_hours or 0) }} ч × {{ "%.0f"|format(shift.hourly_rate) }} ₽</small>
+                                            <div class="fw-bold">{{ "%.1f"|format(shift.total_hours) }} ч</div>
+                                            <small class="text-muted">{{ "%.0f"|format(shift.total_payment or 0) }} ₽</small>
                                         </div>
                                         {% elif shift.hourly_rate %}
                                         <div>
