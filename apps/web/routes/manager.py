@@ -32,6 +32,10 @@ from urllib.parse import quote
 router = APIRouter(prefix="/manager", tags=["manager"])
 templates = Jinja2Templates(directory="apps/web/templates")
 
+# Регистрируем Jinja2 фильтры для локального экземпляра templates
+from apps.web.utils.jinja_filters import register_filters
+register_filters(templates)
+
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:
     """Получает внутренний ID пользователя из current_user."""
