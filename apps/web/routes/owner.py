@@ -2486,12 +2486,18 @@ async def api_calendar_plan_shift(
             if existing_schedules:
                 raise HTTPException(status_code=400, detail="Сотрудник уже запланирован на это время")
 
-            # Определяем ставку: приоритет тайм-слот > объект
+            # Определяем ставку: приоритет тайм-слот > объект > договор сотрудника
             effective_rate = None
+            
+            # Приоритет 1: ставка тайм-слота
             if timeslot.hourly_rate and float(timeslot.hourly_rate) > 0:
                 effective_rate = timeslot.hourly_rate
+            # Приоритет 2: ставка объекта
             elif timeslot.object and timeslot.object.hourly_rate:
                 effective_rate = timeslot.object.hourly_rate
+            # Приоритет 3: ставка из активного договора сотрудника с доступом к объекту
+            elif not is_owner_assignee and contract and contract.hourly_rate:
+                effective_rate = contract.hourly_rate
             
             # Создаем запланированную смену
             new_schedule = ShiftSchedule(
