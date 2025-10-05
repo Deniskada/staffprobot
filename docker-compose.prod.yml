@@ -222,6 +222,7 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
+      - CELERY_BEAT_SCHEDULE_FILENAME=/app/celerybeat-schedule
     restart: unless-stopped
     depends_on:
       postgres:
