@@ -3206,6 +3206,25 @@ async def manager_shifts_list(
             
             # Добавляем обычные смены
             for shift in shifts:
+                # Корректные часы/оплата только для завершённых смен
+                total_hours_val = None
+                total_payment_val = None
+                try:
+                    if str(shift.status) == 'completed':
+                        if getattr(shift, 'total_hours', None) is not None:
+                            total_hours_val = float(shift.total_hours)
+                        elif shift.end_time and shift.start_time:
+                            duration = shift.end_time - shift.start_time
+                            total_hours_val = round(duration.total_seconds() / 3600, 2)
+                        if total_hours_val is not None:
+                            if getattr(shift, 'total_payment', None) is not None:
+                                total_payment_val = float(shift.total_payment)
+                            elif getattr(shift, 'hourly_rate', None) is not None:
+                                total_payment_val = round(total_hours_val * float(shift.hourly_rate), 2)
+                except Exception:
+                    total_hours_val = None
+                    total_payment_val = None
+
                 all_shifts.append({
                     'id': shift.id,
                     'type': 'shift',
@@ -3216,11 +3235,26 @@ async def manager_shifts_list(
                     'start_time': web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.start_time else '-',
                     'end_time': web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.end_time else '-',
                     'status': shift.status,
+                    'is_planned': getattr(shift, 'is_planned', False),
+                    'total_hours': total_hours_val,
+                    'total_payment': total_payment_val,
                     'created_at': shift.created_at
                 })
             
             # Добавляем запланированные смены
             for schedule in schedules:
+                # Плановые часы/оплата для planned/confirmed
+                planned_hours = None
+                planned_payment = None
+                try:
+                    if str(schedule.status) in ['planned', 'confirmed']:
+                        planned_hours = float(schedule.planned_duration_hours)
+                        if getattr(schedule, 'hourly_rate', None) is not None:
+                            planned_payment = round(planned_hours * float(schedule.hourly_rate), 2)
+                except Exception:
+                    planned_hours = None
+                    planned_payment = None
+
                 all_shifts.append({
                     'id': schedule.id,
                     'type': 'schedule',
@@ -3231,6 +3265,9 @@ async def manager_shifts_list(
                     'start_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_start, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_start else '-',
                     'end_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_end, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_end else '-',
                     'status': schedule.status,
+                    'is_planned': True,
+                    'total_hours': planned_hours,
+                    'total_payment': planned_payment,
                     'created_at': schedule.created_at
                 })
             
