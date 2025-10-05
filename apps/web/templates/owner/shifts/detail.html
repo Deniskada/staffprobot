@@ -168,7 +168,8 @@
                             {% if shift.total_payment %}
                                 {% set calculated_payment = shift.total_payment %}
                             {% elif calculated_hours > 0 and shift.hourly_rate %}
-                                {% set calculated_payment = calculated_hours * float(shift.hourly_rate) %}
+                                {% set hourly_rate_num = shift.hourly_rate|float %}
+                                {% set calculated_payment = calculated_hours * hourly_rate_num %}
                             {% endif %}
                             
                             <div class="row">
@@ -216,7 +217,8 @@
                             {% endif %}
                             
                             {% if planned_hours > 0 and shift.hourly_rate %}
-                                {% set planned_payment = planned_hours * float(shift.hourly_rate) %}
+                                {% set hourly_rate_num = shift.hourly_rate|float %}
+                                {% set planned_payment = planned_hours * hourly_rate_num %}
                             {% endif %}
                             
                             <div class="row">
