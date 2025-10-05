@@ -123,6 +123,10 @@ async def shifts_list(
         
         # Добавляем реальные смены (отработанные)
         for shift in shifts:
+            # Рассчитываем часы и оплату динамически
+            calculated_hours = shift.duration_hours if shift.end_time else None
+            calculated_payment = shift.calculate_payment() if shift.end_time else None
+            
             all_shifts.append({
                 'id': shift.id,
                 'type': 'shift',
@@ -131,9 +135,9 @@ async def shifts_list(
                 'start_time': shift.start_time,
                 'end_time': shift.end_time,
                 'status': shift.status,
-                'total_hours': shift.total_hours,
+                'total_hours': calculated_hours,
                 'hourly_rate': shift.hourly_rate,
-                'total_payment': shift.total_payment,
+                'total_payment': calculated_payment,
                 'notes': shift.notes,
                 'created_at': shift.created_at,
                 'is_planned': shift.is_planned,
@@ -174,6 +178,32 @@ async def shifts_list(
         objects_result = await session.execute(objects_query)
         objects = objects_result.scalars().all()
         
+        # Преобразование данных для шаблона
+        formatted_shifts = []
+        for shift in paginated_shifts:
+            # Форматирование времени
+            start_time_str = shift['start_time'].strftime('%d.%m.%Y %H:%M') if shift['start_time'] else '-'
+            end_time_str = shift['end_time'].strftime('%d.%m.%Y %H:%M') if shift['end_time'] else None
+            
+            formatted_shifts.append({
+                'id': shift['id'],
+                'type': shift['type'],
+                'user_id': shift['user'].id if shift['user'] else None,
+                'user_name': f"{shift['user'].first_name} {shift['user'].last_name or ''}".strip() if shift['user'] else 'Неизвестно',
+                'object_id': shift['object'].id if shift['object'] else None,
+                'object_name': shift['object'].name if shift['object'] else 'Неизвестно',
+                'start_time': start_time_str,
+                'end_time': end_time_str,
+                'status': shift['status'],
+                'total_hours': shift['total_hours'],
+                'hourly_rate': shift['hourly_rate'],
+                'total_payment': shift['total_payment'],
+                'notes': shift['notes'],
+                'created_at': shift['created_at'],
+                'is_planned': shift['is_planned'],
+                'schedule_id': shift['schedule_id']
+            })
+        
         # Статистика
         stats = {
             'total': total,
@@ -185,7 +215,7 @@ async def shifts_list(
         return templates.TemplateResponse("owner/shifts/list.html", {
             "request": request,
             "current_user": current_user,
-            "shifts": paginated_shifts,
+            "shifts": formatted_shifts,
             "objects": objects,
             "stats": stats,
             "filters": {
