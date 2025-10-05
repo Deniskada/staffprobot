@@ -23,6 +23,9 @@ celery_app.conf.update(
     timezone=settings.default_timezone,
     enable_utc=True,
     
+    # Путь к файлу расписания Beat
+    beat_schedule_filename='/app/celerybeat-schedule',
+    
     # Сериализация
     task_serializer="json",
     accept_content=["json"],
