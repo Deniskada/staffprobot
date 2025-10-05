@@ -3906,8 +3906,8 @@ async def owner_timeslot_create(
         raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слота: {str(e)}")
 
 
-@router.get("/shifts", response_class=HTMLResponse, name="owner_shifts")
-async def owner_shifts_list(
+@router.get("/shifts_legacy", response_class=HTMLResponse, name="owner_shifts_legacy")
+async def owner_shifts_list_legacy(
     request: Request,
     status: Optional[str] = Query(None, description="Фильтр по статусу: active, planned, completed, cancelled"),
     date_from: Optional[str] = Query(None, description="Дата начала (YYYY-MM-DD)"),
@@ -4112,8 +4112,8 @@ async def owner_shifts_list(
         raise HTTPException(status_code=500, detail="Ошибка загрузки смен")
 
 
-@router.get("/shifts/{shift_id}", response_class=HTMLResponse)
-async def owner_shift_detail(
+@router.get("/shifts_legacy/{shift_id}", response_class=HTMLResponse)
+async def owner_shift_detail_legacy(
     request: Request, 
     shift_id: str,  # Изменено на str для поддержки префикса schedule_
     shift_type: Optional[str] = Query("shift"),
@@ -4195,8 +4195,8 @@ async def owner_shift_detail(
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
 
 
-@router.post("/shifts/{shift_id}/cancel")
-async def owner_cancel_shift(
+@router.post("/shifts_legacy/{shift_id}/cancel")
+async def owner_cancel_shift_legacy(
     request: Request, 
     shift_id: str,  # Изменено на str для поддержки префикса schedule_
     shift_type: Optional[str] = Query("shift"),
