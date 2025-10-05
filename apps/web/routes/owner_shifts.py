@@ -148,8 +148,8 @@ async def shifts_list(
         if not status or status == "planned":
             for schedule in schedules:
                 # Рассчитываем часы и оплату для запланированных смен
-                planned_hours = schedule.planned_duration_hours if schedule.planned_duration_hours > 0 else None
-                planned_payment = schedule.planned_payment if schedule.planned_payment else None
+                planned_hours = schedule.planned_duration_hours
+                planned_payment = schedule.planned_payment
                 
                 all_shifts.append({
                     'id': schedule.id,
