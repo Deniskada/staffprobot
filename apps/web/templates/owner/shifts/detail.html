@@ -147,7 +147,7 @@
                     </div>
 
                     <!-- Финансовая информация -->
-                    {% if shift_type == 'shift' and (shift.total_hours or shift.total_payment) %}
+                    {% if shift_type == 'shift' and shift.hourly_rate %}
                     <div class="card mb-4">
                         <div class="card-header">
                             <h5 class="mb-0">
@@ -155,11 +155,27 @@
                             </h5>
                         </div>
                         <div class="card-body">
+                            {% set calculated_hours = 0 %}
+                            {% set calculated_payment = 0 %}
+                            
+                            {% if shift.total_hours %}
+                                {% set calculated_hours = shift.total_hours %}
+                            {% elif shift.end_time and shift.start_time %}
+                                {% set time_diff = (shift.end_time - shift.start_time).total_seconds() / 3600 %}
+                                {% set calculated_hours = time_diff %}
+                            {% endif %}
+                            
+                            {% if shift.total_payment %}
+                                {% set calculated_payment = shift.total_payment %}
+                            {% elif calculated_hours > 0 and shift.hourly_rate %}
+                                {% set calculated_payment = calculated_hours * shift.hourly_rate %}
+                            {% endif %}
+                            
                             <div class="row">
                                 <div class="col-md-4">
                                     <div class="text-center">
                                         <div class="fs-2 fw-bold text-primary">
-                                            {{ "%.1f"|format(shift.total_hours or 0) }}
+                                            {{ "%.1f"|format(calculated_hours) }}
                                         </div>
                                         <div class="text-muted">Часов отработано</div>
                                     </div>
@@ -167,7 +183,7 @@
                                 <div class="col-md-4">
                                     <div class="text-center">
                                         <div class="fs-2 fw-bold text-success">
-                                            {{ "%.0f"|format(shift.hourly_rate or 0) }} ₽
+                                            {{ "%.0f"|format(shift.hourly_rate) }} ₽
                                         </div>
                                         <div class="text-muted">Почасовая ставка</div>
                                     </div>
@@ -175,9 +191,57 @@
                                 <div class="col-md-4">
                                     <div class="text-center">
                                         <div class="fs-2 fw-bold text-warning">
-                                            {{ "%.0f"|format(shift.total_payment or 0) }} ₽
+                                            {{ "%.0f"|format(calculated_payment) }} ₽
                                         </div>
                                         <div class="text-muted">Общая сумма</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% elif shift_type == 'schedule' and shift.hourly_rate %}
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-currency-dollar"></i> Финансовая информация
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% set planned_hours = 0 %}
+                            {% set planned_payment = 0 %}
+                            
+                            {% if shift.planned_end and shift.planned_start %}
+                                {% set time_diff = (shift.planned_end - shift.planned_start).total_seconds() / 3600 %}
+                                {% set planned_hours = time_diff %}
+                            {% endif %}
+                            
+                            {% if planned_hours > 0 and shift.hourly_rate %}
+                                {% set planned_payment = planned_hours * shift.hourly_rate %}
+                            {% endif %}
+                            
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <div class="fs-2 fw-bold text-primary">
+                                            {{ "%.1f"|format(planned_hours) }}
+                                        </div>
+                                        <div class="text-muted">Часов запланировано</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <div class="fs-2 fw-bold text-success">
+                                            {{ "%.0f"|format(shift.hourly_rate) }} ₽
+                                        </div>
+                                        <div class="text-muted">Почасовая ставка</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <div class="fs-2 fw-bold text-warning">
+                                            {{ "%.0f"|format(planned_payment) }} ₽
+                                        </div>
+                                        <div class="text-muted">Плановая сумма</div>
                                     </div>
                                 </div>
                             </div>
