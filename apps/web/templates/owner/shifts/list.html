@@ -178,7 +178,7 @@
                             </thead>
                             <tbody>
                                 {% for shift in shifts %}
-                                {% set is_incomplete = shift.type == 'shift' and shift.status == 'completed' and not (shift.total_hours and shift.total_payment) %}
+                                {% set is_incomplete = shift.type == 'shift' and shift.status == 'completed' and (not shift.total_hours or not shift.total_payment) %}
                                 <tr{% if is_incomplete %} style="background-color: rgba(220, 53, 69, 0.15);"{% endif %}>
                                     <td>
                                         <div class="d-flex align-items-center">

@@ -175,6 +175,7 @@ async def shifts_list(
                         # Вычисляем оплату как planned_hours * hourly_rate
                         if planned_hours is not None and schedule.hourly_rate is not None:
                             planned_payment = round(planned_hours * float(schedule.hourly_rate), 2)
+                        
                 except Exception:
                     planned_hours = None
                     planned_payment = None
