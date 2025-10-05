@@ -250,20 +250,10 @@
                                             <div class="fw-bold">{{ "%.1f"|format(shift.total_hours) }} ч</div>
                                             <small class="text-muted">{{ "%.0f"|format(shift.total_payment or 0) }} ₽</small>
                                         </div>
-                                        {% elif shift.type == 'schedule' and shift.hourly_rate %}
+                                        {% elif shift.type == 'schedule' and shift.total_hours and shift.total_hours > 0 %}
                                         <div>
-                                            {% set planned_hours = 0 %}
-                                            {% set planned_payment = 0 %}
-                                            {% if shift.end_time and shift.start_time %}
-                                                {% set time_diff = (shift.end_time - shift.start_time).total_seconds() / 3600 %}
-                                                {% set planned_hours = time_diff %}
-                                            {% endif %}
-                                            {% if planned_hours > 0 %}
-                                                {% set hourly_rate_num = shift.hourly_rate|float %}
-                                                {% set planned_payment = planned_hours * hourly_rate_num %}
-                                            {% endif %}
-                                            <div class="fw-bold">{{ "%.1f"|format(planned_hours) }} ч</div>
-                                            <small class="text-muted">{{ "%.0f"|format(planned_payment) }} ₽</small>
+                                            <div class="fw-bold">{{ "%.1f"|format(shift.total_hours) }} ч</div>
+                                            <small class="text-muted">{{ "%.0f"|format(shift.total_payment or 0) }} ₽</small>
                                         </div>
                                         {% elif shift.hourly_rate %}
                                         <div>
