@@ -123,9 +123,24 @@ async def shifts_list(
         
         # Добавляем реальные смены (отработанные)
         for shift in shifts:
-            # Рассчитываем часы и оплату динамически
-            calculated_hours = shift.duration_hours if shift.end_time else None
-            calculated_payment = shift.calculate_payment() if shift.end_time else None
+            # Корректные часы/оплата только для завершённых смен
+            total_hours_val = None
+            total_payment_val = None
+            try:
+                if str(shift.status) == 'completed':
+                    if getattr(shift, 'total_hours', None) is not None:
+                        total_hours_val = float(shift.total_hours)
+                    elif shift.end_time and shift.start_time:
+                        duration = shift.end_time - shift.start_time
+                        total_hours_val = round(duration.total_seconds() / 3600, 2)
+                    if total_hours_val is not None:
+                        if getattr(shift, 'total_payment', None) is not None:
+                            total_payment_val = float(shift.total_payment)
+                        elif getattr(shift, 'hourly_rate', None) is not None:
+                            total_payment_val = round(total_hours_val * float(shift.hourly_rate), 2)
+            except Exception:
+                total_hours_val = None
+                total_payment_val = None
             
             all_shifts.append({
                 'id': shift.id,
@@ -135,9 +150,9 @@ async def shifts_list(
                 'start_time': shift.start_time,
                 'end_time': shift.end_time,
                 'status': shift.status,
-                'total_hours': calculated_hours,
+                'total_hours': total_hours_val,
                 'hourly_rate': shift.hourly_rate,
-                'total_payment': calculated_payment,
+                'total_payment': total_payment_val,
                 'notes': shift.notes,
                 'created_at': shift.created_at,
                 'is_planned': shift.is_planned,
@@ -147,9 +162,22 @@ async def shifts_list(
         # Добавляем запланированные смены (если не отфильтрованы)
         if not status or status == "planned":
             for schedule in schedules:
-                # Рассчитываем часы и оплату для запланированных смен
-                planned_hours = schedule.planned_duration_hours
-                planned_payment = schedule.planned_payment
+                # Плановые часы/оплата для planned/confirmed
+                planned_hours = None
+                planned_payment = None
+                try:
+                    if str(schedule.status) in ['planned', 'confirmed']:
+                        if getattr(schedule, 'planned_duration_hours', None) is not None:
+                            planned_hours = float(schedule.planned_duration_hours)
+                        elif schedule.planned_end and schedule.planned_start:
+                            duration = schedule.planned_end - schedule.planned_start
+                            planned_hours = round(duration.total_seconds() / 3600, 2)
+                        
+                        if planned_hours is not None and getattr(schedule, 'hourly_rate', None) is not None:
+                            planned_payment = round(planned_hours * float(schedule.hourly_rate), 2)
+                except Exception:
+                    planned_hours = None
+                    planned_payment = None
                 
                 all_shifts.append({
                     'id': schedule.id,
