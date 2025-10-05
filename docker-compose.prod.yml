@@ -208,7 +208,7 @@ services:
   celery_beat:
     image: staffprobot-celery_beat:latest
     container_name: staffprobot_celery_beat_prod
-    command: python scripts/start_celery_beat.py
+    command: celery -A core.celery.celery_app beat --schedule=/app/celerybeat-schedule
     volumes:
       - .:/app
       - celery_beat_prod_data:/tmp
