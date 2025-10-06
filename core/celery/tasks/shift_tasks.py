@@ -55,7 +55,7 @@ def auto_close_shifts(self):
                     .filter(
                         and_(
                             Shift.status == 'active',
-                            Shift.start_time < now
+                            Shift.start_time < now_utc
                         )
                     )
                 )
@@ -105,7 +105,7 @@ def auto_close_shifts(self):
                     .filter(
                         and_(
                             ShiftSchedule.status == 'confirmed',
-                            ShiftSchedule.planned_start < now,
+                            ShiftSchedule.planned_start < now_utc,
                             ShiftSchedule.auto_closed == False
                         )
                     )
