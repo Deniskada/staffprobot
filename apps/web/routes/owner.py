@@ -4857,7 +4857,7 @@ async def owner_planning_template_delete(request: Request, template_id: int):
 @router.get("/employees", response_class=HTMLResponse)
 async def owner_employees_list(
     request: Request,
-    view_mode: str = Query("cards", description="Режим отображения: cards или list"),
+    view_mode: str = Query("list", description="Режим отображения: cards или list"),
     show_former: bool = Query(False, description="Показать бывших сотрудников"),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
