@@ -499,7 +499,7 @@ class ContractService:
                 # Определяем доступные объекты для этого договора
                 contract_objects = []
                 if contract.allowed_objects:
-                    # Если указаны конкретные объекты
+                    # Если указаны конкретные объекты - доступ только к ним
                     for obj_id in contract.allowed_objects:
                         if obj_id in objects:
                             obj = objects[obj_id]
@@ -509,17 +509,7 @@ class ContractService:
                                 'address': obj.address
                             })
                             employees[employee.id]['accessible_objects'].add(obj.id)
-                else:
-                    # Если не указаны - доступ ко всем объектам
-                    contract_objects = [
-                        {
-                            'id': obj.id,
-                            'name': obj.name,
-                            'address': obj.address
-                        } for obj in objects.values()
-                    ]
-                    for obj in objects.values():
-                        employees[employee.id]['accessible_objects'].add(obj.id)
+                # Если allowed_objects пустой - нет доступа к объектам (не добавляем ничего)
                 
                 employees[employee.id]['contracts'].append({
                     'id': contract.id,
@@ -597,7 +587,7 @@ class ContractService:
                 contract_objects = []
                 if contract.status == 'active' and contract.is_active:
                     if contract.allowed_objects:
-                        # Если указаны конкретные объекты
+                        # Если указаны конкретные объекты - доступ только к ним
                         for obj_id in contract.allowed_objects:
                             if obj_id in objects:
                                 obj = objects[obj_id]
@@ -607,17 +597,7 @@ class ContractService:
                                     'address': obj.address
                                 })
                                 employees[employee.id]['accessible_objects'].add(obj.id)
-                    else:
-                        # Если не указаны - доступ ко всем объектам
-                        contract_objects = [
-                            {
-                                'id': obj.id,
-                                'name': obj.name,
-                                'address': obj.address
-                            } for obj in objects.values()
-                        ]
-                        for obj in objects.values():
-                            employees[employee.id]['accessible_objects'].add(obj.id)
+                    # Если allowed_objects пустой - нет доступа к объектам (не добавляем ничего)
                 
                 employees[employee.id]['contracts'].append({
                     'id': contract.id,
@@ -952,6 +932,22 @@ class ContractService:
                     objects = objects_result.scalars().all()
                     objects_info = {obj.id: obj for obj in objects}
             
+            # Собираем все уникальные объекты, к которым есть доступ
+            accessible_objects = []
+            accessible_object_ids = set()
+            
+            for contract in contracts:
+                if contract.allowed_objects:
+                    for obj_id in contract.allowed_objects:
+                        if obj_id in objects_info and obj_id not in accessible_object_ids:
+                            obj = objects_info[obj_id]
+                            accessible_objects.append({
+                                'id': obj.id,
+                                'name': obj.name,
+                                'address': obj.address
+                            })
+                            accessible_object_ids.add(obj_id)
+            
             return {
                 'id': employee.id,
                 'telegram_id': employee.telegram_id,
@@ -959,6 +955,7 @@ class ContractService:
                 'last_name': employee.last_name,
                 'username': employee.username,
                 'created_at': employee.created_at,
+                'accessible_objects': accessible_objects,
                 'contracts': [{
                     'id': contract.id,
                     'contract_number': contract.contract_number,
