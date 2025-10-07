@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
+from core.logging.logger import logger
 from domain.entities.contract import Contract, ContractTemplate, ContractVersion
 from domain.entities.user import User, UserRole
 from domain.entities.object import Object
@@ -154,6 +155,37 @@ class ContractService:
             if not employee:
                 raise ValueError(f"Сотрудник с Telegram ID {contract_data['employee_telegram_id']} не найден")
             
+            # Проверяем пересечение объектов в активных договорах (опционально)
+            # Пока разрешаем создание нескольких договоров с одним сотрудником
+            # TODO: В будущем можно добавить проверку пересечения объектов
+            
+            # Валидация обязательных полей
+            hourly_rate = contract_data.get("hourly_rate")
+            if not hourly_rate:
+                # Пытаемся получить ставку из объекта
+                if contract_data.get("allowed_objects"):
+                    # Получаем ставку из первого объекта
+                    from domain.entities.object import Object
+                    object_query = select(Object).where(Object.id == contract_data["allowed_objects"][0])
+                    object_result = await session.execute(object_query)
+                    object_entity = object_result.scalar_one_or_none()
+                    
+                    if object_entity and object_entity.hourly_rate:
+                        hourly_rate = object_entity.hourly_rate
+                        logger.info(f"Автоматически установлена ставка {hourly_rate} из объекта {object_entity.id}")
+                    else:
+                        raise ValueError("Часовая ставка обязательна. Укажите ставку в договоре или выберите объект с установленной ставкой.")
+                else:
+                    raise ValueError("Часовая ставка обязательна. Укажите ставку в договоре или выберите объект с установленной ставкой.")
+            
+            if hourly_rate <= 0:
+                raise ValueError("Ставка должна быть больше 0")
+            
+            # Получаем название договора (теперь обязательное поле)
+            title = contract_data.get("title")
+            if not title or title.strip() == "":
+                raise ValueError("Название договора обязательно")
+            
             # Генерируем номер договора
             contract_number = await self._generate_contract_number(owner.id)
             
@@ -171,18 +203,28 @@ class ContractService:
                     # Генерируем контент из шаблона
                     content = await self._generate_content_from_template(template.content, values, owner, employee)
             
+            # Парсим даты если они переданы как строки
+            from datetime import date
+            start_date = contract_data["start_date"]
+            if isinstance(start_date, str):
+                start_date = date.fromisoformat(start_date)
+            
+            end_date = contract_data.get("end_date")
+            if end_date and isinstance(end_date, str):
+                end_date = date.fromisoformat(end_date)
+            
             # Создаем договор
             contract = Contract(
                 contract_number=contract_number,
                 owner_id=owner.id,
                 employee_id=employee.id,
                 template_id=contract_data.get("template_id"),
-                title=contract_data["title"],
+                title=title,
                 content=content,
                 values=values if values else None,
-                hourly_rate=contract_data.get("hourly_rate"),
-                start_date=contract_data["start_date"],
-                end_date=contract_data.get("end_date"),
+                hourly_rate=hourly_rate,
+                start_date=start_date,
+                end_date=end_date,
                 allowed_objects=contract_data.get("allowed_objects", []),
                 is_manager=contract_data.get("is_manager", False),
                 manager_permissions=contract_data.get("manager_permissions"),

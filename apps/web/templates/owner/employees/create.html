@@ -142,13 +142,14 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="hourly_rate" class="form-label">Почасовая ставка (₽)</label>
+                                    <label for="hourly_rate" class="form-label">Почасовая ставка (₽) <span class="text-danger">*</span></label>
                                     <input type="number" 
                                            class="form-control" 
                                            id="hourly_rate" 
                                            name="hourly_rate" 
                                            min="0"
-                                           placeholder="500">
+                                           required
+                                           placeholder="500 (или выберите объект с установленной ставкой)">
                                 </div>
                             </div>
                             <div class="col-md-6">
