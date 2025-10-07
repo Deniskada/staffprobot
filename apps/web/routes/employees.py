@@ -176,16 +176,12 @@ async def create_contract(
     try:
         contract_service = ContractService()
         
-        # Валидация
-        if not hourly_rate:
-            raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
-        
-        if hourly_rate <= 0:
-            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+        # Валидация теперь происходит в сервисе
         
         # Парсим даты
-        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
-        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+        from datetime import date
+        start_date_obj = date.fromisoformat(start_date)
+        end_date_obj = date.fromisoformat(end_date) if end_date else None
         
         # Получаем данные формы для динамических полей
         form_data = await request.form()
@@ -246,9 +242,14 @@ async def create_contract(
         else:
             raise HTTPException(status_code=400, detail="Ошибка создания договора")
             
+    except ValueError as e:
+        # Это наша кастомная ошибка валидации
+        logger.error(f"Contract validation error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        # Общие ошибки
         logger.error(f"Error creating contract: {e}")
-        raise HTTPException(status_code=400, detail=f"Ошибка создания договора: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Внутренняя ошибка сервера: {str(e)}")
 
 
 @router.get("/{employee_id}", response_class=HTMLResponse)
@@ -354,12 +355,7 @@ async def update_contract(
     try:
         contract_service = ContractService()
         
-        # Валидация
-        if not hourly_rate:
-            raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
-        
-        if hourly_rate <= 0:
-            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
+        # Валидация теперь происходит в сервисе
         
         # Парсим даты
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
