@@ -146,11 +146,47 @@
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Сотрудник</th>
-                                    <th>Telegram ID</th>
+                                    <th>
+                                        <a href="?sort_by=employee&sort_order={% if sort_by == 'employee' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}{{ '&show_former=true' if show_former else '' }}{{ '&view_mode=' ~ view_mode if view_mode else '' }}"
+                                           class="text-decoration-none text-dark">
+                                            Сотрудник
+                                            {% if sort_by == 'employee' %}
+                                                {% if sort_order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?sort_by=telegram_id&sort_order={% if sort_by == 'telegram_id' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}{{ '&show_former=true' if show_former else '' }}{{ '&view_mode=' ~ view_mode if view_mode else '' }}"
+                                           class="text-decoration-none text-dark">
+                                            Telegram ID
+                                            {% if sort_by == 'telegram_id' %}
+                                                {% if sort_order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
                                     <th>Договоры</th>
                                     <th>Доступ к объектам</th>
-                                    <th>Статус</th>
+                                    <th>
+                                        <a href="?sort_by=status&sort_order={% if sort_by == 'status' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}{{ '&show_former=true' if show_former else '' }}{{ '&view_mode=' ~ view_mode if view_mode else '' }}"
+                                           class="text-decoration-none text-dark">
+                                            Статус
+                                            {% if sort_by == 'status' %}
+                                                {% if sort_order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
                                     <th>Действия</th>
                                 </tr>
                             </thead>
