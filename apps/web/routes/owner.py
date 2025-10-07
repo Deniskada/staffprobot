@@ -4858,6 +4858,8 @@ async def owner_planning_template_delete(request: Request, template_id: int):
 async def owner_employees_list(
     request: Request,
     view_mode: str = Query("list", description="Режим отображения: cards или list"),
+    sort_by: str = Query("employee", description="Сортировка: employee | telegram_id | status"),
+    sort_order: str = Query("asc", description="Порядок сортировки: asc | desc"),
     show_former: bool = Query(False, description="Показать бывших сотрудников"),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
@@ -4880,16 +4882,50 @@ async def owner_employees_list(
         else:
             employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
 
-        # Сортировка: сначала по фамилии, затем по имени (локально, так как employees — dict-like)
-        def sort_key(emp):
-            last_name = (emp.get('last_name') or '').strip().lower()
-            first_name = (emp.get('first_name') or '').strip().lower()
-            return (last_name, first_name)
+        # Нормализация параметров сортировки
+        sort_by_norm = (sort_by or "employee").strip().lower()
+        allowed_sort_by = {"employee", "telegram_id", "status"}
+        if sort_by_norm not in allowed_sort_by:
+            sort_by_norm = "employee"
+
+        sort_order_norm = (sort_order or "asc").strip().lower()
+        if sort_order_norm not in {"asc", "desc"}:
+            sort_order_norm = "asc"
+
+        # Вспомогательные вычисления
+        def is_active_employee(emp: dict) -> bool:
+            contracts = emp.get("contracts") or []
+            for c in contracts:
+                if c.get("status") == "active" and c.get("is_active") is True:
+                    return True
+            return False
+
+        # Ключи сортировки
+        def key_employee(emp: dict):
+            return (
+                (emp.get("last_name") or "").strip().lower(),
+                (emp.get("first_name") or "").strip().lower(),
+            )
+
+        def key_telegram(emp: dict):
+            try:
+                return int(emp.get("telegram_id") or 0)
+            except Exception:
+                return 0
+
+        def key_status(emp: dict):
+            # Активные первыми при asc
+            return 0 if is_active_employee(emp) else 1
+
+        key_func = key_employee
+        if sort_by_norm == "telegram_id":
+            key_func = key_telegram
+        elif sort_by_norm == "status":
+            key_func = key_status
 
         try:
-            employees = sorted(employees, key=sort_key)
+            employees = sorted(employees, key=key_func, reverse=(sort_order_norm == "desc"))
         except Exception:
-            # На случай если структура иная — не падаем, оставляем как есть
             pass
         
         # Получаем данные для переключения интерфейсов
@@ -4903,6 +4939,8 @@ async def owner_employees_list(
                 "title": "Управление сотрудниками",
                 "current_user": current_user,
                 "view_mode": view_mode,
+                "sort_by": sort_by_norm,
+                "sort_order": sort_order_norm,
                 "show_former": show_former,
                 "available_interfaces": available_interfaces
             }
