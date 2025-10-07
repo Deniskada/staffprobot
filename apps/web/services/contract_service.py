@@ -954,6 +954,17 @@ class ContractService:
                 'first_name': employee.first_name,
                 'last_name': employee.last_name,
                 'username': employee.username,
+                'phone': employee.phone,
+                'email': employee.email,
+                'birth_date': employee.birth_date,
+                'work_experience': employee.work_experience,
+                'education': employee.education,
+                'skills': employee.skills,
+                'about': employee.about,
+                'preferred_schedule': employee.preferred_schedule,
+                'min_salary': employee.min_salary,
+                'availability_notes': employee.availability_notes,
+                'is_active': employee.is_active,
                 'created_at': employee.created_at,
                 'accessible_objects': accessible_objects,
                 'contracts': [{
@@ -966,6 +977,117 @@ class ContractService:
                     'end_date': contract.end_date,
                     'allowed_objects': contract.allowed_objects or [],
                     'is_active': contract.is_active,
+                    'is_manager': contract.is_manager,
+                    'manager_permissions': contract.manager_permissions,
+                    'allowed_objects_info': [objects_info.get(obj_id) for obj_id in (contract.allowed_objects or []) if objects_info.get(obj_id)]
+                } for contract in contracts]
+            }
+    
+    async def get_employee_by_id(self, employee_id: int, manager_telegram_id: int) -> Optional[Dict[str, Any]]:
+        """Получение информации о сотруднике по внутреннему ID (для управляющих)."""
+        async with get_async_session() as session:
+            # Сначала находим управляющего по telegram_id
+            manager_query = select(User).where(User.telegram_id == manager_telegram_id)
+            manager_result = await session.execute(manager_query)
+            manager = manager_result.scalar_one_or_none()
+            
+            if not manager:
+                return None
+            
+            # Получаем сотрудника по внутреннему ID
+            employee_query = select(User).where(User.id == employee_id)
+            employee_result = await session.execute(employee_query)
+            employee = employee_result.scalar_one_or_none()
+            
+            if not employee:
+                return None
+            
+            # Для управляющего получаем договоры, где он имеет права доступа
+            # Это могут быть договоры, где управляющий является владельцем ИЛИ имеет права управляющего
+            from shared.services.manager_permission_service import ManagerPermissionService
+            permission_service = ManagerPermissionService(session)
+            accessible_objects = await permission_service.get_user_accessible_objects(manager.id)
+            
+            if not accessible_objects:
+                return None
+            
+            # Получаем ID владельцев объектов, к которым есть доступ
+            owner_ids = [obj.owner_id for obj in accessible_objects]
+            
+            # Получаем договоры с этим сотрудником от владельцев, к объектам которых есть доступ
+            query = select(Contract).where(
+                and_(
+                    Contract.employee_id == employee_id,
+                    Contract.owner_id.in_(owner_ids)
+                )
+            ).options(
+                selectinload(Contract.employee)
+            )
+            
+            result = await session.execute(query)
+            contracts = result.scalars().all()
+            
+            # Получаем информацию об объектах
+            objects_info = {}
+            if contracts:
+                object_ids = set()
+                for contract in contracts:
+                    if contract.allowed_objects:
+                        object_ids.update(contract.allowed_objects)
+                
+                if object_ids:
+                    objects_query = select(Object).where(Object.id.in_(object_ids))
+                    objects_result = await session.execute(objects_query)
+                    objects = objects_result.scalars().all()
+                    objects_info = {obj.id: obj for obj in objects}
+            
+            # Собираем все уникальные объекты, к которым есть доступ
+            accessible_objects = []
+            accessible_object_ids = set()
+            
+            for contract in contracts:
+                if contract.allowed_objects:
+                    for obj_id in contract.allowed_objects:
+                        if obj_id in objects_info and obj_id not in accessible_object_ids:
+                            obj = objects_info[obj_id]
+                            accessible_objects.append({
+                                'id': obj.id,
+                                'name': obj.name,
+                                'address': obj.address
+                            })
+                            accessible_object_ids.add(obj_id)
+            
+            return {
+                'id': employee.id,
+                'telegram_id': employee.telegram_id,
+                'first_name': employee.first_name,
+                'last_name': employee.last_name,
+                'username': employee.username,
+                'phone': employee.phone,
+                'email': employee.email,
+                'birth_date': employee.birth_date,
+                'work_experience': employee.work_experience,
+                'education': employee.education,
+                'skills': employee.skills,
+                'about': employee.about,
+                'preferred_schedule': employee.preferred_schedule,
+                'min_salary': employee.min_salary,
+                'availability_notes': employee.availability_notes,
+                'is_active': employee.is_active,
+                'created_at': employee.created_at,
+                'accessible_objects': accessible_objects,
+                'contracts': [{
+                    'id': contract.id,
+                    'contract_number': contract.contract_number,
+                    'title': contract.title,
+                    'status': contract.status,
+                    'hourly_rate': contract.hourly_rate,
+                    'start_date': contract.start_date,
+                    'end_date': contract.end_date,
+                    'allowed_objects': contract.allowed_objects or [],
+                    'is_active': contract.is_active,
+                    'is_manager': contract.is_manager,
+                    'manager_permissions': contract.manager_permissions,
                     'allowed_objects_info': [objects_info.get(obj_id) for obj_id in (contract.allowed_objects or []) if objects_info.get(obj_id)]
                 } for contract in contracts]
             }
@@ -1087,6 +1209,124 @@ class ContractService:
                     "version": contract.template.version
                 } if contract.template else None
             }
+    
+    async def get_contract_by_id_for_manager(self, contract_id: int, manager_telegram_id: int) -> Optional[Dict[str, Any]]:
+        """Получение договора по ID для управляющего с проверкой прав доступа."""
+        async with get_async_session() as session:
+            # Сначала находим управляющего по telegram_id
+            manager_query = select(User).where(User.telegram_id == manager_telegram_id)
+            manager_result = await session.execute(manager_query)
+            manager = manager_result.scalar_one_or_none()
+            
+            if not manager:
+                return None
+            
+            # Проверяем права доступа управляющего
+            from shared.services.manager_permission_service import ManagerPermissionService
+            permission_service = ManagerPermissionService(session)
+            accessible_objects = await permission_service.get_user_accessible_objects(manager.id)
+            
+            if not accessible_objects:
+                return None
+            
+            # Получаем ID владельцев объектов, к которым есть доступ
+            owner_ids = [obj.owner_id for obj in accessible_objects]
+            
+            # Получаем договор, если владелец входит в список доступных
+            query = select(Contract).where(
+                and_(
+                    Contract.id == contract_id,
+                    Contract.owner_id.in_(owner_ids)
+                )
+            ).options(
+                selectinload(Contract.employee),
+                selectinload(Contract.template)
+            )
+            
+            result = await session.execute(query)
+            contract = result.scalar_one_or_none()
+            
+            if not contract:
+                return None
+            
+            return {
+                "id": contract.id,
+                "contract_number": contract.contract_number,
+                "title": contract.title,
+                "content": contract.content,
+                "status": contract.status,
+                "hourly_rate": contract.hourly_rate,
+                "start_date": contract.start_date,
+                "end_date": contract.end_date,
+                "allowed_objects": contract.allowed_objects or [],
+                "employee": {
+                    "id": contract.employee.id,
+                    "telegram_id": contract.employee.telegram_id,
+                    "first_name": contract.employee.first_name,
+                    "last_name": contract.employee.last_name,
+                    "phone": contract.employee.phone,
+                    "email": contract.employee.email
+                }
+            }
+    
+    async def update_contract_for_manager(self, contract_id: int, manager_telegram_id: int, update_data: Dict[str, Any]) -> bool:
+        """Обновление договора управляющим с проверкой прав доступа."""
+        async with get_async_session() as session:
+            # Сначала находим управляющего по telegram_id
+            manager_query = select(User).where(User.telegram_id == manager_telegram_id)
+            manager_result = await session.execute(manager_query)
+            manager = manager_result.scalar_one_or_none()
+            
+            if not manager:
+                return False
+            
+            # Проверяем права доступа управляющего
+            from shared.services.manager_permission_service import ManagerPermissionService
+            permission_service = ManagerPermissionService(session)
+            accessible_objects = await permission_service.get_user_accessible_objects(manager.id)
+            
+            if not accessible_objects:
+                return False
+            
+            # Получаем ID владельцев объектов, к которым есть доступ
+            owner_ids = [obj.owner_id for obj in accessible_objects]
+            
+            # Получаем договор, если владелец входит в список доступных
+            query = select(Contract).where(
+                and_(
+                    Contract.id == contract_id,
+                    Contract.owner_id.in_(owner_ids)
+                )
+            )
+            
+            result = await session.execute(query)
+            contract = result.scalar_one_or_none()
+            
+            if not contract:
+                return False
+            
+            # Обновляем поля договора
+            if "title" in update_data:
+                contract.title = update_data["title"]
+            if "hourly_rate" in update_data:
+                contract.hourly_rate = update_data["hourly_rate"]
+            if "start_date" in update_data:
+                contract.start_date = update_data["start_date"]
+            if "end_date" in update_data:
+                contract.end_date = update_data["end_date"]
+            if "status" in update_data:
+                contract.status = update_data["status"]
+            if "content" in update_data:
+                contract.content = update_data["content"]
+            if "allowed_objects" in update_data:
+                contract.allowed_objects = update_data["allowed_objects"]
+            if "is_manager" in update_data:
+                contract.is_manager = update_data["is_manager"]
+            if "manager_permissions" in update_data:
+                contract.manager_permissions = update_data["manager_permissions"]
+            
+            await session.commit()
+            return True
     
     async def get_contract_by_id_and_owner_telegram_id(self, contract_id: int, owner_telegram_id: int) -> Optional[Contract]:
         """Получение ORM объекта договора по ID с проверкой прав владельца по telegram_id."""

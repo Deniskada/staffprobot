@@ -31,249 +31,262 @@
     </div>
 </div>
 
-<!-- Информация о сотруднике -->
+<!-- Информация о профиле сотрудника -->
 <div class="row mb-4">
-    <div class="col-md-8">
+    <div class="col-lg-8">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Информация о сотруднике</h5>
+                <h5 class="mb-0">
+                    <i class="fas fa-user me-2"></i>Профиль сотрудника
+                    <button class="btn btn-sm btn-outline-primary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#profileDetails" aria-expanded="false" aria-controls="profileDetails">
+                        <i class="fas fa-chevron-down me-1"></i>Подробнее
+                    </button>
+                </h5>
             </div>
             <div class="card-body">
+                <!-- Краткая информация (всегда видна) -->
                 <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Имя</label>
-                            <p class="form-control-plaintext">{{ employee.first_name }}</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Фамилия</label>
-                            <p class="form-control-plaintext">{{ employee.last_name or 'Не указана' }}</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Username</label>
-                            <p class="form-control-plaintext">
-                                {% if employee.username %}
-                                    {% if employee.username.startswith('@') %}
-                                        {{ employee.username }}
-                                    {% else %}
-                                        @{{ employee.username }}
-                                    {% endif %}
-                                {% else %}
-                                    Не указан
-                                {% endif %}
-                            </p>
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto" style="width: 80px; height: 80px;">
+                            <i class="fas fa-user fa-2x"></i>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Телефон</label>
-                            <p class="form-control-plaintext">
-                                {% if employee.phone %}
-                                    <i class="bi bi-telephone me-1"></i>{{ employee.phone }}
+                    <div class="col-md-9">
+                        <h4 class="mb-1">{{ employee.first_name }} {{ employee.last_name or '' }}</h4>
+                        <p class="text-muted mb-2">
+                            {% if employee.username %}
+                                {% if employee.username.startswith('@') %}
+                                    {{ employee.username }}
                                 {% else %}
-                                    Не указан
+                                    @{{ employee.username }}
                                 {% endif %}
-                            </p>
+                            {% else %}
+                                без username
+                            {% endif %} • 
+                            <span class="badge bg-light text-dark">{{ employee.telegram_id }}</span>
+                        </p>
+                        {% if employee['phone'] %}
+                        <p class="mb-1">
+                            <i class="fas fa-phone me-2"></i>{{ employee['phone'] }}
+                        </p>
+                        {% endif %}
+                        {% if employee['birth_date'] %}
+                        <p class="mb-0">
+                            <i class="fas fa-birthday-cake me-2"></i>{{ employee['birth_date'] }}
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Подробная информация (скрыта по умолчанию) -->
+                <div class="collapse" id="profileDetails">
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-6">
+                            {% if employee['email'] %}
+                            <div class="mb-3">
+                                <strong>Email:</strong><br>
+                                <i class="fas fa-envelope me-2"></i>{{ employee['email'] }}
+                            </div>
+                            {% endif %}
+                            {% if employee['work_experience'] %}
+                            <div class="mb-3">
+                                <strong>Опыт работы:</strong><br>
+                                {{ employee['work_experience'] }}
+                            </div>
+                            {% endif %}
+                            {% if employee['education'] %}
+                            <div class="mb-3">
+                                <strong>Образование:</strong><br>
+                                {{ employee['education'] }}
+                            </div>
+                            {% endif %}
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Статус</label>
-                            <p class="form-control-plaintext">
-                                {% if employee.is_active %}
-                                    <span class="badge bg-success">Активен</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">Неактивен</span>
-                                {% endif %}
-                            </p>
+                        <div class="col-md-6">
+                            {% if employee['skills'] %}
+                            <div class="mb-3">
+                                <strong>Навыки:</strong><br>
+                                {{ employee['skills'] }}
+                            </div>
+                            {% endif %}
+                            {% if employee['preferred_schedule'] %}
+                            <div class="mb-3">
+                                <strong>Предпочитаемый график:</strong><br>
+                                {{ employee['preferred_schedule'] }}
+                            </div>
+                            {% endif %}
+                            {% if employee['min_salary'] %}
+                            <div class="mb-3">
+                                <strong>Минимальная зарплата:</strong><br>
+                                {{ employee['min_salary'] }} ₽
+                            </div>
+                            {% endif %}
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Дата регистрации</label>
-                            <p class="form-control-plaintext">
-                                <i class="bi bi-calendar3 me-1"></i>
-                                {{ employee.created_at.strftime('%d.%m.%Y %H:%M') if employee.created_at else 'Не указана' }}
-                            </p>
-                        </div>
+                    </div>
+                    {% if employee['about'] %}
+                    <div class="mb-3">
+                        <strong>О себе:</strong><br>
+                        {{ employee['about'] }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <!-- Договоры -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-file-contract me-2"></i>Договоры
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if contracts %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Номер</th>
+                                            <th>Название</th>
+                                            <th>Статус</th>
+                                            <th>Ставка</th>
+                                            <th>Период</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for contract in contracts %}
+                                        <tr>
+                                            <td>
+                                                <code>{{ contract.contract_number }}</code>
+                                            </td>
+                                            <td>
+                                                <a href="/manager/employees/contract/{{ contract.id }}" class="text-decoration-none">
+                                                    {{ contract.title }}
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge 
+                                                    {% if contract.status == 'active' %}bg-success
+                                                    {% elif contract.status == 'draft' %}bg-warning
+                                                    {% elif contract.status == 'suspended' %}bg-warning
+                                                    {% elif contract.status == 'terminated' %}bg-secondary
+                                                    {% else %}bg-light text-dark{% endif %}">
+                                                    {% if contract.status == 'active' %}Активен
+                                                    {% elif contract.status == 'draft' %}Черновик
+                                                    {% elif contract.status == 'suspended' %}Приостановлен
+                                                    {% elif contract.status == 'terminated' %}Расторгнут
+                                                    {% else %}{{ contract.status }}{% endif %}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {% if contract.hourly_rate %}
+                                                    {{ contract.hourly_rate }} ₽/ч
+                                                {% else %}
+                                                    <span class="text-muted">Не указана</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if contract.start_date and contract.end_date %}
+                                                    {{ contract.start_date.strftime('%d.%m.%Y') }} - {{ contract.end_date.strftime('%d.%m.%Y') }}
+                                                {% elif contract.start_date %}
+                                                    с {{ contract.start_date.strftime('%d.%m.%Y') }}
+                                                {% elif contract.end_date %}
+                                                    до {{ contract.end_date.strftime('%d.%m.%Y') }}
+                                                {% else %}
+                                                    <span class="text-muted">Не указан</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="btn-group" role="group">                                                    
+                                                    {% if contract.status != 'terminated' %}
+                                                    <a href="/manager/employees/contract/{{ contract.id }}/edit" 
+                                                    class="btn btn-outline-secondary btn-sm"
+                                                    title="Редактировать договор">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-file-contract fa-2x text-muted mb-3"></i>
+                                <h5 class="text-muted">Нет договоров</h5>
+                                <p class="text-muted">У этого сотрудника пока нет договоров</p>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
     </div>
     
-    <div class="col-md-4">
-        <div class="card">
+    <div class="col-lg-4">
+        <!-- Доступные объекты -->
+        {% if accessible_objects %}
+        <div class="card mb-3">
             <div class="card-header">
-                <h5 class="mb-0">Роли</h5>
-            </div>
-            <div class="card-body">
-                {% if employee.roles %}
-                    {% for role in employee.roles %}
-                        <span class="badge bg-primary me-1 mb-2">{{ role }}</span>
-                    {% endfor %}
-                {% else %}
-                    <span class="badge bg-secondary">{{ employee.role }}</span>
-                {% endif %}
-            </div>
-        </div>
-        
-        <div class="card mt-3">
-            <div class="card-header">
-                <h5 class="mb-0">Статистика</h5>
-            </div>
-            <div class="card-body">
-                <div class="d-flex justify-content-between mb-2">
-                    <span>Всего смен:</span>
-                    <strong>{{ total_shifts or 0 }}</strong>
-                </div>
-                <div class="d-flex justify-content-between mb-2">
-                    <span>Отработано часов:</span>
-                    <strong>{{ total_hours or 0 }}ч</strong>
-                </div>
-                <div class="d-flex justify-content-between mb-2">
-                    <span>Заработано:</span>
-                    <strong>{{ total_earnings or 0 }}₽</strong>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Информация о договоре -->
-{% if contract %}
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Информация о договоре</h5>
+                <h5 class="mb-0">
+                    <i class="fas fa-building me-2"></i>Доступные объекты
+                </h5>
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Номер договора</label>
-                            <p class="form-control-plaintext">{{ contract.contract_number or 'Не указан' }}</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Название</label>
-                            <p class="form-control-plaintext">{{ contract.title or 'Не указано' }}</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Ставка</label>
-                            <p class="form-control-plaintext">{{ contract.hourly_rate or 0 }}₽/час</p>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Статус</label>
-                            <p class="form-control-plaintext">
-                                {% if contract.status == 'active' %}
-                                    <span class="badge bg-success">Активен</span>
-                                {% elif contract.status == 'terminated' %}
-                                    <span class="badge bg-danger">Расторгнут</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">{{ contract.status }}</span>
+                    {% for object in accessible_objects %}
+                    <div class="col-12 mb-2">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="mb-0">{{ object.name }}</h6>
+                                {% if object.address %}
+                                <small class="text-muted">{{ object.address }}</small>
                                 {% endif %}
-                            </p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Дата начала</label>
-                            <p class="form-control-plaintext">
-                                {{ contract.start_date.strftime('%d.%m.%Y') if contract.start_date else 'Не указана' }}
-                            </p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Дата окончания</label>
-                            <p class="form-control-plaintext">
-                                {{ contract.end_date.strftime('%d.%m.%Y') if contract.end_date else 'Бессрочный' }}
-                            </p>
+                            </div>
                         </div>
                     </div>
+                    {% endfor %}
                 </div>
-                
-                {% if contract.is_manager %}
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <h6 class="fw-bold">Права управляющего:</h6>
-                        <div class="row">
-                            {% if contract.manager_permissions %}
-                                {% for permission, value in contract.manager_permissions.items() %}
-                                    {% if value %}
-                                    <div class="col-md-4">
-                                        <span class="badge bg-info me-1">{{ permission }}</span>
-                                    </div>
-                                    {% endif %}
-                                {% endfor %}
-                            {% else %}
-                                <p class="text-muted">Права не назначены</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
             </div>
         </div>
-    </div>
-</div>
-{% endif %}
+        {% endif %}
 
-<!-- Последние смены -->
-<div class="row">
-    <div class="col-12">
+        <!-- Быстрые действия -->
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Последние смены</h5>
+                <h5 class="mb-0">Быстрые действия</h5>
             </div>
             <div class="card-body">
-                {% if recent_shifts %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Дата</th>
-                                <th>Объект</th>
-                                <th>Время</th>
-                                <th>Статус</th>
-                                <th>Заработок</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for shift in recent_shifts %}
-                            <tr>
-                                <td>{{ shift.start_time.strftime('%d.%m.%Y') if shift.start_time else 'Не указана' }}</td>
-                                <td>{{ shift.object.name if shift.object else 'Не указан' }}</td>
-                                <td>
-                                    {% if shift.start_time and shift.end_time %}
-                                        {{ shift.start_time.strftime('%H:%M') }} - {{ shift.end_time.strftime('%H:%M') }}
-                                    {% else %}
-                                        Не указано
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if shift.status == 'active' %}
-                                        <span class="badge bg-success">Активна</span>
-                                    {% elif shift.status == 'completed' %}
-                                        <span class="badge bg-primary">Завершена</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">{{ shift.status }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ shift.total_payment or 0 }}₽</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary" onclick="viewShifts({{ employee.id }})">
+                        <i class="bi bi-clock me-1"></i>Просмотреть смены
+                    </button>
+                    <button class="btn btn-outline-success" onclick="editEmployee({{ employee.id }})">
+                        <i class="bi bi-pencil me-1"></i>Редактировать
+                    </button>
                 </div>
-                {% else %}
-                <div class="text-center py-4">
-                    <i class="bi bi-clock text-muted" style="font-size: 2rem;"></i>
-                    <p class="text-muted mt-2">Нет смен</p>
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
 </div>
 
+
+
+
+
 <!-- Modal для расторжения договора -->
-{% if contract and contract.status != 'terminated' %}
+{% if contracts %}
+{% for contract in contracts %}
+{% if contract.status != 'terminated' %}
 <div class="modal fade" id="terminateModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -309,6 +322,8 @@
         </div>
     </div>
 </div>
+{% endif %}
+{% endfor %}
 {% endif %}
 
 <script>

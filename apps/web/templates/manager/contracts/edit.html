@@ -1,0 +1,308 @@
+{% extends "manager/base_manager.html" %}
+
+{% block manager_content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex align-items-center">
+                <a href="/manager/employees" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left me-1"></i>
+                    Назад к списку
+                </a>
+                <h2><i class="bi bi-file-earmark-text me-2"></i>Редактирование договора</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Информация о сотруднике -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Информация о сотруднике</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Имя:</strong> {{ contract.employee.first_name }} {{ contract.employee.last_name or '' }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Telegram ID:</strong> {{ contract.employee.telegram_id }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Редактирование договора -->
+<form method="post" action="/manager/employees/{{ contract.employee.id }}/contract/{{ contract.id }}/edit">
+    <div class="card mb-4">
+        <div class="card-header">Информация о договоре</div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">
+                            Название договора <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="title" name="title" 
+                               value="{{ contract.title }}" required
+                               placeholder="Например: Трудовой договор с Ивановым И.И.">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="contract_number" class="form-label">Номер договора</label>
+                        <input type="text" class="form-control" id="contract_number" name="contract_number" 
+                               value="{{ contract.contract_number }}" readonly>
+                        <small class="form-text text-muted">Номер договора нельзя изменить</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="content" class="form-label">Содержание договора <span class="text-danger">*</span></label>
+                <textarea class="form-control" id="content" name="content" rows="8" required
+                          placeholder="Полный текст договора">{{ contract.content or '' }}</textarea>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="hourly_rate" class="form-label">Почасовая ставка (₽)</label>
+                        <input type="number" class="form-control" id="hourly_rate" name="hourly_rate" 
+                               min="0" value="{{ contract.hourly_rate or '' }}" placeholder="500">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Статус</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="draft" {% if contract.status == 'draft' %}selected{% endif %}>Черновик</option>
+                            <option value="active" {% if contract.status == 'active' %}selected{% endif %}>Активен</option>
+                            <option value="suspended" {% if contract.status == 'suspended' %}selected{% endif %}>Приостановлен</option>
+                            <option value="terminated" {% if contract.status == 'terminated' %}selected{% endif %}>Расторгнут</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="start_date" class="form-label">
+                            Дата начала <span class="text-danger">*</span>
+                        </label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" 
+                               required value="{{ contract.start_date.strftime('%Y-%m-%d') if contract.start_date else '' }}">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="end_date" class="form-label">Дата окончания</label>
+                        <input type="date" class="form-control" id="end_date" name="end_date" 
+                               value="{{ contract.end_date.strftime('%Y-%m-%d') if contract.end_date else '' }}"
+                               placeholder="Оставьте пустым для бессрочного договора">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Доступ к объектам -->
+            <div class="mb-3">
+                <label class="form-label">Доступ к объектам</label>
+                <div class="row">
+                    {% for object in accessible_objects %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   name="allowed_objects" 
+                                   value="{{ object.id }}" 
+                                   id="object_{{ object.id }}"
+                                   {% if object.id in contract.allowed_objects %}checked{% endif %}>
+                            <label class="form-check-label" for="object_{{ object.id }}">
+                                {{ object.name }}
+                            </label>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if not accessible_objects %}
+                <div class="text-muted">
+                    У вас нет доступных объектов для назначения.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Назначение управляющим -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-user-tie me-2"></i>
+                Права управляющего
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="form-check mb-3">
+                <input class="form-check-input" 
+                       type="checkbox" 
+                       id="is_manager" 
+                       name="is_manager" 
+                       value="true"
+                       {% if contract.is_manager %}checked{% endif %}
+                       onchange="toggleManagerPermissions()">
+                <label class="form-check-label" for="is_manager">
+                    <strong>Назначить управляющим</strong>
+                </label>
+                <div class="form-text">
+                    Управляющий сможет управлять объектами в соответствии с назначенными правами
+                </div>
+            </div>
+
+            <!-- Права управляющего -->
+            <div id="manager-permissions" style="{% if not contract.is_manager %}display: none;{% endif %}">
+                <h6 class="mb-3">Права управляющего</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="can_view" 
+                                   name="manager_permissions" 
+                                   value="can_view" 
+                                   {% if contract.manager_permissions and contract.manager_permissions.get('can_view') %}checked{% endif %}>
+                            <label class="form-check-label" for="can_view">
+                                Просмотр объектов
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="can_edit" 
+                                   name="manager_permissions" 
+                                   value="can_edit"
+                                   {% if contract.manager_permissions and contract.manager_permissions.get('can_edit') %}checked{% endif %}>
+                            <label class="form-check-label" for="can_edit">
+                                Редактирование объектов
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="can_delete" 
+                                   name="manager_permissions" 
+                                   value="can_delete"
+                                   {% if contract.manager_permissions and contract.manager_permissions.get('can_delete') %}checked{% endif %}>
+                            <label class="form-check-label" for="can_delete">
+                                Удаление объектов
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="can_manage_employees" 
+                                   name="manager_permissions" 
+                                   value="can_manage_employees"
+                                   {% if contract.manager_permissions and contract.manager_permissions.get('can_manage_employees') %}checked{% endif %}>
+                            <label class="form-check-label" for="can_manage_employees">
+                                Управление сотрудниками
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="can_view_finances" 
+                                   name="manager_permissions" 
+                                   value="can_view_finances"
+                                   {% if contract.manager_permissions and contract.manager_permissions.get('can_view_finances') %}checked{% endif %}>
+                            <label class="form-check-label" for="can_view_finances">
+                                Просмотр финансов
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="can_edit_rates" 
+                                   name="manager_permissions" 
+                                   value="can_edit_rates"
+                                   {% if contract.manager_permissions and contract.manager_permissions.get('can_edit_rates') %}checked{% endif %}>
+                            <label class="form-check-label" for="can_edit_rates">
+                                Редактирование ставок
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="can_edit_schedule" 
+                                   name="manager_permissions" 
+                                   value="can_edit_schedule"
+                                   {% if contract.manager_permissions and contract.manager_permissions.get('can_edit_schedule') %}checked{% endif %}>
+                            <label class="form-check-label" for="can_edit_schedule">
+                                Редактирование расписания
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end">
+        <a href="/manager/employees" class="btn btn-secondary me-2">
+            <i class="bi bi-arrow-left me-1"></i>Отмена
+        </a>
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Сохранить изменения
+        </button>
+    </div>
+</form>
+
+<script>
+// Функция для переключения прав управляющего
+function toggleManagerPermissions() {
+    const isManagerCheckbox = document.getElementById('is_manager');
+    const managerPermissionsDiv = document.getElementById('manager-permissions');
+    
+    if (isManagerCheckbox.checked) {
+        managerPermissionsDiv.style.display = 'block';
+        // Если права еще не установлены, устанавливаем по умолчанию (все кроме удаления)
+        const canView = document.getElementById('can_view');
+        const canEdit = document.getElementById('can_edit');
+        const canDelete = document.getElementById('can_delete');
+        const canManageEmployees = document.getElementById('can_manage_employees');
+        const canViewFinances = document.getElementById('can_view_finances');
+        const canEditRates = document.getElementById('can_edit_rates');
+        const canEditSchedule = document.getElementById('can_edit_schedule');
+        
+        // Проверяем, есть ли уже установленные права
+        const hasAnyPermission = canView.checked || canEdit.checked || canDelete.checked || 
+                                canManageEmployees.checked || canViewFinances.checked || 
+                                canEditRates.checked || canEditSchedule.checked;
+        
+        if (!hasAnyPermission) {
+            // Устанавливаем права по умолчанию (все кроме удаления)
+            canView.checked = true;
+            canEdit.checked = true;
+            canDelete.checked = false;
+            canManageEmployees.checked = true;
+            canViewFinances.checked = true;
+            canEditRates.checked = true;
+            canEditSchedule.checked = true;
+        }
+    } else {
+        managerPermissionsDiv.style.display = 'none';
+        // Сбрасываем все права управляющего
+        const permissionCheckboxes = managerPermissionsDiv.querySelectorAll('input[type="checkbox"]');
+        permissionCheckboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+    }
+}
+</script>
+{% endblock %}

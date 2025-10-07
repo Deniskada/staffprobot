@@ -942,88 +942,40 @@ async def manager_employee_add(
 async def manager_employee_detail(
     employee_id: int,
     request: Request,
-    current_user: dict = Depends(require_manager_or_owner)
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Детальная информация о сотруднике."""
     try:
         if isinstance(current_user, RedirectResponse):
             return current_user
         
-        async with get_async_session() as db:
-            user_id = await get_user_id_from_current_user(current_user, db)
-            if not user_id:
-                raise HTTPException(status_code=401, detail="Пользователь не найден")
-            
-            # Получаем сотрудника
-            from sqlalchemy import select
-            from domain.entities.user import User
-            from domain.entities.contract import Contract
-            from domain.entities.shift import Shift
-            from domain.entities.object import Object
-            
-            employee_query = select(User).where(User.id == employee_id)
-            result = await db.execute(employee_query)
-            employee = result.scalar_one_or_none()
-            
-            if not employee:
-                raise HTTPException(status_code=404, detail="Сотрудник не найден")
-            
-            # Получаем договор с сотрудником
-            contract_query = select(Contract).where(
-                Contract.employee_id == employee_id,
-                Contract.is_active == True
-            ).limit(1)
-            result = await db.execute(contract_query)
-            contract_obj = result.scalar_one_or_none()
-            
-            # Преобразуем договор в словарь для шаблона
-            contract = None
-            if contract_obj:
-                contract = {
-                    "id": contract_obj.id,
-                    "contract_number": contract_obj.contract_number,
-                    "title": contract_obj.title,
-                    "hourly_rate": contract_obj.hourly_rate,
-                    "start_date": contract_obj.start_date,
-                    "end_date": contract_obj.end_date,
-                    "status": contract_obj.status,
-                    "is_manager": contract_obj.is_manager,
-                    "manager_permissions": contract_obj.manager_permissions,
-                    "is_active": contract_obj.is_active
-                }
-            
-            # Получаем последние смены
-            shifts_query = select(Shift).where(
-                Shift.user_id == employee_id
-            ).order_by(Shift.start_time.desc()).limit(10).options(
-                selectinload(Shift.object)
-            )
-            result = await db.execute(shifts_query)
-            recent_shifts = result.scalars().all()
-            
-            # Подсчитываем статистику
-            total_shifts_query = select(Shift).where(Shift.user_id == employee_id)
-            result = await db.execute(total_shifts_query)
-            all_shifts = result.scalars().all()
-            
-            total_shifts = len(all_shifts)
-            total_hours = sum(shift.duration_hours or 0 for shift in all_shifts)
-            total_earnings = sum(shift.total_payment or 0 for shift in all_shifts)
-            
-            login_service = RoleBasedLoginService(db)
-            available_interfaces = await login_service.get_available_interfaces(user_id)
-            
-            return templates.TemplateResponse("manager/employees/detail.html", {
-                "request": request,
-                "current_user": current_user,
-                "employee": employee,
-                "contract": contract,
-                "recent_shifts": recent_shifts,
-                "total_shifts": total_shifts,
-                "total_hours": total_hours,
-                "total_earnings": total_earnings,
-                "available_interfaces": available_interfaces
-            })
+        # Получаем внутренний user_id управляющего
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем информацию о сотруднике через сервис
+        from apps.web.services.contract_service import ContractService
+        contract_service = ContractService()
+        employee_info = await contract_service.get_employee_by_id(employee_id, current_user["id"])
+        
+        if not employee_info:
+            raise HTTPException(status_code=404, detail="У вас нет договоров с этим сотрудником")
+        
+        # Получаем данные для переключения интерфейсов
+        from shared.services.role_based_login_service import RoleBasedLoginService
+        login_service = RoleBasedLoginService(db)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
+        return templates.TemplateResponse("manager/employees/detail.html", {
+            "request": request,
+            "current_user": current_user,
+            "employee": employee_info,  # Полная информация из сервиса
+            "contracts": employee_info["contracts"],  # Все договоры
+            "accessible_objects": employee_info["accessible_objects"],  # Доступные объекты
+            "available_interfaces": available_interfaces
+        })
         
     except HTTPException:
         raise
@@ -1043,57 +995,30 @@ async def manager_employee_edit_form(
         if isinstance(current_user, RedirectResponse):
             return current_user
         
-        async with get_async_session() as db:
-            user_id = await get_user_id_from_current_user(current_user, db)
-            if not user_id:
-                raise HTTPException(status_code=401, detail="Пользователь не найден")
-            
-            # Получаем сотрудника
-            from sqlalchemy import select
-            from domain.entities.user import User
-            from domain.entities.contract import Contract
-            
-            employee_query = select(User).where(User.id == employee_id)
-            result = await db.execute(employee_query)
-            employee = result.scalar_one_or_none()
-            
-            if not employee:
-                raise HTTPException(status_code=404, detail="Сотрудник не найден")
-            
-            # Получаем договор с сотрудником
-            contract_query = select(Contract).where(
-                Contract.employee_id == employee_id,
-                Contract.is_active == True
-            ).limit(1)
-            result = await db.execute(contract_query)
-            contract_obj = result.scalar_one_or_none()
-            
-            # Преобразуем договор в словарь для шаблона
-            contract = None
-            if contract_obj:
-                contract = {
-                    "id": contract_obj.id,
-                    "contract_number": contract_obj.contract_number,
-                    "title": contract_obj.title,
-                    "hourly_rate": contract_obj.hourly_rate,
-                    "start_date": contract_obj.start_date,
-                    "end_date": contract_obj.end_date,
-                    "status": contract_obj.status,
-                    "is_manager": contract_obj.is_manager,
-                    "manager_permissions": contract_obj.manager_permissions,
-                    "is_active": contract_obj.is_active
-                }
-            
-            login_service = RoleBasedLoginService(db)
-            available_interfaces = await login_service.get_available_interfaces(user_id)
-            
-            return templates.TemplateResponse("manager/employees/edit.html", {
-                "request": request,
-                "current_user": current_user,
-                "employee": employee,
-                "contract": contract,
-                "available_interfaces": available_interfaces
-            })
+        # Получаем внутренний user_id управляющего
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем информацию о сотруднике через сервис
+        from apps.web.services.contract_service import ContractService
+        contract_service = ContractService()
+        employee_info = await contract_service.get_employee_by_id(employee_id, current_user["id"])
+        
+        if not employee_info:
+            raise HTTPException(status_code=404, detail="Сотрудник не найден или у вас нет прав на его редактирование")
+        
+        # Получаем данные для переключения интерфейсов
+        from shared.services.role_based_login_service import RoleBasedLoginService
+        login_service = RoleBasedLoginService(db)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
+        return templates.TemplateResponse("manager/employees/edit.html", {
+            "request": request,
+            "current_user": current_user,
+            "employee": employee_info,  # Только информация о сотруднике, без договоров
+            "available_interfaces": available_interfaces
+        })
         
     except HTTPException:
         raise
@@ -1302,6 +1227,65 @@ async def manager_employee_terminate(
         raise HTTPException(status_code=500, detail="Ошибка расторжения договора")
 
 
+@router.get("/employees/contract/{contract_id}/edit", response_class=HTMLResponse)
+async def manager_contract_edit_form(
+    contract_id: int,
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Форма редактирования договора управляющим."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        # Получаем внутренний user_id управляющего
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем договор через сервис
+        from apps.web.services.contract_service import ContractService
+        contract_service = ContractService()
+        contract_info = await contract_service.get_contract_by_id_for_manager(contract_id, current_user["id"])
+        
+        if not contract_info:
+            raise HTTPException(status_code=404, detail="Договор не найден или у вас нет прав на его редактирование")
+        
+        # Получаем доступные объекты для управляющего
+        from shared.services.manager_permission_service import ManagerPermissionService
+        permission_service = ManagerPermissionService(db)
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        
+        # Преобразуем объекты в список словарей для шаблона
+        accessible_objects_list = []
+        for obj in accessible_objects:
+            accessible_objects_list.append({
+                'id': obj.id,
+                'name': obj.name,
+                'address': obj.address
+            })
+        
+        # Получаем данные для переключения интерфейсов
+        from shared.services.role_based_login_service import RoleBasedLoginService
+        login_service = RoleBasedLoginService(db)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
+        return templates.TemplateResponse("manager/contracts/edit.html", {
+            "request": request,
+            "current_user": current_user,
+            "contract": contract_info,
+            "accessible_objects": accessible_objects_list,
+            "available_interfaces": available_interfaces
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in manager contract edit form: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки формы редактирования договора")
+
+
 @router.post("/employees/{employee_id}/contract/{contract_id}/edit")
 async def manager_contract_edit(
     employee_id: int,
@@ -1314,66 +1298,88 @@ async def manager_contract_edit(
         if isinstance(current_user, RedirectResponse):
             return current_user
         
+        # Получаем внутренний user_id управляющего
         async with get_async_session() as db:
             user_id = await get_user_id_from_current_user(current_user, db)
             if not user_id:
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
-            
-            form_data = await request.form()
-            
-            # Получаем данные формы
-            title = form_data.get("title", "").strip()
-            hourly_rate_str = form_data.get("hourly_rate", "").strip()
-            hourly_rate = int(hourly_rate_str) if hourly_rate_str else None
-            start_date_str = form_data.get("start_date")
-            end_date_str = form_data.get("end_date")
-            
-            # Валидация
-            if not title:
-                raise HTTPException(status_code=400, detail="Название договора обязательно")
-            
-            if not hourly_rate:
-                raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
-            
-            # Получаем договор
-            from sqlalchemy import select
-            from domain.entities.contract import Contract
-            
-            contract_query = select(Contract).where(
-                Contract.id == contract_id,
-                Contract.employee_id == employee_id
-            )
-            contract_result = await db.execute(contract_query)
-            contract = contract_result.scalar_one_or_none()
-            
-            if not contract:
-                raise HTTPException(status_code=404, detail="Договор не найден")
-            
-            # Обновляем договор
-            contract.title = title
-            contract.hourly_rate = hourly_rate
-            
-            # Обработка дат
-            if start_date_str:
-                try:
-                    from datetime import datetime
-                    contract.start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-                except ValueError:
-                    pass
-            
-            if end_date_str:
-                try:
-                    from datetime import datetime
-                    contract.end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-                except ValueError:
-                    pass
-            
-            await db.commit()
-            await db.refresh(contract)
-            
-            logger.info(f"Updated contract {contract_id} for employee {employee_id} by manager {user_id}")
-            
-            return RedirectResponse(url=f"/manager/employees/{employee_id}", status_code=302)
+        
+        form_data = await request.form()
+        
+        # Получаем данные формы
+        title = form_data.get("title", "").strip()
+        hourly_rate_str = form_data.get("hourly_rate", "").strip()
+        hourly_rate = int(hourly_rate_str) if hourly_rate_str else None
+        start_date_str = form_data.get("start_date")
+        end_date_str = form_data.get("end_date")
+        status = form_data.get("status", "active")
+        content = form_data.get("content", "").strip()
+        
+        # Обработка объектов
+        allowed_objects = []
+        for key, value in form_data.items():
+            if key == "allowed_objects" and value:
+                allowed_objects.append(int(value))
+        
+        # Обработка прав управляющего
+        is_manager = form_data.get("is_manager") == "true"
+        manager_permissions = {}
+        for key, value in form_data.items():
+            if key == "manager_permissions" and value:
+                manager_permissions[value] = True
+        
+        # Валидация
+        if not title:
+            raise HTTPException(status_code=400, detail="Название договора обязательно")
+        
+        if not content:
+            raise HTTPException(status_code=400, detail="Содержание договора обязательно")
+        
+        # Обработка дат
+        start_date = None
+        end_date = None
+        if start_date_str:
+            try:
+                from datetime import datetime
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                pass
+        
+        if end_date_str:
+            try:
+                from datetime import datetime
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                pass
+        
+        # Обновляем договор через сервис
+        from apps.web.services.contract_service import ContractService
+        contract_service = ContractService()
+        
+        update_data = {
+            "title": title,
+            "hourly_rate": hourly_rate,
+            "start_date": start_date,
+            "end_date": end_date,
+            "status": status,
+            "content": content,
+            "allowed_objects": allowed_objects,
+            "is_manager": is_manager,
+            "manager_permissions": manager_permissions
+        }
+        
+        success = await contract_service.update_contract_for_manager(
+            contract_id, 
+            current_user["id"], 
+            update_data
+        )
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Договор не найден или у вас нет прав на его редактирование")
+        
+        logger.info(f"Updated contract {contract_id} for employee {employee_id} by manager {user_id}")
+        
+        return RedirectResponse(url=f"/manager/employees/{employee_id}", status_code=302)
         
     except HTTPException:
         raise

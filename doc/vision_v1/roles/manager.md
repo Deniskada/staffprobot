@@ -25,8 +25,9 @@
 - [GET] `/employees/add`  — (apps/web/routes/manager.py)
 - [POST] `/employees/add`  — (apps/web/routes/manager.py)
 - [GET] `/employees/{employee_id}`  — (apps/web/routes/manager.py)
-- [POST] `/employees/{employee_id}/contract/{contract_id}/edit`  — (apps/web/routes/manager.py)
-- [GET] `/employees/{employee_id}/edit`  — (apps/web/routes/manager.py)
+- [GET] `/employees/contract/{contract_id}/edit`  — (apps/web/routes/manager.py) — форма редактирования договора управляющим
+- [POST] `/employees/{employee_id}/contract/{contract_id}/edit`  — (apps/web/routes/manager.py) — обновление договора через сервис
+- [GET] `/employees/{employee_id}/edit`  — (apps/web/routes/manager.py) — форма редактирования сотрудника (только профиль)
 - [POST] `/employees/{employee_id}/edit`  — (apps/web/routes/manager.py)
 - [GET] `/employees/{employee_id}/shifts`  — (apps/web/routes/manager.py)
 - [POST] `/employees/{employee_id}/terminate`  — (apps/web/routes/manager.py)
@@ -61,8 +62,9 @@
 - `manager/dashboard.html`
 - `manager/employees.html`
 - `manager/employees/add.html`
-- `manager/employees/detail.html`
-- `manager/employees/edit.html`
+- `manager/contracts/edit.html` — форма редактирования договора управляющим
+- `manager/employees/detail.html` — детальная информация о сотруднике с таблицей договоров
+- `manager/employees/edit.html` — редактирование профиля сотрудника
 - `manager/employees/shifts.html`
 - `manager/objects.html`
 - `manager/objects/detail.html`
