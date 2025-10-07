@@ -75,6 +75,11 @@
 - [GET] `/owner/stats/summary`  — (apps/web/routes/owner_shifts.py)
 - [GET] `/owner/tariff/change`  — (apps/web/routes/owner.py)
 - [POST] `/owner/tariff/change`  — (apps/web/routes/owner.py)
+- [GET] `/` — (apps/web/app.py) — лендинг (неавторизованным)
+  - Источник тарифов: TariffService (active_only=True)
+  - Разделы: геро-блок, «Почему выбирают…», «Тарифные планы» (после фич)
+  - Карточки тарифов: цена/период, лимиты (−1 → «Безлимит»), локализованные фичи
+  - Действие: «Выбрать тариф» → `/auth/register?tariff_id=...`
 - [GET] `/owner/templates`  — (apps/web/routes/owner.py)
 - [GET] `/owner/templates/contracts`  — (apps/web/routes/owner.py)
 - [GET] `/owner/templates/contracts/create`  — (apps/web/routes/owner.py)

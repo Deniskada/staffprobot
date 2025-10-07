@@ -460,6 +460,92 @@
         </div>
     </section>
 
+    {% if tariffs %}
+    <!-- Tariffs Section (moved directly after features) -->
+    <section id="tariffs" class="py-5" style="background: linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%);">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="fw-bold mb-2">Тарифные планы</h2>
+                <p class="text-muted">Выберите подходящий тариф и начните работу уже сегодня</p>
+            </div>
+            <div class="row g-4">
+                {% for t in tariffs %}
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm h-100 tariff-card" style="display:flex;">
+                        <div class="card-body d-flex flex-column p-4">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <h5 class="card-title mb-0">{{ t.name }}</h5>
+                                {% if t.is_popular %}
+                                <span class="badge bg-warning text-dark">Популярный</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-muted mb-3">{{ t.description or 'Оптимальный набор функций для эффективной работы' }}</p>
+                            <div class="d-flex align-items-baseline mb-3">
+                                {% if t.price == 0 %}
+                                    <span class="display-6 fw-bold me-2">Бесплатно</span>
+                                {% else %}
+                                    <span class="display-6 fw-bold me-2">{{ '%.0f' % t.price }}</span>
+                                    <span class="text-muted">₽/{{ t.billing_period == 'year' and 'год' or 'месяц' }}</span>
+                                {% endif %}
+                            </div>
+                            <ul class="list-unstyled mb-4 small">
+                                <li class="mb-2"><i class="bi bi-building text-primary me-2"></i>Объекты: {{ t.max_objects == -1 and 'Безлимит' or t.max_objects }}</li>
+                                <li class="mb-2"><i class="bi bi-people text-primary me-2"></i>Сотрудники: {{ t.max_employees == -1 and 'Безлимит' or t.max_employees }}</li>
+                                <li class="mb-2"><i class="bi bi-person-gear text-primary me-2"></i>Управляющие: {{ t.max_managers == -1 and 'Безлимит' or t.max_managers }}</li>
+                            </ul>
+                            {% if t.features %}
+                            {% set feature_names = {
+                                'multishift_support': 'Поддержка мультисменности',
+                                'priority_support': 'Приоритетная поддержка',
+                                'advanced_metrics': 'Расширенная аналитика',
+                                'custom_reports': 'Настраиваемые отчёты',
+                                'llm_support': 'Поддержка LLM-ассистента',
+                                'bulk_assignment': 'Массовое назначение сотрудников',
+                                'contract_templates': 'Шаблоны договоров',
+                                'calendar_export': 'Экспорт в календарь',
+                                'sms_notifications': 'СМС-уведомления',
+                                'white_label': 'White-label брендинг',
+                                'multiple_managers': 'Несколько управляющих',
+                                'extended_limits': 'Расширенные лимиты',
+                                'priority_review': 'Приоритетная модерация отзывов',
+                                'analytics_dashboard': 'Аналитическая панель',
+                                'integrations_crm': 'CRM-интеграции',
+                                'api_access': 'Доступ к API',
+                                'custom_branding': 'Кастомный брендинг',
+                                'onboarding_support': 'Индивидуальный онбординг',
+                                'manager_mobile_app': 'Мобильное приложение управляющего',
+                                'basic_reports': 'Базовые отчёты',
+                                'telegram_bot': 'Telegram-бот',
+                                'basic_support': 'Базовая поддержка',
+                                'shared_calendar': 'Общий календарь',
+                                'notifications': 'Уведомления',
+                                'advanced_reports': 'Расширенные отчёты',
+                                'custom_integrations': 'Кастомные интеграции',
+                                'dedicated_support': 'Персональная поддержка',
+                                'advanced_calendar': 'Расширенный календарь',
+                                'custom_notifications': 'Настраиваемые уведомления'
+                            } %}
+                            <div class="mb-3">
+                                <h6 class="mb-2 text-muted"><i class="bi bi-star me-1"></i>Дополнительные функции</h6>
+                                {% for f in t.features[:5] %}
+                                <div class="d-flex align-items-center mb-1 small">
+                                    <i class="bi bi-check-circle text-success me-2"></i>{{ feature_names.get(f, f) }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <div class="mt-auto">
+                                <a href="/auth/register?tariff_id={{ t.id }}" class="btn btn-primary w-100">Выбрать тариф</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
     <!-- Entry Section -->
     <section id="entry" class="entry-section">
         <div class="container">
@@ -577,13 +663,15 @@
         }, observerOptions);
         
         // Observe feature cards
-        document.querySelectorAll('.feature-card, .entry-card').forEach(card => {
+        document.querySelectorAll('.feature-card, .entry-card, .tariff-card').forEach(card => {
             card.style.opacity = '0';
             card.style.transform = 'translateY(30px)';
             card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
             observer.observe(card);
         });
     </script>
+    
+    
     
         <!-- Footer -->
         <footer class="bg-dark text-light py-4 mt-5">
