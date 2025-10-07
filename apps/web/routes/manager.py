@@ -2569,10 +2569,7 @@ async def get_employees_for_manager(
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
 
 
-@router.get("/")
-async def manager_root_redirect():
-    """Редирект с /manager на календарь управляющего."""
-    return RedirectResponse(url="/manager/calendar")
+# Удалено дублирование root-редиректа. Канонический редирект на /manager/dashboard определён выше.
 
 
 @router.get("/calendar/api/objects")

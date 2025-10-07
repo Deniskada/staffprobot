@@ -432,3 +432,38 @@ def test_create_user_with_invalid_email_should_fail():
 - [Правила миграций и системных проблем](migrations.mdc) - работа с БД, Docker, отладка
 - [Правила выполнения работ](workflow.mdc) - процесс разработки и согласования
 - [Правила работы с user_id](user_id_handling.mdc) - критически важные правила для аутентификации
+
+
+## Ролевые префиксы и маршрутизация (обязательно)
+- Все веб-роуты должны соответствовать префиксам ролей: `/owner/*`, `/manager/*`, `/employee/*`, `/admin/*`, `/moderator/*`.
+- Подключение роутеров — через `apps/web/app.py` (`include_router`). Запрещено дублировать префикс в файлах роли.
+- В одном модуле не допускается более одного маршрута с одинаковыми методом и путём (например, два `@router.get("/")`).
+
+## Шаблоны (обязательно)
+- Использовать единый шаблонизатор: `from apps.web.jinja import templates`.
+- Запрещено создавать локальные `Jinja2Templates` в `apps/web/routes/*`.
+
+## Сессии БД в веб-роутах (обязательно)
+- Только `Depends(get_db_session)`; исключить `async with get_async_session()` в веб-роутах.
+
+## user_id vs telegram_id (обязательно)
+- Получать внутренний `user_id` через `get_user_id_from_current_user(current_user, session)`.
+- Запрещено использовать `current_user.get("id")` как `user_id` для запросов к БД.
+
+## Shared Calendar API (обязательно)
+- Любые календарные данные брать через `routes/shared/calendar_api.py`.
+- Документацию `/api/calendar/*` помечать как shared; см. `doc/vision_v1/shared/calendar.md`.
+
+## URLHelper (обязательно)
+- Запрещены хардкоды доменов/URL. Использовать `core.utils.url_helper.URLHelper`.
+
+## Проверка прав (обязательно)
+- Для ролей — только через зависимости (`require_owner_or_superadmin`, `require_manager_or_owner`, ...).
+
+## Логирование (обязательно)
+- Использовать `core.logging.logger.logger`; не использовать `print`.
+
+## Синхронизация документации (обязательно)
+- Любые изменения роутов/shared-API/бота/шаблонов — обновить `doc/vision_v1/*` и `doc/DOCUMENTATION_RULES.md`.
+- При дублях маршрутов — указать причину (редирект/shared и т.д.).
+

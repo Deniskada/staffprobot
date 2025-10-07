@@ -1,0 +1,33 @@
+repos:
+  - repo: local
+    hooks:
+      - id: no-duplicate-root-route
+        name: Block duplicate root routes in same module
+        entry: bash -lc '! grep -R "@router\\.get(\"/\")" apps/web/routes/ | awk -F: '{print $1}' | sort | uniq -c | awk "$1>1{print; exit 1}"'
+        language: system
+        types: [python]
+      - id: no-local-jinja2templates
+        name: Ban local Jinja2Templates in web routes
+        entry: bash -lc '! grep -R "Jinja2Templates(\" apps/web/routes/'
+        language: system
+        types: [python]
+      - id: no-async-session-in-web-routes
+        name: Ban get_async_session in web routes
+        entry: bash -lc '! grep -R "get_async_session()" apps/web/routes/'
+        language: system
+        types: [python]
+      - id: no-current-user-id-for-db
+        name: Ban current_user.get("id") for DB filters
+        entry: bash -lc '! grep -R "current_user.get(\"id\")" apps/web/routes/'
+        language: system
+        types: [python]
+      - id: no-hardcoded-localhost
+        name: Ban hardcoded localhost URLs
+        entry: bash -lc '! grep -R "http://localhost:8001\|https://localhost"'
+        language: system
+        types: [python, javascript, markdown]
+      - id: templates-require-static-version
+        name: Enforce static_version filter in Jinja templates
+        entry: bash -lc 'if ls apps/web/templates/**/*.html >/dev/null 2>&1; then ! grep -R "<script[^>]*src=\"/static/" apps/web/templates || (echo "Use | static_version for script tags" && exit 1); fi; if ls apps/web/templates/**/*.html >/dev/null 2>&1; then ! grep -R "<link[^>]*href=\"/static/" apps/web/templates || (echo "Use | static_version for link tags" && exit 1); fi'
+        language: system
+        types: [file]
