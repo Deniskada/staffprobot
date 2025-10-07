@@ -158,6 +158,9 @@
                                                 {% endif %}
                                             {% endif %}
                                         </a>
+                                        <div class="mt-1">
+                                            <input type="text" class="form-control form-control-sm" placeholder="Фильтр по ФИ" value="{{ q_employee or '' }}" onkeydown="if(event.key==='Enter'){applyFilters();}">
+                                        </div>
                                     </th>
                                     <th>
                                         <a href="?sort_by=telegram_id&sort_order={% if sort_by == 'telegram_id' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}{{ '&show_former=true' if show_former else '' }}{{ '&view_mode=' ~ view_mode if view_mode else '' }}"
@@ -171,6 +174,9 @@
                                                 {% endif %}
                                             {% endif %}
                                         </a>
+                                        <div class="mt-1">
+                                            <input type="text" class="form-control form-control-sm" placeholder="Фильтр по ID" value="{{ q_telegram or '' }}" onkeydown="if(event.key==='Enter'){applyFilters();}">
+                                        </div>
                                     </th>
                                     <th>Договоры</th>
                                     <th>Доступ к объектам</th>
@@ -186,6 +192,13 @@
                                                 {% endif %}
                                             {% endif %}
                                         </a>
+                                        <div class="mt-1">
+                                            <select class="form-select form-select-sm" onchange="applyFilters()">
+                                                <option value="" {% if not q_status %}selected{% endif %}>Все</option>
+                                                <option value="active" {% if q_status == 'active' %}selected{% endif %}>Активные</option>
+                                                <option value="former" {% if q_status == 'former' %}selected{% endif %}>Бывшие</option>
+                                            </select>
+                                        </div>
                                     </th>
                                     <th>Действия</th>
                                 </tr>
@@ -314,6 +327,28 @@ function toggleFormerEmployees() {
         url.searchParams.delete('show_former');
     }
     
+    window.location.href = url.toString();
+}
+
+function applyFilters() {
+    const url = new URL(window.location);
+    const ths = document.querySelectorAll('thead input.form-control-sm, thead select.form-select-sm');
+    // Порядок: ФИ, Telegram, Статус
+    const fiInput = ths[0];
+    const tgInput = ths[1];
+    const stSelect = ths[2];
+    if (fiInput) {
+        if (fiInput.value.trim()) url.searchParams.set('q_employee', fiInput.value.trim());
+        else url.searchParams.delete('q_employee');
+    }
+    if (tgInput) {
+        if (tgInput.value.trim()) url.searchParams.set('q_telegram', tgInput.value.trim());
+        else url.searchParams.delete('q_telegram');
+    }
+    if (stSelect) {
+        if (stSelect.value) url.searchParams.set('q_status', stSelect.value);
+        else url.searchParams.delete('q_status');
+    }
     window.location.href = url.toString();
 }
 </script>

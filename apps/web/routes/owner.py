@@ -4860,6 +4860,9 @@ async def owner_employees_list(
     view_mode: str = Query("list", description="Режим отображения: cards или list"),
     sort_by: str = Query("employee", description="Сортировка: employee | telegram_id | status"),
     sort_order: str = Query("asc", description="Порядок сортировки: asc | desc"),
+    q_employee: str = Query("", description="Фильтр по Фамилия Имя"),
+    q_telegram: str = Query("", description="Фильтр по Telegram ID"),
+    q_status: str = Query("", description="Фильтр по статусу: active|former"),
     show_former: bool = Query(False, description="Показать бывших сотрудников"),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
@@ -4882,6 +4885,43 @@ async def owner_employees_list(
         else:
             employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
 
+        # Фильтрация
+        q_emp = (q_employee or "").strip().lower()
+        q_tel = (q_telegram or "").strip()
+        q_sts = (q_status or "").strip().lower()
+
+        def is_active_employee(emp: dict) -> bool:
+            contracts = emp.get("contracts") or []
+            for c in contracts:
+                if c.get("status") == "active" and c.get("is_active") is True:
+                    return True
+            return False
+
+        def name_matches(emp: dict) -> bool:
+            if not q_emp:
+                return True
+            last_name = (emp.get('last_name') or '').lower()
+            first_name = (emp.get('first_name') or '').lower()
+            full1 = f"{last_name} {first_name}".strip()
+            full2 = f"{first_name} {last_name}".strip()
+            return q_emp in full1 or q_emp in full2
+
+        def telegram_matches(emp: dict) -> bool:
+            if not q_tel:
+                return True
+            return q_tel in str(emp.get('telegram_id') or '')
+
+        def status_matches(emp: dict) -> bool:
+            if not q_sts:
+                return True
+            if q_sts == 'active':
+                return is_active_employee(emp)
+            if q_sts == 'former':
+                return not is_active_employee(emp)
+            return True
+
+        employees = [e for e in employees if name_matches(e) and telegram_matches(e) and status_matches(e)]
+
         # Нормализация параметров сортировки
         sort_by_norm = (sort_by or "employee").strip().lower()
         allowed_sort_by = {"employee", "telegram_id", "status"}
@@ -4893,13 +4933,6 @@ async def owner_employees_list(
             sort_order_norm = "asc"
 
         # Вспомогательные вычисления
-        def is_active_employee(emp: dict) -> bool:
-            contracts = emp.get("contracts") or []
-            for c in contracts:
-                if c.get("status") == "active" and c.get("is_active") is True:
-                    return True
-            return False
-
         # Ключи сортировки
         def key_employee(emp: dict):
             return (
@@ -4941,6 +4974,9 @@ async def owner_employees_list(
                 "view_mode": view_mode,
                 "sort_by": sort_by_norm,
                 "sort_order": sort_order_norm,
+                "q_employee": q_emp,
+                "q_telegram": q_tel,
+                "q_status": q_sts,
                 "show_former": show_former,
                 "available_interfaces": available_interfaces
             }
