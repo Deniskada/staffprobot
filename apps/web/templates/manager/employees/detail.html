@@ -53,7 +53,11 @@
                             <label class="form-label fw-bold">Username</label>
                             <p class="form-control-plaintext">
                                 {% if employee.username %}
-                                    @{{ employee.username }}
+                                    {% if employee.username.startswith('@') %}
+                                        {{ employee.username }}
+                                    {% else %}
+                                        @{{ employee.username }}
+                                    {% endif %}
                                 {% else %}
                                     Не указан
                                 {% endif %}
