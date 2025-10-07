@@ -42,15 +42,29 @@ async def login(
 ):
     """Обработка входа по Telegram ID и PIN-коду"""
     try:
-        # Проверка PIN-кода
-        if not await auth_service.verify_pin(telegram_id, pin_code):
-            return templates.TemplateResponse("auth/login.html", {
-                "request": request,
-                "title": "Вход в систему",
-                "error": "Неверный PIN-код или время истекло",
-                "telegram_id": telegram_id,
-                "pin_code": pin_code
-            })
+        # Проверка PIN-кода (обход для тест-пользователей)
+        async with get_async_session() as session:
+            res = await session.execute(select(User).where(User.telegram_id == telegram_id))
+            db_user = res.scalar_one_or_none()
+        if db_user and getattr(db_user, 'is_test_user', False):
+            # Принимаем любой 6-значный PIN
+            if not (isinstance(pin_code, str) and len(pin_code) == 6 and pin_code.isdigit()):
+                return templates.TemplateResponse("auth/login.html", {
+                    "request": request,
+                    "title": "Вход в систему",
+                    "error": "Для тестового пользователя введите 6-значный PIN",
+                    "telegram_id": telegram_id,
+                    "pin_code": pin_code
+                })
+        else:
+            if not await auth_service.verify_pin(telegram_id, pin_code):
+                return templates.TemplateResponse("auth/login.html", {
+                    "request": request,
+                    "title": "Вход в систему",
+                    "error": "Неверный PIN-код или время истекло",
+                    "telegram_id": telegram_id,
+                    "pin_code": pin_code
+                })
         
         # Получение пользователя
         logger.info(f"Getting user by telegram_id: {telegram_id}")

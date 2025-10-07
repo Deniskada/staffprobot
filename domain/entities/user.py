@@ -44,6 +44,8 @@ class User(Base):
     role = Column(String(50), nullable=False)  # Оставляем для обратной совместимости
     roles = Column(JSONB, nullable=False)  # Новое поле для множественных ролей
     is_active = Column(Boolean, default=True)
+    # Тестовый пользователь (для веб-аутентификации без отправки PIN)
+    is_test_user = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

@@ -141,6 +141,16 @@ class SystemSettingsService:
     async def set_use_https(self, use_https: bool, changed_by: str = None) -> bool:
         """Установить настройку использования HTTPS"""
         return await self.set_setting("use_https", str(use_https).lower(), "Использовать HTTPS", changed_by)
+
+    # === Тестовые пользователи ===
+    async def get_test_users_enabled(self) -> bool:
+        """Включен ли режим тестовых пользователей"""
+        value = await self.get_setting("enable_test_users", "false")
+        return str(value).lower() == "true"
+
+    async def set_test_users_enabled(self, enabled: bool, changed_by: str = None) -> bool:
+        """Включить/выключить режим тестовых пользователей"""
+        return await self.set_setting("enable_test_users", str(enabled).lower(), "Включить тестовых пользователей", changed_by)
     
     async def validate_domain(self, domain: str) -> Dict[str, Any]:
         """Валидация домена"""

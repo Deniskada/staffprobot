@@ -9,6 +9,7 @@ from typing import Dict, Any
 from core.database.session import get_db_session
 from apps.web.middleware.auth_middleware import require_superadmin
 from apps.web.services.system_settings_service import SystemSettingsService
+from apps.web.services.test_user_service import TestUserService
 from apps.web.services.nginx_service import NginxService
 from apps.web.services.ssl_service import SSLService
 from apps.web.services.ssl_monitoring_service import SSLMonitoringService
@@ -745,6 +746,48 @@ async def get_all_settings(
     except Exception as e:
         logger.error(f"Error getting all settings: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения настроек")
+
+
+# === Тестовые пользователи ===
+@router.post("/test-users/toggle")
+async def toggle_test_users(
+    enabled: bool,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    try:
+        settings_service = SystemSettingsService(db)
+        success = await settings_service.set_test_users_enabled(enabled, str(current_user.get("id")))
+        if not enabled:
+            # Удаляем тестовых пользователей и связанные записи
+            svc = TestUserService(db)
+            await svc.delete_all_test_users()
+        return {"success": success}
+    except Exception as e:
+        logger.error(f"Error toggling test users: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка переключения режима тестовых пользователей")
+
+
+@router.post("/test-users/create")
+async def create_test_user(
+    role: str,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    try:
+        settings_service = SystemSettingsService(db)
+        if not await settings_service.get_test_users_enabled():
+            raise HTTPException(status_code=400, detail="Режим тестовых пользователей отключен")
+        from domain.entities.user import UserRole
+        role_enum = UserRole(role)
+        svc = TestUserService(db)
+        user = await svc.create_test_user(role_enum)
+        return {"success": True, "user_id": user.id, "telegram_id": user.telegram_id}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Неверная роль")
+    except Exception as e:
+        logger.error(f"Error creating test user: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка создания тестового пользователя")
 
 
 # Удалён дублирующийся endpoint /initialize
