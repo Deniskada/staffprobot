@@ -19,6 +19,9 @@ from core.auth.user_manager import UserManager
 from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots
 from routes.shared.calendar_api import router as calendar_api_router
 from apps.web.routes.system_settings_api import router as system_settings_router
+from core.database.session import get_db_session
+from sqlalchemy.ext.asyncio import AsyncSession
+from apps.web.services.tariff_service import TariffService
 from apps.web.services.auth_service import AuthService
 
 
@@ -167,7 +170,7 @@ async def require_role(required_role: str):
 
 # Главная страница
 @app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
+async def root(request: Request, db: AsyncSession = Depends(get_db_session)):
     """Главная страница - лендинг или перенаправление на дашборд"""
     # Проверяем, авторизован ли пользователь
     from apps.web.middleware.auth_middleware import get_current_user
@@ -179,7 +182,12 @@ async def root(request: Request):
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
     # Пользователь не авторизован - показываем лендинг
-    return templates.TemplateResponse("landing.html", {"request": request})
+    try:
+        tariff_service = TariffService(db)
+        tariffs = await tariff_service.get_all_tariff_plans(active_only=True)
+    except Exception:
+        tariffs = []
+    return templates.TemplateResponse("landing.html", {"request": request, "tariffs": tariffs})
 
 
 @app.get("/login")

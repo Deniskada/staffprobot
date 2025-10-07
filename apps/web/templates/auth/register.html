@@ -30,6 +30,13 @@
                 {% endif %}
                 
                 <form id="registerForm" method="POST" action="/auth/register" novalidate>
+                    {% if selected_tariff_id %}
+                    <input type="hidden" name="selected_tariff_id" value="{{ selected_tariff_id }}">
+                    <div class="alert alert-info d-flex align-items-center" role="alert">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Вы выбрали тариф (ID: {{ selected_tariff_id }}). После регистрации мы предложим подключить его.
+                    </div>
+                    {% endif %}
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="first_name" class="form-label">Имя *</label>

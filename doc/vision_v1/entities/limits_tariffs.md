@@ -3,6 +3,11 @@
 ## Веб-роуты и API
 - [GET] `/` — (apps/web/routes/limits.py) — роль: owner
 - [GET] `/` — (apps/web/routes/tariffs.py) — роль: owner
+  
+- [GET] `/` — (apps/web/app.py) — лендинг (неавторизованные)
+  - Тарифные планы загружаются через TariffService (active_only=true)
+  - Карточки тарифов: цена, период, лимиты (−1 → «Безлимит»), локализованные фичи
+  - Кнопка выбора тарифа ведёт на `/auth/register?tariff_id=...`
 - [GET] `/` — (apps/web/routes/user_subscriptions.py) — роль: owner
 - [GET] `/` — (apps/web/routes/billing.py) — роль: owner
 - [GET] `/admin/api/overview` — (apps/web/routes/limits.py) — роль: superadmin

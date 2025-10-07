@@ -2,7 +2,7 @@
 Роуты авторизации для веб-приложения
 """
 
-from fastapi import APIRouter, Request, Form, HTTPException, status
+from fastapi import APIRouter, Request, Form, HTTPException, status, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional
@@ -121,14 +121,15 @@ async def send_pin(request: Request):
 
 
 @router.get("/register", response_class=HTMLResponse)
-async def register_page(request: Request):
+async def register_page(request: Request, tariff_id: Optional[int] = Query(None)):
     """Страница регистрации собственника"""
     return templates.TemplateResponse("auth/register.html", {
         "request": request,
         "title": "Регистрация собственника",
         "form_data": {},
         "error": None,
-        "success": None
+        "success": None,
+        "selected_tariff_id": tariff_id
     })
 
 
@@ -142,7 +143,8 @@ async def register(
     email: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
     company_name: Optional[str] = Form(None),
-    terms: Optional[str] = Form(None)
+    terms: Optional[str] = Form(None),
+    selected_tariff_id: Optional[int] = Form(None)
 ):
     """Обработка регистрации собственника"""
     try:
@@ -208,7 +210,9 @@ async def register(
             logger.error(f"Failed to send PIN code: {e}")
             # Продолжаем без PIN-кода, пользователь может войти позже
         
-        # Перенаправление на страницу входа с сообщением об успехе
+        # Перенаправление: если тариф выбран — на смену тарифа, иначе на логин
+        if selected_tariff_id:
+            return RedirectResponse(url=f"/owner/tariff/change?selected={selected_tariff_id}&success=Регистрация%20успешна!", status_code=status.HTTP_302_FOUND)
         return RedirectResponse(url=f"/auth/login?success=Регистрация%20успешна!%20Проверьте%20Telegram%20для%20получения%20PIN-кода&telegram_id={telegram_id}", status_code=status.HTTP_302_FOUND)
         
     except Exception as e:
