@@ -249,6 +249,36 @@
             </div>
         </div>
 
+        <!-- Тестовые пользователи -->
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-person-plus me-2"></i>
+                    Тестовые пользователи (веб)
+                </h5>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="enableTestUsers">
+                    <label class="form-check-label" for="enableTestUsers">Включить режим</label>
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">В этом режиме можно создавать тестовых пользователей для веб-аутентификации без отправки PIN. В боте изменений нет.</p>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-primary" id="createOwnerBtn" disabled>
+                        <i class="bi bi-person-badge me-1"></i>Создать владельца
+                    </button>
+                    <button class="btn btn-outline-warning" id="createManagerBtn" disabled>
+                        <i class="bi bi-person-gear me-1"></i>Создать управляющего
+                    </button>
+                    <button class="btn btn-outline-success" id="createEmployeeBtn" disabled>
+                        <i class="bi bi-person-workspace me-1"></i>Создать сотрудника
+                    </button>
+                </div>
+                <div class="mt-3" id="testUsersLog"></div>
+                <div class="form-text mt-2">При отключении режима все тестовые пользователи и связанные записи будут удалены.</div>
+            </div>
+        </div>
+
         <!-- Быстрые действия -->
         <div class="card mb-4">
             <div class="card-header">
@@ -1051,6 +1081,68 @@ document.addEventListener('DOMContentLoaded', function() {
             showNotification('Ошибка сохранения настроек', 'error');
         }
     });
+    // ==== Тестовые пользователи ====
+    async function loadTestUsersSetting() {
+        try {
+            const res = await fetch('/api/system-settings/all');
+            const data = await res.json();
+            const settings = data.settings || {};
+            const enabled = (settings.enable_test_users || 'false') === 'true';
+            const checkbox = document.getElementById('enableTestUsers');
+            if (checkbox) checkbox.checked = enabled;
+            setTestUsersControls(enabled);
+        } catch (e) { console.error(e); }
+    }
+
+    function setTestUsersControls(enabled) {
+        ['createOwnerBtn','createManagerBtn','createEmployeeBtn'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.disabled = !enabled;
+        });
+    }
+
+    const enableTestUsersEl = document.getElementById('enableTestUsers');
+    if (enableTestUsersEl) {
+        enableTestUsersEl.addEventListener('change', async (e) => {
+            const enabled = e.target.checked;
+            try {
+                const res = await fetch(`/api/system-settings/test-users/toggle?enabled=${enabled}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    setTestUsersControls(enabled);
+                    if (!enabled) {
+                        const log = document.getElementById('testUsersLog');
+                        if (log) log.innerHTML = '<div class="alert alert-secondary">Режим отключен: тестовые пользователи и связанные записи удалены.</div>';
+                    }
+                }
+            } catch (e) { console.error(e); }
+        });
+    }
+
+    function wireCreate(btnId, role) {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.addEventListener('click', async () => {
+            try {
+                const res = await fetch(`/api/system-settings/test-users/create?role=${role}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    const log = document.getElementById('testUsersLog');
+                    if (log) {
+                        const item = document.createElement('div');
+                        item.className = 'alert alert-success';
+                        item.innerHTML = `Создан пользователь (${role}). Telegram ID: <code>${data.telegram_id}</code>`;
+                        log.prepend(item);
+                    }
+                }
+            } catch (e) { console.error(e); }
+        });
+    }
+
+    wireCreate('createOwnerBtn', 'owner');
+    wireCreate('createManagerBtn', 'manager');
+    wireCreate('createEmployeeBtn', 'employee');
+    loadTestUsersSetting();
 });
 </script>
 {% endblock %}
