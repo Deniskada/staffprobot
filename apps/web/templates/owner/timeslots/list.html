@@ -376,3 +376,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+
+{% block owner_extra_js %}
+<script>
+// no-op: блок для гарантии применения static_version цепочки в base_owner
+</script>
+{% endblock %}

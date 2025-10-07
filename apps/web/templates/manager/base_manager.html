@@ -163,7 +163,7 @@
     
     {% block extra_js %}
     {% block manager_extra_js %}{% endblock %}
-    <script src="/static/js/shared/applications_badge.js" data-role="manager"></script>
+    <script src="{{ 'js/shared/applications_badge.js' | static_version }}" data-role="manager"></script>
     {% endblock %}
 </body>
 </html>
