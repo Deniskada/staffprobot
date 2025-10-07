@@ -83,4 +83,4 @@ dev_backup_*.sql
 staffprobot_*.tar
 staffprobot_*.tar.gz
 dev_config_backup_*.tar.gz
-deployment/backup/*.sql
+deployment/backup/*.sql.cursor/
