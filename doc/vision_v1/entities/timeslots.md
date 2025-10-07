@@ -1,0 +1,173 @@
+# Сущность: Тайм-слоты (TimeSlots)
+
+## Веб-роуты и API
+- [GET] `/` — (apps/web/routes/owner.py) — роль: owner
+- [GET] `/` — (apps/web/routes/manager.py) — роль: owner
+- [GET] `/` — (apps/web/routes/manager.py) — роль: owner
+- [POST] `/api/applications/approve` — (apps/web/routes/owner.py)
+- [POST] `/api/applications/approve` — (apps/web/routes/manager.py)
+- [GET] `/api/applications/count` — (apps/web/routes/owner.py)
+- [GET] `/api/applications/count` — (apps/web/routes/manager.py)
+- [POST] `/api/applications/finalize-contract` — (apps/web/routes/owner.py)
+- [POST] `/api/applications/finalize-contract` — (apps/web/routes/manager.py)
+- [POST] `/api/applications/reject` — (apps/web/routes/owner.py)
+- [POST] `/api/applications/reject` — (apps/web/routes/manager.py)
+- [GET] `/api/applications/{application_id}` — (apps/web/routes/owner.py)
+- [GET] `/api/applications/{application_id}` — (apps/web/routes/manager.py)
+- [POST] `/api/calendar/check-availability` — (apps/web/routes/owner.py) — shared calendar API
+- [POST] `/api/calendar/check-availability` — (apps/web/routes/manager.py) — shared calendar API
+- [POST] `/api/calendar/plan-shift` — (apps/web/routes/owner.py) — shared calendar API
+- [POST] `/api/calendar/plan-shift` — (apps/web/routes/manager.py) — shared calendar API
+- [GET] `/api/contracts/my-contracts` — (apps/web/routes/owner.py)
+- [GET] `/api/employees` — (apps/web/routes/owner.py)
+- [GET] `/api/employees` — (apps/web/routes/manager.py)
+- [GET] `/api/employees/for-object/{object_id}` — (apps/web/routes/owner.py)
+- [GET] `/api/employees/for-object/{object_id}` — (apps/web/routes/manager.py)
+- [GET] `/applications` — (apps/web/routes/owner.py)
+- [GET] `/applications` — (apps/web/routes/manager.py)
+- [POST] `/bulk-delete` — (apps/web/routes/owner_timeslots.py)
+- [GET] `/calendar` — (apps/web/routes/owner.py)
+- [GET] `/calendar` — (apps/web/routes/manager.py)
+- [GET] `/calendar/analysis` — (apps/web/routes/owner.py)
+- [GET] `/calendar/analysis/chart-data` — (apps/web/routes/owner.py)
+- [POST] `/calendar/analysis/fill-gaps/{object_id}` — (apps/web/routes/owner.py)
+- [GET] `/calendar/api/data` — (apps/web/routes/owner.py)
+- [GET] `/calendar/api/data` — (apps/web/routes/manager.py)
+- [GET] `/calendar/api/employees` — (apps/web/routes/manager.py)
+- [GET] `/calendar/api/objects` — (apps/web/routes/owner.py)
+- [GET] `/calendar/api/objects` — (apps/web/routes/manager.py)
+- [POST] `/calendar/api/quick-create-timeslot` — (apps/web/routes/owner.py)
+- [POST] `/calendar/api/quick-create-timeslot` — (apps/web/routes/manager.py)
+- [GET] `/calendar/api/timeslot/{timeslot_id}` — (apps/web/routes/owner.py)
+- [GET] `/calendar/api/timeslot/{timeslot_id}` — (apps/web/routes/manager.py)
+- [GET] `/calendar/api/timeslots-status` — (apps/web/routes/owner.py)
+- [GET] `/calendar/api/timeslots-status` — (apps/web/routes/manager.py)
+- [GET] `/calendar/week` — (apps/web/routes/owner.py)
+- [GET] `/dashboard` — (apps/web/routes/owner.py)
+- [GET] `/dashboard` — (apps/web/routes/manager.py)
+- [GET] `/employees` — (apps/web/routes/owner.py)
+- [GET] `/employees` — (apps/web/routes/manager.py)
+- [GET] `/employees/add` — (apps/web/routes/manager.py)
+- [POST] `/employees/add` — (apps/web/routes/manager.py)
+- [GET] `/employees/contract/{contract_id}` — (apps/web/routes/owner.py)
+- [POST] `/employees/contract/{contract_id}/activate` — (apps/web/routes/owner.py)
+- [GET] `/employees/contract/{contract_id}/edit` — (apps/web/routes/owner.py)
+- [POST] `/employees/contract/{contract_id}/edit` — (apps/web/routes/owner.py)
+- [GET] `/employees/contract/{contract_id}/pdf` — (apps/web/routes/owner.py)
+- [POST] `/employees/contract/{contract_id}/terminate` — (apps/web/routes/owner.py)
+- [GET] `/employees/create` — (apps/web/routes/owner.py)
+- [POST] `/employees/create` — (apps/web/routes/owner.py)
+- [GET] `/employees/{employee_id}` — (apps/web/routes/owner.py)
+- [GET] `/employees/{employee_id}` — (apps/web/routes/manager.py)
+- [POST] `/employees/{employee_id}/contract/{contract_id}/edit` — (apps/web/routes/manager.py)
+- [GET] `/employees/{employee_id}/edit` — (apps/web/routes/manager.py)
+- [POST] `/employees/{employee_id}/edit` — (apps/web/routes/manager.py)
+- [GET] `/employees/{employee_id}/shifts` — (apps/web/routes/manager.py)
+- [POST] `/employees/{employee_id}/terminate` — (apps/web/routes/manager.py)
+- [GET] `/manager/timeslots` — (apps/web/routes/manager_timeslots.py) — роль: manager
+- [POST] `/manager/timeslots/bulk-delete` — (apps/web/routes/manager_timeslots.py) — роль: manager
+- [POST] `/manager/timeslots/bulk-edit` — (apps/web/routes/manager_timeslots.py) — роль: manager
+- [GET] `/manager/timeslots/object/{object_id}` — (apps/web/routes/manager_timeslots.py) — роль: manager
+- [GET] `/manager/timeslots/object/{object_id}/create` — (apps/web/routes/manager_timeslots.py) — роль: manager
+- [POST] `/manager/timeslots/object/{object_id}/create` — (apps/web/routes/manager_timeslots.py) — роль: manager
+- [GET] `/manager/timeslots/{timeslot_id}/edit` — (apps/web/routes/manager_timeslots.py) — роль: manager
+- [POST] `/manager/timeslots/{timeslot_id}/edit` — (apps/web/routes/manager_timeslots.py) — роль: manager
+- [GET] `/object/{object_id}` — (apps/web/routes/owner_timeslots.py)
+- [GET] `/object/{object_id}/create` — (apps/web/routes/owner_timeslots.py)
+- [POST] `/object/{object_id}/create` — (apps/web/routes/owner_timeslots.py)
+- [GET] `/objects` — (apps/web/routes/owner.py)
+- [GET] `/objects` — (apps/web/routes/manager.py)
+- [GET] `/objects/create` — (apps/web/routes/owner.py)
+- [POST] `/objects/create` — (apps/web/routes/owner.py)
+- [GET] `/objects/{object_id}` — (apps/web/routes/owner.py)
+- [GET] `/objects/{object_id}` — (apps/web/routes/manager.py)
+- [POST] `/objects/{object_id}/delete` — (apps/web/routes/owner.py)
+- [GET] `/objects/{object_id}/edit` — (apps/web/routes/owner.py)
+- [POST] `/objects/{object_id}/edit` — (apps/web/routes/owner.py)
+- [GET] `/objects/{object_id}/edit` — (apps/web/routes/manager.py)
+- [POST] `/objects/{object_id}/edit` — (apps/web/routes/manager.py)
+- [GET] `/profile` — (apps/web/routes/owner.py)
+- [GET] `/profile` — (apps/web/routes/manager.py)
+- [POST] `/profile` — (apps/web/routes/manager.py)
+- [GET] `/profile/preview` — (apps/web/routes/owner.py)
+- [POST] `/profile/save` — (apps/web/routes/owner.py)
+- [GET] `/profile/tags/{category}` — (apps/web/routes/owner.py)
+- [GET] `/reports` — (apps/web/routes/owner.py)
+- [GET] `/reports` — (apps/web/routes/manager.py)
+- [POST] `/reports/generate` — (apps/web/routes/owner.py)
+- [POST] `/reports/generate` — (apps/web/routes/manager.py)
+- [GET] `/reports/stats/period` — (apps/web/routes/owner.py)
+- [GET] `/reports/stats/period` — (apps/web/routes/manager.py)
+- [GET] `/settings` — (apps/web/routes/owner.py)
+- [GET] `/shifts` — (apps/web/routes/manager.py)
+- [GET] `/shifts/{shift_id}` — (apps/web/routes/manager.py)
+- [POST] `/shifts/{shift_id}/cancel` — (apps/web/routes/manager.py)
+- [GET] `/shifts_legacy` — (apps/web/routes/owner.py)
+- [GET] `/shifts_legacy/{shift_id}` — (apps/web/routes/owner.py)
+- [POST] `/shifts_legacy/{shift_id}/cancel` — (apps/web/routes/owner.py)
+- [GET] `/tariff/change` — (apps/web/routes/owner.py)
+- [POST] `/tariff/change` — (apps/web/routes/owner.py)
+- [GET] `/templates` — (apps/web/routes/owner.py)
+- [GET] `/templates/contracts` — (apps/web/routes/owner.py)
+- [GET] `/templates/contracts/create` — (apps/web/routes/owner.py)
+- [POST] `/templates/contracts/create` — (apps/web/routes/owner.py)
+- [GET] `/templates/contracts/{template_id}` — (apps/web/routes/owner.py)
+- [GET] `/templates/contracts/{template_id}/edit` — (apps/web/routes/owner.py)
+- [POST] `/templates/contracts/{template_id}/edit` — (apps/web/routes/owner.py)
+- [GET] `/templates/planning` — (apps/web/routes/owner.py)
+- [GET] `/templates/planning/create` — (apps/web/routes/owner.py)
+- [POST] `/templates/planning/create` — (apps/web/routes/owner.py)
+- [GET] `/templates/planning/{template_id}` — (apps/web/routes/owner.py)
+- [POST] `/templates/planning/{template_id}/delete` — (apps/web/routes/owner.py)
+- [GET] `/templates/planning/{template_id}/edit` — (apps/web/routes/owner.py)
+- [POST] `/templates/planning/{template_id}/edit` — (apps/web/routes/owner.py)
+- [POST] `/timeslots/bulk-edit` — (apps/web/routes/owner.py)
+- [GET] `/timeslots/{timeslot_id}` — (apps/web/routes/owner.py)
+- [GET] `/timeslots/{timeslot_id}` — (apps/web/routes/manager.py)
+- [POST] `/timeslots/{timeslot_id}/delete` — (apps/web/routes/owner.py)
+- [GET] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner.py)
+- [POST] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner.py)
+- [POST] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/manager.py)
+- [POST] `/{timeslot_id}/delete` — (apps/web/routes/owner_timeslots.py)
+- [GET] `/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py)
+- [POST] `/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py)
+
+## Шаблоны/JS/CSS
+- `manager/applications.html`
+- `manager/calendar.html`
+- `manager/dashboard.html`
+- `manager/employees.html`
+- `manager/employees/add.html`
+- `manager/employees/detail.html`
+- `manager/employees/edit.html`
+- `manager/employees/shifts.html`
+- `manager/objects.html`
+- `manager/objects/detail.html`
+- `manager/objects/edit.html`
+- `manager/profile.html`
+- `manager/reports/index.html`
+- `manager/shifts/detail.html`
+- `manager/shifts/list.html`
+- `owner/applications.html`
+- `owner/calendar/analysis.html`
+- `owner/calendar/index.html`
+- `owner/calendar/week.html`
+- `owner/change_tariff.html`
+- `owner/dashboard.html`
+- `owner/objects/create.html`
+- `owner/objects/detail.html`
+- `owner/objects/edit.html`
+- `owner/objects/list.html`
+- `owner/profile/index.html`
+- `owner/reports/index.html`
+- `owner/settings.html`
+- `owner/shifts/access_denied.html`
+- `owner/shifts/detail.html`
+- `owner/shifts/list.html`
+- `owner/shifts/not_found.html`
+- `owner/templates/contracts/detail.html`
+- `owner/templates/contracts/edit.html`
+- `owner/timeslots/create.html`
+- `owner/timeslots/detail.html`
+- `owner/timeslots/edit.html`
+- `owner/timeslots/list.html`

@@ -345,7 +345,7 @@ async def update_contract(
     template_id: Optional[int] = Form(None),
     allowed_objects: List[int] = Form(default=[])
 ):
-    """Обновление договора."""
+    """Обновление договора (каноничный endpoint)."""
     # Проверяем авторизацию
     current_user = await require_owner_or_superadmin(request)
     if isinstance(current_user, RedirectResponse):
@@ -388,81 +388,9 @@ async def update_contract(
     except Exception as e:
         logger.error(f"Error updating contract: {e}")
         raise HTTPException(status_code=400, detail=f"Ошибка обновления договора: {str(e)}")
-    # Проверяем авторизацию
-    current_user = await require_owner_or_superadmin(request)
-    if isinstance(current_user, RedirectResponse):
-        return current_user
-    
-    contract_service = ContractService()
-    contract = await contract_service.get_contract_by_id(contract_id, current_user["id"])
-    objects = await contract_service.get_owner_objects(current_user["id"])
-    
-    if not contract:
-        raise HTTPException(status_code=404, detail="Договор не найден")
-    
-    return templates.TemplateResponse(
-        "employees/edit_contract.html",
-        {
-            "request": request,
-            "contract": contract,
-            "objects": objects,
-            "title": "Редактирование договора",
-            "current_user": current_user
-        }
-    )
 
 
-@router.post("/contract/{contract_id}/edit")
-async def edit_contract(
-    request: Request,
-    contract_id: int,
-    title: str = Form(...),
-    content: str = Form(...),
-    hourly_rate: Optional[int] = Form(None),
-    start_date: str = Form(...),
-    end_date: Optional[str] = Form(None),
-    allowed_objects: List[int] = Form(default=[])
-):
-    """Редактирование договора."""
-    # Проверяем авторизацию
-    current_user = await require_owner_or_superadmin(request)
-    if isinstance(current_user, RedirectResponse):
-        return current_user
-    
-    try:
-        contract_service = ContractService()
-        
-        # Валидация
-        if not hourly_rate:
-            raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
-        
-        if hourly_rate <= 0:
-            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
-        
-        # Парсим даты
-        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
-        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
-        
-        # Обновляем договор
-        contract_data = {
-            "title": title,
-            "content": content,
-            "hourly_rate": hourly_rate,
-            "start_date": start_date_obj,
-            "end_date": end_date_obj,
-            "allowed_objects": allowed_objects
-        }
-        
-        success = await contract_service.update_contract(contract_id, current_user["id"], contract_data)
-        
-        if success:
-            return RedirectResponse(url=f"/employees/contract/{contract_id}", status_code=303)
-        else:
-            raise HTTPException(status_code=400, detail="Ошибка обновления договора")
-            
-    except Exception as e:
-        logger.error(f"Error updating contract: {e}")
-        raise HTTPException(status_code=400, detail=f"Ошибка обновления договора: {str(e)}")
+# Удалён дублирующий endpoint /contract/{contract_id}/edit
 
 
 @router.post("/contract/{contract_id}/activate")

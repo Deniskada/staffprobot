@@ -1,7 +1,6 @@
 ---
-alwaysApply: true
+alwaysApply: false
 ---
-
 # Правила работы с user_id в StaffProBot
 
 ## 🚨 Критическая проблема

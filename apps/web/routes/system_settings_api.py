@@ -391,18 +391,27 @@ async def clear_settings_cache(
 
 
 @router.post("/initialize")
-async def initialize_default_settings(
+async def initialize_settings(
     current_user: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """Инициализировать настройки по умолчанию"""
+    """Инициализировать настройки по умолчанию (каноничный endpoint)."""
     try:
         settings_service = SystemSettingsService(db)
-        await settings_service.initialize_default_settings()
-        return {"success": True, "message": "Настройки инициализированы по умолчанию"}
+        success = await settings_service.initialize_default_settings()
+        if success:
+            return {
+                "success": True,
+                "message": "Настройки по умолчанию инициализированы"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Ошибка инициализации настроек"
+            }
     except Exception as e:
         logger.error(f"Error initializing settings: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка инициализации: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка инициализации настроек")
 
 
 # History endpoints
@@ -738,30 +747,7 @@ async def get_all_settings(
         raise HTTPException(status_code=500, detail="Ошибка получения настроек")
 
 
-@router.post("/initialize")
-async def initialize_settings(
-    current_user: dict = Depends(require_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Инициализировать настройки по умолчанию"""
-    try:
-        settings_service = SystemSettingsService(db)
-        success = await settings_service.initialize_default_settings()
-        
-        if success:
-            return {
-                "success": True,
-                "message": "Настройки по умолчанию инициализированы"
-            }
-        else:
-            return {
-                "success": False,
-                "message": "Ошибка инициализации настроек"
-            }
-            
-    except Exception as e:
-        logger.error(f"Error initializing settings: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка инициализации настроек")
+# Удалён дублирующийся endpoint /initialize
 
 
 @router.post("/cache/clear")

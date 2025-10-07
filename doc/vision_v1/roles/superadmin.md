@@ -1,0 +1,75 @@
+# Роль: Суперадмин (Superadmin)
+
+## Роуты и эндпоинты
+- [GET] `/admin/`  — (apps/web/routes/admin.py)
+- [GET] `/admin/`  — (apps/web/routes/admin_reports.py)
+- [GET] `/admin/`  — (apps/web/routes/user_subscriptions.py)
+- [GET] `/admin/`  — (apps/web/routes/tariffs.py)
+- [GET] `/admin/`  — (apps/web/routes/billing.py)
+- [GET] `/admin/all`  — (apps/web/routes/admin/system_settings.py)
+- [GET] `/admin/analytics`  — (apps/web/routes/admin_reports.py)
+- [GET] `/admin/api/financial`  — (apps/web/routes/admin_reports.py)
+- [GET] `/admin/api/list`  — (apps/web/routes/user_subscriptions.py)
+- [GET] `/admin/api/list`  — (apps/web/routes/tariffs.py)
+- [GET] `/admin/api/notifications`  — (apps/web/routes/billing.py)
+- [GET] `/admin/api/statistics`  — (apps/web/routes/tariffs.py)
+- [GET] `/admin/api/transactions`  — (apps/web/routes/billing.py)
+- [GET] `/admin/api/usage/{user_id}`  — (apps/web/routes/billing.py)
+- [GET] `/admin/api/user/{user_id}`  — (apps/web/routes/user_subscriptions.py)
+- [GET] `/admin/api/users`  — (apps/web/routes/admin_reports.py)
+- [GET] `/admin/api/{tariff_id}`  — (apps/web/routes/tariffs.py)
+- [GET] `/admin/assign`  — (apps/web/routes/user_subscriptions.py)
+- [POST] `/admin/assign`  — (apps/web/routes/user_subscriptions.py)
+- [POST] `/admin/auto-renewal/{user_id}`  — (apps/web/routes/billing.py)
+- [POST] `/admin/cache/clear`  — (apps/web/routes/admin/system_settings.py)
+- [GET] `/admin/create`  — (apps/web/routes/tariffs.py)
+- [POST] `/admin/create`  — (apps/web/routes/tariffs.py)
+- [GET] `/admin/domain`  — (apps/web/routes/admin/system_settings.py)
+- [POST] `/admin/domain`  — (apps/web/routes/admin/system_settings.py)
+- [GET] `/admin/domain/preview`  — (apps/web/routes/admin/system_settings.py)
+- [GET] `/admin/domain/validate`  — (apps/web/routes/admin/system_settings.py)
+- [GET] `/admin/export/financial.csv`  — (apps/web/routes/admin_reports.py)
+- [GET] `/admin/export/owners.csv`  — (apps/web/routes/admin_reports.py)
+- [GET] `/admin/export/users.csv`  — (apps/web/routes/admin_reports.py)
+- [GET] `/admin/financial`  — (apps/web/routes/admin_reports.py)
+- [GET] `/admin/https`  — (apps/web/routes/admin/system_settings.py)
+- [POST] `/admin/https`  — (apps/web/routes/admin/system_settings.py)
+- [POST] `/admin/initialize`  — (apps/web/routes/admin/system_settings.py)
+- [GET] `/admin/monitoring`  — (apps/web/routes/admin.py)
+- [GET] `/admin/owners`  — (apps/web/routes/admin_reports.py)
+- [GET] `/admin/reports`  — (apps/web/routes/admin.py)
+- [GET] `/admin/ssl/email`  — (apps/web/routes/admin/system_settings.py)
+- [POST] `/admin/ssl/email`  — (apps/web/routes/admin/system_settings.py)
+- [GET] `/admin/system-settings`  — (apps/web/routes/admin.py)
+- [GET] `/admin/tariffs`  — (apps/web/routes/admin.py)
+- [GET] `/admin/transactions`  — (apps/web/routes/billing.py)
+- [POST] `/admin/transactions/{transaction_id}/status`  — (apps/web/routes/billing.py)
+- [GET] `/admin/usage`  — (apps/web/routes/billing.py)
+- [GET] `/admin/users`  — (apps/web/routes/admin.py)
+- [GET] `/admin/users`  — (apps/web/routes/admin_reports.py)
+- [POST] `/admin/users/{user_id}/role`  — (apps/web/routes/admin.py)
+- [POST] `/admin/users/{user_id}/toggle-active`  — (apps/web/routes/admin.py)
+- [POST] `/admin/{subscription_id}/cancel`  — (apps/web/routes/user_subscriptions.py)
+- [POST] `/admin/{tariff_id}/delete`  — (apps/web/routes/tariffs.py)
+- [GET] `/admin/{tariff_id}/edit`  — (apps/web/routes/tariffs.py)
+- [POST] `/admin/{tariff_id}/edit`  — (apps/web/routes/tariffs.py)
+
+## Шаблоны (Jinja2)
+- `admin/assign_subscription.html`
+- `admin/billing_dashboard.html`
+- `admin/billing_transactions.html`
+- `admin/dashboard.html`
+- `admin/error.html`
+- `admin/financial_report.html`
+- `admin/monitoring.html`
+- `admin/owners_report.html`
+- `admin/reports.html`
+- `admin/reports_dashboard.html`
+- `admin/system_analytics.html`
+- `admin/system_settings.html`
+- `admin/tariff_form.html`
+- `admin/tariffs.html`
+- `admin/usage_metrics.html`
+- `admin/user_subscriptions.html`
+- `admin/users.html`
+- `admin/users_report.html`

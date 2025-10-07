@@ -1,0 +1,81 @@
+# Роль: Управляющий (Manager)
+
+## Роуты и эндпоинты
+- [GET] `/`  — (apps/web/routes/manager.py) — редирект на /manager/dashboard
+- [GET] `/`  — (apps/web/routes/manager.py) — редирект на /manager/dashboard
+- [POST] `/api/applications/approve`  — (apps/web/routes/manager.py)
+- [GET] `/api/applications/count`  — (apps/web/routes/manager.py)
+- [POST] `/api/applications/finalize-contract`  — (apps/web/routes/manager.py)
+- [POST] `/api/applications/reject`  — (apps/web/routes/manager.py)
+- [GET] `/api/applications/{application_id}`  — (apps/web/routes/manager.py)
+- [POST] `/api/calendar/check-availability`  — (apps/web/routes/manager.py)
+- [POST] `/api/calendar/plan-shift`  — (apps/web/routes/manager.py)
+- [GET] `/api/employees`  — (apps/web/routes/manager.py)
+- [GET] `/api/employees/for-object/{object_id}`  — (apps/web/routes/manager.py)
+- [GET] `/applications`  — (apps/web/routes/manager.py)
+- [GET] `/calendar`  — (apps/web/routes/manager.py)
+- [GET] `/calendar/api/data`  — (apps/web/routes/manager.py)
+- [GET] `/calendar/api/employees`  — (apps/web/routes/manager.py)
+- [GET] `/calendar/api/objects`  — (apps/web/routes/manager.py)
+- [POST] `/calendar/api/quick-create-timeslot`  — (apps/web/routes/manager.py)
+- [GET] `/calendar/api/timeslot/{timeslot_id}`  — (apps/web/routes/manager.py)
+- [GET] `/calendar/api/timeslots-status`  — (apps/web/routes/manager.py)
+- [GET] `/dashboard`  — (apps/web/routes/manager.py)
+- [GET] `/employees`  — (apps/web/routes/manager.py)
+- [GET] `/employees/add`  — (apps/web/routes/manager.py)
+- [POST] `/employees/add`  — (apps/web/routes/manager.py)
+- [GET] `/employees/{employee_id}`  — (apps/web/routes/manager.py)
+- [POST] `/employees/{employee_id}/contract/{contract_id}/edit`  — (apps/web/routes/manager.py)
+- [GET] `/employees/{employee_id}/edit`  — (apps/web/routes/manager.py)
+- [POST] `/employees/{employee_id}/edit`  — (apps/web/routes/manager.py)
+- [GET] `/employees/{employee_id}/shifts`  — (apps/web/routes/manager.py)
+- [POST] `/employees/{employee_id}/terminate`  — (apps/web/routes/manager.py)
+- [GET] `/manager/reviews-simple`  — (apps/web/routes/manager_reviews_simple.py)
+- [GET] `/manager/timeslots`  — (apps/web/routes/manager_timeslots.py)
+- [POST] `/manager/timeslots/bulk-delete`  — (apps/web/routes/manager_timeslots.py)
+- [POST] `/manager/timeslots/bulk-edit`  — (apps/web/routes/manager_timeslots.py)
+- [GET] `/manager/timeslots/object/{object_id}`  — (apps/web/routes/manager_timeslots.py)
+- [GET] `/manager/timeslots/object/{object_id}/create`  — (apps/web/routes/manager_timeslots.py)
+- [POST] `/manager/timeslots/object/{object_id}/create`  — (apps/web/routes/manager_timeslots.py)
+- [GET] `/manager/timeslots/{timeslot_id}/edit`  — (apps/web/routes/manager_timeslots.py)
+- [POST] `/manager/timeslots/{timeslot_id}/edit`  — (apps/web/routes/manager_timeslots.py)
+- [GET] `/objects`  — (apps/web/routes/manager.py)
+- [GET] `/objects/{object_id}`  — (apps/web/routes/manager.py)
+- [GET] `/objects/{object_id}/edit`  — (apps/web/routes/manager.py)
+- [POST] `/objects/{object_id}/edit`  — (apps/web/routes/manager.py)
+- [GET] `/profile`  — (apps/web/routes/manager.py)
+- [POST] `/profile`  — (apps/web/routes/manager.py)
+- [GET] `/reports`  — (apps/web/routes/manager.py)
+- [POST] `/reports/generate`  — (apps/web/routes/manager.py)
+- [GET] `/reports/stats/period`  — (apps/web/routes/manager.py)
+- [GET] `/reviews`  — (apps/web/routes/manager_reviews.py)
+- [GET] `/shifts`  — (apps/web/routes/manager.py)
+- [GET] `/shifts/{shift_id}`  — (apps/web/routes/manager.py)
+- [POST] `/shifts/{shift_id}/cancel`  — (apps/web/routes/manager.py)
+- [GET] `/timeslots/{timeslot_id}`  — (apps/web/routes/manager.py)
+- [POST] `/timeslots/{timeslot_id}/edit`  — (apps/web/routes/manager.py)
+
+## Шаблоны (Jinja2)
+- `manager/applications.html`
+- `manager/calendar.html`
+- `manager/dashboard.html`
+- `manager/employees.html`
+- `manager/employees/add.html`
+- `manager/employees/detail.html`
+- `manager/employees/edit.html`
+- `manager/employees/shifts.html`
+- `manager/objects.html`
+- `manager/objects/detail.html`
+- `manager/objects/edit.html`
+- `manager/profile.html`
+- `manager/reports/index.html`
+- `manager/reviews.html`
+- `manager/shifts/detail.html`
+- `manager/shifts/list.html`
+
+## Общий календарь (Shared API)
+- [GET] `/api/calendar/data`
+- [GET] `/api/calendar/timeslots`
+- [GET] `/api/calendar/shifts`
+- [GET] `/api/calendar/stats`
+- [GET] `/api/calendar/objects`
