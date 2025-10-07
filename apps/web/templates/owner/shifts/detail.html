@@ -49,7 +49,17 @@
                                         </div>
                                         <div>
                                             <div class="fw-bold fs-5">{{ shift.user.first_name }} {{ shift.user.last_name or '' }}</div>
-                                            <div class="text-muted">@{{ shift.user.username or 'без username' }}</div>
+                                            <div class="text-muted">
+                                                {% if shift.user.username %}
+                                                    {% if shift.user.username.startswith('@') %}
+                                                        {{ shift.user.username }}
+                                                    {% else %}
+                                                        @{{ shift.user.username }}
+                                                    {% endif %}
+                                                {% else %}
+                                                    без username
+                                                {% endif %}
+                                            </div>
                                             <div class="text-muted">ID: {{ shift.user.telegram_id }}</div>
                                         </div>
                                     </div>

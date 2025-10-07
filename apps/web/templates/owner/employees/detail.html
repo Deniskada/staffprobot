@@ -10,7 +10,15 @@
                 <div>
                     <h1 class="h3 mb-0">{{ employee.first_name }} {{ employee.last_name or '' }}</h1>
                     <p class="text-muted mb-0">
-                        @{{ employee.username or 'без username' }} • 
+                        {% if employee.username %}
+                            {% if employee.username.startswith('@') %}
+                                {{ employee.username }}
+                            {% else %}
+                                @{{ employee.username }}
+                            {% endif %}
+                        {% else %}
+                            без username
+                        {% endif %} • 
                         <span class="badge bg-light text-dark">{{ employee.telegram_id }}</span>
                     </p>
                 </div>
@@ -136,7 +144,11 @@
                             {% if employee.username %}
                             <div class="mb-3">
                                 <strong>Username:</strong><br>
-                                @{{ employee.username }}
+                                {% if employee.username.startswith('@') %}
+                                    {{ employee.username }}
+                                {% else %}
+                                    @{{ employee.username }}
+                                {% endif %}
                             </div>
                             {% endif %}
                             
