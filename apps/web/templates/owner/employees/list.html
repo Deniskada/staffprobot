@@ -71,7 +71,7 @@
                                         </div>
                                         <div>
                                             <h5 class="card-title mb-0">
-                                                {{ employee.first_name }} {{ employee.last_name or '' }}
+                                                {{ (employee.last_name or '') ~ (' ' if employee.last_name and employee.first_name else '') ~ (employee.first_name or '') }}
                                                 {% if not has_active_contracts %}
                                                     <span class="badge bg-warning ms-2">Бывший</span>
                                                 {% endif %}
@@ -164,7 +164,7 @@
                                                 <i class="fas fa-user"></i>
                                             </div>
                                             <div>
-                                                <strong>{{ employee.first_name }} {{ employee.last_name or '' }}</strong>
+                                                <strong>{{ (employee.last_name or '') ~ (' ' if employee.last_name and employee.first_name else '') ~ (employee.first_name or '') }}</strong>
                                                 {% if not has_active_contracts %}
                                                     <span class="badge bg-warning ms-2">Бывший</span>
                                                 {% endif %}

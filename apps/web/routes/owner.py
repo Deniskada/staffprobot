@@ -4879,6 +4879,18 @@ async def owner_employees_list(
             employees = await contract_service.get_all_contract_employees_by_telegram_id(user_id)
         else:
             employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
+
+        # Сортировка: сначала по фамилии, затем по имени (локально, так как employees — dict-like)
+        def sort_key(emp):
+            last_name = (emp.get('last_name') or '').strip().lower()
+            first_name = (emp.get('first_name') or '').strip().lower()
+            return (last_name, first_name)
+
+        try:
+            employees = sorted(employees, key=sort_key)
+        except Exception:
+            # На случай если структура иная — не падаем, оставляем как есть
+            pass
         
         # Получаем данные для переключения интерфейсов
         available_interfaces = await get_available_interfaces_for_user(user_id)
