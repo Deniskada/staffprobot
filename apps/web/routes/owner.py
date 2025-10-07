@@ -4994,14 +4994,17 @@ async def owner_employee_detail(
     try:
         from apps.web.services.contract_service import ContractService
         
-        contract_service = ContractService()
-        user_id = current_user["id"]
+        # Получаем внутренний user_id владельца
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
         
-        # Получаем информацию о сотруднике
-        employee_info = await contract_service.get_employee_by_telegram_id(employee_id, user_id)
+        # Получаем информацию о сотруднике через сервис (employee_id - это telegram_id)
+        contract_service = ContractService()
+        employee_info = await contract_service.get_employee_by_telegram_id(employee_id, current_user["id"])
         
         if not employee_info:
-            raise HTTPException(status_code=404, detail="Сотрудник не найден")
+            raise HTTPException(status_code=404, detail="У вас нет договоров с этим сотрудником")
         
         # Получаем данные для переключения интерфейсов
         available_interfaces = await get_available_interfaces_for_user(user_id)
@@ -5010,9 +5013,11 @@ async def owner_employee_detail(
             "owner/employees/detail.html",
             {
                 "request": request,
-                "title": f"Сотрудник {employee_info.get('name', 'Неизвестно')}",
+                "title": f"Сотрудник {employee_info['first_name']} {employee_info['last_name'] or ''}",
                 "current_user": current_user,
-                "employee": employee_info,
+                "employee": employee_info,  # Полная информация из сервиса
+                "employee_contracts": employee_info["contracts"],  # Договоры из сервиса
+                "employee_accessible_objects": employee_info["accessible_objects"],  # Объекты из сервиса
                 "available_interfaces": available_interfaces
             }
         )

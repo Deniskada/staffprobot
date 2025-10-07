@@ -29,6 +29,107 @@
 
             <div class="row">
                 <div class="col-lg-8">
+                    <!-- Информация о профиле сотрудника -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-user me-2"></i>Профиль сотрудника
+                                <button class="btn btn-sm btn-outline-primary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#profileDetails" aria-expanded="false" aria-controls="profileDetails">
+                                    <i class="fas fa-chevron-down me-1"></i>Подробнее
+                                </button>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Краткая информация (всегда видна) -->
+                            <div class="row">
+                                <div class="col-md-3 text-center mb-3">
+                                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto" style="width: 80px; height: 80px;">
+                                        <i class="fas fa-user fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="col-md-9">
+                                    <h4 class="mb-1">{{ employee.first_name }} {{ employee.last_name or '' }}</h4>
+                                    <p class="text-muted mb-2">
+                                        {% if employee.username %}
+                                            {% if employee.username.startswith('@') %}
+                                                {{ employee.username }}
+                                            {% else %}
+                                                @{{ employee.username }}
+                                            {% endif %}
+                                        {% else %}
+                                            без username
+                                        {% endif %} • 
+                                        <span class="badge bg-light text-dark">{{ employee.telegram_id }}</span>
+                                    </p>
+                                    {% if employee.phone %}
+                                    <p class="mb-1">
+                                        <i class="fas fa-phone me-2"></i>{{ employee.phone }}
+                                    </p>
+                                    {% endif %}
+                                    {% if employee.birth_date %}
+                                    <p class="mb-0">
+                                        <i class="fas fa-birthday-cake me-2"></i>{{ employee.birth_date }}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <!-- Подробная информация (скрыта по умолчанию) -->
+                            <div class="collapse" id="profileDetails">
+                                <hr>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                    {% if employee['email'] %}
+                                    <div class="mb-3">
+                                        <strong>Email:</strong><br>
+                                        <i class="fas fa-envelope me-2"></i>{{ employee['email'] }}
+                                    </div>
+                                    {% endif %}
+                                    {% if employee['work_experience'] %}
+                                    <div class="mb-3">
+                                        <strong>Опыт работы:</strong><br>
+                                        {{ employee['work_experience'] }}
+                                    </div>
+                                    {% endif %}
+                                    {% if employee['education'] %}
+                                    <div class="mb-3">
+                                        <strong>Образование:</strong><br>
+                                        {{ employee['education'] }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6">
+                                    {% if employee['skills'] %}
+                                    <div class="mb-3">
+                                        <strong>Навыки:</strong><br>
+                                        {{ employee['skills'] }}
+                                    </div>
+                                    {% endif %}
+                                    {% if employee['preferred_schedule'] %}
+                                    <div class="mb-3">
+                                        <strong>Предпочитаемый график:</strong><br>
+                                        {{ employee['preferred_schedule'] }}
+                                    </div>
+                                    {% endif %}
+                                    {% if employee['min_salary'] %}
+                                    <div class="mb-3">
+                                        <strong>Минимальная зарплата:</strong><br>
+                                        {{ employee['min_salary'] }} ₽
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% if employee['about'] %}
+                            <div class="mb-3">
+                                <strong>О себе:</strong><br>
+                                {{ employee['about'] }}
+                            </div>
+                            {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Договоры -->
                     <div class="card">
                         <div class="card-header">
                             <h5 class="mb-0">
@@ -36,7 +137,7 @@
                             </h5>
                         </div>
                         <div class="card-body">
-                            {% if employee.contracts %}
+                            {% if employee_contracts %}
                                 <div class="table-responsive">
                                     <table class="table table-hover">
                                         <thead>
@@ -50,7 +151,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for contract in employee.contracts %}
+                                            {% for contract in employee_contracts %}
                                             <tr>
                                                 <td>
                                                     <code>{{ contract.contract_number }}</code>
@@ -124,58 +225,17 @@
                 </div>
 
                 <div class="col-lg-4">
+                    <!-- Доступ к объектам -->
                     <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">
-                                <i class="fas fa-info-circle me-2"></i>Информация
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <strong>Telegram ID:</strong><br>
-                                <code>{{ employee.telegram_id }}</code>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <strong>Имя:</strong><br>
-                                {{ employee.first_name }} {{ employee.last_name or '' }}
-                            </div>
-                            
-                            {% if employee.username %}
-                            <div class="mb-3">
-                                <strong>Username:</strong><br>
-                                {% if employee.username.startswith('@') %}
-                                    {{ employee.username }}
-                                {% else %}
-                                    @{{ employee.username }}
-                                {% endif %}
-                            </div>
-                            {% endif %}
-                            
-                            <div class="mb-3">
-                                <strong>Дата регистрации:</strong><br>
-                                {{ employee.created_at.strftime('%d.%m.%Y %H:%M') }}
-                            </div>
-                            
-                            <div class="mb-3">
-                                <strong>Активных договоров:</strong><br>
-                                <span class="badge bg-primary">
-                                    {{ employee.contracts|selectattr('status', 'equalto', 'active')|list|length }}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card mt-3">
                         <div class="card-header">
                             <h5 class="mb-0">
                                 <i class="fas fa-building me-2"></i>Доступ к объектам
                             </h5>
                         </div>
                         <div class="card-body">
-                            {% if employee.accessible_objects and employee.accessible_objects|length > 0 %}
+                            {% if employee_accessible_objects and employee_accessible_objects|length > 0 %}
                                 <div class="row">
-                                    {% for object in employee.accessible_objects %}
+                                    {% for object in employee_accessible_objects %}
                                     <div class="col-12 mb-2">
                                         <div class="d-flex align-items-center">
                                             <div class="flex-shrink-0">
@@ -225,4 +285,35 @@
         </div>
     </div>
 </div>
+
+<script>
+// Отладка collapse
+document.addEventListener('DOMContentLoaded', function() {
+    const collapseElement = document.getElementById('profileDetails');
+    const toggleButton = document.querySelector('[data-bs-target="#profileDetails"]');
+    
+    if (collapseElement && toggleButton) {
+        console.log('Collapse element found:', collapseElement);
+        console.log('Toggle button found:', toggleButton);
+        
+        // Добавляем обработчик клика
+        toggleButton.addEventListener('click', function() {
+            console.log('Toggle button clicked');
+        });
+        
+        // Слушаем события collapse
+        collapseElement.addEventListener('show.bs.collapse', function() {
+            console.log('Collapse showing');
+        });
+        
+        collapseElement.addEventListener('shown.bs.collapse', function() {
+            console.log('Collapse shown');
+        });
+    } else {
+        console.log('Collapse elements not found');
+        console.log('collapseElement:', collapseElement);
+        console.log('toggleButton:', toggleButton);
+    }
+});
+</script>
 {% endblock %}
