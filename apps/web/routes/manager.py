@@ -988,7 +988,8 @@ async def manager_employee_detail(
 async def manager_employee_edit_form(
     employee_id: int,
     request: Request,
-    current_user: dict = Depends(require_manager_or_owner)
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Форма редактирования сотрудника."""
     try:
