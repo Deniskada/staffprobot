@@ -40,10 +40,10 @@
                                 </label>
                                 <div class="btn-group w-100" role="group">
                                     <button type="button" class="btn btn-outline-primary active" id="btn-single">
-                                        Один тайм-слот
+                                        Один день
                                     </button>
-                                    <button type="button" class="btn btn-outline-primary" id="btn-template">
-                                        По шаблону
+                                    <button type="button" class="btn btn-outline-primary" id="btn-series">
+                                        Серия тайм-слотов
                                     </button>
                                 </div>
                                 <div class="form-text">Выберите режим создания тайм-слотов</div>
@@ -63,128 +63,123 @@
                                            required>
                                     <div class="form-text">Дата для создания тайм-слота</div>
                                 </div>
-
-                                <div class="col-md-6 mb-3">
-                                    <label for="hourly_rate" class="form-label">
-                                        <i class="bi bi-currency-dollar"></i> Ставка за час *
-                                    </label>
-                                    <div class="input-group">
-                                        <input type="number"
-                                               class="form-control"
-                                               id="hourly_rate"
-                                               name="hourly_rate"
-                                               min="0"
-                                               step="0.01"
-                                               required
-                                               value="{{ object.hourly_rate }}">
-                                        <span class="input-group-text">₽/час</span>
-                                    </div>
-                                    <div class="form-text">Почасовая ставка для этого тайм-слота</div>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="max_employees" class="form-label">
-                                        <i class="bi bi-people"></i> Лимит сотрудников *
-                                    </label>
-                                    <input type="number"
-                                           class="form-control"
-                                           id="max_employees"
-                                           name="max_employees"
-                                           min="1"
-                                           step="1"
-                                           value="1"
-                                           required>
-                                    <div class="form-text">Максимальное количество сотрудников</div>
-                                </div>
                             </div>
                         </div>
 
-                        <div id="mode-template-fields" style="display: none;">
+                        <div id="mode-series-fields" style="display: none;">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="template_id" class="form-label">
-                                        <i class="bi bi-blockquote-left"></i> Шаблон планирования *
+                                    <label for="series_start_date" class="form-label">
+                                        <i class="bi bi-calendar-event"></i> Дата начала серии *
                                     </label>
-                                    <select class="form-select" id="template_id" name="template_id">
-                                        <option value="">Выберите шаблон</option>
-                                        {% for template in templates %}
-                                        <option value="{{ template.id }}"
-                                                data-start-time="{{ template.start_time }}"
-                                                data-end-time="{{ template.end_time }}"
-                                                data-hourly-rate="{{ template.hourly_rate }}">
-                                            {{ template.name }}{% if template.is_public %} (публичный){% endif %}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                    <div class="form-text">Выберите шаблон, чтобы создать серию тайм-слотов</div>
+                                    <input type="date"
+                                           class="form-control"
+                                           id="series_start_date"
+                                           name="series_start_date">
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label for="template_hourly_rate" class="form-label">
-                                        <i class="bi bi-currency-dollar"></i> Ставка (опционально)
+                                    <label for="series_end_date" class="form-label">
+                                        <i class="bi bi-calendar-event"></i> Дата окончания серии *
                                     </label>
-                                    <div class="input-group">
-                                        <input type="number"
-                                               class="form-control"
-                                               id="template_hourly_rate"
-                                               name="template_hourly_rate"
-                                               min="0"
-                                               step="0.01"
-                                               placeholder="Использовать из шаблона">
-                                        <span class="input-group-text">₽/час</span>
+                                    <input type="date"
+                                           class="form-control"
+                                           id="series_end_date"
+                                           name="series_end_date">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><i class="bi bi-calendar-week"></i> Дни недели</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="weekdays" value="0" id="wd0">
+                                        <label class="form-check-label" for="wd0">Пн</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="weekdays" value="1" id="wd1">
+                                        <label class="form-check-label" for="wd1">Вт</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="weekdays" value="2" id="wd2">
+                                        <label class="form-check-label" for="wd2">Ср</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="weekdays" value="3" id="wd3">
+                                        <label class="form-check-label" for="wd3">Чт</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="weekdays" value="4" id="wd4">
+                                        <label class="form-check-label" for="wd4">Пт</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="weekdays" value="5" id="wd5">
+                                        <label class="form-check-label" for="wd5">Сб</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="weekdays" value="6" id="wd6">
+                                        <label class="form-check-label" for="wd6">Вс</label>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="template_start_date" class="form-label">
-                                        <i class="bi bi-calendar-event"></i> Дата начала *
-                                    </label>
-                                    <input type="date"
-                                           class="form-control"
-                                           id="template_start_date"
-                                           name="template_start_date">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="template_end_date" class="form-label">
-                                        <i class="bi bi-calendar-event"></i> Дата окончания *
-                                    </label>
-                                    <input type="date"
-                                           class="form-control"
-                                           id="template_end_date"
-                                           name="template_end_date">
-                                </div>
-                            </div>
-                            <div class="alert alert-info" id="template-info" style="display: none;">
-                                <i class="bi bi-info-circle"></i>
-                                <span id="template-details"></span>
+                                <div class="form-text">Если дни не выбраны — создадим для каждого дня диапазона</div>
                             </div>
                         </div>
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="start_time" class="form-label">
-                                    <i class="bi bi-clock"></i> Время начала *
+                                <label for="hourly_rate" class="form-label">
+                                    <i class="bi bi-currency-dollar"></i> Ставка за час *
                                 </label>
-                                <input type="time"
-                                       class="form-control"
-                                       id="start_time"
-                                       name="start_time"
-                                       required>
-                                <div class="form-text">Время начала тайм-слота</div>
+                                <div class="input-group">
+                                    <input type="number"
+                                           class="form-control"
+                                           id="hourly_rate"
+                                           name="hourly_rate"
+                                           min="0"
+                                           step="0.01"
+                                           required
+                                           value="{{ object.hourly_rate if object.hourly_rate is defined else '' }}">
+                                    <span class="input-group-text">₽/час</span>
+                                </div>
+                                <div class="form-text">Почасовая ставка применяется ко всем создаваемым слотам</div>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="end_time" class="form-label">
-                                    <i class="bi bi-clock-fill"></i> Время окончания *
+                                <label for="max_employees" class="form-label">
+                                    <i class="bi bi-people"></i> Лимит сотрудников *
                                 </label>
-                                <input type="time"
+                                <input type="number"
                                        class="form-control"
-                                       id="end_time"
-                                       name="end_time"
+                                       id="max_employees"
+                                       name="max_employees"
+                                       min="1"
+                                       step="1"
+                                       value="1"
                                        required>
-                                <div class="form-text">Время окончания тайм-слота</div>
+                                <div class="form-text">Максимальное количество сотрудников в каждом слоте</div>
                             </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label"><i class="bi bi-clock-history"></i> Интервалы времени *</label>
+                            <div id="intervals-container" class="d-grid gap-2">
+                                <div class="row g-2 interval-row">
+                                    <div class="col-md-5">
+                                        <input type="time" class="form-control interval-start" name="interval_start" required inputmode="numeric" pattern="[0-9]{2}:[0-9]{2}">
+                                    </div>
+                                    <div class="col-md-5">
+                                        <input type="time" class="form-control interval-end" name="interval_end" required inputmode="numeric" pattern="[0-9]{2}:[0-9]{2}">
+                                    </div>
+                                    <div class="col-md-2 d-grid">
+                                        <button type="button" class="btn btn-outline-danger btn-remove-interval" disabled>
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-outline-primary" id="btn-add-interval">
+                                    <i class="bi bi-plus-circle"></i> Добавить интервал
+                                </button>
+                            </div>
+                            <div class="form-text">Можно добавить несколько интервалов за один день</div>
                         </div>
 
                         <div class="row">
@@ -205,8 +200,9 @@
                                     <a href="/owner/timeslots/object/{{ object_id }}" class="btn btn-outline-secondary">
                                         <i class="bi bi-arrow-left"></i> Отмена
                                     </a>
+                                    <div class="text-muted small align-self-center" id="estimate"></div>
                                     <button type="submit" class="btn btn-primary" id="submitBtn">
-                                        <i class="bi bi-check-circle"></i> Создать тайм-слот
+                                        <i class="bi bi-check-circle"></i> Создать тайм-слоты
                                     </button>
                                 </div>
                             </div>
@@ -217,6 +213,34 @@
         </div>
 
         <div class="col-lg-4">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-building"></i> Выбор объектов
+                    </h5>
+                </div>
+                <div class="card-body" style="max-height: 320px; overflow: auto;">
+                    <!-- Фолбек: текущий объект всегда передаём -->
+                    <input type="hidden" name="selected_objects" value="{{ object_id }}">
+                    {% if all_objects and all_objects|length > 0 %}
+                    <div class="d-grid gap-2">
+                        {% for o in all_objects %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="{{ o.id }}" id="obj{{ o.id }}" name="selected_objects" {% if o.id == object_id %}checked{% endif %}>
+                            <label class="form-check-label" for="obj{{ o.id }}">
+                                {{ o.name }}{% if o.address %}, {{ o.address }}{% endif %}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                        <div class="text-muted">Список объектов не загружен — будет использован текущий объект</div>
+                    {% endif %}
+                    <div class="mt-2 small text-muted">
+                        Текущий объект будет использован по умолчанию
+                    </div>
+                </div>
+            </div>
             <div class="card">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
@@ -290,74 +314,182 @@
 
 <script>
 const modeSingleBtn = document.getElementById('btn-single');
-const modeTemplateBtn = document.getElementById('btn-template');
+const modeSeriesBtn = document.getElementById('btn-series');
 const creationModeInput = document.getElementById('creation_mode');
 const singleFields = document.getElementById('mode-single-fields');
-const templateFields = document.getElementById('mode-template-fields');
-const templateSelect = document.getElementById('template_id');
-const templateInfo = document.getElementById('template-info');
-const templateDetails = document.getElementById('template-details');
+const seriesFields = document.getElementById('mode-series-fields');
 
 const slotDateInput = document.getElementById('slot_date');
 const hourlyRateInput = document.getElementById('hourly_rate');
-const startTimeInput = document.getElementById('start_time');
-const endTimeInput = document.getElementById('end_time');
-const templateHourlyRate = document.getElementById('template_hourly_rate');
-const templateStartDate = document.getElementById('template_start_date');
-const templateEndDate = document.getElementById('template_end_date');
+const maxEmployeesInput = document.getElementById('max_employees');
+const seriesStartInput = document.getElementById('series_start_date');
+const seriesEndInput = document.getElementById('series_end_date');
+const intervalsContainer = document.getElementById('intervals-container');
+const addIntervalBtn = document.getElementById('btn-add-interval');
+const submitBtn = document.getElementById('submitBtn');
+const estimateEl = document.getElementById('estimate');
 
 function setMode(newMode) {
     creationModeInput.value = newMode;
-    const isTemplate = newMode === 'template';
+    const isSeries = newMode === 'series';
 
-    singleFields.style.display = isTemplate ? 'none' : 'block';
-    templateFields.style.display = isTemplate ? 'block' : 'none';
+    singleFields.style.display = isSeries ? 'none' : 'block';
+    seriesFields.style.display = isSeries ? 'block' : 'none';
 
-    slotDateInput.required = !isTemplate;
-    hourlyRateInput.required = !isTemplate;
-    templateSelect.required = isTemplate;
-    templateStartDate.required = isTemplate;
-    templateEndDate.required = isTemplate;
+    slotDateInput.required = !isSeries;
+    seriesStartInput.required = isSeries;
+    seriesEndInput.required = isSeries;
 
-    modeSingleBtn.classList.toggle('active', !isTemplate);
-    modeTemplateBtn.classList.toggle('active', isTemplate);
+    modeSingleBtn.classList.toggle('active', !isSeries);
+    modeSeriesBtn.classList.toggle('active', isSeries);
+    // Установим даты по умолчанию для серии, чтобы кнопка могла активироваться
+    if (isSeries) {
+        const today = new Date().toISOString().split('T')[0];
+        if (!seriesStartInput.value) seriesStartInput.value = today;
+        if (!seriesEndInput.value) seriesEndInput.value = today;
+    }
+    updateEstimate();
 }
 
 modeSingleBtn.addEventListener('click', () => setMode('single'));
-modeTemplateBtn.addEventListener('click', () => setMode('template'));
+modeSeriesBtn.addEventListener('click', () => setMode('series'));
 
-templateSelect.addEventListener('change', function() {
-    if (!this.value) {
-        templateInfo.style.display = 'none';
-        return;
-    }
+function addIntervalRow() {
+    const row = document.createElement('div');
+    row.className = 'row g-2 interval-row';
+    row.innerHTML = `
+        <div class="col-md-5">
+            <input type="time" class="form-control interval-start" name="interval_start" required>
+        </div>
+        <div class="col-md-5">
+            <input type="time" class="form-control interval-end" name="interval_end" required>
+        </div>
+        <div class="col-md-2 d-grid">
+            <button type="button" class="btn btn-outline-danger btn-remove-interval">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>`;
+    intervalsContainer.appendChild(row);
+    bindRow(row);
+    refreshRemoveButtons();
+    updateEstimate();
+}
 
-    const option = this.options[this.selectedIndex];
-    const startTime = option.dataset.startTime;
-    const endTime = option.dataset.endTime;
-    const hourlyRate = option.dataset.hourlyRate;
+function bindRow(row) {
+    const start = row.querySelector('.interval-start');
+    const end = row.querySelector('.interval-end');
+    const remove = row.querySelector('.btn-remove-interval');
+    start.addEventListener('change', validateIntervals);
+    end.addEventListener('change', validateIntervals);
+    if (remove) remove.addEventListener('click', () => { row.remove(); refreshRemoveButtons(); updateEstimate(); });
+}
 
-    if (startTime) {
-        startTimeInput.value = startTime;
-    }
-    if (endTime) {
-        endTimeInput.value = endTime;
-    }
-    if (hourlyRate) {
-        templateHourlyRate.placeholder = `Ставка из шаблона: ${hourlyRate} ₽`;
-    }
+function refreshRemoveButtons() {
+    const rows = intervalsContainer.querySelectorAll('.interval-row');
+    rows.forEach((r, idx) => {
+        const btn = r.querySelector('.btn-remove-interval');
+        if (btn) btn.disabled = rows.length === 1;
+    });
+}
 
-    templateDetails.textContent = `Время: ${startTime || '—'} - ${endTime || '—'}, ставка: ${hourlyRate || 'из шаблона'}₽`;
-    templateInfo.style.display = 'block';
-});
+function getSelectedObjectsCount() {
+    const checked = document.querySelectorAll('input[name="selected_objects"]:checked').length;
+    if (checked > 0) return checked;
+    // Фолбек: если есть скрытый selected_objects (текущий объект), считаем 1
+    const hiddenInput = document.querySelector('input[name="selected_objects"][type="hidden"]');
+    return hiddenInput ? 1 : 0;
+}
+
+function enumerateDates(start, end, weekdays) {
+    const res = [];
+    const cur = new Date(start);
+    const last = new Date(end);
+    while (cur <= last) {
+        if (!weekdays || weekdays.length === 0 || weekdays.includes(cur.getDay() === 0 ? 6 : cur.getDay() - 1)) {
+            res.push(new Date(cur));
+        }
+        cur.setDate(cur.getDate() + 1);
+    }
+    return res;
+}
+
+function getIntervalsCount() {
+    return intervalsContainer.querySelectorAll('.interval-row').length;
+}
+
+function updateEstimate() {
+    const objects = getSelectedObjectsCount();
+    const intervals = getIntervalsCount();
+    let days = 1;
+    if (creationModeInput.value === 'series') {
+        const sd = seriesStartInput.value;
+        const ed = seriesEndInput.value;
+        if (sd && ed && sd <= ed) {
+            const weekdays = Array.from(document.querySelectorAll('input[name="weekdays"]:checked')).map(i => parseInt(i.value));
+            days = enumerateDates(sd, ed, weekdays).length;
+        } else { days = 0; }
+    } else {
+        days = slotDateInput.value ? 1 : 0;
+    }
+    const total = objects * intervals * days;
+    estimateEl.textContent = total ? `Будет создано ~ ${total} тайм-слотов` : '';
+    submitBtn.disabled = total === 0 || total > 1000;
+    // Дополнительно: если нет ни одного интервала — явно дизейблим
+    if (intervals === 0) submitBtn.disabled = true;
+    // Защита: если данные валидны — обязательно включаем кнопку
+    if (objects > 0 && intervals > 0 && days > 0 && total <= 1000) submitBtn.disabled = false;
+    if (total > 1000) {
+        estimateEl.textContent += ' (превышает лимит 1000)';
+    }
+}
+
+function validateIntervals() {
+    const rows = intervalsContainer.querySelectorAll('.interval-row');
+    for (const r of rows) {
+        const s = r.querySelector('.interval-start').value;
+        const e = r.querySelector('.interval-end').value;
+        if (s && e && s >= e) {
+            submitBtn.disabled = true;
+            return;
+        }
+    }
+    updateEstimate();
+}
+
+addIntervalBtn.addEventListener('click', () => { addIntervalRow(); updateEstimate(); });
+intervalsContainer.querySelectorAll('.interval-row').forEach(bindRow);
+// Триггерим первичный пересчёт после биндинга, если интервал уже есть
+setTimeout(updateEstimate, 0);
 
 document.getElementById('createForm').addEventListener('submit', function(e) {
-    const startTime = startTimeInput.value;
-    const endTime = endTimeInput.value;
-
-    if (startTime && endTime && startTime >= endTime) {
+    // Final validation and limit check
+    const objects = getSelectedObjectsCount();
+    const intervals = getIntervalsCount();
+    let days = 1;
+    if (creationModeInput.value === 'series') {
+        const sd = seriesStartInput.value;
+        const ed = seriesEndInput.value;
+        if (!(sd && ed && sd <= ed)) {
+            e.preventDefault();
+            alert('Укажите корректный диапазон дат серии');
+            return false;
+        }
+        const weekdays = Array.from(document.querySelectorAll('input[name="weekdays"]:checked')).map(i => parseInt(i.value));
+        days = enumerateDates(sd, ed, weekdays).length;
+    } else if (!slotDateInput.value) {
         e.preventDefault();
-        alert('Время начала должно быть меньше времени окончания');
+        alert('Укажите дату');
+        return false;
+    }
+    const total = objects * intervals * days;
+    if (total === 0) {
+        e.preventDefault();
+        alert('Выберите объекты, интервалы и даты для создания тайм-слотов');
+        return false;
+    }
+    if (total > 1000) {
+        e.preventDefault();
+        alert('Лимит: не более 1000 тайм-слотов за один раз');
         return false;
     }
 });
@@ -365,8 +497,26 @@ document.getElementById('createForm').addEventListener('submit', function(e) {
 document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
     slotDateInput.value = today;
-    templateStartDate.setAttribute('min', today);
-    templateEndDate.setAttribute('min', today);
+    seriesStartInput.setAttribute('min', today);
+    seriesEndInput.setAttribute('min', today);
+    // Автозаполнение первого интервала временем объекта
+    const defaultStart = "{{ object.opening_time }}";
+    const defaultEnd = "{{ object.closing_time }}";
+    const firstStart = intervalsContainer.querySelector('.interval-start');
+    const firstEnd = intervalsContainer.querySelector('.interval-end');
+    if (firstStart && !firstStart.value && defaultStart) firstStart.value = defaultStart;
+    if (firstEnd && !firstEnd.value && defaultEnd) firstEnd.value = defaultEnd;
+    // Слушатели для пересчета
+    slotDateInput.addEventListener('change', updateEstimate);
+    seriesStartInput.addEventListener('change', updateEstimate);
+    seriesEndInput.addEventListener('change', updateEstimate);
+    document.querySelectorAll('input[name="weekdays"]').forEach(cb => {
+        cb.addEventListener('change', updateEstimate);
+    });
+    document.querySelectorAll('input[name="selected_objects"]').forEach(cb => {
+        cb.addEventListener('change', updateEstimate);
+    });
+    updateEstimate();
 });
 </script>
 {% endblock %}

@@ -607,8 +607,16 @@ class TimeSlotService:
             logger.error(f"Error getting user internal ID for telegram_id {telegram_id}: {e}")
             return None
     
-    async def get_timeslots_by_object(self, object_id: int, telegram_id: int) -> List[TimeSlot]:
-        """Получить тайм-слоты объекта с проверкой владельца"""
+    async def get_timeslots_by_object(
+        self,
+        object_id: int,
+        telegram_id: int,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        sort_by: str = "slot_date",
+        sort_order: str = "desc"
+    ) -> List[TimeSlot]:
+        """Получить тайм-слоты объекта с проверкой владельца, фильтрацией и сортировкой"""
         try:
             # Получаем внутренний ID пользователя
             internal_id = await self._get_user_internal_id(telegram_id)
@@ -626,21 +634,67 @@ class TimeSlotService:
                 logger.warning(f"Object {object_id} not found or not owned by user {internal_id}")
                 return []
             
-            # Получаем тайм-слоты
+            # Нормализуем входные параметры
+            sort_by_norm = (sort_by or "slot_date").strip().lower()
+            sort_order_norm = (sort_order or "desc").strip().lower()
+            allowed_sort_by = {"slot_date", "start_time", "hourly_rate"}
+            if sort_by_norm not in allowed_sort_by:
+                sort_by_norm = "slot_date"
+            if sort_order_norm not in {"asc", "desc"}:
+                sort_order_norm = "desc"
+
+            # Приводим пустые строки к None для дат
+            date_from_val = (date_from or "").strip() or None
+            date_to_val = (date_to or "").strip() or None
+
+            # Строим запрос с фильтрацией
             query = select(TimeSlot).where(
                 TimeSlot.object_id == object_id,
                 TimeSlot.is_active == True
-            ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
+            )
+            
+            # Добавляем фильтрацию по датам
+            if date_from_val:
+                try:
+                    from_date = date.fromisoformat(date_from_val)
+                    query = query.where(TimeSlot.slot_date >= from_date)
+                except ValueError:
+                    logger.warning(f"Invalid date_from format: {date_from_val}")
+            
+            if date_to_val:
+                try:
+                    to_date = date.fromisoformat(date_to_val)
+                    query = query.where(TimeSlot.slot_date <= to_date)
+                except ValueError:
+                    logger.warning(f"Invalid date_to format: {date_to_val}")
+            
+            # Добавляем сортировку
+            if sort_by_norm == "slot_date":
+                if sort_order_norm == "desc":
+                    query = query.order_by(TimeSlot.slot_date.desc(), TimeSlot.start_time.desc())
+                else:
+                    query = query.order_by(TimeSlot.slot_date.asc(), TimeSlot.start_time.asc())
+            elif sort_by_norm == "start_time":
+                if sort_order_norm == "desc":
+                    query = query.order_by(TimeSlot.start_time.desc(), TimeSlot.slot_date.desc())
+                else:
+                    query = query.order_by(TimeSlot.start_time.asc(), TimeSlot.slot_date.asc())
+            elif sort_by_norm == "hourly_rate":
+                if sort_order_norm == "desc":
+                    query = query.order_by(TimeSlot.hourly_rate.desc(), TimeSlot.slot_date.desc())
+                else:
+                    query = query.order_by(TimeSlot.hourly_rate.asc(), TimeSlot.slot_date.asc())
+            else:
+                # По умолчанию сортируем по дате
+                query = query.order_by(TimeSlot.slot_date.desc(), TimeSlot.start_time.desc())
             
             result = await self.db.execute(query)
             timeslots = result.scalars().all()
             
-            # Debug для тайм-слота 508
-            if object_id == 6:  # объект "тест"
-                logger.info(f"Found {len(timeslots)} timeslots for object {object_id}")
-                for slot in timeslots:
-                    if slot.id == 508:
-                        logger.info(f"Found timeslot 508: max_employees={slot.max_employees}, is_active={slot.is_active}")
+            logger.info(
+                f"Found {len(timeslots)} timeslots for object {object_id} with filters: "
+                f"date_from={date_from_val}, date_to={date_to_val}, sort_by={sort_by_norm}, sort_order={sort_order_norm}"
+            )
             
             return timeslots
         except Exception as e:
@@ -648,7 +702,7 @@ class TimeSlotService:
             raise
     
     async def create_timeslot(self, timeslot_data: Dict[str, Any], object_id: int, telegram_id: int) -> Optional[TimeSlot]:
-        """Создать новый тайм-слот"""
+        """Создать новый тайм-слот с защитой от дубликатов"""
         try:
             # Получаем внутренний ID пользователя
             internal_id = await self._get_user_internal_id(telegram_id)
@@ -664,6 +718,18 @@ class TimeSlotService:
             if not object_result.scalar_one_or_none():
                 return None
             
+            # Проверяем дубликаты: тот же объект, дата, start_time, end_time
+            duplicate_q = select(TimeSlot).where(
+                TimeSlot.object_id == object_id,
+                TimeSlot.slot_date == timeslot_data.get('slot_date', datetime.now().date()),
+                TimeSlot.start_time == time.fromisoformat(timeslot_data['start_time']),
+                TimeSlot.end_time == time.fromisoformat(timeslot_data['end_time'])
+            )
+            dup_res = await self.db.execute(duplicate_q)
+            if dup_res.scalar_one_or_none():
+                logger.info(f"Skip duplicate timeslot for object {object_id} on {timeslot_data.get('slot_date')} {timeslot_data.get('start_time')}-{timeslot_data.get('end_time')}")
+                return None
+
             # Создаем тайм-слот
             new_timeslot = TimeSlot(
                 object_id=object_id,
