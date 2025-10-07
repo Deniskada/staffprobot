@@ -208,7 +208,7 @@ services:
   celery_beat:
     image: staffprobot-celery_beat:latest
     container_name: staffprobot_celery_beat_prod
-    command: celery -A core.celery.celery_app beat --schedule=/tmp/celerybeat-schedule --pidfile=/tmp/celerybeat.pid --loglevel=info --detach=false
+    command: celery -A core.celery.celery_app beat --schedule=/tmp/celerybeat-schedule --pidfile=/tmp/celerybeat.pid --loglevel=info
     volumes:
       - .:/app
       - celery_beat_prod_data:/tmp

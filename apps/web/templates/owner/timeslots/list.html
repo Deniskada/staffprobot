@@ -43,14 +43,52 @@
     </div>
     {% endif %}
 
+    <!-- Фильтры и сортировка -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-funnel"></i> Фильтры по периоду
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="/owner/timeslots/object/{{ object_id }}" id="filterForm">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="date_from" class="form-label">Период с</label>
+                                <input type="date" class="form-control" id="date_from" name="date_from" value="{{ date_from or '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="date_to" class="form-label">Период по</label>
+                                <input type="date" class="form-control" id="date_to" name="date_to" value="{{ date_to or '' }}">
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary me-2">
+                                    <i class="bi bi-search"></i> Применить фильтры
+                                </button>
+                                <a href="/owner/timeslots/object/{{ object_id }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-x-circle"></i> Сбросить
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% if timeslots %}
     <div class="row">
         <div class="col-12">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-list-ul"></i> Тайм-слоты ({{ timeslots|length }})
-                    </h5>
+                    <div>
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-list-ul"></i> Тайм-слоты ({{ timeslots|length }})
+                        </h5>
+                        <small class="text-muted">Кликните на заголовки столбцов для сортировки</small>
+                    </div>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
                         <label class="form-check-label" for="selectAll">Выбрать все</label>
@@ -62,9 +100,45 @@
                             <thead class="table-light">
                                 <tr>
                                     <th style="width:40px"></th>
-                                    <th>Дата</th>
-                                    <th>Время</th>
-                                    <th>Ставка</th>
+                                    <th>
+                                        <a href="?{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}sort_by=slot_date&sort_order={% if sort_by == 'slot_date' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Дата
+                                            {% if sort_by == 'slot_date' %}
+                                                {% if sort_order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}sort_by=start_time&sort_order={% if sort_by == 'start_time' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Время
+                                            {% if sort_by == 'start_time' %}
+                                                {% if sort_order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}sort_by=hourly_rate&sort_order={% if sort_by == 'hourly_rate' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Ставка
+                                            {% if sort_by == 'hourly_rate' %}
+                                                {% if sort_order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
                                     <th>Лимит</th>
                                     <th>Статус</th>
                                     <th>Действия</th>
@@ -294,5 +368,11 @@ function openBulkEditModal() {
     const modal = new bootstrap.Modal(document.getElementById('bulkEditModal'));
     modal.show();
 }
+
+// Инициализация формы фильтров
+document.addEventListener('DOMContentLoaded', function() {
+    // Убираем автоприменение - пользователь сам нажимает "Применить фильтры"
+    // Это позволяет выбрать обе даты без автоматической отправки формы
+});
 </script>
 {% endblock %}
