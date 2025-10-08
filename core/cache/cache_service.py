@@ -130,6 +130,13 @@ class CacheService:
         await cls.delete_user(user_id)
         await cls.delete_user_active_shifts(user_id)
         await cls.delete_user_objects(user_id)
+        
+        # Инвалидируем кэши методов ContractService с декоратором @cached
+        # Эти методы кэшируются с ключами вида: contract_employees:get_contract_employees_by_telegram_id:HASH
+        await cache.clear_pattern("contract_employees:*")
+        await cache.clear_pattern("all_contract_employees:*")
+        await cache.clear_pattern("owner_objects:*")
+        
         logger.info(f"User cache invalidated for user {user_id}")
     
     @classmethod
@@ -139,6 +146,10 @@ class CacheService:
         # Инвалидируем кэш пользователей, связанных с объектом
         pattern = f"{cls.USER_OBJECTS_PREFIX}:*"
         await cache.clear_pattern(pattern)
+        
+        # Инвалидируем кэши ObjectService с декоратором @cached
+        await cache.clear_pattern("objects_by_owner:*")
+        
         logger.info(f"Object cache invalidated for object {object_id}")
     
     @classmethod
