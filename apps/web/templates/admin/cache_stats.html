@@ -179,7 +179,7 @@
         </div>
         <div class="stat-item">
             <span class="stat-label">Обработано команд</span>
-            <span class="stat-value">{{ redis_stats.total_commands_processed | default(0) | number_format }}</span>
+            <span class="stat-value">{{ "{:,}".format(redis_stats.total_commands_processed | default(0)).replace(',', ' ') }}</span>
         </div>
     </div>
 
