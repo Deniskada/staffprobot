@@ -256,6 +256,11 @@ class ContractService:
                         )
             
             logger.info(f"Created contract: {contract.id} - {contract_number}")
+            
+            # Инвалидация кэша сотрудника и владельца
+            await CacheService.invalidate_user_cache(employee.id)
+            await CacheService.invalidate_user_cache(owner.id)
+            
             return contract
     
     async def get_owner_contracts(self, owner_id: int, active_only: bool = True) -> List[Contract]:
@@ -362,6 +367,11 @@ class ContractService:
             await session.refresh(contract)
             
             logger.info(f"Updated contract: {contract.id}")
+            
+            # Инвалидация кэша сотрудника и владельца
+            await CacheService.invalidate_user_cache(contract.employee_id)
+            await CacheService.invalidate_user_cache(contract.owner_id)
+            
             return contract
     
     async def terminate_contract(self, contract_id: int, reason: str = None) -> bool:
@@ -403,6 +413,11 @@ class ContractService:
             await self._check_and_update_employee_role(session, contract.employee_id)
             
             logger.info(f"Terminated contract: {contract.id}")
+            
+            # Инвалидация кэша сотрудника и владельца
+            await CacheService.invalidate_user_cache(contract.employee_id)
+            await CacheService.invalidate_user_cache(contract.owner_id)
+            
             return True
     
     async def get_contract_employees(self, owner_id: int) -> List[Dict[str, Any]]:
