@@ -47,7 +47,8 @@
 - [GET] `/admin/https`  — (apps/web/routes/admin/system_settings.py)
 - [POST] `/admin/https`  — (apps/web/routes/admin/system_settings.py)
 - [POST] `/admin/initialize`  — (apps/web/routes/admin/system_settings.py)
-- [GET] `/admin/monitoring`  — (apps/web/routes/admin.py)
+- [GET] `/admin/monitoring`  — (apps/web/routes/admin.py) мониторинг системы с реальным Cache Hit Rate из Redis
+- [GET] `/admin/cache/stats`  — (apps/web/routes/admin.py) статистика Redis кэша (hits, misses, memory, ключи по типам)
 - [GET] `/admin/owners`  — (apps/web/routes/admin_reports.py)
 - [GET] `/admin/reports`  — (apps/web/routes/admin.py)
 - [GET] `/admin/ssl/email`  — (apps/web/routes/admin/system_settings.py)
@@ -70,10 +71,11 @@
 - `admin/assign_subscription.html`
 - `admin/billing_dashboard.html`
 - `admin/billing_transactions.html`
+- `admin/cache_stats.html` — статистика Redis кэша
 - `admin/dashboard.html`
 - `admin/error.html`
 - `admin/financial_report.html`
-- `admin/monitoring.html`
+- `admin/monitoring.html` — обновлен: реальный Cache Hit Rate из Redis
 - `admin/owners_report.html`
 - `admin/reports.html`
 - `admin/reports_dashboard.html`
