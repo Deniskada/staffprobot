@@ -291,6 +291,17 @@ async def admin_monitoring(
     if user_role != "superadmin":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
+    # Получаем статистику Redis для Cache Hit Rate
+    from core.cache.redis_cache import cache
+    cache_hit_rate = 0
+    try:
+        if not cache.is_connected:
+            await cache.connect()
+        redis_stats = await cache.get_stats()
+        cache_hit_rate = redis_stats.get("hit_rate", 0)
+    except Exception as e:
+        logger.warning(f"Could not get Redis stats: {e}")
+    
     # Получаем данные для переключения интерфейсов
     from shared.services.role_based_login_service import RoleBasedLoginService
     async with get_async_session() as session:
@@ -304,6 +315,7 @@ async def admin_monitoring(
         "title": "Мониторинг системы",
         "prometheus_url": "http://localhost:9090",
         "grafana_url": "http://localhost:3000",
+        "cache_hit_rate": cache_hit_rate,
         "available_interfaces": available_interfaces
     })
 

@@ -449,14 +449,14 @@
   - [x] 1.5. Протестировать кэширование и инвалидацию
     - Type: test | Files: tests/integration/test_redis_caching.py
     - Acceptance: создание договора инвалидирует кэш; повторный запрос берет данные из БД; второй повторный — из кэша
-- [ ] **Фаза 2: Мониторинг кэша (1 день)**
-  - [ ] 2.1. Создать endpoint /admin/cache/stats
+- [x] **Фаза 2: Мониторинг кэша (1 день)**
+  - [x] 2.1. Создать endpoint /admin/cache/stats
     - Type: feature | Files: apps/web/routes/admin.py
     - Acceptance: возвращает JSON с redis_stats, key_counts, hit_rate
-  - [ ] 2.2. Создать UI страницу статистики кэша
+  - [x] 2.2. Создать UI страницу статистики кэша
     - Type: feature | Files: apps/web/templates/admin/cache_stats.html
     - Acceptance: отображение hit rate, memory usage, количества ключей по типам, кнопка очистки кэша
-  - [ ] 2.3. Добавить ссылку в меню админки
+  - [x] 2.3. Добавить ссылку в меню админки
     - Type: ux | Files: apps/web/templates/admin/base_admin.html
     - Acceptance: пункт меню "Статистика кэша" ведет на /admin/cache/stats
 - [ ] **Фаза 3: Оптимизация конфигурации (0.5 дня)**

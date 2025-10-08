@@ -218,7 +218,7 @@
         </div>
         <div class="col-md-3">
             <div class="metric-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                <div class="metric-value" id="cache-hit-rate">--</div>
+                <div class="metric-value" id="cache-hit-rate">{{ cache_hit_rate }}%</div>
                 <div class="metric-label">Cache Hit Rate</div>
             </div>
         </div>
@@ -302,7 +302,7 @@ function updateMetrics() {
     document.getElementById('cpu-usage').textContent = (Math.random() * 30 + 20).toFixed(1) + '%';
     document.getElementById('memory-usage').textContent = (Math.random() * 40 + 40).toFixed(1) + '%';
     document.getElementById('active-connections').textContent = Math.floor(Math.random() * 10 + 5);
-    document.getElementById('cache-hit-rate').textContent = (Math.random() * 20 + 75).toFixed(1) + '%';
+    // Cache Hit Rate теперь берется из Redis, не обновляем его случайными значениями
 }
 
 // Симуляция загрузки логов
