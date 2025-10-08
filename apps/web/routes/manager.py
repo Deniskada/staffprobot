@@ -1495,7 +1495,20 @@ async def manager_calendar_api_data(
     Использует CalendarFilterService для правильной фильтрации смен.
     """
     try:
-        logger.info(f"Manager calendar API called: start_date={start_date}, end_date={end_date}, object_ids={object_ids}")
+        # Генерируем ключ кэша для всего response
+        import hashlib
+        user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
+        cache_key_data = f"calendar_api:{user_id}:{start_date}:{end_date}:{object_ids or 'all'}"
+        cache_key = hashlib.md5(cache_key_data.encode()).hexdigest()
+        
+        # Проверяем кэш (TTL 2 минуты для API)
+        from core.cache.redis_cache import cache
+        cached_response = await cache.get(f"api_response:{cache_key}", serialize="json")
+        if cached_response:
+            logger.info(f"Manager calendar API: cache HIT for {start_date} to {end_date}")
+            return cached_response
+        
+        logger.info(f"Manager calendar API: cache MISS, fetching data for {start_date} to {end_date}, object_ids={object_ids}")
         
         # Парсим даты
         try:
@@ -1623,8 +1636,8 @@ async def manager_calendar_api_data(
             })
         
         logger.info("Preparing response")
-        return {
-                "timeslots": timeslots_data,
+        response_data = {
+            "timeslots": timeslots_data,
             "shifts": shifts_data,
             "objects": [
                 {
@@ -1642,6 +1655,12 @@ async def manager_calendar_api_data(
             "total_timeslots": len(timeslots_data),
             "total_shifts": len(shifts_data)
         }
+        
+        # Сохраняем в кэш (TTL 2 минуты)
+        await cache.set(f"api_response:{cache_key}", response_data, ttl=120, serialize="json")
+        logger.info(f"Manager calendar API: response cached with key {cache_key}")
+        
+        return response_data
         
     except HTTPException:
         raise

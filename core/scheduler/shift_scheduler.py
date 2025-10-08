@@ -249,6 +249,7 @@ class ShiftScheduler:
                 # Инвалидация кэша календаря
                 from core.cache.redis_cache import cache
                 await cache.clear_pattern("calendar_shifts:*")
+                await cache.clear_pattern("api_response:*")  # API responses
                 
                 return True
                 
