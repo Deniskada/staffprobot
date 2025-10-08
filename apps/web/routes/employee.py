@@ -1104,9 +1104,28 @@ async def employee_api_employees(
     db: AsyncSession = Depends(get_db_session)
 ):
     """Возвращает только текущего сотрудника для панели сотрудников."""
+    import time
+    start_time = time.time()
+    
     try:
         if isinstance(current_user, RedirectResponse):
             raise HTTPException(status_code=401, detail="Необходима авторизация")
+        
+        # Быстрая проверка кэша ДО любых операций с БД
+        # Используем telegram_id из JWT токена (доступен в current_user)
+        user_telegram_id = current_user.get("telegram_id") or current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "telegram_id", None)
+        
+        if user_telegram_id:
+            from core.cache.redis_cache import cache
+            cache_start = time.time()
+            cache_key = f"api_employees:employee_tg_{user_telegram_id}"
+            cached_data = await cache.get(cache_key, serialize="json")
+            cache_time = (time.time() - cache_start) * 1000
+            
+            if cached_data:
+                total_time = (time.time() - start_time) * 1000
+                logger.info(f"Employee employees API: cache HIT for telegram_id {user_telegram_id}, cache_time={cache_time:.2f}ms, total_time={total_time:.2f}ms")
+                return cached_data
 
         # current_user теперь объект User, а не словарь
         if isinstance(current_user, dict):
@@ -1120,14 +1139,6 @@ async def employee_api_employees(
         
         if not user:
             return []
-        
-        # Проверяем кэш
-        from core.cache.redis_cache import cache
-        cache_key = f"api_employees:employee_{user.id}"
-        cached_data = await cache.get(cache_key, serialize="json")
-        if cached_data:
-            logger.info(f"Employee employees API: cache HIT for user {user.id}")
-            return cached_data
 
         name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username or f"ID {user.id}"
         employee_data = [{
@@ -1140,9 +1151,12 @@ async def employee_api_employees(
             "draggable": True,
         }]
         
-        # Сохраняем в кэш (TTL 2 минуты)
+        # Сохраняем в кэш (TTL 2 минуты) с ключом по telegram_id
+        from core.cache.redis_cache import cache
+        cache_key = f"api_employees:employee_tg_{user.telegram_id}"
         await cache.set(cache_key, employee_data, ttl=120, serialize="json")
-        logger.info(f"Employee employees API: cached for user {user.id}")
+        total_time = (time.time() - start_time) * 1000
+        logger.info(f"Employee employees API: cache MISS, cached for user {user.id}, total_time={total_time:.2f}ms")
         
         return employee_data
     except Exception as e:
