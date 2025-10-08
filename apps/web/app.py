@@ -108,6 +108,10 @@ app.add_middleware(
     allowed_hosts=["staffprobot.ru", "*.staffprobot.ru", "localhost", "127.0.0.1"]
 )
 
+# Rate Limiting Middleware
+from core.middleware.rate_limit import RateLimitMiddleware
+app.add_middleware(RateLimitMiddleware)
+
 # Middleware для принудительного HTTPS
 @app.middleware("http")
 async def force_https(request: Request, call_next):

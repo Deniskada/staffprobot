@@ -1,0 +1,257 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.cache-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+    margin-bottom: 20px;
+}
+
+.cache-card:hover {
+    transform: translateY(-3px);
+}
+
+.cache-status {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.stat-item:last-child {
+    border-bottom: none;
+}
+
+.stat-label {
+    font-weight: 500;
+}
+
+.stat-value {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.metric-card {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    padding: 25px;
+    border-radius: 15px;
+    text-align: center;
+    height: 100%;
+}
+
+.metric-card.success {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.metric-card.warning {
+    background: linear-gradient(135deg, #f7b733 0%, #fc4a1a 100%);
+}
+
+.metric-card.info {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.metric-label {
+    font-size: 0.95rem;
+    opacity: 0.95;
+}
+
+.keys-table {
+    background: white;
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.progress-bar-custom {
+    height: 30px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.cache-action-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    padding: 12px 30px;
+    border-radius: 10px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.cache-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.alert-custom {
+    border-radius: 15px;
+    border: none;
+    padding: 20px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-hdd-network me-2"></i>{{ title }}</h2>
+        <button class="cache-action-btn" onclick="refreshStats()">
+            <i class="bi bi-arrow-clockwise me-2"></i>Обновить
+        </button>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger alert-custom">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <strong>Ошибка:</strong> {{ error }}
+    </div>
+    {% else %}
+
+    <!-- Основные метрики -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="metric-card success">
+                <div class="metric-value">{{ redis_stats.keyspace_hits | default(0) }}</div>
+                <div class="metric-label">
+                    <i class="bi bi-check-circle me-2"></i>Cache Hits
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card warning">
+                <div class="metric-value">{{ redis_stats.keyspace_misses | default(0) }}</div>
+                <div class="metric-label">
+                    <i class="bi bi-x-circle me-2"></i>Cache Misses
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card info">
+                <div class="metric-value">{{ redis_stats.hit_rate | default(0) }}%</div>
+                <div class="metric-label">
+                    <i class="bi bi-speedometer2 me-2"></i>Hit Rate
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-value">{{ total_keys | default(0) }}</div>
+                <div class="metric-label">
+                    <i class="bi bi-key me-2"></i>Всего ключей
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статус Redis -->
+    <div class="cache-status">
+        <h4 class="mb-4"><i class="bi bi-server me-2"></i>Статус Redis</h4>
+        <div class="stat-item">
+            <span class="stat-label">Подключенные клиенты</span>
+            <span class="stat-value">{{ redis_stats.connected_clients | default(0) }}</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Использовано памяти</span>
+            <span class="stat-value">{{ redis_stats.used_memory_human | default('N/A') }}</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Обработано команд</span>
+            <span class="stat-value">{{ "{:,}".format(redis_stats.total_commands_processed | default(0)).replace(',', ' ') }}</span>
+        </div>
+    </div>
+
+    <!-- Ключи по типам -->
+    <div class="keys-table">
+        <h4 class="mb-4"><i class="bi bi-layers me-2"></i>Ключи по типам</h4>
+        
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Тип ключа</th>
+                        <th>Количество</th>
+                        <th>Доля</th>
+                        <th>Прогресс</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key_type, count in key_counts.items() %}
+                    {% set percentage = (count / total_keys * 100) if total_keys > 0 else 0 %}
+                    <tr>
+                        <td>
+                            <i class="bi bi-tag me-2"></i>
+                            <strong>{{ key_type }}</strong>
+                        </td>
+                        <td>{{ count }}</td>
+                        <td>{{ "%.1f" | format(percentage) }}%</td>
+                        <td style="width: 40%;">
+                            <div class="progress" style="height: 25px;">
+                                <div class="progress-bar progress-bar-custom {% if percentage > 50 %}bg-danger{% elif percentage > 25 %}bg-warning{% else %}bg-success{% endif %}" 
+                                     role="progressbar" 
+                                     style="width: {{ percentage }}%"
+                                     aria-valuenow="{{ percentage }}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                    {% if percentage > 5 %}{{ count }}{% endif %}
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Дополнительная информация -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="cache-card">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-info-circle me-2"></i>Справочная информация</h5>
+                    <p class="mb-2"><strong>Cache Hit Rate:</strong> Процент запросов, которые были успешно обработаны из кэша.</p>
+                    <p class="mb-2"><strong>Рекомендуемый Hit Rate:</strong> > 80% для оптимальной производительности.</p>
+                    <p class="mb-0"><strong>TTL:</strong> Все кэшированные данные хранятся 15 минут (900 секунд).</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+
+<script>
+function refreshStats() {
+    window.location.reload();
+}
+
+// Добавляем поддержку форматирования чисел
+function numberFormat(number) {
+    return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+</script>
+{% endblock %}
+
