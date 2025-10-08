@@ -221,16 +221,32 @@ class UniversalCalendarManager {
             }
         });
         
-        // Обновляем диапазон дат
-        const newStartDate = new Date(newData.date_range.start);
-        const newEndDate = new Date(newData.date_range.end);
-        const currentStartDate = new Date(this.calendarData.date_range.start);
-        const currentEndDate = new Date(this.calendarData.date_range.end);
+        // Обновляем диапазон дат (проверяем оба формата: date_range и metadata)
+        const newStart = newData.metadata?.date_range_start || newData.date_range?.start;
+        const newEnd = newData.metadata?.date_range_end || newData.date_range?.end;
+        const currentStart = this.calendarData.metadata?.date_range_start || this.calendarData.date_range?.start;
+        const currentEnd = this.calendarData.metadata?.date_range_end || this.calendarData.date_range?.end;
         
-        this.calendarData.date_range.start = newStartDate < currentStartDate ? 
-            newData.date_range.start : this.calendarData.date_range.start;
-        this.calendarData.date_range.end = newEndDate > currentEndDate ? 
-            newData.date_range.end : this.calendarData.date_range.end;
+        if (newStart && newEnd) {
+            const newStartDate = new Date(newStart);
+            const newEndDate = new Date(newEnd);
+            const currentStartDate = currentStart ? new Date(currentStart) : newStartDate;
+            const currentEndDate = currentEnd ? new Date(currentEnd) : newEndDate;
+            
+            // Обновляем metadata (новый формат API)
+            if (!this.calendarData.metadata) {
+                this.calendarData.metadata = {};
+            }
+            this.calendarData.metadata.date_range_start = newStartDate < currentStartDate ? newStart : currentStart;
+            this.calendarData.metadata.date_range_end = newEndDate > currentEndDate ? newEnd : currentEnd;
+            
+            // Для обратной совместимости
+            if (!this.calendarData.date_range) {
+                this.calendarData.date_range = {};
+            }
+            this.calendarData.date_range.start = this.calendarData.metadata.date_range_start;
+            this.calendarData.date_range.end = this.calendarData.metadata.date_range_end;
+        }
     }
     
     initializeLoadedMonthsCache() {
