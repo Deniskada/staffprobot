@@ -134,11 +134,18 @@ class UniversalCalendarManager {
         // Обновляем текущий видимый месяц
         this.currentVisibleMonth = monthKey;
         
-        // Если месяц не загружен, загружаем его с соседними
-        if (!this.loadedMonths.has(monthKey)) {
-            console.log(`Month ${monthKey} not loaded, triggering loadMonthRange`);
-            this.loadMonthRange(year, month);
+        // НЕ загружаем, если:
+        // 1. Месяц уже загружен
+        // 2. Месяц сейчас загружается
+        // 3. Идет пользовательская навигация (клик/выбор месяца)
+        if (this.loadedMonths.has(monthKey) || 
+            this.loadingMonths?.has(monthKey) || 
+            this.isUserNavigating) {
+            return;
         }
+        
+        console.log(`Month ${monthKey} not loaded, triggering loadMonthRange`);
+        this.loadMonthRange(year, month);
     }
     
     async loadMonthData(monthInfo) {
@@ -635,9 +642,24 @@ class UniversalCalendarManager {
     }
     
     async loadMonthRange(year, month) {
+        const monthKey = `${year}-${month}`;
+        
+        // Защита от повторных загрузок (если уже загружается)
+        if (this.loadingMonths?.has(monthKey)) {
+            console.log(`Month ${monthKey} is already loading, skipping`);
+            return;
+        }
+        
+        // Инициализируем Set для отслеживания загружаемых месяцев
+        if (!this.loadingMonths) {
+            this.loadingMonths = new Set();
+        }
+        
+        this.loadingMonths.add(monthKey);
+        console.log(`Loading month range for ${monthKey}`);
+        
         // Всегда загружаем только 3 месяца: 1 до + текущий + 1 после
-        // Это ускоряет загрузку и уменьшает объем данных
-        const halfRange = 1; // 1 месяц до и 1 месяц после
+        const halfRange = 1;
         
         // Загружаем диапазон месяцев вокруг выбранного месяца
         const prevMonth = month - halfRange <= 0 ? 
@@ -674,24 +696,41 @@ class UniversalCalendarManager {
             // Объединяем данные
             this.mergeMonthData(newData);
             
-            // Обновляем кэш
-            this.initializeLoadedMonthsCache();
+            // Помечаем загруженные месяцы (3 месяца вокруг выбранного)
+            for (let i = -1; i <= 1; i++) {
+                let targetMonth = month + i;
+                let targetYear = year;
+                
+                if (targetMonth <= 0) {
+                    targetMonth += 12;
+                    targetYear -= 1;
+                } else if (targetMonth > 12) {
+                    targetMonth -= 12;
+                    targetYear += 1;
+                }
+                
+                const monthKey = `${targetYear}-${targetMonth}`;
+                this.loadedMonths.add(monthKey);
+            }
             
-            // Обновляем отображение
-            this.renderCalendar();
+            // Обновляем отображение БЕЗ полного рендеринга (избегаем сброса скролла)
+            this.renderCalendar(true); // preserveScrollPosition = true
             
             // Позиционируемся на выбранный месяц
             setTimeout(() => {
                 this.scrollToMonth(year, month);
-                // Сбрасываем флаг после позиционирования
+                // Сбрасываем флаги после позиционирования
                 setTimeout(() => {
                     this.isUserNavigating = false;
-                }, 500);
-            }, 200); // Увеличиваем задержку для больших диапазонов
+                    this.loadingMonths.delete(monthKey);
+                    console.log(`Finished loading ${monthKey}`);
+                }, 300);
+            }, 100);
             
         } catch (error) {
             console.error(`Error loading month range for ${year}-${month}:`, error);
             this.isUserNavigating = false;
+            this.loadingMonths.delete(monthKey);
         }
     }
     
