@@ -67,14 +67,27 @@ def auto_close_shifts(self):
                     try:
                         end_time_utc = None
                         obj = shift.object
-                        if obj and obj.closing_time:
-                            tz_name = getattr(obj, 'timezone', None) or 'Europe/Moscow'
-                            obj_tz = pytz.timezone(tz_name)
-                            # Локальная дата по времени начала смены в часовом поясе объекта
-                            start_local = shift.start_time.astimezone(obj_tz) if getattr(shift.start_time, 'tzinfo', None) else obj_tz.localize(shift.start_time)
+                        tz_name = getattr(obj, 'timezone', None) or 'Europe/Moscow'
+                        obj_tz = pytz.timezone(tz_name)
+                        start_local = shift.start_time.astimezone(obj_tz) if getattr(shift.start_time, 'tzinfo', None) else obj_tz.localize(shift.start_time)
+                        
+                        # Для запланированных смен (is_planned=True) используем время из тайм-слота
+                        if shift.is_planned and shift.time_slot_id:
+                            timeslot_query = select(TimeSlot).filter(TimeSlot.id == shift.time_slot_id)
+                            timeslot_result = await session.execute(timeslot_query)
+                            timeslot = timeslot_result.scalar_one_or_none()
+                            if timeslot and timeslot.end_time:
+                                end_local = datetime.combine(start_local.date(), timeslot.end_time)
+                                end_local = obj_tz.localize(end_local)
+                                end_time_utc = end_local.astimezone(pytz.UTC)
+                                logger.info(f"Shift {shift.id}: using timeslot end_time {timeslot.end_time}")
+                        
+                        # Для спонтанных смен используем closing_time объекта
+                        if end_time_utc is None and obj and obj.closing_time:
                             end_local = datetime.combine(start_local.date(), obj.closing_time)
                             end_local = obj_tz.localize(end_local)
                             end_time_utc = end_local.astimezone(pytz.UTC)
+                            logger.info(f"Shift {shift.id}: using object closing_time {obj.closing_time}")
 
                         if end_time_utc and now_utc >= end_time_utc:
                             duration = end_time_utc - shift.start_time
@@ -91,7 +104,9 @@ def auto_close_shifts(self):
                             shift.total_payment = float(total_payment) if total_payment is not None else None
                             
                             closed_count += 1
-                            logger.info(f"Auto-closed spontaneous shift {shift.id} at {end_time_utc} (object closing time)")
+                            shift_type = "planned" if shift.is_planned else "spontaneous"
+                            time_source = "timeslot" if (shift.is_planned and shift.time_slot_id) else "object closing_time"
+                            logger.info(f"Auto-closed {shift_type} shift {shift.id} at {end_time_utc} ({time_source})")
                     except Exception as e:
                         error_msg = f"Error auto-closing spontaneous shift {shift.id}: {e}"
                         logger.error(error_msg)
