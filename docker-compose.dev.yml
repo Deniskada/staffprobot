@@ -24,6 +24,13 @@ services:
   redis:
     image: redis:7-alpine
     container_name: staffprobot_redis_dev
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --appendonly yes
     ports:
       - "6379:6379"
     volumes:
