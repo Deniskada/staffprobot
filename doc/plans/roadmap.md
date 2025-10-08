@@ -469,21 +469,21 @@
   - [x] 3.3. Обновить healthcheck для Redis
     - Type: ops | Files: docker-compose.*.yml
     - Acceptance: healthcheck проверяет доступность с учетом пароля
-- [ ] **Фаза 4: Rate limiting (1 день)**
-  - [ ] 4.1. Создать RateLimiter утилиту
+- [x] **Фаза 4: Rate limiting (1 день)**
+  - [x] 4.1. Создать RateLimiter утилиту
     - Type: feature | Files: core/utils/rate_limiter.py
     - Acceptance: класс с методом `check_rate_limit(key, max_requests, window_seconds)` через Redis INCR
-  - [ ] 4.2. Добавить middleware для API endpoints
+  - [x] 4.2. Добавить middleware для API endpoints
     - Type: feature | Files: core/middleware/rate_limit.py, apps/web/app.py
     - Acceptance: ограничение 100 req/min для неавторизованных, по ролям для авторизованных
-  - [ ] 4.3. Настроить лимиты по ролям
+  - [x] 4.3. Настроить лимиты по ролям
     - Type: config | Files: core/middleware/rate_limit.py
     - Acceptance: owner: 200/мин, manager: 150/мин, employee: 100/мин, guest: 50/мин
-- [ ] **Документация и тесты**
-  - [ ] 5.1. Обновить vision_v1 и roadmap
+- [x] **Документация и тесты**
+  - [x] 5.1. Обновить vision_v1 и roadmap
     - Type: doc | Files: doc/vision_v1/*, doc/plans/roadmap.md
     - Acceptance: задокументированы новые эндпоинты и middleware
-  - [ ] 5.2. Написать тесты для кэширования
-    - Type: test | Files: tests/unit/test_cache_service.py, tests/integration/test_redis_caching.py
+  - [x] 5.2. Написать тесты для кэширования
+    - Type: test | Files: tests/unit/test_rate_limiter.py, tests/integration/test_redis_caching.py
     - Acceptance: покрыты сценарии set/get/invalidate, rate limiting
 
