@@ -1120,9 +1120,17 @@ async def employee_api_employees(
         
         if not user:
             return []
+        
+        # Проверяем кэш
+        from core.cache.redis_cache import cache
+        cache_key = f"api_employees:employee_{user.id}"
+        cached_data = await cache.get(cache_key, serialize="json")
+        if cached_data:
+            logger.info(f"Employee employees API: cache HIT for user {user.id}")
+            return cached_data
 
         name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username or f"ID {user.id}"
-        return [{
+        employee_data = [{
             "id": int(user.id),
             "name": str(name),
             "role": "employee",
@@ -1131,6 +1139,12 @@ async def employee_api_employees(
             # для dnd назначения самим сотрудником на слот
             "draggable": True,
         }]
+        
+        # Сохраняем в кэш (TTL 2 минуты)
+        await cache.set(cache_key, employee_data, ttl=120, serialize="json")
+        logger.info(f"Employee employees API: cached for user {user.id}")
+        
+        return employee_data
     except Exception as e:
         logger.error(f"Ошибка загрузки сотрудника: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
