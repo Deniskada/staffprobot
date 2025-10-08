@@ -772,6 +772,7 @@ class TimeSlotService:
             from core.cache.redis_cache import cache
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")  # API responses
             
             return new_timeslot
             
@@ -838,6 +839,7 @@ class TimeSlotService:
             from core.cache.redis_cache import cache
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")  # API responses
             
             return timeslot
             
@@ -875,6 +877,7 @@ class TimeSlotService:
             from core.cache.redis_cache import cache
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")  # API responses
             
             return True
             
@@ -988,6 +991,7 @@ class TimeSlotService:
             from core.cache.redis_cache import cache
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")  # API responses
             
             return new_timeslot
             
@@ -1061,6 +1065,7 @@ class TimeSlotService:
             from core.cache.redis_cache import cache
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")  # API responses
             
             return timeslot
             
@@ -1099,6 +1104,7 @@ class TimeSlotService:
             from core.cache.redis_cache import cache
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")  # API responses
             
             return True
             
