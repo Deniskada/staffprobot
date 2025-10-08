@@ -2,6 +2,7 @@
 
 import json
 import pickle
+import hashlib
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Union
 from core.config.settings import settings
@@ -244,8 +245,10 @@ def cached(
     """Декоратор для кэширования результатов функций."""
     def decorator(func):
         async def wrapper(*args, **kwargs):
-            # Генерация ключа кэша
-            cache_key = f"{key_prefix}:{func.__name__}:{hash(str(args) + str(sorted(kwargs.items())))}"
+            # Генерация стабильного ключа кэша с использованием MD5
+            args_str = str(args) + str(sorted(kwargs.items()))
+            args_hash = hashlib.md5(args_str.encode()).hexdigest()
+            cache_key = f"{key_prefix}:{func.__name__}:{args_hash}"
             
             # Попытка получить из кэша
             cached_result = await cache.get(cache_key, serialize=serialize)
