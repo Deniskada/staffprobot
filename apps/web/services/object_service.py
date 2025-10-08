@@ -15,6 +15,8 @@ from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.user import User
 from core.logging.logger import logger
 from datetime import datetime, time, date
+from core.cache.redis_cache import cached
+from core.cache.cache_service import CacheService
 
 
 class ObjectService:
@@ -36,6 +38,7 @@ class ObjectService:
             logger.error(f"Error getting user internal ID for telegram_id {telegram_id}: {e}")
             return None
     
+    @cached(ttl=timedelta(minutes=15), key_prefix="objects_by_owner")
     async def get_objects_by_owner(self, telegram_id: int, include_inactive: bool = False) -> List[Object]:
         """Получить все объекты владельца по Telegram ID.
         include_inactive=True возвращает также неактивные объекты.
@@ -140,6 +143,10 @@ class ObjectService:
             await self._update_owner_role(telegram_id)
             
             logger.info(f"Created object {new_object.id} for owner {telegram_id}")
+            
+            # Инвалидация кэша объекта
+            await CacheService.invalidate_object_cache(new_object.id)
+            
             return new_object
             
         except Exception as e:
@@ -195,6 +202,10 @@ class ObjectService:
             await self.db.refresh(obj)
             
             logger.info(f"Updated object {object_id} for owner {owner_id}")
+            
+            # Инвалидация кэша объекта
+            await CacheService.invalidate_object_cache(object_id)
+            
             return obj
             
         except Exception as e:
@@ -255,6 +266,10 @@ class ObjectService:
             await self.db.refresh(obj)
             
             logger.info(f"Updated object {object_id} by manager")
+            
+            # Инвалидация кэша объекта
+            await CacheService.invalidate_object_cache(object_id)
+            
             return obj
             
         except Exception as e:
@@ -305,6 +320,10 @@ class ObjectService:
             await self._check_and_update_owner_role(owner_id)
             
             logger.info(f"Soft deleted object {object_id} for owner {owner_id}")
+            
+            # Инвалидация кэша объекта
+            await CacheService.invalidate_object_cache(object_id)
+            
             return True
             
         except Exception as e:
