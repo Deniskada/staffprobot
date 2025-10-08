@@ -459,14 +459,14 @@
   - [x] 2.3. Добавить ссылку в меню админки
     - Type: ux | Files: apps/web/templates/admin/base_admin.html
     - Acceptance: пункт меню "Статистика кэша" ведет на /admin/cache/stats
-- [ ] **Фаза 3: Оптимизация конфигурации (0.5 дня)**
-  - [ ] 3.1. Настроить maxmemory и maxmemory-policy
+- [x] **Фаза 3: Оптимизация конфигурации (0.5 дня)**
+  - [x] 3.1. Настроить maxmemory и maxmemory-policy
     - Type: config | Files: docker-compose.dev.yml, docker-compose.prod.yml
     - Acceptance: Redis с `--maxmemory 512mb --maxmemory-policy allkeys-lru`
-  - [ ] 3.2. Добавить REDIS_PASSWORD в .env
+  - [x] 3.2. Добавить REDIS_PASSWORD в .env
     - Type: security | Files: .env, env.example, docker-compose.*.yml
     - Acceptance: Redis защищен паролем в production
-  - [ ] 3.3. Обновить healthcheck для Redis
+  - [x] 3.3. Обновить healthcheck для Redis
     - Type: ops | Files: docker-compose.*.yml
     - Acceptance: healthcheck проверяет доступность с учетом пароля
 - [ ] **Фаза 4: Rate limiting (1 день)**
