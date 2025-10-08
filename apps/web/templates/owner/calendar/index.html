@@ -321,11 +321,18 @@ if (window.universalCalendar) {
     window.universalCalendar.assignEmployeeToTimeslot = async function(employeeId, timeslotId) {
     try {
         console.log(`Planning shift: employeeId=${employeeId}, timeslotId=${timeslotId}`);
-        const employeeResponse = await fetch(`/owner/api/employees`);
-        if (!employeeResponse.ok) {
-            throw new Error(`HTTP ${employeeResponse.status}: ${employeeResponse.statusText}`);
+        
+        // Используем данные из памяти вместо повторного запроса
+        const employees = window.calendarPanels?.employeesData || [];
+        if (employees.length === 0) {
+            // Если данных нет в памяти, загружаем
+            const employeeResponse = await fetch(`/owner/api/employees`);
+            if (!employeeResponse.ok) {
+                throw new Error(`HTTP ${employeeResponse.status}: ${employeeResponse.statusText}`);
+            }
+            employees = await employeeResponse.json();
         }
-        const employees = await employeeResponse.json();
+        
         const employee = employees.find(emp => emp.id == parseInt(employeeId));
         if (!employee) {
             console.log(`Employee not found: ${employeeId}`);
@@ -373,8 +380,14 @@ if (window.universalCalendar) {
 if (window.universalCalendar) {
     window.universalCalendar.createTimeslotFromObject = async function(objectId, date) {
         try {
-            const objectResponse = await fetch(`/owner/calendar/api/objects`);
-            const objects = await objectResponse.json();
+            // Используем данные из памяти вместо повторного запроса
+            let objects = window.calendarPanels?.objectsData || [];
+            if (objects.length === 0) {
+                // Если данных нет в памяти, загружаем
+                const objectResponse = await fetch(`/owner/calendar/api/objects`);
+                objects = await objectResponse.json();
+            }
+            
             const object = objects.find(obj => obj.id == objectId);
             if (!object) {
                 calendarPanels.showNotification('Объект не найден', 'error');
@@ -394,14 +407,13 @@ if (window.universalCalendar) {
     };
 }
 
-// Initialize panels on page load
-document.addEventListener('DOMContentLoaded', function() {
-    calendarPanels.init();
-    setTimeout(() => {
-        // Initialize timeslot occupancy
-        initializeTimeslotOccupancy();
-    }, 1000);
-});
+// NOTE: calendarPanels.init() уже вызван в основном DOMContentLoaded выше (строка 258)
+// Убрана дублирующая инициализация панелей
+
+// Initialize timeslot occupancy after calendar loads
+setTimeout(() => {
+    initializeTimeslotOccupancy();
+}, 1000);
 
 // Initialize timeslot occupancy
 function initializeTimeslotOccupancy() {
