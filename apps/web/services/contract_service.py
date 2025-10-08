@@ -261,6 +261,11 @@ class ContractService:
             await CacheService.invalidate_user_cache(employee.id)
             await CacheService.invalidate_user_cache(owner.id)
             
+            # Инвалидация API кэшей
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("api_employees:*")
+            await cache.clear_pattern("api_objects:*")
+            
             return contract
     
     async def get_owner_contracts(self, owner_id: int, active_only: bool = True) -> List[Contract]:

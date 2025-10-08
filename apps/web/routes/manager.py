@@ -2526,6 +2526,17 @@ async def get_employees_for_manager(
         if isinstance(current_user, RedirectResponse):
             raise HTTPException(status_code=401, detail="Необходима авторизация")
         
+        # Проверяем кэш
+        user_id_key = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
+        from core.cache.redis_cache import cache
+        cache_key = f"api_employees:{user_id_key}"
+        cached_data = await cache.get(cache_key, serialize="json")
+        if cached_data:
+            logger.info(f"Manager employees API: cache HIT for user {user_id_key}")
+            return cached_data
+        
+        logger.info(f"Manager employees API: cache MISS for user {user_id_key}")
+        
         async with get_async_session() as db:
             user_id = await get_user_id_from_current_user(current_user, db)
             if not user_id:
@@ -2606,6 +2617,10 @@ async def get_employees_for_manager(
                     "name": f"{emp.first_name} {emp.last_name or ''}".strip() or emp.username or f"ID {emp.id}"
                 })
             
+            # Сохраняем в кэш (TTL 2 минуты)
+            await cache.set(cache_key, employees_data, ttl=120, serialize="json")
+            logger.info(f"Manager employees API: cached {len(employees_data)} employees")
+            
             return employees_data
             
     except Exception as e:
@@ -2624,6 +2639,17 @@ async def get_objects_for_manager_calendar(
     try:
         if isinstance(current_user, RedirectResponse):
             raise HTTPException(status_code=401, detail="Необходима авторизация")
+        
+        # Проверяем кэш
+        user_id_key = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
+        from core.cache.redis_cache import cache
+        cache_key = f"api_objects:{user_id_key}"
+        cached_data = await cache.get(cache_key, serialize="json")
+        if cached_data:
+            logger.info(f"Manager objects API: cache HIT for user {user_id_key}")
+            return cached_data
+        
+        logger.info(f"Manager objects API: cache MISS for user {user_id_key}")
         
         async with get_async_session() as db:
             user_id = await get_user_id_from_current_user(current_user, db)
@@ -2655,6 +2681,10 @@ async def get_objects_for_manager_calendar(
                     "closing_time": obj.closing_time.strftime('%H:%M') if obj.closing_time else None,
                     "working_hours": working_hours
                 })
+            
+            # Сохраняем в кэш (TTL 2 минуты)
+            await cache.set(cache_key, objects_data, ttl=120, serialize="json")
+            logger.info(f"Manager objects API: cached {len(objects_data)} objects")
             
             return objects_data
             
