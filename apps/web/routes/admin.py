@@ -374,3 +374,74 @@ async def admin_reports(request: Request):
         "message": "Функция в разработке",
         "available_interfaces": available_interfaces
     })
+
+
+@router.get("/cache/stats", response_class=HTMLResponse, name="admin_cache_stats")
+async def admin_cache_stats(request: Request):
+    """Статистика Redis кэша"""
+    # Проверяем авторизацию и роль суперадмина
+    current_user = await get_current_user_from_request(request)
+    user_role = current_user.get("role", "employee")
+    if user_role != "superadmin":
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    
+    # Получаем статистику Redis
+    from core.cache.redis_cache import cache
+    from core.cache.cache_service import CacheService
+    
+    try:
+        # Подключаемся к Redis если не подключен
+        if not cache.is_connected:
+            await cache.connect()
+        
+        # Получаем статистику
+        redis_stats = await cache.get_stats()
+        
+        # Получаем количество ключей по типам
+        all_keys = await cache.keys("*")
+        key_counts = {
+            "contract_employees": len([k for k in all_keys if k.startswith("contract_employees:")]),
+            "all_contract_employees": len([k for k in all_keys if k.startswith("all_contract_employees:")]),
+            "owner_objects": len([k for k in all_keys if k.startswith("owner_objects:")]),
+            "objects_by_owner": len([k for k in all_keys if k.startswith("objects_by_owner:")]),
+            "user": len([k for k in all_keys if k.startswith("user:")]),
+            "object": len([k for k in all_keys if k.startswith("object:")]),
+            "shift": len([k for k in all_keys if k.startswith("shift:")]),
+            "active_shifts": len([k for k in all_keys if k.startswith("active_shifts:")]),
+            "user_objects": len([k for k in all_keys if k.startswith("user_objects:")]),
+            "analytics": len([k for k in all_keys if k.startswith("analytics:")]),
+            "other": len([k for k in all_keys if not any(
+                k.startswith(prefix) for prefix in [
+                    "contract_employees:", "all_contract_employees:", "owner_objects:",
+                    "objects_by_owner:", "user:", "object:", "shift:", 
+                    "active_shifts:", "user_objects:", "analytics:"
+                ]
+            )])
+        }
+        
+        # Получаем данные для переключения интерфейсов
+        from shared.services.role_based_login_service import RoleBasedLoginService
+        async with get_async_session() as session:
+            user_id = current_user.get("id")
+            login_service = RoleBasedLoginService(session)
+            available_interfaces = await login_service.get_available_interfaces(user_id)
+        
+        return templates.TemplateResponse("admin/cache_stats.html", {
+            "request": request,
+            "current_user": current_user,
+            "title": "Статистика Redis кэша",
+            "redis_stats": redis_stats,
+            "key_counts": key_counts,
+            "total_keys": len(all_keys),
+            "available_interfaces": available_interfaces
+        })
+    
+    except Exception as e:
+        logger.error(f"Error getting cache stats: {e}")
+        return templates.TemplateResponse("admin/cache_stats.html", {
+            "request": request,
+            "current_user": current_user,
+            "title": "Статистика Redis кэша",
+            "error": f"Ошибка подключения к Redis: {str(e)}",
+            "available_interfaces": []
+        })
