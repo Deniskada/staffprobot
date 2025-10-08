@@ -3,6 +3,8 @@ class CalendarPanels {
     constructor(role) {
         this.role = role;
         this.baseUrl = `/${role}/api`;
+        this.objectsData = [];  // Кэш объектов в памяти
+        this.employeesData = [];  // Кэш сотрудников в памяти
     }
 
     // Panel toggle functions
@@ -47,6 +49,9 @@ class CalendarPanels {
             const response = await fetch(endpoint, { credentials: 'same-origin' });
             const objects = await response.json();
             console.log('[CalendarPanels] Objects loaded:', Array.isArray(objects) ? objects.length : 'n/a');
+            
+            // Сохраняем в память для переиспользования
+            this.objectsData = objects;
             
             objectsList.innerHTML = '';
             
@@ -170,6 +175,9 @@ class CalendarPanels {
             const response = await fetch(url, { credentials: 'same-origin' });
             const employees = await response.json();
             console.log('[CalendarPanels] Employees loaded:', Array.isArray(employees) ? employees.length : 'n/a');
+            
+            // Сохраняем в память для переиспользования
+            this.employeesData = employees;
             
             employeesList.innerHTML = '';
             
