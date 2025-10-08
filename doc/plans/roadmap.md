@@ -432,3 +432,58 @@
     - ✅ Обновлен `doc/vision_v1/roles/manager.md`: указана причина изменения (ранее JSON, теперь form-data)
     - ✅ Создана итерация 20 в `doc/plans/roadmap.md` с описанием выполненных задач
 
+## 🎯 Итерация 21: Оптимизация Redis кэширования (октябрь 2025)
+- [ ] **Фаза 1: Базовое кэширование (1-2 дня)**
+  - [ ] 1.1. Добавить @cached декоратор к методам ContractService
+    - Type: feature | Files: apps/web/services/contract_service.py
+    - Acceptance: `get_contract_employees_by_telegram_id()`, `get_owner_objects()` используют декоратор @cached с TTL 15 мин
+  - [ ] 1.2. Добавить @cached декоратор к методам ObjectService
+    - Type: feature | Files: apps/web/services/object_service.py
+    - Acceptance: методы получения списков объектов кэшируются на 15 мин
+  - [ ] 1.3. Добавить инвалидацию в операции с договорами
+    - Type: feature | Files: apps/web/services/contract_service.py
+    - Acceptance: `create_contract()`, `update_contract()`, `terminate_contract()` вызывают `CacheService.invalidate_user_cache()`
+  - [ ] 1.4. Добавить инвалидацию в операции с объектами
+    - Type: feature | Files: apps/web/services/object_service.py
+    - Acceptance: `create_object()`, `update_object()`, `delete_object()` вызывают `CacheService.invalidate_object_cache()`
+  - [ ] 1.5. Протестировать кэширование и инвалидацию
+    - Type: test | Files: tests/integration/test_redis_caching.py
+    - Acceptance: создание договора инвалидирует кэш; повторный запрос берет данные из БД; второй повторный — из кэша
+- [ ] **Фаза 2: Мониторинг кэша (1 день)**
+  - [ ] 2.1. Создать endpoint /admin/cache/stats
+    - Type: feature | Files: apps/web/routes/admin.py
+    - Acceptance: возвращает JSON с redis_stats, key_counts, hit_rate
+  - [ ] 2.2. Создать UI страницу статистики кэша
+    - Type: feature | Files: apps/web/templates/admin/cache_stats.html
+    - Acceptance: отображение hit rate, memory usage, количества ключей по типам, кнопка очистки кэша
+  - [ ] 2.3. Добавить ссылку в меню админки
+    - Type: ux | Files: apps/web/templates/admin/base_admin.html
+    - Acceptance: пункт меню "Статистика кэша" ведет на /admin/cache/stats
+- [ ] **Фаза 3: Оптимизация конфигурации (0.5 дня)**
+  - [ ] 3.1. Настроить maxmemory и maxmemory-policy
+    - Type: config | Files: docker-compose.dev.yml, docker-compose.prod.yml
+    - Acceptance: Redis с `--maxmemory 512mb --maxmemory-policy allkeys-lru`
+  - [ ] 3.2. Добавить REDIS_PASSWORD в .env
+    - Type: security | Files: .env, env.example, docker-compose.*.yml
+    - Acceptance: Redis защищен паролем в production
+  - [ ] 3.3. Обновить healthcheck для Redis
+    - Type: ops | Files: docker-compose.*.yml
+    - Acceptance: healthcheck проверяет доступность с учетом пароля
+- [ ] **Фаза 4: Rate limiting (1 день)**
+  - [ ] 4.1. Создать RateLimiter утилиту
+    - Type: feature | Files: core/utils/rate_limiter.py
+    - Acceptance: класс с методом `check_rate_limit(key, max_requests, window_seconds)` через Redis INCR
+  - [ ] 4.2. Добавить middleware для API endpoints
+    - Type: feature | Files: core/middleware/rate_limit.py, apps/web/app.py
+    - Acceptance: ограничение 100 req/min для неавторизованных, по ролям для авторизованных
+  - [ ] 4.3. Настроить лимиты по ролям
+    - Type: config | Files: core/middleware/rate_limit.py
+    - Acceptance: owner: 200/мин, manager: 150/мин, employee: 100/мин, guest: 50/мин
+- [ ] **Документация и тесты**
+  - [ ] 5.1. Обновить vision_v1 и roadmap
+    - Type: doc | Files: doc/vision_v1/*, doc/plans/roadmap.md
+    - Acceptance: задокументированы новые эндпоинты и middleware
+  - [ ] 5.2. Написать тесты для кэширования
+    - Type: test | Files: tests/unit/test_cache_service.py, tests/integration/test_redis_caching.py
+    - Acceptance: покрыты сценарии set/get/invalidate, rate limiting
+
