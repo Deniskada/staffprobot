@@ -246,6 +246,10 @@ class ShiftScheduler:
                     "Shift " + str(shift_id) + " manually closed"
                 )
                 
+                # Инвалидация кэша календаря
+                from core.cache.redis_cache import cache
+                await cache.clear_pattern("calendar_shifts:*")
+                
                 return True
                 
         except Exception as e:

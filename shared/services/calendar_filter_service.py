@@ -25,6 +25,8 @@ from shared.models.calendar_data import (
     TimeslotStatus
 )
 from shared.services.object_access_service import ObjectAccessService
+from core.cache.redis_cache import cached
+from core.cache.cache_service import CacheService
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +206,7 @@ class CalendarFilterService:
                 accessible_objects=[]
             )
     
+    @cached(ttl=timedelta(minutes=10), key_prefix="calendar_timeslots")
     async def _get_timeslots(
         self,
         object_ids: List[int],
@@ -283,6 +286,7 @@ class CalendarFilterService:
             logger.error(f"Error getting object timezones: {e}", exc_info=True)
             return {obj_id: 'Europe/Moscow' for obj_id in object_ids}
     
+    @cached(ttl=timedelta(minutes=3), key_prefix="calendar_shifts")
     async def _get_shifts(
         self,
         object_ids: List[int],

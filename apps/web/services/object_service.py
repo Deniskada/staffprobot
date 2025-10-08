@@ -767,6 +767,12 @@ class TimeSlotService:
             await self.db.refresh(new_timeslot)
             
             logger.info(f"Created timeslot {new_timeslot.id} for object {object_id}")
+            
+            # Инвалидация кэша календаря
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_timeslots:*")
+            await cache.clear_pattern("calendar_shifts:*")
+            
             return new_timeslot
             
         except Exception as e:
@@ -827,6 +833,12 @@ class TimeSlotService:
             await self.db.refresh(timeslot)
             
             logger.info(f"Updated timeslot {timeslot_id}")
+            
+            # Инвалидация кэша календаря
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_timeslots:*")
+            await cache.clear_pattern("calendar_shifts:*")
+            
             return timeslot
             
         except Exception as e:
@@ -858,6 +870,12 @@ class TimeSlotService:
             await self.db.commit()
             
             logger.info(f"Soft deleted timeslot {timeslot_id}")
+            
+            # Инвалидация кэша календаря
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_timeslots:*")
+            await cache.clear_pattern("calendar_shifts:*")
+            
             return True
             
         except Exception as e:
@@ -965,6 +983,12 @@ class TimeSlotService:
             await self.db.refresh(new_timeslot)
             
             logger.info(f"Created timeslot {new_timeslot.id} for object {object_id} by manager {telegram_id}")
+            
+            # Инвалидация кэша календаря
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_timeslots:*")
+            await cache.clear_pattern("calendar_shifts:*")
+            
             return new_timeslot
             
         except Exception as e:
@@ -1032,6 +1056,12 @@ class TimeSlotService:
             await self.db.refresh(timeslot)
             
             logger.info(f"Updated timeslot {timeslot_id} by manager {telegram_id}")
+            
+            # Инвалидация кэша календаря
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_timeslots:*")
+            await cache.clear_pattern("calendar_shifts:*")
+            
             return timeslot
             
         except Exception as e:
@@ -1064,6 +1094,12 @@ class TimeSlotService:
             await self.db.commit()
             
             logger.info(f"Soft deleted timeslot {timeslot_id} by manager {telegram_id}")
+            
+            # Инвалидация кэша календаря
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_timeslots:*")
+            await cache.clear_pattern("calendar_shifts:*")
+            
             return True
             
         except Exception as e:
