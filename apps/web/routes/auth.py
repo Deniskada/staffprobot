@@ -123,7 +123,14 @@ async def send_pin(request: Request):
         if not telegram_id:
             raise HTTPException(status_code=400, detail="Telegram ID не указан")
         
-        # Генерация и отправка PIN-кода
+        # Если это тестовый пользователь (веб) — не отправляем PIN, имитируем успех
+        async with get_async_session() as session:
+            res = await session.execute(select(User).where(User.telegram_id == telegram_id))
+            db_user = res.scalar_one_or_none()
+        if db_user and getattr(db_user, 'is_test_user', False):
+            return {"status": "success", "message": "PIN-код (тест) считается отправленным"}
+        
+        # Генерация и отправка PIN-кода (обычный режим)
         pin_code = await auth_service.generate_and_send_pin(telegram_id)
         
         return {"status": "success", "message": "PIN-код отправлен в Telegram"}
