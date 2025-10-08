@@ -1,3 +1,15 @@
+## Тестовые пользователи (веб)
+
+- [GET] `/admin/system-settings` — (apps/web/routes/admin.py) страница системных настроек
+- [GET] `/api/system-settings/all` — получить все настройки
+- [POST] `/api/system-settings/test-users/toggle?enabled=true|false` — включить/выключить режим тест-пользователей
+  - При выключении удаляются все пользователи `is_test_user=true` и связанные записи
+- [POST] `/api/system-settings/test-users/create?role=owner|manager|employee` — создать тест-пользователя с ролью
+- Веб-аутентификация:
+  - `/auth/send-pin` — для `is_test_user` не отправляет PIN, возвращает `success`
+  - `/auth/login` — для `is_test_user` принимается любой 6-значный PIN
+  - Бот: без изменений
+
 # Роль: Суперадмин (Superadmin)
 
 ## Роуты и эндпоинты
