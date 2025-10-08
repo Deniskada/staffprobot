@@ -127,20 +127,17 @@ class UniversalCalendarManager {
     }
     
     checkAndLoadAdjacentMonths(visibleMonth) {
-        // Поскольку мы загружаем диапазон 13 месяцев, динамическая загрузка не нужна
-        // Просто обновляем текущий видимый месяц
+        // Теперь загружаем только 3 месяца, поэтому нужна динамическая подгрузка
         const { year, month } = visibleMonth;
         const monthKey = `${year}-${month}`;
         
-        // Проверяем, что месяц входит в загруженный диапазон
-        const currentDate = new Date();
-        const currentMonth = currentDate.getMonth() + 1;
-        const currentYear = currentDate.getFullYear();
+        // Обновляем текущий видимый месяц
+        this.currentVisibleMonth = monthKey;
         
-        // Проверяем, находится ли видимый месяц в диапазоне ±6 месяцев
-        const monthsDiff = (year - currentYear) * 12 + (month - currentMonth);
-        if (Math.abs(monthsDiff) <= 6) {
-            this.currentVisibleMonth = monthKey;
+        // Если месяц не загружен, загружаем его с соседними
+        if (!this.loadedMonths.has(monthKey)) {
+            console.log(`Month ${monthKey} not loaded, triggering loadMonthRange`);
+            this.loadMonthRange(year, month);
         }
     }
     
@@ -239,12 +236,12 @@ class UniversalCalendarManager {
     initializeLoadedMonthsCache() {
         if (!this.calendarData) return;
         
-        // Помечаем все месяцы в диапазоне 13 месяцев как загруженные
+        // Помечаем все месяцы в диапазоне 3 месяцев как загруженные
         const currentDate = new Date();
         const currentMonth = currentDate.getMonth() + 1; // 1-based
         const currentYear = currentDate.getFullYear();
         
-        for (let i = -6; i <= 6; i++) {
+        for (let i = -1; i <= 1; i++) {
             const targetMonth = currentMonth + i;
             let targetYear = currentYear;
             let monthNumber = targetMonth;
@@ -374,18 +371,18 @@ class UniversalCalendarManager {
         const end = endDate || new Date(this.currentDate);
         
         if (this.viewType === 'month') {
-            // Загружаем 13 месяцев: 6 до текущего + текущий + 6 после
+            // Загружаем 3 месяца: 1 до текущего + текущий + 1 после
             const currentDate = new Date(start);
             const currentMonth = currentDate.getMonth();
             const currentYear = currentDate.getFullYear();
             
-            // 6 месяцев назад
-            start.setMonth(currentMonth - 6);
+            // 1 месяц назад
+            start.setMonth(currentMonth - 1);
             start.setDate(1);
             
-            // 6 месяцев вперед
-            end.setMonth(currentMonth + 6);
-            end.setDate(0); // Последний день 6-го месяца вперед
+            // 1 месяц вперед
+            end.setMonth(currentMonth + 1);
+            end.setDate(0); // Последний день 1-го месяца вперед
         } else if (this.viewType === 'week') {
             // Start from Monday of current week
             const dayOfWeek = start.getDay();
@@ -622,20 +619,9 @@ class UniversalCalendarManager {
     }
     
     async loadMonthRange(year, month) {
-        // Определяем, насколько далеко выбранный месяц от текущего
-        const currentDate = new Date();
-        const currentYear = currentDate.getFullYear();
-        const currentMonth = currentDate.getMonth() + 1;
-        
-        const monthsDiff = (year - currentYear) * 12 + (month - currentMonth);
-        
-        // Если выбранный месяц далеко от текущего, загружаем больше данных
-        let rangeMonths = 3; // По умолчанию 3 месяца
-        if (Math.abs(monthsDiff) > 6) {
-            rangeMonths = 7; // Если далеко, загружаем 7 месяцев
-        }
-        
-        const halfRange = Math.floor(rangeMonths / 2);
+        // Всегда загружаем только 3 месяца: 1 до + текущий + 1 после
+        // Это ускоряет загрузку и уменьшает объем данных
+        const halfRange = 1; // 1 месяц до и 1 месяц после
         
         // Загружаем диапазон месяцев вокруг выбранного месяца
         const prevMonth = month - halfRange <= 0 ? 
