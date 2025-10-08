@@ -1708,8 +1708,22 @@ async def employee_calendar_api_data(
     Использует CalendarFilterService для правильной фильтрации смен.
     """
     try:
-        logger.info(f"Employee calendar API called: start_date={start_date}, end_date={end_date}, object_ids={object_ids}")
+        # Генерируем ключ кэша
+        import hashlib
+        user_id = current_user.get("telegram_id") or current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
+        cache_key_data = f"calendar_api_employee:{user_id}:{start_date}:{end_date}:{object_ids or 'all'}"
+        cache_key = hashlib.md5(cache_key_data.encode()).hexdigest()
+        
+        # Проверяем кэш
+        from core.cache.redis_cache import cache
+        cached_response = await cache.get(f"api_response:{cache_key}", serialize="json")
+        if cached_response:
+            logger.info(f"Employee calendar API: cache HIT for {start_date} to {end_date}")
+            return cached_response
+        
+        logger.info(f"Employee calendar API: cache MISS for {start_date} to {end_date}, object_ids={object_ids}")
         logger.info(f"Current user type: {type(current_user)}, value: {current_user}")
+        
         # Парсим даты
         try:
             start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -1818,7 +1832,7 @@ async def employee_calendar_api_data(
                 "can_view": s.can_view
             })
         
-        return {
+        response_data = {
             "timeslots": timeslots_data,
             "shifts": shifts_data,
             "metadata": {
@@ -1833,6 +1847,12 @@ async def employee_calendar_api_data(
                 "accessible_objects": calendar_data.accessible_objects
             }
         }
+        
+        # Сохраняем в кэш (TTL 2 минуты)
+        await cache.set(f"api_response:{cache_key}", response_data, ttl=120, serialize="json")
+        logger.info(f"Employee calendar API: response cached")
+        
+        return response_data
         
     except HTTPException:
         raise
