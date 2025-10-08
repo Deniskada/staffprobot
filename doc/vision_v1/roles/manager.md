@@ -54,7 +54,7 @@
 - [GET] `/shifts/{shift_id}`  — (apps/web/routes/manager.py)
 - [POST] `/shifts/{shift_id}/cancel`  — (apps/web/routes/manager.py)
 - [GET] `/timeslots/{timeslot_id}`  — (apps/web/routes/manager.py)
-- [POST] `/timeslots/{timeslot_id}/edit`  — (apps/web/routes/manager.py)
+- [POST] `/timeslots/{timeslot_id}/edit`  — (apps/web/routes/manager.py) — форма: form-data; ответ: 303 Redirect на `/manager/timeslots/object/{object_id}` — причина изменения: ранее ожидался JSON, теперь корректно обрабатывается форма.
 
 ## Шаблоны (Jinja2)
 - `manager/applications.html`

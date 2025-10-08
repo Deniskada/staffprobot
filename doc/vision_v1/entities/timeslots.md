@@ -71,7 +71,7 @@
 - [GET] `/manager/timeslots/object/{object_id}/create` — (apps/web/routes/manager_timeslots.py) — роль: manager
 - [POST] `/manager/timeslots/object/{object_id}/create` — (apps/web/routes/manager_timeslots.py) — роль: manager
 - [GET] `/manager/timeslots/{timeslot_id}/edit` — (apps/web/routes/manager_timeslots.py) — роль: manager
-- [POST] `/manager/timeslots/{timeslot_id}/edit` — (apps/web/routes/manager_timeslots.py) — роль: manager
+- [POST] `/manager/timeslots/{timeslot_id}/edit` — (apps/web/routes/manager_timeslots.py) — роль: manager — форма: form-data — ответ: 303 Redirect на `/manager/timeslots/object/{object_id}`
 - [GET] `/object/{object_id}` — (apps/web/routes/owner_timeslots.py)
 - [GET] `/object/{object_id}/create` — (apps/web/routes/owner_timeslots.py)
 - [POST] `/object/{object_id}/create` — (apps/web/routes/owner_timeslots.py)
@@ -127,7 +127,10 @@
 - [POST] `/timeslots/{timeslot_id}/delete` — (apps/web/routes/owner.py)
 - [GET] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner.py)
 - [POST] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner.py)
-- [POST] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/manager.py)
+- [POST] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/manager.py) — роль: manager (роутер подключен с префиксом `/manager`) — форма: form-data — ответ: 303 Redirect на `/manager/timeslots/object/{object_id}` — дубликат эндпоинта (исторический), см. аналогичный роут в `apps/web/routes/manager_timeslots.py`
+
+Примечание по дублям:
+- Эндпоинт обновления тайм-слота доступен из двух модулей: `apps/web/routes/manager_timeslots.py` и `apps/web/routes/manager.py` (подключается под префиксом `/manager`). Оба принимают данные формы (form-data) и делают редирект 303 на страницу списка слотов объекта. Причина дубля: историческая миграция эндпоинтов; поведение унифицировано. При дальнейшем рефакторинге требуется оставить один источник и обновить документацию.
 - [POST] `/{timeslot_id}/delete` — (apps/web/routes/owner_timeslots.py)
 - [GET] `/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py)
 - [POST] `/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py)
