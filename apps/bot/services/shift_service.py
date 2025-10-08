@@ -168,6 +168,10 @@ class ShiftService:
                     f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}"
                 )
                 
+                # Инвалидация кэша календаря
+                from core.cache.redis_cache import cache
+                await cache.clear_pattern("calendar_shifts:*")
+                
                 # Форматируем время в часовом поясе объекта
                 object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
                 local_start_time = timezone_helper.format_local_time(new_shift.start_time, object_timezone)
