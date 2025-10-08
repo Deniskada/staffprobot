@@ -773,6 +773,7 @@ class TimeSlotService:
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
             await cache.clear_pattern("api_response:*")  # API responses
+            await cache.clear_pattern("api_objects:*")  # Панель объектов
             
             return new_timeslot
             
@@ -840,6 +841,7 @@ class TimeSlotService:
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
             await cache.clear_pattern("api_response:*")  # API responses
+            await cache.clear_pattern("api_objects:*")  # Панель объектов
             
             return timeslot
             
@@ -878,6 +880,7 @@ class TimeSlotService:
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
             await cache.clear_pattern("api_response:*")  # API responses
+            await cache.clear_pattern("api_objects:*")  # Панель объектов
             
             return True
             
@@ -992,6 +995,7 @@ class TimeSlotService:
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
             await cache.clear_pattern("api_response:*")  # API responses
+            await cache.clear_pattern("api_objects:*")  # Панель объектов
             
             return new_timeslot
             
@@ -1066,6 +1070,7 @@ class TimeSlotService:
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
             await cache.clear_pattern("api_response:*")  # API responses
+            await cache.clear_pattern("api_objects:*")  # Панель объектов
             
             return timeslot
             
@@ -1105,6 +1110,7 @@ class TimeSlotService:
             await cache.clear_pattern("calendar_timeslots:*")
             await cache.clear_pattern("calendar_shifts:*")
             await cache.clear_pattern("api_response:*")  # API responses
+            await cache.clear_pattern("api_objects:*")  # Панель объектов
             
             return True
             
