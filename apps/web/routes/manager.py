@@ -2046,28 +2046,46 @@ async def manager_timeslot_edit(
         if timeslot.object_id not in accessible_object_ids:
             raise HTTPException(status_code=403, detail="Нет доступа к тайм-слоту")
         
-        # Получаем данные из запроса
-        data = await request.json()
+        # Получаем данные из формы
+        form_data = await request.form()
         
         # Обновляем поля тайм-слота
-        if 'max_employees' in data:
-            timeslot.max_employees = data['max_employees']
+        if 'slot_date' in form_data:
+            from datetime import datetime
+            timeslot.slot_date = datetime.strptime(form_data['slot_date'], "%Y-%m-%d").date()
         
-        if 'hourly_rate' in data:
-            timeslot.hourly_rate = data['hourly_rate']
+        if 'start_time' in form_data:
+            from datetime import time
+            start_parts = form_data['start_time'].split(':')
+            timeslot.start_time = time(int(start_parts[0]), int(start_parts[1]))
         
-        if 'notes' in data:
-            timeslot.notes = data['notes']
+        if 'end_time' in form_data:
+            from datetime import time
+            end_parts = form_data['end_time'].split(':')
+            timeslot.end_time = time(int(end_parts[0]), int(end_parts[1]))
         
-        if 'is_active' in data:
-            timeslot.is_active = data['is_active']
+        if 'max_employees' in form_data:
+            timeslot.max_employees = int(form_data['max_employees'])
+        
+        if 'hourly_rate' in form_data:
+            timeslot.hourly_rate = float(form_data['hourly_rate'])
+        
+        if 'notes' in form_data:
+            timeslot.notes = form_data['notes']
+        
+        if 'is_active' in form_data:
+            timeslot.is_active = form_data['is_active'].lower() == 'true'
         
         # Сохраняем изменения
         await db.commit()
+        await db.refresh(timeslot)
         
         logger.info(f"Timeslot {timeslot_id} updated by manager {user_id}")
         
-        return {"message": "Тайм-слот успешно обновлен"}
+        return RedirectResponse(
+            url=f"/manager/timeslots/object/{timeslot.object_id}",
+            status_code=303
+        )
         
     except HTTPException:
         raise
