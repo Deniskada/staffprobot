@@ -1908,6 +1908,21 @@ async def owner_calendar_api_data(
     Использует CalendarFilterService для правильной фильтрации смен.
     """
     try:
+        # Генерируем ключ кэша
+        import hashlib
+        user_id = current_user.get("telegram_id") or current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
+        cache_key_data = f"calendar_api_owner:{user_id}:{start_date}:{end_date}:{object_ids or 'all'}"
+        cache_key = hashlib.md5(cache_key_data.encode()).hexdigest()
+        
+        # Проверяем кэш
+        from core.cache.redis_cache import cache
+        cached_response = await cache.get(f"api_response:{cache_key}", serialize="json")
+        if cached_response:
+            logger.info(f"Owner calendar API: cache HIT for {start_date} to {end_date}")
+            return cached_response
+        
+        logger.info(f"Owner calendar API: cache MISS for {start_date} to {end_date}")
+        
         # Парсим даты
         try:
             start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -2016,7 +2031,7 @@ async def owner_calendar_api_data(
                 "can_view": s.can_view
             })
         
-        return {
+        response_data = {
             "timeslots": timeslots_data,
             "shifts": shifts_data,
             "metadata": {
@@ -2031,6 +2046,12 @@ async def owner_calendar_api_data(
                 "accessible_objects": calendar_data.accessible_objects
             }
         }
+        
+        # Сохраняем в кэш (TTL 2 минуты)
+        await cache.set(f"api_response:{cache_key}", response_data, ttl=120, serialize="json")
+        logger.info(f"Owner calendar API: response cached")
+        
+        return response_data
         
     except HTTPException:
         raise
@@ -2053,6 +2074,17 @@ async def owner_calendar_api_objects(request: Request):
     if "owner" not in user_roles and "superadmin" not in user_roles:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
+    # Проверяем кэш
+    user_id_key = current_user.get("telegram_id") or current_user.get("id")
+    from core.cache.redis_cache import cache
+    cache_key = f"api_objects:{user_id_key}"
+    cached_data = await cache.get(cache_key, serialize="json")
+    if cached_data:
+        logger.info(f"Owner objects API: cache HIT for user {user_id_key}")
+        return cached_data
+    
+    logger.info(f"Owner objects API: cache MISS for user {user_id_key}")
+
     try:
         async with get_async_session() as session:
             # Определяем владельца по telegram_id
@@ -2071,7 +2103,7 @@ async def owner_calendar_api_objects(request: Request):
             objects_q = select(Object).where(Object.owner_id == owner.id, Object.is_active == True).order_by(Object.created_at.desc())
             objects = (await session.execute(objects_q)).scalars().all()
 
-            return [
+            objects_data = [
                 {
                     "id": obj.id,
                     "name": obj.name,
@@ -2081,6 +2113,12 @@ async def owner_calendar_api_objects(request: Request):
                 }
                 for obj in objects
             ]
+            
+            # Сохраняем в кэш (TTL 2 минуты)
+            await cache.set(cache_key, objects_data, ttl=120, serialize="json")
+            logger.info(f"Owner objects API: cached {len(objects_data)} objects")
+            
+            return objects_data
 
     except Exception as e:
         logger.error(f"Error getting objects: {e}")
@@ -2100,6 +2138,17 @@ async def api_employees(request: Request):
         user_roles = [user_roles]
     if "owner" not in user_roles and "superadmin" not in user_roles:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    # Проверяем кэш
+    user_id_key = current_user.get("telegram_id") or current_user.get("id")
+    from core.cache.redis_cache import cache
+    cache_key = f"api_employees:{user_id_key}"
+    cached_data = await cache.get(cache_key, serialize="json")
+    if cached_data:
+        logger.info(f"Owner employees API: cache HIT for user {user_id_key}")
+        return cached_data
+    
+    logger.info(f"Owner employees API: cache MISS for user {user_id_key}")
 
     try:
         async with get_async_session() as session:
@@ -2139,7 +2188,7 @@ async def api_employees(request: Request):
             if owner:
                 employees.insert(0, owner)
 
-            return [
+            employees_data = [
                 {
                     "id": emp.id,
                     "name": f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username,
@@ -2151,6 +2200,12 @@ async def api_employees(request: Request):
                 }
                 for emp in employees
             ]
+            
+            # Сохраняем в кэш (TTL 2 минуты)
+            await cache.set(cache_key, employees_data, ttl=120, serialize="json")
+            logger.info(f"Owner employees API: cached {len(employees_data)} employees")
+            
+            return employees_data
 
     except Exception as e:
         logger.error(f"Error getting employees: {e}")

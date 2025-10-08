@@ -150,6 +150,9 @@ class CacheService:
         # Инвалидируем кэши ObjectService с декоратором @cached
         await cache.clear_pattern("objects_by_owner:*")
         
+        # Инвалидируем кэши публичных объектов для employee
+        await cache.clear_pattern("api_objects:employee_*")
+        
         logger.info(f"Object cache invalidated for object {object_id}")
     
     @classmethod

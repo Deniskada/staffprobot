@@ -478,6 +478,16 @@ async def employee_api_objects(
         if isinstance(current_user, RedirectResponse):
             logger.info("Redirecting to login")
             return current_user
+        
+        # Проверяем кэш (публичные объекты - общий кэш)
+        from core.cache.redis_cache import cache
+        cache_key = "api_objects:employee_public"
+        cached_data = await cache.get(cache_key, serialize="json")
+        if cached_data:
+            logger.info("Employee objects API: cache HIT for public objects")
+            return cached_data
+        
+        logger.info("Employee objects API: cache MISS")
             
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
@@ -526,7 +536,13 @@ async def employee_api_objects(
             })
         
         logger.info(f"Found {len(objects)} objects")
-        return {"objects": objects}
+        response_data = {"objects": objects}
+        
+        # Сохраняем в кэш (TTL 5 минут для публичных объектов)
+        await cache.set(cache_key, response_data, ttl=300, serialize="json")
+        logger.info(f"Employee objects API: cached {len(objects)} public objects")
+        
+        return response_data
         
     except Exception as e:
         logger.error(f"Ошибка загрузки объектов API: {e}")
@@ -1033,6 +1049,16 @@ async def employee_calendar_api_objects(
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Проверяем кэш
+        from core.cache.redis_cache import cache
+        cache_key = f"api_objects:employee_{user_id}"
+        cached_data = await cache.get(cache_key, serialize="json")
+        if cached_data:
+            logger.info(f"Employee calendar objects API: cache HIT for user {user_id}")
+            return cached_data
+        
+        logger.info(f"Employee calendar objects API: cache MISS for user {user_id}")
 
         # Получаем объекты, где у сотрудника есть активный контракт
         from domain.entities.contract import Contract
@@ -1053,7 +1079,7 @@ async def employee_calendar_api_objects(
         objects_result = await db.execute(objects_query)
         objects = objects_result.scalars().all()
         
-        return [{
+        objects_data = [{
             "id": obj.id,
             "name": obj.name,
             "address": obj.address,
@@ -1061,6 +1087,12 @@ async def employee_calendar_api_objects(
             "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "09:00",
             "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "18:00"
         } for obj in objects]
+        
+        # Сохраняем в кэш (TTL 2 минуты)
+        await cache.set(cache_key, objects_data, ttl=120, serialize="json")
+        logger.info(f"Employee calendar objects API: cached {len(objects_data)} objects")
+        
+        return objects_data
         
     except Exception as e:
         logger.error(f"Error getting employee calendar objects: {e}")
