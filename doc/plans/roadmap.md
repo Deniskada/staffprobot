@@ -486,4 +486,26 @@
   - [x] 5.2. Написать тесты для кэширования
     - Type: test | Files: tests/unit/test_rate_limiter.py, tests/integration/test_redis_caching.py
     - Acceptance: покрыты сценарии set/get/invalidate, rate limiting
+- [ ] **Фаза 5: Дополнительное тестирование и валидация (1 день)**
+  - [x] 5.1. Исправить БАГ #1: нестабильные ключи кэша
+    - Type: bug | Files: core/cache/redis_cache.py
+    - Acceptance: hash() заменен на hashlib.md5() для стабильных ключей
+  - [x] 5.2. Исправить БАГ #2: неполная инвалидация кэша
+    - Type: bug | Files: core/cache/cache_service.py
+    - Acceptance: invalidate_user_cache() удаляет contract_employees:*, all_contract_employees:*, owner_objects:*
+  - [ ] 5.3. Протестировать ObjectService кэширование
+    - Type: test | Files: tests/integration/test_object_caching.py
+    - Acceptance: проверено кэширование get_objects_by_owner() с cache miss/hit
+  - [ ] 5.4. Проверить инвалидацию при create/update/delete объектов
+    - Type: test | Files: tests/integration/test_object_caching.py
+    - Acceptance: create/update/delete_object() корректно инвалидируют кэш
+  - [ ] 5.5. Тесты производительности
+    - Type: test | Files: tests/performance/test_cache_performance.py
+    - Acceptance: замерить реальное ускорение (min 20-30% для списков с >10 элементов)
+  - [ ] 5.6. Graceful degradation тесты
+    - Type: test | Files: tests/integration/test_cache_degradation.py
+    - Acceptance: система работает при недоступности Redis без ошибок
+  - [ ] 5.7. Нагрузочные тесты с большим количеством данных
+    - Type: test | Files: tests/performance/test_cache_load.py
+    - Acceptance: проверка поведения кэша при >100 сотрудников, >50 объектов
 
