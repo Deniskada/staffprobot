@@ -13,6 +13,8 @@ from domain.entities.object import Object
 from shared.services.role_service import RoleService
 from shared.services.manager_permission_service import ManagerPermissionService
 from core.logging.logger import logger
+from core.cache.redis_cache import cached
+from core.cache.cache_service import CacheService
 
 
 class ContractService:
@@ -446,6 +448,7 @@ class ContractService:
             
             return list(employees.values())
     
+    @cached(ttl=timedelta(minutes=15), key_prefix="contract_employees")
     async def get_contract_employees_by_telegram_id(self, owner_telegram_id: int) -> List[Dict[str, Any]]:
         """Получение списка сотрудников владельца по telegram_id."""
         async with get_async_session() as session:
@@ -536,6 +539,7 @@ class ContractService:
             
             return list(employees.values())
     
+    @cached(ttl=timedelta(minutes=15), key_prefix="all_contract_employees")
     async def get_all_contract_employees_by_telegram_id(self, owner_telegram_id: int) -> List[Dict[str, Any]]:
         """Получение всех сотрудников владельца (включая бывших) по telegram_id."""
         async with get_async_session() as session:
@@ -749,6 +753,7 @@ class ContractService:
                 for emp in employees
             ]
     
+    @cached(ttl=timedelta(minutes=15), key_prefix="owner_objects")
     async def get_owner_objects(self, owner_telegram_id: int) -> List[Object]:
         """Получение объектов владельца по telegram_id."""
         async with get_async_session() as session:
