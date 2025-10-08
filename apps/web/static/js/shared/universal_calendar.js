@@ -456,9 +456,11 @@ class UniversalCalendarManager {
         }
         
         // This will be implemented by the specific calendar grid component
-        if (typeof window.renderCalendarGrid === 'function') {
-            window.renderCalendarGrid(this.calendarData);
-        }
+        // NOTE: Не вызываем здесь, т.к. onDataLoaded уже вызывает renderCalendarGrid
+        // Убрано дублирование рендеринга
+        // if (typeof window.renderCalendarGrid === 'function') {
+        //     window.renderCalendarGrid(this.calendarData);
+        // }
         
         // Update occupancy indicators
         this.updateOccupancyIndicators();
