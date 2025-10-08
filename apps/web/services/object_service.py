@@ -15,6 +15,8 @@ from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.user import User
 from core.logging.logger import logger
 from datetime import datetime, time, date
+from core.cache.redis_cache import cached
+from core.cache.cache_service import CacheService
 
 
 class ObjectService:
@@ -36,6 +38,7 @@ class ObjectService:
             logger.error(f"Error getting user internal ID for telegram_id {telegram_id}: {e}")
             return None
     
+    @cached(ttl=timedelta(minutes=15), key_prefix="objects_by_owner")
     async def get_objects_by_owner(self, telegram_id: int, include_inactive: bool = False) -> List[Object]:
         """Получить все объекты владельца по Telegram ID.
         include_inactive=True возвращает также неактивные объекты.
