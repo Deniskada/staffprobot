@@ -36,7 +36,7 @@ async def owner_payroll_list(
         payroll_service = PayrollService(db)
         
         # Получить всех сотрудников владельца
-        query = select(User).join(Contract).where(
+        query = select(User).join(Contract, Contract.employee_id == User.id).where(
             Contract.owner_id == current_user['id'],
             Contract.status == 'active'
         ).distinct()
