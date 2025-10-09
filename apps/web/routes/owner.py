@@ -5175,7 +5175,8 @@ async def owner_employees_create_contract(
     employee_telegram_id: int = Form(...),
     title: str = Form(...),
     content: str = Form(""),
-    hourly_rate: Optional[int] = Form(None),
+    hourly_rate: Optional[float] = Form(None),
+    use_contract_rate: bool = Form(False),
     start_date: str = Form(...),
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
@@ -5190,13 +5191,6 @@ async def owner_employees_create_contract(
         from apps.web.services.contract_service import ContractService
         
         contract_service = ContractService()
-        
-        # Валидация
-        if not hourly_rate:
-            raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
-        
-        if hourly_rate <= 0:
-            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
         
         # Парсим даты
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
@@ -5224,6 +5218,7 @@ async def owner_employees_create_contract(
             "title": title,
             "content": content if content else None,
             "hourly_rate": hourly_rate,
+            "use_contract_rate": use_contract_rate,
             "start_date": start_date_obj,
             "end_date": end_date_obj,
             "template_id": template_id,
@@ -5368,7 +5363,8 @@ async def owner_contract_edit(
     request: Request,
     title: str = Form(...),
     content: str = Form(""),
-    hourly_rate: Optional[int] = Form(None),
+    hourly_rate: Optional[float] = Form(None),
+    use_contract_rate: bool = Form(False),
     start_date: str = Form(...),
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
@@ -5383,13 +5379,6 @@ async def owner_contract_edit(
         from apps.web.services.contract_service import ContractService
         
         contract_service = ContractService()
-        
-        # Валидация
-        if not hourly_rate:
-            raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
-        
-        if hourly_rate <= 0:
-            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
         
         # Парсим даты
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
@@ -5416,6 +5405,7 @@ async def owner_contract_edit(
             "title": title,
             "content": content if content else None,
             "hourly_rate": hourly_rate,
+            "use_contract_rate": use_contract_rate,
             "start_date": start_date_obj,
             "end_date": end_date_obj,
             "template_id": template_id,
