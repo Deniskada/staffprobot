@@ -232,6 +232,7 @@ class ContractService:
                 values=values if values else None,
                 hourly_rate=hourly_rate,
                 use_contract_rate=use_contract_rate,
+                payment_system_id=contract_data.get("payment_system_id", 1),  # По умолчанию simple_hourly
                 start_date=start_date,
                 end_date=end_date,
                 allowed_objects=contract_data.get("allowed_objects", []),

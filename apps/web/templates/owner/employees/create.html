@@ -168,6 +168,25 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
+                                    <label for="payment_system_id" class="form-label">
+                                        Система оплаты труда
+                                        <i class="fas fa-info-circle text-muted" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Определяет метод расчета заработной платы"></i>
+                                    </label>
+                                    <select class="form-select" id="payment_system_id" name="payment_system_id">
+                                        <option value="1" selected>Простая повременная</option>
+                                        <option value="2">Окладная</option>
+                                        <option value="3">Повременно-премиальная</option>
+                                    </select>
+                                    <small class="form-text text-muted">По умолчанию: Простая повременная (почасовая оплата)</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
                                     <label for="template_id" class="form-label">Шаблон договора</label>
                                     <select class="form-select" id="template_id" name="template_id">
                                         <option value="">Выберите шаблон (необязательно)</option>
