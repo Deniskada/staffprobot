@@ -1,9 +1,10 @@
 """Модели для системы договоров."""
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, JSON, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from domain.entities.base import Base
+from typing import Optional
 
 
 class ContractTemplate(Base):
@@ -43,7 +44,8 @@ class Contract(Base):
     # Основные данные договора
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=True)  # Финальный текст договора (может генерироваться из шаблона)
-    hourly_rate = Column(Integer, nullable=True)  # Почасовая ставка в копейках
+    hourly_rate = Column(Numeric(10, 2), nullable=True)  # Почасовая ставка в рублях
+    use_contract_rate = Column(Boolean, default=False, nullable=False, index=True)  # Приоритет ставки договора
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=True)  # None = бессрочный
     
@@ -76,6 +78,44 @@ class Contract(Base):
     # Связанные смены (пока без внешних ключей)
     # shifts = relationship("Shift", backref="contract")
     # scheduled_shifts = relationship("ShiftSchedule", backref="contract")
+    
+    def get_effective_hourly_rate(
+        self, 
+        timeslot_rate: Optional[float] = None,
+        object_rate: Optional[float] = None
+    ) -> Optional[float]:
+        """
+        Определить эффективную почасовую ставку с учетом приоритетов.
+        
+        Приоритет:
+        1. contract.hourly_rate (если use_contract_rate=True)
+        2. timeslot_rate (если указан)
+        3. object_rate (fallback)
+        
+        Args:
+            timeslot_rate: Ставка тайм-слота (если смена запланированная)
+            object_rate: Ставка объекта (fallback)
+            
+        Returns:
+            Эффективная ставка в рублях или None
+        """
+        # Приоритет 1: Ставка договора (если флаг включен)
+        if self.use_contract_rate and self.hourly_rate is not None:
+            return float(self.hourly_rate)
+        
+        # Приоритет 2: Ставка тайм-слота
+        if timeslot_rate is not None:
+            return float(timeslot_rate)
+        
+        # Приоритет 3: Ставка объекта
+        if object_rate is not None:
+            return float(object_rate)
+        
+        # Fallback: ставка договора (даже если флаг выключен)
+        if self.hourly_rate is not None:
+            return float(self.hourly_rate)
+        
+        return None
 
 
 class ContractVersion(Base):
