@@ -153,7 +153,17 @@
                                 <div>
                                     <strong>{{ user.first_name }} {{ user.last_name }}</strong>
                                     <br>
-                                    <small class="text-muted">@{{ user.username or 'N/A' }}</small>
+                                    <small class="text-muted">
+                                        {% if user.username %}
+                                            {% if user.username.startswith('@') %}
+                                                {{ user.username }}
+                                            {% else %}
+                                                @{{ user.username }}
+                                            {% endif %}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </small>
                                     <span class="badge badge-{{ 'success' if user.role.value == 'owner' else 'secondary' }} ml-2">
                                         {{ user.role.value }}
                                     </span>
