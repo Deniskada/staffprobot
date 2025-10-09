@@ -61,6 +61,9 @@ logs/
 data/*.json
 *.csv
 *.xlsx
+uploads/
+docs/market_strategy.md
+docs/marketing
 
 # Temporary files
 tmp/
