@@ -148,8 +148,22 @@
                                            id="hourly_rate" 
                                            name="hourly_rate" 
                                            min="0"
+                                           step="0.01"
                                            required
                                            placeholder="500 (или выберите объект с установленной ставкой)">
+                                    <div class="form-check mt-2">
+                                        <input type="checkbox" 
+                                               class="form-check-input" 
+                                               id="use_contract_rate" 
+                                               name="use_contract_rate"
+                                               value="1">
+                                        <label class="form-check-label" for="use_contract_rate">
+                                            Использовать ставку из договора
+                                            <i class="fas fa-info-circle text-muted" 
+                                               data-bs-toggle="tooltip" 
+                                               title="Если включено, при открытии смены будет использоваться ставка из этого договора, а не из объекта или тайм-слота"></i>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-md-6">
