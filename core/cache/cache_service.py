@@ -186,6 +186,19 @@ class CacheService:
         return await cache.delete(key)
     
     @classmethod
+    async def invalidate_pattern(cls, pattern: str) -> int:
+        """
+        Инвалидация кэша по паттерну.
+        
+        Args:
+            pattern: Паттерн для поиска ключей (например, "user_notifications:*")
+            
+        Returns:
+            Количество удаленных ключей
+        """
+        return await cache.clear_pattern(pattern)
+    
+    @classmethod
     async def get_cache_stats(cls) -> Dict[str, Any]:
         """Получение статистики кэша."""
         redis_stats = await cache.get_stats()
