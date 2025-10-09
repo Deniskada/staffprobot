@@ -91,6 +91,21 @@
                             </div>
                         </div>
                     </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="payment_system_id" class="form-label">
+                                Система оплаты труда
+                                <i class="fas fa-info-circle text-muted" 
+                                   data-bs-toggle="tooltip" 
+                                   title="Определяет метод расчета заработной платы"></i>
+                            </label>
+                            <select class="form-select" id="payment_system_id" name="payment_system_id">
+                                <option value="1" {% if contract.payment_system_id == 1 %}selected{% endif %}>Простая повременная</option>
+                                <option value="2" {% if contract.payment_system_id == 2 %}selected{% endif %}>Окладная</option>
+                                <option value="3" {% if contract.payment_system_id == 3 %}selected{% endif %}>Повременно-премиальная</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="row">

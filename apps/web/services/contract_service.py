@@ -1212,6 +1212,7 @@ class ContractService:
                 "content": contract.content,
                 "hourly_rate": contract.hourly_rate,
                 "use_contract_rate": contract.use_contract_rate,
+                "payment_system_id": contract.payment_system_id,
                 "start_date": contract.start_date,
                 "end_date": contract.end_date,
                 "status": contract.status,
@@ -1502,6 +1503,8 @@ class ContractService:
                 contract.hourly_rate = contract_data["hourly_rate"]
             if "use_contract_rate" in contract_data:
                 contract.use_contract_rate = contract_data["use_contract_rate"]
+            if "payment_system_id" in contract_data:
+                contract.payment_system_id = contract_data["payment_system_id"]
             if "start_date" in contract_data:
                 contract.start_date = contract_data["start_date"]
             if "end_date" in contract_data:

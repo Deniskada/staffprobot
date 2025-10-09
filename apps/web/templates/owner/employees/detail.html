@@ -146,6 +146,7 @@
                                                 <th>Название</th>
                                                 <th>Статус</th>
                                                 <th>Ставка</th>
+                                                <th>Система оплаты</th>
                                                 <th>Период</th>
                                                 <th>Действия</th>
                                             </tr>
@@ -186,6 +187,19 @@
                                                     {% else %}
                                                         <span class="text-muted">—</span>
                                                     {% endif %}
+                                                </td>
+                                                <td>
+                                                    <small>
+                                                        {% if contract.payment_system_id == 1 %}
+                                                            Простая повременная
+                                                        {% elif contract.payment_system_id == 2 %}
+                                                            Окладная
+                                                        {% elif contract.payment_system_id == 3 %}
+                                                            Повременно-премиальная
+                                                        {% else %}
+                                                            <span class="text-muted">—</span>
+                                                        {% endif %}
+                                                    </small>
                                                 </td>
                                                 <td>
                                                     <small>
