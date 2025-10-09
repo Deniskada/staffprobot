@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from apps.web.jinja import templates
-from apps.web.dependencies import get_current_user, require_owner_or_superadmin, require_employee
-from core.database.session import get_async_session
-from core.database.connection import get_db_session
+from apps.web.middleware.auth_middleware import get_current_user, require_owner_or_superadmin
+from apps.web.middleware.role_middleware import require_employee_or_applicant
+from core.database.session import get_db_session
 from core.logging.logger import logger
 from apps.web.services.payroll_service import PayrollService
 from domain.entities.user import User
@@ -311,7 +311,7 @@ async def owner_payroll_create_payment(
 @router.get("/employee/payroll", response_class=HTMLResponse, name="employee_payroll_list")
 async def employee_payroll_list(
     request: Request,
-    current_user: dict = Depends(require_employee),
+    current_user: dict = Depends(require_employee_or_applicant),
     db: AsyncSession = Depends(get_db_session),
     period_start: Optional[str] = None,
     period_end: Optional[str] = None
@@ -361,7 +361,7 @@ async def employee_payroll_list(
 async def employee_payroll_detail(
     request: Request,
     entry_id: int,
-    current_user: dict = Depends(require_employee),
+    current_user: dict = Depends(require_employee_or_applicant),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Детальная страница начисления для сотрудника."""
