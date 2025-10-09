@@ -39,6 +39,17 @@ class Settings(BaseSettings):
     telegram_webhook_url: Optional[str] = None
     telegram_webhook_path: str = "/webhook"
     
+    # Email (SMTP)
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from_email: Optional[str] = None
+    smtp_from_name: str = "StaffProBot"
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_timeout: int = 30
+    
     # Геолокация
     max_distance_meters: int = 500  # Увеличено для тестирования в регионах с неточной геолокацией
     location_accuracy_meters: int = 200  # Увеличено для реальных условий GPS (было 50м)
