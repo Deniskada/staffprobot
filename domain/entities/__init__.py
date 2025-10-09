@@ -5,6 +5,7 @@
 # Импортируем модели в правильном порядке
 from .base import Base
 from .user import User
+from .payment_system import PaymentSystem
 from .object import Object
 from .shift import Shift
 from .shift_schedule import ShiftSchedule
@@ -24,4 +25,4 @@ from .usage_metrics import UsageMetrics
 from .payment_notification import PaymentNotification, NotificationType, NotificationStatus, NotificationChannel
 from .review import Review, ReviewMedia, ReviewAppeal, Rating, SystemRule
 
-__all__ = ["Base", "User", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate", "TariffPlan", "UserSubscription", "SubscriptionStatus", "BillingPeriod", "BillingTransaction", "TransactionType", "TransactionStatus", "PaymentMethod", "UsageMetrics", "PaymentNotification", "NotificationType", "NotificationStatus", "NotificationChannel", "Review", "ReviewMedia", "ReviewAppeal", "Rating", "SystemRule"]
+__all__ = ["Base", "User", "PaymentSystem", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate", "TariffPlan", "UserSubscription", "SubscriptionStatus", "BillingPeriod", "BillingTransaction", "TransactionType", "TransactionStatus", "PaymentMethod", "UsageMetrics", "PaymentNotification", "NotificationType", "NotificationStatus", "NotificationChannel", "Review", "ReviewMedia", "ReviewAppeal", "Rating", "SystemRule"]
