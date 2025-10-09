@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from apps.web.jinja import templates
-from apps.web.dependencies import get_current_user, require_owner_or_superadmin
+from apps.web.dependencies import get_current_user, require_owner_or_superadmin, require_employee
 from core.database.session import get_async_session
 from core.database.connection import get_db_session
 from core.logging.logger import logger
@@ -303,4 +303,91 @@ async def owner_payroll_create_payment(
     except Exception as e:
         logger.error(f"Error creating payment: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка создания выплаты: {str(e)}")
+
+
+# ==================== EMPLOYEE ROUTES ====================
+
+
+@router.get("/employee/payroll", response_class=HTMLResponse, name="employee_payroll_list")
+async def employee_payroll_list(
+    request: Request,
+    current_user: dict = Depends(require_employee),
+    db: AsyncSession = Depends(get_db_session),
+    period_start: Optional[str] = None,
+    period_end: Optional[str] = None
+):
+    """Список начислений для сотрудника."""
+    try:
+        payroll_service = PayrollService(db)
+        
+        # Фильтры по дате
+        if not period_start:
+            period_start = (date.today() - timedelta(days=90)).isoformat()
+        if not period_end:
+            period_end = date.today().isoformat()
+        
+        # Получить начисления текущего сотрудника
+        entries = await payroll_service.get_payroll_entries_by_employee(
+            employee_id=current_user['id'],
+            period_start=date.fromisoformat(period_start),
+            period_end=date.fromisoformat(period_end)
+        )
+        
+        # Рассчитать сводку
+        summary = await payroll_service.get_employee_payroll_summary(
+            employee_id=current_user['id'],
+            period_start=date.fromisoformat(period_start),
+            period_end=date.fromisoformat(period_end)
+        )
+        
+        return templates.TemplateResponse(
+            "employee/payroll/list.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "entries": entries,
+                "summary": summary,
+                "period_start": period_start,
+                "period_end": period_end
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error loading employee payroll list: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки начислений: {str(e)}")
+
+
+@router.get("/employee/payroll/{entry_id}", response_class=HTMLResponse, name="employee_payroll_detail")
+async def employee_payroll_detail(
+    request: Request,
+    entry_id: int,
+    current_user: dict = Depends(require_employee),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Детальная страница начисления для сотрудника."""
+    try:
+        payroll_service = PayrollService(db)
+        entry = await payroll_service.get_payroll_entry_by_id(entry_id)
+        
+        if not entry:
+            raise HTTPException(status_code=404, detail="Начисление не найдено")
+        
+        # Проверить доступ: сотрудник может видеть только свои начисления
+        if entry.employee_id != current_user['id']:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+        
+        return templates.TemplateResponse(
+            "employee/payroll/detail.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "entry": entry
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading employee payroll detail: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки начисления: {str(e)}")
 
