@@ -72,8 +72,23 @@
                                    id="hourly_rate" 
                                    name="hourly_rate" 
                                    min="0"
+                                   step="0.01"
                                    value="{{ contract.hourly_rate or '' }}"
                                    placeholder="500">
+                            <div class="form-check mt-2">
+                                <input type="checkbox" 
+                                       class="form-check-input" 
+                                       id="use_contract_rate" 
+                                       name="use_contract_rate"
+                                       value="1"
+                                       {% if contract.use_contract_rate %}checked{% endif %}>
+                                <label class="form-check-label" for="use_contract_rate">
+                                    Использовать ставку из договора
+                                    <i class="fas fa-info-circle text-muted" 
+                                       data-bs-toggle="tooltip" 
+                                       title="Приоритет над ставками объекта и тайм-слота"></i>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
