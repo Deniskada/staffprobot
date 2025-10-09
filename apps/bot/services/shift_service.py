@@ -137,17 +137,22 @@ class ShiftService:
                                 rate_source = "timeslot"
                                 logger.info(f"Found timeslot rate for spontaneous shift: {timeslot_rate}")
                 
-                # Получаем активный договор сотрудника для определения финальной ставки
+                # Получаем активный договор сотрудника для КОНКРЕТНОГО объекта
                 from domain.entities.contract import Contract
+                from sqlalchemy import or_
+                
+                # Ищем договор для этого объекта (allowed_objects содержит object_id)
                 contract_query = select(Contract).where(
                     and_(
                         Contract.employee_id == db_user.id,
                         Contract.status == 'active',
-                        Contract.is_active == True
+                        Contract.is_active == True,
+                        Contract.allowed_objects.contains([object_id])
                     )
-                )
+                ).order_by(Contract.use_contract_rate.desc())  # Приоритет договорам с use_contract_rate=True
+                
                 contract_result = await session.execute(contract_query)
-                active_contract = contract_result.scalar_one_or_none()
+                active_contract = contract_result.scalars().first()
                 
                 # Определяем финальную ставку с учетом приоритетов
                 if active_contract:
