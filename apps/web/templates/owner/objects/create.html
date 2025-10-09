@@ -69,9 +69,26 @@
                                            id="hourly_rate" 
                                            name="hourly_rate" 
                                            min="1"
+                                           step="0.01"
                                            placeholder="500"
                                            required>
                                     <div class="form-text">Минимальная ставка: 1 ₽/час</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="payment_system_id" class="form-label">
+                                        Система оплаты труда
+                                        <i class="fas fa-info-circle text-muted" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Определяет метод расчета для сотрудников объекта"></i>
+                                    </label>
+                                    <select class="form-select" id="payment_system_id" name="payment_system_id">
+                                        <option value="">Не указано (наследуется от подразделения)</option>
+                                        <option value="1">Простая повременная</option>
+                                        <option value="2">Окладная</option>
+                                        <option value="3">Повременно-премиальная</option>
+                                    </select>
+                                    <small class="form-text text-muted">Оставьте пустым для наследования от подразделения (будет реализовано в Фазе 4)</small>
                                 </div>
                             </div>
                             

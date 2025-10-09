@@ -338,6 +338,8 @@ async def owner_objects_create_post(
         # Обработка новых полей
         work_conditions = form_data.get("work_conditions", "").strip()
         employee_position = form_data.get("employee_position", "").strip()
+        payment_system_id_str = form_data.get("payment_system_id", "").strip()
+        payment_system_id = int(payment_system_id_str) if payment_system_id_str else None
         shift_tasks = form_data.getlist("shift_tasks")
         # Фильтруем пустые задачи
         shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
@@ -364,6 +366,7 @@ async def owner_objects_create_post(
             "closing_time": closing_time,
             "max_distance": max_distance,
             "available_for_applicants": available_for_applicants,
+            "payment_system_id": payment_system_id,
             "is_active": True,
             "coordinates": coordinates,
             "work_days_mask": work_days_mask,
@@ -607,6 +610,8 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         # Обработка новых полей
         work_conditions = form_data.get("work_conditions", "").strip()
         employee_position = form_data.get("employee_position", "").strip()
+        payment_system_id_str = form_data.get("payment_system_id", "").strip()
+        payment_system_id = int(payment_system_id_str) if payment_system_id_str else None
         shift_tasks = form_data.getlist("shift_tasks[]")
         # Фильтруем пустые задачи
         shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
@@ -641,6 +646,7 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "timezone": timezone,
                 "max_distance": max_distance,
                 "available_for_applicants": available_for_applicants,
+                "payment_system_id": payment_system_id,
                 "is_active": is_active,
                 "coordinates": coordinates,
                 "work_days_mask": work_days_mask,

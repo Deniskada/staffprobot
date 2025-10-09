@@ -70,9 +70,25 @@
                                            id="hourly_rate" 
                                            name="hourly_rate" 
                                            min="1"
+                                           step="0.01"
                                            value="{{ object.hourly_rate }}"
                                            required>
                                     <div class="form-text">Минимальная ставка: 1 ₽/час</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="payment_system_id" class="form-label">
+                                        Система оплаты труда
+                                        <i class="fas fa-info-circle text-muted" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Определяет метод расчета для сотрудников объекта"></i>
+                                    </label>
+                                    <select class="form-select" id="payment_system_id" name="payment_system_id">
+                                        <option value="">Не указано (наследуется от подразделения)</option>
+                                        <option value="1" {% if object.payment_system_id == 1 %}selected{% endif %}>Простая повременная</option>
+                                        <option value="2" {% if object.payment_system_id == 2 %}selected{% endif %}>Окладная</option>
+                                        <option value="3" {% if object.payment_system_id == 3 %}selected{% endif %}>Повременно-премиальная</option>
+                                    </select>
                                 </div>
                             </div>
                             
