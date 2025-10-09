@@ -1,0 +1,195 @@
+{% extends "employee/base.html" %}
+
+{% block title %}Начисление #{{ entry.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-file-invoice-dollar text-success"></i> Начисление #{{ entry.id }}</h1>
+                <a href="/employee/payroll" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> К списку
+                </a>
+            </div>
+            
+            <!-- Основная информация -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Информация о начислении</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Период:</strong></td>
+                                    <td>
+                                        {{ entry.period_start.strftime('%d.%m.%Y') }} - 
+                                        {{ entry.period_end.strftime('%d.%m.%Y') }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Часов отработано:</strong></td>
+                                    <td>{{ "%.2f"|format(entry.hours_worked) }} ч</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Почасовая ставка:</strong></td>
+                                    <td>{{ "%.2f"|format(entry.hourly_rate) }}₽</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Начислено:</strong></td>
+                                    <td><span class="badge bg-primary fs-6">{{ "%.2f"|format(entry.gross_amount) }}₽</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Удержания:</strong></td>
+                                    <td><span class="badge bg-danger fs-6">-{{ "%.2f"|format(entry.total_deductions) }}₽</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Доплаты:</strong></td>
+                                    <td><span class="badge bg-success fs-6">+{{ "%.2f"|format(entry.total_bonuses) }}₽</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>К выплате:</strong></td>
+                                    <td><span class="badge bg-success fs-5">{{ "%.2f"|format(entry.net_amount) }}₽</span></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    {% if entry.notes %}
+                    <div class="alert alert-info mt-3">
+                        <strong>Комментарий:</strong> {{ entry.notes }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Удержания -->
+            {% if entry.deductions %}
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="fas fa-minus-circle"></i> Удержания</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Тип</th>
+                                    <th>Описание</th>
+                                    <th>Сумма</th>
+                                    <th>Дата</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for deduction in entry.deductions %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ deduction.deduction_type }}</span>
+                                        {% if deduction.is_automatic %}
+                                        <span class="badge bg-info">Авто</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ deduction.description }}</td>
+                                    <td class="text-danger"><strong>{{ "%.2f"|format(deduction.amount) }}₽</strong></td>
+                                    <td>{{ deduction.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Доплаты -->
+            {% if entry.bonuses %}
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-plus-circle"></i> Доплаты</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Тип</th>
+                                    <th>Описание</th>
+                                    <th>Сумма</th>
+                                    <th>Дата</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for bonus in entry.bonuses %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ bonus.bonus_type }}</span>
+                                    </td>
+                                    <td>{{ bonus.description }}</td>
+                                    <td class="text-success"><strong>{{ "%.2f"|format(bonus.amount) }}₽</strong></td>
+                                    <td>{{ bonus.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Выплаты -->
+            {% if entry.payments %}
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-hand-holding-usd"></i> История выплат</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Дата выплаты</th>
+                                    <th>Сумма</th>
+                                    <th>Способ</th>
+                                    <th>Статус</th>
+                                    <th>Подтверждение</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in entry.payments %}
+                                <tr>
+                                    <td>{{ payment.payment_date.strftime('%d.%m.%Y') }}</td>
+                                    <td><strong>{{ "%.2f"|format(payment.amount) }}₽</strong></td>
+                                    <td>{{ payment.payment_method }}</td>
+                                    <td>
+                                        {% if payment.status == 'completed' %}
+                                        <span class="badge bg-success">Выполнена</span>
+                                        {% elif payment.status == 'pending' %}
+                                        <span class="badge bg-warning">Ожидание</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Ошибка</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ payment.confirmation_code or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i> Выплаты по этому начислению еще не производились.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
