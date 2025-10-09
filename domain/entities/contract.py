@@ -47,6 +47,7 @@ class Contract(Base):
     hourly_rate = Column(Numeric(10, 2), nullable=True)  # Почасовая ставка в рублях
     use_contract_rate = Column(Boolean, default=False, nullable=False, index=True)  # Приоритет ставки договора
     payment_system_id = Column(Integer, ForeignKey("payment_systems.id", ondelete="SET NULL"), nullable=True, index=True)
+    payment_schedule_id = Column(Integer, ForeignKey("payment_schedules.id", ondelete="SET NULL"), nullable=True, index=True)
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=True)  # None = бессрочный
     
@@ -75,6 +76,7 @@ class Contract(Base):
     employee = relationship("User", foreign_keys=[employee_id], backref="employee_contracts")
     template = relationship("ContractTemplate", back_populates="contracts")
     payment_system = relationship("PaymentSystem", backref="contracts")
+    payment_schedule = relationship("PaymentSchedule", backref="contracts")
     object_permissions = relationship("ManagerObjectPermission", back_populates="contract")
     
     # Связанные смены (пока без внешних ключей)
