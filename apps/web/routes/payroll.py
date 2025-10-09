@@ -22,6 +22,15 @@ from domain.entities.contract import Contract
 router = APIRouter()
 
 
+async def get_user_id_from_current_user(current_user: dict, session: AsyncSession) -> Optional[int]:
+    """Получает внутренний ID пользователя из current_user (JWT payload)."""
+    telegram_id = current_user.get("telegram_id") or current_user.get("id")
+    user_query = select(User).where(User.telegram_id == telegram_id)
+    user_result = await session.execute(user_query)
+    user_obj = user_result.scalar_one_or_none()
+    return user_obj.id if user_obj else None
+
+
 @router.get("/payroll", response_class=HTMLResponse, name="owner_payroll_list")
 async def owner_payroll_list(
     request: Request,
@@ -35,9 +44,14 @@ async def owner_payroll_list(
     try:
         payroll_service = PayrollService(db)
         
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
         # Получить всех сотрудников владельца
         query = select(User).join(Contract, Contract.employee_id == User.id).where(
-            Contract.owner_id == current_user['id'],
+            Contract.owner_id == owner_id,
             Contract.status == 'active'
         ).distinct()
         result = await db.execute(query)
@@ -104,10 +118,15 @@ async def owner_payroll_detail(
         if not entry:
             raise HTTPException(status_code=404, detail="Начисление не найдено")
         
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
         # Проверить доступ: владелец должен быть owner этого сотрудника
         query = select(Contract).where(
             Contract.employee_id == entry.employee_id,
-            Contract.owner_id == current_user['id']
+            Contract.owner_id == owner_id
         )
         result = await db.execute(query)
         owner_contract = result.scalar_one_or_none()
@@ -145,6 +164,11 @@ async def owner_payroll_add_deduction(
     try:
         payroll_service = PayrollService(db)
         
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
         # Проверить доступ
         entry = await payroll_service.get_payroll_entry_by_id(entry_id)
         if not entry:
@@ -152,7 +176,7 @@ async def owner_payroll_add_deduction(
         
         query = select(Contract).where(
             Contract.employee_id == entry.employee_id,
-            Contract.owner_id == current_user['id']
+            Contract.owner_id == owner_id
         )
         result = await db.execute(query)
         owner_contract = result.scalar_one_or_none()
@@ -167,7 +191,7 @@ async def owner_payroll_add_deduction(
             amount=Decimal(str(amount)),
             description=description,
             is_automatic=False,
-            created_by_id=current_user['id']
+            created_by_id=owner_id
         )
         
         logger.info(
@@ -203,6 +227,11 @@ async def owner_payroll_add_bonus(
     try:
         payroll_service = PayrollService(db)
         
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
         # Проверить доступ
         entry = await payroll_service.get_payroll_entry_by_id(entry_id)
         if not entry:
@@ -210,7 +239,7 @@ async def owner_payroll_add_bonus(
         
         query = select(Contract).where(
             Contract.employee_id == entry.employee_id,
-            Contract.owner_id == current_user['id']
+            Contract.owner_id == owner_id
         )
         result = await db.execute(query)
         owner_contract = result.scalar_one_or_none()
@@ -224,7 +253,7 @@ async def owner_payroll_add_bonus(
             bonus_type=bonus_type,
             amount=Decimal(str(amount)),
             description=description,
-            created_by_id=current_user['id']
+            created_by_id=owner_id
         )
         
         logger.info(
@@ -261,6 +290,11 @@ async def owner_payroll_create_payment(
     try:
         payroll_service = PayrollService(db)
         
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
         # Проверить доступ
         entry = await payroll_service.get_payroll_entry_by_id(entry_id)
         if not entry:
@@ -268,7 +302,7 @@ async def owner_payroll_create_payment(
         
         query = select(Contract).where(
             Contract.employee_id == entry.employee_id,
-            Contract.owner_id == current_user['id']
+            Contract.owner_id == owner_id
         )
         result = await db.execute(query)
         owner_contract = result.scalar_one_or_none()
@@ -282,7 +316,7 @@ async def owner_payroll_create_payment(
             amount=Decimal(str(amount)),
             payment_date=date.fromisoformat(payment_date),
             payment_method=payment_method,
-            created_by_id=current_user['id'],
+            created_by_id=owner_id,
             notes=notes
         )
         
@@ -320,6 +354,11 @@ async def employee_payroll_list(
     try:
         payroll_service = PayrollService(db)
         
+        # Получить внутренний ID сотрудника
+        employee_id = await get_user_id_from_current_user(current_user, db)
+        if not employee_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
         # Фильтры по дате
         if not period_start:
             period_start = (date.today() - timedelta(days=90)).isoformat()
@@ -328,14 +367,14 @@ async def employee_payroll_list(
         
         # Получить начисления текущего сотрудника
         entries = await payroll_service.get_payroll_entries_by_employee(
-            employee_id=current_user['id'],
+            employee_id=employee_id,
             period_start=date.fromisoformat(period_start),
             period_end=date.fromisoformat(period_end)
         )
         
         # Рассчитать сводку
         summary = await payroll_service.get_employee_payroll_summary(
-            employee_id=current_user['id'],
+            employee_id=employee_id,
             period_start=date.fromisoformat(period_start),
             period_end=date.fromisoformat(period_end)
         )
@@ -367,13 +406,19 @@ async def employee_payroll_detail(
     """Детальная страница начисления для сотрудника."""
     try:
         payroll_service = PayrollService(db)
+        
+        # Получить внутренний ID сотрудника
+        employee_id = await get_user_id_from_current_user(current_user, db)
+        if not employee_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
         entry = await payroll_service.get_payroll_entry_by_id(entry_id)
         
         if not entry:
             raise HTTPException(status_code=404, detail="Начисление не найдено")
         
         # Проверить доступ: сотрудник может видеть только свои начисления
-        if entry.employee_id != current_user['id']:
+        if entry.employee_id != employee_id:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
         return templates.TemplateResponse(
