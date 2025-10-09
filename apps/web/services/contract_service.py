@@ -1210,6 +1210,7 @@ class ContractService:
                 "title": contract.title,
                 "content": contract.content,
                 "hourly_rate": contract.hourly_rate,
+                "use_contract_rate": contract.use_contract_rate,
                 "start_date": contract.start_date,
                 "end_date": contract.end_date,
                 "status": contract.status,
