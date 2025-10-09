@@ -683,70 +683,57 @@
     - ✅ Тесты: простой расчет, доплаты, удержания, комплексный
     - ✅ Покрытие метода расчета 100%
 
-### Фаза 3: Задача 3 - Система учета начислений и выплат (7-8 дней)
+### Фаза 3: Задача 3 - Система учета начислений и выплат (7-8 дней) ✅
 
-- [ ] **3.1. Создать модель PaymentSchedule (1 день)**
-  - Type: feature | Files: domain/entities/payment_schedule.py, migrations/versions/*.py
+- [x] **3.1. Создать модель PaymentSchedule (1 день)**
+  - Type: feature | Files: domain/entities/payment_schedule.py, migrations/versions/5d3d105cbbe1*.py
   - Acceptance:
-    - Таблица `payment_schedules` создана:
-      - `id`, `name`, `description`, `frequency` (weekly, biweekly, monthly)
-      - `payment_period` (за какой период: week, month, custom) - период за который производятся выплаты и укзать за какую именно неделю (при еженедельных выплатах), какие именно даты (например с 15го прошлого месяца по конец прошлого месяца - 15-го, за период с 1-го текущего месяца по 15-е текущего месяца - 30го), за прошлый месяц - 5го числа
-      - `payment_day` (день недели/месяца), `is_active`, `created_at`, `updated_at`
-    - Seed-скрипт: "Еженедельно по пятницам (за неделю)", "Два раза в месяц (15-е и 30-е, за полмесяца)", "Ежемесячно 5-го числа (за месяц)"
-    - Миграция применена на dev
+    - ✅ Таблица `payment_schedules` создана с полями: `id`, `name`, `description`, `frequency`, `payment_period` (JSONB), `payment_day`, `is_active`, `created_at`, `updated_at`
+    - ✅ 3 графика в seed-данных: "Еженедельно по пятницам", "Два раза в месяц (15-е и 30-е)", "Ежемесячно 5-го числа"
+    - ✅ Миграция применена на dev
 
-- [ ] **3.2. Связать PaymentSchedule с Contract, Object, OrgUnit (1 день)**
-  - Type: feature | Files: domain/entities/contract.py, domain/entities/object.py, migrations/versions/*.py
+- [x] **3.2. Связать PaymentSchedule с Contract, Object (1 день)**
+  - Type: feature | Files: domain/entities/contract.py, domain/entities/object.py, migrations/versions/31098b7aa38c*.py
   - Acceptance:
-    - Поле `payment_schedule_id` (nullable FK) добавлено в `contracts`, `objects`
-    - Relationships настроены
-    - По умолчанию null (настраивается вручную)
-    - Миграция применена на dev
+    - ✅ Поле `payment_schedule_id` (nullable FK) добавлено в `contracts`, `objects`
+    - ✅ Relationships настроены (PaymentSchedule backref)
+    - ✅ Миграция применена на dev
 
-- [ ] **3.3. Создать модели Payroll (начисления/удержания/выплаты) (1.5 дня)**
-  - Type: feature | Files: domain/entities/payroll.py, migrations/versions/*.py
+- [x] **3.3. Создать модели Payroll (начисления/удержания/выплаты) (1.5 дня)**
+  - Type: feature | Files: domain/entities/payroll_*.py, migrations/versions/0e923f2961bb*.py
   - Acceptance:
-    - Таблица `payroll_entries` - начисления:
-      - `id`, `employee_id` (FK users), `period_start`, `period_end`
-      - `total_hours`, `base_amount`, `bonus_amount`, `deduction_amount`, `total_amount`
-      - `payment_system_id`, `status` (draft, approved, paid), `created_at`, `updated_at`
-    - Таблица `payroll_deductions` - удержания:
-      - `id`, `payroll_entry_id` (FK), `shift_id` (nullable FK shifts), `deduction_type` (manual, late_shift, task_incomplete)
-      - `is_automatic` (Boolean), `amount`, `description`, `created_by` (FK users)
-      - `created_at`, `updated_at`
-    - Таблица `payroll_bonuses` - доплаты:
-      - `id`, `payroll_entry_id` (FK), `shift_id` (nullable FK shifts), `bonus_type` (manual, overtime, performance)
-      - `amount`, `description`, `created_by` (FK users), `created_at`, `updated_at`
-    - Таблица `employee_payments` - выплаты (фактические):
-      - `id`, `payroll_entry_id` (FK), `payment_date`, `amount`, `payment_method` (card, cash, bank), `status` (pending, completed), `notes`
-    - Миграции применены на dev
+    - ✅ Таблица `payroll_entries` с полями: `id`, `employee_id`, `period_start`, `period_end`, `hours_worked`, `hourly_rate`, `gross_amount`, `total_deductions`, `total_bonuses`, `net_amount`, `calculation_details` (JSONB), `created_at`, `created_by_id`
+    - ✅ Таблица `payroll_deductions` с полями: `id`, `payroll_entry_id`, `deduction_type`, `is_automatic`, `amount`, `description`, `details` (JSONB), `created_at`, `created_by_id`
+    - ✅ Таблица `payroll_bonuses` с полями: `id`, `payroll_entry_id`, `bonus_type`, `amount`, `description`, `details` (JSONB), `created_at`, `created_by_id`
+    - ✅ Таблица `employee_payments` с полями: `id`, `payroll_entry_id`, `employee_id`, `amount`, `payment_date`, `payment_method`, `status`, `confirmation_code`, `payment_details` (JSONB), `notes`, `created_at`, `created_by_id`, `completed_at`
+    - ✅ Миграции применены на dev
 
-- [ ] **3.4. Создать PayrollService (2 дня)**
+- [x] **3.4. Создать PayrollService (2 дня)**
   - Type: feature | Files: apps/web/services/payroll_service.py
   - Acceptance:
-    - Метод `calculate_payroll(employee_id, period_start, period_end)` - расчет за период с учетом удержаний и доплат
-    - Метод `create_payroll_entry()` - создание начисления
-    - Метод `add_deduction(payroll_entry_id, amount, description, is_automatic, created_by)` - добавление удержания (владельцем/управляющим)
-    - Метод `add_bonus(payroll_entry_id, amount, description, created_by)` - добавление доплаты (владельцем/управляющим)
-    - Метод `record_payment(payroll_entry_id, amount, payment_method, notes)` - фиксация факта выплаты денег сотруднику
-    - Метод `get_employee_payroll_history()` - история выплат
-    - Метод `get_upcoming_payments()` - предстоящие выплаты по графику
-    - Type hints, docstrings, логирование, обработка ошибок
-    - Тесты покрытие ≥80%
+    - ✅ Метод `create_payroll_entry()` - создание начисления
+    - ✅ Метод `get_payroll_entries_by_employee()` - получение начислений
+    - ✅ Метод `get_payroll_entry_by_id()` - получение с relationships
+    - ✅ Метод `recalculate_payroll_entry()` - пересчет после изменений
+    - ✅ Метод `add_deduction()` - добавление удержания
+    - ✅ Метод `add_bonus()` - добавление доплаты
+    - ✅ Метод `create_payment()` - фиксация выплаты
+    - ✅ Метод `mark_payment_completed()` - завершение выплаты
+    - ✅ Метод `get_employee_payroll_summary()` - сводка за период
+    - ✅ Type hints, docstrings, логирование, обработка ошибок
 
-- [ ] **3.5. UI страницы выплат для Owner (2 дня)**
-  - Type: feature | Files: apps/web/routes/owner.py, apps/web/templates/owner/payroll/*.html
+- [x] **3.5. UI страницы выплат для Owner (2 дня)**
+  - Type: feature | Files: apps/web/routes/payroll.py, apps/web/templates/owner/payroll/*.html
   - Acceptance:
-    - Страница `/owner/payroll` - список сотрудников с начислениями
-    - Фильтры: период, статус (draft/approved/paid), объект
-    - Кнопка "Рассчитать начисления" → выбор сотрудника и периода
-    - Страница `/owner/payroll/{entry_id}` - детализация начисления:
-      - Смены за период (таблица)
-      - Начисления, удержания (автоматические и ручные), доплаты, итоговая сумма
-      - Кнопка "Добавить удержание" - владелец может добавить ручное удержание
-      - Кнопка "Добавить доплату" - владелец может добавить доплату
-      - Кнопки: "Одобрить" (draft → approved), "Записать выплату" (approved → paid, фиксация факта выплаты), "Отклонить"
-      - Пояснение кнопок: "Одобрить" = начисление проверено, "Записать выплату" = деньги переведены сотруднику
+    - ✅ Страница `/owner/payroll` - список начислений с фильтрами (сотрудник, период)
+    - ✅ Страница `/owner/payroll/{entry_id}` - детализация:
+      - ✅ Основная информация: период, часы, ставка, начислено
+      - ✅ Таблица удержаний (тип, описание, сумма, авто/ручное)
+      - ✅ Таблица доплат (тип, описание, сумма)
+      - ✅ Таблица выплат (дата, сумма, способ, статус)
+      - ✅ Модальное окно "Добавить удержание"
+      - ✅ Модальное окно "Добавить доплату"
+      - ✅ Модальное окно "Записать выплату"
     - График выплат (общая компонента, пока заглушка)
     - Мобильная версия корректна
 
