@@ -98,38 +98,54 @@
 - [x] **Реализовать мобильную версию** - адаптивный дизайн
 - [ ] **Добавить систему шаблонов** - готовые шаблоны договоров
 
-## 🎯 Итерация 24: Система уведомлений (октябрь 2025, 2-3 недели)
-**Базируется на:** Итерация 10 из roadmap.md
+## 🎯 Итерация 24: Система уведомлений ✅ (октябрь 2025, завершена 09.10.2025)
+**Базируется на:** Итерация 10 из roadmap.md  
+**Статус:** Завершена  
+**Отчет:** [doc/plans/iteration24/ITERATION_24_FINAL_REPORT.md](iteration24/ITERATION_24_FINAL_REPORT.md)
 
-### **Фаза 1: Основа системы (3-4 дня)**
-- [ ] **1.1. Создать единую модель уведомлений (1 день)**
-  - Type: feature | Files: domain/entities/notification.py, migrations/versions/*
-  - Acceptance: модель Notification с полями user_id, type, channel, status, priority, title, message, data, timestamps; enum NotificationType, NotificationPriority, NotificationChannel
+### **Фаза 1: Основа системы ✅**
+- [x] **1.1. Создать единую модель уведомлений**
+  - Type: feature | Files: domain/entities/notification.py, migrations/versions/21bdf8e9a3c7_*
+  - Acceptance: ✅ Модель Notification (195 строк); 5 ENUM типов; 19 типов уведомлений; методы is_scheduled, is_overdue, is_read, mark_as_*; миграция БД
+  - Commit: 21bdf8e9a3c7
 
-- [ ] **1.2. Восстановить NotificationService (2 дня)**
+- [x] **1.2. Восстановить NotificationService**
   - Type: refactor | Files: shared/services/notification_service.py
-  - Acceptance: удалены заглушки; методы create_notification, get_user_notifications, mark_as_read, get_unread_count; интеграция с Redis кэшированием
+  - Acceptance: ✅ CRUD операции (492 строки); фильтрация, пагинация, группировка; Redis кэширование (TTL 5мин); методы для планировщика
+  - Commit: a99a173
 
-- [ ] **1.3. Создать систему шаблонов (1 день)**
+- [x] **1.3. Создать систему шаблонов**
   - Type: feature | Files: shared/templates/notifications/base_templates.py
-  - Acceptance: NotificationTemplateManager с шаблонами для смен, договоров, отзывов, платежей, системных уведомлений; поддержка переменных {{var}}; рендеринг для HTML и plain text
+  - Acceptance: ✅ NotificationTemplateManager (370 строк); 19 готовых шаблонов (смены, договоры, отзывы, платежи, системные); переменные $var; HTML/Plain рендеринг
+  - Commit: d09b356
 
-### **Фаза 2: Каналы доставки (4-5 дней)**
-- [ ] **2.1. Email уведомления (2 дня)**
-  - Type: feature | Files: core/notifications/email_channel.py, requirements.txt
-  - Acceptance: EmailChannel класс; SMTP настройки через .env; отправка HTML/plain text; обработка ошибок
+### **Фаза 2: Каналы доставки ✅**
+- [x] **2.1. Telegram уведомления**
+  - Type: feature | Files: shared/services/senders/telegram_sender.py, notification_dispatcher.py
+  - Acceptance: ✅ TelegramNotificationSender (370 строк); HTML форматирование; эмодзи для 19 типов; приоритеты; retry логика (3 попытки); массовая отправка
+  - Commit: 6e39e58
 
-- [ ] **2.2. SMS уведомления (1 день)**
-  - Type: feature | Files: core/notifications/sms_channel.py
-  - Acceptance: SMSChannel класс; интеграция с Twilio/SMSC; валидация номеров; rate limiting
+- [x] **2.2. Email уведомления**
+  - Type: feature | Files: shared/services/senders/email_sender.py, core/config/settings.py
+  - Acceptance: ✅ EmailNotificationSender (511 строк); SMTP настройки; HTML/Plain версии; красивый шаблон с CSS; приоритеты в заголовках; retry логика
+  - Commit: 8c123b2
 
-- [ ] **2.3. Push уведомления (1-2 дня)**
-  - Type: feature | Files: core/notifications/push_channel.py, apps/web/static/js/push_notifications.js
-  - Acceptance: PushChannel класс; Web Push API; Service Worker; подписка/отписка; UI кнопка
+- [x] **2.3. SMS уведомления (заглушка)**
+  - Type: feature | Files: shared/services/senders/sms_sender.py
+  - Acceptance: ✅ SMSNotificationSender stub (137 строк); структура готова; комментарии для интеграции (Twilio, AWS SNS); корректная обработка в dispatcher
+  - Commit: 32b5bff
 
-- [ ] **2.4. Улучшение Telegram канала (0.5 дня)**
-  - Type: refactor | Files: core/notifications/telegram_channel.py
-  - Acceptance: TelegramChannel класс; унификация с другими каналами; форматирование; inline кнопки
+- [x] **2.4. NotificationDispatcher (координация)**
+  - Type: feature | Files: shared/services/notification_dispatcher.py
+  - Acceptance: ✅ Диспетчер (384 строки); dispatch_notification, dispatch_scheduled, retry_failed; автообновление статусов; поддержка всех каналов
+  - Commit: 6e39e58
+
+### **Не реализовано (Future)**
+- [ ] **Push уведомления** - требует Web Push API
+- [ ] **Настройки пользователей** - NotificationPreferences
+- [ ] **Планировщик Celery** - для scheduled_at
+- [ ] **API роуты** - GET/PATCH /api/notifications
+- [ ] **WebSocket** - для IN_APP в реальном времени
 
 ### **Фаза 3: Настройки пользователей (2 дня)**
 - [ ] **3.1. Модель настроек уведомлений (1 день)**
