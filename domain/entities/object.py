@@ -36,12 +36,15 @@ class Object(Base):
     schedule_repeat_weeks = Column(Integer, nullable=False, server_default="1")
     # Часовой пояс объекта (например: "Europe/Moscow", "America/New_York")
     timezone = Column(String(50), nullable=True, default="Europe/Moscow")
+    # Система оплаты труда (переопределяет org_unit)
+    payment_system_id = Column(Integer, ForeignKey("payment_systems.id", ondelete="SET NULL"), nullable=True, index=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Отношения
     owner = relationship("User", backref="owned_objects")
+    payment_system = relationship("PaymentSystem", backref="objects")
     manager_permissions = relationship("ManagerObjectPermission", back_populates="object", lazy="select")
     # planning_templates = relationship("PlanningTemplate", back_populates="object")
     
