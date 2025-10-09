@@ -99,11 +99,11 @@ class ShiftService:
                         'max_distance_meters': location_validation.get('max_distance_meters')
                     }
                 
-                # Создаем смену
-                # Получаем данные для смены
-                hourly_rate = obj.hourly_rate
+                # Определяем ставку с учетом приоритета договора
+                timeslot_rate = None
+                rate_source = "object"
                 
-                # Если это запланированная смена, получаем данные из расписания
+                # Если это запланированная смена, получаем ставку из расписания/тайм-слота
                 logger.info(f"Shift type: {shift_type}, schedule_id: {schedule_id}, timeslot_id: {timeslot_id}")
                 if shift_type == "planned" and schedule_id:
                     from apps.bot.services.shift_schedule_service import ShiftScheduleService
@@ -112,15 +112,11 @@ class ShiftService:
                     
                     if schedule_data:
                         logger.info(f"Schedule data: {schedule_data}")
-                        # Приоритет: ставка из запланированной смены, если есть
                         schedule_rate = schedule_data.get('hourly_rate')
                         if schedule_rate:
-                            hourly_rate = schedule_rate
-                            logger.info(f"Using schedule rate: {hourly_rate}")
-                        else:
-                            # Fallback: ставка из объекта
-                            hourly_rate = obj.hourly_rate
-                            logger.info(f"Using object rate: {hourly_rate}")
+                            timeslot_rate = schedule_rate
+                            rate_source = "schedule"
+                            logger.info(f"Found schedule rate: {schedule_rate}")
                     else:
                         logger.warning(f"No schedule data found for schedule_id: {schedule_id}")
                 else:
@@ -136,16 +132,43 @@ class ShiftService:
                         if available_timeslots:
                             # Есть доступные тайм-слоты - берем ставку из первого
                             first_timeslot = available_timeslots[0]
-                            timeslot_rate = first_timeslot.get('hourly_rate')
-                            if timeslot_rate:
-                                hourly_rate = timeslot_rate
-                                logger.info(f"Using timeslot rate for spontaneous shift: {hourly_rate}")
-                            else:
-                                logger.info(f"Using object rate for spontaneous shift (no timeslot rate): {hourly_rate}")
-                        else:
-                            logger.info(f"Using object rate for spontaneous shift (no available timeslots): {hourly_rate}")
+                            if first_timeslot.get('hourly_rate'):
+                                timeslot_rate = first_timeslot.get('hourly_rate')
+                                rate_source = "timeslot"
+                                logger.info(f"Found timeslot rate for spontaneous shift: {timeslot_rate}")
+                
+                # Получаем активный договор сотрудника для определения финальной ставки
+                from domain.entities.contract import Contract
+                contract_query = select(Contract).where(
+                    and_(
+                        Contract.employee_id == db_user.id,
+                        Contract.status == 'active',
+                        Contract.is_active == True
+                    )
+                )
+                contract_result = await session.execute(contract_query)
+                active_contract = contract_result.scalar_one_or_none()
+                
+                # Определяем финальную ставку с учетом приоритетов
+                if active_contract:
+                    hourly_rate = active_contract.get_effective_hourly_rate(
+                        timeslot_rate=timeslot_rate,
+                        object_rate=float(obj.hourly_rate)
+                    )
+                    
+                    if active_contract.use_contract_rate and active_contract.hourly_rate:
+                        rate_source = "contract"
+                        logger.info(f"Using contract rate (priority): {hourly_rate}")
+                    elif timeslot_rate:
+                        rate_source = "timeslot"
+                        logger.info(f"Using timeslot rate: {hourly_rate}")
                     else:
-                        logger.info(f"Using object rate for shift: {hourly_rate}")
+                        rate_source = "object"
+                        logger.info(f"Using object rate: {hourly_rate}")
+                else:
+                    # Нет активного договора - используем timeslot или object
+                    hourly_rate = timeslot_rate if timeslot_rate else float(obj.hourly_rate)
+                    logger.info(f"No active contract, using {rate_source} rate: {hourly_rate}")
                 
                 # Создаем новую смену
                 new_shift = Shift(
