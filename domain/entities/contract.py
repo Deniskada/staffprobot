@@ -88,7 +88,7 @@ class Contract(Base):
         Определить эффективную почасовую ставку с учетом приоритетов.
         
         Приоритет:
-        1. contract.hourly_rate (если use_contract_rate=True)
+        1. contract.hourly_rate (ТОЛЬКО если use_contract_rate=True)
         2. timeslot_rate (если указан)
         3. object_rate (fallback)
         
@@ -99,7 +99,7 @@ class Contract(Base):
         Returns:
             Эффективная ставка в рублях или None
         """
-        # Приоритет 1: Ставка договора (если флаг включен)
+        # Приоритет 1: Ставка договора (ТОЛЬКО если флаг включен)
         if self.use_contract_rate and self.hourly_rate is not None:
             return float(self.hourly_rate)
         
@@ -111,10 +111,7 @@ class Contract(Base):
         if object_rate is not None:
             return float(object_rate)
         
-        # Fallback: ставка договора (даже если флаг выключен)
-        if self.hourly_rate is not None:
-            return float(self.hourly_rate)
-        
+        # Если ничего не найдено - вернуть None
         return None
 
 
