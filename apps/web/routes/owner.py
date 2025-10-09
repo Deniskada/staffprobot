@@ -5177,6 +5177,7 @@ async def owner_employees_create_contract(
     content: str = Form(""),
     hourly_rate: Optional[float] = Form(None),
     use_contract_rate: bool = Form(False),
+    payment_system_id: Optional[int] = Form(1),  # По умолчанию simple_hourly
     start_date: str = Form(...),
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
@@ -5219,6 +5220,7 @@ async def owner_employees_create_contract(
             "content": content if content else None,
             "hourly_rate": hourly_rate,
             "use_contract_rate": use_contract_rate,
+            "payment_system_id": payment_system_id,
             "start_date": start_date_obj,
             "end_date": end_date_obj,
             "template_id": template_id,
