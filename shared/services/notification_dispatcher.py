@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from .notification_service import NotificationService
 from .senders.telegram_sender import get_telegram_sender
+from .senders.email_sender import get_email_sender
 
 
 class NotificationDispatcher:
@@ -28,8 +29,8 @@ class NotificationDispatcher:
         """Инициализация диспетчера."""
         self.notification_service = NotificationService()
         self.telegram_sender = get_telegram_sender()
-        # email_sender и sms_sender будут добавлены позже
-        self.email_sender = None
+        self.email_sender = get_email_sender()
+        # sms_sender будет добавлен позже
         self.sms_sender = None
     
     async def dispatch_notification(
@@ -151,12 +152,21 @@ class NotificationDispatcher:
                 )
                 
             elif notification.channel == NotificationChannel.EMAIL:
-                # TODO: Email отправка будет реализована в Фазе 2.2
-                logger.warning(
-                    f"Email notifications not yet implemented",
-                    notification_id=notification.id
+                # Проверяем наличие email
+                if not user.email:
+                    logger.warning(
+                        f"User {user.id} has no email",
+                        user_id=user.id,
+                        notification_id=notification.id
+                    )
+                    return False
+                
+                # Отправляем через Email
+                return await self.email_sender.send_notification(
+                    notification=notification,
+                    to_email=user.email,
+                    variables=notification.data
                 )
-                return False
                 
             elif notification.channel == NotificationChannel.SMS:
                 # TODO: SMS отправка будет реализована в Фазе 2.3
