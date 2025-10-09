@@ -162,7 +162,13 @@ class ContractService:
             # TODO: В будущем можно добавить проверку пересечения объектов
             
             # Валидация обязательных полей
+            use_contract_rate = contract_data.get("use_contract_rate", False)
             hourly_rate = contract_data.get("hourly_rate")
+            
+            # Если включен флаг use_contract_rate, hourly_rate обязателен
+            if use_contract_rate and not hourly_rate:
+                raise ValueError("При использовании ставки договора необходимо указать почасовую ставку")
+            
             if not hourly_rate:
                 # Пытаемся получить ставку из объекта
                 if contract_data.get("allowed_objects"):
@@ -173,8 +179,8 @@ class ContractService:
                     object_entity = object_result.scalar_one_or_none()
                     
                     if object_entity and object_entity.hourly_rate:
-                        hourly_rate = object_entity.hourly_rate
-                        logger.info(f"Автоматически установлена ставка {hourly_rate} из объекта {object_entity.id}")
+                        hourly_rate = float(object_entity.hourly_rate)
+                        logger.info(f"Автоматически установлена ставка {hourly_rate} руб/час из объекта {object_entity.id}")
                     else:
                         raise ValueError("Часовая ставка обязательна. Укажите ставку в договоре или выберите объект с установленной ставкой.")
                 else:
@@ -225,6 +231,7 @@ class ContractService:
                 content=content,
                 values=values if values else None,
                 hourly_rate=hourly_rate,
+                use_contract_rate=use_contract_rate,
                 start_date=start_date,
                 end_date=end_date,
                 allowed_objects=contract_data.get("allowed_objects", []),
@@ -1476,6 +1483,14 @@ class ContractService:
             old_status = contract.status
             old_is_active = contract.is_active
             
+            # Валидация use_contract_rate + hourly_rate
+            if "use_contract_rate" in contract_data:
+                use_contract_rate = contract_data["use_contract_rate"]
+                hourly_rate_value = contract_data.get("hourly_rate", contract.hourly_rate)
+                
+                if use_contract_rate and not hourly_rate_value:
+                    raise ValueError("При использовании ставки договора необходимо указать почасовую ставку")
+            
             # Обновляем поля
             if "title" in contract_data:
                 contract.title = contract_data["title"]
@@ -1483,6 +1498,8 @@ class ContractService:
                 contract.content = contract_data["content"]
             if "hourly_rate" in contract_data:
                 contract.hourly_rate = contract_data["hourly_rate"]
+            if "use_contract_rate" in contract_data:
+                contract.use_contract_rate = contract_data["use_contract_rate"]
             if "start_date" in contract_data:
                 contract.start_date = contract_data["start_date"]
             if "end_date" in contract_data:
