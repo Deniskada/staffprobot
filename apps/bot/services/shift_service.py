@@ -143,13 +143,13 @@ class ShiftService:
                 from sqlalchemy.dialects.postgresql import JSONB
                 
                 # Ищем договор для этого объекта (allowed_objects содержит object_id)
-                # Используем JSONB оператор @> для проверки
+                # Cast allowed_objects к JSONB для использования оператора @>
                 contract_query = select(Contract).where(
                     and_(
                         Contract.employee_id == db_user.id,
                         Contract.status == 'active',
                         Contract.is_active == True,
-                        Contract.allowed_objects.op('@>')(cast([object_id], JSONB))
+                        cast(Contract.allowed_objects, JSONB).op('@>')(cast([object_id], JSONB))
                     )
                 ).order_by(Contract.use_contract_rate.desc())  # Приоритет договорам с use_contract_rate=True
                 
