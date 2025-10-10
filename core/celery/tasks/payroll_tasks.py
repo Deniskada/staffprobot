@@ -107,12 +107,15 @@ def process_automatic_deductions():
                         
                         # Добавить начисления (удержания/премии) к начислению
                         for adjustment_type, amount, description, details in auto_deductions:
-                            # Отрицательная сумма → удержание (штраф)
-                            if amount < 0:
-                                # Добавляем shift_id в details
-                                details_with_shift = details.copy() if details else {}
-                                details_with_shift['shift_id'] = shift.id
-                                
+                            # Добавляем shift_id в details
+                            details_with_shift = details.copy() if details else {}
+                            details_with_shift['shift_id'] = shift.id
+                            
+                            # Определяем тип начисления по adjustment_type
+                            # Штрафы: late_start, task_penalty
+                            # Премии: task_bonus
+                            if adjustment_type in ('late_start', 'task_penalty') or amount < 0:
+                                # Удержание (штраф)
                                 await payroll_service.add_deduction(
                                     payroll_entry_id=payroll_entry.id,
                                     deduction_type=adjustment_type,
@@ -123,16 +126,12 @@ def process_automatic_deductions():
                                     details=details_with_shift
                                 )
                                 total_deductions += 1
-                            # Положительная сумма → премия
-                            elif amount > 0:
-                                # Добавляем shift_id в details
-                                details_with_shift = details.copy() if details else {}
-                                details_with_shift['shift_id'] = shift.id
-                                
+                            elif adjustment_type == 'task_bonus' or amount > 0:
+                                # Премия
                                 await payroll_service.add_bonus(
                                     payroll_entry_id=payroll_entry.id,
                                     bonus_type=adjustment_type,
-                                    amount=amount,
+                                    amount=abs(amount),
                                     description=description,
                                     created_by_id=shift.user_id,
                                     details=details_with_shift
