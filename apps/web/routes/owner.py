@@ -4065,14 +4065,16 @@ async def owner_shift_add_task(
         raise HTTPException(status_code=500, detail=f"Ошибка добавления задачи: {str(e)}")
 
 
-@router.get("/shift-tasks/completed", response_class=HTMLResponse, name="owner_shift_tasks_completed")
-async def owner_shift_tasks_completed(
+@router.get("/shift-tasks", response_class=HTMLResponse, name="owner_shift_tasks")
+async def owner_shift_tasks(
     request: Request,
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session),
-    object_id: Optional[int] = Query(None)
+    object_id: Optional[int] = Query(None),
+    status_filter: Optional[str] = Query("all"),  # all, completed, not_completed
+    mandatory_filter: Optional[str] = Query("all")  # all, mandatory, optional
 ):
-    """Список выполненных задач смен."""
+    """Список задач смен с фильтрами."""
     try:
         from apps.web.services.shift_task_service import ShiftTaskService
         
@@ -4086,44 +4088,52 @@ async def owner_shift_tasks_completed(
         objects_result = await db.execute(objects_query)
         objects = objects_result.scalars().all()
         
-        # Получить выполненные задачи с загрузкой связей
+        # Построить запрос с фильтрами
+        filters = []
+        
         if object_id:
             # Фильтр по объекту
-            tasks_query = select(ShiftTask).join(Shift).where(
-                and_(
-                    Shift.object_id == object_id,
-                    ShiftTask.is_completed == True
-                )
-            ).options(
-                selectinload(ShiftTask.shift).selectinload(Shift.object),
-                selectinload(ShiftTask.shift).selectinload(Shift.user)
-            ).order_by(ShiftTask.completed_at.asc())  # От старых к новым
+            filters.append(Shift.object_id == object_id)
+            tasks_query = select(ShiftTask).join(Shift).where(and_(*filters))
         else:
             # Все объекты владельца
-            tasks_query = select(ShiftTask).join(Shift).join(Object).where(
-                and_(
-                    Object.owner_id == owner_id,
-                    ShiftTask.is_completed == True
-                )
-            ).options(
-                selectinload(ShiftTask.shift).selectinload(Shift.object),
-                selectinload(ShiftTask.shift).selectinload(Shift.user)
-            ).order_by(ShiftTask.completed_at.asc())  # От старых к новым
+            filters.append(Object.owner_id == owner_id)
+            tasks_query = select(ShiftTask).join(Shift).join(Object).where(and_(*filters))
+        
+        # Фильтр по статусу выполнения
+        if status_filter == "completed":
+            tasks_query = tasks_query.where(ShiftTask.is_completed == True)
+        elif status_filter == "not_completed":
+            tasks_query = tasks_query.where(ShiftTask.is_completed == False)
+        
+        # Фильтр по обязательности
+        if mandatory_filter == "mandatory":
+            tasks_query = tasks_query.where(ShiftTask.is_mandatory == True)
+        elif mandatory_filter == "optional":
+            tasks_query = tasks_query.where(ShiftTask.is_mandatory == False)
+        
+        # Загрузить связи и отсортировать
+        tasks_query = tasks_query.options(
+            selectinload(ShiftTask.shift).selectinload(Shift.object),
+            selectinload(ShiftTask.shift).selectinload(Shift.user)
+        ).order_by(ShiftTask.created_at.desc())  # От новых к старым
         
         tasks_result = await db.execute(tasks_query)
-        completed_tasks = tasks_result.scalars().all()
+        tasks = tasks_result.scalars().all()
         
-        return templates.TemplateResponse("owner/shift_tasks/completed.html", {
+        return templates.TemplateResponse("owner/shift_tasks/list.html", {
             "request": request,
             "current_user": current_user,
-            "completed_tasks": completed_tasks,
+            "tasks": tasks,
             "objects": objects,
-            "selected_object_id": object_id
+            "selected_object_id": object_id,
+            "status_filter": status_filter,
+            "mandatory_filter": mandatory_filter
         })
         
     except Exception as e:
-        logger.error(f"Error loading completed tasks: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки выполненных задач: {str(e)}")
+        logger.error(f"Error loading tasks: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки задач: {str(e)}")
 
 
 @router.post("/shifts/{shift_id}/tasks/{task_id}/toggle", name="owner_shift_task_toggle")
