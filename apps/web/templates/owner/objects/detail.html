@@ -236,33 +236,7 @@
                 </div>
                 
                 <div class="col-md-4">
-                    <!-- Статистика -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">Статистика</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="text-center mb-3">
-                                <h3 class="text-primary">0</h3>
-                                <p class="text-muted mb-0">Активных смен</p>
-                            </div>
-                            
-                            <div class="text-center mb-3">
-                                <h3 class="text-success">0</h3>
-                                <p class="text-muted mb-0">Отработано часов</p>
-                            </div>
-                            
-                            <div class="text-center mb-3">
-                                <h3 class="text-info">0</h3>
-                                <p class="text-muted mb-0">Сотрудников</p>
-                            </div>
-                            
-                            <div class="text-center">
-                                <h3 class="text-warning">0</h3>
-                                <p class="text-muted mb-0">Пробных смен</p>
-                            </div>
-                        </div>
-                    </div>
+                   
                     
                     <!-- Быстрые действия -->
                     <div class="card mt-3">
@@ -282,6 +256,9 @@
                                 </a>
                                 <a href="/owner/employees?object_id={{ object.id }}" class="btn btn-outline-secondary">
                                     <i class="bi bi-people"></i> Сотрудники
+                                </a>
+                                <a href="/owner/shift-tasks/completed?object_id={{ object.id }}" class="btn btn-outline-warning">
+                                    <i class="fas fa-clipboard-check"></i> Выполненные задачи
                                 </a>
                             </div>
                         </div>
