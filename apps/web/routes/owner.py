@@ -4065,6 +4065,67 @@ async def owner_shift_add_task(
         raise HTTPException(status_code=500, detail=f"Ошибка добавления задачи: {str(e)}")
 
 
+@router.get("/shift-tasks/completed", response_class=HTMLResponse, name="owner_shift_tasks_completed")
+async def owner_shift_tasks_completed(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session),
+    object_id: Optional[int] = None
+):
+    """Список выполненных задач смен."""
+    try:
+        from apps.web.services.shift_task_service import ShiftTaskService
+        
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        # Получить объекты владельца для фильтра
+        objects_query = select(Object).where(Object.owner_id == owner_id).order_by(Object.name)
+        objects_result = await db.execute(objects_query)
+        objects = objects_result.scalars().all()
+        
+        # Получить выполненные задачи с загрузкой связей
+        if object_id:
+            # Фильтр по объекту
+            tasks_query = select(ShiftTask).join(Shift).where(
+                and_(
+                    Shift.object_id == object_id,
+                    ShiftTask.is_completed == True
+                )
+            ).options(
+                selectinload(ShiftTask.shift).selectinload(Shift.object),
+                selectinload(ShiftTask.shift).selectinload(Shift.user)
+            ).order_by(ShiftTask.completed_at.asc())  # От старых к новым
+        else:
+            # Все объекты владельца
+            tasks_query = select(ShiftTask).join(Shift).join(Object).where(
+                and_(
+                    Object.owner_id == owner_id,
+                    ShiftTask.is_completed == True
+                )
+            ).options(
+                selectinload(ShiftTask.shift).selectinload(Shift.object),
+                selectinload(ShiftTask.shift).selectinload(Shift.user)
+            ).order_by(ShiftTask.completed_at.asc())  # От старых к новым
+        
+        tasks_result = await db.execute(tasks_query)
+        completed_tasks = tasks_result.scalars().all()
+        
+        return templates.TemplateResponse("owner/shift_tasks/completed.html", {
+            "request": request,
+            "current_user": current_user,
+            "completed_tasks": completed_tasks,
+            "objects": objects,
+            "selected_object_id": object_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading completed tasks: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки выполненных задач: {str(e)}")
+
+
 @router.post("/shifts/{shift_id}/tasks/{task_id}/toggle", name="owner_shift_task_toggle")
 async def owner_shift_task_toggle(
     request: Request,
