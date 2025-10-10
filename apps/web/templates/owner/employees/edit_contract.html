@@ -242,6 +242,17 @@
                             <div class="form-check">
                                 <input class="form-check-input" 
                                        type="checkbox" 
+                                       id="can_manage_payroll" 
+                                       name="manager_permissions" 
+                                       value="can_manage_payroll"
+                                       {% if contract.manager_permissions and contract.manager_permissions.get('can_manage_payroll') %}checked{% endif %}>
+                                <label class="form-check-label" for="can_manage_payroll">
+                                    Управление начислениями и выплатами
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
                                        id="can_view_finances" 
                                        name="manager_permissions" 
                                        value="can_view_finances"
