@@ -252,7 +252,7 @@
                                                             <input class="form-check-input" 
                                                                    type="checkbox" 
                                                                    name="task_mandatory[]" 
-                                                                   value="1"
+                                                                   value="{{ loop.index0 }}"
                                                                    {% if task is mapping and task.is_mandatory %}checked{% elif task is not mapping %}checked{% endif %}>
                                                             <label class="form-check-label">Да</label>
                                                         </div>
@@ -292,7 +292,7 @@
                                                             <input class="form-check-input" 
                                                                    type="checkbox" 
                                                                    name="task_mandatory[]" 
-                                                                   value="1"
+                                                                   value="0"
                                                                    checked>
                                                             <label class="form-check-label">Да</label>
                                                         </div>
@@ -487,6 +487,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Функции для управления задачами
 function addTask() {
     const container = document.getElementById('tasks-container');
+    const currentTaskCount = container.children.length;
     const taskItem = document.createElement('div');
     taskItem.className = 'task-item mb-3 border rounded p-3';
     taskItem.innerHTML = `
@@ -513,7 +514,7 @@ function addTask() {
                     <input class="form-check-input" 
                            type="checkbox" 
                            name="task_mandatory[]" 
-                           value="1"
+                           value="${currentTaskCount}"
                            checked>
                     <label class="form-check-label">Да</label>
                 </div>

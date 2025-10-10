@@ -347,12 +347,16 @@ async def owner_objects_create_post(
         task_deductions = form_data.getlist("task_deductions[]")
         task_mandatory = form_data.getlist("task_mandatory[]")
         
+        logger.info(f"Task parsing - texts: {task_texts}, deductions: {task_deductions}, mandatory: {task_mandatory}")
+        
         shift_tasks = []
         for idx, text in enumerate(task_texts):
             if text.strip():
+                is_mandatory = str(idx) in task_mandatory
+                logger.info(f"Task {idx}: text='{text}', is_mandatory={is_mandatory} (checking '{idx}' in {task_mandatory})")
                 shift_tasks.append({
                     "text": text.strip(),
-                    "is_mandatory": str(idx) in task_mandatory or f"{idx}" in task_mandatory,
+                    "is_mandatory": is_mandatory,
                     "deduction_amount": float(task_deductions[idx]) if idx < len(task_deductions) else 100.0
                 })
         
@@ -630,12 +634,16 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         task_deductions = form_data.getlist("task_deductions[]")
         task_mandatory = form_data.getlist("task_mandatory[]")
         
+        logger.info(f"Task parsing (edit) - texts: {task_texts}, deductions: {task_deductions}, mandatory: {task_mandatory}")
+        
         shift_tasks = []
         for idx, text in enumerate(task_texts):
             if text.strip():
+                is_mandatory = str(idx) in task_mandatory
+                logger.info(f"Task {idx} (edit): text='{text}', is_mandatory={is_mandatory}")
                 shift_tasks.append({
                     "text": text.strip(),
-                    "is_mandatory": str(idx) in task_mandatory or f"{idx}" in task_mandatory,
+                    "is_mandatory": is_mandatory,
                     "deduction_amount": float(task_deductions[idx]) if idx < len(task_deductions) else 100.0
                 })
         
