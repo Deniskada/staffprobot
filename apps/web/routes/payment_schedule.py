@@ -97,6 +97,46 @@ async def create_custom_payment_schedule(
         raise HTTPException(status_code=500, detail=f"Ошибка создания графика: {str(e)}")
 
 
+@router.get("/payment-schedules/{schedule_id}/view")
+async def view_payment_schedule(
+    schedule_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Просмотр графика выплат."""
+    try:
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        # Получить график
+        query = select(PaymentSchedule).where(PaymentSchedule.id == schedule_id)
+        result = await db.execute(query)
+        schedule = result.scalar_one_or_none()
+        
+        if not schedule:
+            raise HTTPException(status_code=404, detail="График не найден")
+        
+        # Проверить доступ (для кастомных графиков)
+        if schedule.is_custom and schedule.owner_id != owner_id:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+        
+        return JSONResponse(content={
+            "id": schedule.id,
+            "name": schedule.name,
+            "frequency": schedule.frequency,
+            "payment_day": schedule.payment_day,
+            "payment_period": schedule.payment_period,
+            "is_custom": schedule.is_custom
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error viewing payment schedule: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка просмотра графика: {str(e)}")
+
+
 @router.get("/payment-schedules/available")
 async def get_available_payment_schedules(
     object_id: Optional[int] = None,
