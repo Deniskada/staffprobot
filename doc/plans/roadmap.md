@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 273/299 (91.3%)
+**Общий прогресс:** 274/299 (91.6%)
 
 ## 🎯 Итерация 1: MVP (1-2 недели)
 - [x] **Создать структуру проекта** - папки, файлы, базовые модули
@@ -834,17 +834,19 @@
 
 ### Фаза 4: Задача 4 - Организационная структура (5-6 дней)
 
-- [ ] **4.1. Создать модель OrgStructureUnit (1 день)**
+- [x] **4.1. Создать модель OrgStructureUnit (1 день)**
   - Type: feature | Files: domain/entities/org_structure.py, migrations/versions/*.py
   - Acceptance:
-    - Таблица `org_structure_units` создана:
+    - ✅ Таблица `org_structure_units` создана:
       - `id`, `owner_id` (FK users), `parent_id` (nullable FK self), `name`, `description`
       - `payment_system_id` (nullable FK, наследуется от родителя)
       - `payment_schedule_id` (nullable FK, наследуется от родителя)
+      - `inherit_late_settings`, `late_threshold_minutes`, `late_penalty_per_minute` (наследуются от родителя)
       - `level` (для оптимизации запросов), `is_active`, `created_at`, `updated_at`
-    - Индексы: owner_id, parent_id, level
-    - Seed-скрипт: создать "Основное подразделение" для всех существующих владельцев
-    - Миграция применена на dev
+    - ✅ Индексы: owner_id, parent_id, level, is_active
+    - ✅ Seed-скрипт: создано "Основное подразделение" для всех существующих владельцев
+    - ✅ Методы в модели: `get_full_path()`, `get_inherited_payment_system_id()`, `get_inherited_payment_schedule_id()`, `get_inherited_late_settings()`
+    - ✅ Миграция применена на dev
 
 - [ ] **4.2. Связать OrgStructureUnit с Object (1 день)**
   - Type: feature | Files: domain/entities/object.py, migrations/versions/*.py
