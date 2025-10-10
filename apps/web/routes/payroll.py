@@ -129,9 +129,9 @@ async def owner_payroll_detail(
             Contract.owner_id == owner_id
         )
         result = await db.execute(query)
-        owner_contract = result.scalar_one_or_none()
+        owner_contracts = result.scalars().all()
         
-        if not owner_contract:
+        if not owner_contracts:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
         return templates.TemplateResponse(
