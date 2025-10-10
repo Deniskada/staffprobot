@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from apps.web.jinja import templates
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin, get_current_user
-from apps.web.middleware.user_id_middleware import get_user_id_from_current_user
+from apps.web.middleware.role_middleware import get_user_id_from_current_user
 from core.database.session import get_db_session
 from apps.web.services.org_structure_service import OrgStructureService
 from apps.web.services.payment_system_service import PaymentSystemService
@@ -39,7 +39,7 @@ async def owner_org_structure_list(
         
         # Получить системы оплаты и графики выплат для dropdown
         payment_system_service = PaymentSystemService(db)
-        payment_systems = await payment_system_service.get_all_payment_systems()
+        payment_systems = await payment_system_service.get_active_systems()
         
         from domain.entities.payment_schedule import PaymentSchedule
         from sqlalchemy import select
