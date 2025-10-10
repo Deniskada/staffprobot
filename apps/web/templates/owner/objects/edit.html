@@ -94,6 +94,34 @@
                             
                             <div class="col-md-6">
                                 <div class="mb-3">
+                                    <label for="payment_schedule_id" class="form-label">
+                                        График выплат
+                                        <i class="bi bi-info-circle" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Определяет периодичность выплат сотрудникам объекта"></i>
+                                    </label>
+                                    <select class="form-select" id="payment_schedule_id" name="payment_schedule_id">
+                                        <option value="">Не указано (наследуется от подразделения)</option>
+                                        {% for schedule in payment_schedules %}
+                                        <option value="{{ schedule.id }}" {% if object.payment_schedule_id == schedule.id %}selected{% endif %}>
+                                            {{ schedule.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    {% if object.payment_schedule_id %}
+                                    {% for schedule in payment_schedules %}
+                                    {% if schedule.id == object.payment_schedule_id %}
+                                    <small class="text-muted">
+                                        {{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}
+                                    </small>
+                                    {% endif %}
+                                    {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="mb-3">
                                     <label for="opening_time" class="form-label">Время открытия *</label>
                                     <input type="time" 
                                            class="form-control" 
@@ -541,6 +569,30 @@ function removeTask(button) {
         input.value = '';
     }
 }
+
+// Динамическое отображение описания графика выплат
+document.addEventListener('DOMContentLoaded', function() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    
+    if (scheduleSelect) {
+        const scheduleData = {
+            {% for schedule in payment_schedules %}
+            {{ schedule.id }}: "{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}",
+            {% endfor %}
+        };
+        
+        scheduleSelect.addEventListener('change', function() {
+            const scheduleId = parseInt(this.value);
+            const description = scheduleData[scheduleId] || '';
+            
+            // Обновить описание в small тексте
+            const descEl = this.parentElement.querySelector('small.text-muted');
+            if (descEl && description) {
+                descEl.textContent = description;
+            }
+        });
+    }
+});
 </script>
 {% endblock %}
 {% endblock %}

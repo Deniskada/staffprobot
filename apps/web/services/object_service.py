@@ -176,6 +176,7 @@ class ObjectService:
             obj.timezone = object_data.get('timezone', 'Europe/Moscow')
             obj.hourly_rate = object_data['hourly_rate']
             obj.payment_system_id = object_data.get('payment_system_id')
+            obj.payment_schedule_id = object_data.get('payment_schedule_id')
             obj.max_distance_meters = object_data.get('max_distance', obj.max_distance_meters)
             obj.auto_close_minutes = object_data.get('auto_close_minutes', obj.auto_close_minutes)
             obj.is_active = object_data.get('is_active', obj.is_active)
@@ -246,6 +247,7 @@ class ObjectService:
             obj.timezone = object_data.get('timezone', 'Europe/Moscow')
             obj.hourly_rate = object_data['hourly_rate']
             obj.payment_system_id = object_data.get('payment_system_id')
+            obj.payment_schedule_id = object_data.get('payment_schedule_id')
             obj.max_distance_meters = object_data.get('max_distance_meters', obj.max_distance_meters)
             obj.is_active = object_data.get('is_active', obj.is_active)
             obj.available_for_applicants = object_data.get('available_for_applicants', obj.available_for_applicants)

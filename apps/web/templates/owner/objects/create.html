@@ -90,6 +90,24 @@
                                     </select>
                                     <small class="form-text text-muted">Оставьте пустым для наследования от подразделения (будет реализовано в Фазе 4)</small>
                                 </div>
+                                
+                                <div class="mb-3">
+                                    <label for="payment_schedule_id" class="form-label">
+                                        График выплат
+                                        <i class="bi bi-info-circle" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Определяет периодичность выплат сотрудникам объекта"></i>
+                                    </label>
+                                    <select class="form-select" id="payment_schedule_id" name="payment_schedule_id">
+                                        <option value="">Не указано (наследуется от подразделения)</option>
+                                        {% for schedule in payment_schedules %}
+                                        <option value="{{ schedule.id }}">
+                                            {{ schedule.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="form-text text-muted" id="schedule_description"></small>
+                                </div>
                             </div>
                             
                             <div class="col-md-6">
@@ -315,6 +333,25 @@ document.addEventListener('DOMContentLoaded', function() {
             closingTime.value = opening.toTimeString().slice(0, 5);
         }
     });
+});
+
+// Динамическое отображение описания графика выплат
+document.addEventListener('DOMContentLoaded', function() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const descriptionEl = document.getElementById('schedule_description');
+    
+    if (scheduleSelect && descriptionEl) {
+        const scheduleData = {
+            {% for schedule in payment_schedules %}
+            {{ schedule.id }}: "{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}",
+            {% endfor %}
+        };
+        
+        scheduleSelect.addEventListener('change', function() {
+            const scheduleId = parseInt(this.value);
+            descriptionEl.textContent = scheduleData[scheduleId] || '';
+        });
+    }
 });
 
 // Функции для управления задачами

@@ -257,16 +257,23 @@ async def owner_objects_create(request: Request):
     if user_role != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
-    # Получаем данные для переключения интерфейсов
+    # Получаем данные для переключения интерфейсов и графики выплат
     async with get_async_session() as session:
         user_id = await get_user_id_from_current_user(current_user, session)
         available_interfaces = await get_available_interfaces_for_user(user_id)
+        
+        # Загрузить графики выплат
+        from domain.entities.payment_schedule import PaymentSchedule
+        schedules_query = select(PaymentSchedule).where(PaymentSchedule.is_active == True).order_by(PaymentSchedule.id)
+        schedules_result = await session.execute(schedules_query)
+        payment_schedules = schedules_result.scalars().all()
     
     return templates.TemplateResponse("owner/objects/create.html", {
         "request": request,
         "title": "Создание объекта",
         "current_user": current_user,
-        "available_interfaces": available_interfaces
+        "available_interfaces": available_interfaces,
+        "payment_schedules": payment_schedules
     })
 
 
@@ -341,6 +348,8 @@ async def owner_objects_create_post(
         employee_position = form_data.get("employee_position", "").strip()
         payment_system_id_str = form_data.get("payment_system_id", "").strip()
         payment_system_id = int(payment_system_id_str) if payment_system_id_str else None
+        payment_schedule_id_str = form_data.get("payment_schedule_id", "").strip()
+        payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
         
         # Парсинг задач с новой структурой
         task_texts = form_data.getlist("task_texts[]")
@@ -383,6 +392,7 @@ async def owner_objects_create_post(
             "max_distance": max_distance,
             "available_for_applicants": available_for_applicants,
             "payment_system_id": payment_system_id,
+            "payment_schedule_id": payment_schedule_id,
             "is_active": True,
             "coordinates": coordinates,
             "work_days_mask": work_days_mask,
@@ -509,6 +519,12 @@ async def owner_objects_edit(request: Request, object_id: int):
             if not obj:
                 raise HTTPException(status_code=404, detail="Объект не найден")
             
+            # Загрузить графики выплат
+            from domain.entities.payment_schedule import PaymentSchedule
+            schedules_query = select(PaymentSchedule).where(PaymentSchedule.is_active == True).order_by(PaymentSchedule.id)
+            schedules_result = await session.execute(schedules_query)
+            payment_schedules = schedules_result.scalars().all()
+            
             # Преобразуем в формат для шаблона
             object_data = {
                 "id": obj.id,
@@ -539,7 +555,8 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "title": f"Редактирование: {object_data['name']}",
                 "object": object_data,
                 "available_interfaces": available_interfaces,
-                "current_user": current_user
+                "current_user": current_user,
+                "payment_schedules": payment_schedules
             })
             
     except HTTPException:
@@ -633,6 +650,8 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         employee_position = form_data.get("employee_position", "").strip()
         payment_system_id_str = form_data.get("payment_system_id", "").strip()
         payment_system_id = int(payment_system_id_str) if payment_system_id_str else None
+        payment_schedule_id_str = form_data.get("payment_schedule_id", "").strip()
+        payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
         
         # Парсинг задач с новой структурой
         task_texts = form_data.getlist("task_texts[]")
@@ -683,6 +702,7 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "max_distance": max_distance,
                 "available_for_applicants": available_for_applicants,
                 "payment_system_id": payment_system_id,
+                "payment_schedule_id": payment_schedule_id,
                 "is_active": is_active,
                 "coordinates": coordinates,
                 "work_days_mask": work_days_mask,
