@@ -1,6 +1,6 @@
 """Модель задачи на смену."""
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from domain.entities.base import Base
@@ -25,6 +25,10 @@ class ShiftTask(Base):
     # Источник задачи
     source = Column(String(50), nullable=False, index=True)  # 'object', 'timeslot', 'manual'
     source_id = Column(Integer, nullable=True)  # ID объекта/тайм-слота, если применимо
+    
+    # Обязательность и удержания
+    is_mandatory = Column(Boolean, default=True, nullable=False, index=True)  # Обязательная задача
+    deduction_amount = Column(Numeric(10, 2), nullable=True)  # Сумма удержания за невыполнение (в рублях)
     
     # Метаданные
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -59,6 +63,10 @@ class TimeslotTaskTemplate(Base):
     
     # Текст задачи
     task_text = Column(Text, nullable=False)
+    
+    # Обязательность и удержания
+    is_mandatory = Column(Boolean, default=True, nullable=False)  # Обязательная задача
+    deduction_amount = Column(Numeric(10, 2), nullable=True)  # Сумма удержания за невыполнение (в рублях)
     
     # Порядок отображения
     display_order = Column(Integer, default=0, nullable=False)
