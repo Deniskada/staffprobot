@@ -194,8 +194,18 @@ class ShiftService:
                 await session.commit()
                 await session.refresh(new_shift)
                 
+                # Создать задачи для смены на основе наследования
+                from apps.web.services.shift_task_service import ShiftTaskService
+                task_service = ShiftTaskService(session)
+                tasks = await task_service.create_tasks_for_shift(
+                    shift_id=new_shift.id,
+                    object_id=object_id,
+                    timeslot_id=timeslot_id if shift_type == "planned" else None,
+                    created_by_id=db_user.id
+                )
+                
                 logger.info(
-                    f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}"
+                    f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}, tasks_created={len(tasks)}"
                 )
                 
                 # Инвалидация кэша календаря
