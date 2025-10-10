@@ -96,26 +96,34 @@ class AutoDeductionService:
             if not shift.schedule_id or not shift.object_id:
                 return None
             
-            # Получить объект для настроек штрафов
+            # Получить объект с подразделением для настроек штрафов
             from domain.entities.object import Object
-            object_query = select(Object).where(Object.id == shift.object_id)
+            from sqlalchemy.orm import selectinload
+            
+            object_query = select(Object).options(
+                selectinload(Object.org_unit)
+            ).where(Object.id == shift.object_id)
             object_result = await self.db.execute(object_query)
             obj = object_result.scalar_one_or_none()
             
             if not obj:
                 return None
             
-            # Определить настройки штрафа (из объекта или по умолчанию)
-            if obj.inherit_late_settings or obj.late_threshold_minutes is None or obj.late_penalty_per_minute is None:
-                # Наследуем настройки (в будущем - от подразделения), пока используем константы
+            # Получить эффективные настройки штрафа (с учетом наследования от подразделения)
+            late_settings = obj.get_effective_late_settings()
+            
+            if late_settings['threshold_minutes'] is not None and late_settings['penalty_per_minute'] is not None:
+                threshold_minutes = late_settings['threshold_minutes']
+                penalty_per_minute = late_settings['penalty_per_minute']
+                logger.info(
+                    f"Using late settings for object {obj.id} from {late_settings['source']}: "
+                    f"threshold={threshold_minutes}, penalty={penalty_per_minute}"
+                )
+            else:
+                # Fallback на константы
                 threshold_minutes = self.LATE_START_THRESHOLD_MINUTES
                 penalty_per_minute = self.LATE_START_PENALTY_PER_MINUTE
                 logger.info(f"Using default late settings for object {obj.id}: threshold={threshold_minutes}, penalty={penalty_per_minute}")
-            else:
-                # Используем настройки объекта
-                threshold_minutes = obj.late_threshold_minutes
-                penalty_per_minute = Decimal(str(obj.late_penalty_per_minute))
-                logger.info(f"Using object late settings for object {obj.id}: threshold={threshold_minutes}, penalty={penalty_per_minute}")
             
             # Получить запланированное время начала
             schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == shift.schedule_id)
