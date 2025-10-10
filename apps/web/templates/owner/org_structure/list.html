@@ -135,11 +135,11 @@
                     <div class="mb-3">
                         <label for="create_parent_id" class="form-label">Родительское подразделение</label>
                         <select class="form-select" id="create_parent_id" name="parent_id">
-                            <option value="">Корневое подразделение</option>
                             {% for root in org_tree %}
                                 {{ render_unit_options(root, 0) }}
                             {% endfor %}
                         </select>
+                        <small class="form-text text-muted">Новое подразделение будет создано внутри выбранного</small>
                     </div>
                     
                     <hr>
