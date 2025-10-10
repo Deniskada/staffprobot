@@ -55,22 +55,22 @@
                             <dl class="row">
                                 <dt class="col-sm-5">Начислено:</dt>
                                 <dd class="col-sm-7">
-                                    <strong class="text-success">{{ "%.2f"|format(entry.base_amount) }} ₽</strong>
+                                    <strong class="text-success">{{ "%.2f"|format(entry.gross_amount) }} ₽</strong>
                                 </dd>
                                 
                                 <dt class="col-sm-5">Доплаты:</dt>
                                 <dd class="col-sm-7">
-                                    <span class="text-success">+{{ "%.2f"|format(entry.bonus_amount or 0) }} ₽</span>
+                                    <span class="text-success">+{{ "%.2f"|format(entry.total_bonuses or 0) }} ₽</span>
                                 </dd>
                                 
                                 <dt class="col-sm-5">Удержания:</dt>
                                 <dd class="col-sm-7">
-                                    <span class="text-danger">-{{ "%.2f"|format(entry.deduction_amount or 0) }} ₽</span>
+                                    <span class="text-danger">-{{ "%.2f"|format(entry.total_deductions or 0) }} ₽</span>
                                 </dd>
                                 
                                 <dt class="col-sm-5"><strong>Итого:</strong></dt>
                                 <dd class="col-sm-7">
-                                    <strong class="text-primary fs-5">{{ "%.2f"|format(entry.total_amount) }} ₽</strong>
+                                    <strong class="text-primary fs-5">{{ "%.2f"|format(entry.net_amount) }} ₽</strong>
                                 </dd>
                             </dl>
                         </div>

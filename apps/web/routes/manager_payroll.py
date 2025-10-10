@@ -106,7 +106,7 @@ async def manager_payroll_list(
                 employee = user_result.scalar_one_or_none()
                 
                 if employee:
-                    total_amount = sum(entry.total_amount for entry in entries)
+                    total_amount = sum(entry.net_amount for entry in entries)
                     employees_data.append({
                         "employee": employee,
                         "entries_count": len(entries),
