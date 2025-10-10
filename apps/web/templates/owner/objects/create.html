@@ -646,7 +646,7 @@ function editSchedule() {
 
 <!-- Макрос для рендеринга подразделений в dropdown -->
 {% macro render_org_unit_option(unit, indent) %}
-<option value="{{ unit.id }}">{{ '&nbsp;&nbsp;&nbsp;&nbsp;' * indent }}{{ unit.name }}</option>
+<option value="{{ unit.id }}">{{ '├─ ' * indent }}{{ unit.name }}</option>
 {% if unit.children %}
     {% for child in unit.children %}
         {{ render_org_unit_option(child, indent + 1) }}
