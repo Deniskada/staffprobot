@@ -60,7 +60,7 @@
 
 <!-- Макрос для рендеринга options в select -->
 {% macro render_unit_options(unit, indent) %}
-<option value="{{ unit.id }}">{{ '&nbsp;&nbsp;&nbsp;&nbsp;' * indent }}{{ unit.name }}</option>
+<option value="{{ unit.id }}">{{ '├─ ' * indent }}{{ unit.name }}</option>
 {% if unit.children %}
     {% for child in unit.children %}
         {{ render_unit_options(child, indent + 1) }}
