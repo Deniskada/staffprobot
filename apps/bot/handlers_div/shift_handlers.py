@@ -9,6 +9,7 @@ from apps.bot.services.object_service import ObjectService
 from core.database.session import get_async_session
 from core.utils.timezone_helper import timezone_helper
 from domain.entities.object import Object
+from domain.entities.shift import Shift
 from sqlalchemy import select
 from core.state import user_state_manager, UserAction, UserStep
 # from .utils import get_location_keyboard  # Удалено, создаем клавиатуру прямо в коде
