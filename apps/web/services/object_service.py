@@ -67,12 +67,16 @@ class ObjectService:
     async def get_object_by_id(self, object_id: int, telegram_id: int) -> Optional[Object]:
         """Получить объект по ID с проверкой владельца"""
         try:
+            from sqlalchemy.orm import selectinload
+            
             # Получаем внутренний ID пользователя
             internal_id = await self._get_user_internal_id(telegram_id)
             if not internal_id:
                 return None
             
-            query = select(Object).where(
+            query = select(Object).options(
+                selectinload(Object.org_unit)
+            ).where(
                 Object.id == object_id,
                 Object.owner_id == internal_id
             )
@@ -125,7 +129,8 @@ class ObjectService:
                 shift_tasks=object_data.get('shift_tasks'),
                 inherit_late_settings=object_data.get('inherit_late_settings', True),
                 late_threshold_minutes=object_data.get('late_threshold_minutes'),
-                late_penalty_per_minute=object_data.get('late_penalty_per_minute')
+                late_penalty_per_minute=object_data.get('late_penalty_per_minute'),
+                org_unit_id=object_data.get('org_unit_id')
             )
             
             self.db.add(new_object)
@@ -200,6 +205,10 @@ class ObjectService:
                 obj.late_threshold_minutes = object_data['late_threshold_minutes']
             if 'late_penalty_per_minute' in object_data:
                 obj.late_penalty_per_minute = object_data['late_penalty_per_minute']
+            
+            # Обновляем подразделение
+            if 'org_unit_id' in object_data:
+                obj.org_unit_id = object_data['org_unit_id']
             
             logger.info(f"Updating object {object_id} - work_conditions: '{obj.work_conditions}', shift_tasks: {obj.shift_tasks}")
             
