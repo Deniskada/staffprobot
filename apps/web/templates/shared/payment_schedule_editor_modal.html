@@ -1,0 +1,69 @@
+<!-- Модальное окно для создания/редактирования графика выплат -->
+<div class="modal fade" id="paymentScheduleModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-calendar-alt"></i> Настройка графика выплат
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <!-- Левая панель: настройки -->
+                    <div class="col-md-5">
+                        <div class="mb-3">
+                            <label for="schedule_name" class="form-label">Название графика *</label>
+                            <input type="text" 
+                                   id="schedule_name" 
+                                   class="form-control" 
+                                   placeholder="Например: Еженедельные выплаты по средам">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="schedule_frequency" class="form-label">Частота выплат *</label>
+                            <select id="schedule_frequency" class="form-select">
+                                <option value="">Выберите частоту</option>
+                                <option value="daily">Ежедневно</option>
+                                <option value="weekly">Еженедельно</option>
+                                <option value="biweekly">Раз в 2 недели</option>
+                                <option value="monthly">Ежемесячно</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Динамические параметры в зависимости от частоты -->
+                        <div id="schedule_params"></div>
+                        
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="button" class="btn btn-outline-primary" onclick="window.paymentScheduleEditor.generateSchedule()">
+                                <i class="fas fa-sync"></i> Обновить превью
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Правая панель: превью графика -->
+                    <div class="col-md-7">
+                        <h6 class="mb-3">
+                            <i class="fas fa-table"></i> Превью графика на год
+                        </h6>
+                        <div id="schedule_preview">
+                            <div class="alert alert-secondary">
+                                <i class="fas fa-info-circle"></i> 
+                                Выберите частоту выплат для отображения графика
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Отмена
+                </button>
+                <button type="button" id="save_schedule_btn" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Сохранить и применить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
