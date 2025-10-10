@@ -346,14 +346,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     # Задачи на смену
     elif query.data.startswith("complete_task:"):
+        from .shift_handlers import _handle_complete_task
         task_id = int(query.data.split(":", 1)[1])
         await _handle_complete_task(update, context, task_id)
         return
     elif query.data.startswith("close_shift_proceed:"):
+        from .shift_handlers import _handle_close_shift_proceed
         shift_id = int(query.data.split(":", 1)[1])
         await _handle_close_shift_proceed(update, context, shift_id)
         return
     elif query.data.startswith("close_shift_skip_tasks:"):
+        from .shift_handlers import _handle_close_shift_proceed
         shift_id = int(query.data.split(":", 1)[1])
         await _handle_close_shift_proceed(update, context, shift_id)
         return
