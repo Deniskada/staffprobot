@@ -98,14 +98,20 @@
                                            data-bs-toggle="tooltip" 
                                            title="Определяет периодичность выплат сотрудникам объекта"></i>
                                     </label>
-                                    <select class="form-select" id="payment_schedule_id" name="payment_schedule_id">
-                                        <option value="">Не указано (наследуется от подразделения)</option>
-                                        {% for schedule in payment_schedules %}
-                                        <option value="{{ schedule.id }}">
-                                            {{ schedule.name }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
+                                    <div class="input-group">
+                                        <select class="form-select" id="payment_schedule_id" name="payment_schedule_id">
+                                            <option value="">Не указано (наследуется от подразделения)</option>
+                                            {% for schedule in payment_schedules %}
+                                            <option value="{{ schedule.id }}" 
+                                                    data-description="{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}">
+                                                {{ schedule.name }}{% if schedule.is_custom %} (кастомный){% endif %}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="button" class="btn btn-outline-primary" onclick="showScheduleEditor()">
+                                            <i class="fas fa-cog"></i> Настроить
+                                        </button>
+                                    </div>
                                     <small class="form-text text-muted" id="schedule_description"></small>
                                 </div>
                             </div>
@@ -388,6 +394,28 @@ function removeTask(button) {
         input.value = '';
     }
 }
+
+// Инициализация редактора графиков выплат
+let paymentScheduleEditor;
+
+function showScheduleEditor() {
+    const objectId = null; // Объект еще не создан
+    
+    if (!paymentScheduleEditor) {
+        paymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', objectId);
+        paymentScheduleEditor.init();
+    }
+    
+    window.paymentScheduleEditor = paymentScheduleEditor;
+    paymentScheduleEditor.show();
+}
 </script>
+
+<!-- Подключение редактора графиков выплат -->
+<script src="{{ 'js/shared/payment_schedule_editor.js' | static_version }}"></script>
+
+<!-- Модальное окно редактора графиков -->
+{% include 'shared/payment_schedule_editor_modal.html' %}
+
 {% endblock %}
 {% endblock %}

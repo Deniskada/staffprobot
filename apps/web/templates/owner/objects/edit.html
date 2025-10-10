@@ -100,23 +100,30 @@
                                            data-bs-toggle="tooltip" 
                                            title="Определяет периодичность выплат сотрудникам объекта"></i>
                                     </label>
-                                    <select class="form-select" id="payment_schedule_id" name="payment_schedule_id">
-                                        <option value="">Не указано (наследуется от подразделения)</option>
+                                    <div class="input-group">
+                                        <select class="form-select" id="payment_schedule_id" name="payment_schedule_id">
+                                            <option value="">Не указано (наследуется от подразделения)</option>
+                                            {% for schedule in payment_schedules %}
+                                            <option value="{{ schedule.id }}" 
+                                                    data-description="{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}"
+                                                    {% if object.payment_schedule_id == schedule.id %}selected{% endif %}>
+                                                {{ schedule.name }}{% if schedule.is_custom %} (кастомный){% endif %}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="button" class="btn btn-outline-primary" onclick="showScheduleEditor()">
+                                            <i class="fas fa-cog"></i> Настроить
+                                        </button>
+                                    </div>
+                                    <small class="text-muted" id="schedule_description_text">
+                                        {% if object.payment_schedule_id %}
                                         {% for schedule in payment_schedules %}
-                                        <option value="{{ schedule.id }}" {% if object.payment_schedule_id == schedule.id %}selected{% endif %}>
-                                            {{ schedule.name }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                    {% if object.payment_schedule_id %}
-                                    {% for schedule in payment_schedules %}
-                                    {% if schedule.id == object.payment_schedule_id %}
-                                    <small class="text-muted">
+                                        {% if schedule.id == object.payment_schedule_id %}
                                         {{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}
+                                        {% endif %}
+                                        {% endfor %}
+                                        {% endif %}
                                     </small>
-                                    {% endif %}
-                                    {% endfor %}
-                                    {% endif %}
                                 </div>
                             </div>
                             
@@ -573,26 +580,38 @@ function removeTask(button) {
 // Динамическое отображение описания графика выплат
 document.addEventListener('DOMContentLoaded', function() {
     const scheduleSelect = document.getElementById('payment_schedule_id');
+    const descEl = document.getElementById('schedule_description_text');
     
-    if (scheduleSelect) {
-        const scheduleData = {
-            {% for schedule in payment_schedules %}
-            {{ schedule.id }}: "{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}",
-            {% endfor %}
-        };
-        
+    if (scheduleSelect && descEl) {
         scheduleSelect.addEventListener('change', function() {
-            const scheduleId = parseInt(this.value);
-            const description = scheduleData[scheduleId] || '';
-            
-            // Обновить описание в small тексте
-            const descEl = this.parentElement.querySelector('small.text-muted');
-            if (descEl && description) {
-                descEl.textContent = description;
-            }
+            const selectedOption = this.options[this.selectedIndex];
+            const description = selectedOption.getAttribute('data-description') || '';
+            descEl.textContent = description;
         });
     }
 });
+
+// Инициализация редактора графиков выплат
+let paymentScheduleEditor;
+
+function showScheduleEditor() {
+    const objectId = {{ object.id }};
+    
+    if (!paymentScheduleEditor) {
+        paymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', objectId);
+        paymentScheduleEditor.init();
+    }
+    
+    window.paymentScheduleEditor = paymentScheduleEditor;
+    paymentScheduleEditor.show();
+}
 </script>
+
+<!-- Подключение редактора графиков выплат -->
+<script src="{{ 'js/shared/payment_schedule_editor.js' | static_version }}"></script>
+
+<!-- Модальное окно редактора графиков -->
+{% include 'shared/payment_schedule_editor_modal.html' %}
+
 {% endblock %}
 {% endblock %}
