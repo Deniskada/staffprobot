@@ -76,7 +76,7 @@ class Contract(Base):
     employee = relationship("User", foreign_keys=[employee_id], backref="employee_contracts")
     template = relationship("ContractTemplate", back_populates="contracts")
     payment_system = relationship("PaymentSystem", backref="contracts")
-    payment_schedule = relationship("PaymentSchedule", backref="contracts")
+    payment_schedule = relationship("PaymentSchedule", foreign_keys=[payment_schedule_id], backref="assigned_contracts")
     object_permissions = relationship("ManagerObjectPermission", back_populates="contract")
     
     # Связанные смены (пока без внешних ключей)

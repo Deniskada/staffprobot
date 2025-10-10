@@ -262,9 +262,14 @@ async def owner_objects_create(request: Request):
         user_id = await get_user_id_from_current_user(current_user, session)
         available_interfaces = await get_available_interfaces_for_user(user_id)
         
-        # Загрузить графики выплат
+        # Загрузить графики выплат (системные + кастомные владельца)
         from domain.entities.payment_schedule import PaymentSchedule
-        schedules_query = select(PaymentSchedule).where(PaymentSchedule.is_active == True).order_by(PaymentSchedule.id)
+        schedules_query = select(PaymentSchedule).where(
+            PaymentSchedule.is_active == True
+        ).where(
+            (PaymentSchedule.owner_id == None) |  # Системные
+            (PaymentSchedule.owner_id == user_id)  # Кастомные владельца
+        ).order_by(PaymentSchedule.is_custom.asc(), PaymentSchedule.id.asc())
         schedules_result = await session.execute(schedules_query)
         payment_schedules = schedules_result.scalars().all()
     
@@ -519,9 +524,17 @@ async def owner_objects_edit(request: Request, object_id: int):
             if not obj:
                 raise HTTPException(status_code=404, detail="Объект не найден")
             
-            # Загрузить графики выплат
+            # Загрузить графики выплат (системные + кастомные владельца + кастомные объекта)
             from domain.entities.payment_schedule import PaymentSchedule
-            schedules_query = select(PaymentSchedule).where(PaymentSchedule.is_active == True).order_by(PaymentSchedule.id)
+            user_id = await get_user_id_from_current_user(current_user, session)
+            
+            schedules_query = select(PaymentSchedule).where(
+                PaymentSchedule.is_active == True
+            ).where(
+                (PaymentSchedule.owner_id == None) |  # Системные
+                (PaymentSchedule.owner_id == user_id) |  # Кастомные владельца
+                (PaymentSchedule.object_id == object_id)  # Кастомные объекта
+            ).order_by(PaymentSchedule.is_custom.asc(), PaymentSchedule.id.asc())
             schedules_result = await session.execute(schedules_query)
             payment_schedules = schedules_result.scalars().all()
             
