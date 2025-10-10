@@ -103,6 +103,35 @@ def auto_close_shifts(self):
                             shift.total_hours = float(total_hours)
                             shift.total_payment = float(total_payment) if total_payment is not None else None
                             
+                            # Создаем корректировки начислений (Phase 4A)
+                            from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+                            from shared.services.late_penalty_calculator import LatePenaltyCalculator
+                            
+                            adjustment_service = PayrollAdjustmentService(session)
+                            late_penalty_calc = LatePenaltyCalculator(session)
+                            
+                            # 1. Создать базовую оплату за смену
+                            await adjustment_service.create_shift_base_adjustment(
+                                shift=shift,
+                                employee_id=shift.user_id,
+                                object_id=shift.object_id,
+                                created_by=shift.user_id  # Для авто-закрытия - сотрудник
+                            )
+                            
+                            # 2. Проверить и создать штраф за опоздание
+                            late_minutes, penalty_amount = await late_penalty_calc.calculate_late_penalty(
+                                shift=shift,
+                                obj=obj
+                            )
+                            
+                            if penalty_amount > 0:
+                                await adjustment_service.create_late_start_adjustment(
+                                    shift=shift,
+                                    late_minutes=late_minutes,
+                                    penalty_amount=penalty_amount,
+                                    created_by=shift.user_id
+                                )
+                            
                             closed_count += 1
                             shift_type = "planned" if shift.is_planned else "spontaneous"
                             time_source = "timeslot" if (shift.is_planned and shift.time_slot_id) else "object closing_time"
