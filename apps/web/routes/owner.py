@@ -566,7 +566,10 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "employee_position": obj.employee_position or "",
                 "shift_tasks": obj.shift_tasks or [],
                 "payment_system_id": obj.payment_system_id,
-                "payment_schedule_id": obj.payment_schedule_id
+                "payment_schedule_id": obj.payment_schedule_id,
+                "inherit_late_settings": obj.inherit_late_settings if hasattr(obj, 'inherit_late_settings') else True,
+                "late_threshold_minutes": obj.late_threshold_minutes if hasattr(obj, 'late_threshold_minutes') else None,
+                "late_penalty_per_minute": obj.late_penalty_per_minute if hasattr(obj, 'late_penalty_per_minute') else None
             }
             
             # Получаем данные для переключения интерфейсов

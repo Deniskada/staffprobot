@@ -501,18 +501,22 @@ function toggleLateSettings() {
     const lateThresholdInput = document.getElementById('late_threshold_minutes');
     const latePenaltyInput = document.getElementById('late_penalty_per_minute');
     
-    // Если чекбокс включен (наследуем), отключаем поля
-    const disabled = inheritCheckbox.checked;
-    lateThresholdInput.disabled = disabled;
-    latePenaltyInput.disabled = disabled;
+    // Если чекбокс включен (наследуем), делаем поля readonly
+    const readonly = inheritCheckbox.checked;
+    lateThresholdInput.readOnly = readonly;
+    latePenaltyInput.readOnly = readonly;
     
     // Визуально обозначаем неактивность
-    if (disabled) {
+    if (readonly) {
         lateThresholdInput.style.backgroundColor = '#e9ecef';
         latePenaltyInput.style.backgroundColor = '#e9ecef';
+        lateThresholdInput.style.cursor = 'not-allowed';
+        latePenaltyInput.style.cursor = 'not-allowed';
     } else {
         lateThresholdInput.style.backgroundColor = '';
         latePenaltyInput.style.backgroundColor = '';
+        lateThresholdInput.style.cursor = '';
+        latePenaltyInput.style.cursor = '';
     }
 }
 
