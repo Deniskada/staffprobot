@@ -14,7 +14,13 @@ from domain.entities.time_slot import TimeSlot
 
 
 class AutoDeductionService:
-    """Сервис для расчета автоматических удержаний."""
+    """
+    Сервис для расчета автоматических удержаний.
+    
+    ВАЖНО: Премии и штрафы за задачи применяются только для
+    "Повременно-премиальной" системы оплаты труда (payment_system_id=3).
+    Проверка системы оплаты выполняется в Celery задаче process_automatic_deductions.
+    """
     
     def __init__(self, db: AsyncSession):
         self.db = db
