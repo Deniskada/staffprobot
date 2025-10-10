@@ -48,9 +48,17 @@ class ShiftTaskService:
             obj = object_result.scalar_one_or_none()
             
             if obj and obj.shift_tasks:
-                # object.shift_tasks - это JSON массив строк
-                for task_text in obj.shift_tasks:
-                    if task_text.strip():  # Пропускаем пустые
+                # object.shift_tasks - это JSON массив объектов {"text": "...", "is_mandatory": true, "deduction_amount": 100}
+                for task_data in obj.shift_tasks:
+                    # Поддержка старого формата (строки) и нового (объекты)
+                    if isinstance(task_data, str):
+                        task_text = task_data
+                    elif isinstance(task_data, dict):
+                        task_text = task_data.get('text', '')
+                    else:
+                        continue
+                    
+                    if task_text and task_text.strip():  # Пропускаем пустые
                         task = ShiftTask(
                             shift_id=shift_id,
                             task_text=task_text.strip(),

@@ -341,9 +341,20 @@ async def owner_objects_create_post(
         employee_position = form_data.get("employee_position", "").strip()
         payment_system_id_str = form_data.get("payment_system_id", "").strip()
         payment_system_id = int(payment_system_id_str) if payment_system_id_str else None
-        shift_tasks = form_data.getlist("shift_tasks")
-        # Фильтруем пустые задачи
-        shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
+        
+        # Парсинг задач с новой структурой
+        task_texts = form_data.getlist("task_texts[]")
+        task_deductions = form_data.getlist("task_deductions[]")
+        task_mandatory = form_data.getlist("task_mandatory[]")
+        
+        shift_tasks = []
+        for idx, text in enumerate(task_texts):
+            if text.strip():
+                shift_tasks.append({
+                    "text": text.strip(),
+                    "is_mandatory": str(idx) in task_mandatory or f"{idx}" in task_mandatory,
+                    "deduction_amount": float(task_deductions[idx]) if idx < len(task_deductions) else 100.0
+                })
         
         # Обработка графика работы
         work_days = form_data.getlist("work_days")
@@ -613,9 +624,20 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         employee_position = form_data.get("employee_position", "").strip()
         payment_system_id_str = form_data.get("payment_system_id", "").strip()
         payment_system_id = int(payment_system_id_str) if payment_system_id_str else None
-        shift_tasks = form_data.getlist("shift_tasks[]")
-        # Фильтруем пустые задачи
-        shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
+        
+        # Парсинг задач с новой структурой
+        task_texts = form_data.getlist("task_texts[]")
+        task_deductions = form_data.getlist("task_deductions[]")
+        task_mandatory = form_data.getlist("task_mandatory[]")
+        
+        shift_tasks = []
+        for idx, text in enumerate(task_texts):
+            if text.strip():
+                shift_tasks.append({
+                    "text": text.strip(),
+                    "is_mandatory": str(idx) in task_mandatory or f"{idx}" in task_mandatory,
+                    "deduction_amount": float(task_deductions[idx]) if idx < len(task_deductions) else 100.0
+                })
         
         logger.info(f"Form data - work_conditions: '{work_conditions}', shift_tasks: {shift_tasks}")
         
