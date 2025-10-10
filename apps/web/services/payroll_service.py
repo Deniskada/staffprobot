@@ -150,6 +150,7 @@ class PayrollService:
     async def get_payroll_entry_by_id(self, entry_id: int) -> Optional[PayrollEntry]:
         """Получить начисление по ID с загрузкой связей."""
         query = select(PayrollEntry).where(PayrollEntry.id == entry_id).options(
+            selectinload(PayrollEntry.employee),
             selectinload(PayrollEntry.deductions),
             selectinload(PayrollEntry.bonuses),
             selectinload(PayrollEntry.payments)
