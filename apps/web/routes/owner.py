@@ -356,6 +356,13 @@ async def owner_objects_create_post(
         payment_schedule_id_str = form_data.get("payment_schedule_id", "").strip()
         payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
         
+        # Обработка настроек штрафов за опоздание
+        inherit_late_settings = "inherit_late_settings" in form_data
+        late_threshold_minutes_str = form_data.get("late_threshold_minutes", "").strip()
+        late_threshold_minutes = int(late_threshold_minutes_str) if late_threshold_minutes_str else None
+        late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
+        late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
+        
         # Парсинг задач с новой структурой
         task_texts = form_data.getlist("task_texts[]")
         task_deductions = form_data.getlist("task_deductions[]")
@@ -404,7 +411,10 @@ async def owner_objects_create_post(
             "schedule_repeat_weeks": schedule_repeat_weeks,
             "work_conditions": work_conditions if work_conditions else None,
             "employee_position": employee_position if employee_position else None,
-            "shift_tasks": shift_tasks if shift_tasks else None
+            "shift_tasks": shift_tasks if shift_tasks else None,
+            "inherit_late_settings": inherit_late_settings,
+            "late_threshold_minutes": late_threshold_minutes,
+            "late_penalty_per_minute": late_penalty_per_minute
         }
         
         # Передаем telegram_id в create_object (метод ожидает telegram_id)
@@ -666,6 +676,13 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         payment_schedule_id_str = form_data.get("payment_schedule_id", "").strip()
         payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
         
+        # Обработка настроек штрафов за опоздание
+        inherit_late_settings = "inherit_late_settings" in form_data
+        late_threshold_minutes_str = form_data.get("late_threshold_minutes", "").strip()
+        late_threshold_minutes = int(late_threshold_minutes_str) if late_threshold_minutes_str else None
+        late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
+        late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
+        
         # Парсинг задач с новой структурой
         task_texts = form_data.getlist("task_texts[]")
         task_deductions = form_data.getlist("task_deductions[]")
@@ -722,7 +739,10 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "schedule_repeat_weeks": schedule_repeat_weeks,
                 "work_conditions": work_conditions if work_conditions else None,
                 "employee_position": employee_position if employee_position else None,
-                "shift_tasks": shift_tasks if shift_tasks else None
+                "shift_tasks": shift_tasks if shift_tasks else None,
+                "inherit_late_settings": inherit_late_settings,
+                "late_threshold_minutes": late_threshold_minutes,
+                "late_penalty_per_minute": late_penalty_per_minute
             }
             
             # Получаем внутренний ID пользователя
