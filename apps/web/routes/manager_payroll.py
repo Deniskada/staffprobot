@@ -49,6 +49,7 @@ async def manager_payroll_list(
                     "manager/payroll/list.html",
                     {
                         "request": request,
+                        "current_user": current_user,
                         "title": "Начисления и выплаты",
                         "employees": [],
                         "accessible_objects": [],
@@ -122,6 +123,7 @@ async def manager_payroll_list(
             "manager/payroll/list.html",
             {
                 "request": request,
+                "current_user": current_user,
                 "title": "Начисления и выплаты",
                 "employees": employees_data,
                 "accessible_objects": accessible_objects,
@@ -177,6 +179,7 @@ async def manager_payroll_detail(
             "manager/payroll/detail.html",
             {
                 "request": request,
+                "current_user": current_user,
                 "title": f"Начисление #{entry_id}",
                 "entry": entry,
                 "shifts": shifts,
