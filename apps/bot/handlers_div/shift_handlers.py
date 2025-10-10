@@ -180,10 +180,66 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             return
         
-        # Если одна активная смена - сразу переходим к геопозиции
+        # Если одна активная смена - проверяем задачи
         if len(active_shifts) == 1:
             shift = active_shifts[0]  # Это словарь, а не объект
             
+            # Получаем задачи смены
+            async with get_async_session() as session:
+                from apps.web.services.shift_task_service import ShiftTaskService
+                from domain.entities.shift_task import ShiftTask
+                
+                task_service = ShiftTaskService(session)
+                shift_tasks = await task_service.get_shift_tasks(shift['id'])
+                
+                # Если есть задачи - показываем их для подтверждения
+                if shift_tasks:
+                    incomplete_tasks = [t for t in shift_tasks if not t.is_completed]
+                    
+                    # Формируем текст с задачами
+                    tasks_text = "📋 <b>Задачи на смену:</b>\n\n"
+                    for task in shift_tasks:
+                        if task.is_completed:
+                            tasks_text += f"✅ <s>{task.task_text}</s>\n"
+                        else:
+                            tasks_text += f"❌ {task.task_text}\n"
+                    
+                    # Формируем кнопки для невыполненных задач
+                    keyboard = []
+                    for task in incomplete_tasks:
+                        keyboard.append([
+                            InlineKeyboardButton(
+                                f"✓ {task.task_text[:40]}...",
+                                callback_data=f"complete_task:{task.id}"
+                            )
+                        ])
+                    
+                    # Кнопка продолжить без задач или со всеми выполненными
+                    if incomplete_tasks:
+                        keyboard.append([
+                            InlineKeyboardButton(
+                                "⚠️ Закрыть смену с невыполненными задачами",
+                                callback_data=f"close_shift_skip_tasks:{shift['id']}"
+                            )
+                        ])
+                    else:
+                        keyboard.append([
+                            InlineKeyboardButton(
+                                "✅ Продолжить закрытие смены",
+                                callback_data=f"close_shift_proceed:{shift['id']}"
+                            )
+                        ])
+                    
+                    keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="main_menu")])
+                    
+                    await query.edit_message_text(
+                        text=tasks_text,
+                        parse_mode='HTML',
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    return
+            
+            # Нет задач - переходим сразу к геопозиции
             # Создаем состояние пользователя
             user_state_manager.create_state(
                 user_id=user_id,
@@ -627,5 +683,148 @@ async def _handle_retry_location_close(update: Update, context: ContextTypes.DEF
             one_time_keyboard=True
         )
     )
+
+
+async def _handle_complete_task(update: Update, context: ContextTypes.DEFAULT_TYPE, task_id: int):
+    """Обработчик отметки задачи как выполненной."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        async with get_async_session() as session:
+            from apps.web.services.shift_task_service import ShiftTaskService
+            from domain.entities.shift_task import ShiftTask
+            
+            task_service = ShiftTaskService(session)
+            
+            # Получить задачу
+            task_query = select(ShiftTask).where(ShiftTask.id == task_id)
+            task_result = await session.execute(task_query)
+            task = task_result.scalar_one_or_none()
+            
+            if not task:
+                await query.answer("❌ Задача не найдена", show_alert=True)
+                return
+            
+            # Отметить как выполненную
+            await task_service.mark_task_completed(task_id)
+            
+            # Получить все задачи смены для обновления списка
+            shift_tasks = await task_service.get_shift_tasks(task.shift_id)
+            incomplete_tasks = [t for t in shift_tasks if not t.is_completed]
+            
+            # Формируем обновленный текст
+            tasks_text = "📋 <b>Задачи на смену:</b>\n\n"
+            for t in shift_tasks:
+                if t.is_completed:
+                    tasks_text += f"✅ <s>{t.task_text}</s>\n"
+                else:
+                    tasks_text += f"❌ {t.task_text}\n"
+            
+            # Формируем кнопки
+            keyboard = []
+            for t in incomplete_tasks:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"✓ {t.task_text[:40]}...",
+                        callback_data=f"complete_task:{t.id}"
+                    )
+                ])
+            
+            # Кнопка продолжить
+            if incomplete_tasks:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        "⚠️ Закрыть смену с невыполненными задачами",
+                        callback_data=f"close_shift_skip_tasks:{task.shift_id}"
+                    )
+                ])
+            else:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        "✅ Продолжить закрытие смены",
+                        callback_data=f"close_shift_proceed:{task.shift_id}"
+                    )
+                ])
+            
+            keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="main_menu")])
+            
+            await query.edit_message_text(
+                text=tasks_text,
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            await query.answer("✅ Задача отмечена")
+            
+    except Exception as e:
+        logger.error(f"Error completing task: {e}")
+        await query.answer("❌ Ошибка отметки задачи", show_alert=True)
+
+
+async def _handle_close_shift_proceed(update: Update, context: ContextTypes.DEFAULT_TYPE, shift_id: int):
+    """Обработчик продолжения закрытия смены после проверки задач."""
+    query = update.callback_query
+    user = query.from_user
+    user_id = user.id
+    
+    try:
+        # Создаем состояние пользователя
+        user_state_manager.create_state(
+            user_id=user_id,
+            action=UserAction.CLOSE_SHIFT,
+            step=UserStep.LOCATION_REQUEST,
+            selected_shift_id=shift_id
+        )
+        
+        # Получаем информацию об объекте смены
+        async with get_async_session() as session:
+            shift_query = select(Shift).where(Shift.id == shift_id)
+            shift_result = await session.execute(shift_query)
+            shift = shift_result.scalar_one_or_none()
+            
+            if not shift:
+                await query.answer("❌ Смена не найдена", show_alert=True)
+                return
+            
+            obj_query = select(Object).where(Object.id == shift.object_id)
+            obj_result = await session.execute(obj_query)
+            obj = obj_result.scalar_one_or_none()
+            
+            if not obj:
+                await query.edit_message_text(
+                    text="❌ Объект смены не найден.",
+                    parse_mode='HTML'
+                )
+                user_state_manager.clear_state(user_id)
+                return
+            
+            # Конвертируем время начала смены в часовой пояс объекта
+            object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
+            local_start_time = timezone_helper.format_local_time(shift.start_time, object_timezone)
+            
+            # Запрашиваем геопозицию
+            await query.edit_message_text(
+                text=f"📍 <b>Отправьте геопозицию для закрытия смены</b>\n\n"
+                     f"🏢 Объект: <b>{obj.name}</b>\n"
+                     f"📍 Адрес: {obj.address or 'не указан'}\n"
+                     f"🕐 Начало смены: {local_start_time}\n\n"
+                     f"Нажмите кнопку ниже для отправки вашего местоположения:",
+                parse_mode='HTML'
+            )
+            
+            # Отправляем клавиатуру для геопозиции
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="👇 Используйте кнопку для отправки геопозиции:",
+                reply_markup=ReplyKeyboardMarkup(
+                    [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
+                    resize_keyboard=True,
+                    one_time_keyboard=True
+                )
+            )
+            
+    except Exception as e:
+        logger.error(f"Error proceeding to close shift: {e}")
+        await query.answer("❌ Ошибка продолжения закрытия смены", show_alert=True)
 
 

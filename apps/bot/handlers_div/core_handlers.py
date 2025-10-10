@@ -344,6 +344,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         shift_id = int(query.data.split(":", 1)[1])
         await _handle_retry_location_close(update, context, shift_id)
         return
+    # Задачи на смену
+    elif query.data.startswith("complete_task:"):
+        task_id = int(query.data.split(":", 1)[1])
+        await _handle_complete_task(update, context, task_id)
+        return
+    elif query.data.startswith("close_shift_proceed:"):
+        shift_id = int(query.data.split(":", 1)[1])
+        await _handle_close_shift_proceed(update, context, shift_id)
+        return
+    elif query.data.startswith("close_shift_skip_tasks:"):
+        shift_id = int(query.data.split(":", 1)[1])
+        await _handle_close_shift_proceed(update, context, shift_id)
+        return
     # Планирование смен
     elif query.data == "schedule_shift":
         from .schedule_handlers import handle_schedule_shift
