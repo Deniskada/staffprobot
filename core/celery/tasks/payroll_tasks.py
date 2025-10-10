@@ -37,7 +37,7 @@ def process_automatic_deductions():
                 
                 shifts_query = select(Shift).where(
                     and_(
-                        Shift.status == 'closed',
+                        Shift.status == 'completed',  # Статус для закрытых смен
                         Shift.end_time >= yesterday
                     )
                 )

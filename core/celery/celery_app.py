@@ -82,7 +82,8 @@ celery_app.conf.update(
         'core.celery.tasks.notification_tasks.*': {'queue': 'notifications'},
         'core.celery.tasks.shift_tasks.*': {'queue': 'shifts'},
         'core.celery.tasks.analytics_tasks.*': {'queue': 'analytics'},
-        'core.celery.tasks.payroll_tasks.*': {'queue': 'payroll'},
+        'core.celery.tasks.payroll_tasks.*': {'queue': 'shifts'},  # Используем shifts для payroll
+        'process_automatic_deductions': {'queue': 'shifts'},  # Явно для этой задачи
     },
 )
 
