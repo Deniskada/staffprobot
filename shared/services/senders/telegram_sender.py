@@ -122,27 +122,20 @@ class TelegramNotificationSender:
             
             if success:
                 logger.info(
-                    f"Telegram notification sent successfully",
-                    notification_id=notification.id,
-                    telegram_id=telegram_id,
-                    type=notification.type.value
+                    f"Telegram notification sent successfully "
+                    f"(notification_id={notification.id}, telegram_id={telegram_id}, type={notification.type.value})"
                 )
             else:
                 logger.error(
-                    f"Failed to send Telegram notification",
-                    notification_id=notification.id,
-                    telegram_id=telegram_id,
-                    type=notification.type.value
+                    f"Failed to send Telegram notification "
+                    f"(notification_id={notification.id}, telegram_id={telegram_id}, type={notification.type.value})"
                 )
             
             return success
             
         except Exception as e:
             logger.error(
-                f"Error sending Telegram notification: {e}",
-                notification_id=notification.id,
-                telegram_id=telegram_id,
-                error=str(e)
+                f"Error sending Telegram notification (notification_id={notification.id}, telegram_id={telegram_id}): {e}"
             )
             return False
     
@@ -182,30 +175,22 @@ class TelegramNotificationSender:
             except Forbidden as e:
                 # Пользователь заблокировал бота - не повторяем
                 logger.warning(
-                    f"User blocked the bot",
-                    telegram_id=telegram_id,
-                    notification_id=notification.id,
-                    error=str(e)
+                    f"User blocked the bot (telegram_id={telegram_id}, notification_id={notification.id}): {e}"
                 )
                 return False
                 
             except BadRequest as e:
                 # Неверный запрос (например, неверный chat_id) - не повторяем
                 logger.warning(
-                    f"Bad request to Telegram API",
-                    telegram_id=telegram_id,
-                    notification_id=notification.id,
-                    error=str(e)
+                    f"Bad request to Telegram API (telegram_id={telegram_id}, notification_id={notification.id}): {e}"
                 )
                 return False
                 
             except NetworkError as e:
                 # Сетевая ошибка - повторяем
                 logger.warning(
-                    f"Network error, attempt {attempt + 1}/{self.max_retries}",
-                    telegram_id=telegram_id,
-                    notification_id=notification.id,
-                    error=str(e)
+                    f"Network error, attempt {attempt + 1}/{self.max_retries} "
+                    f"(telegram_id={telegram_id}, notification_id={notification.id}): {e}"
                 )
                 
                 if attempt < self.max_retries - 1:
@@ -217,10 +202,8 @@ class TelegramNotificationSender:
             except TelegramError as e:
                 # Другая ошибка Telegram API - повторяем
                 logger.warning(
-                    f"Telegram API error, attempt {attempt + 1}/{self.max_retries}",
-                    telegram_id=telegram_id,
-                    notification_id=notification.id,
-                    error=str(e)
+                    f"Telegram API error, attempt {attempt + 1}/{self.max_retries} "
+                    f"(telegram_id={telegram_id}, notification_id={notification.id}): {e}"
                 )
                 
                 if attempt < self.max_retries - 1:
@@ -232,10 +215,7 @@ class TelegramNotificationSender:
             except Exception as e:
                 # Неожиданная ошибка
                 logger.error(
-                    f"Unexpected error sending Telegram message",
-                    telegram_id=telegram_id,
-                    notification_id=notification.id,
-                    error=str(e)
+                    f"Unexpected error sending Telegram message (telegram_id={telegram_id}, notification_id={notification.id}): {e}"
                 )
                 return False
         
