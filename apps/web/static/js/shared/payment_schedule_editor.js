@@ -33,27 +33,36 @@ class PaymentScheduleEditor {
         const paramsContainer = document.getElementById('schedule_params');
         
         let html = '';
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
         
         if (frequency === 'daily') {
             html = `
                 <div class="mb-3">
-                    <label class="form-label">Время выплаты</label>
-                    <input type="time" id="payment_time" class="form-control" value="12:00">
+                    <label class="form-label">Следующая дата выплаты</label>
+                    <input type="date" 
+                           id="next_payment_date" 
+                           class="form-control" 
+                           value="${this.formatDateInput(tomorrow)}"
+                           onchange="window.paymentScheduleEditor.generateSchedule()">
+                    <small class="text-muted">Дата первой выплаты</small>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Период расчета</label>
-                    <select id="period_type" class="form-select">
-                        <option value="previous_day">За предыдущий день</option>
-                        <option value="current_day">За текущий день</option>
-                    </select>
+                    <label class="form-label">Выберите дату (за которую производить выплаты)</label>
+                    <input type="date" 
+                           id="period_date" 
+                           class="form-control" 
+                           value="${this.formatDateInput(today)}"
+                           onchange="window.paymentScheduleEditor.generateSchedule()">
+                    <small class="text-muted">За какой день будет выплата</small>
                 </div>
             `;
-        } else if (frequency === 'weekly' || frequency === 'biweekly') {
-            const weekLabel = frequency === 'biweekly' ? 'каждые 2 недели' : 'каждую неделю';
+        } else if (frequency === 'weekly') {
             html = `
                 <div class="mb-3">
-                    <label class="form-label">День недели для выплаты</label>
-                    <select id="payment_day" class="form-select">
+                    <label class="form-label">День недели для выплаты *</label>
+                    <select id="payment_day_of_week" class="form-select" onchange="updateNextPaymentDate();window.paymentScheduleEditor.generateSchedule()">
                         <option value="1">Понедельник</option>
                         <option value="2">Вторник</option>
                         <option value="3">Среда</option>
@@ -64,42 +73,41 @@ class PaymentScheduleEditor {
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Начало расчетного периода (день недели)</label>
-                    <select id="period_start_day" class="form-select">
-                        <option value="1" selected>Понедельник</option>
-                        <option value="2">Вторник</option>
-                        <option value="3">Среда</option>
-                        <option value="4">Четверг</option>
-                        <option value="5">Пятница</option>
-                        <option value="6">Суббота</option>
-                        <option value="7">Воскресенье</option>
-                    </select>
-                    <small class="text-muted">С какого дня начинается рабочая неделя</small>
+                    <label class="form-label">Следующая дата выплаты</label>
+                    <input type="date" 
+                           id="next_payment_date" 
+                           class="form-control" 
+                           value="${this.getNextDayOfWeek(5)}"
+                           readonly>
+                    <small class="text-muted">Автоматически рассчитывается</small>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Конец расчетного периода (день недели)</label>
-                    <select id="period_end_day" class="form-select">
-                        <option value="1">Понедельник</option>
-                        <option value="2">Вторник</option>
-                        <option value="3">Среда</option>
-                        <option value="4">Четверг</option>
-                        <option value="5">Пятница</option>
-                        <option value="6">Суббота</option>
-                        <option value="7" selected>Воскресенье</option>
-                    </select>
-                    <small class="text-muted">На какой день заканчивается рабочая неделя</small>
+                    <label class="form-label">Выберите дату начала периода (за который производить выплаты)</label>
+                    <input type="date" 
+                           id="period_start_date" 
+                           class="form-control" 
+                           onchange="window.paymentScheduleEditor.generateSchedule()">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Выберите дату окончания периода (за который производить выплаты)</label>
+                    <input type="date" 
+                           id="period_end_date" 
+                           class="form-control" 
+                           onchange="window.paymentScheduleEditor.generateSchedule()">
                 </div>
             `;
         } else if (frequency === 'monthly') {
             html = `
                 <div class="mb-3">
-                    <label class="form-label">Количество выплат в месяц</label>
-                    <select id="payments_per_month" class="form-select" onchange="updateMonthlyPayments()">
-                        <option value="1">1 раз в месяц</option>
-                        <option value="2" selected>2 раза в месяц</option>
-                        <option value="3">3 раза в месяц</option>
-                        <option value="4">4 раза в месяц</option>
-                    </select>
+                    <label class="form-label">Количество выплат в месяц *</label>
+                    <input type="number" 
+                           id="payments_per_month" 
+                           class="form-control" 
+                           min="1" 
+                           max="30" 
+                           value="2"
+                           onchange="updateMonthlyPayments()">
+                    <small class="text-muted">От 1 до 30</small>
                 </div>
                 <div id="monthly_payments_container"></div>
             `;
@@ -107,7 +115,9 @@ class PaymentScheduleEditor {
         
         paramsContainer.innerHTML = html;
         
-        if (frequency === 'monthly') {
+        if (frequency === 'weekly') {
+            updateNextPaymentDate();
+        } else if (frequency === 'monthly') {
             updateMonthlyPayments();
         }
         
@@ -116,106 +126,96 @@ class PaymentScheduleEditor {
     
     generateSchedule() {
         const frequency = document.getElementById('schedule_frequency').value;
-        const today = new Date();
+        if (!frequency) return;
+        
         const schedules = [];
         
         if (frequency === 'daily') {
-            // Генерация ежедневных выплат на месяц вперед
-            for (let i = 0; i < 30; i++) {
-                const paymentDate = new Date(today);
-                paymentDate.setDate(today.getDate() + i);
+            const nextPaymentInput = document.getElementById('next_payment_date');
+            const periodDateInput = document.getElementById('period_date');
+            
+            if (!nextPaymentInput || !periodDateInput) return;
+            
+            const nextPayment = new Date(nextPaymentInput.value);
+            const periodDate = new Date(periodDateInput.value);
+            
+            // Рассчитать смещение
+            const offset = Math.floor((periodDate - nextPayment) / (1000 * 60 * 60 * 24));
+            
+            // Генерация на 365 дней
+            for (let i = 0; i < 365; i++) {
+                const paymentDate = new Date(nextPayment);
+                paymentDate.setDate(nextPayment.getDate() + i);
                 
-                const periodStart = new Date(paymentDate);
-                periodStart.setDate(paymentDate.getDate() - 1);
+                const periodDate = new Date(paymentDate);
+                periodDate.setDate(paymentDate.getDate() + offset);
                 
                 schedules.push({
                     payment_date: this.formatDate(paymentDate),
-                    period_start: this.formatDate(periodStart),
-                    period_end: this.formatDate(periodStart)
+                    period_start: this.formatDate(periodDate),
+                    period_end: this.formatDate(periodDate)
                 });
             }
         } else if (frequency === 'weekly') {
-            const paymentDay = parseInt(document.getElementById('payment_day')?.value || 5);
-            const periodStartDay = parseInt(document.getElementById('period_start_day')?.value || 1);
+            const nextPaymentInput = document.getElementById('next_payment_date');
+            const periodStartInput = document.getElementById('period_start_date');
+            const periodEndInput = document.getElementById('period_end_date');
             
-            // Найти ближайшую пятницу (или выбранный день)
-            let current = new Date(today);
-            while (current.getDay() !== (paymentDay === 7 ? 0 : paymentDay)) {
-                current.setDate(current.getDate() + 1);
-            }
+            if (!nextPaymentInput || !periodStartInput || !periodEndInput) return;
             
-            // Генерация на 12 недель вперед
-            for (let i = 0; i < 12; i++) {
-                const paymentDate = new Date(current);
-                paymentDate.setDate(current.getDate() + (i * 7));
+            const nextPayment = new Date(nextPaymentInput.value);
+            const periodStart = new Date(periodStartInput.value);
+            const periodEnd = new Date(periodEndInput.value);
+            
+            // Рассчитать смещение от даты выплаты до начала периода
+            const startOffset = Math.floor((periodStart - nextPayment) / (1000 * 60 * 60 * 24));
+            const endOffset = Math.floor((periodEnd - nextPayment) / (1000 * 60 * 60 * 24));
+            
+            // Генерация на 52 недели
+            for (let i = 0; i < 52; i++) {
+                const paymentDate = new Date(nextPayment);
+                paymentDate.setDate(nextPayment.getDate() + (i * 7));
                 
-                // Расчетный период - предыдущая неделя
-                const periodEnd = new Date(paymentDate);
-                periodEnd.setDate(paymentDate.getDate() - 1);
+                const periodStartDate = new Date(paymentDate);
+                periodStartDate.setDate(paymentDate.getDate() + startOffset);
                 
-                const periodStart = new Date(periodEnd);
-                periodStart.setDate(periodEnd.getDate() - 6);
+                const periodEndDate = new Date(paymentDate);
+                periodEndDate.setDate(paymentDate.getDate() + endOffset);
                 
                 schedules.push({
                     payment_date: this.formatDate(paymentDate),
-                    period_start: this.formatDate(periodStart),
-                    period_end: this.formatDate(periodEnd)
-                });
-            }
-        } else if (frequency === 'biweekly') {
-            const paymentDay = parseInt(document.getElementById('payment_day')?.value || 5);
-            
-            let current = new Date(today);
-            while (current.getDay() !== (paymentDay === 7 ? 0 : paymentDay)) {
-                current.setDate(current.getDate() + 1);
-            }
-            
-            // Генерация на 6 периодов (12 недель)
-            for (let i = 0; i < 6; i++) {
-                const paymentDate = new Date(current);
-                paymentDate.setDate(current.getDate() + (i * 14));
-                
-                const periodEnd = new Date(paymentDate);
-                periodEnd.setDate(paymentDate.getDate() - 1);
-                
-                const periodStart = new Date(periodEnd);
-                periodStart.setDate(periodEnd.getDate() - 13);
-                
-                schedules.push({
-                    payment_date: this.formatDate(paymentDate),
-                    period_start: this.formatDate(periodStart),
-                    period_end: this.formatDate(periodEnd)
+                    period_start: this.formatDate(periodStartDate),
+                    period_end: this.formatDate(periodEndDate)
                 });
             }
         } else if (frequency === 'monthly') {
             const paymentsPerMonth = parseInt(document.getElementById('payments_per_month')?.value || 2);
             
-            // Генерация на 12 месяцев вперед
+            // Генерация на 12 месяцев
             for (let month = 0; month < 12; month++) {
                 for (let paymentNum = 1; paymentNum <= paymentsPerMonth; paymentNum++) {
-                    const dayInput = document.getElementById(`payment_day_${paymentNum}`);
-                    if (!dayInput) continue;
+                    const nextPaymentInput = document.getElementById(`next_payment_date_${paymentNum}`);
+                    const periodStartInput = document.getElementById(`period_start_date_${paymentNum}`);
+                    const periodEndInput = document.getElementById(`period_end_date_${paymentNum}`);
                     
-                    const paymentDay = parseInt(dayInput.value);
-                    const paymentDate = new Date(today.getFullYear(), today.getMonth() + month, paymentDay);
+                    if (!nextPaymentInput || !periodStartInput || !periodEndInput) continue;
                     
-                    let periodStart, periodEnd;
+                    const basePaymentDate = new Date(nextPaymentInput.value);
+                    const basePeriodStart = new Date(periodStartInput.value);
+                    const basePeriodEnd = new Date(periodEndInput.value);
                     
-                    if (paymentsPerMonth === 1) {
-                        // Весь предыдущий месяц
-                        periodStart = new Date(paymentDate.getFullYear(), paymentDate.getMonth() - 1, 1);
-                        periodEnd = new Date(paymentDate.getFullYear(), paymentDate.getMonth(), 0);
-                    } else if (paymentsPerMonth === 2) {
-                        if (paymentNum === 1) {
-                            // С 16-го прошлого месяца по 15-е текущего
-                            periodStart = new Date(paymentDate.getFullYear(), paymentDate.getMonth() - 1, 16);
-                            periodEnd = new Date(paymentDate.getFullYear(), paymentDate.getMonth(), 15);
-                        } else {
-                            // С 16-го по конец текущего месяца
-                            periodStart = new Date(paymentDate.getFullYear(), paymentDate.getMonth(), 16);
-                            periodEnd = new Date(paymentDate.getFullYear(), paymentDate.getMonth() + 1, 0);
-                        }
-                    }
+                    // Добавить месяцы
+                    const paymentDate = new Date(basePaymentDate.getFullYear(), basePaymentDate.getMonth() + month, basePaymentDate.getDate());
+                    
+                    // Рассчитать смещения
+                    const startOffset = Math.floor((basePeriodStart - basePaymentDate) / (1000 * 60 * 60 * 24));
+                    const endOffset = Math.floor((basePeriodEnd - basePaymentDate) / (1000 * 60 * 60 * 24));
+                    
+                    const periodStart = new Date(paymentDate);
+                    periodStart.setDate(paymentDate.getDate() + startOffset);
+                    
+                    const periodEnd = new Date(paymentDate);
+                    periodEnd.setDate(paymentDate.getDate() + endOffset);
                     
                     schedules.push({
                         payment_date: this.formatDate(paymentDate),
@@ -234,12 +234,42 @@ class PaymentScheduleEditor {
         const container = document.getElementById('schedule_preview');
         if (!container) return;
         
-        let html = `
-            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                <table class="table table-sm table-striped">
+        if (this.scheduleData.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-secondary">
+                    <i class="fas fa-info-circle"></i> 
+                    Заполните параметры графика для отображения превью
+                </div>
+            `;
+            return;
+        }
+        
+        // Рассчитать смещение и длительность по первой записи
+        let offsetInfo = '';
+        if (this.scheduleData.length > 0) {
+            const first = this.scheduleData[0];
+            const paymentDate = this.parseDate(first.payment_date);
+            const periodStart = this.parseDate(first.period_start);
+            const periodEnd = this.parseDate(first.period_end);
+            
+            const offsetDays = Math.floor((periodStart - paymentDate) / (1000 * 60 * 60 * 24));
+            const durationDays = Math.floor((periodEnd - periodStart) / (1000 * 60 * 60 * 24)) + 1;
+            
+            offsetInfo = `
+                <div class="alert alert-primary mb-3">
+                    <strong>Параметры графика:</strong><br>
+                    Смещение: <strong>${offsetDays} дней</strong> (от даты выплаты до начала периода)<br>
+                    Длительность периода: <strong>${durationDays} дней</strong>
+                </div>
+            `;
+        }
+        
+        let html = offsetInfo + `
+            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                <table class="table table-sm table-striped table-hover">
                     <thead class="sticky-top bg-white">
                         <tr>
-                            <th>№</th>
+                            <th style="width: 60px;">№</th>
                             <th>Дата выплаты</th>
                             <th>Начало периода</th>
                             <th>Конец периода</th>
@@ -252,7 +282,7 @@ class PaymentScheduleEditor {
             html += `
                 <tr>
                     <td>${index + 1}</td>
-                    <td>${item.payment_date}</td>
+                    <td><strong>${item.payment_date}</strong></td>
                     <td>${item.period_start}</td>
                     <td>${item.period_end}</td>
                 </tr>
@@ -263,8 +293,8 @@ class PaymentScheduleEditor {
                     </tbody>
                 </table>
             </div>
-            <div class="alert alert-info mt-2">
-                <i class="fas fa-info-circle"></i> 
+            <div class="alert alert-success mt-2">
+                <i class="fas fa-check-circle"></i> 
                 Всего выплат в году: <strong>${this.scheduleData.length}</strong>
             </div>
         `;
@@ -272,11 +302,38 @@ class PaymentScheduleEditor {
         container.innerHTML = html;
     }
     
+    parseDate(dateStr) {
+        const parts = dateStr.split('.');
+        return new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+    
     formatDate(date) {
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const year = date.getFullYear();
         return `${day}.${month}.${year}`;
+    }
+    
+    formatDateInput(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    
+    getNextDayOfWeek(targetDay) {
+        const today = new Date();
+        const currentDay = today.getDay();
+        const adjustedTargetDay = targetDay === 7 ? 0 : targetDay;
+        const adjustedCurrentDay = currentDay === 0 ? 7 : currentDay;
+        
+        let daysUntil = adjustedTargetDay - adjustedCurrentDay;
+        if (daysUntil <= 0) daysUntil += 7;
+        
+        const nextDate = new Date(today);
+        nextDate.setDate(today.getDate() + daysUntil);
+        
+        return this.formatDateInput(nextDate);
     }
     
     async saveSchedule() {
@@ -324,41 +381,62 @@ class PaymentScheduleEditor {
         const frequency = document.getElementById('schedule_frequency').value;
         
         if (frequency === 'daily') {
+            const nextPayment = new Date(document.getElementById('next_payment_date').value);
+            const periodDate = new Date(document.getElementById('period_date').value);
+            const offset = Math.floor((periodDate - nextPayment) / (1000 * 60 * 60 * 24));
+            
             return {
                 type: 'day',
-                calc_rules: {
-                    period: document.getElementById('period_type').value
-                }
+                offset: offset,
+                description: `За день со смещением ${offset} дней`
             };
-        } else if (frequency === 'weekly' || frequency === 'biweekly') {
+        } else if (frequency === 'weekly') {
+            const nextPayment = new Date(document.getElementById('next_payment_date').value);
+            const periodStart = new Date(document.getElementById('period_start_date').value);
+            const periodEnd = new Date(document.getElementById('period_end_date').value);
+            
+            const startOffset = Math.floor((periodStart - nextPayment) / (1000 * 60 * 60 * 24));
+            const endOffset = Math.floor((periodEnd - nextPayment) / (1000 * 60 * 60 * 24));
+            const duration = Math.floor((periodEnd - periodStart) / (1000 * 60 * 60 * 24)) + 1;
+            
             return {
-                type: frequency === 'weekly' ? 'week' : 'biweek',
-                calc_rules: {
-                    start_day: parseInt(document.getElementById('period_start_day').value),
-                    end_day: parseInt(document.getElementById('period_end_day').value)
-                }
+                type: 'week',
+                start_offset: startOffset,
+                end_offset: endOffset,
+                duration: duration,
+                description: `За ${duration} дней, смещение начала ${startOffset} дней`
             };
         } else if (frequency === 'monthly') {
             const paymentsPerMonth = parseInt(document.getElementById('payments_per_month').value);
             const payments = [];
             
             for (let i = 1; i <= paymentsPerMonth; i++) {
-                const dayInput = document.getElementById(`payment_day_${i}`);
-                if (dayInput) {
+                const nextPaymentInput = document.getElementById(`next_payment_date_${i}`);
+                const periodStartInput = document.getElementById(`period_start_date_${i}`);
+                const periodEndInput = document.getElementById(`period_end_date_${i}`);
+                
+                if (nextPaymentInput && periodStartInput && periodEndInput) {
+                    const nextPayment = new Date(nextPaymentInput.value);
+                    const periodStart = new Date(periodStartInput.value);
+                    const periodEnd = new Date(periodEndInput.value);
+                    
+                    const startOffset = Math.floor((periodStart - nextPayment) / (1000 * 60 * 60 * 24));
+                    const endOffset = Math.floor((periodEnd - nextPayment) / (1000 * 60 * 60 * 24));
+                    
                     payments.push({
-                        day: parseInt(dayInput.value),
-                        period_start: document.getElementById(`period_start_${i}`).value,
-                        period_end: document.getElementById(`period_end_${i}`).value
+                        payment_num: i,
+                        next_payment_date: nextPaymentInput.value,
+                        start_offset: startOffset,
+                        end_offset: endOffset
                     });
                 }
             }
             
             return {
                 type: 'month',
-                calc_rules: {
-                    payments_per_month: paymentsPerMonth,
-                    payments: payments
-                }
+                payments_per_month: paymentsPerMonth,
+                payments: payments,
+                description: `${paymentsPerMonth} раз(а) в месяц`
             };
         }
         
@@ -370,10 +448,10 @@ class PaymentScheduleEditor {
         
         if (frequency === 'daily') {
             return 0;  // Каждый день
-        } else if (frequency === 'weekly' || frequency === 'biweekly') {
-            return parseInt(document.getElementById('payment_day').value);
+        } else if (frequency === 'weekly') {
+            return parseInt(document.getElementById('payment_day_of_week')?.value || 5);
         } else if (frequency === 'monthly') {
-            return parseInt(document.getElementById('payment_day_1')?.value || 5);
+            return parseInt(document.getElementById('next_payment_date_1')?.value?.split('-')[2] || 15);
         }
         
         return 1;
@@ -398,36 +476,83 @@ class PaymentScheduleEditor {
     }
 }
 
+// Функция для обновления следующей даты выплаты (еженедельно)
+function updateNextPaymentDate() {
+    const dayOfWeek = parseInt(document.getElementById('payment_day_of_week').value);
+    const nextPaymentInput = document.getElementById('next_payment_date');
+    
+    if (nextPaymentInput && window.paymentScheduleEditor) {
+        nextPaymentInput.value = window.paymentScheduleEditor.getNextDayOfWeek(dayOfWeek);
+    }
+}
+
 // Функция для обновления полей ежемесячных выплат
 function updateMonthlyPayments() {
     const paymentsPerMonth = parseInt(document.getElementById('payments_per_month').value);
     const container = document.getElementById('monthly_payments_container');
+    const today = new Date();
     
     let html = '';
     
     for (let i = 1; i <= paymentsPerMonth; i++) {
+        // Рассчитываем дату следующей выплаты (1-я = 15-е, 2-я = 30-е и т.д.)
+        const nextPaymentDay = i === 1 ? 15 : 30;
+        const nextPayment = new Date(today.getFullYear(), today.getMonth(), nextPaymentDay);
+        if (nextPayment < today) {
+            nextPayment.setMonth(nextPayment.getMonth() + 1);
+        }
+        
+        // Период по умолчанию
+        let defaultPeriodStart, defaultPeriodEnd;
+        if (i === 1) {
+            // 1-я выплата: с 1-го по 15-е
+            defaultPeriodStart = new Date(nextPayment.getFullYear(), nextPayment.getMonth(), 1);
+            defaultPeriodEnd = new Date(nextPayment.getFullYear(), nextPayment.getMonth(), 15);
+        } else {
+            // 2-я выплата: с 16-го по конец месяца
+            defaultPeriodStart = new Date(nextPayment.getFullYear(), nextPayment.getMonth(), 16);
+            defaultPeriodEnd = new Date(nextPayment.getFullYear(), nextPayment.getMonth() + 1, 0);
+        }
+        
+        const formatDateInput = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        
         html += `
             <div class="card mb-3">
-                <div class="card-header">
-                    <h6 class="mb-0">Выплата ${i}</h6>
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="fas fa-calendar-day"></i> Выплата ${i}</h6>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <label class="form-label">День месяца</label>
-                            <input type="number" id="payment_day_${i}" class="form-control" 
-                                   min="1" max="31" value="${i === 1 ? 15 : 30}">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Период с (день месяца)</label>
-                            <input type="number" id="period_start_${i}" class="form-control" 
-                                   min="1" max="31" value="${i === 1 ? 1 : 16}">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Период по (день месяца)</label>
-                            <input type="number" id="period_end_${i}" class="form-control" 
-                                   min="1" max="31" value="${i === 1 ? 15 : 31}">
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label">Следующая дата выплаты</label>
+                        <input type="date" 
+                               id="next_payment_date_${i}" 
+                               class="form-control" 
+                               value="${formatDateInput(nextPayment)}"
+                               onchange="window.paymentScheduleEditor.generateSchedule()">
+                        <small class="text-muted">Дата первой выплаты ${i}</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Выберите дату начала периода</label>
+                        <input type="date" 
+                               id="period_start_date_${i}" 
+                               class="form-control" 
+                               value="${formatDateInput(defaultPeriodStart)}"
+                               onchange="window.paymentScheduleEditor.generateSchedule()">
+                        <small class="text-muted">С какой даты считается период</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Выберите дату окончания периода</label>
+                        <input type="date" 
+                               id="period_end_date_${i}" 
+                               class="form-control" 
+                               value="${formatDateInput(defaultPeriodEnd)}"
+                               onchange="window.paymentScheduleEditor.generateSchedule()">
+                        <small class="text-muted">По какую дату считается период</small>
                     </div>
                 </div>
             </div>
