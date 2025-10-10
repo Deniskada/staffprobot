@@ -20,7 +20,7 @@
                                 <option value="">Все сотрудники</option>
                                 {% for employee in employees %}
                                 <option value="{{ employee.id }}" {% if selected_employee_id == employee.id %}selected{% endif %}>
-                                    {{ employee.full_name() }}
+                                    {{ employee.first_name }} {{ employee.last_name or '' }}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -68,7 +68,7 @@
                                     <td>{{ entry.id }}</td>
                                     <td>
                                         {% if entry.employee %}
-                                        {{ entry.employee.full_name() }}
+                                        {{ entry.employee.first_name }} {{ entry.employee.last_name or '' }}
                                         {% else %}
                                         <span class="text-muted">ID: {{ entry.employee_id }}</span>
                                         {% endif %}
