@@ -4070,7 +4070,7 @@ async def owner_shift_tasks_completed(
     request: Request,
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session),
-    object_id: Optional[int] = None
+    object_id: Optional[int] = Query(None)
 ):
     """Список выполненных задач смен."""
     try:
