@@ -101,9 +101,7 @@ class NotificationDispatcher:
                 
         except Exception as e:
             logger.error(
-                f"Error dispatching notification {notification_id}: {e}",
-                notification_id=notification_id,
-                error=str(e)
+                f"Error dispatching notification {notification_id}: {e}"
             )
             
             # Помечаем как failed
@@ -138,9 +136,7 @@ class NotificationDispatcher:
                 # Проверяем наличие telegram_id
                 if not user.telegram_id:
                     logger.warning(
-                        f"User {user.id} has no telegram_id",
-                        user_id=user.id,
-                        notification_id=notification.id
+                        f"User {user.id} has no telegram_id (notification_id={notification.id})"
                     )
                     return False
                 
@@ -155,9 +151,7 @@ class NotificationDispatcher:
                 # Проверяем наличие email
                 if not user.email:
                     logger.warning(
-                        f"User {user.id} has no email",
-                        user_id=user.id,
-                        notification_id=notification.id
+                        f"User {user.id} has no email (notification_id={notification.id})"
                     )
                     return False
                 
@@ -172,9 +166,7 @@ class NotificationDispatcher:
                 # Проверяем наличие телефона
                 if not user.phone:
                     logger.warning(
-                        f"User {user.id} has no phone",
-                        user_id=user.id,
-                        notification_id=notification.id
+                        f"User {user.id} has no phone (notification_id={notification.id})"
                     )
                     return False
                 
@@ -188,25 +180,19 @@ class NotificationDispatcher:
             elif notification.channel == NotificationChannel.IN_APP:
                 # In-app уведомления не требуют отправки, только сохранение в БД
                 logger.info(
-                    f"In-app notification {notification.id} stored in DB",
-                    notification_id=notification.id
+                    f"In-app notification {notification.id} stored in DB"
                 )
                 return True
                 
             else:
                 logger.warning(
-                    f"Unsupported notification channel: {notification.channel.value}",
-                    notification_id=notification.id,
-                    channel=notification.channel.value
+                    f"Unsupported notification channel: {notification.channel.value} (notification_id={notification.id})"
                 )
                 return False
                 
         except Exception as e:
             logger.error(
-                f"Error sending via channel {notification.channel.value}: {e}",
-                notification_id=notification.id,
-                channel=notification.channel.value,
-                error=str(e)
+                f"Error sending via channel {notification.channel.value} (notification_id={notification.id}): {e}"
             )
             return False
     
@@ -249,7 +235,7 @@ class NotificationDispatcher:
             return stats
             
         except Exception as e:
-            logger.error(f"Error dispatching scheduled notifications: {e}", error=str(e))
+            logger.error(f"Error dispatching scheduled notifications: {e}")
             return {
                 "processed": 0,
                 "sent": 0,
@@ -350,7 +336,7 @@ class NotificationDispatcher:
                 return stats
                 
         except Exception as e:
-            logger.error(f"Error retrying failed notifications: {e}", error=str(e))
+            logger.error(f"Error retrying failed notifications: {e}")
             return {
                 "retried": 0,
                 "sent": 0,
