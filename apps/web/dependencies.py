@@ -96,22 +96,24 @@ async def require_manager_payroll_permission(
     if current_user is None:
         return RedirectResponse(url="/auth/login", status_code=302)
     
-    # Проверить роль (current_user - это объект User)
-    if not hasattr(current_user, 'role'):
+    # Проверить роли (current_user - это объект User с множественными ролями)
+    if not hasattr(current_user, 'roles'):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Пользователь не найден"
         )
     
-    user_role = current_user.role
-    if user_role not in ["manager", "owner"]:
+    user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
+    
+    # Проверить, есть ли роль manager или owner
+    if not any(role in ["manager", "owner"] for role in user_roles):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Доступ только для управляющих и владельцев"
         )
     
     # Владелец всегда имеет доступ
-    if user_role == "owner":
+    if "owner" in user_roles:
         return current_user
     
     # Для управляющего проверить право can_manage_payroll

@@ -34,14 +34,14 @@ async def manager_payroll_list(
 ):
     """Список начислений (только по доступным объектам)."""
     try:
-        # current_user - это объект User
+        # current_user - это объект User с множественными ролями
         user_id = current_user.id
-        user_role = current_user.role
+        user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
         
         # Получить доступные объекты управляющего
         permission_service = ManagerPermissionService(db)
         
-        if user_role == "manager":
+        if "manager" in user_roles and "owner" not in user_roles:
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
             if not accessible_objects:
                 return templates.TemplateResponse(
@@ -143,9 +143,9 @@ async def manager_payroll_detail(
 ):
     """Детализация начисления."""
     try:
-        # current_user - это объект User
+        # current_user - это объект User с множественными ролями
         user_id = current_user.id
-        user_role = current_user.role
+        user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
         
         payroll_service = PayrollService(db)
         entry = await payroll_service.get_payroll_entry_by_id(entry_id)
@@ -154,7 +154,7 @@ async def manager_payroll_detail(
             raise HTTPException(status_code=404, detail="Начисление не найдено")
         
         # Проверить доступ (управляющий должен иметь доступ к объектам смен сотрудника)
-        if user_role == "manager":
+        if "manager" in user_roles and "owner" not in user_roles:
             permission_service = ManagerPermissionService(db)
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
             accessible_object_ids = [obj.id for obj in accessible_objects]
@@ -178,7 +178,7 @@ async def manager_payroll_detail(
                 "shifts": shifts,
                 "deductions": deductions,
                 "bonuses": bonuses,
-                "is_manager": user_role == "manager"
+                "is_manager": "manager" in user_roles and "owner" not in user_roles
             }
         )
         
