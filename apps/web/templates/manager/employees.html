@@ -157,13 +157,7 @@
                                         <div>
                                             <strong>{{ employee.first_name }} {{ employee.last_name or '' }}</strong>
                                             {% if employee.username %}
-                                            <br><small class="text-muted">
-                                                {% if employee.username.startswith('@') %}
-                                                    {{ employee.username }}
-                                                {% else %}
-                                                    @{{ employee.username }}
-                                                {% endif %}
-                                            </small>
+                                            <br><small class="text-muted">@{{ employee.username }}</small>
                                             {% endif %}
                                         </div>
                                     </div>

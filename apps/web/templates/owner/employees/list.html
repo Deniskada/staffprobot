@@ -76,17 +76,7 @@
                                                     <span class="badge bg-warning ms-2">Бывший</span>
                                                 {% endif %}
                                             </h5>
-                                            <small class="text-muted">
-                                                {% if employee.username %}
-                                                    {% if employee.username.startswith('@') %}
-                                                        {{ employee.username }}
-                                                    {% else %}
-                                                        @{{ employee.username }}
-                                                    {% endif %}
-                                                {% else %}
-                                                    без username
-                                                {% endif %}
-                                            </small>
+                                            <small class="text-muted">@{{ employee.username or 'без username' }}</small>
                                         </div>
                                     </div>
                                     
