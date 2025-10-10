@@ -183,13 +183,22 @@
                             <ul class="list-group">
                                 {% for task in object.shift_tasks %}
                                 <li class="list-group-item">
-                                    <div class="d-flex align-items-center">
-                                        <span class="badge bg-primary me-3">{{ loop.index }}</span>
-                                        <div class="flex-grow-1">
-                                            <i class="fas fa-check-circle text-success me-2"></i>
-                                            <strong>{{ task }}</strong>
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div class="d-flex align-items-center flex-grow-1">
+                                            <span class="badge bg-primary me-3">{{ loop.index }}</span>
+                                            <div class="flex-grow-1">
+                                                <i class="fas fa-check-circle text-success me-2"></i>
+                                                <strong>{{ task.text if task is mapping else task }}</strong>
+                                                {% if task is mapping and task.is_mandatory %}
+                                                <span class="badge bg-danger ms-2">Обязательная</span>
+                                                {% endif %}
+                                            </div>
                                         </div>
-                                        <span class="badge bg-secondary">Объект</span>
+                                        <div class="text-end">
+                                            {% if task is mapping %}
+                                            <span class="badge bg-warning text-dark">Штраф: {{ task.deduction_amount }}₽</span>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </li>
                                 {% endfor %}
