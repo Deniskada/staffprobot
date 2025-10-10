@@ -452,6 +452,8 @@ async def owner_objects_detail(request: Request, object_id: int):
                 "work_days_mask": obj.work_days_mask,
                 "schedule_repeat_weeks": obj.schedule_repeat_weeks,
                 "shift_tasks": obj.shift_tasks or [],
+                "payment_system_id": obj.payment_system_id,
+                "payment_schedule_id": obj.payment_schedule_id,
                 "timeslots": [
                     {
                         "id": slot.id,
@@ -523,7 +525,9 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "schedule_repeat_weeks": obj.schedule_repeat_weeks,
                 "work_conditions": obj.work_conditions or "",
                 "employee_position": obj.employee_position or "",
-                "shift_tasks": obj.shift_tasks or []
+                "shift_tasks": obj.shift_tasks or [],
+                "payment_system_id": obj.payment_system_id,
+                "payment_schedule_id": obj.payment_schedule_id
             }
             
             # Получаем данные для переключения интерфейсов
