@@ -451,6 +451,7 @@ async def owner_objects_detail(request: Request, object_id: int):
                 "owner_id": obj.owner_id,
                 "work_days_mask": obj.work_days_mask,
                 "schedule_repeat_weeks": obj.schedule_repeat_weeks,
+                "shift_tasks": obj.shift_tasks or [],
                 "timeslots": [
                     {
                         "id": slot.id,
