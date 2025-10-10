@@ -53,8 +53,12 @@ class ShiftTaskService:
                     # Поддержка старого формата (строки) и нового (объекты)
                     if isinstance(task_data, str):
                         task_text = task_data
+                        is_mandatory = True
+                        deduction_amount = None
                     elif isinstance(task_data, dict):
                         task_text = task_data.get('text', '')
+                        is_mandatory = task_data.get('is_mandatory', True)
+                        deduction_amount = task_data.get('deduction_amount')
                     else:
                         continue
                     
@@ -64,6 +68,8 @@ class ShiftTaskService:
                             task_text=task_text.strip(),
                             source='object',
                             source_id=object_id,
+                            is_mandatory=is_mandatory,
+                            deduction_amount=deduction_amount,
                             created_by_id=created_by_id
                         )
                         self.db.add(task)
@@ -84,6 +90,8 @@ class ShiftTaskService:
                         task_text=template.task_text,
                         source='timeslot',
                         source_id=timeslot_id,
+                        is_mandatory=template.is_mandatory,
+                        deduction_amount=template.deduction_amount,
                         created_by_id=created_by_id
                     )
                     self.db.add(task)
