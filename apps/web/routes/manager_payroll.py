@@ -95,8 +95,8 @@ async def manager_payroll_list(
             # Проверить, есть ли у этого сотрудника начисления
             entries = await payroll_service.get_payroll_entries_by_employee(
                 employee_id=contract.employee_id,
-                start_date=start_date,
-                end_date=end_date
+                period_start=start_date,
+                period_end=end_date
             )
             
             if entries:
