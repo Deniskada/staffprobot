@@ -38,15 +38,14 @@ async def manager_payroll_list(
         if not user_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        telegram_id = current_user.get("telegram_id") or current_user.get("id")
         user_role = current_user.get("role", "employee")
         
         # Получить доступные объекты управляющего
         permission_service = ManagerPermissionService(db)
         
         if user_role == "manager":
-            accessible_object_ids = await permission_service.get_manager_accessible_objects(telegram_id)
-            if not accessible_object_ids:
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            if not accessible_objects:
                 return templates.TemplateResponse(
                     "manager/payroll/list.html",
                     {
@@ -61,13 +60,9 @@ async def manager_payroll_list(
             # Владелец видит все свои объекты
             objects_query = select(Object).where(Object.owner_id == user_id, Object.is_active == True)
             objects_result = await db.execute(objects_query)
-            all_objects = objects_result.scalars().all()
-            accessible_object_ids = [obj.id for obj in all_objects]
+            accessible_objects = objects_result.scalars().all()
         
-        # Загрузить доступные объекты для фильтра
-        accessible_objects_query = select(Object).where(Object.id.in_(accessible_object_ids))
-        accessible_objects_result = await db.execute(accessible_objects_query)
-        accessible_objects = accessible_objects_result.scalars().all()
+        accessible_object_ids = [obj.id for obj in accessible_objects]
         
         # Получить начисления
         payroll_service = PayrollService(db)
@@ -154,7 +149,6 @@ async def manager_payroll_detail(
         if not user_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        telegram_id = current_user.get("telegram_id") or current_user.get("id")
         user_role = current_user.get("role", "employee")
         
         payroll_service = PayrollService(db)
@@ -166,7 +160,8 @@ async def manager_payroll_detail(
         # Проверить доступ (управляющий должен иметь доступ к объектам смен сотрудника)
         if user_role == "manager":
             permission_service = ManagerPermissionService(db)
-            accessible_object_ids = await permission_service.get_manager_accessible_objects(telegram_id)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
             
             # Проверить, что все смены сотрудника в доступных объектах
             # (упрощенная проверка - просто даем доступ, если есть хоть один доступный объект)
