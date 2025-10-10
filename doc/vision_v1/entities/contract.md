@@ -63,6 +63,30 @@ else:
 
 **UI:** Dropdown "Система оплаты труда" в формах договора.
 
+### 2Б. `use_contract_payment_system` (Boolean) ⭐ НОВОЕ
+**Назначение:** Указывает, что система оплаты из договора имеет приоритет над системой объекта (с наследованием).
+
+**Логика приоритетов:**
+```python
+if contract.use_contract_payment_system and contract.payment_system_id:
+    effective_system = contract.payment_system_id  # Приоритет 1
+else:
+    effective_system = object.get_effective_payment_system_id()  # Приоритет 2 (с наследованием)
+```
+
+**Использование в Celery:**
+```python
+# В process_automatic_deductions()
+object_payment_system = shift.object.get_effective_payment_system_id()
+effective_system = contract.get_effective_payment_system_id(object_payment_system)
+
+# Применять штрафы/премии только для "Повременно-премиальной" (ID=3)
+if effective_system != 3:
+    continue  # Пропускаем
+```
+
+**UI:** Чекбокс "Использовать систему оплаты из договора" в формах создания/редактирования договора.
+
 ### 3. `manager_permissions.can_manage_payroll` (JSON → Boolean)
 **Назначение:** Право управляющего на работу с начислениями и выплатами.
 
