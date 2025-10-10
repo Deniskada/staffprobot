@@ -14,7 +14,8 @@ celery_app = Celery(
     include=[
         "core.celery.tasks.notification_tasks",
         "core.celery.tasks.shift_tasks", 
-        "core.celery.tasks.analytics_tasks"
+        "core.celery.tasks.analytics_tasks",
+        "core.celery.tasks.payroll_tasks"
     ]
 )
 
@@ -69,6 +70,11 @@ celery_app.conf.update(
             'task': 'core.celery.tasks.shift_tasks.plan_next_year_timeslots',
             'schedule': crontab(hour=3, minute=0, day_of_month=1, month_of_year=12),  # 1 декабря в 03:00
         },
+        # Обработка автоматических удержаний каждый день в 01:00
+        'process-automatic-deductions': {
+            'task': 'process_automatic_deductions',
+            'schedule': crontab(hour=1, minute=0),  # каждый день в 01:00
+        },
     },
     
     # Маршрутизация задач
@@ -76,6 +82,7 @@ celery_app.conf.update(
         'core.celery.tasks.notification_tasks.*': {'queue': 'notifications'},
         'core.celery.tasks.shift_tasks.*': {'queue': 'shifts'},
         'core.celery.tasks.analytics_tasks.*': {'queue': 'analytics'},
+        'core.celery.tasks.payroll_tasks.*': {'queue': 'payroll'},
     },
 )
 
