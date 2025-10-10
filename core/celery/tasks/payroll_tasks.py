@@ -1,197 +1,218 @@
-"""Celery задачи для обработки начислений и автоудержаний."""
+"""Celery задачи для автоматического создания начислений по графику выплат."""
 
 from datetime import datetime, timedelta, date
 from decimal import Decimal
-from typing import List
+from typing import List, Dict, Any
+import asyncio
 
 from core.celery.celery_app import celery_app
 from core.database.session import get_async_session
 from core.logging.logger import logger
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 
-from domain.entities.shift import Shift
-from domain.entities.payroll_entry import PayrollEntry
+from domain.entities.payment_schedule import PaymentSchedule
+from domain.entities.object import Object
 from domain.entities.contract import Contract
-from apps.web.services.auto_deduction_service import AutoDeductionService
-from apps.web.services.payroll_service import PayrollService
+from domain.entities.payroll_entry import PayrollEntry
+from domain.entities.payroll_adjustment import PayrollAdjustment
+from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 
 
-@celery_app.task(name="process_automatic_deductions")
-def process_automatic_deductions():
+@celery_app.task(name="create_payroll_entries_by_schedule")
+def create_payroll_entries_by_schedule():
     """
-    Обрабатывает автоматические удержания для закрытых смен.
+    Автоматически создает начисления (payroll_entries) по графикам выплат.
     
-    Запускается раз в день в 00:00.
-    Находит все смены, закрытые за последние сутки,
-    рассчитывает для них автоудержания и добавляет к начислениям.
+    Запускается ежедневно в 01:00.
+    
+    Логика:
+    1. Находит все payment_schedules, у которых дата выплаты = сегодня
+    2. Для каждого графика находит все объекты с этим payment_schedule_id
+    3. Для каждого объекта находит активных сотрудников (contracts)
+    4. Для каждого сотрудника:
+       - Определяет период выплаты из schedule (period_start, period_end)
+       - Получает все is_applied=FALSE adjustments за период
+       - Создает PayrollEntry
+       - Проставляет payroll_entry_id и is_applied=TRUE у adjustments
     """
-    import asyncio
     
     async def process():
         try:
-            logger.info("Starting automatic deductions processing")
+            today = date.today()
+            logger.info(f"Starting payroll entries creation for {today}")
             
             async with get_async_session() as session:
-                # Найти смены, закрытые за последние 24 часа
-                yesterday = datetime.now() - timedelta(days=1)
-                
-                shifts_query = select(Shift).where(
-                    and_(
-                        Shift.status == 'completed',  # Статус для закрытых смен
-                        Shift.end_time >= yesterday
-                    )
+                # 1. Найти все schedules с датой выплаты сегодня
+                schedules_query = select(PaymentSchedule).where(
+                    PaymentSchedule.is_custom == True  # Только пользовательские графики
                 )
-                shifts_result = await session.execute(shifts_query)
-                shifts = shifts_result.scalars().all()
+                schedules_result = await session.execute(schedules_query)
+                schedules = schedules_result.scalars().all()
                 
-                logger.info(f"Found {len(shifts)} closed shifts for processing")
+                logger.info(f"Found {len(schedules)} payment schedules to check")
                 
-                deduction_service = AutoDeductionService(session)
-                payroll_service = PayrollService(session)
+                total_entries_created = 0
+                total_adjustments_applied = 0
+                errors = []
                 
-                total_processed = 0
-                total_deductions = 0
-                
-                for shift in shifts:
+                for schedule in schedules:
                     try:
-                        # Получить смену с объектом и подразделением для определения системы оплаты
-                        from sqlalchemy.orm import selectinload
-                        from domain.entities.object import Object
+                        # Проверяем, есть ли выплата сегодня для этого графика
+                        payment_period = await _get_payment_period_for_date(schedule, today)
                         
-                        shift_query = select(Shift).options(
-                            selectinload(Shift.object).selectinload(Object.org_unit)
-                        ).where(Shift.id == shift.id)
-                        shift_result = await session.execute(shift_query)
-                        shift_with_obj = shift_result.scalar_one()
-                        
-                        # Получить активный контракт
-                        contract_query = select(Contract).where(
-                            and_(
-                                Contract.employee_id == shift.user_id,
-                                Contract.status == 'active',
-                                Contract.is_active == True
-                            )
-                        ).order_by(Contract.created_at.desc())
-                        contract_result = await session.execute(contract_query)
-                        contract = contract_result.scalars().first()
-                        
-                        if not contract:
-                            logger.debug(
-                                "Skipping shift - no active contract",
-                                shift_id=shift.id
-                            )
+                        if not payment_period:
+                            # Сегодня не день выплаты для этого графика
                             continue
                         
-                        # Определить эффективную систему оплаты с учетом приоритетов
-                        # 1. Если use_contract_payment_system=True → берем из договора
-                        # 2. Иначе → берем из объекта (с учетом наследования от подразделения)
-                        object_payment_system = shift_with_obj.object.get_effective_payment_system_id()
-                        effective_payment_system = contract.get_effective_payment_system_id(object_payment_system)
-                        
-                        # Премии/штрафы применяются только для "Повременно-премиальной" системы (id=3)
-                        if effective_payment_system != 3:
-                            logger.debug(
-                                "Skipping shift - payment system is not hourly_bonus",
-                                shift_id=shift.id,
-                                effective_payment_system=effective_payment_system,
-                                source="contract" if contract.use_contract_payment_system else "object/org_unit"
-                            )
-                            continue
-                        
-                        # Рассчитать автоудержания
-                        auto_deductions = await deduction_service.calculate_deductions_for_shift(shift.id)
-                        
-                        if not auto_deductions:
-                            continue
-                        
-                        # Найти или создать payroll_entry для смены
-                        # Ищем существующее начисление за период смены
-                        shift_date = shift.end_time.date()
-                        
-                        payroll_query = select(PayrollEntry).where(
-                            and_(
-                                PayrollEntry.employee_id == shift.user_id,
-                                PayrollEntry.period_start <= shift_date,
-                                PayrollEntry.period_end >= shift_date
-                            )
-                        )
-                        payroll_result = await session.execute(payroll_query)
-                        payroll_entry = payroll_result.scalars().first()
-                        
-                        # Если нет начисления - пропускаем (начисление создается вручную)
-                        if not payroll_entry:
-                            logger.warning(
-                                f"No payroll entry found for shift",
-                                shift_id=shift.id,
-                                employee_id=shift.user_id,
-                                shift_date=shift_date.isoformat()
-                            )
-                            continue
-                        
-                        # Добавить начисления (удержания/премии) к начислению
-                        for adjustment_type, amount, description, details in auto_deductions:
-                            # Добавляем shift_id в details
-                            details_with_shift = details.copy() if details else {}
-                            details_with_shift['shift_id'] = shift.id
-                            
-                            # Определяем тип начисления по adjustment_type
-                            # Штрафы: late_start, task_penalty
-                            # Премии: task_bonus
-                            if adjustment_type in ('late_start', 'task_penalty') or amount < 0:
-                                # Удержание (штраф)
-                                await payroll_service.add_deduction(
-                                    payroll_entry_id=payroll_entry.id,
-                                    deduction_type=adjustment_type,
-                                    amount=abs(amount),  # add_deduction ожидает положительное значение
-                                    description=description,
-                                    is_automatic=True,
-                                    created_by_id=shift.user_id,
-                                    details=details_with_shift
-                                )
-                                total_deductions += 1
-                            elif adjustment_type == 'task_bonus' or amount > 0:
-                                # Премия
-                                await payroll_service.add_bonus(
-                                    payroll_entry_id=payroll_entry.id,
-                                    bonus_type=adjustment_type,
-                                    amount=abs(amount),
-                                    description=description,
-                                    created_by_id=shift.user_id,
-                                    details=details_with_shift
-                                )
-                                total_deductions += 1  # Считаем и премии
-                        
-                        total_processed += 1
+                        period_start = payment_period['period_start']
+                        period_end = payment_period['period_end']
                         
                         logger.info(
-                            f"Auto-deductions applied to shift",
-                            shift_id=shift.id,
-                            payroll_entry_id=payroll_entry.id,
-                            deductions_count=len(auto_deductions)
+                            f"Processing schedule {schedule.id}: {schedule.name}",
+                            period_start=period_start.isoformat(),
+                            period_end=period_end.isoformat()
                         )
                         
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing auto-deductions for shift",
-                            shift_id=shift.id,
-                            error=str(e)
+                        # 2. Найти все объекты с этим payment_schedule_id
+                        objects_query = select(Object).where(
+                            Object.payment_schedule_id == schedule.id,
+                            Object.is_active == True
                         )
+                        objects_result = await session.execute(objects_query)
+                        objects = objects_result.scalars().all()
+                        
+                        logger.info(f"Found {len(objects)} objects for schedule {schedule.id}")
+                        
+                        for obj in objects:
+                            try:
+                                # 3. Найти активных сотрудников (contracts) для этого объекта
+                                contracts_query = select(Contract).where(
+                                    and_(
+                                        Contract.object_id == obj.id,
+                                        Contract.status == 'active',
+                                        Contract.is_active == True
+                                    )
+                                )
+                                contracts_result = await session.execute(contracts_query)
+                                contracts = contracts_result.scalars().all()
+                                
+                                logger.debug(f"Found {len(contracts)} active contracts for object {obj.id}")
+                                
+                                for contract in contracts:
+                                    try:
+                                        # 4. Создать payroll_entry для сотрудника
+                                        adjustment_service = PayrollAdjustmentService(session)
+                                        
+                                        # Получить неприменённые adjustments за период
+                                        adjustments = await adjustment_service.get_unapplied_adjustments(
+                                            employee_id=contract.employee_id,
+                                            period_start=period_start,
+                                            period_end=period_end
+                                        )
+                                        
+                                        if not adjustments:
+                                            logger.debug(
+                                                f"No adjustments for employee",
+                                                employee_id=contract.employee_id,
+                                                period_start=period_start,
+                                                period_end=period_end
+                                            )
+                                            continue
+                                        
+                                        # Рассчитать итоговые суммы
+                                        gross_amount = Decimal('0.00')
+                                        total_bonuses = Decimal('0.00')
+                                        total_deductions = Decimal('0.00')
+                                        
+                                        for adj in adjustments:
+                                            amount_decimal = Decimal(str(adj.amount))
+                                            
+                                            if adj.adjustment_type == 'shift_base':
+                                                gross_amount += amount_decimal
+                                            elif amount_decimal > 0:
+                                                total_bonuses += amount_decimal
+                                            else:
+                                                total_deductions += abs(amount_decimal)
+                                        
+                                        net_amount = gross_amount + total_bonuses - total_deductions
+                                        
+                                        # Создать PayrollEntry
+                                        payroll_entry = PayrollEntry(
+                                            employee_id=contract.employee_id,
+                                            contract_id=contract.id,
+                                            object_id=obj.id,
+                                            period_start=period_start,
+                                            period_end=period_end,
+                                            gross_amount=float(gross_amount),
+                                            total_bonuses=float(total_bonuses),
+                                            total_deductions=float(total_deductions),
+                                            net_amount=float(net_amount),
+                                            status='pending',
+                                            payment_schedule_id=schedule.id
+                                        )
+                                        
+                                        session.add(payroll_entry)
+                                        await session.flush()
+                                        
+                                        # Отметить adjustments как примененные
+                                        adjustment_ids = [adj.id for adj in adjustments]
+                                        applied_count = await adjustment_service.mark_adjustments_as_applied(
+                                            adjustment_ids=adjustment_ids,
+                                            payroll_entry_id=payroll_entry.id
+                                        )
+                                        
+                                        total_entries_created += 1
+                                        total_adjustments_applied += applied_count
+                                        
+                                        logger.info(
+                                            f"Created payroll entry",
+                                            payroll_entry_id=payroll_entry.id,
+                                            employee_id=contract.employee_id,
+                                            object_id=obj.id,
+                                            gross_amount=float(gross_amount),
+                                            net_amount=float(net_amount),
+                                            adjustments_count=applied_count
+                                        )
+                                        
+                                    except Exception as e:
+                                        error_msg = f"Error creating payroll entry for contract {contract.id}: {e}"
+                                        logger.error(error_msg)
+                                        errors.append(error_msg)
+                                        continue
+                                
+                            except Exception as e:
+                                error_msg = f"Error processing object {obj.id}: {e}"
+                                logger.error(error_msg)
+                                errors.append(error_msg)
+                                continue
+                        
+                    except Exception as e:
+                        error_msg = f"Error processing schedule {schedule.id}: {e}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
                         continue
                 
+                # Сохраняем все изменения
+                await session.commit()
+                
                 logger.info(
-                    f"Automatic deductions processing completed",
-                    shifts_processed=total_processed,
-                    deductions_added=total_deductions
+                    f"Payroll entries creation completed",
+                    entries_created=total_entries_created,
+                    adjustments_applied=total_adjustments_applied,
+                    errors_count=len(errors)
                 )
                 
                 return {
                     'success': True,
-                    'shifts_processed': total_processed,
-                    'deductions_added': total_deductions
+                    'date': today.isoformat(),
+                    'entries_created': total_entries_created,
+                    'adjustments_applied': total_adjustments_applied,
+                    'errors': errors
                 }
                 
         except Exception as e:
-            logger.error(f"Error in automatic deductions task: {e}")
+            logger.error(f"Critical error in payroll entries task: {e}")
             return {
                 'success': False,
                 'error': str(e)
@@ -200,3 +221,57 @@ def process_automatic_deductions():
     # Запускаем async функцию в event loop
     return asyncio.run(process())
 
+
+async def _get_payment_period_for_date(
+    schedule: PaymentSchedule,
+    target_date: date
+) -> Dict[str, date]:
+    """
+    Определяет период выплаты для заданной даты по графику.
+    
+    Args:
+        schedule: График выплат
+        target_date: Дата, для которой проверяем
+        
+    Returns:
+        dict: {'period_start': date, 'period_end': date} или None если сегодня не день выплаты
+    """
+    if not schedule.periods:
+        return None
+    
+    # Проверяем каждый период в графике
+    for period in schedule.periods:
+        # Формат периода: {'start_day': int, 'end_day': int, 'offset_days': int, ...}
+        payment_day = period.get('payment_day')  # День месяца для выплаты
+        
+        if not payment_day:
+            continue
+        
+        # Проверяем, совпадает ли сегодняшний день с днем выплаты
+        if target_date.day == payment_day:
+            # Определяем период
+            start_day = period.get('start_day', 1)
+            end_day = period.get('end_day', 31)
+            
+            # Месяц периода - предыдущий месяц от даты выплаты
+            # (т.к. выплата за прошедший период)
+            if target_date.month == 1:
+                period_month = 12
+                period_year = target_date.year - 1
+            else:
+                period_month = target_date.month - 1
+                period_year = target_date.year
+            
+            # Формируем даты начала и конца периода
+            from calendar import monthrange
+            last_day_of_period = monthrange(period_year, period_month)[1]
+            
+            period_start = date(period_year, period_month, min(start_day, last_day_of_period))
+            period_end = date(period_year, period_month, min(end_day, last_day_of_period))
+            
+            return {
+                'period_start': period_start,
+                'period_end': period_end
+            }
+    
+    return None

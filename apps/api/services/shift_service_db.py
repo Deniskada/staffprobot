@@ -148,9 +148,20 @@ class ShiftServiceDB:
             return False
     
     async def close_shift(self, shift_id: int, end_time: datetime, end_coordinates: str) -> bool:
-        """Закрывает смену."""
+        """Закрывает смену с созданием корректировок начислений."""
         try:
-            shift = await self.get_shift(shift_id)
+            # Загружаем смену с объектом
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+            from domain.entities.shift import Shift
+            from domain.entities.object import Object
+            
+            query = select(Shift).where(Shift.id == shift_id).options(
+                selectinload(Shift.object).selectinload(Object.org_unit)
+            )
+            result = await self.db.execute(query)
+            shift = result.scalar_one_or_none()
+            
             if not shift:
                 logger.error(f"Shift {shift_id} not found")
                 return False
@@ -163,18 +174,49 @@ class ShiftServiceDB:
             duration = end_time - shift.start_time
             total_hours = duration.total_seconds() / 3600
             
-            update_data = {
-                'end_time': end_time,
-                'end_coordinates': end_coordinates,
-                'status': 'completed',
-                'total_hours': total_hours,
-                'total_payment': total_hours * shift.hourly_rate if shift.hourly_rate else None
-            }
+            # Обновляем смену
+            shift.end_time = end_time
+            shift.end_coordinates = end_coordinates
+            shift.status = 'completed'
+            shift.total_hours = total_hours
+            shift.total_payment = total_hours * shift.hourly_rate if shift.hourly_rate else None
             
-            return await self.update_shift(shift_id, update_data)
+            # Создаем корректировки начислений (Phase 4A)
+            from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+            from shared.services.late_penalty_calculator import LatePenaltyCalculator
+            
+            adjustment_service = PayrollAdjustmentService(self.db)
+            late_penalty_calc = LatePenaltyCalculator(self.db)
+            
+            # 1. Создать базовую оплату за смену
+            await adjustment_service.create_shift_base_adjustment(
+                shift=shift,
+                employee_id=shift.user_id,
+                object_id=shift.object_id,
+                created_by=shift.user_id
+            )
+            
+            # 2. Проверить и создать штраф за опоздание
+            late_minutes, penalty_amount = await late_penalty_calc.calculate_late_penalty(
+                shift=shift,
+                obj=shift.object
+            )
+            
+            if penalty_amount > 0:
+                await adjustment_service.create_late_start_adjustment(
+                    shift=shift,
+                    late_minutes=late_minutes,
+                    penalty_amount=penalty_amount,
+                    created_by=shift.user_id
+                )
+            
+            await self.db.commit()
+            logger.info(f"Shift {shift_id} closed successfully with adjustments")
+            return True
             
         except Exception as e:
             logger.error(f"Error while closing shift {shift_id}: {e}")
+            await self.db.rollback()
             return False
     
     async def get_shift_statistics(self, user_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
