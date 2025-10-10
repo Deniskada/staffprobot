@@ -135,45 +135,70 @@ class AutoDeductionService:
         shift_id: int
     ) -> List[Tuple[str, Decimal, str, dict]]:
         """
-        Рассчитать штрафы за невыполненные задачи.
+        Рассчитать начисления (штрафы/премии) за задачи смены.
+        
+        Логика:
+        - Обязательная задача НЕ выполнена → штраф (отрицательное значение deduction_amount)
+        - Необязательная задача ВЫПОЛНЕНА → премия (положительное значение deduction_amount)
         
         Args:
             shift_id: ID смены
             
         Returns:
             Список кортежей (type, amount, description, details)
+            amount может быть отрицательным (штраф) или положительным (премия)
         """
         try:
-            penalties = []
+            adjustments = []
             
             # Получить все задачи смены
             tasks_query = select(ShiftTask).where(ShiftTask.shift_id == shift_id)
             tasks_result = await self.db.execute(tasks_query)
             tasks = tasks_result.scalars().all()
             
-            # Найти невыполненные
-            incomplete_tasks = [t for t in tasks if not t.is_completed]
-            
-            # Рассчитать штраф за каждую
-            for task in incomplete_tasks:
-                description = f"Не выполнена задача: {task.task_text[:50]}"
+            for task in tasks:
+                # Пропускаем задачи без суммы начисления
+                if not task.deduction_amount or task.deduction_amount == 0:
+                    continue
                 
-                details = {
-                    "task_id": task.id,
-                    "task_text": task.task_text,
-                    "source": task.source
-                }
+                # Обязательная задача не выполнена → штраф
+                if task.is_mandatory and not task.is_completed:
+                    # deduction_amount < 0 → штраф
+                    # deduction_amount > 0 → тоже штраф (инверсия в минус)
+                    amount = -abs(Decimal(str(task.deduction_amount)))
+                    description = f"Штраф: не выполнена обязательная задача '{task.task_text[:50]}'"
+                    adjustment_type = "task_penalty"
+                    
+                    details = {
+                        "task_id": task.id,
+                        "task_text": task.task_text,
+                        "source": task.source,
+                        "is_mandatory": True,
+                        "is_completed": False
+                    }
+                    
+                    adjustments.append((adjustment_type, amount, description, details))
                 
-                penalties.append((
-                    "missed_task",
-                    self.INCOMPLETE_TASK_PENALTY,
-                    description,
-                    details
-                ))
+                # Необязательная задача выполнена → премия
+                elif not task.is_mandatory and task.is_completed and task.deduction_amount > 0:
+                    # deduction_amount > 0 → премия
+                    amount = abs(Decimal(str(task.deduction_amount)))
+                    description = f"Премия: выполнена необязательная задача '{task.task_text[:50]}'"
+                    adjustment_type = "task_bonus"
+                    
+                    details = {
+                        "task_id": task.id,
+                        "task_text": task.task_text,
+                        "source": task.source,
+                        "is_mandatory": False,
+                        "is_completed": True
+                    }
+                    
+                    adjustments.append((adjustment_type, amount, description, details))
             
-            return penalties
+            return adjustments
             
         except Exception as e:
-            logger.error(f"Error calculating task penalties: {e}", shift_id=shift_id)
+            logger.error(f"Error calculating task adjustments: {e}", shift_id=shift_id)
             return []
 

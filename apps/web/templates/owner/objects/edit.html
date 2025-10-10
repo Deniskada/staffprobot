@@ -238,13 +238,12 @@
                                                                placeholder="Например: Уборка торгового зала">
                                                     </div>
                                                     <div class="col-md-2">
-                                                        <label class="form-label small">Штраф (₽)</label>
+                                                        <label class="form-label small">Премия (₽)</label>
                                                         <input type="number" 
                                                                class="form-control" 
                                                                name="task_deductions[]" 
                                                                value="{{ task.deduction_amount if task is mapping else 100 }}"
-                                                               step="0.01"
-                                                               min="0">
+                                                               step="0.01">
                                                     </div>
                                                     <div class="col-md-3">
                                                         <label class="form-label small">Обязательная</label>
@@ -278,13 +277,12 @@
                                                                placeholder="Например: Уборка торгового зала">
                                                     </div>
                                                     <div class="col-md-2">
-                                                        <label class="form-label small">Штраф (₽)</label>
+                                                        <label class="form-label small">Премия (₽)</label>
                                                         <input type="number" 
                                                                class="form-control" 
                                                                name="task_deductions[]" 
                                                                value="100"
-                                                               step="0.01"
-                                                               min="0">
+                                                               step="0.01">
                                                     </div>
                                                     <div class="col-md-3">
                                                         <label class="form-label small">Обязательная</label>
@@ -500,13 +498,12 @@ function addTask() {
                        placeholder="Например: Уборка торгового зала">
             </div>
             <div class="col-md-2">
-                <label class="form-label small">Штраф (₽)</label>
+                <label class="form-label small">Премия (₽)</label>
                 <input type="number" 
                        class="form-control" 
                        name="task_deductions[]" 
                        value="100"
-                       step="0.01"
-                       min="0">
+                       step="0.01">
             </div>
             <div class="col-md-3">
                 <label class="form-label small">Обязательная</label>

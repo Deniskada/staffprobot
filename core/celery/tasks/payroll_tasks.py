@@ -83,18 +83,39 @@ def process_automatic_deductions():
                             )
                             continue
                         
-                        # Добавить удержания к начислению
-                        for deduction_type, amount, description, details in auto_deductions:
-                            await payroll_service.add_deduction(
-                                payroll_entry_id=payroll_entry.id,
-                                deduction_type=deduction_type,
-                                amount=amount,
-                                description=description,
-                                is_automatic=True,
-                                created_by_id=shift.user_id,  # Система от имени пользователя
-                                details=details
-                            )
-                            total_deductions += 1
+                        # Добавить начисления (удержания/премии) к начислению
+                        for adjustment_type, amount, description, details in auto_deductions:
+                            # Отрицательная сумма → удержание (штраф)
+                            if amount < 0:
+                                # Добавляем shift_id в details
+                                details_with_shift = details.copy() if details else {}
+                                details_with_shift['shift_id'] = shift.id
+                                
+                                await payroll_service.add_deduction(
+                                    payroll_entry_id=payroll_entry.id,
+                                    deduction_type=adjustment_type,
+                                    amount=abs(amount),  # add_deduction ожидает положительное значение
+                                    description=description,
+                                    is_automatic=True,
+                                    created_by_id=shift.user_id,
+                                    details=details_with_shift
+                                )
+                                total_deductions += 1
+                            # Положительная сумма → премия
+                            elif amount > 0:
+                                # Добавляем shift_id в details
+                                details_with_shift = details.copy() if details else {}
+                                details_with_shift['shift_id'] = shift.id
+                                
+                                await payroll_service.add_bonus(
+                                    payroll_entry_id=payroll_entry.id,
+                                    bonus_type=adjustment_type,
+                                    amount=amount,
+                                    description=description,
+                                    created_by_id=shift.user_id,
+                                    details=details_with_shift
+                                )
+                                total_deductions += 1  # Считаем и премии
                         
                         total_processed += 1
                         

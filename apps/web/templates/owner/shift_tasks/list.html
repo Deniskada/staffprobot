@@ -74,7 +74,7 @@
                                     <th>Сотрудник</th>
                                     <th>Статус</th>
                                     <th>Обязательность</th>
-                                    <th>Удержание</th>
+                                    <th>Начисления</th>
                                     <th>Источник</th>
                                 </tr>
                             </thead>
@@ -128,7 +128,13 @@
                                     </td>
                                     <td>
                                         {% if task.deduction_amount %}
-                                        <span class="text-danger">{{ "%.2f"|format(task.deduction_amount) }}₽</span>
+                                            {% if task.deduction_amount < 0 %}
+                                            <span class="text-danger fw-bold">{{ "%.2f"|format(task.deduction_amount) }}₽</span>
+                                            {% elif task.deduction_amount > 0 %}
+                                            <span class="text-success fw-bold">+{{ "%.2f"|format(task.deduction_amount) }}₽</span>
+                                            {% else %}
+                                            <span class="text-muted">0.00₽</span>
+                                            {% endif %}
                                         {% else %}
                                         <span class="text-muted">-</span>
                                         {% endif %}
