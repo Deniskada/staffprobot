@@ -126,6 +126,49 @@
                         </div>
 
                         <hr class="my-4">
+                        
+                        <!-- Задачи тайм-слота -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label class="form-label">
+                                        <i class="fas fa-tasks"></i> Задачи на смену
+                                        <i class="fas fa-info-circle text-muted" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Задачи, специфичные для этого тайм-слота. Дополняют задачи объекта."></i>
+                                    </label>
+                                    <div id="timeslot-tasks-container">
+                                        {% if timeslot_tasks %}
+                                            {% for task in timeslot_tasks %}
+                                            <div class="task-item mb-2">
+                                                <input type="hidden" name="task_ids[]" value="{{ task.id }}">
+                                                <div class="input-group">
+                                                    <input type="text" 
+                                                           class="form-control" 
+                                                           name="task_texts[]" 
+                                                           value="{{ task.task_text }}"
+                                                           placeholder="Например: Проверить оборудование">
+                                                    <button type="button" 
+                                                            class="btn btn-outline-danger" 
+                                                            onclick="removeTimeslotTask(this)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        {% endif %}
+                                    </div>
+                                    <button type="button" 
+                                            class="btn btn-outline-primary btn-sm mt-2" 
+                                            onclick="addTimeslotTask()">
+                                        <i class="bi bi-plus"></i> Добавить задачу
+                                    </button>
+                                    <div class="form-text">Задачи, специфичные для этого тайм-слота (дополняют задачи объекта)</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
 
                         <div class="d-flex justify-content-between">
                             <a href="/owner/timeslots/object/{{ timeslot.object_id }}" class="btn btn-outline-secondary">
@@ -280,5 +323,32 @@ document.getElementById('editForm').addEventListener('submit', function(e) {
         return false;
     }
 });
+
+// Управление задачами тайм-слота
+function addTimeslotTask() {
+    const container = document.getElementById('timeslot-tasks-container');
+    const taskItem = document.createElement('div');
+    taskItem.className = 'task-item mb-2';
+    taskItem.innerHTML = `
+        <input type="hidden" name="task_ids[]" value="">
+        <div class="input-group">
+            <input type="text" 
+                   class="form-control" 
+                   name="task_texts[]" 
+                   placeholder="Например: Проверить оборудование">
+            <button type="button" 
+                    class="btn btn-outline-danger" 
+                    onclick="removeTimeslotTask(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(taskItem);
+}
+
+function removeTimeslotTask(button) {
+    const taskItem = button.closest('.task-item');
+    taskItem.remove();
+}
 </script>
 {% endblock %}

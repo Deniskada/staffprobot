@@ -399,12 +399,21 @@ async def edit_timeslot_form(
             "address": obj.address or ""
         }
         
+        # Получаем задачи тайм-слота
+        from domain.entities.shift_task import TimeslotTaskTemplate
+        tasks_query = select(TimeslotTaskTemplate).where(
+            TimeslotTaskTemplate.timeslot_id == timeslot_id
+        ).order_by(TimeslotTaskTemplate.display_order)
+        tasks_result = await db.execute(tasks_query)
+        timeslot_tasks = tasks_result.scalars().all()
+        
         return templates.TemplateResponse("owner/timeslots/edit.html", {
             "request": request,
             "title": f"Редактирование тайм-слота: {object_data['name']}",
             "timeslot": timeslot_data,
             "object_id": timeslot.object_id,
             "object": object_data,
+            "timeslot_tasks": timeslot_tasks,
             "current_user": current_user
         })
         
@@ -471,6 +480,46 @@ async def update_timeslot(
         updated_timeslot = await timeslot_service.update_timeslot(timeslot_id, timeslot_data, current_user["telegram_id"])
         if not updated_timeslot:
             raise HTTPException(status_code=404, detail="Тайм-слот не найден или нет доступа")
+        
+        # Обработка задач тайм-слота
+        task_ids = form_data.getlist("task_ids[]")
+        task_texts = form_data.getlist("task_texts[]")
+        
+        if task_texts:
+            from domain.entities.shift_task import TimeslotTaskTemplate
+            from apps.web.services.shift_task_service import ShiftTaskService
+            from domain.entities.user import User
+            
+            # Получить внутренний ID пользователя
+            telegram_id = current_user.get("telegram_id") or current_user.get("id")
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await db.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            user_id = user_obj.id if user_obj else None
+            
+            # Удалить все существующие задачи тайм-слота
+            delete_query = select(TimeslotTaskTemplate).where(
+                TimeslotTaskTemplate.timeslot_id == timeslot_id
+            )
+            delete_result = await db.execute(delete_query)
+            old_tasks = delete_result.scalars().all()
+            for old_task in old_tasks:
+                await db.delete(old_task)
+            
+            # Создать новые задачи
+            for idx, task_text in enumerate(task_texts):
+                if task_text.strip():  # Пропускаем пустые
+                    new_task = TimeslotTaskTemplate(
+                        timeslot_id=timeslot_id,
+                        task_text=task_text.strip(),
+                        display_order=idx,
+                        created_by_id=user_id
+                    )
+                    db.add(new_task)
+            
+            await db.commit()
+            
+            logger.info(f"Timeslot {timeslot_id} tasks updated: {len([t for t in task_texts if t.strip()])} tasks")
         
         logger.info(f"Timeslot {timeslot_id} updated successfully")
         
