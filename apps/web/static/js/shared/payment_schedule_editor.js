@@ -204,18 +204,37 @@ class PaymentScheduleEditor {
                     const basePeriodStart = new Date(periodStartInput.value);
                     const basePeriodEnd = new Date(periodEndInput.value);
                     
+                    // Проверяем, является ли период концом месяца
+                    const isEndOfMonth = this.isLastDayOfMonth(basePeriodEnd);
+                    
                     // Добавить месяцы
                     const paymentDate = new Date(basePaymentDate.getFullYear(), basePaymentDate.getMonth() + month, basePaymentDate.getDate());
                     
                     // Рассчитать смещения
                     const startOffset = Math.floor((basePeriodStart - basePaymentDate) / (1000 * 60 * 60 * 24));
-                    const endOffset = Math.floor((basePeriodEnd - basePaymentDate) / (1000 * 60 * 60 * 24));
                     
-                    const periodStart = new Date(paymentDate);
-                    periodStart.setDate(paymentDate.getDate() + startOffset);
+                    let periodStart, periodEnd;
                     
-                    const periodEnd = new Date(paymentDate);
-                    periodEnd.setDate(paymentDate.getDate() + endOffset);
+                    // Начало периода
+                    if (basePeriodStart.getDate() === 1) {
+                        // Если базовый период начинается с 1-го числа, всегда 1-е число
+                        periodStart = new Date(paymentDate.getFullYear(), paymentDate.getMonth(), 1);
+                    } else {
+                        // Иначе используем смещение
+                        periodStart = new Date(paymentDate);
+                        periodStart.setDate(paymentDate.getDate() + startOffset);
+                    }
+                    
+                    // Конец периода
+                    if (isEndOfMonth) {
+                        // Если базовый период заканчивается концом месяца, всегда последний день месяца
+                        periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 0);
+                    } else {
+                        // Иначе используем смещение
+                        const endOffset = Math.floor((basePeriodEnd - basePaymentDate) / (1000 * 60 * 60 * 24));
+                        periodEnd = new Date(paymentDate);
+                        periodEnd.setDate(paymentDate.getDate() + endOffset);
+                    }
                     
                     schedules.push({
                         payment_date: this.formatDate(paymentDate),
@@ -312,6 +331,13 @@ class PaymentScheduleEditor {
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const year = date.getFullYear();
         return `${day}.${month}.${year}`;
+    }
+    
+    isLastDayOfMonth(date) {
+        // Проверяем, является ли дата последним днем месяца
+        const nextDay = new Date(date);
+        nextDay.setDate(date.getDate() + 1);
+        return nextDay.getMonth() !== date.getMonth();
     }
     
     formatDateInput(date) {
@@ -422,12 +448,16 @@ class PaymentScheduleEditor {
                     
                     const startOffset = Math.floor((periodStart - nextPayment) / (1000 * 60 * 60 * 24));
                     const endOffset = Math.floor((periodEnd - nextPayment) / (1000 * 60 * 60 * 24));
+                    const isEndOfMonth = this.isLastDayOfMonth(periodEnd);
+                    const isStartOfMonth = periodStart.getDate() === 1;
                     
                     payments.push({
                         payment_num: i,
                         next_payment_date: nextPaymentInput.value,
                         start_offset: startOffset,
-                        end_offset: endOffset
+                        end_offset: endOffset,
+                        is_start_of_month: isStartOfMonth,
+                        is_end_of_month: isEndOfMonth
                     });
                 }
             }
