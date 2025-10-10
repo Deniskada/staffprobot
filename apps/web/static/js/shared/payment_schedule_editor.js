@@ -508,6 +508,30 @@ class PaymentScheduleEditor {
             this.modal.show();
         }
     }
+    
+    async loadSchedule(scheduleId) {
+        try {
+            const response = await fetch(`/owner/payment-schedules/${scheduleId}/view`);
+            if (!response.ok) {
+                throw new Error('Не удалось загрузить график');
+            }
+            
+            const schedule = await response.json();
+            
+            // Заполнить форму данными графика
+            document.getElementById('schedule_name').value = schedule.name;
+            document.getElementById('schedule_frequency').value = schedule.frequency;
+            
+            // Обновить поля частоты
+            this.onFrequencyChange();
+            
+            // Заполнить специфичные поля (реализовать позже при необходимости)
+            // TODO: Заполнить payment_period данными
+            
+        } catch (e) {
+            alert(`Ошибка загрузки графика: ${e.message}`);
+        }
+    }
 }
 
 // Функция для обновления следующей даты выплаты (еженедельно)

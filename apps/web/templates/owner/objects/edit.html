@@ -101,18 +101,25 @@
                                            title="Определяет периодичность выплат сотрудникам объекта"></i>
                                     </label>
                                     <div class="input-group">
-                                        <select class="form-select" id="payment_schedule_id" name="payment_schedule_id">
+                                        <select class="form-select" id="payment_schedule_id" name="payment_schedule_id" onchange="updateScheduleActions()">
                                             <option value="">Не указано (наследуется от подразделения)</option>
                                             {% for schedule in payment_schedules %}
                                             <option value="{{ schedule.id }}" 
                                                     data-description="{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}"
+                                                    data-is-custom="{{ 'true' if schedule.is_custom else 'false' }}"
                                                     {% if object.payment_schedule_id == schedule.id %}selected{% endif %}>
                                                 {{ schedule.name }}{% if schedule.is_custom %} (кастомный){% endif %}
                                             </option>
                                             {% endfor %}
+                                            <option value="create_new" style="font-weight: bold; color: #0d6efd;">
+                                                ➕ Создать новый график
+                                            </option>
                                         </select>
-                                        <button type="button" class="btn btn-outline-primary" onclick="showScheduleEditor()">
-                                            <i class="fas fa-cog"></i> Настроить
+                                        <button type="button" id="view_schedule_btn" class="btn btn-outline-info" onclick="viewSchedule()" style="display: none;">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button type="button" id="edit_schedule_btn" class="btn btn-outline-primary" onclick="editSchedule()" style="display: none;">
+                                            <i class="fas fa-pencil-alt"></i>
                                         </button>
                                     </div>
                                     <small class="text-muted" id="schedule_description_text">
@@ -577,24 +584,88 @@ function removeTask(button) {
     }
 }
 
-// Динамическое отображение описания графика выплат
-document.addEventListener('DOMContentLoaded', function() {
+// Управление действиями с графиком выплат
+function updateScheduleActions() {
     const scheduleSelect = document.getElementById('payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
     const descEl = document.getElementById('schedule_description_text');
+    const viewBtn = document.getElementById('view_schedule_btn');
+    const editBtn = document.getElementById('edit_schedule_btn');
     
-    if (scheduleSelect && descEl) {
-        scheduleSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            const description = selectedOption.getAttribute('data-description') || '';
-            descEl.textContent = description;
-        });
+    // Обновить описание
+    const description = selectedOption.getAttribute('data-description') || '';
+    descEl.textContent = description;
+    
+    const selectedValue = scheduleSelect.value;
+    
+    // Если выбрано "Создать новый"
+    if (selectedValue === 'create_new') {
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        createNewSchedule();
+        return;
     }
+    
+    // Если "Не указано"
+    if (selectedValue === '') {
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        return;
+    }
+    
+    // Проверить, является ли график кастомным
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    // Показать кнопки для выбранного графика
+    viewBtn.style.display = 'inline-block';
+    editBtn.style.display = isCustom ? 'inline-block' : 'none';
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    updateScheduleActions();
 });
 
 // Инициализация редактора графиков выплат
 let paymentScheduleEditor;
 
-function showScheduleEditor() {
+function createNewSchedule() {
+    const objectId = {{ object.id }};
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    
+    if (!paymentScheduleEditor) {
+        paymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', objectId);
+        paymentScheduleEditor.init();
+    }
+    
+    window.paymentScheduleEditor = paymentScheduleEditor;
+    paymentScheduleEditor.show();
+    
+    // Сбросить выбор на предыдущий
+    scheduleSelect.selectedIndex = 0;
+}
+
+function viewSchedule() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const scheduleId = scheduleSelect.value;
+    
+    if (scheduleId) {
+        // Открыть модальное окно с превью графика (только чтение)
+        window.open(`/owner/payment-schedules/${scheduleId}/view`, '_blank', 'width=800,height=600');
+    }
+}
+
+function editSchedule() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const scheduleId = scheduleSelect.value;
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    if (!isCustom) {
+        alert('Можно редактировать только кастомные графики');
+        return;
+    }
+    
     const objectId = {{ object.id }};
     
     if (!paymentScheduleEditor) {
@@ -602,6 +673,8 @@ function showScheduleEditor() {
         paymentScheduleEditor.init();
     }
     
+    // Загрузить данные графика для редактирования
+    paymentScheduleEditor.loadSchedule(scheduleId);
     window.paymentScheduleEditor = paymentScheduleEditor;
     paymentScheduleEditor.show();
 }
