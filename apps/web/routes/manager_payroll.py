@@ -26,7 +26,7 @@ router = APIRouter()
 @router.get("/payroll", response_class=HTMLResponse)
 async def manager_payroll_list(
     request: Request,
-    current_user: dict = Depends(require_manager_payroll_permission),
+    current_user = Depends(require_manager_payroll_permission),
     db: AsyncSession = Depends(get_db_session),
     period_start: Optional[str] = Query(None),
     period_end: Optional[str] = Query(None),
@@ -34,11 +34,9 @@ async def manager_payroll_list(
 ):
     """Список начислений (только по доступным объектам)."""
     try:
-        user_id = await get_user_id_from_current_user(current_user, db)
-        if not user_id:
-            raise HTTPException(status_code=403, detail="Пользователь не найден")
-        
-        user_role = current_user.get("role", "employee")
+        # current_user - это объект User
+        user_id = current_user.id
+        user_role = current_user.role
         
         # Получить доступные объекты управляющего
         permission_service = ManagerPermissionService(db)
@@ -140,16 +138,14 @@ async def manager_payroll_list(
 async def manager_payroll_detail(
     request: Request,
     entry_id: int,
-    current_user: dict = Depends(require_manager_payroll_permission),
+    current_user = Depends(require_manager_payroll_permission),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Детализация начисления."""
     try:
-        user_id = await get_user_id_from_current_user(current_user, db)
-        if not user_id:
-            raise HTTPException(status_code=403, detail="Пользователь не найден")
-        
-        user_role = current_user.get("role", "employee")
+        # current_user - это объект User
+        user_id = current_user.id
+        user_role = current_user.role
         
         payroll_service = PayrollService(db)
         entry = await payroll_service.get_payroll_entry_by_id(entry_id)
