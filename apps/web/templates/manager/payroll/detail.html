@@ -78,44 +78,8 @@
                 </div>
             </div>
             
-            <!-- Смены -->
-            <div class="card mb-3">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-clock"></i> Смены за период
-                    </h5>
-                </div>
-                <div class="card-body">
-                    {% if shifts %}
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Дата</th>
-                                    <th>Объект</th>
-                                    <th>Часы</th>
-                                    <th>Ставка</th>
-                                    <th>Сумма</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for shift in shifts %}
-                                <tr>
-                                    <td>{{ shift.start_time.strftime('%d.%m.%Y') }}</td>
-                                    <td>{{ shift.object.name if shift.object else 'Неизвестно' }}</td>
-                                    <td>{{ "%.2f"|format(shift.hours_worked or 0) }}</td>
-                                    <td>{{ "%.2f"|format(shift.hourly_rate or 0) }} ₽</td>
-                                    <td><strong>{{ "%.2f"|format((shift.hours_worked or 0) * (shift.hourly_rate or 0)) }} ₽</strong></td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <p class="text-muted">Нет смен за период</p>
-                    {% endif %}
-                </div>
-            </div>
+            <!-- Примечание: смены не отображаются в детализации начисления -->
+            <!-- Информация о часах содержится в entry.hours_worked -->
             
             <!-- Удержания и доплаты -->
             <div class="row">
@@ -127,15 +91,13 @@
                             </h5>
                         </div>
                         <div class="card-body">
-                            {% if deductions %}
+                            {% if entry.deductions %}
                             <ul class="list-group list-group-flush">
-                                {% for deduction in deductions %}
+                                {% for deduction in entry.deductions %}
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>{{ deduction.description }}</strong>
-                                        {% if deduction.is_automatic %}
-                                        <br><small class="text-muted"><i class="fas fa-robot"></i> Автоматическое</small>
-                                        {% endif %}
+                                        <br><small class="text-muted"><span class="badge bg-secondary">{{ deduction.deduction_type }}</span></small>
                                     </div>
                                     <span class="text-danger">-{{ "%.2f"|format(deduction.amount) }} ₽</span>
                                 </li>
@@ -156,15 +118,13 @@
                             </h5>
                         </div>
                         <div class="card-body">
-                            {% if bonuses %}
+                            {% if entry.bonuses %}
                             <ul class="list-group list-group-flush">
-                                {% for bonus in bonuses %}
+                                {% for bonus in entry.bonuses %}
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>{{ bonus.description }}</strong>
-                                        {% if bonus.is_automatic %}
-                                        <br><small class="text-muted"><i class="fas fa-robot"></i> Автоматическое</small>
-                                        {% endif %}
+                                        <br><small class="text-muted"><span class="badge bg-info">{{ bonus.bonus_type }}</span></small>
                                     </div>
                                     <span class="text-success">+{{ "%.2f"|format(bonus.amount) }} ₽</span>
                                 </li>

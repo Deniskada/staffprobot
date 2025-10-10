@@ -119,6 +119,8 @@ async def manager_payroll_list(
                     "latest_entry": entries[0] if entries else None
                 })
         
+        logger.info(f"Manager payroll: found {len(employees_data)} employees, {len(accessible_objects)} accessible objects")
+        
         return templates.TemplateResponse(
             "manager/payroll/list.html",
             {
@@ -170,10 +172,8 @@ async def manager_payroll_detail(
             if not accessible_object_ids:
                 raise HTTPException(status_code=403, detail="У вас нет доступа к этому начислению")
         
-        # Получить детали (смены, удержания, премии)
-        shifts = await payroll_service.get_shifts_for_entry(entry_id)
-        deductions = await payroll_service.get_deductions_for_entry(entry_id)
-        bonuses = await payroll_service.get_bonuses_for_entry(entry_id)
+        # Смены, удержания и премии загружаются через relationships в entry
+        # Просто передаем entry в шаблон
         
         return templates.TemplateResponse(
             "manager/payroll/detail.html",
@@ -182,9 +182,6 @@ async def manager_payroll_detail(
                 "current_user": current_user,
                 "title": f"Начисление #{entry_id}",
                 "entry": entry,
-                "shifts": shifts,
-                "deductions": deductions,
-                "bonuses": bonuses,
                 "is_manager": "manager" in user_roles and "owner" not in user_roles
             }
         )
