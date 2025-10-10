@@ -113,6 +113,7 @@ class ObjectService:
                 closing_time=time.fromisoformat(object_data['closing_time']),
                 hourly_rate=object_data['hourly_rate'],
                 payment_system_id=object_data.get('payment_system_id'),
+                payment_schedule_id=object_data.get('payment_schedule_id'),
                 max_distance_meters=object_data.get('max_distance', 500),
                 auto_close_minutes=object_data.get('auto_close_minutes', 60),
                 available_for_applicants=object_data.get('available_for_applicants', False),
@@ -121,7 +122,10 @@ class ObjectService:
                 schedule_repeat_weeks=object_data.get('schedule_repeat_weeks', 1),
                 work_conditions=object_data.get('work_conditions'),
                 employee_position=object_data.get('employee_position'),
-                shift_tasks=object_data.get('shift_tasks')
+                shift_tasks=object_data.get('shift_tasks'),
+                inherit_late_settings=object_data.get('inherit_late_settings', True),
+                late_threshold_minutes=object_data.get('late_threshold_minutes'),
+                late_penalty_per_minute=object_data.get('late_penalty_per_minute')
             )
             
             self.db.add(new_object)
@@ -188,6 +192,14 @@ class ObjectService:
             obj.work_conditions = object_data.get('work_conditions', obj.work_conditions)
             obj.employee_position = object_data.get('employee_position', obj.employee_position)
             obj.shift_tasks = object_data.get('shift_tasks', obj.shift_tasks)
+            
+            # Обновляем настройки штрафов за опоздание
+            if 'inherit_late_settings' in object_data:
+                obj.inherit_late_settings = object_data['inherit_late_settings']
+            if 'late_threshold_minutes' in object_data:
+                obj.late_threshold_minutes = object_data['late_threshold_minutes']
+            if 'late_penalty_per_minute' in object_data:
+                obj.late_penalty_per_minute = object_data['late_penalty_per_minute']
             
             logger.info(f"Updating object {object_id} - work_conditions: '{obj.work_conditions}', shift_tasks: {obj.shift_tasks}")
             
