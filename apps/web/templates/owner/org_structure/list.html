@@ -2,6 +2,72 @@
 
 {% block title %}{{ title }}{% endblock %}
 
+<!-- Макрос для рендеринга узла дерева -->
+{% macro render_unit(unit, payment_systems, payment_schedules) %}
+<div class="card mb-2 ms-{{ unit.level * 3 }}">
+    <div class="card-body py-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="flex-grow-1">
+                <h6 class="mb-1">
+                    <i class="fas fa-folder{% if unit.children %}-open{% endif %} text-primary"></i>
+                    {{ unit.name }}
+                    {% if unit.level > 0 %}
+                    <span class="badge bg-secondary badge-sm">Уровень {{ unit.level }}</span>
+                    {% endif %}
+                </h6>
+                <small class="text-muted">
+                    {% if unit.description %}{{ unit.description }} • {% endif %}
+                    {% if unit.payment_system_id %}
+                        {% for ps in payment_systems %}
+                            {% if ps.id == unit.payment_system_id %}
+                                💰 {{ ps.name }}
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">💰 Наследуется</span>
+                    {% endif %}
+                    •
+                    {% if unit.payment_schedule_id %}
+                        {% for schedule in payment_schedules %}
+                            {% if schedule.id == unit.payment_schedule_id %}
+                                📅 {{ schedule.name }}
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">📅 Наследуется</span>
+                    {% endif %}
+                </small>
+            </div>
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="showEditModal({{ unit.id }})" title="Редактировать">
+                    <i class="fas fa-edit"></i>
+                </button>
+                {% if unit.level > 0 %}
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUnit({{ unit.id }}, '{{ unit.name }}')" title="Удалить">
+                    <i class="fas fa-trash"></i>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_unit(child, payment_systems, payment_schedules) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
+
+<!-- Макрос для рендеринга options в select -->
+{% macro render_unit_options(unit, indent) %}
+<option value="{{ unit.id }}">{{ '&nbsp;&nbsp;&nbsp;&nbsp;' * indent }}{{ unit.name }}</option>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_unit_options(child, indent + 1) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
+
 {% block content %}
 <div class="container-fluid mt-4">
     <div class="row">
@@ -343,72 +409,6 @@ function toggleEditLateFields() {
     }
 }
 </script>
-
-<!-- Макрос для рендеринга узла дерева -->
-{% macro render_unit(unit, payment_systems, payment_schedules) %}
-<div class="card mb-2 ms-{{ unit.level * 3 }}">
-    <div class="card-body py-2">
-        <div class="d-flex justify-content-between align-items-center">
-            <div class="flex-grow-1">
-                <h6 class="mb-1">
-                    <i class="fas fa-folder{% if unit.children %}-open{% endif %} text-primary"></i>
-                    {{ unit.name }}
-                    {% if unit.level > 0 %}
-                    <span class="badge bg-secondary badge-sm">Уровень {{ unit.level }}</span>
-                    {% endif %}
-                </h6>
-                <small class="text-muted">
-                    {% if unit.description %}{{ unit.description }} • {% endif %}
-                    {% if unit.payment_system_id %}
-                        {% for ps in payment_systems %}
-                            {% if ps.id == unit.payment_system_id %}
-                                💰 {{ ps.name }}
-                            {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        <span class="text-muted">💰 Наследуется</span>
-                    {% endif %}
-                    •
-                    {% if unit.payment_schedule_id %}
-                        {% for schedule in payment_schedules %}
-                            {% if schedule.id == unit.payment_schedule_id %}
-                                📅 {{ schedule.name }}
-                            {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        <span class="text-muted">📅 Наследуется</span>
-                    {% endif %}
-                </small>
-            </div>
-            <div class="btn-group">
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="showEditModal({{ unit.id }})" title="Редактировать">
-                    <i class="fas fa-edit"></i>
-                </button>
-                {% if unit.level > 0 %}
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUnit({{ unit.id }}, '{{ unit.name }}')" title="Удалить">
-                    <i class="fas fa-trash"></i>
-                </button>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-{% if unit.children %}
-    {% for child in unit.children %}
-        {{ render_unit(child, payment_systems, payment_schedules) }}
-    {% endfor %}
-{% endif %}
-{% endmacro %}
-
-<!-- Макрос для рендеринга options в select -->
-{% macro render_unit_options(unit, indent) %}
-<option value="{{ unit.id }}">{{ '&nbsp;&nbsp;&nbsp;&nbsp;' * indent }}{{ unit.name }}</option>
-{% if unit.children %}
-    {% for child in unit.children %}
-        {{ render_unit_options(child, indent + 1) }}
-    {% endfor %}
-{% endif %}
-{% endmacro %}
 
 {% endblock %}
 
