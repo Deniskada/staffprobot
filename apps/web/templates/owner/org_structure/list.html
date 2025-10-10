@@ -1,0 +1,414 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h3 class="card-title mb-0">
+                        <i class="fas fa-sitemap"></i> {{ title }}
+                    </h3>
+                    <button type="button" class="btn btn-light" onclick="showCreateModal()">
+                        <i class="fas fa-plus"></i> Добавить подразделение
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-4">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Информация:</strong> Подразделения позволяют организовать объекты в логическую структуру 
+                        и настроить единые параметры оплаты для группы объектов.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <span class="badge bg-secondary">Всего подразделений: {{ units_count }}</span>
+                    </div>
+                    
+                    {% if org_tree %}
+                    <div id="org-tree-container">
+                        {% for root in org_tree %}
+                            {{ render_unit(root, payment_systems, payment_schedules) }}
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Подразделения не найдены. Создайте первое подразделение.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно создания подразделения -->
+<div class="modal fade" id="createUnitModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus-circle"></i> Создать подразделение
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="/owner/org-structure/create">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="create_name" class="form-label">Название *</label>
+                        <input type="text" class="form-control" id="create_name" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="create_description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="create_description" name="description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="create_parent_id" class="form-label">Родительское подразделение</label>
+                        <select class="form-select" id="create_parent_id" name="parent_id">
+                            <option value="">Корневое подразделение</option>
+                            {% for root in org_tree %}
+                                {{ render_unit_options(root, 0) }}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-coins"></i> Финансовые настройки</h6>
+                    
+                    <div class="mb-3">
+                        <label for="create_payment_system_id" class="form-label">Система оплаты труда</label>
+                        <select class="form-select" id="create_payment_system_id" name="payment_system_id">
+                            <option value="">Наследовать от родителя</option>
+                            {% for ps in payment_systems %}
+                            <option value="{{ ps.id }}">{{ ps.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="create_payment_schedule_id" class="form-label">График выплат</label>
+                        <select class="form-select" id="create_payment_schedule_id" name="payment_schedule_id">
+                            <option value="">Наследовать от родителя</option>
+                            {% for schedule in payment_schedules %}
+                            <option value="{{ schedule.id }}">{{ schedule.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-clock"></i> Настройки штрафов</h6>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="create_inherit_late_settings" 
+                                   name="inherit_late_settings" checked onchange="toggleCreateLateFields()">
+                            <label class="form-check-label" for="create_inherit_late_settings">
+                                Наследовать от родителя
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="create_late_fields">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="create_late_threshold" class="form-label">Допустимое опоздание (мин)</label>
+                                <input type="number" class="form-control" id="create_late_threshold" 
+                                       name="late_threshold_minutes" placeholder="0">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="create_late_penalty" class="form-label">Стоимость минуты (₽)</label>
+                                <input type="number" class="form-control" id="create_late_penalty" 
+                                       name="late_penalty_per_minute" step="0.01" placeholder="10.00">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check"></i> Создать
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования подразделения -->
+<div class="modal fade" id="editUnitModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Редактировать подразделение
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editUnitForm">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_unit_id" name="unit_id">
+                    
+                    <div class="mb-3">
+                        <label for="edit_name" class="form-label">Название *</label>
+                        <input type="text" class="form-control" id="edit_name" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="edit_description" name="description" rows="2"></textarea>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-coins"></i> Финансовые настройки</h6>
+                    
+                    <div class="mb-3">
+                        <label for="edit_payment_system_id" class="form-label">Система оплаты труда</label>
+                        <select class="form-select" id="edit_payment_system_id" name="payment_system_id">
+                            <option value="">Наследовать от родителя</option>
+                            {% for ps in payment_systems %}
+                            <option value="{{ ps.id }}">{{ ps.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_payment_schedule_id" class="form-label">График выплат</label>
+                        <select class="form-select" id="edit_payment_schedule_id" name="payment_schedule_id">
+                            <option value="">Наследовать от родителя</option>
+                            {% for schedule in payment_schedules %}
+                            <option value="{{ schedule.id }}">{{ schedule.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-clock"></i> Настройки штрафов</h6>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="edit_inherit_late_settings" 
+                                   name="inherit_late_settings" onchange="toggleEditLateFields()">
+                            <label class="form-check-label" for="edit_inherit_late_settings">
+                                Наследовать от родителя
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="edit_late_fields">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_late_threshold" class="form-label">Допустимое опоздание (мин)</label>
+                                <input type="number" class="form-control" id="edit_late_threshold" 
+                                       name="late_threshold_minutes">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_late_penalty" class="form-label">Стоимость минуты (₽)</label>
+                                <input type="number" class="form-control" id="edit_late_penalty" 
+                                       name="late_penalty_per_minute" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="edit_is_active" 
+                                   name="is_active" value="true">
+                            <label class="form-check-label" for="edit_is_active">
+                                Активно
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Сохранить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Показать модальное окно создания
+function showCreateModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createUnitModal'));
+    modal.show();
+    toggleCreateLateFields();
+}
+
+// Показать модальное окно редактирования
+async function showEditModal(unitId) {
+    try {
+        const response = await fetch(`/owner/org-structure/${unitId}/data`);
+        if (!response.ok) throw new Error('Не удалось загрузить данные');
+        
+        const unit = await response.json();
+        
+        // Заполнить форму
+        document.getElementById('edit_unit_id').value = unit.id;
+        document.getElementById('edit_name').value = unit.name;
+        document.getElementById('edit_description').value = unit.description || '';
+        document.getElementById('edit_payment_system_id').value = unit.payment_system_id || '';
+        document.getElementById('edit_payment_schedule_id').value = unit.payment_schedule_id || '';
+        document.getElementById('edit_inherit_late_settings').checked = unit.inherit_late_settings;
+        document.getElementById('edit_late_threshold').value = unit.late_threshold_minutes || '';
+        document.getElementById('edit_late_penalty').value = unit.late_penalty_per_minute || '';
+        document.getElementById('edit_is_active').checked = unit.is_active;
+        
+        // Обновить action формы
+        document.getElementById('editUnitForm').action = `/owner/org-structure/${unitId}/edit`;
+        
+        // Показать модалку
+        const modal = new bootstrap.Modal(document.getElementById('editUnitModal'));
+        modal.show();
+        
+        toggleEditLateFields();
+        
+    } catch (e) {
+        alert(`Ошибка загрузки: ${e.message}`);
+    }
+}
+
+// Удалить подразделение
+async function deleteUnit(unitId, unitName) {
+    if (!confirm(`Удалить подразделение "${unitName}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/owner/org-structure/${unitId}/delete`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            window.location.reload();
+        } else {
+            alert(`Ошибка: ${result.message}`);
+        }
+        
+    } catch (e) {
+        alert(`Ошибка удаления: ${e.message}`);
+    }
+}
+
+// Переключение видимости полей штрафов (создание)
+function toggleCreateLateFields() {
+    const checkbox = document.getElementById('create_inherit_late_settings');
+    const thresholdInput = document.getElementById('create_late_threshold');
+    const penaltyInput = document.getElementById('create_late_penalty');
+    
+    const readonly = checkbox.checked;
+    thresholdInput.readOnly = readonly;
+    penaltyInput.readOnly = readonly;
+    
+    if (readonly) {
+        thresholdInput.style.backgroundColor = '#e9ecef';
+        penaltyInput.style.backgroundColor = '#e9ecef';
+    } else {
+        thresholdInput.style.backgroundColor = '';
+        penaltyInput.style.backgroundColor = '';
+    }
+}
+
+// Переключение видимости полей штрафов (редактирование)
+function toggleEditLateFields() {
+    const checkbox = document.getElementById('edit_inherit_late_settings');
+    const thresholdInput = document.getElementById('edit_late_threshold');
+    const penaltyInput = document.getElementById('edit_late_penalty');
+    
+    const readonly = checkbox.checked;
+    thresholdInput.readOnly = readonly;
+    penaltyInput.readOnly = readonly;
+    
+    if (readonly) {
+        thresholdInput.style.backgroundColor = '#e9ecef';
+        penaltyInput.style.backgroundColor = '#e9ecef';
+    } else {
+        thresholdInput.style.backgroundColor = '';
+        penaltyInput.style.backgroundColor = '';
+    }
+}
+</script>
+
+<!-- Макрос для рендеринга узла дерева -->
+{% macro render_unit(unit, payment_systems, payment_schedules) %}
+<div class="card mb-2 ms-{{ unit.level * 3 }}">
+    <div class="card-body py-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="flex-grow-1">
+                <h6 class="mb-1">
+                    <i class="fas fa-folder{% if unit.children %}-open{% endif %} text-primary"></i>
+                    {{ unit.name }}
+                    {% if unit.level > 0 %}
+                    <span class="badge bg-secondary badge-sm">Уровень {{ unit.level }}</span>
+                    {% endif %}
+                </h6>
+                <small class="text-muted">
+                    {% if unit.description %}{{ unit.description }} • {% endif %}
+                    {% if unit.payment_system_id %}
+                        {% for ps in payment_systems %}
+                            {% if ps.id == unit.payment_system_id %}
+                                💰 {{ ps.name }}
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">💰 Наследуется</span>
+                    {% endif %}
+                    •
+                    {% if unit.payment_schedule_id %}
+                        {% for schedule in payment_schedules %}
+                            {% if schedule.id == unit.payment_schedule_id %}
+                                📅 {{ schedule.name }}
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">📅 Наследуется</span>
+                    {% endif %}
+                </small>
+            </div>
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="showEditModal({{ unit.id }})" title="Редактировать">
+                    <i class="fas fa-edit"></i>
+                </button>
+                {% if unit.level > 0 %}
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUnit({{ unit.id }}, '{{ unit.name }}')" title="Удалить">
+                    <i class="fas fa-trash"></i>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_unit(child, payment_systems, payment_schedules) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
+
+<!-- Макрос для рендеринга options в select -->
+{% macro render_unit_options(unit, indent) %}
+<option value="{{ unit.id }}">{{ '&nbsp;&nbsp;&nbsp;&nbsp;' * indent }}{{ unit.name }}</option>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_unit_options(child, indent + 1) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
+
+{% endblock %}
+
