@@ -123,10 +123,19 @@ class PayrollService:
                 PayrollEntry.employee_id == employee_id
             )
             
-            if period_start:
-                query = query.where(PayrollEntry.period_start >= period_start)
-            if period_end:
-                query = query.where(PayrollEntry.period_end <= period_end)
+            # Логика пересечения периодов:
+            # Начисление пересекается с запрошенным периодом, если:
+            # - начало начисления <= конец запрошенного периода
+            # - конец начисления >= начало запрошенного периода
+            if period_start and period_end:
+                query = query.where(
+                    PayrollEntry.period_start <= period_end,
+                    PayrollEntry.period_end >= period_start
+                )
+            elif period_start:
+                query = query.where(PayrollEntry.period_end >= period_start)
+            elif period_end:
+                query = query.where(PayrollEntry.period_start <= period_end)
             
             query = query.order_by(PayrollEntry.period_end.desc())
             query = query.limit(limit).offset(offset)
