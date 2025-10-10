@@ -511,7 +511,7 @@ class PaymentScheduleEditor {
     
     async loadSchedule(scheduleId) {
         try {
-            const response = await fetch(`/owner/payment-schedules/${scheduleId}/view`);
+            const response = await fetch(`/owner/payment-schedules/${scheduleId}/data`);
             if (!response.ok) {
                 throw new Error('Не удалось загрузить график');
             }
@@ -525,12 +525,110 @@ class PaymentScheduleEditor {
             // Обновить поля частоты
             this.onFrequencyChange();
             
-            // Заполнить специфичные поля (реализовать позже при необходимости)
-            // TODO: Заполнить payment_period данными
+            // Заполнить payment_period данными
+            setTimeout(() => this.fillPaymentPeriodData(schedule), 100);
             
         } catch (e) {
             alert(`Ошибка загрузки графика: ${e.message}`);
         }
+    }
+    
+    fillPaymentPeriodData(schedule) {
+        const period = schedule.payment_period || {};
+        const frequency = schedule.frequency;
+        
+        if (frequency === 'daily') {
+            const offset = period.offset || -1;
+            const nextPayment = new Date();
+            nextPayment.setDate(nextPayment.getDate() + 1);
+            
+            const periodDate = new Date(nextPayment);
+            periodDate.setDate(nextPayment.getDate() + offset);
+            
+            const nextPaymentInput = document.getElementById('next_payment_date');
+            const periodDateInput = document.getElementById('period_date');
+            
+            if (nextPaymentInput) nextPaymentInput.value = this.formatDateInput(nextPayment);
+            if (periodDateInput) periodDateInput.value = this.formatDateInput(periodDate);
+            
+        } else if (frequency === 'weekly') {
+            const startOffset = period.start_offset || -6;
+            const endOffset = period.end_offset || -1;
+            
+            // Найти следующий день недели
+            const nextPayment = this.getNextDayOfWeekDate(schedule.payment_day);
+            const periodStart = new Date(nextPayment);
+            periodStart.setDate(nextPayment.getDate() + startOffset);
+            const periodEnd = new Date(nextPayment);
+            periodEnd.setDate(nextPayment.getDate() + endOffset);
+            
+            const dayOfWeekSelect = document.getElementById('payment_day_of_week');
+            const nextPaymentInput = document.getElementById('next_payment_date');
+            const periodStartInput = document.getElementById('period_start_date');
+            const periodEndInput = document.getElementById('period_end_date');
+            
+            if (dayOfWeekSelect) dayOfWeekSelect.value = schedule.payment_day;
+            if (nextPaymentInput) nextPaymentInput.value = this.formatDateInput(nextPayment);
+            if (periodStartInput) periodStartInput.value = this.formatDateInput(periodStart);
+            if (periodEndInput) periodEndInput.value = this.formatDateInput(periodEnd);
+            
+        } else if (frequency === 'monthly') {
+            const payments = period.payments || [];
+            const paymentsPerMonthInput = document.getElementById('payments_per_month');
+            
+            if (paymentsPerMonthInput) {
+                paymentsPerMonthInput.value = period.payments_per_month || payments.length;
+                updateMonthlyPayments();
+                
+                // Заполнить данные каждой выплаты
+                setTimeout(() => {
+                    payments.forEach((payment, index) => {
+                        const num = index + 1;
+                        const nextPaymentInput = document.getElementById(`next_payment_date_${num}`);
+                        const periodStartInput = document.getElementById(`period_start_date_${num}`);
+                        const periodEndInput = document.getElementById(`period_end_date_${num}`);
+                        
+                        if (nextPaymentInput && payment.next_payment_date) {
+                            nextPaymentInput.value = payment.next_payment_date;
+                            
+                            // Рассчитать периоды на основе смещений
+                            const paymentDate = new Date(payment.next_payment_date);
+                            const periodStart = new Date(paymentDate);
+                            periodStart.setDate(paymentDate.getDate() + (payment.start_offset || 0));
+                            
+                            let periodEnd;
+                            if (payment.is_end_of_month) {
+                                periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 0);
+                            } else {
+                                periodEnd = new Date(paymentDate);
+                                periodEnd.setDate(paymentDate.getDate() + (payment.end_offset || 0));
+                            }
+                            
+                            if (periodStartInput) periodStartInput.value = this.formatDateInput(periodStart);
+                            if (periodEndInput) periodEndInput.value = this.formatDateInput(periodEnd);
+                        }
+                    });
+                }, 200);
+            }
+        }
+        
+        // Сгенерировать превью
+        setTimeout(() => this.generateSchedule(), 300);
+    }
+    
+    getNextDayOfWeekDate(targetDay) {
+        const today = new Date();
+        const currentDay = today.getDay();
+        const adjustedTargetDay = targetDay === 7 ? 0 : targetDay;
+        const adjustedCurrentDay = currentDay === 0 ? 7 : currentDay;
+        
+        let daysUntil = adjustedTargetDay - adjustedCurrentDay;
+        if (daysUntil <= 0) daysUntil += 7;
+        
+        const nextDate = new Date(today);
+        nextDate.setDate(today.getDate() + daysUntil);
+        
+        return nextDate;
     }
 }
 
