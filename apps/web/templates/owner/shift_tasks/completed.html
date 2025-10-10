@@ -16,10 +16,10 @@
             <!-- Фильтр по объектам -->
             <div class="card mb-4">
                 <div class="card-body">
-                    <form method="get" action="/owner/shift-tasks/completed" class="row g-3">
+                    <form method="get" action="/owner/shift-tasks/completed" class="row g-3" id="filterForm">
                         <div class="col-md-10">
                             <label for="object_id" class="form-label">Объект</label>
-                            <select class="form-select" id="object_id" name="object_id" onchange="this.form.submit()">
+                            <select class="form-select" id="object_id" name="object_id" onchange="submitFilter()">
                                 <option value="">Все объекты</option>
                                 {% for obj in objects %}
                                 <option value="{{ obj.id }}" {% if selected_object_id == obj.id %}selected{% endif %}>
@@ -125,5 +125,21 @@
         </div>
     </div>
 </div>
+
+<script>
+function submitFilter() {
+    const select = document.getElementById('object_id');
+    const form = document.getElementById('filterForm');
+    
+    // Если выбрано "Все объекты" (пустое значение), удаляем параметр object_id
+    if (!select.value || select.value === '') {
+        // Перенаправляем без параметра object_id
+        window.location.href = '/owner/shift-tasks/completed';
+    } else {
+        // Отправляем форму как обычно
+        form.submit();
+    }
+}
+</script>
 {% endblock %}
 
