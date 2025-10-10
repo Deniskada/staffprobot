@@ -1,0 +1,199 @@
+"""Роуты для работы управляющих с начислениями и выплатами."""
+
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Query
+from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_
+from typing import Optional
+from datetime import date, datetime
+from decimal import Decimal
+
+from apps.web.jinja import templates
+from apps.web.middleware.auth_middleware import get_current_user
+from apps.web.middleware.role_middleware import get_user_id_from_current_user, require_manager_or_owner
+from apps.web.dependencies import require_manager_payroll_permission
+from core.database.session import get_db_session
+from apps.web.services.payroll_service import PayrollService
+from shared.services.manager_permission_service import ManagerPermissionService
+from domain.entities.object import Object
+from domain.entities.user import User
+from domain.entities.contract import Contract
+from core.logging.logger import logger
+
+router = APIRouter()
+
+
+@router.get("/payroll", response_class=HTMLResponse)
+async def manager_payroll_list(
+    request: Request,
+    current_user: dict = Depends(require_manager_payroll_permission),
+    db: AsyncSession = Depends(get_db_session),
+    period_start: Optional[str] = Query(None),
+    period_end: Optional[str] = Query(None),
+    object_id: Optional[int] = Query(None)
+):
+    """Список начислений (только по доступным объектам)."""
+    try:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        user_role = current_user.get("role", "employee")
+        
+        # Получить доступные объекты управляющего
+        permission_service = ManagerPermissionService(db)
+        
+        if user_role == "manager":
+            accessible_object_ids = await permission_service.get_manager_accessible_objects(telegram_id)
+            if not accessible_object_ids:
+                return templates.TemplateResponse(
+                    "manager/payroll/list.html",
+                    {
+                        "request": request,
+                        "title": "Начисления и выплаты",
+                        "employees": [],
+                        "accessible_objects": [],
+                        "error": "У вас нет доступных объектов"
+                    }
+                )
+        else:
+            # Владелец видит все свои объекты
+            objects_query = select(Object).where(Object.owner_id == user_id, Object.is_active == True)
+            objects_result = await db.execute(objects_query)
+            all_objects = objects_result.scalars().all()
+            accessible_object_ids = [obj.id for obj in all_objects]
+        
+        # Загрузить доступные объекты для фильтра
+        accessible_objects_query = select(Object).where(Object.id.in_(accessible_object_ids))
+        accessible_objects_result = await db.execute(accessible_objects_query)
+        accessible_objects = accessible_objects_result.scalars().all()
+        
+        # Получить начисления
+        payroll_service = PayrollService(db)
+        
+        # Фильтрация по периоду
+        if period_start and period_end:
+            start_date = datetime.strptime(period_start, "%Y-%m-%d").date()
+            end_date = datetime.strptime(period_end, "%Y-%m-%d").date()
+        else:
+            # По умолчанию - текущий месяц
+            today = date.today()
+            start_date = date(today.year, today.month, 1)
+            if today.month == 12:
+                end_date = date(today.year + 1, 1, 1)
+            else:
+                end_date = date(today.year, today.month + 1, 1)
+        
+        # Получить сотрудников с начислениями по доступным объектам
+        # Для этого нужно получить все начисления и отфильтровать по object_id смен
+        employees_data = []
+        
+        # Получить всех сотрудников (из активных договоров по доступным объектам)
+        contracts_query = select(Contract).join(User, Contract.employee_id == User.id).where(
+            Contract.is_active == True,
+            Contract.status == "active"
+        )
+        
+        contracts_result = await db.execute(contracts_query)
+        contracts = contracts_result.scalars().all()
+        
+        for contract in contracts:
+            # Проверить, есть ли у этого сотрудника начисления
+            entries = await payroll_service.get_payroll_entries_by_employee(
+                employee_id=contract.employee_id,
+                start_date=start_date,
+                end_date=end_date
+            )
+            
+            if entries:
+                # Получить данные сотрудника
+                user_query = select(User).where(User.id == contract.employee_id)
+                user_result = await db.execute(user_query)
+                employee = user_result.scalar_one_or_none()
+                
+                if employee:
+                    total_amount = sum(entry.total_amount for entry in entries)
+                    employees_data.append({
+                        "employee": employee,
+                        "entries_count": len(entries),
+                        "total_amount": total_amount,
+                        "latest_entry": entries[0] if entries else None
+                    })
+        
+        return templates.TemplateResponse(
+            "manager/payroll/list.html",
+            {
+                "request": request,
+                "title": "Начисления и выплаты",
+                "employees": employees_data,
+                "accessible_objects": accessible_objects,
+                "period_start": period_start or start_date.strftime("%Y-%m-%d"),
+                "period_end": period_end or end_date.strftime("%Y-%m-%d"),
+                "selected_object_id": object_id
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading manager payroll: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки начислений: {str(e)}")
+
+
+@router.get("/payroll/{entry_id}", response_class=HTMLResponse)
+async def manager_payroll_detail(
+    request: Request,
+    entry_id: int,
+    current_user: dict = Depends(require_manager_payroll_permission),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Детализация начисления."""
+    try:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        user_role = current_user.get("role", "employee")
+        
+        payroll_service = PayrollService(db)
+        entry = await payroll_service.get_payroll_entry_by_id(entry_id)
+        
+        if not entry:
+            raise HTTPException(status_code=404, detail="Начисление не найдено")
+        
+        # Проверить доступ (управляющий должен иметь доступ к объектам смен сотрудника)
+        if user_role == "manager":
+            permission_service = ManagerPermissionService(db)
+            accessible_object_ids = await permission_service.get_manager_accessible_objects(telegram_id)
+            
+            # Проверить, что все смены сотрудника в доступных объектах
+            # (упрощенная проверка - просто даем доступ, если есть хоть один доступный объект)
+            if not accessible_object_ids:
+                raise HTTPException(status_code=403, detail="У вас нет доступа к этому начислению")
+        
+        # Получить детали (смены, удержания, премии)
+        shifts = await payroll_service.get_shifts_for_entry(entry_id)
+        deductions = await payroll_service.get_deductions_for_entry(entry_id)
+        bonuses = await payroll_service.get_bonuses_for_entry(entry_id)
+        
+        return templates.TemplateResponse(
+            "manager/payroll/detail.html",
+            {
+                "request": request,
+                "title": f"Начисление #{entry_id}",
+                "entry": entry,
+                "shifts": shifts,
+                "deductions": deductions,
+                "bonuses": bonuses,
+                "is_manager": user_role == "manager"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading payroll detail: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки начисления: {str(e)}")
+

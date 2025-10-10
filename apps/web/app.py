@@ -16,7 +16,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots, payroll, payment_schedule, org_structure
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots, payroll, payment_schedule, org_structure, manager_payroll
 from routes.shared.calendar_api import router as calendar_api_router
 from apps.web.routes.system_settings_api import router as system_settings_router
 from core.database.session import get_db_session
@@ -247,6 +247,7 @@ app.include_router(org_structure.router, prefix="/owner", tags=["Владеле�
 app.include_router(owner_timeslots.router, prefix="/owner/timeslots", tags=["Владелец - Тайм-слоты (новые)"])
 app.include_router(owner_shifts.router, prefix="/owner/shifts", tags=["Владелец - Смены"])
 app.include_router(manager.router, tags=["Управляющий"])
+app.include_router(manager_payroll.router, prefix="/manager", tags=["Управляющий - Начисления и выплаты"])
 app.include_router(manager_timeslots.router, tags=["Управляющий - Тайм-слоты"])
 app.include_router(test_calendar.router, tags=["Тест календаря"])
 app.include_router(employee.router, prefix="/employee", tags=["Сотрудник"])
