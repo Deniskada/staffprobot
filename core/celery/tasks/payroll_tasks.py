@@ -11,6 +11,7 @@ from sqlalchemy import select, and_
 
 from domain.entities.shift import Shift
 from domain.entities.payroll_entry import PayrollEntry
+from domain.entities.contract import Contract
 from apps.web.services.auto_deduction_service import AutoDeductionService
 from apps.web.services.payroll_service import PayrollService
 
@@ -53,6 +54,27 @@ def process_automatic_deductions():
                 
                 for shift in shifts:
                     try:
+                        # Проверить систему оплаты труда
+                        # Премии/штрафы применяются только для "Повременно-премиальной" системы (id=3)
+                        contract_query = select(Contract).where(
+                            and_(
+                                Contract.employee_id == shift.user_id,
+                                Contract.status == 'active',
+                                Contract.is_active == True
+                            )
+                        ).order_by(Contract.created_at.desc())
+                        contract_result = await session.execute(contract_query)
+                        contract = contract_result.scalars().first()
+                        
+                        # Если нет контракта или система оплаты не "Повременно-премиальная" (3) - пропускаем
+                        if not contract or contract.payment_system_id != 3:
+                            logger.debug(
+                                f"Skipping shift - payment system is not hourly_bonus",
+                                shift_id=shift.id,
+                                payment_system_id=contract.payment_system_id if contract else None
+                            )
+                            continue
+                        
                         # Рассчитать автоудержания
                         auto_deductions = await deduction_service.calculate_deductions_for_shift(shift.id)
                         
