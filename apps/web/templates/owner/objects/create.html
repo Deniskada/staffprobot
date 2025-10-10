@@ -180,6 +180,27 @@
                             <!-- Вкладка 2: Финансы -->
                             <div class="tab-pane fade" id="finance" role="tabpanel">
                                 <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <label for="org_unit_id" class="form-label">
+                                                Подразделение
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Объект наследует финансовые настройки от подразделения"></i>
+                                            </label>
+                                            <select class="form-select" id="org_unit_id" name="org_unit_id">
+                                                {% for root in org_tree %}
+                                                    {{ render_org_unit_option(root, 0) }}
+                                                {% endfor %}
+                                            </select>
+                                            <small class="form-text text-muted">Выберите подразделение для наследования настроек оплаты и штрафов</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <hr>
+                                
+                                <div class="row">
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
@@ -622,6 +643,16 @@ function editSchedule() {
 
 <!-- Модальное окно редактора графиков -->
 {% include 'shared/payment_schedule_editor_modal.html' %}
+
+<!-- Макрос для рендеринга подразделений в dropdown -->
+{% macro render_org_unit_option(unit, indent) %}
+<option value="{{ unit.id }}">{{ '&nbsp;&nbsp;&nbsp;&nbsp;' * indent }}{{ unit.name }}</option>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_org_unit_option(child, indent + 1) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
 
 {% endblock %}
 {% endblock %}

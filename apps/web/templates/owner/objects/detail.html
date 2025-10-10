@@ -39,6 +39,19 @@
                                             <strong>{{ object.name }}</strong>
                                         </dd>
                                         
+                                        <dt class="col-sm-4">Подразделение:</dt>
+                                        <dd class="col-sm-8">
+                                            <i class="fas fa-sitemap text-muted"></i>
+                                            {% if object.org_unit %}
+                                                {{ object.org_unit.name }}
+                                                {% if object.org_unit.level > 0 %}
+                                                <span class="badge bg-info badge-sm">Уровень {{ object.org_unit.level }}</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">Не указано</span>
+                                            {% endif %}
+                                        </dd>
+                                        
                                         <dt class="col-sm-4">Адрес:</dt>
                                         <dd class="col-sm-8">
                                             <i class="bi bi-geo-alt text-muted"></i>

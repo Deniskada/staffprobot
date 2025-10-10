@@ -257,7 +257,7 @@ async def owner_objects_create(request: Request):
     if user_role != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
-    # Получаем данные для переключения интерфейсов и графики выплат
+    # Получаем данные для переключения интерфейсов, графики выплат и подразделения
     async with get_async_session() as session:
         user_id = await get_user_id_from_current_user(current_user, session)
         available_interfaces = await get_available_interfaces_for_user(user_id)
@@ -272,13 +272,21 @@ async def owner_objects_create(request: Request):
         ).order_by(PaymentSchedule.is_custom.asc(), PaymentSchedule.id.asc())
         schedules_result = await session.execute(schedules_query)
         payment_schedules = schedules_result.scalars().all()
+        
+        # Загрузить подразделения владельца
+        from apps.web.services.org_structure_service import OrgStructureService
+        org_service = OrgStructureService(session)
+        org_units = await org_service.get_units_by_owner(user_id)
+        org_tree = await org_service.get_org_tree(user_id)
     
     return templates.TemplateResponse("owner/objects/create.html", {
         "request": request,
         "title": "Создание объекта",
         "current_user": current_user,
         "available_interfaces": available_interfaces,
-        "payment_schedules": payment_schedules
+        "payment_schedules": payment_schedules,
+        "org_units": org_units,
+        "org_tree": org_tree
     })
 
 
@@ -363,6 +371,10 @@ async def owner_objects_create_post(
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
         
+        # Обработка подразделения
+        org_unit_id_str = form_data.get("org_unit_id", "").strip()
+        org_unit_id = int(org_unit_id_str) if org_unit_id_str else None
+        
         # Парсинг задач с новой структурой
         task_texts = form_data.getlist("task_texts[]")
         task_deductions = form_data.getlist("task_deductions[]")
@@ -405,6 +417,7 @@ async def owner_objects_create_post(
             "available_for_applicants": available_for_applicants,
             "payment_system_id": payment_system_id,
             "payment_schedule_id": payment_schedule_id,
+            "org_unit_id": org_unit_id,
             "is_active": True,
             "coordinates": coordinates,
             "work_days_mask": work_days_mask,
@@ -548,6 +561,12 @@ async def owner_objects_edit(request: Request, object_id: int):
             schedules_result = await session.execute(schedules_query)
             payment_schedules = schedules_result.scalars().all()
             
+            # Загрузить подразделения владельца
+            from apps.web.services.org_structure_service import OrgStructureService
+            org_service = OrgStructureService(session)
+            org_units = await org_service.get_units_by_owner(user_id)
+            org_tree = await org_service.get_org_tree(user_id)
+            
             # Преобразуем в формат для шаблона
             object_data = {
                 "id": obj.id,
@@ -567,6 +586,7 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "shift_tasks": obj.shift_tasks or [],
                 "payment_system_id": obj.payment_system_id,
                 "payment_schedule_id": obj.payment_schedule_id,
+                "org_unit_id": obj.org_unit_id if hasattr(obj, 'org_unit_id') else None,
                 "inherit_late_settings": obj.inherit_late_settings if hasattr(obj, 'inherit_late_settings') else True,
                 "late_threshold_minutes": obj.late_threshold_minutes if hasattr(obj, 'late_threshold_minutes') else None,
                 "late_penalty_per_minute": obj.late_penalty_per_minute if hasattr(obj, 'late_penalty_per_minute') else None
@@ -576,13 +596,21 @@ async def owner_objects_edit(request: Request, object_id: int):
             user_id = await get_user_id_from_current_user(current_user, session)
             available_interfaces = await get_available_interfaces_for_user(user_id)
             
+            # Загрузить подразделения (уже получили user_id и org_service выше, повторно создаем)
+            from apps.web.services.org_structure_service import OrgStructureService
+            org_service = OrgStructureService(session)
+            org_units = await org_service.get_units_by_owner(user_id)
+            org_tree = await org_service.get_org_tree(user_id)
+            
             return templates.TemplateResponse("owner/objects/edit.html", {
                 "request": request,
                 "title": f"Редактирование: {object_data['name']}",
                 "object": object_data,
                 "available_interfaces": available_interfaces,
                 "current_user": current_user,
-                "payment_schedules": payment_schedules
+                "payment_schedules": payment_schedules,
+                "org_units": org_units,
+                "org_tree": org_tree
             })
             
     except HTTPException:
@@ -686,6 +714,10 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
         
+        # Обработка подразделения
+        org_unit_id_str = form_data.get("org_unit_id", "").strip()
+        org_unit_id = int(org_unit_id_str) if org_unit_id_str else None
+        
         # Парсинг задач с новой структурой
         task_texts = form_data.getlist("task_texts[]")
         task_deductions = form_data.getlist("task_deductions[]")
@@ -745,7 +777,8 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "shift_tasks": shift_tasks if shift_tasks else None,
                 "inherit_late_settings": inherit_late_settings,
                 "late_threshold_minutes": late_threshold_minutes,
-                "late_penalty_per_minute": late_penalty_per_minute
+                "late_penalty_per_minute": late_penalty_per_minute,
+                "org_unit_id": org_unit_id
             }
             
             # Получаем внутренний ID пользователя
