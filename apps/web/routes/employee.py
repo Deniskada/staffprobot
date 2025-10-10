@@ -18,6 +18,9 @@ from core.database.session import get_db_session, get_async_session
 from apps.web.middleware.role_middleware import require_employee_or_applicant
 from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift, TimeSlot
 from domain.entities.application import ApplicationStatus
+from domain.entities.payroll_entry import PayrollEntry
+from domain.entities.payroll_deduction import PayrollDeduction
+from domain.entities.payroll_bonus import PayrollBonus
 from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from shared.services.calendar_filter_service import CalendarFilterService
@@ -70,6 +73,7 @@ async def load_employee_earnings(
     total_amount = 0.0
     summary_by_object: Dict[int, Dict[str, Any]] = {}
 
+    # 1. Добавить смены
     for shift, obj in rows:
         timezone_str = getattr(obj, "timezone", None) or "Europe/Moscow"
         date_label = web_timezone_helper.format_datetime_with_timezone(
@@ -99,6 +103,7 @@ async def load_employee_earnings(
 
         earnings.append(
             {
+                "type": "shift",
                 "shift_id": shift.id,
                 "object_name": obj.name,
                 "date_label": date_label,
@@ -107,6 +112,7 @@ async def load_employee_earnings(
                 "duration_hours": duration_hours,
                 "hourly_rate": hourly_rate,
                 "amount": amount,
+                "description": ""
             }
         )
 
@@ -122,6 +128,56 @@ async def load_employee_earnings(
         summary_entry["hours"] += duration_hours
         summary_entry["amount"] += amount
         summary_entry["shifts"] += 1
+
+    # 2. Добавить удержания и премии из payroll_entries
+    from sqlalchemy.orm import selectinload
+    
+    payroll_query = select(PayrollEntry).where(
+        PayrollEntry.employee_id == user_id,
+        PayrollEntry.period_start <= end_date,
+        PayrollEntry.period_end >= start_date
+    ).options(
+        selectinload(PayrollEntry.deductions),
+        selectinload(PayrollEntry.bonuses)
+    )
+    payroll_result = await db.execute(payroll_query)
+    payroll_entries = payroll_result.scalars().all()
+    
+    for entry in payroll_entries:
+        # Удержания (штрафы)
+        for deduction in entry.deductions:
+            earnings.append({
+                "type": "deduction",
+                "object_name": "-",
+                "date_label": deduction.created_at.strftime('%d.%m.%Y'),
+                "start_label": "-",
+                "end_label": "-",
+                "duration_hours": 0.0,
+                "hourly_rate": 0.0,
+                "amount": -float(deduction.amount),  # Отрицательная сумма
+                "description": deduction.description,
+                "is_automatic": deduction.is_automatic
+            })
+            total_amount -= float(deduction.amount)
+        
+        # Премии
+        for bonus in entry.bonuses:
+            earnings.append({
+                "type": "bonus",
+                "object_name": "-",
+                "date_label": bonus.created_at.strftime('%d.%m.%Y'),
+                "start_label": "-",
+                "end_label": "-",
+                "duration_hours": 0.0,
+                "hourly_rate": 0.0,
+                "amount": float(bonus.amount),  # Положительная сумма
+                "description": bonus.description,
+                "is_automatic": False
+            })
+            total_amount += float(bonus.amount)
+    
+    # Сортируем earnings по дате
+    earnings.sort(key=lambda x: x["date_label"])
 
     summary_list = sorted(
         summary_by_object.values(), key=lambda item: item["amount"], reverse=True
@@ -250,25 +306,26 @@ async def employee_earnings_export(
             round(item["amount"], 2),
         ])
 
-    detail_sheet = workbook.create_sheet("Детализация")
+    detail_sheet = workbook.create_sheet("Начисления")
     detail_sheet.append([
         "Дата",
+        "Тип",
+        "Описание",
         "Объект",
-        "Время начала",
-        "Время окончания",
         "Часы",
         "Ставка, ₽",
         "Сумма, ₽",
     ])
 
     for row in earnings:
+        row_type = "Смена" if row["type"] == "shift" else ("Штраф" if row["type"] == "deduction" else "Премия")
         detail_sheet.append([
             row["date_label"],
+            row_type,
+            row.get("description", "Смена на объекте" if row["type"] == "shift" else "-"),
             row["object_name"],
-            row["start_label"],
-            row["end_label"],
-            round(row["duration_hours"], 2),
-            round(row["hourly_rate"], 2),
+            round(row["duration_hours"], 2) if row["type"] == "shift" else "-",
+            round(row["hourly_rate"], 2) if row["type"] == "shift" else "-",
             round(row["amount"], 2),
         ])
 
