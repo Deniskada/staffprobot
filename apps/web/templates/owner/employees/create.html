@@ -179,7 +179,19 @@
                                         <option value="2">Окладная</option>
                                         <option value="3">Повременно-премиальная</option>
                                     </select>
-                                    <small class="form-text text-muted">По умолчанию: Простая повременная (почасовая оплата)</small>
+                                    <div class="form-check mt-2">
+                                        <input type="checkbox" 
+                                               class="form-check-input" 
+                                               id="use_contract_payment_system" 
+                                               name="use_contract_payment_system"
+                                               value="1">
+                                        <label class="form-check-label" for="use_contract_payment_system">
+                                            Использовать систему оплаты из договора
+                                            <i class="fas fa-info-circle text-muted" 
+                                               data-bs-toggle="tooltip" 
+                                               title="Если включено, при расчете выплат будет использоваться система оплаты из договора, а не из объекта (с наследованием от подразделения)"></i>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>

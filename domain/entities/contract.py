@@ -47,6 +47,7 @@ class Contract(Base):
     hourly_rate = Column(Numeric(10, 2), nullable=True)  # Почасовая ставка в рублях
     use_contract_rate = Column(Boolean, default=False, nullable=False, index=True)  # Приоритет ставки договора
     payment_system_id = Column(Integer, ForeignKey("payment_systems.id", ondelete="SET NULL"), nullable=True, index=True)
+    use_contract_payment_system = Column(Boolean, default=False, nullable=False, index=True)  # Приоритет системы оплаты договора
     payment_schedule_id = Column(Integer, ForeignKey("payment_schedules.id", ondelete="SET NULL"), nullable=True, index=True)
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=True)  # None = бессрочный
@@ -117,6 +118,30 @@ class Contract(Base):
         
         # Если ничего не найдено - вернуть None
         return None
+    
+    def get_effective_payment_system_id(
+        self,
+        object_payment_system_id: Optional[int] = None
+    ) -> Optional[int]:
+        """
+        Определить эффективную систему оплаты с учетом приоритетов.
+        
+        Приоритет:
+        1. contract.payment_system_id (ТОЛЬКО если use_contract_payment_system=True)
+        2. object_payment_system_id (с учетом наследования от подразделения)
+        
+        Args:
+            object_payment_system_id: Система оплаты объекта (с наследованием)
+            
+        Returns:
+            ID системы оплаты или None
+        """
+        # Приоритет 1: Система оплаты договора (ТОЛЬКО если флаг включен)
+        if self.use_contract_payment_system and self.payment_system_id is not None:
+            return self.payment_system_id
+        
+        # Приоритет 2: Система оплаты объекта (с учетом наследования)
+        return object_payment_system_id
 
 
 class ContractVersion(Base):

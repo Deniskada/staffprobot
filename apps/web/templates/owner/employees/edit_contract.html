@@ -104,6 +104,20 @@
                                 <option value="2" {% if contract.payment_system_id == 2 %}selected{% endif %}>Окладная</option>
                                 <option value="3" {% if contract.payment_system_id == 3 %}selected{% endif %}>Повременно-премиальная</option>
                             </select>
+                            <div class="form-check mt-2">
+                                <input type="checkbox" 
+                                       class="form-check-input" 
+                                       id="use_contract_payment_system" 
+                                       name="use_contract_payment_system"
+                                       value="1"
+                                       {% if contract.use_contract_payment_system %}checked{% endif %}>
+                                <label class="form-check-label" for="use_contract_payment_system">
+                                    Использовать систему оплаты из договора
+                                    <i class="fas fa-info-circle text-muted" 
+                                       data-bs-toggle="tooltip" 
+                                       title="Приоритет над системой объекта (с наследованием от подразделения)"></i>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -54,8 +54,17 @@ def process_automatic_deductions():
                 
                 for shift in shifts:
                     try:
-                        # Проверить систему оплаты труда
-                        # Премии/штрафы применяются только для "Повременно-премиальной" системы (id=3)
+                        # Получить смену с объектом и подразделением для определения системы оплаты
+                        from sqlalchemy.orm import selectinload
+                        from domain.entities.object import Object
+                        
+                        shift_query = select(Shift).options(
+                            selectinload(Shift.object).selectinload(Object.org_unit)
+                        ).where(Shift.id == shift.id)
+                        shift_result = await session.execute(shift_query)
+                        shift_with_obj = shift_result.scalar_one()
+                        
+                        # Получить активный контракт
                         contract_query = select(Contract).where(
                             and_(
                                 Contract.employee_id == shift.user_id,
@@ -66,12 +75,26 @@ def process_automatic_deductions():
                         contract_result = await session.execute(contract_query)
                         contract = contract_result.scalars().first()
                         
-                        # Если нет контракта или система оплаты не "Повременно-премиальная" (3) - пропускаем
-                        if not contract or contract.payment_system_id != 3:
+                        if not contract:
                             logger.debug(
-                                f"Skipping shift - payment system is not hourly_bonus",
+                                "Skipping shift - no active contract",
+                                shift_id=shift.id
+                            )
+                            continue
+                        
+                        # Определить эффективную систему оплаты с учетом приоритетов
+                        # 1. Если use_contract_payment_system=True → берем из договора
+                        # 2. Иначе → берем из объекта (с учетом наследования от подразделения)
+                        object_payment_system = shift_with_obj.object.get_effective_payment_system_id()
+                        effective_payment_system = contract.get_effective_payment_system_id(object_payment_system)
+                        
+                        # Премии/штрафы применяются только для "Повременно-премиальной" системы (id=3)
+                        if effective_payment_system != 3:
+                            logger.debug(
+                                "Skipping shift - payment system is not hourly_bonus",
                                 shift_id=shift.id,
-                                payment_system_id=contract.payment_system_id if contract else None
+                                effective_payment_system=effective_payment_system,
+                                source="contract" if contract.use_contract_payment_system else "object/org_unit"
                             )
                             continue
                         

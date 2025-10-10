@@ -163,11 +163,16 @@ class ContractService:
             
             # Валидация обязательных полей
             use_contract_rate = contract_data.get("use_contract_rate", False)
+            use_contract_payment_system = contract_data.get("use_contract_payment_system", False)
             hourly_rate = contract_data.get("hourly_rate")
             
             # Если включен флаг use_contract_rate, hourly_rate обязателен
             if use_contract_rate and not hourly_rate:
                 raise ValueError("При использовании ставки договора необходимо указать почасовую ставку")
+            
+            # Если включен флаг use_contract_payment_system, payment_system_id обязателен
+            if use_contract_payment_system and not contract_data.get("payment_system_id"):
+                raise ValueError("При использовании системы оплаты договора необходимо указать систему оплаты")
             
             if not hourly_rate:
                 # Пытаемся получить ставку из объекта
@@ -233,6 +238,7 @@ class ContractService:
                 hourly_rate=hourly_rate,
                 use_contract_rate=use_contract_rate,
                 payment_system_id=contract_data.get("payment_system_id", 1),  # По умолчанию simple_hourly
+                use_contract_payment_system=use_contract_payment_system,
                 start_date=start_date,
                 end_date=end_date,
                 allowed_objects=contract_data.get("allowed_objects", []),
@@ -1213,6 +1219,7 @@ class ContractService:
                 "hourly_rate": contract.hourly_rate,
                 "use_contract_rate": contract.use_contract_rate,
                 "payment_system_id": contract.payment_system_id,
+                "use_contract_payment_system": contract.use_contract_payment_system,
                 "start_date": contract.start_date,
                 "end_date": contract.end_date,
                 "status": contract.status,
@@ -1494,6 +1501,14 @@ class ContractService:
                 if use_contract_rate and not hourly_rate_value:
                     raise ValueError("При использовании ставки договора необходимо указать почасовую ставку")
             
+            # Валидация use_contract_payment_system + payment_system_id
+            if "use_contract_payment_system" in contract_data:
+                use_contract_payment_system = contract_data["use_contract_payment_system"]
+                payment_system_id_value = contract_data.get("payment_system_id", contract.payment_system_id)
+                
+                if use_contract_payment_system and not payment_system_id_value:
+                    raise ValueError("При использовании системы оплаты договора необходимо указать систему оплаты")
+            
             # Обновляем поля
             if "title" in contract_data:
                 contract.title = contract_data["title"]
@@ -1505,6 +1520,8 @@ class ContractService:
                 contract.use_contract_rate = contract_data["use_contract_rate"]
             if "payment_system_id" in contract_data:
                 contract.payment_system_id = contract_data["payment_system_id"]
+            if "use_contract_payment_system" in contract_data:
+                contract.use_contract_payment_system = contract_data["use_contract_payment_system"]
             if "start_date" in contract_data:
                 contract.start_date = contract_data["start_date"]
             if "end_date" in contract_data:
