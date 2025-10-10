@@ -124,10 +124,10 @@ async def require_manager_payroll_permission(
             Contract.is_manager == True,
             Contract.is_active == True,
             Contract.status == "active"
-        )
+        ).order_by(Contract.created_at.desc())
         
         result = await session.execute(query)
-        manager_contract = result.scalar_one_or_none()
+        manager_contract = result.scalars().first()  # Берем первый (последний созданный)
         
         if not manager_contract:
             raise HTTPException(
