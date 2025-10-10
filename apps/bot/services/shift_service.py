@@ -345,6 +345,24 @@ class ShiftService:
                         f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={updated_shift.total_hours}, total_payment={updated_shift.total_payment}"
                     )
                     
+                    # Рассчитать автоматические удержания
+                    from apps.web.services.auto_deduction_service import AutoDeductionService
+                    deduction_service = AutoDeductionService(fresh_session)
+                    auto_deductions = await deduction_service.calculate_deductions_for_shift(shift_id)
+                    
+                    # Сохранить информацию об удержаниях в shift metadata (для последующей обработки Celery)
+                    if auto_deductions:
+                        # Сохраняем в notes смены для информации
+                        deduction_summary = f"\n\nАвтоудержания: {len(auto_deductions)} шт., "
+                        deduction_summary += f"сумма: {sum(d[1] for d in auto_deductions)}₽"
+                        
+                        logger.info(
+                            f"Auto-deductions calculated for shift",
+                            shift_id=shift_id,
+                            count=len(auto_deductions),
+                            total=float(sum(d[1] for d in auto_deductions))
+                        )
+                    
                     # Форматируем время в часовом поясе объекта
                     object_timezone = getattr(shift.object, 'timezone', None) or 'Europe/Moscow'
                     local_end_time = timezone_helper.format_local_time(updated_shift.end_time, object_timezone) if updated_shift.end_time else None
@@ -355,7 +373,8 @@ class ShiftService:
                         'shift_id': shift_id,
                         'total_hours': float(updated_shift.total_hours) if updated_shift.total_hours else 0,
                         'total_payment': float(updated_shift.total_payment) if updated_shift.total_payment else 0,
-                        'end_time': local_end_time
+                        'end_time': local_end_time,
+                        'auto_deductions': len(auto_deductions) if auto_deductions else 0
                     }
                 
         except Exception as e:
