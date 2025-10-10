@@ -33,6 +33,7 @@ from domain.entities.object import Object
 from domain.entities.contract import Contract
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
+from domain.entities.shift_task import ShiftTask
 from domain.entities.application import Application, ApplicationStatus
 from core.logging.logger import logger
 from apps.web.services.template_service import TemplateService
@@ -3957,6 +3958,13 @@ async def owner_shift_detail_legacy(
         # Получаем объект для передачи в шаблон
         object = shift.object
         
+        # Получаем задачи смены (только для реальных смен)
+        shift_tasks = []
+        if actual_shift_type != "schedule":
+            from apps.web.services.shift_task_service import ShiftTaskService
+            task_service = ShiftTaskService(db)
+            shift_tasks = await task_service.get_shift_tasks(actual_shift_id)
+        
         # Получаем данные для переключения интерфейсов
         available_interfaces = await get_available_interfaces_for_user(user_id)
         
@@ -3965,6 +3973,7 @@ async def owner_shift_detail_legacy(
             "current_user": current_user,
             "shift": shift,
             "shift_type": shift_type,
+            "shift_tasks": shift_tasks,
             "available_interfaces": available_interfaces,
             "object": object,
             "web_timezone_helper": web_timezone_helper
@@ -3973,6 +3982,110 @@ async def owner_shift_detail_legacy(
     except Exception as e:
         logger.error(f"Error loading shift detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
+
+
+@router.post("/shifts/{shift_id}/add-task", name="owner_shift_add_task")
+async def owner_shift_add_task(
+    request: Request,
+    shift_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session),
+    task_text: str = Form(...)
+):
+    """Добавить задачу к смене."""
+    try:
+        from apps.web.services.shift_task_service import ShiftTaskService
+        
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        # Проверить доступ к смене
+        shift_query = select(Shift).join(Object).where(
+            Shift.id == shift_id,
+            Object.owner_id == owner_id
+        )
+        shift_result = await db.execute(shift_query)
+        shift = shift_result.scalar_one_or_none()
+        
+        if not shift:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+        
+        # Добавить задачу
+        task_service = ShiftTaskService(db)
+        await task_service.add_manual_task(
+            shift_id=shift_id,
+            task_text=task_text,
+            created_by_id=owner_id
+        )
+        
+        logger.info(f"Manual task added to shift", shift_id=shift_id, owner_id=owner_id)
+        
+        return RedirectResponse(
+            url=f"/owner/shifts_legacy/{shift_id}",
+            status_code=status.HTTP_302_FOUND
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding task to shift: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка добавления задачи: {str(e)}")
+
+
+@router.post("/shifts/{shift_id}/tasks/{task_id}/toggle", name="owner_shift_task_toggle")
+async def owner_shift_task_toggle(
+    request: Request,
+    shift_id: int,
+    task_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Переключить статус выполнения задачи."""
+    try:
+        from apps.web.services.shift_task_service import ShiftTaskService
+        
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        # Проверить доступ к смене
+        shift_query = select(Shift).join(Object).where(
+            Shift.id == shift_id,
+            Object.owner_id == owner_id
+        )
+        shift_result = await db.execute(shift_query)
+        shift = shift_result.scalar_one_or_none()
+        
+        if not shift:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+        
+        # Получить задачу и переключить статус
+        task_service = ShiftTaskService(db)
+        task_query = select(ShiftTask).where(ShiftTask.id == task_id)
+        task_result = await db.execute(task_query)
+        task = task_result.scalar_one_or_none()
+        
+        if not task:
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+        
+        if task.is_completed:
+            await task_service.mark_task_incomplete(task_id)
+        else:
+            await task_service.mark_task_completed(task_id)
+        
+        return RedirectResponse(
+            url=f"/owner/shifts_legacy/{shift_id}",
+            status_code=status.HTTP_302_FOUND
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling task: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка изменения статуса задачи: {str(e)}")
 
 
 @router.post("/shifts_legacy/{shift_id}/cancel")
