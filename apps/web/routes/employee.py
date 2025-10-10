@@ -129,52 +129,38 @@ async def load_employee_earnings(
         summary_entry["amount"] += amount
         summary_entry["shifts"] += 1
 
-    # 2. Добавить удержания и премии из payroll_entries
-    from sqlalchemy.orm import selectinload
+    # 2. Добавить корректировки начислений (Phase 4A: новая архитектура)
+    from domain.entities.payroll_adjustment import PayrollAdjustment
     
-    payroll_query = select(PayrollEntry).where(
-        PayrollEntry.employee_id == user_id,
-        PayrollEntry.period_start <= end_date,
-        PayrollEntry.period_end >= start_date
-    ).options(
-        selectinload(PayrollEntry.deductions),
-        selectinload(PayrollEntry.bonuses)
-    )
-    payroll_result = await db.execute(payroll_query)
-    payroll_entries = payroll_result.scalars().all()
+    adjustments_query = select(PayrollAdjustment).where(
+        PayrollAdjustment.employee_id == user_id,
+        func.date(PayrollAdjustment.created_at) >= start_date,
+        func.date(PayrollAdjustment.created_at) <= end_date
+    ).order_by(PayrollAdjustment.created_at)
     
-    for entry in payroll_entries:
-        # Удержания (штрафы)
-        for deduction in entry.deductions:
-            earnings.append({
-                "type": "deduction",
-                "object_name": "-",
-                "date_label": deduction.created_at.strftime('%d.%m.%Y'),
-                "start_label": "-",
-                "end_label": "-",
-                "duration_hours": 0.0,
-                "hourly_rate": 0.0,
-                "amount": -float(deduction.amount),  # Отрицательная сумма
-                "description": deduction.description,
-                "is_automatic": deduction.is_automatic
-            })
-            total_amount -= float(deduction.amount)
+    adjustments_result = await db.execute(adjustments_query)
+    adjustments = adjustments_result.scalars().all()
+    
+    # Добавляем корректировки к списку заработка
+    for adj in adjustments:
+        # Пропускаем базовую оплату за смену (она уже учтена выше)
+        if adj.adjustment_type == 'shift_base':
+            continue
         
-        # Премии
-        for bonus in entry.bonuses:
-            earnings.append({
-                "type": "bonus",
-                "object_name": "-",
-                "date_label": bonus.created_at.strftime('%d.%m.%Y'),
-                "start_label": "-",
-                "end_label": "-",
-                "duration_hours": 0.0,
-                "hourly_rate": 0.0,
-                "amount": float(bonus.amount),  # Положительная сумма
-                "description": bonus.description,
-                "is_automatic": False
-            })
-            total_amount += float(bonus.amount)
+        earnings.append({
+            "type": "adjustment",
+            "adjustment_type": adj.adjustment_type,
+            "object_name": "-",
+            "date_label": adj.created_at.strftime('%d.%m.%Y'),
+            "start_label": "-",
+            "end_label": "-",
+            "duration_hours": 0.0,
+            "hourly_rate": 0.0,
+            "amount": float(adj.amount),
+            "description": adj.get_type_label() + (f": {adj.description}" if adj.description else ""),
+            "is_automatic": adj.adjustment_type in ['late_start', 'task_bonus', 'task_penalty']
+        })
+        total_amount += float(adj.amount)
     
     # Сортируем earnings по дате
     earnings.sort(key=lambda x: x["date_label"])
