@@ -83,17 +83,14 @@ class NotificationService:
                 await self._invalidate_user_cache(user_id)
                 
                 logger.info(
-                    f"Created notification {notification.id}",
-                    user_id=user_id,
-                    type=type.value,
-                    channel=channel.value,
-                    priority=priority.value
+                    f"Created notification {notification.id} for user {user_id}, "
+                    f"type={type.value}, channel={channel.value}, priority={priority.value}"
                 )
                 
                 return notification
                 
         except Exception as e:
-            logger.error(f"Error creating notification: {e}", user_id=user_id, error=str(e))
+            logger.error(f"Error creating notification for user {user_id}: {e}")
             return None
     
     @cached(ttl=timedelta(minutes=5), key_prefix="user_notifications")
@@ -150,7 +147,7 @@ class NotificationService:
                 return list(notifications)
                 
         except Exception as e:
-            logger.error(f"Error getting user notifications: {e}", user_id=user_id, error=str(e))
+            logger.error(f"Error getting user notifications for user {user_id}: {e}")
             return []
     
     @cached(ttl=timedelta(minutes=1), key_prefix="unread_count")
@@ -179,7 +176,7 @@ class NotificationService:
                 return count
                 
         except Exception as e:
-            logger.error(f"Error getting unread count: {e}", user_id=user_id, error=str(e))
+            logger.error(f"Error getting unread count for user {user_id}: {e}")
             return 0
     
     async def mark_as_read(
@@ -223,7 +220,7 @@ class NotificationService:
                 return True
                 
         except Exception as e:
-            logger.error(f"Error marking notification as read: {e}", notification_id=notification_id, error=str(e))
+            logger.error(f"Error marking notification {notification_id} as read: {e}")
             return False
     
     async def mark_all_as_read(self, user_id: int) -> int:
@@ -263,7 +260,7 @@ class NotificationService:
                 return count
                 
         except Exception as e:
-            logger.error(f"Error marking all as read: {e}", user_id=user_id, error=str(e))
+            logger.error(f"Error marking all as read for user {user_id}: {e}")
             return 0
     
     async def delete_notification(
@@ -305,7 +302,7 @@ class NotificationService:
                 return True
                 
         except Exception as e:
-            logger.error(f"Error deleting notification: {e}", notification_id=notification_id, error=str(e))
+            logger.error(f"Error deleting notification {notification_id}: {e}")
             return False
     
     async def get_scheduled_notifications(
@@ -343,7 +340,7 @@ class NotificationService:
                 return list(notifications)
                 
         except Exception as e:
-            logger.error(f"Error getting scheduled notifications: {e}", error=str(e))
+            logger.error(f"Error getting scheduled notifications: {e}")
             return []
     
     async def get_overdue_notifications(self) -> List[Notification]:
@@ -371,7 +368,7 @@ class NotificationService:
                 return list(notifications)
                 
         except Exception as e:
-            logger.error(f"Error getting overdue notifications: {e}", error=str(e))
+            logger.error(f"Error getting overdue notifications: {e}")
             return []
     
     async def group_notifications(
@@ -415,7 +412,7 @@ class NotificationService:
                 return grouped
                 
         except Exception as e:
-            logger.error(f"Error grouping notifications: {e}", user_id=user_id, error=str(e))
+            logger.error(f"Error grouping notifications for user {user_id}: {e}")
             return {}
     
     async def update_notification_status(
@@ -463,14 +460,12 @@ class NotificationService:
                 await self._invalidate_user_cache(notification.user_id)
                 
                 logger.info(
-                    f"Updated notification {notification_id} status to {status.value}",
-                    notification_id=notification_id,
-                    status=status.value
+                    f"Updated notification {notification_id} status to {status.value}"
                 )
                 return True
                 
         except Exception as e:
-            logger.error(f"Error updating notification status: {e}", notification_id=notification_id, error=str(e))
+            logger.error(f"Error updating notification {notification_id} status: {e}")
             return False
     
     async def _invalidate_user_cache(self, user_id: int) -> None:
@@ -488,4 +483,4 @@ class NotificationService:
             logger.debug(f"Invalidated notification cache for user {user_id}")
             
         except Exception as e:
-            logger.warning(f"Failed to invalidate cache: {e}", user_id=user_id)
+            logger.warning(f"Failed to invalidate cache for user {user_id}: {e}")
