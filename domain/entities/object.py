@@ -46,7 +46,7 @@ class Object(Base):
     # Отношения
     owner = relationship("User", backref="owned_objects")
     payment_system = relationship("PaymentSystem", backref="objects")
-    payment_schedule = relationship("PaymentSchedule", backref="objects")
+    payment_schedule = relationship("PaymentSchedule", foreign_keys=[payment_schedule_id], backref="assigned_objects")
     manager_permissions = relationship("ManagerObjectPermission", back_populates="object", lazy="select")
     # planning_templates = relationship("PlanningTemplate", back_populates="object")
     
