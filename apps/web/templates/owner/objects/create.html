@@ -2,6 +2,16 @@
 
 {% block title %}{{ title }}{% endblock %}
 
+<!-- Макрос для рендеринга подразделений в dropdown -->
+{% macro render_org_unit_option(unit, indent) %}
+<option value="{{ unit.id }}">{{ '├─ ' * indent }}{{ unit.name }}</option>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_org_unit_option(child, indent + 1) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
+
 {% block content %}
 <div class="container">
     <div class="row justify-content-center">
@@ -643,16 +653,6 @@ function editSchedule() {
 
 <!-- Модальное окно редактора графиков -->
 {% include 'shared/payment_schedule_editor_modal.html' %}
-
-<!-- Макрос для рендеринга подразделений в dropdown -->
-{% macro render_org_unit_option(unit, indent) %}
-<option value="{{ unit.id }}">{{ '├─ ' * indent }}{{ unit.name }}</option>
-{% if unit.children %}
-    {% for child in unit.children %}
-        {{ render_org_unit_option(child, indent + 1) }}
-    {% endfor %}
-{% endif %}
-{% endmacro %}
 
 {% endblock %}
 {% endblock %}
