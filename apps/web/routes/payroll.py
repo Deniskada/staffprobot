@@ -179,9 +179,9 @@ async def owner_payroll_add_deduction(
             Contract.owner_id == owner_id
         )
         result = await db.execute(query)
-        owner_contract = result.scalar_one_or_none()
+        owner_contracts = result.scalars().all()
         
-        if not owner_contract:
+        if not owner_contracts:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
         # Добавить удержание
@@ -242,9 +242,9 @@ async def owner_payroll_add_bonus(
             Contract.owner_id == owner_id
         )
         result = await db.execute(query)
-        owner_contract = result.scalar_one_or_none()
+        owner_contracts = result.scalars().all()
         
-        if not owner_contract:
+        if not owner_contracts:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
         # Добавить доплату
@@ -305,9 +305,9 @@ async def owner_payroll_create_payment(
             Contract.owner_id == owner_id
         )
         result = await db.execute(query)
-        owner_contract = result.scalar_one_or_none()
+        owner_contracts = result.scalars().all()
         
-        if not owner_contract:
+        if not owner_contracts:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
         # Создать выплату
