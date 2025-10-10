@@ -83,6 +83,9 @@ class AutoDeductionService:
         """
         Рассчитать штраф за опоздание.
         
+        Использует настройки объекта (late_threshold_minutes, late_penalty_per_minute).
+        Если настройки не указаны (наследуются от подразделения), использует константы.
+        
         Args:
             shift: Объект смены
             
@@ -90,8 +93,29 @@ class AutoDeductionService:
             Кортеж (type, amount, description, details) или None
         """
         try:
-            if not shift.schedule_id:
+            if not shift.schedule_id or not shift.object_id:
                 return None
+            
+            # Получить объект для настроек штрафов
+            from domain.entities.object import Object
+            object_query = select(Object).where(Object.id == shift.object_id)
+            object_result = await self.db.execute(object_query)
+            obj = object_result.scalar_one_or_none()
+            
+            if not obj:
+                return None
+            
+            # Определить настройки штрафа (из объекта или по умолчанию)
+            if obj.inherit_late_settings or obj.late_threshold_minutes is None or obj.late_penalty_per_minute is None:
+                # Наследуем настройки (в будущем - от подразделения), пока используем константы
+                threshold_minutes = self.LATE_START_THRESHOLD_MINUTES
+                penalty_per_minute = self.LATE_START_PENALTY_PER_MINUTE
+                logger.info(f"Using default late settings for object {obj.id}: threshold={threshold_minutes}, penalty={penalty_per_minute}")
+            else:
+                # Используем настройки объекта
+                threshold_minutes = obj.late_threshold_minutes
+                penalty_per_minute = Decimal(str(obj.late_penalty_per_minute))
+                logger.info(f"Using object late settings for object {obj.id}: threshold={threshold_minutes}, penalty={penalty_per_minute}")
             
             # Получить запланированное время начала
             schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == shift.schedule_id)
@@ -110,16 +134,16 @@ class AutoDeductionService:
             
             late_minutes = int((actual_start - planned_start).total_seconds() / 60)
             
-            if late_minutes <= self.LATE_START_THRESHOLD_MINUTES:
+            if late_minutes <= threshold_minutes:
                 return None  # Опоздание в пределах допустимого
             
             # Рассчитать штраф
-            penalty_minutes = late_minutes - self.LATE_START_THRESHOLD_MINUTES
-            penalty_amount = Decimal(penalty_minutes) * self.LATE_START_PENALTY_PER_MINUTE
+            penalty_minutes = late_minutes - threshold_minutes
+            penalty_amount = Decimal(penalty_minutes) * penalty_per_minute
             
             description = (
                 f"Опоздание на {late_minutes} минут "
-                f"(допустимо {self.LATE_START_THRESHOLD_MINUTES} мин)"
+                f"(допустимо {threshold_minutes} мин)"
             )
             
             details = {
@@ -127,7 +151,8 @@ class AutoDeductionService:
                 "actual_start": actual_start.isoformat(),
                 "late_minutes": late_minutes,
                 "penalty_minutes": penalty_minutes,
-                "penalty_per_minute": float(self.LATE_START_PENALTY_PER_MINUTE)
+                "penalty_per_minute": float(penalty_per_minute),
+                "threshold_minutes": threshold_minutes
             }
             
             return ("late_start", penalty_amount, description, details)
