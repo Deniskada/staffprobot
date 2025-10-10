@@ -116,17 +116,7 @@
                             <div class="user-info mb-3">
                                 <h6>👤 Пользователь</h6>
                                 <p class="mb-1"><strong>ID:</strong> {{ subscription.user.id }}</p>
-                                <p class="mb-1"><strong>Telegram:</strong> 
-                                    {% if subscription.user.username %}
-                                        {% if subscription.user.username.startswith('@') %}
-                                            {{ subscription.user.username }}
-                                        {% else %}
-                                            @{{ subscription.user.username }}
-                                        {% endif %}
-                                    {% else %}
-                                        не указан
-                                    {% endif %}
-                                </p>
+                                <p class="mb-1"><strong>Telegram:</strong> @{{ subscription.user.username or 'не указан' }}</p>
                                 <p class="mb-0"><strong>Роль:</strong> {{ subscription.user.role }}</p>
                             </div>
                         </div>

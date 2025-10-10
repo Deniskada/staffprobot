@@ -223,17 +223,7 @@
                     <td><strong>{{ user.id }}</strong></td>
                     <td>
                         <div>
-                            <strong>
-                                {% if user.username %}
-                                    {% if user.username.startswith('@') %}
-                                        {{ user.username }}
-                                    {% else %}
-                                        @{{ user.username }}
-                                    {% endif %}
-                                {% else %}
-                                    не указан
-                                {% endif %}
-                            </strong>
+                            <strong>@{{ user.username or 'не указан' }}</strong>
                             <br><small class="text-muted">ID: {{ user.telegram_id }}</small>
                         </div>
                     </td>

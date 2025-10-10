@@ -142,15 +142,7 @@
                                 {{ user.first_name }} {{ user.last_name }}
                             </h5>
                             <p class="card-text text-muted mb-1">
-                                {% if user.username %}
-                                    {% if user.username.startswith('@') %}
-                                        {{ user.username }}
-                                    {% else %}
-                                        @{{ user.username }}
-                                    {% endif %}
-                                {% else %}
-                                    N/A
-                                {% endif %}
+                                @{{ user.username or 'N/A' }}
                             </p>
                             <small class="text-muted">
                                 ID: {{ user.telegram_id }}

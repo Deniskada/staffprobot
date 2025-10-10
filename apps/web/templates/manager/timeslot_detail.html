@@ -105,13 +105,7 @@
                                     <td>
                                         <strong>{{ shift.user.first_name }} {{ shift.user.last_name or '' }}</strong>
                                         {% if shift.user.username %}
-                                            <br><small class="text-muted">
-                                                {% if shift.user.username.startswith('@') %}
-                                                    {{ shift.user.username }}
-                                                {% else %}
-                                                    @{{ shift.user.username }}
-                                                {% endif %}
-                                            </small>
+                                            <br><small class="text-muted">@{{ shift.user.username }}</small>
                                         {% endif %}
                                     </td>
                                     <td>{{ shift.planned_start.strftime('%H:%M') }}</td>
@@ -161,13 +155,7 @@
                                     <td>
                                         <strong>{{ shift.user.first_name }} {{ shift.user.last_name or '' }}</strong>
                                         {% if shift.user.username %}
-                                            <br><small class="text-muted">
-                                                {% if shift.user.username.startswith('@') %}
-                                                    {{ shift.user.username }}
-                                                {% else %}
-                                                    @{{ shift.user.username }}
-                                                {% endif %}
-                                            </small>
+                                            <br><small class="text-muted">@{{ shift.user.username }}</small>
                                         {% endif %}
                                     </td>
                                     <td>{{ shift.start_time.strftime('%H:%M') }}</td>
