@@ -156,6 +156,19 @@ class ShiftService:
                 contract_result = await session.execute(contract_query)
                 active_contract = contract_result.scalars().first()
                 
+                # Логирование цепочки принятия решений по ставке
+                logger.info(
+                    "Rate calculation chain started",
+                    object_id=object_id,
+                    object_rate=float(obj.hourly_rate),
+                    timeslot_rate=timeslot_rate,
+                    has_contract=active_contract is not None,
+                    contract_rate=float(active_contract.hourly_rate) if active_contract and active_contract.hourly_rate else None,
+                    use_contract_rate=active_contract.use_contract_rate if active_contract else None,
+                    payment_system_id=active_contract.payment_system_id if active_contract else None,
+                    org_unit_id=obj.org_unit_id if hasattr(obj, 'org_unit_id') else None
+                )
+                
                 # Определяем финальную ставку с учетом приоритетов
                 if active_contract:
                     hourly_rate = active_contract.get_effective_hourly_rate(
@@ -165,17 +178,36 @@ class ShiftService:
                     
                     if active_contract.use_contract_rate and active_contract.hourly_rate:
                         rate_source = "contract"
-                        logger.info(f"Using contract rate (priority): {hourly_rate}")
+                        logger.info(
+                            "Final rate decision: contract (highest priority)",
+                            hourly_rate=hourly_rate,
+                            contract_id=active_contract.id,
+                            payment_system_id=active_contract.payment_system_id
+                        )
                     elif timeslot_rate:
                         rate_source = "timeslot"
-                        logger.info(f"Using timeslot rate: {hourly_rate}")
+                        logger.info(
+                            "Final rate decision: timeslot",
+                            hourly_rate=hourly_rate,
+                            timeslot_id=timeslot_id
+                        )
                     else:
                         rate_source = "object"
-                        logger.info(f"Using object rate: {hourly_rate}")
+                        logger.info(
+                            "Final rate decision: object",
+                            hourly_rate=hourly_rate,
+                            object_id=object_id,
+                            org_unit_id=obj.org_unit_id if hasattr(obj, 'org_unit_id') else None
+                        )
                 else:
                     # Нет активного договора - используем timeslot или object
                     hourly_rate = timeslot_rate if timeslot_rate else float(obj.hourly_rate)
-                    logger.info(f"No active contract, using {rate_source} rate: {hourly_rate}")
+                    rate_source = "timeslot" if timeslot_rate else "object"
+                    logger.info(
+                        "Final rate decision: no contract",
+                        hourly_rate=hourly_rate,
+                        rate_source=rate_source
+                    )
                 
                 # Создаем новую смену
                 new_shift = Shift(
@@ -513,9 +545,13 @@ class ShiftService:
             return None
     
     async def _get_object(self, session, object_id: int) -> Optional[Object]:
-        """Получает объект по ID."""
+        """Получает объект по ID с загрузкой организационной структуры."""
         try:
-            query = select(Object).where(Object.id == object_id)
+            from sqlalchemy.orm import selectinload
+            
+            query = select(Object).options(
+                selectinload(Object.org_unit)
+            ).where(Object.id == object_id)
             result = await session.execute(query)
             return result.scalar_one_or_none()
         except Exception as e:
