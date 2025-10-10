@@ -100,11 +100,20 @@ async def require_manager_payroll_permission(
     
     # Для управляющего проверить право can_manage_payroll
     async with get_async_session() as session:
-        telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        from domain.entities.user import User
+        from apps.web.middleware.role_middleware import get_user_id_from_current_user
+        
+        # Получить внутренний user_id
+        user_id = await get_user_id_from_current_user(current_user, session)
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Пользователь не найден"
+            )
         
         # Найти активный договор управляющего
         query = select(Contract).where(
-            Contract.employee_id == telegram_id,
+            Contract.employee_id == user_id,
             Contract.is_manager == True,
             Contract.is_active == True,
             Contract.status == "active"
