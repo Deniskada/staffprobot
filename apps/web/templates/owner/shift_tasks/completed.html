@@ -82,7 +82,7 @@
                                     </td>
                                     <td>
                                         {% if task.shift and task.shift.user %}
-                                        {{ task.shift.user.full_name() }}
+                                        {{ task.shift.user.first_name }} {{ task.shift.user.last_name or '' }}
                                         {% else %}
                                         <span class="text-muted">-</span>
                                         {% endif %}
