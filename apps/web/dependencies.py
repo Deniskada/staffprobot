@@ -67,8 +67,8 @@ def require_role(roles: List[str]):
 
 async def require_manager_payroll_permission(
     request: Request, 
-    current_user: dict = Depends(require_auth)
-) -> dict:
+    current_user = Depends(get_current_user_dependency())
+):
     """
     Проверка права управляющего на работу с начислениями.
     
@@ -76,18 +76,34 @@ async def require_manager_payroll_permission(
     
     Args:
         request: HTTP запрос
-        current_user: Текущий пользователь
+        current_user: Объект User (текущий пользователь)
         
     Returns:
-        dict: Данные пользователя
+        User: Объект пользователя
         
     Raises:
         HTTPException: 403 если нет прав
     """
     from domain.entities.contract import Contract
+    from domain.entities.user import User
+    from core.database.session import get_async_session
+    from sqlalchemy import select, and_
     
-    # Проверить роль
-    user_role = current_user.get("role", "employee")
+    # Проверка аутентификации
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    if current_user is None:
+        return RedirectResponse(url="/auth/login", status_code=302)
+    
+    # Проверить роль (current_user - это объект User)
+    if not hasattr(current_user, 'role'):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Пользователь не найден"
+        )
+    
+    user_role = current_user.role
     if user_role not in ["manager", "owner"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -100,20 +116,9 @@ async def require_manager_payroll_permission(
     
     # Для управляющего проверить право can_manage_payroll
     async with get_async_session() as session:
-        from domain.entities.user import User
-        from apps.web.middleware.role_middleware import get_user_id_from_current_user
-        
-        # Получить внутренний user_id
-        user_id = await get_user_id_from_current_user(current_user, session)
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Пользователь не найден"
-            )
-        
-        # Найти активный договор управляющего
+        # Найти активный договор управляющего (используем current_user.id)
         query = select(Contract).where(
-            Contract.employee_id == user_id,
+            Contract.employee_id == current_user.id,
             Contract.is_manager == True,
             Contract.is_active == True,
             Contract.status == "active"
