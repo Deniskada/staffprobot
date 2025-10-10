@@ -78,41 +78,44 @@ async def manager_payroll_list(
             else:
                 end_date = date(today.year, today.month + 1, 1)
         
-        # Получить сотрудников с начислениями по доступным объектам
-        # Для этого нужно получить все начисления и отфильтровать по object_id смен
+        # Получить сотрудников с начислениями
         employees_data = []
         
-        # Получить всех сотрудников (из активных договоров по доступным объектам)
-        contracts_query = select(Contract).join(User, Contract.employee_id == User.id).where(
-            Contract.is_active == True,
-            Contract.status == "active"
-        )
+        # Получить уникальных сотрудников из начислений за период
+        from domain.entities.payroll_entry import PayrollEntry
         
-        contracts_result = await db.execute(contracts_query)
-        contracts = contracts_result.scalars().all()
-        
-        for contract in contracts:
-            # Проверить, есть ли у этого сотрудника начисления
-            entries = await payroll_service.get_payroll_entries_by_employee(
-                employee_id=contract.employee_id,
-                period_start=start_date,
-                period_end=end_date
+        payroll_query = select(PayrollEntry).where(
+            and_(
+                PayrollEntry.period_start >= start_date,
+                PayrollEntry.period_end <= end_date
             )
+        ).options(selectinload(PayrollEntry.employee))
+        
+        payroll_result = await db.execute(payroll_query)
+        all_entries = payroll_result.scalars().all()
+        
+        # Группировать по сотрудникам
+        employees_entries = {}
+        for entry in all_entries:
+            emp_id = entry.employee_id
+            if emp_id not in employees_entries:
+                employees_entries[emp_id] = []
+            employees_entries[emp_id].append(entry)
+        
+        # Для каждого сотрудника создать запись
+        for emp_id, entries in employees_entries.items():
+            user_query = select(User).where(User.id == emp_id)
+            user_result = await db.execute(user_query)
+            employee = user_result.scalar_one_or_none()
             
-            if entries:
-                # Получить данные сотрудника
-                user_query = select(User).where(User.id == contract.employee_id)
-                user_result = await db.execute(user_query)
-                employee = user_result.scalar_one_or_none()
-                
-                if employee:
-                    total_amount = sum(entry.net_amount for entry in entries)
-                    employees_data.append({
-                        "employee": employee,
-                        "entries_count": len(entries),
-                        "total_amount": total_amount,
-                        "latest_entry": entries[0] if entries else None
-                    })
+            if employee:
+                total_amount = sum(entry.net_amount for entry in entries)
+                employees_data.append({
+                    "employee": employee,
+                    "entries_count": len(entries),
+                    "total_amount": total_amount,
+                    "latest_entry": entries[0] if entries else None
+                })
         
         return templates.TemplateResponse(
             "manager/payroll/list.html",
