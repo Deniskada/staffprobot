@@ -106,7 +106,7 @@ def setup_logging() -> None:
     root_logger.addHandler(console_handler)
 
 # Создаем основной логгер
-logger = logging.getLogger("staffprobot")
+logger = StructuredLogger("staffprobot")
 
 # Настраиваем логирование при импорте модуля
 setup_logging()
