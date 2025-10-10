@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 283/299 (94.6%)
+**Общий прогресс:** 284/299 (95.0%)
 
 ## 🎯 Итерация 1: MVP (1-2 недели)
 - [x] **Создать структуру проекта** - папки, файлы, базовые модули
@@ -963,17 +963,19 @@
     - ✅ Пункт меню "Начисления" в `base_manager.html`
     - ✅ Роутер зарегистрирован в `app.py`
 
-- [ ] **5.3. Обновить документацию (1 день)**
+- [x] **5.3. Обновить документацию (1 день)**
   - Type: doc | Files: doc/vision_v1/**/*.md
   - Acceptance:
-    - Обновлен `doc/vision_v1/entities/contract.md` - новые поля (use_contract_rate, payment_system_id, manager_permissions.can_manage_payroll)
-    - Создан `doc/vision_v1/entities/payment_system.md` - справочник систем оплаты
-    - Создан `doc/vision_v1/entities/payroll.md` - начисления, удержания, выплаты
-    - Создан `doc/vision_v1/entities/org_structure.md` - организационная структура
-    - Создан `doc/vision_v1/entities/shift_task.md` - задачи на смену
-    - Обновлен `doc/vision_v1/roles/owner.md` - новые страницы (payment_systems, payroll, org_structure)
-    - Обновлен `doc/vision_v1/roles/manager.md` - страница выплат, право can_manage_payroll
-    - Обновлен `doc/vision_v1/roles/employee.md` - страница выплат, задачи на смене
+    - ✅ Создан `doc/vision_v1/entities/contract.md` - новые поля (use_contract_rate, payment_system_id, manager_permissions)
+    - ✅ Создан `doc/vision_v1/entities/payment_system.md` - типы систем, логика применения
+    - ✅ Создан `doc/vision_v1/entities/payroll.md` - начисления, удержания, выплаты, Celery
+    - ✅ Создан `doc/vision_v1/entities/org_structure.md` - иерархия, наследование, CRUD
+    - ✅ Создан `doc/vision_v1/entities/shift_task.md` - обязательные/необязательные, штрафы/премии
+    - ✅ Создан `doc/vision_v1/entities/README.md` - сводка всех сущностей и связей
+    - ✅ Обновлен `doc/vision_v1/roles/owner.md` - роуты для /payroll, /org-structure, /payment-schedules, /shift-tasks
+    - ✅ Обновлен `doc/vision_v1/roles/manager.md` - роуты /manager/payroll с проверкой права can_manage_payroll
+    - ✅ Обновлен `doc/vision_v1/roles/employee.md` - роуты /employee/payroll для просмотра начислений
+    - ✅ Обновлен `doc/vision.md` - раздел "Ключевые достижения Итерации 23"
     - Обновлен `doc/vision.md` - схемы всех новых таблиц
     - Соответствие `doc/DOCUMENTATION_RULES.md`
 
