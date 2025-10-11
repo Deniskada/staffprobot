@@ -11,7 +11,6 @@ from domain.entities.shift import Shift
 from domain.entities.object import Object
 from domain.entities.user import User
 from sqlalchemy import select, and_
-from sqlalchemy.orm import joinedload
 from .base_service import BaseService
 
 
@@ -194,38 +193,6 @@ class ShiftService(BaseService):
                 hours = duration.total_seconds() / 3600
                 active_shift.total_hours = hours
                 active_shift.total_payment = hours * active_shift.hourly_rate
-                
-                # Создаем корректировки начислений (Phase 4A)
-                from shared.services.payroll_adjustment_service import PayrollAdjustmentService
-                from shared.services.late_penalty_calculator import LatePenaltyCalculator
-                
-                adjustment_service = PayrollAdjustmentService(session)
-                late_penalty_calc = LatePenaltyCalculator(session)
-                
-                # 1. Создать базовую оплату за смену
-                await adjustment_service.create_shift_base_adjustment(
-                    shift=active_shift,
-                    employee_id=user.id,
-                    object_id=active_shift.object_id,
-                    created_by=user.id
-                )
-                
-                # 2. Проверить и создать штраф за опоздание
-                late_minutes, penalty_amount = await late_penalty_calc.calculate_late_penalty(
-                    shift=active_shift,
-                    obj=active_shift.object
-                )
-                
-                if penalty_amount > 0:
-                    await adjustment_service.create_late_start_adjustment(
-                        shift=active_shift,
-                        late_minutes=late_minutes,
-                        penalty_amount=penalty_amount,
-                        created_by=user.id
-                    )
-                
-                # 3. Обработать задачи смены (из shift.object.shift_tasks JSONB)
-                # TODO: Реализовать после доработки модели задач
                 
                 await session.commit()
                 

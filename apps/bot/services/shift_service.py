@@ -226,11 +226,18 @@ class ShiftService:
                 await session.commit()
                 await session.refresh(new_shift)
                 
-                # Phase 4A: Задачи теперь обрабатываются при закрытии смены
-                # Читаются из object.shift_tasks (JSONB) и создаются как PayrollAdjustment
+                # Создать задачи для смены на основе наследования
+                from apps.web.services.shift_task_service import ShiftTaskService
+                task_service = ShiftTaskService(session)
+                tasks = await task_service.create_tasks_for_shift(
+                    shift_id=new_shift.id,
+                    object_id=object_id,
+                    timeslot_id=timeslot_id if shift_type == "planned" else None,
+                    created_by_id=db_user.id
+                )
                 
                 logger.info(
-                    f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}"
+                    f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}, tasks_created={len(tasks)}"
                 )
                 
                 # Инвалидация кэша календаря
@@ -267,13 +274,11 @@ class ShiftService:
         coordinates: str
     ) -> Dict[str, Any]:
         """
-        Закрытие смены через shared сервис.
-        
-        Phase 4A: Используем shared.services.shift_service.ShiftService для избежания greenlet ошибок
+        Закрытие смены с проверкой геолокации.
         
         Args:
-            user_id: Telegram ID пользователя
-            shift_id: ID смены (не используется, определяется из активной смены пользователя)
+            user_id: ID пользователя
+            shift_id: ID смены
             coordinates: Координаты пользователя в формате 'lat,lon'
             
         Returns:
@@ -284,13 +289,125 @@ class ShiftService:
                 f"Closing shift requested: user_id={user_id}, shift_id={shift_id}, coordinates={coordinates}"
             )
             
-            # Используем общий сервис из shared
-            from shared.services.shift_service import ShiftService as SharedShiftService
-            
-            shared_service = SharedShiftService()
-            result = await shared_service.close_shift(user_id=user_id, coordinates=coordinates)
-            
-            return result
+            async with get_async_session() as session:
+                # Находим пользователя по telegram_id для получения его id в БД
+                from domain.entities.user import User
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = await session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    return {
+                        'success': False,
+                        'error': 'Пользователь не найден в базе данных. Обратитесь к администратору.'
+                    }
+                
+                # Получаем смену
+                shift = await self._get_shift(session, shift_id)
+                if not shift:
+                    return {
+                        'success': False,
+                        'error': 'Смена не найдена'
+                    }
+                
+                # Проверяем, принадлежит ли смена пользователю
+                if shift.user_id != db_user.id:
+                    return {
+                        'success': False,
+                        'error': 'Смена не принадлежит вам'
+                    }
+                
+                # Проверяем, активна ли смена
+                if shift.status != 'active':
+                    return {
+                        'success': False,
+                        'error': f'Смена уже {shift.status}'
+                    }
+                
+                # Получаем объект для проверки геолокации
+                obj = await self._get_object(session, shift.object_id)
+                if not obj:
+                    return {
+                        'success': False,
+                        'error': 'Объект смены не найден'
+                    }
+                
+                # Валидируем геолокацию при закрытии с использованием max_distance_meters из объекта
+                location_validation = self.location_validator.validate_shift_location(
+                    coordinates, obj.coordinates, obj.max_distance_meters
+                )
+                
+                if not location_validation['valid']:
+                    return {
+                        'success': False,
+                        'error': location_validation['error'],
+                        'distance_meters': location_validation.get('distance_meters'),
+                        'max_distance_meters': location_validation.get('max_distance_meters')
+                    }
+                
+                # Закрываем смену
+                success = await self.scheduler.close_shift_manually(
+                    shift_id=shift_id,
+                    end_coordinates=coordinates,
+                    notes=f"Закрыта пользователем в {datetime.now().strftime('%H:%M:%S')}"
+                )
+                
+                if not success:
+                    return {
+                        'success': False,
+                        'error': 'Ошибка при закрытии смены'
+                    }
+                
+                # Получаем обновленную информацию о смене в новой сессии (после коммита close_shift_manually)
+                async with get_async_session() as fresh_session:
+                    updated_shift = await self._get_shift(fresh_session, shift_id)
+                    
+                    if not updated_shift:
+                        logger.error(f"Could not retrieve updated shift {shift_id} after closing")
+                        return {
+                            'success': True,  # Смена закрыта, но не можем получить детали
+                            'message': f'Смена успешно закрыта! {location_validation["message"]}',
+                            'shift_id': shift_id,
+                            'total_hours': 0,
+                            'total_payment': 0,
+                            'end_time': None
+                        }
+                    
+                    logger.info(
+                        f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={updated_shift.total_hours}, total_payment={updated_shift.total_payment}"
+                    )
+                    
+                    # Рассчитать автоматические удержания
+                    from apps.web.services.auto_deduction_service import AutoDeductionService
+                    deduction_service = AutoDeductionService(fresh_session)
+                    auto_deductions = await deduction_service.calculate_deductions_for_shift(shift_id)
+                    
+                    # Сохранить информацию об удержаниях в shift metadata (для последующей обработки Celery)
+                    if auto_deductions:
+                        # Сохраняем в notes смены для информации
+                        deduction_summary = f"\n\nАвтоудержания: {len(auto_deductions)} шт., "
+                        deduction_summary += f"сумма: {sum(d[1] for d in auto_deductions)}₽"
+                        
+                        logger.info(
+                            f"Auto-deductions calculated for shift",
+                            shift_id=shift_id,
+                            count=len(auto_deductions),
+                            total=float(sum(d[1] for d in auto_deductions))
+                        )
+                    
+                    # Форматируем время в часовом поясе объекта
+                    object_timezone = getattr(shift.object, 'timezone', None) or 'Europe/Moscow'
+                    local_end_time = timezone_helper.format_local_time(updated_shift.end_time, object_timezone) if updated_shift.end_time else None
+                    
+                    return {
+                        'success': True,
+                        'message': f'Смена успешно закрыта! {location_validation["message"]}',
+                        'shift_id': shift_id,
+                        'total_hours': float(updated_shift.total_hours) if updated_shift.total_hours else 0,
+                        'total_payment': float(updated_shift.total_payment) if updated_shift.total_payment else 0,
+                        'end_time': local_end_time,
+                        'auto_deductions': len(auto_deductions) if auto_deductions else 0
+                    }
                 
         except Exception as e:
             logger.error(
