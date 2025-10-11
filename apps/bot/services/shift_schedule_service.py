@@ -40,12 +40,18 @@ class ShiftScheduleService:
                     return []
                 
                 # Получаем запланированные смены пользователя на указанную дату
+                # Локализуем дату в Europe/Moscow для правильного сравнения
+                import pytz
+                msk_tz = pytz.timezone('Europe/Moscow')
+                start_of_day = msk_tz.localize(datetime.combine(target_date, datetime.min.time()))
+                end_of_day = start_of_day + timedelta(days=1)
+                
                 query = select(ShiftSchedule).where(
                     and_(
                         ShiftSchedule.user_id == user.id,
                         ShiftSchedule.status.in_(["planned", "confirmed"]),
-                        ShiftSchedule.planned_start >= datetime.combine(target_date, datetime.min.time()),
-                        ShiftSchedule.planned_start < datetime.combine(target_date, datetime.min.time()) + timedelta(days=1)
+                        ShiftSchedule.planned_start >= start_of_day,
+                        ShiftSchedule.planned_start < end_of_day
                     )
                 ).order_by(ShiftSchedule.planned_start)
                 
@@ -65,15 +71,22 @@ class ShiftScheduleService:
                     timeslot_result = await session.execute(timeslot_query)
                     timeslot = timeslot_result.scalar_one_or_none()
                     
+                    # Форматируем время в часовом поясе объекта
+                    from core.utils.timezone_helper import timezone_helper
+                    object_timezone = obj.timezone if obj else 'Europe/Moscow'
+                    planned_start_str = timezone_helper.format_local_time(shift.planned_start, object_timezone, '%H:%M')
+                    planned_end_str = timezone_helper.format_local_time(shift.planned_end, object_timezone, '%H:%M')
+                    
                     planned_shifts.append({
                         'id': shift.id,
                         'user_id': shift.user_id,
                         'object_id': shift.object_id,
                         'object_name': obj.name if obj else 'Неизвестно',
-                        'object_timezone': obj.timezone if obj else 'Europe/Moscow',
+                        'object_timezone': object_timezone,
                         'time_slot_id': shift.time_slot_id,
                         'planned_start': shift.planned_start,
                         'planned_end': shift.planned_end,
+                        'planned_start_str': f"{planned_start_str}-{planned_end_str}",
                         'status': shift.status,
                         'hourly_rate': shift.hourly_rate,
                         'notes': shift.notes,
@@ -124,6 +137,12 @@ class ShiftScheduleService:
                 
                 logger.info(f"Found timeslot: {timeslot.start_time if timeslot else 'None'}")
                 
+                # Форматируем время в часовом поясе объекта
+                from core.utils.timezone_helper import timezone_helper
+                object_timezone = obj.timezone if obj else 'Europe/Moscow'
+                planned_start_str = timezone_helper.format_local_time(shift.planned_start, object_timezone, '%H:%M')
+                planned_end_str = timezone_helper.format_local_time(shift.planned_end, object_timezone, '%H:%M')
+                
                 result = {
                     'id': shift.id,
                     'user_id': shift.user_id,
@@ -132,6 +151,7 @@ class ShiftScheduleService:
                     'time_slot_id': shift.time_slot_id,
                     'planned_start': shift.planned_start,
                     'planned_end': shift.planned_end,
+                    'planned_start_str': f"{planned_start_str}-{planned_end_str}",
                     'status': shift.status,
                     'hourly_rate': shift.hourly_rate,
                     'notes': shift.notes,
