@@ -22,6 +22,11 @@ class Shift(Base):
     end_time = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(50), default="active", index=True)  # active, completed, cancelled
     is_planned = Column(Boolean, default=False)  # Была ли смена запланирована
+    
+    # Плановое и фактическое время начала (для штрафов за опоздание)
+    planned_start = Column(DateTime(timezone=True), nullable=True)  # Плановое время начала (opening_time/timeslot + threshold)
+    actual_start = Column(DateTime(timezone=True), nullable=True)  # Фактическое время начала работы
+    
     start_coordinates = Column(String(100), nullable=True)  # "lat,lon" формат для MVP
     end_coordinates = Column(String(100), nullable=True)  # "lat,lon" формат для MVP
     total_hours = Column(Numeric(5, 2), nullable=True)

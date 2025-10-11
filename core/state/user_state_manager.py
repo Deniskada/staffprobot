@@ -11,6 +11,8 @@ class UserAction(str, Enum):
     """Возможные действия пользователя."""
     OPEN_SHIFT = "open_shift"
     CLOSE_SHIFT = "close_shift"
+    OPEN_OBJECT = "open_object"  # Открытие объекта
+    CLOSE_OBJECT = "close_object"  # Закрытие объекта
     CREATE_OBJECT = "create_object"
     EDIT_OBJECT = "edit_object"
     SCHEDULE_SHIFT = "schedule_shift"
@@ -31,6 +33,8 @@ class UserStep(str, Enum):
     TASK_COMPLETION = "task_completion"  # Phase 4A: отметка задач при закрытии смены
     MEDIA_UPLOAD = "media_upload"  # Загрузка фото/видео отчета для задачи
     LOCATION_REQUEST = "location_request"
+    OPENING_OBJECT_LOCATION = "opening_object_location"  # Геолокация при открытии объекта
+    CLOSING_OBJECT_LOCATION = "closing_object_location"  # Геолокация при закрытии объекта
     PROCESSING = "processing"
     INPUT_MAX_DISTANCE = "input_max_distance"
     INPUT_FIELD_VALUE = "input_field_value"
