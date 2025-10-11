@@ -267,11 +267,13 @@ class ShiftService:
         coordinates: str
     ) -> Dict[str, Any]:
         """
-        Закрытие смены с проверкой геолокации.
+        Закрытие смены через shared сервис.
+        
+        Phase 4A: Используем shared.services.shift_service.ShiftService для избежания greenlet ошибок
         
         Args:
-            user_id: ID пользователя
-            shift_id: ID смены
+            user_id: Telegram ID пользователя
+            shift_id: ID смены (не используется, определяется из активной смены пользователя)
             coordinates: Координаты пользователя в формате 'lat,lon'
             
         Returns:
@@ -282,127 +284,14 @@ class ShiftService:
                 f"Closing shift requested: user_id={user_id}, shift_id={shift_id}, coordinates={coordinates}"
             )
             
-            async with get_async_session() as session:
-                # Находим пользователя по telegram_id для получения его id в БД
-                from domain.entities.user import User
-                user_query = select(User).where(User.telegram_id == user_id)
-                user_result = await session.execute(user_query)
-                db_user = user_result.scalar_one_or_none()
-                
-                if not db_user:
-                    return {
-                        'success': False,
-                        'error': 'Пользователь не найден в базе данных. Обратитесь к администратору.'
-                    }
-                
-                # Получаем смену
-                shift = await self._get_shift(session, shift_id)
-                if not shift:
-                    return {
-                        'success': False,
-                        'error': 'Смена не найдена'
-                    }
-                
-                # Проверяем, принадлежит ли смена пользователю
-                if shift.user_id != db_user.id:
-                    return {
-                        'success': False,
-                        'error': 'Смена не принадлежит вам'
-                    }
-                
-                # Проверяем, активна ли смена
-                if shift.status != 'active':
-                    return {
-                        'success': False,
-                        'error': f'Смена уже {shift.status}'
-                    }
-                
-                # Получаем объект для проверки геолокации
-                obj = await self._get_object(session, shift.object_id)
-                if not obj:
-                    return {
-                        'success': False,
-                        'error': 'Объект смены не найден'
-                    }
-                
-                # Валидируем геолокацию при закрытии с использованием max_distance_meters из объекта
-                location_validation = self.location_validator.validate_shift_location(
-                    coordinates, obj.coordinates, obj.max_distance_meters
-                )
-                
-                if not location_validation['valid']:
-                    return {
-                        'success': False,
-                        'error': location_validation['error'],
-                        'distance_meters': location_validation.get('distance_meters'),
-                        'max_distance_meters': location_validation.get('max_distance_meters')
-                    }
-                
-                # Закрываем смену напрямую в текущей сессии (Phase 4A: избегаем вложенных сессий)
-                import pytz
-                shift.end_time = datetime.now(pytz.UTC)
-                shift.status = 'completed'
-                shift.end_coordinates = coordinates
-                
-                # Рассчитываем время и оплату
-                duration = shift.end_time - shift.start_time
-                hours = duration.total_seconds() / 3600
-                shift.total_hours = hours
-                shift.total_payment = hours * float(shift.hourly_rate) if shift.hourly_rate else 0
-                shift.notes = f"Закрыта пользователем в {shift.end_time.strftime('%H:%M:%S')}"
-                
-                # Создаем корректировки начислений (Phase 4A)
-                from shared.services.payroll_adjustment_service import PayrollAdjustmentService
-                from shared.services.late_penalty_calculator import LatePenaltyCalculator
-                
-                adjustment_service = PayrollAdjustmentService(session)
-                late_penalty_calc = LatePenaltyCalculator(session)
-                
-                # 1. Создать базовую оплату за смену
-                await adjustment_service.create_shift_base_adjustment(
-                    shift=shift,
-                    employee_id=db_user.id,
-                    object_id=shift.object_id,
-                    created_by=db_user.id
-                )
-                
-                # 2. Проверить и создать штраф за опоздание
-                late_minutes, penalty_amount = await late_penalty_calc.calculate_late_penalty(
-                    shift=shift,
-                    obj=obj
-                )
-                
-                if penalty_amount > 0:
-                    await adjustment_service.create_late_start_adjustment(
-                        shift=shift,
-                        late_minutes=late_minutes,
-                        penalty_amount=penalty_amount,
-                        created_by=db_user.id
-                    )
-                
-                await session.commit()
-                
-                # Инвалидация кэша календаря
-                from core.cache.redis_cache import cache
-                await cache.clear_pattern("calendar_shifts:*")
-                await cache.clear_pattern("api_response:*")
-                
-                logger.info(
-                    f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={shift.total_hours}, total_payment={shift.total_payment}"
-                )
-                
-                # Форматируем время в часовом поясе объекта
-                object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
-                local_end_time = timezone_helper.format_local_time(shift.end_time, object_timezone)
-                
-                return {
-                    'success': True,
-                    'message': f'Смена успешно закрыта! {location_validation["message"]}',
-                    'shift_id': shift_id,
-                    'total_hours': float(shift.total_hours),
-                    'total_payment': float(shift.total_payment),
-                    'end_time': local_end_time
-                }
+            # Используем общий сервис из shared
+            from shared.services.shift_service import ShiftService as SharedShiftService
+            from core.geolocation.location_validator import LocationValidator
+            
+            shared_service = SharedShiftService(LocationValidator())
+            result = await shared_service.close_shift(user_id=user_id, coordinates=coordinates)
+            
+            return result
                 
         except Exception as e:
             logger.error(
