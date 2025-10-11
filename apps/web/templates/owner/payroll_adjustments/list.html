@@ -7,7 +7,7 @@
     <div class="row mb-4">
         <div class="col-12">
             <h2><i class="bi bi-cash-coin"></i> Корректировки начислений</h2>
-            <p class="text-muted">Просмотр и управление корректировками (смены, штрафы, премии)</p>
+            <p class="text-muted">Просмотр и управление начислениями (смены, штрафы, премии)</p>
         </div>
     </div>
 
@@ -28,7 +28,7 @@
                         <input type="date" class="form-control" id="date_to" name="date_to" value="{{ filter_date_to }}">
                     </div>
                     <div class="col-md-3">
-                        <label for="adjustment_type" class="form-label">Тип корректировки</label>
+                        <label for="adjustment_type" class="form-label">Тип начисления</label>
                         <select class="form-select" id="adjustment_type" name="adjustment_type">
                             <option value="">Все типы</option>
                             {% for type_value, type_label in adjustment_types %}
@@ -61,7 +61,7 @@
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label for="is_applied" class="form-label">Статус применения</label>
+                        <label for="is_applied" class="form-label">Применено в выплате</label>
                         <select class="form-select" id="is_applied" name="is_applied">
                             <option value="all" {% if filter_is_applied == 'all' or not filter_is_applied %}selected{% endif %}>Все</option>
                             <option value="applied" {% if filter_is_applied == 'applied' %}selected{% endif %}>Применено</option>
@@ -85,7 +85,7 @@
     <div class="row mb-3">
         <div class="col-12">
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createAdjustmentModal">
-                <i class="bi bi-plus-circle"></i> Добавить ручную корректировку
+                <i class="bi bi-plus-circle"></i> Добавить начисление
             </button>
         </div>
     </div>
@@ -93,7 +93,7 @@
     <!-- Таблица корректировок -->
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Список корректировок</h5>
+            <h5 class="mb-0">Список начислений</h5>
             <span class="badge bg-secondary">Всего: {{ total_count }}</span>
         </div>
         <div class="card-body">
@@ -146,6 +146,18 @@
                             </td>
                             <td>
                                 <small>{{ adj.description or '—' }}</small>
+                                {% if adj.details %}
+                                    {% if adj.details.get('source') %}
+                                    <br><span class="badge bg-secondary">{{ 'Объект' if adj.details.source == 'object' else 'Тайм-слот' }}</span>
+                                    {% endif %}
+                                    {% if adj.details.get('media_url') %}
+                                    <br>
+                                    <a href="{{ adj.details.media_url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                                        <i class="bi bi-{% if adj.details.media_type == 'photo' %}image{% else %}play-circle{% endif %}"></i>
+                                        Просмотр отчета
+                                    </a>
+                                    {% endif %}
+                                {% endif %}
                             </td>
                             <td class="text-end">
                                 <strong class="{% if adj.amount > 0 %}text-success{% elif adj.amount < 0 %}text-danger{% endif %}">
@@ -208,7 +220,7 @@
 
             {% else %}
             <div class="alert alert-info">
-                <i class="bi bi-info-circle"></i> Корректировки не найдены. Попробуйте изменить фильтры.
+                <i class="bi bi-info-circle"></i> Начисления не найдены. Попробуйте изменить фильтры.
             </div>
             {% endif %}
         </div>
@@ -220,7 +232,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Добавить ручную корректировку</h5>
+                <h5 class="modal-title">Добавить начисление вручную</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="createAdjustmentForm">
@@ -239,8 +251,8 @@
                     <div class="mb-3">
                         <label for="create_adjustment_type" class="form-label">Тип *</label>
                         <select class="form-select" id="create_adjustment_type" name="adjustment_type" required>
-                            <option value="manual_bonus">Ручная премия</option>
-                            <option value="manual_deduction">Ручной штраф</option>
+                            <option value="manual_bonus">Премия</option>
+                            <option value="manual_deduction">Штраф</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -278,7 +290,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Редактировать корректировку</h5>
+                <h5 class="modal-title">Редактировать начисление</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="editAdjustmentForm">
@@ -309,7 +321,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">История изменений корректировки</h5>
+                <h5 class="modal-title">История изменений начисления</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="historyModalBody">
@@ -338,13 +350,13 @@ document.getElementById('createAdjustmentForm').addEventListener('submit', async
         const data = await response.json();
         
         if (data.success) {
-            alert('Корректировка успешно создана');
+            alert('Начисление успешно создано');
             location.reload();
         } else {
             alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
         }
     } catch (error) {
-        alert('Ошибка создания корректировки: ' + error);
+        alert('Ошибка создания начисления: ' + error);
     }
 });
 
@@ -378,13 +390,13 @@ document.getElementById('editAdjustmentForm').addEventListener('submit', async f
         const data = await response.json();
         
         if (data.success) {
-            alert('Корректировка успешно обновлена');
+            alert('Начисление успешно обновлено');
             location.reload();
         } else {
             alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
         }
     } catch (error) {
-        alert('Ошибка обновления корректировки: ' + error);
+        alert('Ошибка обновления начисления: ' + error);
     }
 });
 
@@ -398,7 +410,7 @@ document.querySelectorAll('.btn-view-history').forEach(btn => {
             const data = await response.json();
             
             if (data.success) {
-                let html = '<div class="mb-3"><strong>Корректировка:</strong><br>';
+                let html = '<div class="mb-3"><strong>Начисление:</strong><br>';
                 html += `Тип: ${data.adjustment.type}<br>`;
                 html += `Сумма: ${data.adjustment.amount} ₽<br>`;
                 html += `Описание: ${data.adjustment.description || '—'}</div>`;
