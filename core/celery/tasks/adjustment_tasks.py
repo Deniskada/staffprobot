@@ -77,7 +77,7 @@ def process_closed_shifts_adjustments():
                             PayrollAdjustment.shift_id == shift.id
                         )
                         existing_result = await session.execute(existing_query)
-                        existing = existing_result.scalar_one_or_none()
+                        existing = existing_result.scalars().first()
                         
                         if existing:
                             logger.debug(f"Adjustments already exist for shift {shift.id}, skipping")
