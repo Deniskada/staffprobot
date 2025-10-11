@@ -33,7 +33,7 @@ async def payroll_adjustments_list(
     date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
     page: int = Query(1, ge=1, description="Номер страницы"),
     per_page: int = Query(50, ge=1, le=200, description="Записей на странице"),
-    current_user: dict = Depends(get_current_user_dependency()),
+    current_user = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
@@ -159,7 +159,7 @@ async def create_manual_adjustment(
     description: str = Form(...),
     object_id: Optional[int] = Form(None),
     shift_id: Optional[int] = Form(None),
-    current_user: dict = Depends(get_current_user_dependency()),
+    current_user = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
@@ -178,7 +178,7 @@ async def create_manual_adjustment(
             amount=amount,
             adjustment_type=adjustment_type,
             description=description,
-            created_by=current_user["id"],
+            created_by=current_user.id,
             object_id=object_id,
             shift_id=shift_id
         )
@@ -191,7 +191,7 @@ async def create_manual_adjustment(
             employee_id=employee_id,
             type=adjustment_type,
             amount=float(amount),
-            owner_id=current_user["id"]
+            owner_id=current_user.id
         )
         
         return JSONResponse(content={
@@ -214,7 +214,7 @@ async def edit_adjustment(
     adjustment_id: int,
     amount: Optional[Decimal] = Form(None),
     description: Optional[str] = Form(None),
-    current_user: dict = Depends(get_current_user_dependency()),
+    current_user = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
@@ -238,7 +238,7 @@ async def edit_adjustment(
         adjustment = await adjustment_service.update_adjustment(
             adjustment_id=adjustment_id,
             updates=updates,
-            updated_by=current_user["id"]
+            updated_by=current_user.id
         )
         
         await session.commit()
@@ -246,7 +246,7 @@ async def edit_adjustment(
         logger.info(
             f"Adjustment updated by owner",
             adjustment_id=adjustment_id,
-            updated_by=current_user["id"],
+            updated_by=current_user.id,
             fields=list(updates.keys())
         )
         
@@ -272,7 +272,7 @@ async def edit_adjustment(
 @router.get("/{adjustment_id}/history", response_class=JSONResponse)
 async def get_adjustment_history(
     adjustment_id: int,
-    current_user: dict = Depends(get_current_user_dependency()),
+    current_user = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
