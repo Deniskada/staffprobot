@@ -734,13 +734,6 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
         telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
         
-        logger.info(
-            f"[EDIT OBJECT {object_id}] Telegram chat settings",
-            raw_value=inherit_telegram_chat_value,
-            inherit_telegram_chat=inherit_telegram_chat,
-            telegram_report_chat_id=telegram_report_chat_id
-        )
-        
         # Обработка подразделения
         org_unit_id_str = form_data.get("org_unit_id", "").strip()
         org_unit_id = int(org_unit_id_str) if org_unit_id_str else None
