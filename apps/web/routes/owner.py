@@ -370,6 +370,11 @@ async def owner_objects_create_post(
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
         
+        # Обработка Telegram группы для отчетов
+        inherit_telegram_chat = "inherit_telegram_chat" in form_data
+        telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
+        telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
+        
         # Обработка подразделения
         org_unit_id_str = form_data.get("org_unit_id", "").strip()
         org_unit_id = int(org_unit_id_str) if org_unit_id_str else None
@@ -378,6 +383,7 @@ async def owner_objects_create_post(
         task_texts = form_data.getlist("task_texts[]")
         task_deductions = form_data.getlist("task_deductions[]")
         task_mandatory = form_data.getlist("task_mandatory[]")
+        task_requires_media = form_data.getlist("task_requires_media[]")
         
         logger.info(f"Task parsing - texts: {task_texts}, deductions: {task_deductions}, mandatory: {task_mandatory}")
         
@@ -588,7 +594,9 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "org_unit_id": obj.org_unit_id if hasattr(obj, 'org_unit_id') else None,
                 "inherit_late_settings": obj.inherit_late_settings if hasattr(obj, 'inherit_late_settings') else True,
                 "late_threshold_minutes": obj.late_threshold_minutes if hasattr(obj, 'late_threshold_minutes') else None,
-                "late_penalty_per_minute": obj.late_penalty_per_minute if hasattr(obj, 'late_penalty_per_minute') else None
+                "late_penalty_per_minute": obj.late_penalty_per_minute if hasattr(obj, 'late_penalty_per_minute') else None,
+                "inherit_telegram_chat": obj.inherit_telegram_chat if hasattr(obj, 'inherit_telegram_chat') else True,
+                "telegram_report_chat_id": obj.telegram_report_chat_id if hasattr(obj, 'telegram_report_chat_id') else None
             }
             
             # Получаем данные для переключения интерфейсов
@@ -713,6 +721,11 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
         
+        # Обработка Telegram группы для отчетов
+        inherit_telegram_chat = "inherit_telegram_chat" in form_data
+        telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
+        telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
+        
         # Обработка подразделения
         org_unit_id_str = form_data.get("org_unit_id", "").strip()
         org_unit_id = int(org_unit_id_str) if org_unit_id_str else None
@@ -721,18 +734,22 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         task_texts = form_data.getlist("task_texts[]")
         task_deductions = form_data.getlist("task_deductions[]")
         task_mandatory = form_data.getlist("task_mandatory[]")
+        task_requires_media = form_data.getlist("task_requires_media[]")
+        task_requires_media = form_data.getlist("task_requires_media[]")
         
-        logger.info(f"Task parsing (edit) - texts: {task_texts}, deductions: {task_deductions}, mandatory: {task_mandatory}")
+        logger.info(f"Task parsing (edit) - texts: {task_texts}, deductions: {task_deductions}, mandatory: {task_mandatory}, requires_media: {task_requires_media}")
         
         shift_tasks = []
         for idx, text in enumerate(task_texts):
             if text.strip():
                 is_mandatory = str(idx) in task_mandatory
-                logger.info(f"Task {idx} (edit): text='{text}', is_mandatory={is_mandatory}")
+                requires_media = str(idx) in task_requires_media
+                logger.info(f"Task {idx}: text='{text}', is_mandatory={is_mandatory}, requires_media={requires_media}")
                 shift_tasks.append({
                     "text": text.strip(),
                     "is_mandatory": is_mandatory,
-                    "deduction_amount": float(task_deductions[idx]) if idx < len(task_deductions) else 100.0
+                    "deduction_amount": float(task_deductions[idx]) if idx < len(task_deductions) else 100.0,
+                    "requires_media": requires_media
                 })
         
         logger.info(f"Form data - work_conditions: '{work_conditions}', shift_tasks: {shift_tasks}")
@@ -777,6 +794,8 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "inherit_late_settings": inherit_late_settings,
                 "late_threshold_minutes": late_threshold_minutes,
                 "late_penalty_per_minute": late_penalty_per_minute,
+                "inherit_telegram_chat": inherit_telegram_chat,
+                "telegram_report_chat_id": telegram_report_chat_id,
                 "org_unit_id": org_unit_id
             }
             
