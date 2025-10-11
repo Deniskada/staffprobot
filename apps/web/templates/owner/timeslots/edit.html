@@ -392,6 +392,27 @@ document.getElementById('editForm').addEventListener('submit', function(e) {
         alert('Время начала должно быть меньше времени окончания');
         return false;
     }
+    
+    // Обработка unchecked checkbox'ов
+    const form = e.target;
+    
+    // penalize_late_start
+    if (!document.getElementById('penalize_late_start').checked) {
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'penalize_late_start';
+        hidden.value = 'false';
+        form.appendChild(hidden);
+    }
+    
+    // ignore_object_tasks  
+    if (!document.getElementById('ignore_object_tasks').checked) {
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'ignore_object_tasks';
+        hidden.value = 'false';
+        form.appendChild(hidden);
+    }
 });
 
 // Управление задачами тайм-слота
