@@ -188,9 +188,19 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
             # Получаем информацию об объекте и его задачах
             async with get_async_session() as session:
                 from sqlalchemy.orm import selectinload
+                from domain.entities.org_structure import OrgStructureUnit
+                
+                # Загружаем объект с org_unit и всей цепочкой родителей
+                def load_org_hierarchy():
+                    loader = selectinload(Object.org_unit)
+                    # Загружаем до 10 уровней иерархии (достаточно)
+                    current = loader
+                    for _ in range(10):
+                        current = current.selectinload(OrgStructureUnit.parent)
+                    return loader
                 
                 obj_query = select(Object).options(
-                    selectinload(Object.org_unit)
+                    load_org_hierarchy()
                 ).where(Object.id == shift['object_id'])
                 obj_result = await session.execute(obj_query)
                 obj = obj_result.scalar_one_or_none()
