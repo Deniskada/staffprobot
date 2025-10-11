@@ -143,8 +143,8 @@
                                                 <strong>{{ opening.object.name }}</strong>
                                             </a>
                                         </td>
-                                        <td>{{ opening.opened_at|format_datetime_local('%d.%m.%Y') }}</td>
-                                        <td>{{ opening.opened_at|format_datetime_local('%H:%M') }}</td>
+                                        <td>{{ format_datetime_local(opening.opened_at, 'Europe/Moscow', '%d.%m.%Y') }}</td>
+                                        <td>{{ format_datetime_local(opening.opened_at, 'Europe/Moscow', '%H:%M') }}</td>
                                         <td>
                                             <span class="fw-semibold">{{ opening.opener.first_name }} {{ opening.opener.last_name or '' }}</span>
                                         </td>
