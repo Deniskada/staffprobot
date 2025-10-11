@@ -45,6 +45,9 @@ class Object(Base):
     late_penalty_per_minute = Column(Numeric(10, 2), nullable=True)  # Стоимость минуты штрафа (₽)
     # Подразделение
     org_unit_id = Column(Integer, ForeignKey("org_structure_units.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Telegram группа для фото/видео отчетов по задачам
+    telegram_report_chat_id = Column(String(100), nullable=True)  # ID Telegram группы для отчетов
+    inherit_telegram_chat = Column(Boolean, default=True, nullable=False)  # Наследовать от подразделения
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

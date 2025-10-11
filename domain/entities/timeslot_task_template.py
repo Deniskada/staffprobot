@@ -20,6 +20,10 @@ class TimeslotTaskTemplate(Base):
     is_mandatory = Column(Boolean, default=True, nullable=False)  # Обязательная задача
     deduction_amount = Column(Numeric(10, 2), nullable=True)  # Сумма удержания за невыполнение (в рублях)
     
+    # Фото/видео отчеты
+    requires_media = Column(Boolean, default=False, nullable=False)  # Требуется фото/видео отчет
+    media_types = Column(Text, nullable=True, default="photo,video")  # Допустимые типы (разделены запятой)
+    
     # Порядок отображения
     display_order = Column(Integer, default=0, nullable=False)
     

@@ -37,6 +37,9 @@ class OrgStructureUnit(Base):
     late_threshold_minutes = Column(Integer, nullable=True)  # Допустимое опоздание в минутах
     late_penalty_per_minute = Column(Numeric(10, 2), nullable=True)  # Стоимость минуты штрафа
     
+    # Telegram группа для фото/видео отчетов по задачам
+    telegram_report_chat_id = Column(String(100), nullable=True)  # ID Telegram группы для отчетов
+    
     # Уровень в иерархии (для оптимизации запросов)
     level = Column(Integer, default=0, nullable=False, index=True)
     
