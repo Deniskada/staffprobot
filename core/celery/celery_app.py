@@ -15,7 +15,8 @@ celery_app = Celery(
         "core.celery.tasks.notification_tasks",
         "core.celery.tasks.shift_tasks", 
         "core.celery.tasks.analytics_tasks",
-        "core.celery.tasks.payroll_tasks"
+        "core.celery.tasks.payroll_tasks",
+        "core.celery.tasks.adjustment_tasks"  # Phase 4A
     ]
 )
 
