@@ -420,10 +420,15 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     )
                     
                     if result['success']:
+                        # Форматируем время с учетом часового пояса объекта
+                        from core.utils.timezone_helper import timezone_helper
+                        object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
+                        local_time = timezone_helper.format_local_time(opening.opened_at, object_timezone, '%H:%M')
+                        
                         await update.message.reply_text(
                             f"✅ <b>Объект открыт!</b>\n\n"
                             f"🏢 Объект: {obj.name}\n"
-                            f"⏰ Время: {opening.opened_at.strftime('%H:%M')}\n\n"
+                            f"⏰ Время: {local_time}\n\n"
                             f"✅ <b>Смена автоматически открыта</b>\n"
                             f"💰 Ставка: {result.get('hourly_rate', 0)}₽/час",
                             parse_mode='HTML'
