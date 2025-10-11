@@ -1121,8 +1121,13 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
             logger.info(f"Media sent to group, message_id: {sent_message.message_id}")
             
             # Формируем ссылку на пост
-            # Формат: https://t.me/c/{chat_id без -100}/{message_id}
-            chat_id_str = str(telegram_chat_id).replace('-100', '')
+            # Формат: https://t.me/c/{chat_id без -100 и минуса}/{message_id}
+            chat_id_str = str(telegram_chat_id)
+            # Убираем -100 для супергрупп, или просто - для обычных групп
+            if chat_id_str.startswith('-100'):
+                chat_id_str = chat_id_str[4:]  # Убираем -100
+            elif chat_id_str.startswith('-'):
+                chat_id_str = chat_id_str[1:]  # Убираем -
             media_url = f"https://t.me/c/{chat_id_str}/{sent_message.message_id}"
             
             # Сохраняем медиа в состоянии
