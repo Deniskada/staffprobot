@@ -292,15 +292,21 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                         
                         tasks_text += f"{media_icon}{mandatory_icon} {task_text}{cost_text}\n"
                     
-                    # Создаем состояние со списком задач
+                    # Создаем или обновляем состояние со списком задач
+                    # Проверяем существующий state (может быть CLOSE_OBJECT)
+                    existing_state = user_state_manager.get_state(user_id)
+                    action = existing_state.action if existing_state else UserAction.CLOSE_SHIFT
+                    selected_object_id = existing_state.selected_object_id if existing_state else None
+                    
                     user_state_manager.create_state(
                         user_id=user_id,
-                        action=UserAction.CLOSE_SHIFT,
-                        step=UserStep.TASK_COMPLETION,  # Новый шаг
+                        action=action,  # Сохраняем исходный action
+                        step=UserStep.TASK_COMPLETION,
                         selected_shift_id=shift['id'],
-                        shift_tasks=shift_tasks,  # Сохраняем задачи
-                        completed_tasks=[],  # Изначально пусто
-                        data={'telegram_chat_id': telegram_chat_id, 'object_name': obj.name}  # Для медиа отчетов
+                        selected_object_id=selected_object_id,  # Сохраняем object_id если был
+                        shift_tasks=shift_tasks,
+                        completed_tasks=[],
+                        data={'telegram_chat_id': telegram_chat_id, 'object_name': obj.name}
                     )
                     
                     # Формируем кнопки для задач
@@ -336,13 +342,18 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                     return
             
             # Нет задач - переходим сразу к геопозиции
-            # Создаем состояние пользователя
+            # Проверяем существующий state (может быть CLOSE_OBJECT)
+            existing_state = user_state_manager.get_state(user_id)
+            action = existing_state.action if existing_state else UserAction.CLOSE_SHIFT
+            selected_object_id = existing_state.selected_object_id if existing_state else None
+            
             user_state_manager.create_state(
                 user_id=user_id,
-                action=UserAction.CLOSE_SHIFT,
+                action=action,  # Сохраняем исходный action
                 step=UserStep.LOCATION_REQUEST,
                 selected_shift_id=shift['id'],
-                completed_tasks=[]  # Пустой список
+                selected_object_id=selected_object_id,  # Сохраняем object_id если был
+                completed_tasks=[]
             )
             
             # Получаем информацию об объекте смены
