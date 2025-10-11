@@ -212,45 +212,46 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                     )
                     return
                 
-                # Получаем задачи из object.shift_tasks (JSONB)
-                shift_tasks = list(obj.shift_tasks or [])
+                # Формируем список задач (новая логика комбинирования)
+                shift_tasks = []
                 
-                # Добавляем маркер источника для задач объекта
-                for task in shift_tasks:
-                    if 'source' not in task:
-                        task['source'] = 'object'
-                
-                # Если смена привязана к тайм-слоту, добавляем его задачи
                 if shift.get('time_slot_id'):
+                    # Запланированная смена - получаем тайм-слот
                     from domain.entities.time_slot import TimeSlot
-                    from domain.entities.timeslot_task_template import TimeslotTaskTemplate
                     
-                    timeslot_query = select(TimeSlot).options(
-                        selectinload(TimeSlot.task_templates)
-                    ).where(TimeSlot.id == shift['time_slot_id'])
+                    timeslot_query = select(TimeSlot).where(TimeSlot.id == shift['time_slot_id'])
                     timeslot_result = await session.execute(timeslot_query)
                     timeslot = timeslot_result.scalar_one_or_none()
                     
-                    if timeslot and timeslot.task_templates:
-                        # Преобразуем TimeslotTaskTemplate в формат shift_tasks
-                        for task_template in timeslot.task_templates:
-                            media_types_list = task_template.media_types.split(',') if task_template.media_types else ['photo', 'video']
-                            shift_tasks.append({
-                                'text': task_template.task_text,
-                                'is_mandatory': task_template.is_mandatory,
-                                'deduction_amount': float(task_template.deduction_amount) if task_template.deduction_amount else 0,
-                                'requires_media': task_template.requires_media,
-                                'media_types': media_types_list,
-                                'source': 'timeslot',
-                                'timeslot_task_id': task_template.id
-                            })
+                    if timeslot:
+                        # 1. Собственные задачи тайм-слота (из JSONB shift_tasks)
+                        if timeslot.shift_tasks:
+                            for task in timeslot.shift_tasks:
+                                task_copy = dict(task)
+                                task_copy['source'] = 'timeslot'
+                                shift_tasks.append(task_copy)
+                        
+                        # 2. Задачи объекта (если НЕ игнорируются)
+                        if not timeslot.ignore_object_tasks and obj.shift_tasks:
+                            for task in obj.shift_tasks:
+                                task_copy = dict(task)
+                                task_copy['source'] = 'object'
+                                shift_tasks.append(task_copy)
                         
                         logger.info(
-                            f"Combined tasks from object and timeslot",
+                            f"Combined tasks from timeslot and object",
                             shift_id=shift['id'],
-                            object_tasks=len(obj.shift_tasks or []),
-                            timeslot_tasks=len(timeslot.task_templates)
+                            timeslot_tasks=len(timeslot.shift_tasks or []),
+                            object_tasks=len(obj.shift_tasks or []) if not timeslot.ignore_object_tasks else 0,
+                            ignore_object_tasks=timeslot.ignore_object_tasks
                         )
+                else:
+                    # Спонтанная смена - всегда задачи объекта
+                    if obj.shift_tasks:
+                        for task in obj.shift_tasks:
+                            task_copy = dict(task)
+                            task_copy['source'] = 'object'
+                            shift_tasks.append(task_copy)
                 
                 # Если есть задачи - показываем их для подтверждения выполнения
                 if shift_tasks:

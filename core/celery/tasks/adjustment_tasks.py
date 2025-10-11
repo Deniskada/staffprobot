@@ -165,37 +165,30 @@ def process_closed_shifts_adjustments():
                                             penalty=float(penalty_amount)
                                         )
                         
-                        # 3. Обработать задачи смены (из объекта И тайм-слота)
+                        # 3. Обработать задачи смены (новая логика комбинирования)
                         shift_tasks = []
                         
-                        # Задачи из объекта
-                        if shift.object and shift.object.shift_tasks:
-                            for task in shift.object.shift_tasks:
-                                task_copy = dict(task)
-                                task_copy['source'] = 'object'
-                                shift_tasks.append(task_copy)
-                        
-                        # Задачи из тайм-слота (если смена запланированная)
                         if shift.time_slot_id and shift.time_slot:
-                            from domain.entities.timeslot_task_template import TimeslotTaskTemplate
+                            # 1. Собственные задачи тайм-слота (из JSONB shift_tasks)
+                            if shift.time_slot.shift_tasks:
+                                for task in shift.time_slot.shift_tasks:
+                                    task_copy = dict(task)
+                                    task_copy['source'] = 'timeslot'
+                                    shift_tasks.append(task_copy)
                             
-                            timeslot_tasks_query = select(TimeslotTaskTemplate).where(
-                                TimeslotTaskTemplate.timeslot_id == shift.time_slot_id
-                            )
-                            timeslot_tasks_result = await session.execute(timeslot_tasks_query)
-                            timeslot_tasks = timeslot_tasks_result.scalars().all()
-                            
-                            for task_template in timeslot_tasks:
-                                media_types_list = task_template.media_types.split(',') if task_template.media_types else ['photo', 'video']
-                                shift_tasks.append({
-                                    'text': task_template.task_text,
-                                    'is_mandatory': task_template.is_mandatory,
-                                    'deduction_amount': float(task_template.deduction_amount) if task_template.deduction_amount else 0,
-                                    'requires_media': task_template.requires_media,
-                                    'media_types': media_types_list,
-                                    'source': 'timeslot',
-                                    'timeslot_task_id': task_template.id
-                                })
+                            # 2. Задачи объекта (если НЕ игнорируются)
+                            if not shift.time_slot.ignore_object_tasks and shift.object and shift.object.shift_tasks:
+                                for task in shift.object.shift_tasks:
+                                    task_copy = dict(task)
+                                    task_copy['source'] = 'object'
+                                    shift_tasks.append(task_copy)
+                        else:
+                            # Спонтанная смена - всегда задачи объекта
+                            if shift.object and shift.object.shift_tasks:
+                                for task in shift.object.shift_tasks:
+                                    task_copy = dict(task)
+                                    task_copy['source'] = 'object'
+                                    shift_tasks.append(task_copy)
                         
                         if shift_tasks:
                             import json
