@@ -63,9 +63,6 @@ def process_closed_shifts_adjustments():
                         'adjustments_created': 0
                     }
                 
-                adjustment_service = PayrollAdjustmentService(session)
-                late_penalty_calc = LatePenaltyCalculator(session)
-                
                 total_processed = 0
                 total_adjustments = 0
                 errors = []
@@ -85,41 +82,78 @@ def process_closed_shifts_adjustments():
                             logger.debug(f"Adjustments already exist for shift {shift.id}, skipping")
                             continue
                         
-                        # 1. Создать базовую оплату за смену
-                        await adjustment_service.create_shift_base_adjustment(
-                            shift=shift,
+                        # 1. Создать базовую оплату за смену (напрямую без сервиса)
+                        shift_base = PayrollAdjustment(
+                            shift_id=shift.id,
                             employee_id=shift.user_id,
                             object_id=shift.object_id,
-                            created_by=shift.user_id
+                            adjustment_type='shift_base',
+                            amount=shift.total_payment or Decimal('0.00'),
+                            description=f'Базовая оплата за смену #{shift.id}',
+                            details={
+                                'shift_id': shift.id,
+                                'hours': float(shift.total_hours or 0),
+                                'hourly_rate': float(shift.hourly_rate or 0)
+                            },
+                            created_by=shift.user_id,
+                            is_applied=False
                         )
+                        session.add(shift_base)
                         total_adjustments += 1
                         
-                        # 2. Проверить и создать штраф за опоздание
-                        if shift.object:
-                            late_minutes, penalty_amount = await late_penalty_calc.calculate_late_penalty(
-                                shift=shift,
-                                obj=shift.object
-                            )
+                        # 2. Проверить и создать штраф за опоздание (если есть planned_start)
+                        if shift.object and hasattr(shift, 'planned_start') and shift.planned_start and shift.start_time:
+                            # Получить настройки штрафов (inline логика)
+                            obj = shift.object
+                            threshold_minutes = None
+                            penalty_per_minute = None
                             
-                            if penalty_amount > 0:
-                                await adjustment_service.create_late_start_adjustment(
-                                    shift=shift,
-                                    late_minutes=late_minutes,
-                                    penalty_amount=penalty_amount,
-                                    created_by=shift.user_id
-                                )
-                                total_adjustments += 1
+                            if not obj.inherit_late_settings and obj.late_threshold_minutes is not None and obj.late_penalty_per_minute is not None:
+                                threshold_minutes = obj.late_threshold_minutes
+                                penalty_per_minute = obj.late_penalty_per_minute
+                            elif obj.org_unit:
+                                # Получить от org_unit
+                                org_unit = obj.org_unit
+                                if not org_unit.inherit_late_settings and org_unit.late_threshold_minutes is not None:
+                                    threshold_minutes = org_unit.late_threshold_minutes
+                                    penalty_per_minute = org_unit.late_penalty_per_minute
+                            
+                            if threshold_minutes is not None and penalty_per_minute is not None:
+                                # Рассчитать опоздание
+                                delta = shift.start_time - shift.planned_start
+                                late_minutes = int(delta.total_seconds() / 60)
+                                
+                                if late_minutes > threshold_minutes:
+                                    penalized_minutes = late_minutes - threshold_minutes
+                                    penalty_amount = Decimal(str(penalized_minutes)) * Decimal(str(penalty_per_minute))
+                                    
+                                    late_adjustment = PayrollAdjustment(
+                                        shift_id=shift.id,
+                                        employee_id=shift.user_id,
+                                        object_id=shift.object_id,
+                                        adjustment_type='late_start',
+                                        amount=-abs(penalty_amount),
+                                        description=f'Штраф за опоздание на {late_minutes} мин',
+                                        details={
+                                            'shift_id': shift.id,
+                                            'late_minutes': late_minutes,
+                                            'penalty_per_minute': float(penalty_per_minute)
+                                        },
+                                        created_by=shift.user_id,
+                                        is_applied=False
+                                    )
+                                    session.add(late_adjustment)
+                                    total_adjustments += 1
                         
                         # 3. Обработать задачи смены (из shift.object.shift_tasks JSONB)
-                        # TODO: Реализовать обработку задач после согласования формата
+                        # TODO: Реализовать обработку задач
                         
                         total_processed += 1
                         
                         logger.info(
                             f"Adjustments created for shift",
                             shift_id=shift.id,
-                            employee_id=shift.user_id,
-                            adjustments_count=total_adjustments
+                            employee_id=shift.user_id
                         )
                         
                     except Exception as e:
