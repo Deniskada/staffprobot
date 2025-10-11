@@ -207,6 +207,7 @@ class ShiftService(BaseService):
                 return {
                     'success': True,
                     'shift_id': active_shift.id,
+                    'object_id': active_shift.object_id,
                     'hours': hours,
                     'payment': active_shift.total_payment,
                     'message': f'Смена закрыта. Время: {hours:.1f}ч, Оплата: {active_shift.total_payment:.0f}₽'
