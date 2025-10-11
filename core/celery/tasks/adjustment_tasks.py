@@ -42,7 +42,8 @@ def process_closed_shifts_adjustments():
             async with get_async_session() as session:
                 # Найти смены, закрытые за последние 15 минут
                 shifts_query = select(Shift).options(
-                    selectinload(Shift.object).selectinload(Object.org_unit)
+                    selectinload(Shift.object).selectinload(Object.org_unit),
+                    selectinload(Shift.time_slot)
                 ).where(
                     and_(
                         Shift.status == 'completed',
@@ -145,13 +146,45 @@ def process_closed_shifts_adjustments():
                                     session.add(late_adjustment)
                                     total_adjustments += 1
                         
-                        # 3. Обработать задачи смены (из shift.object.shift_tasks JSONB)
+                        # 3. Обработать задачи смены (из объекта И тайм-слота)
+                        shift_tasks = []
+                        
+                        # Задачи из объекта
                         if shift.object and shift.object.shift_tasks:
+                            for task in shift.object.shift_tasks:
+                                task_copy = dict(task)
+                                task_copy['source'] = 'object'
+                                shift_tasks.append(task_copy)
+                        
+                        # Задачи из тайм-слота (если смена запланированная)
+                        if shift.time_slot_id and shift.time_slot:
+                            from domain.entities.timeslot_task_template import TimeslotTaskTemplate
+                            
+                            timeslot_tasks_query = select(TimeslotTaskTemplate).where(
+                                TimeslotTaskTemplate.timeslot_id == shift.time_slot_id
+                            )
+                            timeslot_tasks_result = await session.execute(timeslot_tasks_query)
+                            timeslot_tasks = timeslot_tasks_result.scalars().all()
+                            
+                            for task_template in timeslot_tasks:
+                                media_types_list = task_template.media_types.split(',') if task_template.media_types else ['photo', 'video']
+                                shift_tasks.append({
+                                    'text': task_template.task_text,
+                                    'is_mandatory': task_template.is_mandatory,
+                                    'deduction_amount': float(task_template.deduction_amount) if task_template.deduction_amount else 0,
+                                    'requires_media': task_template.requires_media,
+                                    'media_types': media_types_list,
+                                    'source': 'timeslot',
+                                    'timeslot_task_id': task_template.id
+                                })
+                        
+                        if shift_tasks:
                             import json
                             import re
                             
-                            # Получаем список выполненных задач из shift.notes
+                            # Получаем информацию о выполненных задачах и медиа из shift.notes
                             completed_task_indices = []
+                            task_media = {}
                             if shift.notes:
                                 # Ищем [TASKS]{...} в notes
                                 match = re.search(r'\[TASKS\]({.*?})', shift.notes)
@@ -159,14 +192,17 @@ def process_closed_shifts_adjustments():
                                     try:
                                         tasks_data = json.loads(match.group(1))
                                         completed_task_indices = tasks_data.get('completed_tasks', [])
+                                        task_media = tasks_data.get('task_media', {})
                                     except json.JSONDecodeError:
                                         logger.warning(f"Failed to parse completed_tasks for shift {shift.id}")
                             
                             # Обрабатываем каждую задачу
-                            for idx, task in enumerate(shift.object.shift_tasks):
+                            for idx, task in enumerate(shift_tasks):
                                 task_text = task.get('text') or task.get('task_text', 'Задача')
                                 is_mandatory = task.get('is_mandatory', True)
                                 deduction_amount = task.get('deduction_amount') or task.get('bonus_amount', 0)
+                                requires_media = task.get('requires_media', False)
+                                source = task.get('source', 'object')
                                 
                                 if not deduction_amount or float(deduction_amount) == 0:
                                     continue  # Пропускаем задачи без стоимости
@@ -174,8 +210,35 @@ def process_closed_shifts_adjustments():
                                 # Проверяем выполнение
                                 is_completed = idx in completed_task_indices
                                 
+                                # Проверяем обязательность медиа
+                                if requires_media and is_completed:
+                                    media_info = task_media.get(str(idx))
+                                    if not media_info:
+                                        logger.warning(
+                                            f"Task marked complete but missing media",
+                                            shift_id=shift.id,
+                                            task_idx=idx,
+                                            task_text=task_text,
+                                            source=source
+                                        )
+                                        continue  # Не начисляем, если нет медиа
+                                
                                 # Применяем премию/штраф в зависимости от выполнения
                                 amount = Decimal(str(deduction_amount))
+                                
+                                # Формируем details с медиа и источником
+                                details = {
+                                    'task_text': task_text,
+                                    'is_mandatory': is_mandatory,
+                                    'completed': is_completed,
+                                    'source': source
+                                }
+                                
+                                # Добавляем медиа в details
+                                if is_completed and str(idx) in task_media:
+                                    media_info = task_media[str(idx)]
+                                    details['media_url'] = media_info.get('media_url')
+                                    details['media_type'] = media_info.get('media_type')
                                 
                                 if amount > 0:
                                     # Положительная сумма - премия за выполнение
@@ -188,7 +251,7 @@ def process_closed_shifts_adjustments():
                                             adjustment_type=adjustment_type,
                                             amount=amount,
                                             description=f"Премия за задачу: {task_text}",
-                                            details={'task_text': task_text, 'is_mandatory': is_mandatory, 'completed': True},
+                                            details=details,
                                             created_by=shift.user_id,
                                             is_applied=False
                                         )
@@ -205,7 +268,7 @@ def process_closed_shifts_adjustments():
                                             adjustment_type=adjustment_type,
                                             amount=amount,  # уже отрицательное
                                             description=f"Штраф за невыполнение задачи: {task_text}",
-                                            details={'task_text': task_text, 'is_mandatory': is_mandatory, 'completed': False},
+                                            details=details,
                                             created_by=shift.user_id,
                                             is_applied=False
                                         )
