@@ -115,7 +115,7 @@
                     <tbody>
                         {% for adj in adjustments %}
                         <tr>
-                            <td>{{ adj.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                            <td>{{ adj.created_at | format_datetime_local }}</td>
                             <td>
                                 {% if adj.employee %}
                                     {{ adj.employee.last_name }} {{ adj.employee.first_name }}
