@@ -7,12 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.entities.object_opening import ObjectOpening
 from domain.entities.shift import Shift
-from shared.services.base_service import BaseService
 from core.logging.logger import logger
 
 
-class ObjectOpeningService(BaseService):
-    """Сервис для управления состоянием объектов."""
+class ObjectOpeningService:
+    """Сервис для управления состоянием объектов.
+    
+    Не использует BaseService, т.к. требует передачи сессии.
+    """
+    
+    def __init__(self, session: AsyncSession):
+        """Инициализация сервиса с сессией БД."""
+        self.db = session
     
     async def is_object_open(self, object_id: int) -> bool:
         """Проверить: открыт ли объект.
