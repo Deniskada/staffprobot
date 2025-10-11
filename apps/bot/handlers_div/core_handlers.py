@@ -302,12 +302,46 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 # Убираем клавиатуру
                 from telegram import ReplyKeyboardRemove
-                await update.message.reply_text(
+                shift_close_message = (
                     f"✅ Смена успешно закрыта!\n"
                     f"⏱️ Отработано: {total_hours:.1f} часов\n"
-                    f"💰 Заработано: {total_payment}₽",
-                    reply_markup=ReplyKeyboardRemove()
+                    f"💰 Заработано: {total_payment}₽"
                 )
+                
+                # Проверяем: если это было закрытие объекта - закрываем объект
+                if user_state.action == UserAction.CLOSE_OBJECT and user_state.selected_object_id:
+                    await update.message.reply_text(shift_close_message, reply_markup=ReplyKeyboardRemove())
+                    
+                    # Закрываем объект
+                    from shared.services.object_opening_service import ObjectOpeningService
+                    from domain.entities.user import User
+                    
+                    async with get_async_session() as session:
+                        opening_service = ObjectOpeningService(session)
+                        
+                        # Получить пользователя по telegram_id
+                        user_query = select(User).where(User.telegram_id == user_id)
+                        user_result = await session.execute(user_query)
+                        db_user = user_result.scalar_one_or_none()
+                        
+                        if db_user:
+                            try:
+                                opening = await opening_service.close_object(
+                                    object_id=user_state.selected_object_id,
+                                    user_id=db_user.id,
+                                    coordinates=coordinates
+                                )
+                                
+                                await update.message.reply_text(
+                                    f"✅ <b>Объект закрыт!</b>\n\n"
+                                    f"⏰ Время закрытия: {opening.closed_at.strftime('%H:%M')}\n"
+                                    f"⏱️ Время работы объекта: {opening.duration_hours:.1f}ч",
+                                    parse_mode='HTML'
+                                )
+                            except ValueError as e:
+                                await update.message.reply_text(f"⚠️ Смена закрыта, но не удалось закрыть объект: {str(e)}")
+                else:
+                    await update.message.reply_text(shift_close_message, reply_markup=ReplyKeyboardRemove())
                 
                 # Очищаем состояние ТОЛЬКО при успехе
                 user_state_manager.clear_state(user_id)
