@@ -154,6 +154,22 @@ async def owner_dashboard(request: Request):
                     })
                 )
             
+            # Получаем открытые объекты
+            from domain.entities.object_opening import ObjectOpening
+            open_objects_query = select(ObjectOpening).where(
+                and_(
+                    ObjectOpening.object_id.in_(
+                        select(Object.id).where(Object.owner_id == user_id)
+                    ),
+                    ObjectOpening.closed_at.is_(None)
+                )
+            ).options(
+                selectinload(ObjectOpening.object),
+                selectinload(ObjectOpening.opener)
+            ).order_by(ObjectOpening.opened_at.desc())
+            result = await session.execute(open_objects_query)
+            open_objects = result.scalars().all()
+            
             # Получаем данные для переключения интерфейсов
             available_interfaces = await get_available_interfaces_for_user(user_id)
         
@@ -169,6 +185,7 @@ async def owner_dashboard(request: Request):
             "title": "Дашборд владельца",
             "stats": stats,
             "recent_objects": recent_objects,
+            "open_objects": open_objects,
             "available_interfaces": available_interfaces,
         })
     except Exception as e:
