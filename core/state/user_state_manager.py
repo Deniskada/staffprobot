@@ -159,6 +159,14 @@ class UserStateManager:
             state.selected_schedule_id = kwargs['selected_schedule_id']
         if 'shift_type' in kwargs:
             state.shift_type = kwargs['shift_type']
+        if 'shift_tasks' in kwargs:
+            state.shift_tasks = kwargs['shift_tasks']
+        if 'completed_tasks' in kwargs:
+            state.completed_tasks = kwargs['completed_tasks']
+        if 'pending_media_task_idx' in kwargs:
+            state.pending_media_task_idx = kwargs['pending_media_task_idx']
+        if 'task_media' in kwargs:
+            state.task_media = kwargs['task_media']
         if 'data' in kwargs:
             for key, value in kwargs['data'].items():
                 state.add_data(key, value)
