@@ -54,6 +54,8 @@ class UserState:
         selected_timeslot_id: Optional[int] = None,
         selected_schedule_id: Optional[int] = None,
         shift_type: Optional[str] = None,
+        shift_tasks: Optional[list] = None,  # Phase 4A: задачи смены
+        completed_tasks: Optional[list] = None,  # Phase 4A: выполненные задачи
         data: Optional[Dict[str, Any]] = None,
         timeout_minutes: int = 5
     ):
@@ -65,6 +67,8 @@ class UserState:
         self.selected_timeslot_id = selected_timeslot_id
         self.selected_schedule_id = selected_schedule_id
         self.shift_type = shift_type
+        self.shift_tasks = shift_tasks or []  # Phase 4A
+        self.completed_tasks = completed_tasks or []  # Phase 4A
         self.data = data or {}
         self.created_at = datetime.now()
         self.expires_at = self.created_at + timedelta(minutes=timeout_minutes)
