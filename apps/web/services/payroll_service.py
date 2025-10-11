@@ -9,8 +9,6 @@ from sqlalchemy.orm import selectinload
 
 from core.logging.logger import logger
 from domain.entities.payroll_entry import PayrollEntry
-from domain.entities.payroll_deduction import PayrollDeduction
-from domain.entities.payroll_bonus import PayrollBonus
 from domain.entities.employee_payment import EmployeePayment
 from domain.entities.contract import Contract
 from domain.entities.shift import Shift
@@ -199,121 +197,9 @@ class PayrollService:
             logger.error(f"Error recalculating payroll entry: {e}", entry_id=entry_id)
             raise
     
-    # ================== DEDUCTIONS ==================
-    
-    async def add_deduction(
-        self,
-        payroll_entry_id: int,
-        deduction_type: str,
-        amount: Decimal,
-        description: str,
-        is_automatic: bool,
-        created_by_id: int,
-        details: Optional[Dict[str, Any]] = None
-    ) -> PayrollDeduction:
-        """
-        Добавить удержание к начислению.
-        
-        Args:
-            payroll_entry_id: ID начисления
-            deduction_type: Тип удержания
-            amount: Сумма
-            description: Описание
-            is_automatic: Автоматическое ли
-            created_by_id: Кто создал
-            details: Дополнительные данные
-            
-        Returns:
-            Созданное удержание
-        """
-        try:
-            deduction = PayrollDeduction(
-                payroll_entry_id=payroll_entry_id,
-                deduction_type=deduction_type,
-                amount=amount,
-                description=description,
-                is_automatic=is_automatic,
-                details=details,
-                created_by_id=created_by_id
-            )
-            
-            self.db.add(deduction)
-            await self.db.commit()
-            await self.db.refresh(deduction)
-            
-            # Пересчитать entry
-            await self.recalculate_payroll_entry(payroll_entry_id)
-            
-            logger.info(
-                f"Deduction added",
-                deduction_id=deduction.id,
-                payroll_entry_id=payroll_entry_id,
-                amount=float(amount),
-                is_automatic=is_automatic
-            )
-            
-            return deduction
-            
-        except Exception as e:
-            await self.db.rollback()
-            logger.error(f"Error adding deduction: {e}", payroll_entry_id=payroll_entry_id)
-            raise
-    
-    # ================== BONUSES ==================
-    
-    async def add_bonus(
-        self,
-        payroll_entry_id: int,
-        bonus_type: str,
-        amount: Decimal,
-        description: str,
-        created_by_id: int,
-        details: Optional[Dict[str, Any]] = None
-    ) -> PayrollBonus:
-        """
-        Добавить доплату к начислению.
-        
-        Args:
-            payroll_entry_id: ID начисления
-            bonus_type: Тип доплаты
-            amount: Сумма
-            description: Описание
-            created_by_id: Кто создал
-            details: Дополнительные данные
-            
-        Returns:
-            Созданная доплата
-        """
-        try:
-            bonus = PayrollBonus(
-                payroll_entry_id=payroll_entry_id,
-                bonus_type=bonus_type,
-                amount=amount,
-                description=description,
-                details=details,
-                created_by_id=created_by_id
-            )
-            
-            self.db.add(bonus)
-            await self.db.commit()
-            await self.db.refresh(bonus)
-            
-            # Пересчитать entry
-            await self.recalculate_payroll_entry(payroll_entry_id)
-            
-            logger.info(
-                f"Bonus added",
-                bonus_id=bonus.id,
-                payroll_entry_id=payroll_entry_id,
-                amount=float(amount)
-            )
-            
-            return bonus
-            
-        except Exception as e:
-            await self.db.rollback()
-            logger.error(f"Error adding bonus: {e}", payroll_entry_id=payroll_entry_id)
-            raise
+    # ================== DEDUCTIONS & BONUSES ==================
+    # Phase 4A: Методы add_deduction и add_bonus удалены
+    # Используйте PayrollAdjustmentService из shared/services/payroll_adjustment_service.py
     
     # ================== PAYMENTS ==================
     

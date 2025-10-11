@@ -377,23 +377,8 @@ class ShiftService:
                         f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={updated_shift.total_hours}, total_payment={updated_shift.total_payment}"
                     )
                     
-                    # Рассчитать автоматические удержания
-                    from apps.web.services.auto_deduction_service import AutoDeductionService
-                    deduction_service = AutoDeductionService(fresh_session)
-                    auto_deductions = await deduction_service.calculate_deductions_for_shift(shift_id)
-                    
-                    # Сохранить информацию об удержаниях в shift metadata (для последующей обработки Celery)
-                    if auto_deductions:
-                        # Сохраняем в notes смены для информации
-                        deduction_summary = f"\n\nАвтоудержания: {len(auto_deductions)} шт., "
-                        deduction_summary += f"сумма: {sum(d[1] for d in auto_deductions)}₽"
-                        
-                        logger.info(
-                            f"Auto-deductions calculated for shift",
-                            shift_id=shift_id,
-                            count=len(auto_deductions),
-                            total=float(sum(d[1] for d in auto_deductions))
-                        )
+                    # Phase 4A: Корректировки создаются автоматически в shared/services/shift_service.py
+                    auto_deductions = []  # Пустой список для совместимости с return
                     
                     # Форматируем время в часовом поясе объекта
                     object_timezone = getattr(shift.object, 'timezone', None) or 'Europe/Moscow'
