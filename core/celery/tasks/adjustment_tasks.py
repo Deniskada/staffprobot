@@ -187,14 +187,23 @@ def process_closed_shifts_adjustments():
                             task_media = {}
                             if shift.notes:
                                 # Ищем [TASKS]{...} в notes
-                                match = re.search(r'\[TASKS\]({.*?})', shift.notes)
-                                if match:
+                                # Используем все после [TASKS], т.к. non-greedy {.*?} неправильно парсит вложенный JSON
+                                marker = '[TASKS]'
+                                marker_pos = shift.notes.find(marker)
+                                if marker_pos != -1:
+                                    json_str = shift.notes[marker_pos + len(marker):].strip()
                                     try:
-                                        tasks_data = json.loads(match.group(1))
+                                        tasks_data = json.loads(json_str)
                                         completed_task_indices = tasks_data.get('completed_tasks', [])
                                         task_media = tasks_data.get('task_media', {})
-                                    except json.JSONDecodeError:
-                                        logger.warning(f"Failed to parse completed_tasks for shift {shift.id}")
+                                        logger.info(
+                                            f"Parsed shift tasks data",
+                                            shift_id=shift.id,
+                                            completed_tasks=completed_task_indices,
+                                            media_count=len(task_media)
+                                        )
+                                    except json.JSONDecodeError as e:
+                                        logger.warning(f"Failed to parse completed_tasks for shift {shift.id}: {e}")
                             
                             # Обрабатываем каждую задачу
                             for idx, task in enumerate(shift_tasks):
@@ -240,7 +249,31 @@ def process_closed_shifts_adjustments():
                                     details['media_url'] = media_info.get('media_url')
                                     details['media_type'] = media_info.get('media_type')
                                 
-                                if amount > 0:
+                                # Для задач с медиа-отчетом создаем запись даже если штраф избежан
+                                should_create_media_record = (
+                                    requires_media and 
+                                    is_completed and 
+                                    str(idx) in task_media and 
+                                    amount < 0  # Штраф был избежан
+                                )
+                                
+                                if should_create_media_record:
+                                    # Создать запись о выполнении задачи с медиа (amount=0, т.к. штраф избежан)
+                                    adjustment_type = 'task_completed'
+                                    task_adj = PayrollAdjustment(
+                                        shift_id=shift.id,
+                                        employee_id=shift.user_id,
+                                        object_id=shift.object_id,
+                                        adjustment_type=adjustment_type,
+                                        amount=Decimal('0.00'),
+                                        description=f"Выполнено с отчетом: {task_text} (штраф {amount}₽ избежан)",
+                                        details=details,
+                                        created_by=shift.user_id,
+                                        is_applied=False
+                                    )
+                                    session.add(task_adj)
+                                    total_adjustments += 1
+                                elif amount > 0:
                                     # Положительная сумма - премия за выполнение
                                     if is_completed:
                                         adjustment_type = 'task_bonus'
