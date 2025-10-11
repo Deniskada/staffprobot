@@ -41,18 +41,20 @@ def format_datetime_local(dt: Optional[datetime], timezone_str: str = 'Europe/Mo
 
 def register_filters(templates):
     """
-    Регистрирует фильтры в Jinja2
+    Регистрирует фильтры и глобальные функции в Jinja2
     
     Args:
         templates: Экземпляр Jinja2Templates
     """
     try:
+        # Регистрируем как фильтры
         templates.env.filters['static_version'] = static_version_filter
         templates.env.filters['format_datetime_local'] = format_datetime_local
-        print(f"✅ Фильтры зарегистрированы успешно: static_version, format_datetime_local")
-    except Exception as e:
-        print(f"❌ Ошибка регистрации фильтров: {e}")
-        # Fallback - создаем глобальные функции
+        
+        # ТАКЖЕ регистрируем как глобальные функции (для синтаксиса {{ func(...) }})
         templates.env.globals['static_version'] = static_version_filter
         templates.env.globals['format_datetime_local'] = format_datetime_local
-        print(f"✅ Созданы глобальные функции: static_version, format_datetime_local")
+        
+        print(f"✅ Фильтры и глобальные функции зарегистрированы: static_version, format_datetime_local")
+    except Exception as e:
+        print(f"❌ Ошибка регистрации: {e}")
