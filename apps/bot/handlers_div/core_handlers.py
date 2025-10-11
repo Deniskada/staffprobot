@@ -201,6 +201,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     f"💰 Часовая ставка: {hourly_rate}₽",
                     reply_markup=ReplyKeyboardRemove()
                 )
+                
+                # Очищаем состояние ТОЛЬКО при успехе
+                user_state_manager.clear_state(user_id)
+                
             else:
                 error_msg = f"❌ Ошибка при открытии смены: {result['error']}"
                 if 'distance_meters' in result:
@@ -216,6 +220,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 await update.message.reply_text(error_msg, reply_markup=reply_markup)
+                # НЕ очищаем состояние - пользователь может попробовать снова
                             
         elif user_state.action == UserAction.CLOSE_SHIFT:
             # Закрываем смену
@@ -243,6 +248,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     f"💰 Заработано: {total_payment}₽",
                     reply_markup=ReplyKeyboardRemove()
                 )
+                
+                # Очищаем состояние ТОЛЬКО при успехе
+                user_state_manager.clear_state(user_id)
+                
             else:
                 error_msg = f"❌ Ошибка при закрытии смены: {result['error']}"
                 if 'distance_meters' in result:
@@ -257,10 +266,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 await update.message.reply_text(error_msg, reply_markup=reply_markup)
-        
-        
-        # Очищаем состояние пользователя после успешной обработки
-        user_state_manager.clear_state(user_id)
+                # НЕ очищаем состояние - пользователь может попробовать снова
         
     except Exception as e:
         logger.error(f"Error processing location for user {user_id}: {e}")
