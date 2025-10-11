@@ -320,6 +320,40 @@
                         </div>
                         <div class="form-text">Оставьте пустым, чтобы не изменять статус</div>
                     </div>
+                    
+                    <hr>
+                    
+                    <!-- Настройки опозданий и задач -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="bulk_penalize_late_start" name="penalize_late_start">
+                                <label class="form-check-label" for="bulk_penalize_late_start">
+                                    <i class="bi bi-alarm text-warning"></i> Штрафовать за опоздание
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="bulk_ignore_object_tasks" name="ignore_object_tasks">
+                                <label class="form-check-label" for="bulk_ignore_object_tasks">
+                                    <i class="bi bi-x-circle text-danger"></i> Игнорировать задачи объекта
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Задачи на смену -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-check2-square me-2"></i>Задачи на смену
+                        </label>
+                        <div class="form-text mb-2">Если добавите задачи, они будут установлены для всех выбранных тайм-слотов</div>
+                        <div id="bulk-tasks-container"></div>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="bulk-add-task">
+                            <i class="bi bi-plus-circle me-1"></i>Добавить задачу
+                        </button>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
@@ -372,6 +406,49 @@ function openBulkEditModal() {
 // Инициализация формы фильтров
 document.addEventListener('DOMContentLoaded', function() {
     // Убираем автоприменение - пользователь сам нажимает "Применить фильтры"
+    // Работа с задачами в bulk edit
+    let bulkTaskIndex = 0;
+    
+    document.getElementById('bulk-add-task').addEventListener('click', function() {
+        const taskHtml = `
+            <div class="task-item mb-2 p-3 border rounded">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <input type="text" class="form-control" name="task_text[]" placeholder="Описание задачи" required>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" class="form-control" name="task_amount[]" step="0.01" placeholder="Премия (₽)" value="0">
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="task_mandatory_${bulkTaskIndex}" value="true">
+                            <label class="form-check-label">Обязательная</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="task_media_${bulkTaskIndex}" value="true">
+                            <label class="form-check-label">Медиа отчет</label>
+                        </div>
+                    </div>
+                    <div class="col-md-1 text-end">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-bulk-task">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('bulk-tasks-container').insertAdjacentHTML('beforeend', taskHtml);
+        bulkTaskIndex++;
+    });
+    
+    document.getElementById('bulk-tasks-container').addEventListener('click', function(e) {
+        if (e.target.closest('.remove-bulk-task')) {
+            e.target.closest('.task-item').remove();
+        }
+    });
+    
     // Это позволяет выбрать обе даты без автоматической отправки формы
 });
 </script>
