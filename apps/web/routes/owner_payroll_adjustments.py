@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, desc
 from sqlalchemy.orm import selectinload
 
-from apps.web.dependencies import require_owner_or_superadmin, get_db_session
+from apps.web.dependencies import get_current_user_dependency, require_role
+from core.database.session import get_db_session
 from apps.web.jinja import templates
 from core.logging.logger import logger
 from domain.entities.payroll_adjustment import PayrollAdjustment
@@ -32,7 +33,8 @@ async def payroll_adjustments_list(
     date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
     page: int = Query(1, ge=1, description="Номер страницы"),
     per_page: int = Query(50, ge=1, le=200, description="Записей на странице"),
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Список корректировок начислений с фильтрами."""
@@ -157,7 +159,8 @@ async def create_manual_adjustment(
     description: str = Form(...),
     object_id: Optional[int] = Form(None),
     shift_id: Optional[int] = Form(None),
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Создать ручную корректировку."""
@@ -211,7 +214,8 @@ async def edit_adjustment(
     adjustment_id: int,
     amount: Optional[Decimal] = Form(None),
     description: Optional[str] = Form(None),
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Редактировать корректировку."""
@@ -268,7 +272,8 @@ async def edit_adjustment(
 @router.get("/{adjustment_id}/history", response_class=JSONResponse)
 async def get_adjustment_history(
     adjustment_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Получить историю изменений корректировки."""

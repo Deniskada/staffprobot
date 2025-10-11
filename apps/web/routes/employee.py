@@ -19,8 +19,7 @@ from apps.web.middleware.role_middleware import require_employee_or_applicant
 from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift, TimeSlot
 from domain.entities.application import ApplicationStatus
 from domain.entities.payroll_entry import PayrollEntry
-from domain.entities.payroll_deduction import PayrollDeduction
-from domain.entities.payroll_bonus import PayrollBonus
+from domain.entities.payroll_adjustment import PayrollAdjustment
 from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from shared.services.calendar_filter_service import CalendarFilterService
@@ -130,8 +129,6 @@ async def load_employee_earnings(
         summary_entry["shifts"] += 1
 
     # 2. Добавить корректировки начислений (Phase 4A: новая архитектура)
-    from domain.entities.payroll_adjustment import PayrollAdjustment
-    
     adjustments_query = select(PayrollAdjustment).where(
         PayrollAdjustment.employee_id == user_id,
         func.date(PayrollAdjustment.created_at) >= start_date,
