@@ -154,15 +154,36 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_id = update.effective_user.id
     location = update.message.location
     
+    logger.info(
+        f"Location received from user",
+        user_id=user_id,
+        latitude=location.latitude,
+        longitude=location.longitude
+    )
+    
     # Получаем состояние пользователя
     user_state = user_state_manager.get_state(user_id)
     if not user_state:
+        logger.warning(f"No state found for user {user_id} when processing location")
         await update.message.reply_text(
             "❌ Сначала выберите действие (открыть или закрыть смену)"
         )
         return
     
+    logger.info(
+        f"User state retrieved",
+        user_id=user_id,
+        action=user_state.action,
+        step=user_state.step
+    )
+    
     if user_state.step not in [UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION]:
+        logger.warning(
+            f"Location not expected at this step",
+            user_id=user_id,
+            current_step=user_state.step,
+            expected_steps=[UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION]
+        )
         await update.message.reply_text(
             "❌ Геопозиция не ожидается на данном этапе"
         )
