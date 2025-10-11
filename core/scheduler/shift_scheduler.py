@@ -225,60 +225,21 @@ class ShiftScheduler:
                 total_payment = round(total_hours * hourly_rate, 2) if hourly_rate > 0 else None
                 
                 # Обновляем смену
-                shift.end_time = close_time
-                shift.status = 'completed'
-                shift.total_hours = total_hours
-                shift.total_payment = total_payment
+                update_data = {
+                    'end_time': close_time,
+                    'status': 'completed',
+                    'total_hours': total_hours,
+                    'total_payment': total_payment
+                }
                 
                 if end_coordinates:
-                    shift.end_coordinates = end_coordinates
+                    update_data['end_coordinates'] = end_coordinates
                 
                 if notes:
-                    shift.notes = notes
+                    update_data['notes'] = notes
                 
-                # Загружаем объект для создания корректировок
-                from sqlalchemy.orm import selectinload
-                from domain.entities.object import Object
-                
-                if shift.object_id:
-                    obj_query = select(Object).where(Object.id == shift.object_id).options(
-                        selectinload(Object.org_unit)
-                    )
-                    obj_result = await session.execute(obj_query)
-                    obj = obj_result.scalar_one_or_none()
-                else:
-                    obj = None
-                
-                # Создаем корректировки начислений (Phase 4A)
-                from shared.services.payroll_adjustment_service import PayrollAdjustmentService
-                from shared.services.late_penalty_calculator import LatePenaltyCalculator
-                
-                adjustment_service = PayrollAdjustmentService(session)
-                late_penalty_calc = LatePenaltyCalculator(session)
-                
-                # 1. Создать базовую оплату за смену
-                await adjustment_service.create_shift_base_adjustment(
-                    shift=shift,
-                    employee_id=shift.user_id,
-                    object_id=shift.object_id,
-                    created_by=shift.user_id  # Для ручного закрытия - пользователь
-                )
-                
-                # 2. Проверить и создать штраф за опоздание (если есть объект)
-                if obj:
-                    late_minutes, penalty_amount = await late_penalty_calc.calculate_late_penalty(
-                        shift=shift,
-                        obj=obj
-                    )
-                    
-                    if penalty_amount > 0:
-                        await adjustment_service.create_late_start_adjustment(
-                            shift=shift,
-                            late_minutes=late_minutes,
-                            penalty_amount=penalty_amount,
-                            created_by=shift.user_id
-                        )
-                
+                update_query = update(Shift).where(Shift.id == shift_id).values(**update_data)
+                await session.execute(update_query)
                 await session.commit()
                 
                 logger.info(

@@ -70,9 +70,14 @@ celery_app.conf.update(
             'task': 'core.celery.tasks.shift_tasks.plan_next_year_timeslots',
             'schedule': crontab(hour=3, minute=0, day_of_month=1, month_of_year=12),  # 1 декабря в 03:00
         },
-        # Обработка автоматических удержаний каждый день в 01:00
-        'process-automatic-deductions': {
-            'task': 'process_automatic_deductions',
+        # Phase 4A: Обработка закрытых смен каждые 10 минут
+        'process-closed-shifts-adjustments': {
+            'task': 'process_closed_shifts_adjustments',
+            'schedule': 600,  # каждые 10 минут
+        },
+        # Phase 4A: Создание payroll_entries по графикам каждый день в 01:00
+        'create-payroll-entries-by-schedule': {
+            'task': 'create_payroll_entries_by_schedule',
             'schedule': crontab(hour=1, minute=0),  # каждый день в 01:00
         },
     },
@@ -83,7 +88,9 @@ celery_app.conf.update(
         'core.celery.tasks.shift_tasks.*': {'queue': 'shifts'},
         'core.celery.tasks.analytics_tasks.*': {'queue': 'analytics'},
         'core.celery.tasks.payroll_tasks.*': {'queue': 'shifts'},  # Используем shifts для payroll
-        'process_automatic_deductions': {'queue': 'shifts'},  # Явно для этой задачи
+        'core.celery.tasks.adjustment_tasks.*': {'queue': 'shifts'},  # Phase 4A: adjustments
+        'process_closed_shifts_adjustments': {'queue': 'shifts'},  # Phase 4A: явно для задачи
+        'create_payroll_entries_by_schedule': {'queue': 'shifts'},  # Phase 4A: явно для задачи
     },
 )
 
