@@ -146,7 +146,71 @@ def process_closed_shifts_adjustments():
                                     total_adjustments += 1
                         
                         # 3. Обработать задачи смены (из shift.object.shift_tasks JSONB)
-                        # TODO: Реализовать обработку задач
+                        if shift.object and shift.object.shift_tasks:
+                            import json
+                            import re
+                            
+                            # Получаем список выполненных задач из shift.notes
+                            completed_task_indices = []
+                            if shift.notes:
+                                # Ищем [TASKS]{...} в notes
+                                match = re.search(r'\[TASKS\]({.*?})', shift.notes)
+                                if match:
+                                    try:
+                                        tasks_data = json.loads(match.group(1))
+                                        completed_task_indices = tasks_data.get('completed_tasks', [])
+                                    except json.JSONDecodeError:
+                                        logger.warning(f"Failed to parse completed_tasks for shift {shift.id}")
+                            
+                            # Обрабатываем каждую задачу
+                            for idx, task in enumerate(shift.object.shift_tasks):
+                                task_text = task.get('text') or task.get('task_text', 'Задача')
+                                is_mandatory = task.get('is_mandatory', True)
+                                deduction_amount = task.get('deduction_amount') or task.get('bonus_amount', 0)
+                                
+                                if not deduction_amount or float(deduction_amount) == 0:
+                                    continue  # Пропускаем задачи без стоимости
+                                
+                                # Проверяем выполнение
+                                is_completed = idx in completed_task_indices
+                                
+                                # Применяем премию/штраф в зависимости от выполнения
+                                amount = Decimal(str(deduction_amount))
+                                
+                                if amount > 0:
+                                    # Положительная сумма - премия за выполнение
+                                    if is_completed:
+                                        adjustment_type = 'task_bonus'
+                                        task_adj = PayrollAdjustment(
+                                            shift_id=shift.id,
+                                            employee_id=shift.user_id,
+                                            object_id=shift.object_id,
+                                            adjustment_type=adjustment_type,
+                                            amount=amount,
+                                            description=f"Премия за задачу: {task_text}",
+                                            details={'task_text': task_text, 'is_mandatory': is_mandatory, 'completed': True},
+                                            created_by=shift.user_id,
+                                            is_applied=False
+                                        )
+                                        session.add(task_adj)
+                                        total_adjustments += 1
+                                else:
+                                    # Отрицательная сумма - штраф за невыполнение
+                                    if not is_completed:
+                                        adjustment_type = 'task_penalty'
+                                        task_adj = PayrollAdjustment(
+                                            shift_id=shift.id,
+                                            employee_id=shift.user_id,
+                                            object_id=shift.object_id,
+                                            adjustment_type=adjustment_type,
+                                            amount=amount,  # уже отрицательное
+                                            description=f"Штраф за невыполнение задачи: {task_text}",
+                                            details={'task_text': task_text, 'is_mandatory': is_mandatory, 'completed': False},
+                                            created_by=shift.user_id,
+                                            is_applied=False
+                                        )
+                                        session.add(task_adj)
+                                        total_adjustments += 1
                         
                         total_processed += 1
                         

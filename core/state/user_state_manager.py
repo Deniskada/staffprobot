@@ -28,6 +28,7 @@ class UserStep(str, Enum):
     """Шаги в диалоге."""
     OBJECT_SELECTION = "object_selection"
     SHIFT_SELECTION = "shift_selection"
+    TASK_COMPLETION = "task_completion"  # Phase 4A: отметка задач при закрытии смены
     LOCATION_REQUEST = "location_request"
     PROCESSING = "processing"
     INPUT_MAX_DISTANCE = "input_max_distance"
