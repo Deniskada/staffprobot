@@ -559,8 +559,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     
                     await update.message.reply_text(
                         f"✅ <b>Смена и объект закрыты!</b>\n\n"
-                        f"⏱️ Время смены: {result['hours']:.1f}ч\n"
-                        f"💰 Оплата: {result['payment']:.0f}₽\n"
+                        f"⏱️ Время смены: {result.get('total_hours', 0):.1f}ч\n"
+                        f"💰 Оплата: {result.get('total_payment', 0):.0f}₽\n"
                         f"⏰ Объект закрыт в: {close_time}\n"
                         f"⏱️ Время работы объекта: {opening.duration_hours:.1f}ч",
                         parse_mode='HTML'
