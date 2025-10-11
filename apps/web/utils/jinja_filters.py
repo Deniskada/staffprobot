@@ -1,7 +1,10 @@
 """
 Jinja2 фильтры для приложения
 """
+from datetime import datetime
+from typing import Optional
 from .static_version import get_static_url_with_version
+from core.utils.timezone_helper import TimezoneHelper
 
 
 def static_version_filter(file_path: str) -> str:
@@ -17,6 +20,25 @@ def static_version_filter(file_path: str) -> str:
     return get_static_url_with_version(file_path)
 
 
+def format_datetime_local(dt: Optional[datetime], timezone_str: str = 'Europe/Moscow', format_str: str = '%d.%m.%Y %H:%M') -> str:
+    """
+    Jinja2 фильтр для форматирования даты/времени с учетом часового пояса
+    
+    Args:
+        dt: UTC datetime объект
+        timezone_str: Временная зона (по умолчанию Europe/Moscow)
+        format_str: Формат вывода
+        
+    Returns:
+        Отформатированная строка
+    """
+    if dt is None:
+        return '—'
+    
+    timezone_helper = TimezoneHelper()
+    return timezone_helper.format_local_time(dt, timezone_str, format_str)
+
+
 def register_filters(templates):
     """
     Регистрирует фильтры в Jinja2
@@ -26,9 +48,11 @@ def register_filters(templates):
     """
     try:
         templates.env.filters['static_version'] = static_version_filter
-        print(f"✅ Фильтр static_version зарегистрирован успешно")
+        templates.env.filters['format_datetime_local'] = format_datetime_local
+        print(f"✅ Фильтры зарегистрированы успешно: static_version, format_datetime_local")
     except Exception as e:
-        print(f"❌ Ошибка регистрации фильтра static_version: {e}")
-        # Fallback - создаем глобальную функцию
+        print(f"❌ Ошибка регистрации фильтров: {e}")
+        # Fallback - создаем глобальные функции
         templates.env.globals['static_version'] = static_version_filter
-        print(f"✅ Создана глобальная функция static_version")
+        templates.env.globals['format_datetime_local'] = format_datetime_local
+        print(f"✅ Созданы глобальные функции: static_version, format_datetime_local")
