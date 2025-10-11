@@ -161,6 +161,24 @@ async def manager_timeslots_create(
             if not obj:
                 raise HTTPException(status_code=404, detail="Объект не найден или доступ запрещен")
             
+            # Обработка задач (shift_tasks) - одинаково для обоих режимов
+            shift_tasks = []
+            task_texts = form_data.getlist("task_text[]")
+            task_amounts = form_data.getlist("task_amount[]")
+            
+            for idx, text in enumerate(task_texts):
+                if text.strip():
+                    is_mandatory = f"task_mandatory_{idx}" in form_data
+                    requires_media = f"task_media_{idx}" in form_data
+                    
+                    task = {
+                        "description": text.strip(),
+                        "amount": float(task_amounts[idx]) if idx < len(task_amounts) and task_amounts[idx] else 0.0,
+                        "is_mandatory": is_mandatory,
+                        "requires_media": requires_media
+                    }
+                    shift_tasks.append(task)
+            
             if creation_mode == "single":
                 # Создание одного тайм-слота
                 timeslot_data = {
@@ -169,7 +187,10 @@ async def manager_timeslots_create(
                     "end_time": form_data.get("end_time"),
                     "hourly_rate": float(form_data.get("hourly_rate", obj.hourly_rate)),
                     "max_employees": int(form_data.get("max_employees", 1)),
-                    "notes": form_data.get("notes", "")
+                    "notes": form_data.get("notes", ""),
+                    "penalize_late_start": "penalize_late_start" in form_data and form_data.get("penalize_late_start") not in ["false", ""],
+                    "ignore_object_tasks": "ignore_object_tasks" in form_data and form_data.get("ignore_object_tasks") not in ["false", ""],
+                    "shift_tasks": shift_tasks if shift_tasks else None
                 }
                 
                 timeslot = await timeslot_service.create_timeslot_for_manager(timeslot_data, object_id, telegram_id)
@@ -223,7 +244,10 @@ async def manager_timeslots_create(
                             "end_time": end_time,
                             "hourly_rate": hourly_rate,
                             "max_employees": max_employees,
-                            "notes": notes
+                            "notes": notes,
+                            "penalize_late_start": "penalize_late_start" in form_data and form_data.get("penalize_late_start") not in ["false", ""],
+                            "ignore_object_tasks": "ignore_object_tasks" in form_data and form_data.get("ignore_object_tasks") not in ["false", ""],
+                            "shift_tasks": shift_tasks if shift_tasks else None
                         }
                         
                         timeslot = await timeslot_service.create_timeslot_for_manager(timeslot_data, object_id, telegram_id)
@@ -298,13 +322,35 @@ async def manager_timeslots_edit(
         async with get_async_session() as session:
             timeslot_service = TimeSlotService(session)
             
+            # Обработка задач (shift_tasks)
+            shift_tasks = []
+            task_texts = form_data.getlist("task_text[]")
+            task_amounts = form_data.getlist("task_amount[]")
+            
+            for idx, text in enumerate(task_texts):
+                if text.strip():
+                    # Проверяем чекбоксы для обязательности и медиа-отчета
+                    is_mandatory = f"task_mandatory_{idx}" in form_data
+                    requires_media = f"task_media_{idx}" in form_data
+                    
+                    task = {
+                        "description": text.strip(),
+                        "amount": float(task_amounts[idx]) if idx < len(task_amounts) and task_amounts[idx] else 0.0,
+                        "is_mandatory": is_mandatory,
+                        "requires_media": requires_media
+                    }
+                    shift_tasks.append(task)
+            
             timeslot_data = {
                 "slot_date": datetime.strptime(form_data.get("slot_date"), "%Y-%m-%d").date(),
                 "start_time": form_data.get("start_time"),
                 "end_time": form_data.get("end_time"),
                 "hourly_rate": float(form_data.get("hourly_rate")),
                 "max_employees": int(form_data.get("max_employees", 1)),
-                "notes": form_data.get("notes", "")
+                "notes": form_data.get("notes", ""),
+                "penalize_late_start": "penalize_late_start" in form_data and form_data.get("penalize_late_start") not in ["false", ""],
+                "ignore_object_tasks": "ignore_object_tasks" in form_data and form_data.get("ignore_object_tasks") not in ["false", ""],
+                "shift_tasks": shift_tasks if shift_tasks else None
             }
             
             timeslot = await timeslot_service.update_timeslot_for_manager(timeslot_id, timeslot_data, telegram_id)
@@ -450,6 +496,34 @@ async def manager_timeslots_bulk_edit(
             update_params["is_active"] = True
         elif set_inactive and not set_active:
             update_params["is_active"] = False
+        
+        # Обработка новых полей: penalize_late_start, ignore_object_tasks
+        if "penalize_late_start" in form_data:
+            update_params["penalize_late_start"] = form_data.get("penalize_late_start") not in ["false", ""]
+        
+        if "ignore_object_tasks" in form_data:
+            update_params["ignore_object_tasks"] = form_data.get("ignore_object_tasks") not in ["false", ""]
+        
+        # Обработка задач (shift_tasks)
+        shift_tasks = []
+        task_texts = form_data.getlist("task_text[]")
+        task_amounts = form_data.getlist("task_amount[]")
+        
+        for idx, text in enumerate(task_texts):
+            if text.strip():
+                is_mandatory = f"task_mandatory_{idx}" in form_data
+                requires_media = f"task_media_{idx}" in form_data
+                
+                task = {
+                    "description": text.strip(),
+                    "amount": float(task_amounts[idx]) if idx < len(task_amounts) and task_amounts[idx] else 0.0,
+                    "is_mandatory": is_mandatory,
+                    "requires_media": requires_media
+                }
+                shift_tasks.append(task)
+        
+        if shift_tasks:
+            update_params["shift_tasks"] = shift_tasks
 
         if not update_params:
             raise HTTPException(status_code=400, detail="Не указано ни одного параметра для изменения")
@@ -496,7 +570,10 @@ async def manager_timeslots_bulk_edit(
                         "hourly_rate": update_params.get("hourly_rate", slot.hourly_rate),
                         "max_employees": update_params.get("max_employees", slot.max_employees),
                         "is_active": update_params.get("is_active", slot.is_active),
-                        "notes": slot.notes or ""
+                        "notes": slot.notes or "",
+                        "penalize_late_start": update_params.get("penalize_late_start", slot.penalize_late_start if hasattr(slot, 'penalize_late_start') else True),
+                        "ignore_object_tasks": update_params.get("ignore_object_tasks", slot.ignore_object_tasks if hasattr(slot, 'ignore_object_tasks') else False),
+                        "shift_tasks": update_params.get("shift_tasks", slot.shift_tasks if hasattr(slot, 'shift_tasks') else None)
                     }
                     await timeslot_service.update_timeslot_for_manager(ts_id, slot_data, telegram_id)
                     updated_count += 1

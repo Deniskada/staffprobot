@@ -89,6 +89,79 @@
                             </div>
                         </div>
                         
+                        <!-- Настройки опозданий и задач -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="penalize_late_start" name="penalize_late_start" 
+                                           {% if timeslot.penalize_late_start %}checked{% endif %}>
+                                    <label class="form-check-label" for="penalize_late_start">
+                                        <i class="bi bi-alarm text-warning"></i> Штрафовать за опоздание
+                                        <small class="text-muted d-block">Применять штраф за опоздание на начало этого тайм-слота</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="ignore_object_tasks" name="ignore_object_tasks" 
+                                           {% if timeslot.ignore_object_tasks %}checked{% endif %}>
+                                    <label class="form-check-label" for="ignore_object_tasks">
+                                        <i class="bi bi-x-circle text-danger"></i> Игнорировать задачи объекта
+                                        <small class="text-muted d-block">Использовать только задачи этого тайм-слота</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Задачи на смену -->
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <h5><i class="bi bi-check2-square me-2"></i>Задачи на смену</h5>
+                                <div id="tasks-container">
+                                    {% if timeslot.shift_tasks %}
+                                        {% for task in timeslot.shift_tasks %}
+                                        <div class="task-item mb-2 p-3 border rounded">
+                                            <div class="row align-items-center">
+                                                <div class="col-md-5">
+                                                    <input type="text" class="form-control" name="task_text[]" 
+                                                           value="{{ task.description }}" placeholder="Описание задачи" required>
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <input type="number" class="form-control" name="task_amount[]" 
+                                                           value="{{ task.amount or 0 }}" step="0.01" placeholder="Премия (₽)">
+                                                </div>
+                                                <div class="col-md-2 text-center">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" 
+                                                               name="task_mandatory_{{ loop.index0 }}" value="true"
+                                                               {% if task.is_mandatory %}checked{% endif %}>
+                                                        <label class="form-check-label">Обязательная</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-2 text-center">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" 
+                                                               name="task_media_{{ loop.index0 }}" value="true"
+                                                               {% if task.requires_media %}checked{% endif %}>
+                                                        <label class="form-check-label">Медиа отчет</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-1 text-end">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger remove-task">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add-task">
+                                    <i class="bi bi-plus-circle me-1"></i>Добавить задачу
+                                </button>
+                            </div>
+                        </div>
+                        
                         <!-- Кнопки -->
                         <div class="row">
                             <div class="col-12">
@@ -114,6 +187,72 @@ document.addEventListener('DOMContentLoaded', function() {
     // Установка минимальной даты на сегодня
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('slot_date').setAttribute('min', today);
+    
+    let taskIndex = {{ timeslot.shift_tasks | length if timeslot.shift_tasks else 0 }};
+    
+    // Добавление задачи
+    document.getElementById('add-task').addEventListener('click', function() {
+        const taskHtml = `
+            <div class="task-item mb-2 p-3 border rounded">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <input type="text" class="form-control" name="task_text[]" placeholder="Описание задачи" required>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" class="form-control" name="task_amount[]" step="0.01" placeholder="Премия (₽)" value="0">
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="task_mandatory_${taskIndex}" value="true">
+                            <label class="form-check-label">Обязательная</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="task_media_${taskIndex}" value="true">
+                            <label class="form-check-label">Медиа отчет</label>
+                        </div>
+                    </div>
+                    <div class="col-md-1 text-end">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-task">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('tasks-container').insertAdjacentHTML('beforeend', taskHtml);
+        taskIndex++;
+    });
+    
+    // Удаление задачи
+    document.getElementById('tasks-container').addEventListener('click', function(e) {
+        if (e.target.closest('.remove-task')) {
+            e.target.closest('.task-item').remove();
+        }
+    });
+    
+    // Обработка unchecked checkboxes для penalize_late_start и ignore_object_tasks
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const penalizeCheckbox = document.getElementById('penalize_late_start');
+        const ignoreCheckbox = document.getElementById('ignore_object_tasks');
+        
+        if (!penalizeCheckbox.checked) {
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'penalize_late_start';
+            hiddenInput.value = 'false';
+            this.appendChild(hiddenInput);
+        }
+        
+        if (!ignoreCheckbox.checked) {
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'ignore_object_tasks';
+            hiddenInput.value = 'false';
+            this.appendChild(hiddenInput);
+        }
+    });
 });
 </script>
 {% endblock %}
