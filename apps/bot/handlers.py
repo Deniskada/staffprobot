@@ -78,6 +78,20 @@ async def get_chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     chat_type = chat.type  # 'private', 'group', 'supergroup', 'channel'
     chat_id = chat.id
     
+    # Для супергрупп и групп формируем правильный ID для ссылок
+    # Telegram API возвращает ID с префиксом -100 для супергрупп
+    # Но для обычных групп (устаревший формат) нужно добавить -100
+    display_chat_id = chat_id
+    if chat_type in ['group', 'supergroup', 'channel']:
+        # Проверяем, есть ли уже префикс -100
+        chat_id_str = str(chat_id)
+        if chat_id_str.startswith('-') and not chat_id_str.startswith('-100'):
+            # Обычная группа - добавляем префикс -100
+            display_chat_id = f"-100{chat_id_str[1:]}"
+        else:
+            # Супергруппа - используем как есть
+            display_chat_id = chat_id
+    
     if chat_type == 'private':
         response_text = f"""
 ℹ️ <b>ID чата</b>
@@ -96,9 +110,12 @@ async def get_chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 ℹ️ <b>ID чата</b>
 
 💬 Группа: <b>{chat_title}</b>
-🆔 Chat ID: <code>{chat_id}</code>
+🔗 Тип: <i>{chat_type}</i>
+🆔 Chat ID: <code>{display_chat_id}</code>
 
 📋 Скопируйте этот ID и вставьте в настройки объекта или подразделения в разделе "Telegram группа для отчетов".
+
+⚠️ Важно: ID должен начинаться с <code>-100</code> для корректной работы ссылок на отчеты.
 
 ✅ Бот будет отправлять фото/видео отчеты по задачам в эту группу.
 """
