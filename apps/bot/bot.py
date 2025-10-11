@@ -112,6 +112,16 @@ class StaffProBot:
             MessageHandler(filters.PHOTO | filters.VIDEO, _handle_received_media)
         )
         
+        # Обработка открытия/закрытия объектов
+        from .handlers_div.object_state_handlers import (
+            _handle_open_object,
+            _handle_close_object,
+            _handle_select_object_to_open
+        )
+        self.application.add_handler(CallbackQueryHandler(_handle_open_object, pattern="^open_object$"))
+        self.application.add_handler(CallbackQueryHandler(_handle_close_object, pattern="^close_object$"))
+        self.application.add_handler(CallbackQueryHandler(_handle_select_object_to_open, pattern="^select_object_to_open:.*$"))
+        
         # Добавляем ConversationHandler для отчетов
         # Временно отключаем для исправления проблемы с геолокацией
         # self.application.add_handler(self.analytics_handlers.get_conversation_handler())

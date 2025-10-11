@@ -222,7 +222,7 @@ async def _handle_close_object(update: Update, context: ContextTypes.DEFAULT_TYP
     
     # Получить активные смены пользователя
     bot_shift_service = BotShiftService()
-    active_shifts = await bot_shift_service.get_active_shifts(user_id)
+    active_shifts = await bot_shift_service.get_user_active_shifts(user_id)
     
     if not active_shifts:
         await query.edit_message_text(

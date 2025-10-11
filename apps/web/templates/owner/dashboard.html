@@ -121,31 +121,32 @@
         <div class="col-md-6">
             <div class="card owner-card">
                 <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">🏢 Активность по объектам</h5>
+                    <h5 class="mb-0">🔓 Открытые объекты</h5>
                 </div>
                 <div class="card-body">
-                    {% if active_shifts_today %}
+                    {% if open_objects %}
                         <div class="table-responsive">
                             <table class="table table-hover">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Объект</th>
-                                        <th>Дата и время открытия</th>
-                                        <th>Сотрудник</th>
+                                        <th>Дата открытия</th>
+                                        <th>Время открытия</th>
+                                        <th>Открыл</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for shift in active_shifts_today %}
+                                    {% for opening in open_objects %}
                                     <tr>
                                         <td>
-                                            <strong>{{ shift.object_name }}</strong><br>
-                                            <small class="text-muted">{{ shift.object_address }}</small>
+                                            <a href="/owner/objects/{{ opening.object.id }}" class="text-decoration-none">
+                                                <strong>{{ opening.object.name }}</strong>
+                                            </a>
                                         </td>
+                                        <td>{{ opening.opened_at|format_datetime_local('%d.%m.%Y') }}</td>
+                                        <td>{{ opening.opened_at|format_datetime_local('%H:%M') }}</td>
                                         <td>
-                                            <span class="badge bg-success">{{ shift.date_time_label }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="fw-semibold">{{ shift.employee_name }}</span>
+                                            <span class="fw-semibold">{{ opening.opener.first_name }} {{ opening.opener.last_name or '' }}</span>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -154,10 +155,10 @@
                         </div>
                     {% else %}
                         <div class="text-center py-4">
-                            <i class="bi bi-calendar2-check text-muted" style="font-size: 3rem;"></i>
-                            <p class="text-muted mt-2">Сегодня активных смен нет</p>
-                            <a href="/owner/calendar" class="btn btn-success">
-                                Планировать смены
+                            <i class="bi bi-lock text-muted" style="font-size: 3rem;"></i>
+                            <p class="text-muted mt-2">Нет открытых объектов</p>
+                            <a href="/owner/objects" class="btn btn-success">
+                                Просмотреть объекты
                             </a>
                         </div>
                     {% endif %}

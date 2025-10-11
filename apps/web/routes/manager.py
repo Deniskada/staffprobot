@@ -152,6 +152,20 @@ async def manager_dashboard(
                 "can_edit_schedule": "Редактирование расписания"
             }
             
+            # Получаем открытые объекты
+            from domain.entities.object_opening import ObjectOpening
+            open_objects_query = select(ObjectOpening).where(
+                and_(
+                    ObjectOpening.object_id.in_(object_ids) if object_ids else False,
+                    ObjectOpening.closed_at.is_(None)
+                )
+            ).options(
+                selectinload(ObjectOpening.object),
+                selectinload(ObjectOpening.opener)
+            ).order_by(ObjectOpening.opened_at.desc())
+            result = await db.execute(open_objects_query)
+            open_objects = result.scalars().all()
+            
             # Получаем данные для переключения интерфейсов
             manager_context = await get_manager_context(user_id, db)
 
@@ -160,6 +174,7 @@ async def manager_dashboard(
                 "current_user": current_user,
                 "accessible_objects": accessible_objects,
                 "accessible_objects_count": accessible_objects_count,
+                "open_objects": open_objects,
                 "active_shifts_count": len(active_shifts),
                 "scheduled_shifts_count": len(scheduled_shifts),
                 "employees_count": len(set(shift.user_id for shift in recent_shifts)),

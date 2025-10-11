@@ -170,6 +170,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
     
+    print(f"[DEBUG] User {user_id} state: action={user_state.action}, step={user_state.step}")
+    
     logger.info(
         f"User state retrieved",
         user_id=user_id,
@@ -178,6 +180,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
     
     if user_state.step not in [UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION]:
+        print(f"[DEBUG] Step mismatch! Current: {user_state.step}, Expected: {[UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION]}")
+        
         logger.warning(
             f"Location not expected at this step",
             user_id=user_id,
@@ -324,14 +328,26 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 await update.message.reply_text(error_msg, reply_markup=reply_markup)
                 # НЕ очищаем состояние - пользователь может попробовать снова
         
-        elif user_state.step == UserStep.OPENING_OBJECT_LOCATION:
+        elif user_state.action == UserAction.OPEN_OBJECT:
+            print(f"[DEBUG] ✅ ENTERED opening_object block! action={user_state.action}, step={user_state.step}")
             # Открытие объекта + автоматическое открытие смены
             from shared.services.object_opening_service import ObjectOpeningService
             from core.geolocation.location_validator import LocationValidator
+            from domain.entities.user import User
             
             async with get_async_session() as session:
                 opening_service = ObjectOpeningService(session)
                 location_validator = LocationValidator()
+                
+                # Получить пользователя по telegram_id
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = await session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    await update.message.reply_text("❌ Пользователь не найден.")
+                    user_state_manager.clear_state(user_id)
+                    return
                 
                 # Получить объект
                 obj_query = select(Object).where(Object.id == user_state.selected_object_id)
@@ -344,17 +360,17 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     return
                 
                 # Проверить расстояние
-                is_valid, distance = location_validator.validate_location(
-                    user_coords=(location.latitude, location.longitude),
-                    object_coords_str=obj.coordinates,
-                    max_distance=obj.max_distance_meters
+                validation_result = location_validator.validate_shift_location(
+                    user_coordinates=coordinates,
+                    object_coordinates=obj.coordinates,
+                    max_distance_meters=obj.max_distance_meters
                 )
                 
-                if not is_valid:
+                if not validation_result['valid']:
                     await update.message.reply_text(
                         f"❌ Вы слишком далеко от объекта!\n"
-                        f"📏 Расстояние: {distance:.0f}м\n"
-                        f"📐 Максимум: {obj.max_distance_meters}м"
+                        f"📏 Расстояние: {validation_result['distance_meters']:.0f}м\n"
+                        f"📐 Максимум: {validation_result['max_distance_meters']}м"
                     )
                     return
                 
@@ -362,7 +378,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 try:
                     opening = await opening_service.open_object(
                         object_id=obj.id,
-                        user_id=user_id,
+                        user_id=db_user.id,  # Используем внутренний ID, а не telegram_id
                         coordinates=coordinates
                     )
                     
@@ -386,7 +402,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         user_state_manager.clear_state(user_id)
                     else:
                         # Откатываем открытие объекта
-                        await opening_service.close_object(obj.id, user_id, coordinates)
+                        await opening_service.close_object(obj.id, db_user.id, coordinates)
                         await update.message.reply_text(
                             f"❌ Объект открыт, но не удалось открыть смену:\n{result['error']}"
                         )
@@ -396,17 +412,29 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     await update.message.reply_text(f"❌ {str(e)}")
                     user_state_manager.clear_state(user_id)
         
-        elif user_state.step == UserStep.CLOSING_OBJECT_LOCATION:
+        elif user_state.action == UserAction.CLOSE_OBJECT:
+            print(f"[DEBUG] ✅ ENTERED close_object block! action={user_state.action}, step={user_state.step}")
             # Закрытие объекта после успешного закрытия смены
             from shared.services.object_opening_service import ObjectOpeningService
+            from domain.entities.user import User
             
             async with get_async_session() as session:
                 opening_service = ObjectOpeningService(session)
                 
+                # Получить пользователя по telegram_id
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = await session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    await update.message.reply_text("❌ Пользователь не найден.")
+                    user_state_manager.clear_state(user_id)
+                    return
+                
                 try:
                     opening = await opening_service.close_object(
                         object_id=user_state.selected_object_id,
-                        user_id=user_id,
+                        user_id=db_user.id,  # Используем внутренний ID, а не telegram_id
                         coordinates=coordinates
                     )
                     
@@ -421,6 +449,13 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 except ValueError as e:
                     await update.message.reply_text(f"❌ {str(e)}")
                     user_state_manager.clear_state(user_id)
+        
+        else:
+            print(f"[DEBUG] ❌ NO HANDLER FOR action={user_state.action}, step={user_state.step}")
+            await update.message.reply_text(
+                "❌ Непредвиденная ситуация. Попробуйте начать с /start"
+            )
+            user_state_manager.clear_state(user_id)
     
     except Exception as e:
         logger.error(f"Error processing location for user {user_id}: {e}")
