@@ -28,6 +28,7 @@ class TimeSlot(Base):
     
     # Отношения
     object = relationship("Object", backref="time_slots")
+    task_templates = relationship("TimeslotTaskTemplate", backref="timeslot", cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f"<TimeSlot(id={self.id}, object_id={self.object_id}, date={self.slot_date}, time={self.start_time}-{self.end_time})>"
