@@ -364,14 +364,18 @@ async def owner_objects_create_post(
         payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
         
         # Обработка настроек штрафов за опоздание
-        inherit_late_settings = "inherit_late_settings" in form_data
+        # JavaScript создает скрытое поле со значением 'false' при снятии галочки
+        inherit_late_settings_value = form_data.get("inherit_late_settings", "false")
+        inherit_late_settings = inherit_late_settings_value not in ["false", ""]
         late_threshold_minutes_str = form_data.get("late_threshold_minutes", "").strip()
         late_threshold_minutes = int(late_threshold_minutes_str) if late_threshold_minutes_str else None
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
         
         # Обработка Telegram группы для отчетов
-        inherit_telegram_chat = "inherit_telegram_chat" in form_data
+        # JavaScript создает скрытое поле со значением 'false' при снятии галочки
+        inherit_telegram_chat_value = form_data.get("inherit_telegram_chat", "false")
+        inherit_telegram_chat = inherit_telegram_chat_value not in ["false", ""]
         telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
         telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
         
@@ -715,16 +719,27 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
         
         # Обработка настроек штрафов за опоздание
-        inherit_late_settings = "inherit_late_settings" in form_data
+        # JavaScript создает скрытое поле со значением 'false' при снятии галочки
+        inherit_late_settings_value = form_data.get("inherit_late_settings", "false")
+        inherit_late_settings = inherit_late_settings_value not in ["false", ""]
         late_threshold_minutes_str = form_data.get("late_threshold_minutes", "").strip()
         late_threshold_minutes = int(late_threshold_minutes_str) if late_threshold_minutes_str else None
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
         
         # Обработка Telegram группы для отчетов
-        inherit_telegram_chat = "inherit_telegram_chat" in form_data
+        # JavaScript создает скрытое поле со значением 'false' при снятии галочки
+        inherit_telegram_chat_value = form_data.get("inherit_telegram_chat", "false")
+        inherit_telegram_chat = inherit_telegram_chat_value not in ["false", ""]
         telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
         telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
+        
+        logger.info(
+            f"[EDIT OBJECT {object_id}] Telegram chat settings",
+            raw_value=inherit_telegram_chat_value,
+            inherit_telegram_chat=inherit_telegram_chat,
+            telegram_report_chat_id=telegram_report_chat_id
+        )
         
         # Обработка подразделения
         org_unit_id_str = form_data.get("org_unit_id", "").strip()
@@ -734,7 +749,6 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         task_texts = form_data.getlist("task_texts[]")
         task_deductions = form_data.getlist("task_deductions[]")
         task_mandatory = form_data.getlist("task_mandatory[]")
-        task_requires_media = form_data.getlist("task_requires_media[]")
         task_requires_media = form_data.getlist("task_requires_media[]")
         
         logger.info(f"Task parsing (edit) - texts: {task_texts}, deductions: {task_deductions}, mandatory: {task_mandatory}, requires_media: {task_requires_media}")
