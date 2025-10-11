@@ -42,7 +42,7 @@ def process_closed_shifts_adjustments():
             async with get_async_session() as session:
                 # Найти смены, закрытые за последние 15 минут
                 shifts_query = select(Shift).options(
-                    selectinload(Shift.object).selectinload(Object.org_unit),
+                    selectinload(Shift.object),
                     selectinload(Shift.time_slot)
                 ).where(
                     and_(
@@ -103,6 +103,14 @@ def process_closed_shifts_adjustments():
                         total_adjustments += 1
                         
                         # 2. Проверить и создать штраф за опоздание (новая логика с planned_start/actual_start)
+                        logger.info(
+                            f"Checking late penalty for shift",
+                            shift_id=shift.id,
+                            planned_start=shift.planned_start,
+                            actual_start=shift.actual_start,
+                            has_both=bool(shift.planned_start and shift.actual_start)
+                        )
+                        
                         if shift.planned_start and shift.actual_start:
                             # Для запланированных смен - проверяем флаг penalize_late_start
                             should_penalize = True
@@ -121,19 +129,13 @@ def process_closed_shifts_adjustments():
                                     late_seconds = (shift.actual_start - shift.planned_start).total_seconds()
                                     late_minutes = int(late_seconds / 60)
                                     
-                                    # Получить penalty_per_minute из объекта или org_unit
+                                    # Получить penalty_per_minute (упрощенная версия без рекурсии)
+                                    # Берем из объекта напрямую, без иерархии org_unit
                                     obj = shift.object
-                                    penalty_per_minute = None
+                                    penalty_per_minute = obj.late_penalty_per_minute
                                     
-                                    if not obj.inherit_late_settings and obj.late_penalty_per_minute is not None:
-                                        penalty_per_minute = obj.late_penalty_per_minute
-                                    elif obj.org_unit:
-                                        org_unit = obj.org_unit
-                                        while org_unit:
-                                            if not org_unit.inherit_late_settings and org_unit.late_penalty_per_minute is not None:
-                                                penalty_per_minute = org_unit.late_penalty_per_minute
-                                                break
-                                            org_unit = org_unit.parent
+                                    # Если у объекта не задан штраф - пропускаем
+                                    # (полная логика с иерархией требует дополнительных запросов)
                                     
                                     if penalty_per_minute and late_minutes > 0:
                                         penalty_amount = Decimal(str(late_minutes)) * Decimal(str(penalty_per_minute))
