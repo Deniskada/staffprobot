@@ -209,11 +209,48 @@ class ShiftService:
                         rate_source=rate_source
                     )
                 
+                # Вычисляем planned_start и actual_start для штрафов за опоздание
+                from datetime import date as date_class, time as time_class
+                from domain.entities.time_slot import TimeSlot
+                
+                current_time = datetime.now()
+                planned_start = None
+                
+                # Получить late_threshold_minutes из объекта или org_unit
+                late_threshold_minutes = 0
+                if not obj.inherit_late_settings and obj.late_threshold_minutes is not None:
+                    late_threshold_minutes = obj.late_threshold_minutes
+                elif obj.org_unit:
+                    org_unit = obj.org_unit
+                    while org_unit:
+                        if not org_unit.inherit_late_settings and org_unit.late_threshold_minutes is not None:
+                            late_threshold_minutes = org_unit.late_threshold_minutes
+                            break
+                        org_unit = org_unit.parent
+                
+                if shift_type == "planned" and timeslot_id:
+                    # Запланированная смена: planned_start = timeslot.start_time + threshold
+                    timeslot_query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
+                    timeslot_result = await session.execute(timeslot_query)
+                    timeslot = timeslot_result.scalar_one_or_none()
+                    
+                    if timeslot:
+                        from datetime import datetime as dt, timedelta
+                        base_time = dt.combine(timeslot.slot_date, timeslot.start_time)
+                        planned_start = base_time + timedelta(minutes=late_threshold_minutes)
+                else:
+                    # Спонтанная смена: planned_start = object.opening_time + threshold
+                    from datetime import datetime as dt, timedelta
+                    base_time = dt.combine(current_time.date(), obj.opening_time)
+                    planned_start = base_time + timedelta(minutes=late_threshold_minutes)
+                
                 # Создаем новую смену
                 new_shift = Shift(
                     user_id=db_user.id,  # Используем id из БД, а не telegram_id
                     object_id=object_id,
-                    start_time=datetime.now(),
+                    start_time=current_time,
+                    actual_start=current_time,  # Фактическое время начала работы
+                    planned_start=planned_start,  # Плановое время (для штрафов)
                     status='active',
                     start_coordinates=coordinates,
                     hourly_rate=hourly_rate,
