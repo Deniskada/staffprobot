@@ -187,7 +187,11 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
             
             # Получаем информацию об объекте и его задачах
             async with get_async_session() as session:
-                obj_query = select(Object).where(Object.id == shift['object_id'])
+                from sqlalchemy.orm import selectinload
+                
+                obj_query = select(Object).options(
+                    selectinload(Object.org_unit)
+                ).where(Object.id == shift['object_id'])
                 obj_result = await session.execute(obj_query)
                 obj = obj_result.scalar_one_or_none()
                 
@@ -210,7 +214,6 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                 if shift.get('time_slot_id'):
                     from domain.entities.time_slot import TimeSlot
                     from domain.entities.timeslot_task_template import TimeslotTaskTemplate
-                    from sqlalchemy.orm import selectinload
                     
                     timeslot_query = select(TimeSlot).options(
                         selectinload(TimeSlot.task_templates)
