@@ -286,9 +286,8 @@ class ShiftService:
             
             # Используем общий сервис из shared
             from shared.services.shift_service import ShiftService as SharedShiftService
-            from core.geolocation.location_validator import LocationValidator
             
-            shared_service = SharedShiftService(LocationValidator())
+            shared_service = SharedShiftService()
             result = await shared_service.close_shift(user_id=user_id, coordinates=coordinates)
             
             return result
