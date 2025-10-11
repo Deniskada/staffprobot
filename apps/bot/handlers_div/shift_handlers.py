@@ -883,11 +883,50 @@ async def _handle_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer("❌ Состояние утеряно", show_alert=True)
             return
         
-        # Обновляем состояние
+        # Получаем telegram_report_chat_id ЗАРАНЕЕ (до изменения состояния)
+        async with get_async_session() as session:
+            from domain.entities.shift import Shift
+            from domain.entities.object import Object
+            from sqlalchemy.orm import selectinload
+            
+            shift_query = select(Shift).options(
+                selectinload(Shift.object).selectinload(Object.org_unit)
+            ).where(Shift.id == shift_id)
+            shift_result = await session.execute(shift_query)
+            shift = shift_result.scalar_one_or_none()
+            
+            if not shift or not shift.object:
+                await query.answer("❌ Смена не найдена", show_alert=True)
+                return
+            
+            # Наследование telegram_report_chat_id
+            telegram_chat_id = None
+            obj = shift.object
+            
+            if not obj.inherit_telegram_chat and obj.telegram_report_chat_id:
+                telegram_chat_id = obj.telegram_report_chat_id
+            elif obj.org_unit:
+                org_unit = obj.org_unit
+                while org_unit:
+                    if org_unit.telegram_report_chat_id:
+                        telegram_chat_id = org_unit.telegram_report_chat_id
+                        break
+                    org_unit = org_unit.parent
+            
+            if not telegram_chat_id:
+                await query.edit_message_text(
+                    text="❌ Telegram группа для отчетов не настроена.\n\n"
+                         "Обратитесь к администратору для настройки группы в объекте или подразделении.",
+                    parse_mode='HTML'
+                )
+                return
+        
+        # Обновляем состояние (ПОСЛЕ получения данных из БД)
         user_state_manager.update_state(
             user_id,
             step=UserStep.MEDIA_UPLOAD,
-            pending_media_task_idx=task_idx
+            pending_media_task_idx=task_idx,
+            data={'telegram_chat_id': telegram_chat_id, 'object_name': obj.name}
         )
         
         shift_tasks = getattr(user_state, 'shift_tasks', [])
@@ -1045,116 +1084,97 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text("❌ Неподдерживаемый тип файла. Отправьте фото или видео.")
             return
         
-        # Получаем telegram_report_chat_id из Object/OrgStructureUnit
-        async with get_async_session() as session:
-            from domain.entities.shift import Shift
-            from domain.entities.object import Object
-            from sqlalchemy.orm import selectinload
+        logger.info(f"Media type: {media_type}, file_id: {media_file_id}")
+        
+        # Получаем telegram_chat_id и object_name из state.data (сохранены в _handle_media_upload)
+        telegram_chat_id = user_state.data.get('telegram_chat_id')
+        object_name = user_state.data.get('object_name', 'Объект')
+        
+        if not telegram_chat_id:
+            logger.error(f"telegram_chat_id not found in state.data")
+            await update.message.reply_text(
+                "❌ Ошибка: группа не настроена.\n"
+                "Попробуйте снова."
+            )
+            return
+        
+        logger.info(f"Sending media to Telegram group: {telegram_chat_id}")
+        
+        # Отправляем медиа в группу (БЕЗ вложенной сессии БД!)
+        try:
+            task_text = task.get('text') or task.get('task_text', 'Задача')
+            user_name = f"{update.message.from_user.first_name} {update.message.from_user.last_name or ''}".strip()
+            caption = f"📋 Отчет по задаче: {task_text}\n👤 {user_name}\n🏢 {object_name}"
             
-            shift_query = select(Shift).options(
-                selectinload(Shift.object).selectinload(Object.org_unit)
-            ).where(Shift.id == shift_id)
-            shift_result = await session.execute(shift_query)
-            shift = shift_result.scalar_one_or_none()
-            
-            if not shift or not shift.object:
-                await update.message.reply_text("❌ Смена не найдена")
-                return
-            
-            # Наследование telegram_report_chat_id
-            telegram_chat_id = None
-            obj = shift.object
-            
-            if not obj.inherit_telegram_chat and obj.telegram_report_chat_id:
-                telegram_chat_id = obj.telegram_report_chat_id
-            elif obj.org_unit:
-                org_unit = obj.org_unit
-                while org_unit:
-                    if org_unit.telegram_report_chat_id:
-                        telegram_chat_id = org_unit.telegram_report_chat_id
-                        break
-                    org_unit = org_unit.parent
-            
-            if not telegram_chat_id:
-                await update.message.reply_text(
-                    "❌ Telegram группа для отчетов не настроена.\n"
-                    "Обратитесь к администратору."
+            sent_message = None
+            if media_type == 'photo':
+                sent_message = await context.bot.send_photo(
+                    chat_id=telegram_chat_id,
+                    photo=media_file_id,
+                    caption=caption
                 )
-                return
+            elif media_type == 'video':
+                sent_message = await context.bot.send_video(
+                    chat_id=telegram_chat_id,
+                    video=media_file_id,
+                    caption=caption
+                )
             
-            # Отправляем медиа в группу
-            try:
-                task_text = task.get('text') or task.get('task_text', 'Задача')
-                user_name = f"{update.message.from_user.first_name} {update.message.from_user.last_name or ''}".strip()
-                caption = f"📋 Отчет по задаче: {task_text}\n👤 {user_name}\n🏢 {obj.name}"
-                
-                sent_message = None
-                if media_type == 'photo':
-                    sent_message = await context.bot.send_photo(
-                        chat_id=telegram_chat_id,
-                        photo=media_file_id,
-                        caption=caption
-                    )
-                elif media_type == 'video':
-                    sent_message = await context.bot.send_video(
-                        chat_id=telegram_chat_id,
-                        video=media_file_id,
-                        caption=caption
-                    )
-                
-                # Формируем ссылку на пост
-                # Формат: https://t.me/c/{chat_id без -100}/{message_id}
-                chat_id_str = str(telegram_chat_id).replace('-100', '')
-                media_url = f"https://t.me/c/{chat_id_str}/{sent_message.message_id}"
-                
-                # Сохраняем медиа в состоянии
-                task_media = getattr(user_state, 'task_media', {})
-                task_media[task_idx] = {
-                    'media_url': media_url,
-                    'media_type': media_type
-                }
-                
-                # Отмечаем задачу как выполненную
-                completed_tasks = getattr(user_state, 'completed_tasks', [])
-                if task_idx not in completed_tasks:
-                    completed_tasks.append(task_idx)
-                
-                # Обновляем состояние
-                user_state_manager.update_state(
-                    user_id,
-                    step=UserStep.TASK_COMPLETION,
-                    completed_tasks=completed_tasks,
-                    task_media=task_media,
-                    pending_media_task_idx=None
-                )
-                
-                logger.info(
-                    f"Media uploaded for task",
-                    shift_id=shift_id,
-                    task_idx=task_idx,
-                    media_type=media_type,
-                    telegram_group=telegram_chat_id,
-                    media_url=media_url
-                )
-                
-                # Отправляем подтверждение
-                await update.message.reply_text(
-                    f"✅ <b>Отчет принят!</b>\n\n"
-                    f"📋 Задача: <i>{task_text}</i>\n"
-                    f"✅ Отмечена как выполненная\n"
-                    f"📤 Отправлено в группу отчетов",
-                    parse_mode='HTML'
-                )
-                
-                # Возвращаемся к списку задач
-                await _show_task_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
-                
-            except Exception as e:
-                logger.error(f"Error sending media to Telegram group: {e}")
-                await update.message.reply_text(
-                    "❌ Ошибка отправки отчета в группу.\n"
-                    "Проверьте, что бот добавлен в группу и имеет права на отправку медиа."
-                )
+            logger.info(f"Media sent to group, message_id: {sent_message.message_id}")
+            
+            # Формируем ссылку на пост
+            # Формат: https://t.me/c/{chat_id без -100}/{message_id}
+            chat_id_str = str(telegram_chat_id).replace('-100', '')
+            media_url = f"https://t.me/c/{chat_id_str}/{sent_message.message_id}"
+            
+            # Сохраняем медиа в состоянии
+            task_media = getattr(user_state, 'task_media', {})
+            task_media[task_idx] = {
+                'media_url': media_url,
+                'media_type': media_type
+            }
+            
+            # Отмечаем задачу как выполненную
+            completed_tasks = getattr(user_state, 'completed_tasks', [])
+            if task_idx not in completed_tasks:
+                completed_tasks.append(task_idx)
+            
+            # Обновляем состояние
+            user_state_manager.update_state(
+                user_id,
+                step=UserStep.TASK_COMPLETION,
+                completed_tasks=completed_tasks,
+                task_media=task_media,
+                pending_media_task_idx=None
+            )
+            
+            logger.info(
+                f"Media uploaded for task",
+                shift_id=shift_id,
+                task_idx=task_idx,
+                media_type=media_type,
+                telegram_group=telegram_chat_id,
+                media_url=media_url
+            )
+            
+            # Отправляем подтверждение
+            await update.message.reply_text(
+                f"✅ <b>Отчет принят!</b>\n\n"
+                f"📋 Задача: <i>{task_text}</i>\n"
+                f"✅ Отмечена как выполненная\n"
+                f"📤 Отправлено в группу отчетов",
+                parse_mode='HTML'
+            )
+            
+            # Возвращаемся к списку задач
+            await _show_task_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
+            
+        except Exception as e:
+            logger.error(f"Error sending media to Telegram group: {e}")
+            await update.message.reply_text(
+                "❌ Ошибка отправки отчета в группу.\n"
+                "Проверьте, что бот добавлен в группу и имеет права на отправку медиа."
+            )
                 
     except Exception as e:
         logger.error(f"Error in _handle_received_media: {e}")
