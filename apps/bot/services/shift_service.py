@@ -348,7 +348,7 @@ class ShiftService:
                 duration = shift.end_time - shift.start_time
                 hours = duration.total_seconds() / 3600
                 shift.total_hours = hours
-                shift.total_payment = hours * shift.hourly_rate
+                shift.total_payment = hours * float(shift.hourly_rate) if shift.hourly_rate else 0
                 shift.notes = f"Закрыта пользователем в {shift.end_time.strftime('%H:%M:%S')}"
                 
                 # Создаем корректировки начислений (Phase 4A)
