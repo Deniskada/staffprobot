@@ -170,8 +170,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
     
-    print(f"[DEBUG] User {user_id} state: action={user_state.action}, step={user_state.step}")
-    
     logger.info(
         f"User state retrieved",
         user_id=user_id,
@@ -180,8 +178,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
     
     if user_state.step not in [UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION]:
-        print(f"[DEBUG] Step mismatch! Current: {user_state.step}, Expected: {[UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION]}")
-        
         logger.warning(
             f"Location not expected at this step",
             user_id=user_id,
@@ -363,7 +359,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 # НЕ очищаем состояние - пользователь может попробовать снова
         
         elif user_state.action == UserAction.OPEN_OBJECT:
-            print(f"[DEBUG] ✅ ENTERED opening_object block! action={user_state.action}, step={user_state.step}")
             # Открытие объекта + автоматическое открытие смены
             from shared.services.object_opening_service import ObjectOpeningService
             from core.geolocation.location_validator import LocationValidator
@@ -447,7 +442,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     user_state_manager.clear_state(user_id)
         
         elif user_state.action == UserAction.CLOSE_OBJECT:
-            print(f"[DEBUG] ✅ ENTERED close_object block! action={user_state.action}, step={user_state.step}")
             # Закрытие объекта после успешного закрытия смены
             from shared.services.object_opening_service import ObjectOpeningService
             from domain.entities.user import User
@@ -485,7 +479,12 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     user_state_manager.clear_state(user_id)
         
         else:
-            print(f"[DEBUG] ❌ NO HANDLER FOR action={user_state.action}, step={user_state.step}")
+            logger.warning(
+                f"No handler for action/step combination",
+                user_id=user_id,
+                action=user_state.action,
+                step=user_state.step
+            )
             await update.message.reply_text(
                 "❌ Непредвиденная ситуация. Попробуйте начать с /start"
             )
