@@ -27,9 +27,22 @@ async def _handle_open_object(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # Получить доступные объекты для сотрудника
     async with get_async_session() as session:
-        # Найти активные договоры
+        # Найти пользователя по telegram_id
+        from domain.entities.user import User
+        user_query = select(User).where(User.telegram_id == user_id)
+        user_result = await session.execute(user_query)
+        db_user = user_result.scalar_one_or_none()
+        
+        if not db_user:
+            await query.edit_message_text(
+                text="❌ Пользователь не найден.\n\nИспользуйте /start для регистрации.",
+                parse_mode='HTML'
+            )
+            return
+        
+        # Найти активные договоры по employee_id
         contracts_query = select(Contract).where(
-            Contract.telegram_id == str(user_id),
+            Contract.employee_id == db_user.id,
             Contract.status == 'active'
         )
         contracts_result = await session.execute(contracts_query)
