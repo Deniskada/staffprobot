@@ -339,7 +339,8 @@ class ShiftService:
                     }
                 
                 # Закрываем смену напрямую в текущей сессии (Phase 4A: избегаем вложенных сессий)
-                shift.end_time = datetime.now()
+                import pytz
+                shift.end_time = datetime.now(pytz.UTC)
                 shift.status = 'completed'
                 shift.end_coordinates = coordinates
                 
@@ -380,6 +381,11 @@ class ShiftService:
                     )
                 
                 await session.commit()
+                
+                # Инвалидация кэша календаря
+                from core.cache.redis_cache import cache
+                await cache.clear_pattern("calendar_shifts:*")
+                await cache.clear_pattern("api_response:*")
                 
                 logger.info(
                     f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={shift.total_hours}, total_payment={shift.total_payment}"
