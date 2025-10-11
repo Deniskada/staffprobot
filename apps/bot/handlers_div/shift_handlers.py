@@ -241,6 +241,18 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                 
                 # Если есть задачи - показываем их для подтверждения выполнения
                 if shift_tasks:
+                    # Получаем telegram_report_chat_id для медиа отчетов (наследование)
+                    telegram_chat_id = None
+                    if not obj.inherit_telegram_chat and obj.telegram_report_chat_id:
+                        telegram_chat_id = obj.telegram_report_chat_id
+                    elif obj.org_unit:
+                        org_unit = obj.org_unit
+                        while org_unit:
+                            if org_unit.telegram_report_chat_id:
+                                telegram_chat_id = org_unit.telegram_report_chat_id
+                                break
+                            org_unit = org_unit.parent
+                    
                     # Формируем текст с задачами
                     tasks_text = "📋 <b>Задачи на смену:</b>\n\n"
                     tasks_text += "Отметьте выполненные задачи:\n\n"
@@ -273,7 +285,8 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                         step=UserStep.TASK_COMPLETION,  # Новый шаг
                         selected_shift_id=shift['id'],
                         shift_tasks=shift_tasks,  # Сохраняем задачи
-                        completed_tasks=[]  # Изначально пусто
+                        completed_tasks=[],  # Изначально пусто
+                        data={'telegram_chat_id': telegram_chat_id, 'object_name': obj.name}  # Для медиа отчетов
                     )
                     
                     # Формируем кнопки для задач
@@ -883,50 +896,22 @@ async def _handle_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer("❌ Состояние утеряно", show_alert=True)
             return
         
-        # Получаем telegram_report_chat_id ЗАРАНЕЕ (до изменения состояния)
-        async with get_async_session() as session:
-            from domain.entities.shift import Shift
-            from domain.entities.object import Object
-            from sqlalchemy.orm import selectinload
-            
-            shift_query = select(Shift).options(
-                selectinload(Shift.object).selectinload(Object.org_unit)
-            ).where(Shift.id == shift_id)
-            shift_result = await session.execute(shift_query)
-            shift = shift_result.scalar_one_or_none()
-            
-            if not shift or not shift.object:
-                await query.answer("❌ Смена не найдена", show_alert=True)
-                return
-            
-            # Наследование telegram_report_chat_id
-            telegram_chat_id = None
-            obj = shift.object
-            
-            if not obj.inherit_telegram_chat and obj.telegram_report_chat_id:
-                telegram_chat_id = obj.telegram_report_chat_id
-            elif obj.org_unit:
-                org_unit = obj.org_unit
-                while org_unit:
-                    if org_unit.telegram_report_chat_id:
-                        telegram_chat_id = org_unit.telegram_report_chat_id
-                        break
-                    org_unit = org_unit.parent
-            
-            if not telegram_chat_id:
-                await query.edit_message_text(
-                    text="❌ Telegram группа для отчетов не настроена.\n\n"
-                         "Обратитесь к администратору для настройки группы в объекте или подразделении.",
-                    parse_mode='HTML'
-                )
-                return
+        # Проверяем наличие telegram_chat_id (уже получен в _handle_close_shift)
+        telegram_chat_id = user_state.data.get('telegram_chat_id')
         
-        # Обновляем состояние (ПОСЛЕ получения данных из БД)
+        if not telegram_chat_id:
+            await query.edit_message_text(
+                text="❌ Telegram группа для отчетов не настроена.\n\n"
+                     "Обратитесь к администратору для настройки группы в объекте или подразделении.",
+                parse_mode='HTML'
+            )
+            return
+        
+        # Обновляем состояние
         user_state_manager.update_state(
             user_id,
             step=UserStep.MEDIA_UPLOAD,
-            pending_media_task_idx=task_idx,
-            data={'telegram_chat_id': telegram_chat_id, 'object_name': obj.name}
+            pending_media_task_idx=task_idx
         )
         
         shift_tasks = getattr(user_state, 'shift_tasks', [])
