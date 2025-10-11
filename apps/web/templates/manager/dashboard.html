@@ -177,8 +177,8 @@
                                     </div>
                                 </td>
                                 <td>{{ shift.object.name }}</td>
-                                <td>{{ shift.start_time.strftime('%d.%m.%Y') }}</td>
-                                <td>{{ shift.start_time.strftime('%H:%M') }} - {{ shift.end_time.strftime('%H:%M') if shift.end_time else 'Активна' }}</td>
+                                <td>{{ format_datetime_local(shift.start_time, shift.object.timezone or 'Europe/Moscow', '%d.%m.%Y') }}</td>
+                                <td>{{ format_datetime_local(shift.start_time, shift.object.timezone or 'Europe/Moscow', '%H:%M') }} - {{ format_datetime_local(shift.end_time, shift.object.timezone or 'Europe/Moscow', '%H:%M') if shift.end_time else 'Активна' }}</td>
                                 <td>
                                     {% if shift.status == 'active' %}
                                         <span class="badge bg-success">Активна</span>
