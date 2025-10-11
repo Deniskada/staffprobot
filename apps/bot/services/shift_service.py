@@ -338,54 +338,65 @@ class ShiftService:
                         'max_distance_meters': location_validation.get('max_distance_meters')
                     }
                 
-                # Закрываем смену
-                success = await self.scheduler.close_shift_manually(
-                    shift_id=shift_id,
-                    end_coordinates=coordinates,
-                    notes=f"Закрыта пользователем в {datetime.now().strftime('%H:%M:%S')}"
+                # Закрываем смену напрямую в текущей сессии (Phase 4A: избегаем вложенных сессий)
+                shift.end_time = datetime.now()
+                shift.status = 'completed'
+                shift.end_coordinates = coordinates
+                
+                # Рассчитываем время и оплату
+                duration = shift.end_time - shift.start_time
+                hours = duration.total_seconds() / 3600
+                shift.total_hours = hours
+                shift.total_payment = hours * shift.hourly_rate
+                shift.notes = f"Закрыта пользователем в {shift.end_time.strftime('%H:%M:%S')}"
+                
+                # Создаем корректировки начислений (Phase 4A)
+                from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+                from shared.services.late_penalty_calculator import LatePenaltyCalculator
+                
+                adjustment_service = PayrollAdjustmentService(session)
+                late_penalty_calc = LatePenaltyCalculator(session)
+                
+                # 1. Создать базовую оплату за смену
+                await adjustment_service.create_shift_base_adjustment(
+                    shift=shift,
+                    employee_id=db_user.id,
+                    object_id=shift.object_id,
+                    created_by=db_user.id
                 )
                 
-                if not success:
-                    return {
-                        'success': False,
-                        'error': 'Ошибка при закрытии смены'
-                    }
+                # 2. Проверить и создать штраф за опоздание
+                late_minutes, penalty_amount = await late_penalty_calc.calculate_late_penalty(
+                    shift=shift,
+                    obj=obj
+                )
                 
-                # Получаем обновленную информацию о смене в новой сессии (после коммита close_shift_manually)
-                async with get_async_session() as fresh_session:
-                    updated_shift = await self._get_shift(fresh_session, shift_id)
-                    
-                    if not updated_shift:
-                        logger.error(f"Could not retrieve updated shift {shift_id} after closing")
-                        return {
-                            'success': True,  # Смена закрыта, но не можем получить детали
-                            'message': f'Смена успешно закрыта! {location_validation["message"]}',
-                            'shift_id': shift_id,
-                            'total_hours': 0,
-                            'total_payment': 0,
-                            'end_time': None
-                        }
-                    
-                    logger.info(
-                        f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={updated_shift.total_hours}, total_payment={updated_shift.total_payment}"
+                if penalty_amount > 0:
+                    await adjustment_service.create_late_start_adjustment(
+                        shift=shift,
+                        late_minutes=late_minutes,
+                        penalty_amount=penalty_amount,
+                        created_by=db_user.id
                     )
-                    
-                    # Phase 4A: Корректировки создаются автоматически в shared/services/shift_service.py
-                    auto_deductions = []  # Пустой список для совместимости с return
-                    
-                    # Форматируем время в часовом поясе объекта
-                    object_timezone = getattr(shift.object, 'timezone', None) or 'Europe/Moscow'
-                    local_end_time = timezone_helper.format_local_time(updated_shift.end_time, object_timezone) if updated_shift.end_time else None
-                    
-                    return {
-                        'success': True,
-                        'message': f'Смена успешно закрыта! {location_validation["message"]}',
-                        'shift_id': shift_id,
-                        'total_hours': float(updated_shift.total_hours) if updated_shift.total_hours else 0,
-                        'total_payment': float(updated_shift.total_payment) if updated_shift.total_payment else 0,
-                        'end_time': local_end_time,
-                        'auto_deductions': len(auto_deductions) if auto_deductions else 0
-                    }
+                
+                await session.commit()
+                
+                logger.info(
+                    f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={shift.total_hours}, total_payment={shift.total_payment}"
+                )
+                
+                # Форматируем время в часовом поясе объекта
+                object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
+                local_end_time = timezone_helper.format_local_time(shift.end_time, object_timezone)
+                
+                return {
+                    'success': True,
+                    'message': f'Смена успешно закрыта! {location_validation["message"]}',
+                    'shift_id': shift_id,
+                    'total_hours': float(shift.total_hours),
+                    'total_payment': float(shift.total_payment),
+                    'end_time': local_end_time
+                }
                 
         except Exception as e:
             logger.error(
