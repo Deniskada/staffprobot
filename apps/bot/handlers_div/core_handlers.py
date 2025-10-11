@@ -451,13 +451,40 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         coordinates=coordinates
                     )
                     
-                    # Автоматически открыть смену
-                    result = await shift_service.open_shift(
-                        user_id=user_id,
-                        object_id=obj.id,
-                        coordinates=coordinates,
-                        shift_type='spontaneous'
-                    )
+                    # Проверяем: есть ли запланированная смена на сегодня на этом объекте?
+                    from apps.bot.services.shift_schedule_service import ShiftScheduleService
+                    from datetime import date
+                    
+                    shift_schedule_service = ShiftScheduleService()
+                    today = date.today()
+                    planned_shifts = await shift_schedule_service.get_user_planned_shifts_for_date(user_id, today)
+                    
+                    # Ищем смену для текущего объекта
+                    schedule_for_object = None
+                    for shift_data in planned_shifts:
+                        if shift_data.get('object_id') == obj.id:
+                            schedule_for_object = shift_data
+                            break
+                    
+                    # Определяем параметры для открытия смены
+                    if schedule_for_object:
+                        # Есть запланированная смена - открываем её
+                        result = await shift_service.open_shift(
+                            user_id=user_id,
+                            object_id=obj.id,
+                            coordinates=coordinates,
+                            shift_type='planned',
+                            timeslot_id=schedule_for_object.get('time_slot_id'),
+                            schedule_id=schedule_for_object.get('id')
+                        )
+                    else:
+                        # Нет запланированной смены - открываем спонтанную
+                        result = await shift_service.open_shift(
+                            user_id=user_id,
+                            object_id=obj.id,
+                            coordinates=coordinates,
+                            shift_type='spontaneous'
+                        )
                     
                     if result['success']:
                         # Форматируем время с учетом часового пояса объекта
