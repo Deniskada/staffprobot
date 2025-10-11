@@ -240,7 +240,6 @@ class ShiftScheduler:
                 from sqlalchemy.orm import selectinload
                 from domain.entities.object import Object
                 
-                await session.refresh(shift, ['object'])
                 if shift.object_id:
                     obj_query = select(Object).where(Object.id == shift.object_id).options(
                         selectinload(Object.org_unit)
