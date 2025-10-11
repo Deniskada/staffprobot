@@ -168,6 +168,14 @@ async def _handle_select_object_to_open(update: Update, context: ContextTypes.DE
             selected_object_id=object_id
         )
         
+        logger.info(
+            f"State created for object opening",
+            user_id=user_id,
+            action=UserAction.OPEN_OBJECT,
+            step=UserStep.OPENING_OBJECT_LOCATION,
+            object_id=object_id
+        )
+        
         await query.edit_message_text(
             text=f"🏢 <b>Открытие объекта</b>\n\n"
                  f"Объект: <b>{obj.name}</b>\n\n"
