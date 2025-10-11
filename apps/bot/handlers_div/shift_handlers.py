@@ -101,8 +101,9 @@ async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 reply_markup=reply_markup
             )
         else:
-            # Нет запланированных смен - показываем выбор объекта для спонтанной смены
+            # Нет запланированных смен - проверяем открытые объекты для спонтанной смены
             from apps.bot.services.employee_objects_service import EmployeeObjectsService
+            from shared.services.object_opening_service import ObjectOpeningService
             
             employee_objects_service = EmployeeObjectsService()
             objects = await employee_objects_service.get_employee_objects(user_id)
@@ -113,6 +114,32 @@ async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     parse_mode='HTML'
                 )
                 return
+            
+            # Проверяем: есть ли среди них открытые?
+            async with get_async_session() as session:
+                opening_service = ObjectOpeningService(session)
+                open_objects = []
+                
+                for obj in objects:
+                    is_open = await opening_service.is_object_open(obj['id'])
+                    if is_open:
+                        open_objects.append(obj)
+            
+            if not open_objects:
+                # Нет открытых объектов - предлагаем сначала открыть объект
+                await query.edit_message_text(
+                    text="⚠️ <b>Нет открытых объектов</b>\n\n"
+                         "Для открытия спонтанной смены сначала откройте объект.\n\n"
+                         "Используйте кнопку 'Открыть объект' в главном меню.",
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🏢 Открыть объект", callback_data="open_object")
+                    ]])
+                )
+                return
+            
+            # Показываем только открытые объекты
+            objects = open_objects
                 
             # Создаем состояние пользователя
             user_state_manager.create_state(
@@ -152,6 +179,94 @@ async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Error getting objects: {e}")
         await query.edit_message_text(
             text="❌ <b>Ошибка при получении объектов</b>\n\nПопробуйте позже или обратитесь к администратору.",
+            parse_mode='HTML'
+        )
+
+
+async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAULT_TYPE, schedule_id: int):
+    """Обработчик открытия запланированной смены."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        # Получаем информацию о запланированной смене
+        from apps.bot.services.shift_schedule_service import ShiftScheduleService
+        shift_schedule_service = ShiftScheduleService()
+        schedule_data = await shift_schedule_service.get_shift_schedule_by_id(schedule_id)
+        
+        if not schedule_data:
+            await query.edit_message_text(
+                text="❌ Запланированная смена не найдена.",
+                parse_mode='HTML'
+            )
+            return
+        
+        object_id = schedule_data.get('object_id')
+        
+        # Проверяем: объект открыт?
+        async with get_async_session() as session:
+            from shared.services.object_opening_service import ObjectOpeningService
+            opening_service = ObjectOpeningService(session)
+            is_open = await opening_service.is_object_open(object_id)
+        
+        if not is_open:
+            # Объект закрыт - предлагаем сначала открыть объект
+            await query.edit_message_text(
+                text="⚠️ <b>Объект закрыт</b>\n\n"
+                     "Для открытия запланированной смены сначала откройте объект.\n\n"
+                     "Используйте кнопку 'Открыть объект' в главном меню.",
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🏢 Открыть объект", callback_data="open_object")
+                ]])
+            )
+            return
+        
+        # Объект открыт - продолжаем открытие смены
+        # Создаем состояние для запроса геолокации
+        user_state_manager.create_state(
+            user_id=user_id,
+            action=UserAction.OPEN_SHIFT,
+            step=UserStep.LOCATION_REQUEST,
+            selected_object_id=object_id,
+            shift_type="planned",
+            selected_schedule_id=schedule_id,
+            selected_timeslot_id=schedule_data.get('time_slot_id')
+        )
+        
+        # Запрашиваем геолокацию
+        object_name = schedule_data.get('object_name', 'Неизвестный объект')
+        planned_start_str = schedule_data.get('planned_start_str', '')
+        
+        from telegram import KeyboardButton, ReplyKeyboardMarkup
+        location_keyboard = [
+            [KeyboardButton("📍 Отправить геопозицию", request_location=True)]
+        ]
+        location_markup = ReplyKeyboardMarkup(
+            location_keyboard, 
+            one_time_keyboard=True, 
+            resize_keyboard=True
+        )
+        
+        await query.edit_message_text(
+            text=f"📍 <b>Отправьте геопозицию для открытия смены</b>\n\n"
+                 f"🏢 Объект: <b>{object_name}</b>\n"
+                 f"🕐 Время: {planned_start_str}\n\n"
+                 f"Нажмите кнопку ниже для отправки вашего местоположения:",
+            parse_mode='HTML'
+        )
+        
+        # Отправляем клавиатуру в отдельном сообщении
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="👇 Используйте кнопку ниже:",
+            reply_markup=location_markup
+        )
+        
+    except Exception as e:
+        logger.error(f"Error opening planned shift {schedule_id}: {e}")
+        await query.edit_message_text(
+            text="❌ Ошибка при открытии смены. Попробуйте позже.",
             parse_mode='HTML'
         )
 

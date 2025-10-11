@@ -25,7 +25,33 @@ async def _handle_open_object(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     logger.info(f"User {user_id} initiated object opening")
     
-    # Получить доступные объекты для сотрудника
+    # Сначала проверяем: есть ли запланированные смены?
+    # Если есть - предлагаем открыть их (через "Открыть смену")
+    from apps.bot.services.shift_service import ShiftService
+    bot_shift_service = ShiftService()
+    
+    scheduled_shifts = await bot_shift_service.get_user_scheduled_shifts(user_id)
+    
+    if scheduled_shifts:
+        # Есть запланированные смены - перенаправляем на их открытие
+        shifts_text = "📅 <b>У вас есть запланированные смены!</b>\n\n"
+        shifts_text += "Пожалуйста, используйте кнопку 'Открыть смену' для открытия запланированной смены.\n\n"
+        shifts_text += "<b>Ваши запланированные смены:</b>\n"
+        
+        for idx, shift in enumerate(scheduled_shifts[:3], 1):
+            shifts_text += f"\n{idx}. <b>{shift['object_name']}</b>\n"
+            shifts_text += f"   🕐 {shift['planned_start_str']}\n"
+        
+        await query.edit_message_text(
+            text=shifts_text,
+            parse_mode='HTML',
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift")
+            ]])
+        )
+        return
+    
+    # Нет запланированных смен - продолжаем открытие объекта
     async with get_async_session() as session:
         # Найти пользователя по telegram_id
         from domain.entities.user import User
