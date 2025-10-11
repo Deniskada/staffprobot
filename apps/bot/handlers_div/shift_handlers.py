@@ -781,6 +781,8 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
         requires_media = current_task.get('requires_media', False)
         task_media = getattr(user_state, 'task_media', {})
         
+        logger.info(f"Task toggle: idx={task_idx}, requires_media={requires_media}, completed={task_idx in completed_tasks}")
+        
         # Переключаем статус
         if task_idx in completed_tasks:
             # Снимаем отметку
@@ -793,6 +795,7 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
         else:
             # Проверяем, требуется ли медиа
             if requires_media:
+                logger.info(f"Task requires media, calling _handle_media_upload")
                 # Переходим к загрузке медиа
                 await _handle_media_upload(update, context, shift_id, task_idx)
                 return
@@ -984,12 +987,18 @@ async def _handle_close_shift_with_tasks(update: Update, context: ContextTypes.D
 
 async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка полученного фото/видео для задачи."""
+    logger.info(f"_handle_received_media CALLED")
+    
     # Игнорируем, если это не личное сообщение
     if update.message.chat.type != 'private':
+        logger.info(f"Ignoring media from non-private chat: {update.message.chat.type}")
         return
     
     user_id = update.message.from_user.id
+    logger.info(f"Media received from user: {user_id}")
+    
     user_state = user_state_manager.get_state(user_id)
+    logger.info(f"User state: {user_state}, step: {user_state.step if user_state else None}")
     
     if not user_state or user_state.step != UserStep.MEDIA_UPLOAD:
         # Подсказка если состояние потеряно
@@ -1004,11 +1013,18 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
         return
     
     task_idx = getattr(user_state, 'pending_media_task_idx', None)
+    logger.info(f"pending_media_task_idx: {task_idx}")
+    
     if task_idx is None:
+        logger.warning(f"pending_media_task_idx is None, ignoring media")
+        await update.message.reply_text("⚠️ Не удалось определить задачу. Попробуйте снова.")
         return
     
     shift_tasks = getattr(user_state, 'shift_tasks', [])
+    logger.info(f"shift_tasks count: {len(shift_tasks)}, task_idx: {task_idx}")
+    
     if task_idx >= len(shift_tasks):
+        logger.error(f"task_idx {task_idx} >= shift_tasks length {len(shift_tasks)}")
         await update.message.reply_text("❌ Задача не найдена")
         return
     
