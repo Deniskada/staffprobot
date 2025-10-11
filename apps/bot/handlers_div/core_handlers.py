@@ -304,40 +304,72 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     f"💰 Заработано: {total_payment}₽"
                 )
                 
-                # Проверяем: если это было закрытие объекта - закрываем объект
-                if user_state.action == UserAction.CLOSE_OBJECT and user_state.selected_object_id:
-                    await update.message.reply_text(shift_close_message, reply_markup=ReplyKeyboardRemove())
-                    
-                    # Закрываем объект
-                    from shared.services.object_opening_service import ObjectOpeningService
-                    from domain.entities.user import User
-                    
+                await update.message.reply_text(shift_close_message, reply_markup=ReplyKeyboardRemove())
+                
+                # Проверяем: была ли это последняя смена на объекте?
+                # Если да - автоматически закрываем объект
+                from shared.services.object_opening_service import ObjectOpeningService
+                from domain.entities.user import User
+                
+                # Получаем object_id из закрытой смены
+                closed_shift_object_id = result.get('object_id')
+                
+                if closed_shift_object_id:
                     async with get_async_session() as session:
                         opening_service = ObjectOpeningService(session)
                         
-                        # Получить пользователя по telegram_id
-                        user_query = select(User).where(User.telegram_id == user_id)
-                        user_result = await session.execute(user_query)
-                        db_user = user_result.scalar_one_or_none()
+                        # Проверяем: есть ли еще активные смены на этом объекте?
+                        active_count = await opening_service.get_active_shifts_count(closed_shift_object_id)
                         
-                        if db_user:
-                            try:
-                                opening = await opening_service.close_object(
-                                    object_id=user_state.selected_object_id,
-                                    user_id=db_user.id,
-                                    coordinates=coordinates
-                                )
-                                
-                                await update.message.reply_text(
-                                    f"✅ <b>Объект закрыт!</b>\n\n"
-                                    f"⏰ Время закрытия: {opening.closed_at.strftime('%H:%M')}\n"
-                                    f"⏱️ Время работы объекта: {opening.duration_hours:.1f}ч",
-                                    parse_mode='HTML'
-                                )
-                            except ValueError as e:
-                                await update.message.reply_text(f"⚠️ Смена закрыта, но не удалось закрыть объект: {str(e)}")
-                else:
-                    await update.message.reply_text(shift_close_message, reply_markup=ReplyKeyboardRemove())
+                        if active_count == 0:
+                            # Это была последняя смена - закрываем объект
+                            # Получить пользователя по telegram_id
+                            user_query = select(User).where(User.telegram_id == user_id)
+                            user_result = await session.execute(user_query)
+                            db_user = user_result.scalar_one_or_none()
+                            
+                            if db_user:
+                                try:
+                                    opening = await opening_service.close_object(
+                                        object_id=closed_shift_object_id,
+                                        user_id=db_user.id,
+                                        coordinates=coordinates
+                                    )
+                                    
+                                    # Форматируем время с учетом часового пояса
+                                    from core.utils.timezone_helper import timezone_helper
+                                    # Получаем объект для timezone
+                                    obj_query = select(Object).where(Object.id == closed_shift_object_id)
+                                    obj_result = await session.execute(obj_query)
+                                    obj = obj_result.scalar_one_or_none()
+                                    
+                                    object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
+                                    close_time = timezone_helper.format_local_time(opening.closed_at, object_timezone, '%H:%M')
+                                    
+                                    await update.message.reply_text(
+                                        f"✅ <b>Объект автоматически закрыт!</b>\n\n"
+                                        f"(Это была последняя активная смена)\n\n"
+                                        f"⏰ Время закрытия: {close_time}\n"
+                                        f"⏱️ Время работы объекта: {opening.duration_hours:.1f}ч",
+                                        parse_mode='HTML'
+                                    )
+                                    
+                                    logger.info(
+                                        f"Object auto-closed after last shift closed",
+                                        object_id=closed_shift_object_id,
+                                        user_id=user_id,
+                                        shift_id=user_state.selected_shift_id
+                                    )
+                                except ValueError as e:
+                                    logger.warning(
+                                        f"Failed to auto-close object",
+                                        object_id=closed_shift_object_id,
+                                        error=str(e)
+                                    )
+                                    await update.message.reply_text(
+                                        f"⚠️ Не удалось автоматически закрыть объект: {str(e)}\n"
+                                        f"Используйте кнопку 'Закрыть объект' для закрытия вручную."
+                                    )
                 
                 # Очищаем состояние ТОЛЬКО при успехе
                 user_state_manager.clear_state(user_id)
