@@ -2,7 +2,7 @@
 
 **ID:** bug-outdated-timeslot-binding  
 **Дата обнаружения:** 2025-10-12  
-**Статус:** 🟡 Найдено  
+**Статус:** ✅ Исправлено (см. bug-shift-schedule-status-not-updated)  
 **Приоритет:** Средний  
 **Теги:** `bot`, `shift-scheduling`, `timezone`, `business-logic`
 
