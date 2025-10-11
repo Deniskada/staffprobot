@@ -62,7 +62,7 @@ class PayrollAdjustmentService:
         )
         
         self.session.add(adjustment)
-        await self.session.flush()
+        # Не используем flush() - commit будет в вызывающем коде
         
         logger.info(
             "Базовая оплата за смену создана",
@@ -115,7 +115,7 @@ class PayrollAdjustmentService:
         )
         
         self.session.add(adjustment)
-        await self.session.flush()
+        # Не используем flush() - commit будет в вызывающем коде
         
         logger.info(
             "Штраф за опоздание создан",
@@ -173,7 +173,7 @@ class PayrollAdjustmentService:
         )
         
         self.session.add(adjustment)
-        await self.session.flush()
+        # Не используем flush() - commit будет в вызывающем коде
         
         logger.info(
             f"{'Премия' if is_bonus else 'Штраф'} за задачу создан",
@@ -232,7 +232,7 @@ class PayrollAdjustmentService:
         )
         
         self.session.add(adjustment)
-        await self.session.flush()
+        # Не используем flush() - commit будет в вызывающем коде
         
         logger.info(
             "Ручная корректировка создана",
@@ -370,7 +370,7 @@ class PayrollAdjustmentService:
         adjustment.updated_by = updated_by
         adjustment.updated_at = datetime.now()
         
-        await self.session.flush()
+        # Не используем flush() - commit будет в вызывающем коде
         
         logger.info(
             "Корректировка обновлена",
@@ -411,7 +411,7 @@ class PayrollAdjustmentService:
             adjustment.is_applied = True
             count += 1
         
-        await self.session.flush()
+        # Не используем flush() - commit будет в вызывающем коде
         
         logger.info(
             "Корректировки отмечены как применённые",
