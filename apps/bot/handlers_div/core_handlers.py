@@ -221,7 +221,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             # Закрываем смену
             result = await shift_service.close_shift(
                 user_id=user_id,
-                shift_id=user_state.selected_shift_id,
                 coordinates=coordinates
             )
             
@@ -258,15 +257,16 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 await update.message.reply_text(error_msg, reply_markup=reply_markup)
         
+        
+        # Очищаем состояние пользователя после успешной обработки
+        user_state_manager.clear_state(user_id)
+        
     except Exception as e:
-        logger.error(f"Error processing location for user {user_id}: {e}")
+        logger.error(f"Error processing location for user {user_id}: {e}", exc_info=True)
         await update.message.reply_text(
             "❌ Произошла ошибка при обработке геопозиции. Попробуйте еще раз."
         )
-    
-    finally:
-        # Очищаем состояние пользователя
-        user_state_manager.clear_state(user_id)
+        # НЕ очищаем состояние при ошибке - пользователь может попробовать снова
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
