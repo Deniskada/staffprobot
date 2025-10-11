@@ -257,15 +257,25 @@ class ShiftService:
                             break
                         org_unit = org_unit.parent
                 
+                # Локализуем базовое время в часовом поясе объекта
+                import pytz
+                from datetime import datetime as dt, timedelta
+                object_timezone = obj.timezone or 'Europe/Moscow'
+                object_tz = pytz.timezone(object_timezone)
+                
                 if shift_type == "planned" and timeslot_obj:
                     # Запланированная смена: planned_start = timeslot.start_time + threshold
-                    from datetime import datetime as dt, timedelta
+                    # timeslot.start_time уже в локальном времени объекта
                     base_time = dt.combine(timeslot_obj.slot_date, timeslot_obj.start_time)
+                    # Локализуем naive datetime в timezone объекта
+                    base_time = object_tz.localize(base_time)
                     planned_start = base_time + timedelta(minutes=late_threshold_minutes)
                 else:
                     # Спонтанная смена: planned_start = object.opening_time + threshold
-                    from datetime import datetime as dt, timedelta
+                    # opening_time - это time (локальное время объекта)
                     base_time = dt.combine(current_time.date(), obj.opening_time)
+                    # Локализуем naive datetime в timezone объекта
+                    base_time = object_tz.localize(base_time)
                     planned_start = base_time + timedelta(minutes=late_threshold_minutes)
                 
                 # Создаем новую смену
