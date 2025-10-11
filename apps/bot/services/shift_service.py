@@ -226,18 +226,10 @@ class ShiftService:
                 await session.commit()
                 await session.refresh(new_shift)
                 
-                # Создать задачи для смены на основе наследования
-                from apps.web.services.shift_task_service import ShiftTaskService
-                task_service = ShiftTaskService(session)
-                tasks = await task_service.create_tasks_for_shift(
-                    shift_id=new_shift.id,
-                    object_id=object_id,
-                    timeslot_id=timeslot_id if shift_type == "planned" else None,
-                    created_by_id=db_user.id
-                )
+                # Phase 4A: Задачи обрабатываются при закрытии смены через Celery
                 
                 logger.info(
-                    f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}, tasks_created={len(tasks)}"
+                    f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}"
                 )
                 
                 # Инвалидация кэша календаря
@@ -377,23 +369,7 @@ class ShiftService:
                         f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={updated_shift.total_hours}, total_payment={updated_shift.total_payment}"
                     )
                     
-                    # Рассчитать автоматические удержания
-                    from apps.web.services.auto_deduction_service import AutoDeductionService
-                    deduction_service = AutoDeductionService(fresh_session)
-                    auto_deductions = await deduction_service.calculate_deductions_for_shift(shift_id)
-                    
-                    # Сохранить информацию об удержаниях в shift metadata (для последующей обработки Celery)
-                    if auto_deductions:
-                        # Сохраняем в notes смены для информации
-                        deduction_summary = f"\n\nАвтоудержания: {len(auto_deductions)} шт., "
-                        deduction_summary += f"сумма: {sum(d[1] for d in auto_deductions)}₽"
-                        
-                        logger.info(
-                            f"Auto-deductions calculated for shift",
-                            shift_id=shift_id,
-                            count=len(auto_deductions),
-                            total=float(sum(d[1] for d in auto_deductions))
-                        )
+                    # Phase 4A: Корректировки создаются через Celery задачу
                     
                     # Форматируем время в часовом поясе объекта
                     object_timezone = getattr(shift.object, 'timezone', None) or 'Europe/Moscow'
@@ -405,8 +381,7 @@ class ShiftService:
                         'shift_id': shift_id,
                         'total_hours': float(updated_shift.total_hours) if updated_shift.total_hours else 0,
                         'total_payment': float(updated_shift.total_payment) if updated_shift.total_payment else 0,
-                        'end_time': local_end_time,
-                        'auto_deductions': len(auto_deductions) if auto_deductions else 0
+                        'end_time': local_end_time
                     }
                 
         except Exception as e:
