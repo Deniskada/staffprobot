@@ -40,20 +40,19 @@ class ShiftScheduleService:
                     return []
                 
                 # Получаем запланированные смены пользователя на указанную дату
-                # Локализуем дату в Europe/Moscow для правильного сравнения
-                import pytz
-                msk_tz = pytz.timezone('Europe/Moscow')
-                start_of_day = msk_tz.localize(datetime.combine(target_date, datetime.min.time()))
-                end_of_day = start_of_day + timedelta(days=1)
-                
-                query = select(ShiftSchedule).where(
-                    and_(
-                        ShiftSchedule.user_id == user.id,
-                        ShiftSchedule.status.in_(["planned", "confirmed"]),
-                        ShiftSchedule.planned_start >= start_of_day,
-                        ShiftSchedule.planned_start < end_of_day
+                # JOIN с time_slots для проверки slot_date (более надежно)
+                query = (
+                    select(ShiftSchedule)
+                    .join(TimeSlot, TimeSlot.id == ShiftSchedule.time_slot_id)
+                    .where(
+                        and_(
+                            ShiftSchedule.user_id == user.id,
+                            ShiftSchedule.status.in_(["planned", "confirmed"]),
+                            TimeSlot.slot_date == target_date  # Проверяем slot_date!
+                        )
                     )
-                ).order_by(ShiftSchedule.planned_start)
+                    .order_by(ShiftSchedule.planned_start)
+                )
                 
                 result = await session.execute(query)
                 shifts = result.scalars().all()
