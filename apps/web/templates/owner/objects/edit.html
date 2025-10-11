@@ -644,6 +644,18 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Валидация Telegram chat_id
+        const telegramChatId = document.getElementById('telegram_report_chat_id').value.trim();
+        const inheritTelegramChat = document.getElementById('inherit_telegram_chat').checked;
+        if (telegramChatId && !inheritTelegramChat) {
+            // Проверяем формат: должен начинаться с -100 для супергрупп
+            if (!telegramChatId.startsWith('-100')) {
+                e.preventDefault();
+                alert('ID Telegram группы должен начинаться с -100 (например: -1001234567890).\n\nОтправьте команду /get_chat_id в вашу группу, чтобы получить правильный ID.');
+                return;
+            }
+        }
+        
         // Логируем данные формы перед отправкой
         const formData = new FormData(form);
         console.log('Form data keys:', Array.from(formData.keys()));
