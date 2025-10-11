@@ -346,19 +346,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     # Задачи на смену
     elif query.data.startswith("complete_task:"):
-        from .shift_handlers import _handle_complete_task
-        task_id = int(query.data.split(":", 1)[1])
-        await _handle_complete_task(update, context, task_id)
+        # Phase 4A: Задачи больше не требуют подтверждения в боте
+        await query.answer("⚠️ Функция отметки задач удалена в Phase 4A", show_alert=True)
         return
-    elif query.data.startswith("close_shift_proceed:"):
-        from .shift_handlers import _handle_close_shift_proceed
-        shift_id = int(query.data.split(":", 1)[1])
-        await _handle_close_shift_proceed(update, context, shift_id)
-        return
-    elif query.data.startswith("close_shift_skip_tasks:"):
-        from .shift_handlers import _handle_close_shift_proceed
-        shift_id = int(query.data.split(":", 1)[1])
-        await _handle_close_shift_proceed(update, context, shift_id)
+    elif query.data.startswith("close_shift_proceed:") or query.data.startswith("close_shift_skip_tasks:"):
+        # Phase 4A: Callback'и удалены, задачи обрабатываются при закрытии смены
+        await query.answer("⚠️ Эта функция больше не используется", show_alert=True)
         return
     # Планирование смен
     elif query.data == "schedule_shift":
