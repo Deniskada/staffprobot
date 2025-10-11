@@ -11,6 +11,7 @@ from domain.entities.shift import Shift
 from domain.entities.object import Object
 from domain.entities.user import User
 from sqlalchemy import select, and_
+from sqlalchemy.orm import joinedload
 from .base_service import BaseService
 
 
