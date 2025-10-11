@@ -28,7 +28,8 @@ class OrgStructureService:
         payment_schedule_id: Optional[int] = None,
         inherit_late_settings: bool = True,
         late_threshold_minutes: Optional[int] = None,
-        late_penalty_per_minute: Optional[Decimal] = None
+        late_penalty_per_minute: Optional[Decimal] = None,
+        telegram_report_chat_id: Optional[str] = None
     ) -> OrgStructureUnit:
         """
         Создать новое подразделение.
@@ -77,6 +78,7 @@ class OrgStructureService:
                 inherit_late_settings=inherit_late_settings,
                 late_threshold_minutes=late_threshold_minutes,
                 late_penalty_per_minute=late_penalty_per_minute,
+                telegram_report_chat_id=telegram_report_chat_id,
                 level=level,
                 is_active=True
             )
@@ -225,6 +227,8 @@ class OrgStructureService:
                 unit.late_threshold_minutes = data['late_threshold_minutes']
             if 'late_penalty_per_minute' in data:
                 unit.late_penalty_per_minute = data['late_penalty_per_minute']
+            if 'telegram_report_chat_id' in data:
+                unit.telegram_report_chat_id = data['telegram_report_chat_id']
             if 'is_active' in data:
                 unit.is_active = data['is_active']
             

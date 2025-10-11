@@ -96,6 +96,9 @@ async def owner_org_structure_create(
         late_threshold_minutes_str = form_data.get("late_threshold_minutes", "").strip()
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         
+        telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
+        telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
+        
         # Валидация
         if not name:
             raise HTTPException(status_code=400, detail="Название обязательно")
@@ -118,7 +121,8 @@ async def owner_org_structure_create(
             payment_schedule_id=payment_schedule_id,
             inherit_late_settings=inherit_late_settings,
             late_threshold_minutes=late_threshold_minutes,
-            late_penalty_per_minute=late_penalty_per_minute
+            late_penalty_per_minute=late_penalty_per_minute,
+            telegram_report_chat_id=telegram_report_chat_id
         )
         
         logger.info("Org unit created via UI", unit_id=new_unit.id, owner_id=owner_id)
@@ -159,6 +163,9 @@ async def owner_org_structure_edit(
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         is_active_str = form_data.get("is_active", "").strip()
         
+        telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
+        telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
+        
         # Валидация
         if not name:
             raise HTTPException(status_code=400, detail="Название обязательно")
@@ -183,6 +190,7 @@ async def owner_org_structure_edit(
                 "inherit_late_settings": inherit_late_settings,
                 "late_threshold_minutes": late_threshold_minutes,
                 "late_penalty_per_minute": late_penalty_per_minute,
+                "telegram_report_chat_id": telegram_report_chat_id,
                 "is_active": is_active
             }
         )
