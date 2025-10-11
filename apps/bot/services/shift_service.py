@@ -66,6 +66,14 @@ class ShiftService:
                         'error': 'Объект не найден'
                     }
                 
+                # Загружаем TimeSlot заранее (если есть), чтобы избежать greenlet ошибок
+                timeslot_obj = None
+                if timeslot_id:
+                    from domain.entities.time_slot import TimeSlot
+                    timeslot_query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
+                    timeslot_result = await session.execute(timeslot_query)
+                    timeslot_obj = timeslot_result.scalar_one_or_none()
+                
                 # Находим пользователя по telegram_id для получения его id в БД
                 from domain.entities.user import User
                 user_query = select(User).where(User.telegram_id == user_id)
@@ -228,16 +236,11 @@ class ShiftService:
                             break
                         org_unit = org_unit.parent
                 
-                if shift_type == "planned" and timeslot_id:
+                if shift_type == "planned" and timeslot_obj:
                     # Запланированная смена: planned_start = timeslot.start_time + threshold
-                    timeslot_query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
-                    timeslot_result = await session.execute(timeslot_query)
-                    timeslot = timeslot_result.scalar_one_or_none()
-                    
-                    if timeslot:
-                        from datetime import datetime as dt, timedelta
-                        base_time = dt.combine(timeslot.slot_date, timeslot.start_time)
-                        planned_start = base_time + timedelta(minutes=late_threshold_minutes)
+                    from datetime import datetime as dt, timedelta
+                    base_time = dt.combine(timeslot_obj.slot_date, timeslot_obj.start_time)
+                    planned_start = base_time + timedelta(minutes=late_threshold_minutes)
                 else:
                     # Спонтанная смена: planned_start = object.opening_time + threshold
                     from datetime import datetime as dt, timedelta
@@ -560,9 +563,18 @@ class ShiftService:
         """Получает объект по ID с загрузкой организационной структуры."""
         try:
             from sqlalchemy.orm import selectinload
+            from domain.entities.org_structure import OrgStructureUnit
+            
+            # Загружаем объект с org_unit и всей цепочкой родителей
+            def load_org_hierarchy():
+                loader = selectinload(Object.org_unit)
+                current = loader
+                for _ in range(10):  # До 10 уровней иерархии
+                    current = current.selectinload(OrgStructureUnit.parent)
+                return loader
             
             query = select(Object).options(
-                selectinload(Object.org_unit)
+                load_org_hierarchy()
             ).where(Object.id == object_id)
             result = await session.execute(query)
             return result.scalar_one_or_none()
