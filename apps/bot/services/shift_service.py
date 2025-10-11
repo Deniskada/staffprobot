@@ -419,6 +419,7 @@ class ShiftService:
                         'success': True,
                         'message': f'Смена успешно закрыта! {location_validation["message"]}',
                         'shift_id': shift_id,
+                        'object_id': shift.object_id,
                         'total_hours': float(updated_shift.total_hours) if updated_shift.total_hours else 0,
                         'total_payment': float(updated_shift.total_payment) if updated_shift.total_payment else 0,
                         'end_time': local_end_time
