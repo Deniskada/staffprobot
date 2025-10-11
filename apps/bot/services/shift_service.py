@@ -107,6 +107,27 @@ class ShiftService:
                         'max_distance_meters': location_validation.get('max_distance_meters')
                     }
                 
+                # Автоматически открываем объект (если еще не открыт)
+                from shared.services.object_opening_service import ObjectOpeningService
+                opening_service = ObjectOpeningService(session)
+                
+                is_open = await opening_service.is_object_open(object_id)
+                if not is_open:
+                    try:
+                        await opening_service.open_object(
+                            object_id=object_id,
+                            user_id=db_user.id,
+                            coordinates=coordinates
+                        )
+                        logger.info(
+                            f"Object auto-opened before shift opening",
+                            object_id=object_id,
+                            user_id=user_id
+                        )
+                    except ValueError as e:
+                        logger.warning(f"Failed to auto-open object: {e}")
+                        # Продолжаем открытие смены даже если объект не открылся
+                
                 # Определяем ставку с учетом приоритета договора
                 timeslot_rate = None
                 rate_source = "object"
