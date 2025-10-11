@@ -34,6 +34,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 /start - Запуск бота и главное меню
 /help - Эта справка
 /status - Статус ваших смен
+/get_chat_id - Узнать ID текущего чата (для настройки групп отчетов)
 
 <b>Основные функции:</b>
 🔄 <b>Открыть смену</b> - Начать рабочую смену с проверкой геолокации
@@ -65,6 +66,46 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         help_text,
         parse_mode='HTML',
         reply_markup=reply_markup
+    )
+
+
+async def get_chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик команды /get_chat_id - показывает ID текущего чата."""
+    chat = update.effective_chat
+    if not chat:
+        return
+    
+    chat_type = chat.type  # 'private', 'group', 'supergroup', 'channel'
+    chat_id = chat.id
+    
+    if chat_type == 'private':
+        response_text = f"""
+ℹ️ <b>ID чата</b>
+
+📱 Это личный чат
+🆔 Chat ID: <code>{chat_id}</code>
+
+💡 Для получения ID группы:
+1. Добавьте бота в группу
+2. Напишите в группе команду /get_chat_id
+3. Скопируйте полученный ID
+"""
+    else:
+        chat_title = chat.title or "Без названия"
+        response_text = f"""
+ℹ️ <b>ID чата</b>
+
+💬 Группа: <b>{chat_title}</b>
+🆔 Chat ID: <code>{chat_id}</code>
+
+📋 Скопируйте этот ID и вставьте в настройки объекта или подразделения в разделе "Telegram группа для отчетов".
+
+✅ Бот будет отправлять фото/видео отчеты по задачам в эту группу.
+"""
+    
+    await update.message.reply_text(
+        response_text,
+        parse_mode='HTML'
     )
 
 

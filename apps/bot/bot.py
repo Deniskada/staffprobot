@@ -24,7 +24,8 @@ from .handlers_div import (
 )
 from .handlers import (
     help_command,
-    status_command
+    status_command,
+    get_chat_id_command
 )
 # Импорты удаленных файлов убраны
 # from .analytics_handlers import AnalyticsHandlers
@@ -98,6 +99,7 @@ class StaffProBot:
         self.application.add_handler(CommandHandler("start", start_command))
         self.application.add_handler(CommandHandler("help", help_command))
         self.application.add_handler(CommandHandler("status", status_command))
+        self.application.add_handler(CommandHandler("get_chat_id", get_chat_id_command))
         
         # Обработка геопозиции (ВАЖНО: до ConversationHandler!)
         self.application.add_handler(
