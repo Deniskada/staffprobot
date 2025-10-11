@@ -25,31 +25,38 @@ async def _handle_open_object(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     logger.info(f"User {user_id} initiated object opening")
     
-    # Сначала проверяем: есть ли запланированные смены?
+    # Сначала проверяем: есть ли запланированные смены на сегодня?
     # Если есть - предлагаем открыть их (через "Открыть смену")
-    from apps.bot.services.shift_service import ShiftService
-    bot_shift_service = ShiftService()
-    
-    scheduled_shifts = await bot_shift_service.get_user_scheduled_shifts(user_id)
-    
-    if scheduled_shifts:
-        # Есть запланированные смены - перенаправляем на их открытие
-        shifts_text = "📅 <b>У вас есть запланированные смены!</b>\n\n"
-        shifts_text += "Пожалуйста, используйте кнопку 'Открыть смену' для открытия запланированной смены.\n\n"
-        shifts_text += "<b>Ваши запланированные смены:</b>\n"
+    try:
+        from apps.bot.services.shift_schedule_service import ShiftScheduleService
+        from datetime import date
         
-        for idx, shift in enumerate(scheduled_shifts[:3], 1):
-            shifts_text += f"\n{idx}. <b>{shift['object_name']}</b>\n"
-            shifts_text += f"   🕐 {shift['planned_start_str']}\n"
+        shift_schedule_service = ShiftScheduleService()
+        today = date.today()
+        planned_shifts = await shift_schedule_service.get_user_planned_shifts_for_date(user_id, today)
         
-        await query.edit_message_text(
-            text=shifts_text,
-            parse_mode='HTML',
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift")
-            ]])
-        )
-        return
+        if planned_shifts:
+            # Есть запланированные смены - перенаправляем на их открытие
+            shifts_text = "📅 <b>У вас есть запланированные смены!</b>\n\n"
+            shifts_text += "Пожалуйста, используйте кнопку 'Открыть смену' для открытия запланированной смены.\n\n"
+            shifts_text += "<b>Ваши запланированные смены:</b>\n"
+            
+            for idx, shift in enumerate(planned_shifts[:3], 1):
+                shifts_text += f"\n{idx}. <b>{shift['object_name']}</b>\n"
+                planned_start_str = shift.get('planned_start_str', '')
+                shifts_text += f"   🕐 {planned_start_str}\n"
+            
+            await query.edit_message_text(
+                text=shifts_text,
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift")
+                ]])
+            )
+            return
+    except Exception as e:
+        logger.error(f"Error checking planned shifts: {e}")
+        # Продолжаем открытие объекта даже при ошибке проверки
     
     # Нет запланированных смен - продолжаем открытие объекта
     async with get_async_session() as session:
