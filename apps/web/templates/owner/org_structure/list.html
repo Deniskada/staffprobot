@@ -194,6 +194,17 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <h6 class="mt-4"><i class="fas fa-paper-plane"></i> Telegram группа для отчетов</h6>
+                    <div class="mb-3">
+                        <label for="create_telegram_chat" class="form-label">ID Telegram группы</label>
+                        <input type="text" class="form-control" id="create_telegram_chat" 
+                               name="telegram_report_chat_id" placeholder="-1001234567890">
+                        <small class="form-text text-muted">
+                            ID группы для отправки фото/видео отчетов. Получите через 
+                            <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>
+                        </small>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
@@ -283,6 +294,17 @@
                         </div>
                     </div>
                     
+                    <h6 class="mt-4"><i class="fas fa-paper-plane"></i> Telegram группа для отчетов</h6>
+                    <div class="mb-3">
+                        <label for="edit_telegram_chat" class="form-label">ID Telegram группы</label>
+                        <input type="text" class="form-control" id="edit_telegram_chat" 
+                               name="telegram_report_chat_id" placeholder="-1001234567890">
+                        <small class="form-text text-muted">
+                            ID группы для отправки фото/видео отчетов. Получите через 
+                            <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>
+                        </small>
+                    </div>
+                    
                     <hr>
                     
                     <div class="mb-3">
@@ -331,6 +353,7 @@ async function showEditModal(unitId) {
         document.getElementById('edit_inherit_late_settings').checked = unit.inherit_late_settings;
         document.getElementById('edit_late_threshold').value = unit.late_threshold_minutes || '';
         document.getElementById('edit_late_penalty').value = unit.late_penalty_per_minute || '';
+        document.getElementById('edit_telegram_chat').value = unit.telegram_report_chat_id || '';
         document.getElementById('edit_is_active').checked = unit.is_active;
         
         // Обновить action формы
