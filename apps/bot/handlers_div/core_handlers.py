@@ -212,7 +212,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     error_msg += f"\n📐 Максимум: {result.get('max_distance_meters', 100)}м"
                 
                 # Добавляем кнопки для повторной отправки или отмены
-                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
                 keyboard = [
                     [InlineKeyboardButton("📍 Отправить геопозицию повторно", callback_data=f"retry_location:{user_state.selected_object_id}")],
                     [InlineKeyboardButton("❌ Отмена", callback_data="main_menu")]
