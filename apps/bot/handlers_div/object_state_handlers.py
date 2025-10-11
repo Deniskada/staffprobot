@@ -110,11 +110,23 @@ async def _handle_open_object(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text(
                 text=f"🏢 <b>Открытие объекта</b>\n\n"
                      f"Объект: <b>{selected_object['name']}</b>\n\n"
-                     f"📍 Отправьте вашу геопозицию для подтверждения местоположения.",
+                     f"📍 Нажмите кнопку ниже для отправки геопозиции:",
                 parse_mode='HTML',
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("❌ Отмена", callback_data="main_menu")
                 ]])
+            )
+            
+            # Отправляем клавиатуру для геопозиции
+            from telegram import KeyboardButton, ReplyKeyboardMarkup
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="👇 Используйте кнопку для отправки геопозиции:",
+                reply_markup=ReplyKeyboardMarkup(
+                    [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
+                    resize_keyboard=True,
+                    one_time_keyboard=True
+                )
             )
         else:
             # Показать список объектов для выбора
@@ -179,11 +191,23 @@ async def _handle_select_object_to_open(update: Update, context: ContextTypes.DE
         await query.edit_message_text(
             text=f"🏢 <b>Открытие объекта</b>\n\n"
                  f"Объект: <b>{obj.name}</b>\n\n"
-                 f"📍 Отправьте вашу геопозицию для подтверждения местоположения.",
+                 f"📍 Нажмите кнопку ниже для отправки геопозиции:",
             parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("❌ Отмена", callback_data="main_menu")
             ]])
+        )
+        
+        # Отправляем клавиатуру для геопозиции (новое сообщение!)
+        from telegram import KeyboardButton, ReplyKeyboardMarkup
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="👇 Используйте кнопку для отправки геопозиции:",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
+                resize_keyboard=True,
+                one_time_keyboard=True
+            )
         )
 
 
