@@ -102,49 +102,68 @@ def process_closed_shifts_adjustments():
                         session.add(shift_base)
                         total_adjustments += 1
                         
-                        # 2. Проверить и создать штраф за опоздание (если есть planned_start)
-                        if shift.object and hasattr(shift, 'planned_start') and shift.planned_start and shift.start_time:
-                            # Получить настройки штрафов (inline логика)
-                            obj = shift.object
-                            threshold_minutes = None
-                            penalty_per_minute = None
-                            
-                            if not obj.inherit_late_settings and obj.late_threshold_minutes is not None and obj.late_penalty_per_minute is not None:
-                                threshold_minutes = obj.late_threshold_minutes
-                                penalty_per_minute = obj.late_penalty_per_minute
-                            elif obj.org_unit:
-                                # Получить от org_unit
-                                org_unit = obj.org_unit
-                                if not org_unit.inherit_late_settings and org_unit.late_threshold_minutes is not None:
-                                    threshold_minutes = org_unit.late_threshold_minutes
-                                    penalty_per_minute = org_unit.late_penalty_per_minute
-                            
-                            if threshold_minutes is not None and penalty_per_minute is not None:
-                                # Рассчитать опоздание
-                                delta = shift.start_time - shift.planned_start
-                                late_minutes = int(delta.total_seconds() / 60)
-                                
-                                if late_minutes > threshold_minutes:
-                                    penalized_minutes = late_minutes - threshold_minutes
-                                    penalty_amount = Decimal(str(penalized_minutes)) * Decimal(str(penalty_per_minute))
-                                    
-                                    late_adjustment = PayrollAdjustment(
+                        # 2. Проверить и создать штраф за опоздание (новая логика с planned_start/actual_start)
+                        if shift.planned_start and shift.actual_start:
+                            # Для запланированных смен - проверяем флаг penalize_late_start
+                            should_penalize = True
+                            if shift.is_planned and shift.time_slot_id and shift.time_slot:
+                                if not shift.time_slot.penalize_late_start:
+                                    should_penalize = False
+                                    logger.debug(
+                                        f"Late penalty disabled by timeslot flag",
                                         shift_id=shift.id,
-                                        employee_id=shift.user_id,
-                                        object_id=shift.object_id,
-                                        adjustment_type='late_start',
-                                        amount=-abs(penalty_amount),
-                                        description=f'Штраф за опоздание на {late_minutes} мин',
-                                        details={
-                                            'shift_id': shift.id,
-                                            'late_minutes': late_minutes,
-                                            'penalty_per_minute': float(penalty_per_minute)
-                                        },
-                                        created_by=shift.user_id,
-                                        is_applied=False
+                                        time_slot_id=shift.time_slot_id
                                     )
-                                    session.add(late_adjustment)
-                                    total_adjustments += 1
+                            
+                            if should_penalize:
+                                # Сравниваем actual_start с planned_start (порог уже учтен при открытии смены)
+                                if shift.actual_start > shift.planned_start:
+                                    late_seconds = (shift.actual_start - shift.planned_start).total_seconds()
+                                    late_minutes = int(late_seconds / 60)
+                                    
+                                    # Получить penalty_per_minute из объекта или org_unit
+                                    obj = shift.object
+                                    penalty_per_minute = None
+                                    
+                                    if not obj.inherit_late_settings and obj.late_penalty_per_minute is not None:
+                                        penalty_per_minute = obj.late_penalty_per_minute
+                                    elif obj.org_unit:
+                                        org_unit = obj.org_unit
+                                        while org_unit:
+                                            if not org_unit.inherit_late_settings and org_unit.late_penalty_per_minute is not None:
+                                                penalty_per_minute = org_unit.late_penalty_per_minute
+                                                break
+                                            org_unit = org_unit.parent
+                                    
+                                    if penalty_per_minute and late_minutes > 0:
+                                        penalty_amount = Decimal(str(late_minutes)) * Decimal(str(penalty_per_minute))
+                                        
+                                        late_adjustment = PayrollAdjustment(
+                                            shift_id=shift.id,
+                                            employee_id=shift.user_id,
+                                            object_id=shift.object_id,
+                                            adjustment_type='late_start',
+                                            amount=-abs(penalty_amount),
+                                            description=f'Штраф за опоздание на {late_minutes} мин',
+                                            details={
+                                                'shift_id': shift.id,
+                                                'late_minutes': late_minutes,
+                                                'penalty_per_minute': float(penalty_per_minute),
+                                                'planned_start': shift.planned_start.isoformat(),
+                                                'actual_start': shift.actual_start.isoformat()
+                                            },
+                                            created_by=shift.user_id,
+                                            is_applied=False
+                                        )
+                                        session.add(late_adjustment)
+                                        total_adjustments += 1
+                                        
+                                        logger.info(
+                                            f"Late penalty created",
+                                            shift_id=shift.id,
+                                            late_minutes=late_minutes,
+                                            penalty=float(penalty_amount)
+                                        )
                         
                         # 3. Обработать задачи смены (из объекта И тайм-слота)
                         shift_tasks = []
