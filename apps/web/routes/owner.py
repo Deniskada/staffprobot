@@ -3626,8 +3626,8 @@ async def owner_timeslot_update(
             "hourly_rate": hourly_rate,
             "max_employees": int(form_data.get("max_employees", 1)),
             "is_active": is_active,
-            "penalize_late_start": "penalize_late_start" in form_data,
-            "ignore_object_tasks": "ignore_object_tasks" in form_data,
+            "penalize_late_start": "penalize_late_start" in form_data and form_data.get("penalize_late_start") not in ["false", ""],
+            "ignore_object_tasks": "ignore_object_tasks" in form_data and form_data.get("ignore_object_tasks") not in ["false", ""],
             "shift_tasks": shift_tasks if shift_tasks else None
         }
         
