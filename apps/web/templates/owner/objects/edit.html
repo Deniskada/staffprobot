@@ -356,6 +356,51 @@
                                         </div>
                                     </div>
                                 </div>
+                                
+                                <hr class="my-4">
+                                <h5 class="mb-3"><i class="fas fa-paper-plane"></i> Telegram группа для отчетов</h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="inherit_telegram_chat" 
+                                                       name="inherit_telegram_chat"
+                                                       {% if object.inherit_telegram_chat %}checked{% endif %}
+                                                       onchange="toggleTelegramChatField()">
+                                                <label class="form-check-label" for="inherit_telegram_chat">
+                                                    <strong>Наследовать от подразделения</strong>
+                                                </label>
+                                            </div>
+                                            <small class="form-text text-muted">Если включено, будет использоваться группа подразделения</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row" id="telegram_chat_field">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <label for="telegram_report_chat_id" class="form-label">
+                                                ID Telegram группы
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="ID группы для отправки фото/видео отчетов по задачам. Формат: -1001234567890"></i>
+                                            </label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="telegram_report_chat_id" 
+                                                   name="telegram_report_chat_id" 
+                                                   value="{{ object.telegram_report_chat_id or '' }}"
+                                                   placeholder="-1001234567890">
+                                            <div class="form-text">
+                                                Получите ID группы через бота <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>. 
+                                                Бот должен быть добавлен в группу с правами на отправку медиа.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <!-- Конец вкладки 2: Финансы -->
                             
@@ -409,7 +454,7 @@
                                                                value="{{ task.deduction_amount if task is mapping else 100 }}"
                                                                step="0.01">
                                                     </div>
-                                                    <div class="col-md-3">
+                                                    <div class="col-md-2">
                                                         <label class="form-label small">Обязательная</label>
                                                         <div class="form-check mt-2">
                                                             <input class="form-check-input" 
@@ -418,6 +463,17 @@
                                                                    value="{{ loop.index0 }}"
                                                                    {% if task is mapping and task.is_mandatory %}checked{% elif task is not mapping %}checked{% endif %}>
                                                             <label class="form-check-label">Да</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Медиа отчет</label>
+                                                        <div class="form-check mt-2">
+                                                            <input class="form-check-input" 
+                                                                   type="checkbox" 
+                                                                   name="task_requires_media[]" 
+                                                                   value="{{ loop.index0 }}"
+                                                                   {% if task is mapping and task.requires_media %}checked{% endif %}>
+                                                            <label class="form-check-label">📸</label>
                                                         </div>
                                                     </div>
                                                     <div class="col-md-1 d-flex align-items-end">
@@ -448,7 +504,7 @@
                                                                value="100"
                                                                step="0.01">
                                                     </div>
-                                                    <div class="col-md-3">
+                                                    <div class="col-md-2">
                                                         <label class="form-label small">Обязательная</label>
                                                         <div class="form-check mt-2">
                                                             <input class="form-check-input" 
@@ -457,6 +513,16 @@
                                                                    value="0"
                                                                    checked>
                                                             <label class="form-check-label">Да</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Медиа отчет</label>
+                                                        <div class="form-check mt-2">
+                                                            <input class="form-check-input" 
+                                                                   type="checkbox" 
+                                                                   name="task_requires_media[]" 
+                                                                   value="0">
+                                                            <label class="form-check-label">📸</label>
                                                         </div>
                                                     </div>
                                                     <div class="col-md-1 d-flex align-items-end">
@@ -672,7 +738,7 @@ function addTask() {
                        value="100"
                        step="0.01">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small">Обязательная</label>
                 <div class="form-check mt-2">
                     <input class="form-check-input" 
@@ -681,6 +747,16 @@ function addTask() {
                            value="${currentTaskCount}"
                            checked>
                     <label class="form-check-label">Да</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Медиа отчет</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="task_requires_media[]" 
+                           value="${currentTaskCount}">
+                    <label class="form-check-label">📸</label>
                 </div>
             </div>
             <div class="col-md-1 d-flex align-items-end">
@@ -734,6 +810,24 @@ function toggleLateSettings() {
     }
 }
 
+function toggleTelegramChatField() {
+    const inheritCheckbox = document.getElementById('inherit_telegram_chat');
+    const telegramChatInput = document.getElementById('telegram_report_chat_id');
+    
+    // Если чекбокс включен (наследуем), делаем поле readonly
+    const readonly = inheritCheckbox.checked;
+    telegramChatInput.readOnly = readonly;
+    
+    // Визуально обозначаем неактивность
+    if (readonly) {
+        telegramChatInput.style.backgroundColor = '#e9ecef';
+        telegramChatInput.style.cursor = 'not-allowed';
+    } else {
+        telegramChatInput.style.backgroundColor = '';
+        telegramChatInput.style.cursor = '';
+    }
+}
+
 function updateScheduleActions() {
     const scheduleSelect = document.getElementById('payment_schedule_id');
     const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
@@ -774,6 +868,7 @@ function updateScheduleActions() {
 document.addEventListener('DOMContentLoaded', function() {
     updateScheduleActions();
     toggleLateSettings();
+    toggleTelegramChatField();
 });
 
 // Инициализация редактора графиков выплат

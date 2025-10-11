@@ -130,6 +130,8 @@ class ObjectService:
                 inherit_late_settings=object_data.get('inherit_late_settings', True),
                 late_threshold_minutes=object_data.get('late_threshold_minutes'),
                 late_penalty_per_minute=object_data.get('late_penalty_per_minute'),
+                inherit_telegram_chat=object_data.get('inherit_telegram_chat', True),
+                telegram_report_chat_id=object_data.get('telegram_report_chat_id'),
                 org_unit_id=object_data.get('org_unit_id')
             )
             
@@ -209,6 +211,12 @@ class ObjectService:
             # Обновляем подразделение
             if 'org_unit_id' in object_data:
                 obj.org_unit_id = object_data['org_unit_id']
+            
+            # Обновляем Telegram группу для отчетов
+            if 'inherit_telegram_chat' in object_data:
+                obj.inherit_telegram_chat = object_data['inherit_telegram_chat']
+            if 'telegram_report_chat_id' in object_data:
+                obj.telegram_report_chat_id = object_data['telegram_report_chat_id']
             
             logger.info(f"Updating object {object_id} - work_conditions: '{obj.work_conditions}', shift_tasks: {obj.shift_tasks}")
             
