@@ -221,14 +221,30 @@ def process_closed_shifts_adjustments():
                             
                             # Обрабатываем каждую задачу
                             for idx, task in enumerate(shift_tasks):
-                                task_text = task.get('text') or task.get('task_text', 'Задача')
+                                # Поддержка старого и нового формата
+                                task_text = task.get('text') or task.get('description') or task.get('task_text', 'Задача')
                                 is_mandatory = task.get('is_mandatory', True)
-                                deduction_amount = task.get('deduction_amount') or task.get('bonus_amount', 0)
+                                
+                                # Старый формат: deduction_amount, bonus_amount
+                                # Новый формат: amount
+                                amount_value = task.get('amount')
+                                if amount_value is None:
+                                    # Старый формат
+                                    deduction = task.get('deduction_amount')
+                                    bonus = task.get('bonus_amount')
+                                    if deduction is not None:
+                                        amount_value = deduction
+                                    elif bonus is not None:
+                                        amount_value = bonus
+                                    else:
+                                        amount_value = 0
+                                
                                 requires_media = task.get('requires_media', False)
                                 source = task.get('source', 'object')
                                 
-                                if not deduction_amount or float(deduction_amount) == 0:
-                                    continue  # Пропускаем задачи без стоимости
+                                # Пропускаем НЕобязательные задачи без стоимости
+                                if (not amount_value or float(amount_value) == 0) and not is_mandatory:
+                                    continue
                                 
                                 # Проверяем выполнение
                                 is_completed = idx in completed_task_indices
@@ -247,7 +263,11 @@ def process_closed_shifts_adjustments():
                                         continue  # Не начисляем, если нет медиа
                                 
                                 # Применяем премию/штраф в зависимости от выполнения
-                                amount = Decimal(str(deduction_amount))
+                                # Для обязательных задач без стоимости используем дефолтный штраф -50₽
+                                if is_mandatory and (not amount_value or float(amount_value) == 0):
+                                    amount_value = -50
+                                
+                                amount = Decimal(str(amount_value))
                                 
                                 # Формируем details с медиа и источником
                                 details = {
