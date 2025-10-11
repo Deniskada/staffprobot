@@ -514,10 +514,25 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     user_state_manager.clear_state(user_id)
         
         elif user_state.action == UserAction.CLOSE_OBJECT:
-            # Закрытие объекта после успешного закрытия смены
+            # Закрытие объекта - СНАЧАЛА закрываем смену, ПОТОМ объект
             from shared.services.object_opening_service import ObjectOpeningService
             from domain.entities.user import User
             
+            # 1. Закрыть смену
+            result = await shift_service.close_shift(
+                user_id=user_id,
+                shift_id=user_state.selected_shift_id,
+                coordinates=coordinates
+            )
+            
+            if not result['success']:
+                await update.message.reply_text(
+                    f"❌ Ошибка при закрытии смены: {result.get('error', 'Неизвестная ошибка')}"
+                )
+                user_state_manager.clear_state(user_id)
+                return
+            
+            # 2. Закрыть объект
             async with get_async_session() as session:
                 opening_service = ObjectOpeningService(session)
                 
@@ -534,13 +549,19 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 try:
                     opening = await opening_service.close_object(
                         object_id=user_state.selected_object_id,
-                        user_id=db_user.id,  # Используем внутренний ID, а не telegram_id
+                        user_id=db_user.id,
                         coordinates=coordinates
                     )
                     
+                    # Форматируем время с учетом часового пояса
+                    from core.utils.timezone_helper import timezone_helper
+                    close_time = timezone_helper.format_local_time(opening.closed_at, 'Europe/Moscow', '%H:%M')
+                    
                     await update.message.reply_text(
-                        f"✅ <b>Объект закрыт!</b>\n\n"
-                        f"⏰ Время закрытия: {opening.closed_at.strftime('%H:%M')}\n"
+                        f"✅ <b>Смена и объект закрыты!</b>\n\n"
+                        f"⏱️ Время смены: {result['hours']:.1f}ч\n"
+                        f"💰 Оплата: {result['payment']:.0f}₽\n"
+                        f"⏰ Объект закрыт в: {close_time}\n"
                         f"⏱️ Время работы объекта: {opening.duration_hours:.1f}ч",
                         parse_mode='HTML'
                     )
