@@ -900,7 +900,8 @@ async def _handle_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(
             text=f"📸 <b>Требуется отчет</b>\n\n"
                  f"Задача: <i>{task_text}</i>\n\n"
-                 f"Отправьте {media_text} отчет о выполнении задачи.",
+                 f"📷 Отправьте {media_text} отчет о выполнении задачи.\n\n"
+                 f"⚠️ <b>Важно:</b> отправьте медиа БЕЗ использования команд /start или других кнопок, иначе состояние потеряется!",
             parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_media_upload:{shift_id}")
@@ -991,7 +992,16 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
     user_state = user_state_manager.get_state(user_id)
     
     if not user_state or user_state.step != UserStep.MEDIA_UPLOAD:
-        return  # Игнорируем медиа не в контексте отчета
+        # Подсказка если состояние потеряно
+        logger.info(f"Media received but no valid state: user_id={user_id}, state={user_state}, step={user_state.step if user_state else None}")
+        await update.message.reply_text(
+            "ℹ️ Фото/видео получено, но не в контексте отчета.\n\n"
+            "Для отправки отчета:\n"
+            "1. Закройте смену\n"
+            "2. Нажмите на задачу с 📸\n"
+            "3. Отправьте фото БЕЗ использования /start"
+        )
+        return
     
     task_idx = getattr(user_state, 'pending_media_task_idx', None)
     if task_idx is None:
@@ -1107,12 +1117,17 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
                     shift_id=shift_id,
                     task_idx=task_idx,
                     media_type=media_type,
-                    telegram_group=telegram_chat_id
+                    telegram_group=telegram_chat_id,
+                    media_url=media_url
                 )
                 
+                # Отправляем подтверждение
                 await update.message.reply_text(
-                    f"✅ Отчет принят!\n"
-                    f"Задача отмечена как выполненная."
+                    f"✅ <b>Отчет принят!</b>\n\n"
+                    f"📋 Задача: <i>{task_text}</i>\n"
+                    f"✅ Отмечена как выполненная\n"
+                    f"📤 Отправлено в группу отчетов",
+                    parse_mode='HTML'
                 )
                 
                 # Возвращаемся к списку задач
