@@ -233,6 +233,33 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 total_hours = result.get('total_hours', 0) or 0
                 total_payment = result.get('total_payment', 0) or 0
                 
+                # Phase 4A: Сохраняем информацию о выполненных задачах в БД
+                shift_tasks = getattr(user_state, 'shift_tasks', [])
+                completed_tasks = getattr(user_state, 'completed_tasks', [])
+                
+                if shift_tasks:
+                    # Сохраняем выполнение задач в shift.notes для Celery
+                    async with get_async_session() as session:
+                        from domain.entities.shift import Shift
+                        import json
+                        
+                        shift_query = select(Shift).where(Shift.id == user_state.selected_shift_id)
+                        shift_result = await session.execute(shift_query)
+                        shift_obj = shift_result.scalar_one_or_none()
+                        
+                        if shift_obj:
+                            # Добавляем JSON с completed_tasks в notes
+                            completed_info = json.dumps({'completed_tasks': completed_tasks})
+                            shift_obj.notes = (shift_obj.notes or '') + f"\n[TASKS]{completed_info}"
+                            await session.commit()
+                            
+                            logger.info(
+                                f"Saved completed tasks info",
+                                shift_id=shift_obj.id,
+                                completed_count=len(completed_tasks),
+                                total_count=len(shift_tasks)
+                            )
+                
                 # Отладочный вывод
                 logger.info(
                     f"Close shift result for user {user_id}: result={result}, "
@@ -350,14 +377,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         shift_id = int(query.data.split(":", 1)[1])
         await _handle_retry_location_close(update, context, shift_id)
         return
-    # Задачи на смену
-    elif query.data.startswith("complete_task:"):
-        # Phase 4A: Задачи больше не требуют подтверждения в боте
-        await query.answer("⚠️ Функция отметки задач удалена в Phase 4A", show_alert=True)
+    # Задачи на смену (Phase 4A: восстановлено)
+    elif query.data.startswith("complete_shift_task:"):
+        from .shift_handlers import _handle_complete_shift_task
+        parts = query.data.split(":", 2)
+        shift_id = int(parts[1])
+        task_idx = int(parts[2])
+        await _handle_complete_shift_task(update, context, shift_id, task_idx)
         return
-    elif query.data.startswith("close_shift_proceed:") or query.data.startswith("close_shift_skip_tasks:"):
-        # Phase 4A: Callback'и удалены, задачи обрабатываются при закрытии смены
-        await query.answer("⚠️ Эта функция больше не используется", show_alert=True)
+    elif query.data.startswith("close_shift_with_tasks:"):
+        from .shift_handlers import _handle_close_shift_with_tasks
+        shift_id = int(query.data.split(":", 1)[1])
+        await _handle_close_shift_with_tasks(update, context, shift_id)
         return
     # Планирование смен
     elif query.data == "schedule_shift":
