@@ -236,6 +236,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 # Phase 4A: Сохраняем информацию о выполненных задачах в БД
                 shift_tasks = getattr(user_state, 'shift_tasks', [])
                 completed_tasks = getattr(user_state, 'completed_tasks', [])
+                task_media = getattr(user_state, 'task_media', {})
                 
                 if shift_tasks:
                     # Сохраняем выполнение задач в shift.notes для Celery
@@ -248,8 +249,11 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         shift_obj = shift_result.scalar_one_or_none()
                         
                         if shift_obj:
-                            # Добавляем JSON с completed_tasks в notes
-                            completed_info = json.dumps({'completed_tasks': completed_tasks})
+                            # Добавляем JSON с completed_tasks и task_media в notes
+                            completed_info = json.dumps({
+                                'completed_tasks': completed_tasks,
+                                'task_media': task_media
+                            })
                             shift_obj.notes = (shift_obj.notes or '') + f"\n[TASKS]{completed_info}"
                             await session.commit()
                             
@@ -257,7 +261,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                                 f"Saved completed tasks info",
                                 shift_id=shift_obj.id,
                                 completed_count=len(completed_tasks),
-                                total_count=len(shift_tasks)
+                                total_count=len(shift_tasks),
+                                media_count=len(task_media)
                             )
                 
                 # Отладочный вывод
@@ -389,6 +394,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         from .shift_handlers import _handle_close_shift_with_tasks
         shift_id = int(query.data.split(":", 1)[1])
         await _handle_close_shift_with_tasks(update, context, shift_id)
+        return
+    elif query.data.startswith("cancel_media_upload:"):
+        # Отмена загрузки медиа - возврат к списку задач
+        shift_id = int(query.data.split(":", 1)[1])
+        user_state = user_state_manager.get_state(user_id)
+        if user_state:
+            user_state_manager.update_state(user_id, step=UserStep.TASK_COMPLETION, pending_media_task_idx=None)
+            shift_tasks = getattr(user_state, 'shift_tasks', [])
+            completed_tasks = getattr(user_state, 'completed_tasks', [])
+            task_media = getattr(user_state, 'task_media', {})
+            from .shift_handlers import _show_task_list
+            await _show_task_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
         return
     # Планирование смен
     elif query.data == "schedule_shift":

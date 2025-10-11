@@ -199,7 +199,45 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                     return
                 
                 # Получаем задачи из object.shift_tasks (JSONB)
-                shift_tasks = obj.shift_tasks or []
+                shift_tasks = list(obj.shift_tasks or [])
+                
+                # Добавляем маркер источника для задач объекта
+                for task in shift_tasks:
+                    if 'source' not in task:
+                        task['source'] = 'object'
+                
+                # Если смена привязана к тайм-слоту, добавляем его задачи
+                if shift.get('time_slot_id'):
+                    from domain.entities.time_slot import TimeSlot
+                    from domain.entities.timeslot_task_template import TimeslotTaskTemplate
+                    from sqlalchemy.orm import selectinload
+                    
+                    timeslot_query = select(TimeSlot).options(
+                        selectinload(TimeSlot.task_templates)
+                    ).where(TimeSlot.id == shift['time_slot_id'])
+                    timeslot_result = await session.execute(timeslot_query)
+                    timeslot = timeslot_result.scalar_one_or_none()
+                    
+                    if timeslot and timeslot.task_templates:
+                        # Преобразуем TimeslotTaskTemplate в формат shift_tasks
+                        for task_template in timeslot.task_templates:
+                            media_types_list = task_template.media_types.split(',') if task_template.media_types else ['photo', 'video']
+                            shift_tasks.append({
+                                'text': task_template.task_text,
+                                'is_mandatory': task_template.is_mandatory,
+                                'deduction_amount': float(task_template.deduction_amount) if task_template.deduction_amount else 0,
+                                'requires_media': task_template.requires_media,
+                                'media_types': media_types_list,
+                                'source': 'timeslot',
+                                'timeslot_task_id': task_template.id
+                            })
+                        
+                        logger.info(
+                            f"Combined tasks from object and timeslot",
+                            shift_id=shift['id'],
+                            object_tasks=len(obj.shift_tasks or []),
+                            timeslot_tasks=len(timeslot.task_templates)
+                        )
                 
                 # Если есть задачи - показываем их для подтверждения выполнения
                 if shift_tasks:
@@ -211,9 +249,11 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                         task_text = task.get('text') or task.get('task_text', 'Задача')
                         is_mandatory = task.get('is_mandatory', True)
                         deduction_amount = task.get('deduction_amount') or task.get('bonus_amount', 0)
+                        requires_media = task.get('requires_media', False)
                         
                         # Иконки
                         mandatory_icon = "⚠️" if is_mandatory else "⭐"
+                        media_icon = "📸 " if requires_media else ""
                         
                         # Стоимость
                         cost_text = ""
@@ -224,7 +264,7 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                             else:
                                 cost_text = f" ({amount}₽)"
                         
-                        tasks_text += f"{mandatory_icon} {task_text}{cost_text}\n"
+                        tasks_text += f"{media_icon}{mandatory_icon} {task_text}{cost_text}\n"
                     
                     # Создаем состояние со списком задач
                     user_state_manager.create_state(
@@ -241,11 +281,13 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                     for idx, task in enumerate(shift_tasks):
                         task_text = task.get('text') or task.get('task_text', 'Задача')
                         is_mandatory = task.get('is_mandatory', True)
+                        requires_media = task.get('requires_media', False)
                         
                         icon = "⚠️" if is_mandatory else "⭐"
+                        media_icon = "📸 " if requires_media else ""
                         keyboard.append([
                             InlineKeyboardButton(
-                                f"✓ {icon} {task_text[:35]}...",
+                                f"✓ {media_icon}{icon} {task_text[:30]}...",
                                 callback_data=f"complete_shift_task:{shift['id']}:{idx}"
                             )
                         ])
@@ -734,16 +776,31 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
             await query.answer("❌ Задача не найдена", show_alert=True)
             return
         
+        # Получаем информацию о задаче
+        current_task = shift_tasks[task_idx]
+        requires_media = current_task.get('requires_media', False)
+        task_media = getattr(user_state, 'task_media', {})
+        
         # Переключаем статус
         if task_idx in completed_tasks:
+            # Снимаем отметку
             completed_tasks.remove(task_idx)
+            # Удаляем медиа, если было
+            if task_idx in task_media:
+                del task_media[task_idx]
             status_msg = "Задача снята с отметки"
+            user_state_manager.update_state(user_id, completed_tasks=completed_tasks, task_media=task_media)
         else:
-            completed_tasks.append(task_idx)
-            status_msg = "✅ Задача отмечена"
-        
-        # Обновляем состояние
-        user_state_manager.update_state(user_id, completed_tasks=completed_tasks)
+            # Проверяем, требуется ли медиа
+            if requires_media:
+                # Переходим к загрузке медиа
+                await _handle_media_upload(update, context, shift_id, task_idx)
+                return
+            else:
+                # Простая отметка без медиа
+                completed_tasks.append(task_idx)
+                status_msg = "✅ Задача отмечена"
+                user_state_manager.update_state(user_id, completed_tasks=completed_tasks)
         
         # Формируем обновленный текст
         tasks_text = "📋 <b>Задачи на смену:</b>\n\n"
@@ -753,10 +810,12 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
             task_text = task.get('text') or task.get('task_text', 'Задача')
             is_mandatory = task.get('is_mandatory', True)
             deduction_amount = task.get('deduction_amount') or task.get('bonus_amount', 0)
+            requires_media = task.get('requires_media', False)
             
             # Иконки
             mandatory_icon = "⚠️" if is_mandatory else "⭐"
             completed_icon = "✅ " if idx in completed_tasks else ""
+            media_icon = "📸 " if requires_media else ""
             
             # Стоимость
             cost_text = ""
@@ -767,7 +826,7 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
                 else:
                     cost_text = f" ({amount}₽)"
             
-            task_line = f"{completed_icon}{mandatory_icon} {task_text}{cost_text}"
+            task_line = f"{completed_icon}{media_icon}{mandatory_icon} {task_text}{cost_text}"
             if idx in completed_tasks:
                 task_line = f"<s>{task_line}</s>"
             tasks_text += task_line + "\n"
@@ -777,12 +836,14 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
         for idx, task in enumerate(shift_tasks):
             task_text = task.get('text') or task.get('task_text', 'Задача')
             is_mandatory = task.get('is_mandatory', True)
+            requires_media = task.get('requires_media', False)
             
             icon = "⚠️" if is_mandatory else "⭐"
+            media_icon = "📸 " if requires_media else ""
             check = "✓ " if idx in completed_tasks else "☐ "
             keyboard.append([
                 InlineKeyboardButton(
-                    f"{check}{icon} {task_text[:35]}...",
+                    f"{check}{media_icon}{icon} {task_text[:30]}...",
                     callback_data=f"complete_shift_task:{shift_id}:{idx}"
                 )
             ])
@@ -806,6 +867,49 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
     except Exception as e:
         logger.error(f"Error toggling task: {e}")
         await query.answer("❌ Ошибка отметки задачи", show_alert=True)
+
+
+async def _handle_media_upload(update: Update, context: ContextTypes.DEFAULT_TYPE, shift_id: int, task_idx: int):
+    """Запрос на загрузку медиа для задачи."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        user_state = user_state_manager.get_state(user_id)
+        if not user_state:
+            await query.answer("❌ Состояние утеряно", show_alert=True)
+            return
+        
+        # Обновляем состояние
+        user_state_manager.update_state(
+            user_id,
+            step=UserStep.MEDIA_UPLOAD,
+            pending_media_task_idx=task_idx
+        )
+        
+        shift_tasks = getattr(user_state, 'shift_tasks', [])
+        task = shift_tasks[task_idx]
+        task_text = task.get('text') or task.get('task_text', 'Задача')
+        
+        media_types = task.get('media_types', ['photo', 'video'])
+        if isinstance(media_types, str):
+            media_types = media_types.split(',')
+        
+        media_text = "фото" if media_types == ["photo"] else "видео" if media_types == ["video"] else "фото или видео"
+        
+        await query.edit_message_text(
+            text=f"📸 <b>Требуется отчет</b>\n\n"
+                 f"Задача: <i>{task_text}</i>\n\n"
+                 f"Отправьте {media_text} отчет о выполнении задачи.",
+            parse_mode='HTML',
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_media_upload:{shift_id}")
+            ]])
+        )
+        
+    except Exception as e:
+        logger.error(f"Error handling media upload: {e}")
+        await query.answer("❌ Ошибка запроса медиа", show_alert=True)
 
 
 async def _handle_close_shift_with_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE, shift_id: int):
@@ -875,5 +979,217 @@ async def _handle_close_shift_with_tasks(update: Update, context: ContextTypes.D
     except Exception as e:
         logger.error(f"Error proceeding with tasks: {e}")
         await query.answer("❌ Ошибка продолжения", show_alert=True)
+
+
+async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка полученного фото/видео для задачи."""
+    # Игнорируем, если это не личное сообщение
+    if update.message.chat.type != 'private':
+        return
+    
+    user_id = update.message.from_user.id
+    user_state = user_state_manager.get_state(user_id)
+    
+    if not user_state or user_state.step != UserStep.MEDIA_UPLOAD:
+        return  # Игнорируем медиа не в контексте отчета
+    
+    task_idx = getattr(user_state, 'pending_media_task_idx', None)
+    if task_idx is None:
+        return
+    
+    shift_tasks = getattr(user_state, 'shift_tasks', [])
+    if task_idx >= len(shift_tasks):
+        await update.message.reply_text("❌ Задача не найдена")
+        return
+    
+    task = shift_tasks[task_idx]
+    shift_id = user_state.selected_shift_id
+    
+    try:
+        # Определяем тип медиа
+        media_type = None
+        media_file_id = None
+        if update.message.photo:
+            media_type = 'photo'
+            media_file_id = update.message.photo[-1].file_id
+        elif update.message.video:
+            media_type = 'video'
+            media_file_id = update.message.video.file_id
+        else:
+            await update.message.reply_text("❌ Неподдерживаемый тип файла. Отправьте фото или видео.")
+            return
+        
+        # Получаем telegram_report_chat_id из Object/OrgStructureUnit
+        async with get_async_session() as session:
+            from domain.entities.shift import Shift
+            from domain.entities.object import Object
+            from sqlalchemy.orm import selectinload
+            
+            shift_query = select(Shift).options(
+                selectinload(Shift.object).selectinload(Object.org_unit)
+            ).where(Shift.id == shift_id)
+            shift_result = await session.execute(shift_query)
+            shift = shift_result.scalar_one_or_none()
+            
+            if not shift or not shift.object:
+                await update.message.reply_text("❌ Смена не найдена")
+                return
+            
+            # Наследование telegram_report_chat_id
+            telegram_chat_id = None
+            obj = shift.object
+            
+            if not obj.inherit_telegram_chat and obj.telegram_report_chat_id:
+                telegram_chat_id = obj.telegram_report_chat_id
+            elif obj.org_unit:
+                org_unit = obj.org_unit
+                while org_unit:
+                    if org_unit.telegram_report_chat_id:
+                        telegram_chat_id = org_unit.telegram_report_chat_id
+                        break
+                    org_unit = org_unit.parent
+            
+            if not telegram_chat_id:
+                await update.message.reply_text(
+                    "❌ Telegram группа для отчетов не настроена.\n"
+                    "Обратитесь к администратору."
+                )
+                return
+            
+            # Отправляем медиа в группу
+            try:
+                task_text = task.get('text') or task.get('task_text', 'Задача')
+                user_name = f"{update.message.from_user.first_name} {update.message.from_user.last_name or ''}".strip()
+                caption = f"📋 Отчет по задаче: {task_text}\n👤 {user_name}\n🏢 {obj.name}"
+                
+                sent_message = None
+                if media_type == 'photo':
+                    sent_message = await context.bot.send_photo(
+                        chat_id=telegram_chat_id,
+                        photo=media_file_id,
+                        caption=caption
+                    )
+                elif media_type == 'video':
+                    sent_message = await context.bot.send_video(
+                        chat_id=telegram_chat_id,
+                        video=media_file_id,
+                        caption=caption
+                    )
+                
+                # Формируем ссылку на пост
+                # Формат: https://t.me/c/{chat_id без -100}/{message_id}
+                chat_id_str = str(telegram_chat_id).replace('-100', '')
+                media_url = f"https://t.me/c/{chat_id_str}/{sent_message.message_id}"
+                
+                # Сохраняем медиа в состоянии
+                task_media = getattr(user_state, 'task_media', {})
+                task_media[task_idx] = {
+                    'media_url': media_url,
+                    'media_type': media_type
+                }
+                
+                # Отмечаем задачу как выполненную
+                completed_tasks = getattr(user_state, 'completed_tasks', [])
+                if task_idx not in completed_tasks:
+                    completed_tasks.append(task_idx)
+                
+                # Обновляем состояние
+                user_state_manager.update_state(
+                    user_id,
+                    step=UserStep.TASK_COMPLETION,
+                    completed_tasks=completed_tasks,
+                    task_media=task_media,
+                    pending_media_task_idx=None
+                )
+                
+                logger.info(
+                    f"Media uploaded for task",
+                    shift_id=shift_id,
+                    task_idx=task_idx,
+                    media_type=media_type,
+                    telegram_group=telegram_chat_id
+                )
+                
+                await update.message.reply_text(
+                    f"✅ Отчет принят!\n"
+                    f"Задача отмечена как выполненная."
+                )
+                
+                # Возвращаемся к списку задач
+                await _show_task_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
+                
+            except Exception as e:
+                logger.error(f"Error sending media to Telegram group: {e}")
+                await update.message.reply_text(
+                    "❌ Ошибка отправки отчета в группу.\n"
+                    "Проверьте, что бот добавлен в группу и имеет права на отправку медиа."
+                )
+                
+    except Exception as e:
+        logger.error(f"Error in _handle_received_media: {e}")
+        await update.message.reply_text("❌ Ошибка обработки медиа")
+
+
+async def _show_task_list(context, user_id: int, shift_id: int, shift_tasks: list, completed_tasks: list, task_media: dict):
+    """Показать обновленный список задач."""
+    tasks_text = "📋 <b>Задачи на смену:</b>\n\n"
+    tasks_text += "Отметьте выполненные задачи:\n\n"
+    
+    for idx, task in enumerate(shift_tasks):
+        task_text = task.get('text') or task.get('task_text', 'Задача')
+        is_mandatory = task.get('is_mandatory', True)
+        deduction_amount = task.get('deduction_amount') or task.get('bonus_amount', 0)
+        requires_media = task.get('requires_media', False)
+        
+        # Иконки
+        mandatory_icon = "⚠️" if is_mandatory else "⭐"
+        completed_icon = "✅ " if idx in completed_tasks else ""
+        media_icon = "📸 " if requires_media else ""
+        
+        # Стоимость
+        cost_text = ""
+        if deduction_amount and float(deduction_amount) != 0:
+            amount = float(deduction_amount)
+            if amount > 0:
+                cost_text = f" (+{amount}₽)"
+            else:
+                cost_text = f" ({amount}₽)"
+        
+        task_line = f"{completed_icon}{media_icon}{mandatory_icon} {task_text}{cost_text}"
+        if idx in completed_tasks:
+            task_line = f"<s>{task_line}</s>"
+        tasks_text += task_line + "\n"
+    
+    # Формируем кнопки
+    keyboard = []
+    for idx, task in enumerate(shift_tasks):
+        task_text = task.get('text') or task.get('task_text', 'Задача')
+        is_mandatory = task.get('is_mandatory', True)
+        requires_media = task.get('requires_media', False)
+        
+        icon = "⚠️" if is_mandatory else "⭐"
+        media_icon = "📸 " if requires_media else ""
+        check = "✓ " if idx in completed_tasks else "☐ "
+        keyboard.append([
+            InlineKeyboardButton(
+                f"{check}{media_icon}{icon} {task_text[:30]}...",
+                callback_data=f"complete_shift_task:{shift_id}:{idx}"
+            )
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton(
+            "✅ Продолжить закрытие смены",
+            callback_data=f"close_shift_with_tasks:{shift_id}"
+        )
+    ])
+    keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="main_menu")])
+    
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=tasks_text,
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 

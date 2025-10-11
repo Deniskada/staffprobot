@@ -29,6 +29,7 @@ class UserStep(str, Enum):
     OBJECT_SELECTION = "object_selection"
     SHIFT_SELECTION = "shift_selection"
     TASK_COMPLETION = "task_completion"  # Phase 4A: отметка задач при закрытии смены
+    MEDIA_UPLOAD = "media_upload"  # Загрузка фото/видео отчета для задачи
     LOCATION_REQUEST = "location_request"
     PROCESSING = "processing"
     INPUT_MAX_DISTANCE = "input_max_distance"
@@ -56,6 +57,8 @@ class UserState:
         shift_type: Optional[str] = None,
         shift_tasks: Optional[list] = None,  # Phase 4A: задачи смены
         completed_tasks: Optional[list] = None,  # Phase 4A: выполненные задачи
+        pending_media_task_idx: Optional[int] = None,  # Индекс задачи, ожидающей медиа
+        task_media: Optional[dict] = None,  # {task_idx: {media_url, media_type}}
         data: Optional[Dict[str, Any]] = None,
         timeout_minutes: int = 5
     ):
@@ -69,6 +72,8 @@ class UserState:
         self.shift_type = shift_type
         self.shift_tasks = shift_tasks or []  # Phase 4A
         self.completed_tasks = completed_tasks or []  # Phase 4A
+        self.pending_media_task_idx = pending_media_task_idx
+        self.task_media = task_media or {}
         self.data = data or {}
         self.created_at = datetime.now()
         self.expires_at = self.created_at + timedelta(minutes=timeout_minutes)
