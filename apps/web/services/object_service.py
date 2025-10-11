@@ -793,7 +793,10 @@ class TimeSlotService:
                 max_employees=timeslot_data.get('max_employees', 1),
                 is_additional=timeslot_data.get('is_additional', False),
                 is_active=timeslot_data.get('is_active', True),
-                notes=timeslot_data.get('notes', '')
+                notes=timeslot_data.get('notes', ''),
+                penalize_late_start=timeslot_data.get('penalize_late_start', True),
+                ignore_object_tasks=timeslot_data.get('ignore_object_tasks', False),
+                shift_tasks=timeslot_data.get('shift_tasks')
             )
             
             self.db.add(new_timeslot)
@@ -864,6 +867,14 @@ class TimeSlotService:
             timeslot.is_additional = timeslot_data.get('is_additional', timeslot.is_additional)
             timeslot.is_active = timeslot_data.get('is_active', timeslot.is_active)
             timeslot.notes = timeslot_data.get('notes', timeslot.notes)
+            
+            # Новые поля Phase 4C
+            if 'penalize_late_start' in timeslot_data:
+                timeslot.penalize_late_start = timeslot_data['penalize_late_start']
+            if 'ignore_object_tasks' in timeslot_data:
+                timeslot.ignore_object_tasks = timeslot_data['ignore_object_tasks']
+            if 'shift_tasks' in timeslot_data:
+                timeslot.shift_tasks = timeslot_data['shift_tasks']
             
             await self.db.commit()
             await self.db.refresh(timeslot)
@@ -1015,7 +1026,10 @@ class TimeSlotService:
                 max_employees=timeslot_data.get('max_employees', 1),
                 is_additional=timeslot_data.get('is_additional', False),
                 is_active=timeslot_data.get('is_active', True),
-                notes=timeslot_data.get('notes', '')
+                notes=timeslot_data.get('notes', ''),
+                penalize_late_start=timeslot_data.get('penalize_late_start', True),
+                ignore_object_tasks=timeslot_data.get('ignore_object_tasks', False),
+                shift_tasks=timeslot_data.get('shift_tasks')
             )
             
             self.db.add(new_timeslot)
@@ -1093,6 +1107,14 @@ class TimeSlotService:
             timeslot.is_additional = timeslot_data.get('is_additional', timeslot.is_additional)
             timeslot.is_active = timeslot_data.get('is_active', timeslot.is_active)
             timeslot.notes = timeslot_data.get('notes', timeslot.notes)
+            
+            # Новые поля Phase 4C
+            if 'penalize_late_start' in timeslot_data:
+                timeslot.penalize_late_start = timeslot_data['penalize_late_start']
+            if 'ignore_object_tasks' in timeslot_data:
+                timeslot.ignore_object_tasks = timeslot_data['ignore_object_tasks']
+            if 'shift_tasks' in timeslot_data:
+                timeslot.shift_tasks = timeslot_data['shift_tasks']
             
             await self.db.commit()
             await self.db.refresh(timeslot)

@@ -3599,15 +3599,36 @@ async def owner_timeslot_update(
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат времени")
         
+        # Обработка задач тайм-слота
+        task_texts = form_data.getlist("task_texts[]")
+        task_amounts = form_data.getlist("task_amounts[]")
+        task_mandatory_indices = [int(i) for i in form_data.getlist("task_mandatory[]")]
+        task_media_indices = [int(i) for i in form_data.getlist("task_requires_media[]")]
+        
+        shift_tasks = []
+        for idx, text in enumerate(task_texts):
+            if text.strip():
+                amount = float(task_amounts[idx]) if idx < len(task_amounts) and task_amounts[idx] else 0
+                task = {
+                    "text": text.strip(),
+                    "is_mandatory": idx in task_mandatory_indices,
+                    "requires_media": idx in task_media_indices,
+                    "bonus_amount": amount if amount >= 0 else 0,
+                    "deduction_amount": abs(amount) if amount < 0 else 0
+                }
+                shift_tasks.append(task)
+        
         # Обновление тайм-слота в базе данных
         timeslot_service = TimeSlotService(db)
         timeslot_data = {
             "start_time": start_time,
             "end_time": end_time,
             "hourly_rate": hourly_rate,
-            # Новое поле лимита сотрудников
-            "max_employees": int((await request.form()).get("max_employees", 1)),
-            "is_active": is_active
+            "max_employees": int(form_data.get("max_employees", 1)),
+            "is_active": is_active,
+            "penalize_late_start": "penalize_late_start" in form_data,
+            "ignore_object_tasks": "ignore_object_tasks" in form_data,
+            "shift_tasks": shift_tasks if shift_tasks else None
         }
         
         updated_timeslot = await timeslot_service.update_timeslot(timeslot_id, timeslot_data, telegram_id)

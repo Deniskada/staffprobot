@@ -259,6 +259,28 @@ async def create_timeslot(
         if not parsed_intervals:
             raise HTTPException(status_code=400, detail="Нужно указать хотя бы один валидный интервал времени")
         
+        # Обработка задач тайм-слота
+        penalize_late_start = "penalize_late_start" in form_data
+        ignore_object_tasks = "ignore_object_tasks" in form_data
+        
+        task_texts = form_data.getlist("task_texts[]")
+        task_amounts = form_data.getlist("task_amounts[]")
+        task_mandatory_indices = [int(i) for i in form_data.getlist("task_mandatory[]")]
+        task_media_indices = [int(i) for i in form_data.getlist("task_requires_media[]")]
+        
+        shift_tasks = []
+        for idx, text in enumerate(task_texts):
+            if text.strip():
+                amount = float(task_amounts[idx]) if idx < len(task_amounts) and task_amounts[idx] else 0
+                task = {
+                    "text": text.strip(),
+                    "is_mandatory": idx in task_mandatory_indices,
+                    "requires_media": idx in task_media_indices,
+                    "bonus_amount": amount if amount >= 0 else 0,
+                    "deduction_amount": abs(amount) if amount < 0 else 0
+                }
+                shift_tasks.append(task)
+        
         created_count = 0
         timeslot_service = TimeSlotService(db)
 
@@ -306,7 +328,10 @@ async def create_timeslot(
                                     "end_time": e,
                                     "hourly_rate": hourly_rate,
                                     "max_employees": max_employees,
-                                    "is_active": is_active
+                                    "is_active": is_active,
+                                    "penalize_late_start": penalize_late_start,
+                                    "ignore_object_tasks": ignore_object_tasks,
+                                    "shift_tasks": shift_tasks if shift_tasks else None
                                 }
                                 new_timeslot = await timeslot_service.create_timeslot(timeslot_data, int(obj_id), telegram_id)
                                 if new_timeslot:
@@ -337,7 +362,10 @@ async def create_timeslot(
                             "end_time": e,
                             "hourly_rate": hourly_rate,
                             "max_employees": max_employees,
-                            "is_active": is_active
+                            "is_active": is_active,
+                            "penalize_late_start": penalize_late_start,
+                            "ignore_object_tasks": ignore_object_tasks,
+                            "shift_tasks": shift_tasks if shift_tasks else None
                         }
                         new_timeslot = await timeslot_service.create_timeslot(timeslot_data, int(obj_id), telegram_id)
                         if new_timeslot:
