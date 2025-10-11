@@ -94,6 +94,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # Создаем кнопки для основных действий
     keyboard = [
         [
+            InlineKeyboardButton("🏢 Открыть объект", callback_data="open_object"),
+            InlineKeyboardButton("🔒 Закрыть объект", callback_data="close_object")
+        ],
+        [
             InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift"),
             InlineKeyboardButton("🔚 Закрыть смену", callback_data="close_shift")
         ],
@@ -158,7 +162,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
     
-    if user_state.step != UserStep.LOCATION_REQUEST:
+    if user_state.step not in [UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION]:
         await update.message.reply_text(
             "❌ Геопозиция не ожидается на данном этапе"
         )
@@ -299,6 +303,104 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 await update.message.reply_text(error_msg, reply_markup=reply_markup)
                 # НЕ очищаем состояние - пользователь может попробовать снова
         
+        elif user_state.step == UserStep.OPENING_OBJECT_LOCATION:
+            # Открытие объекта + автоматическое открытие смены
+            from shared.services.object_opening_service import ObjectOpeningService
+            from core.geolocation.location_validator import LocationValidator
+            
+            async with get_async_session() as session:
+                opening_service = ObjectOpeningService(session)
+                location_validator = LocationValidator()
+                
+                # Получить объект
+                obj_query = select(Object).where(Object.id == user_state.selected_object_id)
+                obj_result = await session.execute(obj_query)
+                obj = obj_result.scalar_one_or_none()
+                
+                if not obj:
+                    await update.message.reply_text("❌ Объект не найден.")
+                    user_state_manager.clear_state(user_id)
+                    return
+                
+                # Проверить расстояние
+                is_valid, distance = location_validator.validate_location(
+                    user_coords=(location.latitude, location.longitude),
+                    object_coords_str=obj.coordinates,
+                    max_distance=obj.max_distance_meters
+                )
+                
+                if not is_valid:
+                    await update.message.reply_text(
+                        f"❌ Вы слишком далеко от объекта!\n"
+                        f"📏 Расстояние: {distance:.0f}м\n"
+                        f"📐 Максимум: {obj.max_distance_meters}м"
+                    )
+                    return
+                
+                # Открыть объект
+                try:
+                    opening = await opening_service.open_object(
+                        object_id=obj.id,
+                        user_id=user_id,
+                        coordinates=coordinates
+                    )
+                    
+                    # Автоматически открыть смену
+                    result = await shift_service.open_shift(
+                        user_id=user_id,
+                        object_id=obj.id,
+                        coordinates=coordinates,
+                        shift_type='spontaneous'
+                    )
+                    
+                    if result['success']:
+                        await update.message.reply_text(
+                            f"✅ <b>Объект открыт!</b>\n\n"
+                            f"🏢 Объект: {obj.name}\n"
+                            f"⏰ Время: {opening.opened_at.strftime('%H:%M')}\n\n"
+                            f"✅ <b>Смена автоматически открыта</b>\n"
+                            f"💰 Ставка: {result.get('hourly_rate', 0)}₽/час",
+                            parse_mode='HTML'
+                        )
+                        user_state_manager.clear_state(user_id)
+                    else:
+                        # Откатываем открытие объекта
+                        await opening_service.close_object(obj.id, user_id, coordinates)
+                        await update.message.reply_text(
+                            f"❌ Объект открыт, но не удалось открыть смену:\n{result['error']}"
+                        )
+                        user_state_manager.clear_state(user_id)
+                        
+                except ValueError as e:
+                    await update.message.reply_text(f"❌ {str(e)}")
+                    user_state_manager.clear_state(user_id)
+        
+        elif user_state.step == UserStep.CLOSING_OBJECT_LOCATION:
+            # Закрытие объекта после успешного закрытия смены
+            from shared.services.object_opening_service import ObjectOpeningService
+            
+            async with get_async_session() as session:
+                opening_service = ObjectOpeningService(session)
+                
+                try:
+                    opening = await opening_service.close_object(
+                        object_id=user_state.selected_object_id,
+                        user_id=user_id,
+                        coordinates=coordinates
+                    )
+                    
+                    await update.message.reply_text(
+                        f"✅ <b>Объект закрыт!</b>\n\n"
+                        f"⏰ Время закрытия: {opening.closed_at.strftime('%H:%M')}\n"
+                        f"⏱️ Время работы объекта: {opening.duration_hours:.1f}ч",
+                        parse_mode='HTML'
+                    )
+                    user_state_manager.clear_state(user_id)
+                    
+                except ValueError as e:
+                    await update.message.reply_text(f"❌ {str(e)}")
+                    user_state_manager.clear_state(user_id)
+    
     except Exception as e:
         logger.error(f"Error processing location for user {user_id}: {e}")
         await update.message.reply_text(
@@ -325,7 +427,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Обработчики уже импортированы в начале файла
     
     # Обрабатываем разные типы кнопок
-    if query.data == "open_shift":
+    if query.data == "open_object":
+        from .object_state_handlers import _handle_open_object
+        await _handle_open_object(update, context)
+        return
+    elif query.data == "close_object":
+        from .object_state_handlers import _handle_close_object
+        await _handle_close_object(update, context)
+        return
+    elif query.data.startswith("select_object_to_open:"):
+        from .object_state_handlers import _handle_select_object_to_open
+        await _handle_select_object_to_open(update, context)
+        return
+    elif query.data == "open_shift":
         await _handle_open_shift(update, context)
         return
     elif query.data == "close_shift":
@@ -659,6 +773,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     # Создаем кнопки для ответа
     keyboard = [
+        [
+            InlineKeyboardButton("🏢 Открыть объект", callback_data="open_object"),
+            InlineKeyboardButton("🔒 Закрыть объект", callback_data="close_object")
+        ],
         [
             InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift"),
             InlineKeyboardButton("🔚 Закрыть смену", callback_data="close_shift")
