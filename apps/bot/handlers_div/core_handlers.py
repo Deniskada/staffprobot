@@ -314,6 +314,14 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 # Получаем object_id из закрытой смены
                 closed_shift_object_id = result.get('object_id')
                 
+                logger.info(
+                    f"Checking for auto-close object",
+                    user_id=user_id,
+                    shift_id=result.get('shift_id'),
+                    object_id=closed_shift_object_id,
+                    result_keys=list(result.keys())
+                )
+                
                 if closed_shift_object_id:
                     async with get_async_session() as session:
                         opening_service = ObjectOpeningService(session)
