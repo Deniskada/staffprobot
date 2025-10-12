@@ -192,6 +192,26 @@ function updateCalendarURL(params) {
     window.location.href = url.toString();
 }
 
+// Инициализация фильтра при загрузке если подразделение уже выбрано
+document.addEventListener('DOMContentLoaded', function() {
+    const orgUnitFilter = document.getElementById('orgUnitFilter');
+    const objectFilter = document.getElementById('objectFilter');
+    
+    if (orgUnitFilter && objectFilter && orgUnitFilter.value) {
+        // Применяем фильтрацию объектов по выбранному подразделению
+        const selectedOrgUnitId = orgUnitFilter.value;
+        const allOptions = objectFilter.querySelectorAll('option[data-org-unit]');
+        
+        allOptions.forEach(option => {
+            if (selectedOrgUnitId === '' || option.dataset.orgUnit === selectedOrgUnitId) {
+                option.style.display = '';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+    }
+});
+
 // Глобальные переменные для интеграции с UniversalCalendarManager
 window.unifiedCalendar = {
     // Функция для создания календарной сетки
