@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, insert
 from domain.entities.system_settings import SystemSettings
 from domain.entities.settings_history import SettingsHistory
-from core.cache.redis_cache import RedisCache
+from core.cache.redis_cache import cache  # Используем глобальный экземпляр
 from core.logging.logger import logger
 
 
@@ -18,7 +18,7 @@ class SystemSettingsService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.cache = RedisCache()
+        self.cache = cache  # Используем глобальный подключенный экземпляр
         self.cache_key_prefix = "system_settings:"
         self.cache_ttl = 3600  # 1 час
     
