@@ -7,22 +7,22 @@
             <div class="nav-group">
                 <!-- Легенда слева -->
                 <div class="legend-left">
-                    <div class="calendar-legend" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#e3f2fd; border:1px solid #2196f3;"></span>
-                            <small>Запланированная смена</small>
+                    <div class="calendar-legend" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size: 0.875rem;">
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#e3f2fd; border:1px solid #2196f3;"></span>
+                            <small style="color: #6c757d;">Запланирована</small>
                         </div>
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#fff3e0; border:1px solid #ff9800;"></span>
-                            <small>Активная смена</small>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#fff3e0; border:1px solid #ff9800;"></span>
+                            <small style="color: #6c757d;">Активная</small>
                         </div>
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#c8e6c9; border:2px solid #2e7d32;"></span>
-                            <small>Завершённая смена</small>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#c8e6c9; border:1px solid #2e7d32;"></span>
+                            <small style="color: #6c757d;">Завершена</small>
                         </div>
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:#f3e5f5; border:1px solid #9c27b0;"></span>
-                            <small>Свободный тайм‑слот</small>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#f3e5f5; border:1px solid #9c27b0;"></span>
+                            <small style="color: #6c757d;">Тайм-слот</small>
                         </div>
                     </div>
                 </div>
@@ -30,9 +30,9 @@
                 <!-- Переключатель месяцев в центре -->
                 <div class="month-selector">
                     <div class="month-picker">
-                        <div class="month-display" id="monthDisplay">
+                        <div class="month-display" id="monthDisplay" style="background: #6c757d; padding: 8px 16px; font-size: 14px; box-shadow: none;">
                             <span class="month-name" id="monthName">{{ calendar_title or 'Календарь' }}</span>
-                            <i class="bi bi-chevron-down dropdown-icon"></i>
+                            <i class="bi bi-chevron-down dropdown-icon" style="font-size: 12px;"></i>
                         </div>
                         <div class="month-dropdown" id="monthDropdown">
                             <div class="dropdown-content">
@@ -65,43 +65,34 @@
                 </div>
             </div>
             <div class="nav-actions">
+                {% if org_units and org_units|length > 0 and current_user.role != 'employee' %}
+                <div class="form-group mb-0 me-2" style="min-width: 180px;">
+                    <select class="form-select form-select-sm" id="orgUnitFilter" onchange="filterByOrgUnit()">
+                        <option value="">Все подразделения</option>
+                        {% for unit in org_units %}
+                        <option value="{{ unit.id }}" {% if unit.id == selected_org_unit_id %}selected{% endif %} style="padding-left: {{ unit.level * 12 }}px;">
+                            {{ unit.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
                 {% if objects and objects|length > 1 and current_user.role != 'employee' %}
-                <div class="object-filter">
-                    <div class="object-picker">
-                        <div class="object-display" id="objectDisplay">
-                            <span class="object-name" id="objectName">
-                                {% if selected_object_id %}
-                                    {% for obj in objects %}
-                                        {% if obj.id == selected_object_id %}{{ obj.name }}{% endif %}
-                                    {% endfor %}
-                                {% else %}
-                                    Все объекты
-                                {% endif %}
-                            </span>
-                            <i class="bi bi-chevron-down dropdown-icon"></i>
-                        </div>
-                        <div class="object-dropdown" id="objectDropdown">
-                            <div class="dropdown-content">
-                                <div class="object-options">
-                                    <div class="object-option" data-object-id="" data-object-name="Все объекты">
-                                        <i class="bi bi-grid-3x3-gap"></i>
-                                        <span>Все объекты</span>
-                                    </div>
-                                    {% for obj in objects %}
-                                    <div class="object-option" data-object-id="{{ obj.id }}" data-object-name="{{ obj.name }}">
-                                        <i class="bi bi-building"></i>
-                                        <span>{{ obj.name }}</span>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div class="form-group mb-0 me-2" style="min-width: 180px;">
+                    <select class="form-select form-select-sm" id="objectFilter" onchange="filterByObject()">
+                        <option value="">Все объекты</option>
+                        {% for obj in objects %}
+                        <option value="{{ obj.id }}" data-org-unit="{{ obj.org_unit_id or '' }}" {% if obj.id == selected_object_id %}selected{% endif %}>
+                            {{ obj.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
                 </div>
                 {% endif %}
                 
                 {% if show_today_button %}
-                <button type="button" class="today-btn" onclick="goToToday()">
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="goToToday()">
                     <i class="bi bi-calendar-today"></i> Сегодня
                 </button>
                 {% endif %}
@@ -131,6 +122,54 @@
 <!-- Unified Calendar JavaScript -->
 <script>
 console.log('Unified calendar grid script loading...');
+
+// Каскадная фильтрация по подразделениям и объектам
+function filterByOrgUnit() {
+    const orgUnitId = document.getElementById('orgUnitFilter').value;
+    const objectFilter = document.getElementById('objectFilter');
+    
+    // Фильтруем объекты по подразделению
+    if (objectFilter) {
+        const allOptions = objectFilter.querySelectorAll('option[data-org-unit]');
+        allOptions.forEach(option => {
+            if (orgUnitId === '' || option.dataset.orgUnit === orgUnitId) {
+                option.style.display = '';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+        // Сбрасываем выбор объекта если он не соответствует подразделению
+        if (objectFilter.value) {
+            const selectedOption = objectFilter.querySelector(`option[value="${objectFilter.value}"]`);
+            if (selectedOption && selectedOption.style.display === 'none') {
+                objectFilter.value = '';
+            }
+        }
+    }
+    
+    // Обновляем URL
+    updateCalendarURL({ org_unit_id: orgUnitId, object_id: objectFilter?.value || '' });
+}
+
+function filterByObject() {
+    const objectId = document.getElementById('objectFilter').value;
+    updateCalendarURL({ object_id: objectId });
+}
+
+function updateCalendarURL(params) {
+    const url = new URL(window.location);
+    
+    // Обновляем или удаляем параметры
+    Object.keys(params).forEach(key => {
+        if (params[key]) {
+            url.searchParams.set(key, params[key]);
+        } else {
+            url.searchParams.delete(key);
+        }
+    });
+    
+    window.location.href = url.toString();
+}
 
 // Глобальные переменные для интеграции с UniversalCalendarManager
 window.unifiedCalendar = {
