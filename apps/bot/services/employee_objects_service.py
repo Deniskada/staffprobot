@@ -67,7 +67,7 @@ class EmployeeObjectsService:
                         logger.info(f"Contract {contract.id} allows objects: {contract.allowed_objects}")
                 
                 logger.info(f"Total allowed object IDs for user {telegram_id}: {object_ids}")
-                if not object_ids:
+                if not object_ids and user_role != 'owner' and 'owner' not in user_roles:
                     logger.info(f"No allowed objects found in contracts for user {telegram_id}")
                     return []
                 
