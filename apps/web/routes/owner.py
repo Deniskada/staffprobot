@@ -883,7 +883,8 @@ async def owner_calendar(
     request: Request,
     year: int = Query(None),
     month: int = Query(None),
-    object_id: int = Query(None)
+    object_id: int = Query(None),
+    org_unit_id: int = Query(None)
 ):
     """Календарный вид планирования"""
     current_user = await get_current_user(request)
@@ -911,7 +912,19 @@ async def owner_calendar(
             
             # ОРИГИНАЛ: используем telegram_id владельца (а не внутренний id)
             owner_telegram_id = current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id")
+            
+            # Получаем подразделения владельца
+            from apps.web.services.org_structure_service import OrgStructureService
+            org_service = OrgStructureService(session)
+            user_id = await get_user_id_from_current_user(current_user, session)
+            org_units = await org_service.get_org_tree(user_id)
+            
+            # Получаем объекты
             objects = await object_service.get_objects_by_owner(owner_telegram_id)
+            
+            # Фильтрация по подразделению если выбрано
+            if org_unit_id:
+                objects = [obj for obj in objects if obj.org_unit_id == org_unit_id]
             
             # Если выбран конкретный объект, проверяем доступ
             selected_object = None
@@ -1061,7 +1074,8 @@ async def owner_calendar(
             logger.info(f"Calendar grid created with {len(calendar_data)} weeks")
             
             # Подготавливаем данные для шаблона
-            objects_list = [{"id": obj.id, "name": obj.name} for obj in objects]
+            objects_list = [{"id": obj.id, "name": obj.name, "org_unit_id": obj.org_unit_id} for obj in objects]
+            org_units_list = [{"id": unit.id, "name": unit.name, "level": unit.level} for unit in org_units]
             
             # Навигация по месяцам
             prev_month = month - 1 if month > 1 else 12
@@ -1136,7 +1150,9 @@ async def owner_calendar(
                 "calendar_weeks": calendar_weeks,
                 "available_interfaces": available_interfaces,
                 "objects": objects_list,
+                "org_units": org_units_list,
                 "selected_object_id": object_id,
+                "selected_org_unit_id": org_unit_id,
                 "selected_object": selected_object,
                 "timeslots": timeslots_data,
                 "prev_month": prev_month,
