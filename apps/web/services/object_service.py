@@ -139,17 +139,21 @@ class ObjectService:
             await self.db.commit()
             await self.db.refresh(new_object)
             
-            # Планируем тайм-слоты до конца года
-            try:
-                await self.plan_timeslots_for_object(
-                    new_object,
-                    start_date=date.today(),
-                    end_date=date(date.today().year, 12, 31)
-                )
-                logger.info(f"Planned timeslots for object {new_object.id} until end of year")
-            except Exception as e:
-                logger.error(f"Error planning timeslots for object {new_object.id}: {e}")
-                # Не прерываем создание объекта из-за ошибки планирования
+            # Планируем тайм-слоты до конца года (только если включена галочка)
+            auto_create_timeslots = object_data.get('auto_create_timeslots', True)  # По умолчанию True
+            if auto_create_timeslots:
+                try:
+                    await self.plan_timeslots_for_object(
+                        new_object,
+                        start_date=date.today(),
+                        end_date=date(date.today().year, 12, 31)
+                    )
+                    logger.info(f"Planned timeslots for object {new_object.id} until end of year")
+                except Exception as e:
+                    logger.error(f"Error planning timeslots for object {new_object.id}: {e}")
+                    # Не прерываем создание объекта из-за ошибки планирования
+            else:
+                logger.info(f"Skipped auto-creation of timeslots for object {new_object.id} (disabled by user)")
             
             # Обновляем роль владельца на "owner"
             await self._update_owner_role(telegram_id)

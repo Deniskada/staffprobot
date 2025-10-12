@@ -369,8 +369,9 @@ async def owner_objects_create_post(
             except ValueError:
                 raise HTTPException(status_code=400, detail="Неверный формат координат")
         
-        # Обработка чекбокса (он не отправляется, если не отмечен)
+        # Обработка чекбоксов (они не отправляются, если не отмечены)
         available_for_applicants = "available_for_applicants" in form_data
+        auto_create_timeslots = "auto_create_timeslots" in form_data
         
         # Обработка новых полей
         work_conditions = form_data.get("work_conditions", "").strip()
@@ -441,6 +442,7 @@ async def owner_objects_create_post(
             "closing_time": closing_time,
             "max_distance": max_distance,
             "available_for_applicants": available_for_applicants,
+            "auto_create_timeslots": auto_create_timeslots,
             "payment_system_id": payment_system_id,
             "payment_schedule_id": payment_schedule_id,
             "org_unit_id": org_unit_id,
