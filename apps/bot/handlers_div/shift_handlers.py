@@ -1462,6 +1462,8 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             
             # Создаем состояние для отслеживания выполнения задач
+            logger.info(f"[MY_TASKS] Creating state for user {user_id}, shift {shift_id}, {len(shift_tasks)} tasks")
+            
             user_state_manager.create_state(
                 user_id=user_id,
                 action=UserAction.MY_TASKS,
@@ -1472,8 +1474,14 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 task_media={}
             )
             
+            # Проверяем что состояние создалось
+            check_state = user_state_manager.get_state(user_id)
+            logger.info(f"[MY_TASKS] State created and verified: {check_state is not None}, action={check_state.action if check_state else None}")
+            
             # Показываем список задач
             await _show_my_tasks_list(context, user_id, shift_id, shift_tasks, [], {})
+            
+            logger.info(f"[MY_TASKS] Task list shown successfully")
             
     except Exception as e:
         logger.error(f"Error showing my tasks: {e}")
