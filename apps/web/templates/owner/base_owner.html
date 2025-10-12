@@ -20,160 +20,259 @@
     
     <!-- Custom CSS -->
     <link href="{{ url_for('static', path='css/main.css') }}?v={{ range(1000, 9999) | random }}" rel="stylesheet">
+    <link href="{{ 'css/owner/sidebar.css' | static_version }}" rel="stylesheet">
     
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Navigation for Owners -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-success">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/owner">
-                <i class="bi bi-building-gear"></i> StaffProBot
-            </a>
-            
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    {% if current_user %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="/owner/objects">
-                                <i class="bi bi-building"></i> Объекты
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/owner/calendar">
-                                <i class="bi bi-calendar3"></i> Календарь
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/owner/employees">
-                                <i class="bi bi-people"></i> Сотрудники
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/owner/shifts">
-                                <i class="bi bi-clock"></i> Смены
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/owner/payroll">
-                                <i class="fas fa-money-bill-wave"></i> Выплаты
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.url.path.startswith('/owner/payroll-adjustments') %}active{% endif %}" href="/owner/payroll-adjustments">
-                                <i class="bi bi-cash-coin"></i> Начисления
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/owner/org-structure">
-                                <i class="fas fa-sitemap"></i> Подразделения
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/owner/reviews">
-                                <i class="bi bi-star"></i> Отзывы
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/owner/applications">
-                                <i class="bi bi-file-text"></i> Заявки
-                                <span
-                                    id="owner-new-applications-badge"
-                                    class="badge bg-warning ms-1 {% if not new_applications_count or new_applications_count == 0 %}d-none{% endif %}">
-                                    {% if new_applications_count and new_applications_count > 0 %}{{ new_applications_count }}{% endif %}
-                                </span>
-                            </a>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-layout-text-window-reverse"></i> Шаблоны
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="/owner/templates/contracts">
-                                    <i class="bi bi-file-earmark-text"></i> Договоры
-                                </a></li>
-                                <li><a class="dropdown-item" href="/owner/templates/planning">
-                                    <i class="bi bi-calendar3"></i> Планирование
-                                </a></li>
-                            </ul>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/owner/reports">
-                                <i class="bi bi-graph-up"></i> Отчеты
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/owner/limits/">
-                                <i class="bi bi-shield-check"></i> Лимиты
-                            </a>
-                        </li>
+    <!-- Топбар -->
+    <header class="topbar">
+        <button class="topbar-toggle" aria-label="Toggle sidebar">
+            <i class="bi bi-list"></i>
+        </button>
+        
+        <a href="/owner" class="topbar-brand">
+            <i class="bi bi-building-gear"></i>
+            <span>StaffProBot</span>
+        </a>
+        
+        <div class="topbar-right">
+            {% if current_user %}
+                <!-- Уведомления -->
+                <button class="topbar-notifications" aria-label="Notifications">
+                    <i class="bi bi-bell"></i>
+                    {% if new_applications_count and new_applications_count > 0 %}
+                    <span class="badge bg-warning" id="owner-new-applications-badge">{{ new_applications_count }}</span>
                     {% endif %}
-                </ul>
+                </button>
                 
-                <ul class="navbar-nav">
-                    {% if current_user %}
-                        <!-- Переключатель ролей -->
-                        {% if available_interfaces and available_interfaces|length > 1 %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-arrow-left-right me-1"></i>
-                                Владелец
+                <!-- Переключатель ролей -->
+                {% if available_interfaces and available_interfaces|length > 1 %}
+                <div class="dropdown">
+                    <button class="topbar-toggle dropdown-toggle" data-bs-toggle="dropdown" aria-label="Switch interface">
+                        <i class="bi bi-arrow-left-right"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        {% for interface in available_interfaces %}
+                        <li>
+                            <a class="dropdown-item {% if interface.title == 'Владелец' %}active{% endif %}" 
+                               href="{{ interface.url }}">
+                                {% if interface.title == 'Администратор' %}
+                                    <i class="bi bi-shield-fill-check me-2"></i>
+                                {% elif interface.title == 'Владелец' %}
+                                    <i class="bi bi-person-badge me-2"></i>
+                                {% elif interface.title == 'Управляющий' %}
+                                    <i class="bi bi-person-gear me-2"></i>
+                                {% elif interface.title == 'Сотрудник' %}
+                                    <i class="bi bi-person me-2"></i>
+                                {% elif interface.title == 'Соискатель' %}
+                                    <i class="bi bi-person-plus me-2"></i>
+                                {% else %}
+                                    <i class="bi bi-person-circle me-2"></i>
+                                {% endif %}
+                                {{ interface.title }}
                             </a>
-                            <ul class="dropdown-menu">
-                                {% for interface in available_interfaces %}
-                                <li>
-                                    <a class="dropdown-item {% if interface.title == 'Владелец' %}active{% endif %}" 
-                                       href="{{ interface.url }}">
-                                        {% if interface.title == 'Администратор' %}
-                                            <i class="bi bi-shield-fill-check me-2"></i>
-                                        {% elif interface.title == 'Владелец' %}
-                                            <i class="bi bi-person-badge me-2"></i>
-                                        {% elif interface.title == 'Управляющий' %}
-                                            <i class="bi bi-person-gear me-2"></i>
-                                        {% elif interface.title == 'Сотрудник' %}
-                                            <i class="bi bi-person me-2"></i>
-                                        {% elif interface.title == 'Соискатель' %}
-                                            <i class="bi bi-person-plus me-2"></i>
-                                        {% else %}
-                                            <i class="bi bi-person-circle me-2"></i>
-                                        {% endif %}
-                                        {{ interface.title }}
-                                    </a>
-                                </li>
-                                {% endfor %}
-                            </ul>
                         </li>
-                        {% endif %}
-                        
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-person-circle"></i> {{ current_user.first_name }}
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="/owner/profile">
-                                    <i class="bi bi-person"></i> Профиль
-                                </a></li>
-                                <li><a class="dropdown-item" href="/owner/settings">
-                                    <i class="bi bi-gear"></i> Настройки
-                                </a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="/auth/logout">
-                                    <i class="bi bi-box-arrow-right"></i> Выход
-                                </a></li>
-                            </ul>
-                        </li>
-                    {% endif %}
-                </ul>
-            </div>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                
+                <!-- Профиль пользователя -->
+                <div class="dropdown">
+                    <button class="topbar-toggle dropdown-toggle" data-bs-toggle="dropdown" aria-label="User menu">
+                        <i class="bi bi-person-circle"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="/owner/profile">
+                            <i class="bi bi-person me-2"></i> Профиль
+                        </a></li>
+                        <li><a class="dropdown-item" href="/owner/settings">
+                            <i class="bi bi-gear me-2"></i> Настройки
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/auth/logout">
+                            <i class="bi bi-box-arrow-right me-2"></i> Выход
+                        </a></li>
+                    </ul>
+                </div>
+            {% endif %}
         </div>
-    </nav>
+    </header>
 
-    <!-- Main Content -->
-    <main class="container-fluid mt-4">
+    <!-- Сайдбар -->
+    <aside class="sidebar">
+        <nav>
+            <ul class="sidebar-nav">
+                <!-- Главная -->
+                <li class="sidebar-item">
+                    <a href="/owner" class="sidebar-link">
+                        <i class="bi bi-house-door"></i>
+                        <span class="sidebar-text">Главная</span>
+                    </a>
+                    <div class="sidebar-tooltip">Главная</div>
+                </li>
+                
+                <!-- Планирование -->
+                <li class="sidebar-item" data-section="planning">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-calendar3"></i>
+                        <span class="sidebar-text">Планирование</span>
+                        <i class="bi bi-chevron-right sidebar-arrow"></i>
+                    </a>
+                    <div class="sidebar-tooltip">Планирование</div>
+                    <ul class="sidebar-submenu">
+                        <li>
+                            <a href="/owner/calendar" class="sidebar-link">
+                                <i class="bi bi-calendar-event"></i>
+                                <span class="sidebar-text">Календарь</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/owner/shifts" class="sidebar-link">
+                                <i class="bi bi-clock"></i>
+                                <span class="sidebar-text">Смены</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/owner/timeslots" class="sidebar-link">
+                                <i class="bi bi-clock-history"></i>
+                                <span class="sidebar-text">Тайм-слоты</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Персонал -->
+                <li class="sidebar-item" data-section="personnel">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-people"></i>
+                        <span class="sidebar-text">Персонал</span>
+                        <i class="bi bi-chevron-right sidebar-arrow"></i>
+                    </a>
+                    <div class="sidebar-tooltip">Персонал</div>
+                    <ul class="sidebar-submenu">
+                        <li>
+                            <a href="/owner/employees" class="sidebar-link">
+                                <i class="bi bi-person-badge"></i>
+                                <span class="sidebar-text">Сотрудники</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/owner/applications" class="sidebar-link">
+                                <i class="bi bi-file-text"></i>
+                                <span class="sidebar-text">Заявки</span>
+                                {% if new_applications_count and new_applications_count > 0 %}
+                                <span class="badge bg-warning sidebar-badge">{{ new_applications_count }}</span>
+                                {% endif %}
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/owner/org-structure" class="sidebar-link">
+                                <i class="fas fa-sitemap"></i>
+                                <span class="sidebar-text">Подразделения</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Объекты -->
+                <li class="sidebar-item">
+                    <a href="/owner/objects" class="sidebar-link">
+                        <i class="bi bi-building"></i>
+                        <span class="sidebar-text">Объекты</span>
+                    </a>
+                    <div class="sidebar-tooltip">Объекты</div>
+                </li>
+                
+                <!-- Финансы -->
+                <li class="sidebar-item" data-section="finance">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-cash-stack"></i>
+                        <span class="sidebar-text">Финансы</span>
+                        <i class="bi bi-chevron-right sidebar-arrow"></i>
+                    </a>
+                    <div class="sidebar-tooltip">Финансы</div>
+                    <ul class="sidebar-submenu">
+                        <li>
+                            <a href="/owner/payroll" class="sidebar-link">
+                                <i class="fas fa-money-bill-wave"></i>
+                                <span class="sidebar-text">Выплаты</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/owner/payroll-adjustments" class="sidebar-link">
+                                <i class="bi bi-cash-coin"></i>
+                                <span class="sidebar-text">Начисления</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/owner/payment-systems" class="sidebar-link">
+                                <i class="bi bi-credit-card"></i>
+                                <span class="sidebar-text">Системы оплаты</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/owner/reports" class="sidebar-link">
+                                <i class="bi bi-graph-up"></i>
+                                <span class="sidebar-text">Отчеты</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Отзывы -->
+                <li class="sidebar-item">
+                    <a href="/owner/reviews" class="sidebar-link">
+                        <i class="bi bi-star"></i>
+                        <span class="sidebar-text">Отзывы</span>
+                    </a>
+                    <div class="sidebar-tooltip">Отзывы</div>
+                </li>
+                
+                <!-- Настройки -->
+                <li class="sidebar-item" data-section="settings">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-gear"></i>
+                        <span class="sidebar-text">Настройки</span>
+                        <i class="bi bi-chevron-right sidebar-arrow"></i>
+                    </a>
+                    <div class="sidebar-tooltip">Настройки</div>
+                    <ul class="sidebar-submenu">
+                        <li>
+                            <a href="/owner/profile" class="sidebar-link">
+                                <i class="bi bi-person"></i>
+                                <span class="sidebar-text">Профиль</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/owner/tariff/change" class="sidebar-link">
+                                <i class="bi bi-credit-card-2-front"></i>
+                                <span class="sidebar-text">Тарифы</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/owner/limits/" class="sidebar-link">
+                                <i class="bi bi-shield-check"></i>
+                                <span class="sidebar-text">Лимиты</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+            
+            <!-- Кнопка сворачивания (только десктоп) -->
+            <button class="sidebar-collapse-btn" aria-label="Toggle sidebar pin">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+        </nav>
+    </aside>
+
+    <!-- Overlay для мобильных -->
+    <div class="sidebar-overlay"></div>
+
+    <!-- Контент страницы -->
+    <main class="content-wrapper">
         {% block content %}{% endblock %}
     </main>
 
@@ -189,6 +288,7 @@
     <!-- FullCalendar JS removed - not used -->
     <!-- Custom JS -->
     <script src="{{ 'js/main.js' | static_version }}"></script>
+    <script src="{{ 'js/owner/sidebar.js' | static_version }}"></script>
     
     {% block extra_js %}
     {% block owner_extra_js %}{% endblock %}
