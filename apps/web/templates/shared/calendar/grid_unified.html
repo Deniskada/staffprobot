@@ -134,10 +134,18 @@ function filterByOrgUnit() {
         let hasVisibleObjects = false;
         
         allOptions.forEach(option => {
-            if (orgUnitId === '' || option.dataset.orgUnit === orgUnitId) {
+            // Если подразделение не выбрано - показываем все объекты
+            if (!orgUnitId || orgUnitId === '') {
                 option.style.display = '';
                 hasVisibleObjects = true;
-            } else {
+            }
+            // Если выбрано конкретное подразделение - показываем только объекты этого подразделения
+            else if (option.dataset.orgUnit && option.dataset.orgUnit === orgUnitId) {
+                option.style.display = '';
+                hasVisibleObjects = true;
+            }
+            // Скрываем остальные объекты
+            else {
                 option.style.display = 'none';
             }
         });

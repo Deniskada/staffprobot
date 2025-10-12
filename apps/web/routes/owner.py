@@ -927,8 +927,12 @@ async def owner_calendar(
             # Фильтрация по подразделению если выбрано (для календаря)
             if org_unit_id:
                 filtered_objects = [obj for obj in all_objects if obj.org_unit_id == org_unit_id]
+                logger.info(f"Filtering by org_unit_id={org_unit_id}: {len(filtered_objects)}/{len(all_objects)} objects")
+                logger.info(f"Filtered object IDs: {[obj.id for obj in filtered_objects]}")
             else:
                 filtered_objects = all_objects
+                logger.info(f"No org_unit filter, loading all {len(all_objects)} objects")
+                logger.info(f"All object IDs: {[obj.id for obj in all_objects]}")
             
             # Если выбран конкретный объект, проверяем доступ
             selected_object = None
