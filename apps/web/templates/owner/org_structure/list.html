@@ -562,7 +562,8 @@ function editCreateSchedule() {
     // Установить глобально для работы onchange в HTML
     window.paymentScheduleEditor = createPaymentScheduleEditor;
     
-    createPaymentScheduleEditor.edit(scheduleId);
+    createPaymentScheduleEditor.loadSchedule(scheduleId);
+    createPaymentScheduleEditor.show();
 }
 
 // Функции для работы с графиками выплат (редактирование подразделения)
@@ -647,7 +648,8 @@ function editEditSchedule() {
     // Установить глобально для работы onchange в HTML
     window.paymentScheduleEditor = editPaymentScheduleEditor;
     
-    editPaymentScheduleEditor.edit(scheduleId);
+    editPaymentScheduleEditor.loadSchedule(scheduleId);
+    editPaymentScheduleEditor.show();
 }
 </script>
 
