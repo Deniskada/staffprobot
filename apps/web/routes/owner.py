@@ -2098,6 +2098,7 @@ async def owner_calendar_api_data(
     start_date: str = Query(..., description="Начальная дата в формате YYYY-MM-DD"),
     end_date: str = Query(..., description="Конечная дата в формате YYYY-MM-DD"),
     object_ids: Optional[str] = Query(None, description="ID объектов через запятую"),
+    org_unit_id: Optional[int] = Query(None, description="ID подразделения для фильтрации"),
     current_user: dict = Depends(get_current_user_dependency()),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -2109,17 +2110,17 @@ async def owner_calendar_api_data(
         # Генерируем ключ кэша
         import hashlib
         user_id = current_user.get("telegram_id") or current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
-        cache_key_data = f"calendar_api_owner:{user_id}:{start_date}:{end_date}:{object_ids or 'all'}"
+        cache_key_data = f"calendar_api_owner:{user_id}:{start_date}:{end_date}:{object_ids or 'all'}:{org_unit_id or 'all'}"
         cache_key = hashlib.md5(cache_key_data.encode()).hexdigest()
         
         # Проверяем кэш
         from core.cache.redis_cache import cache
         cached_response = await cache.get(f"api_response:{cache_key}", serialize="json")
         if cached_response:
-            logger.info(f"Owner calendar API: cache HIT for {start_date} to {end_date}")
+            logger.info(f"Owner calendar API: cache HIT for {start_date} to {end_date}, org_unit={org_unit_id}")
             return cached_response
         
-        logger.info(f"Owner calendar API: cache MISS for {start_date} to {end_date}")
+        logger.info(f"Owner calendar API: cache MISS for {start_date} to {end_date}, org_unit={org_unit_id}")
         
         # Парсим даты
         try:
@@ -2130,7 +2131,21 @@ async def owner_calendar_api_data(
         
         # Парсим фильтр объектов
         object_filter = None
-        if object_ids:
+        
+        # Если указано подразделение - получаем объекты этого подразделения
+        if org_unit_id and not object_ids:
+            object_service = ObjectService(db)
+            owner_telegram_id = user_id
+            all_objects = await object_service.get_objects_by_owner(owner_telegram_id)
+            filtered_by_org = [obj.id for obj in all_objects if obj.org_unit_id == org_unit_id]
+            if filtered_by_org:
+                object_filter = filtered_by_org
+                logger.info(f"Filtering by org_unit_id={org_unit_id}: {len(filtered_by_org)} objects - {filtered_by_org}")
+            else:
+                logger.info(f"No objects found for org_unit_id={org_unit_id}")
+                # Если нет объектов в подразделении - вернем пустой результат
+                object_filter = [-1]  # Несуществующий ID чтобы вернуть пустой результат
+        elif object_ids:
             try:
                 object_filter = [int(obj_id.strip()) for obj_id in object_ids.split(",") if obj_id.strip()]
             except ValueError:

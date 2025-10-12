@@ -344,14 +344,20 @@ class UniversalCalendarManager {
                 end_date: this.formatDateLocal(dateRange.end)
             });
             
-            // Получаем object_id из URL параметров
+            // Получаем параметры фильтрации из URL
             const urlParams = new URLSearchParams(window.location.search);
             const objectIdFromUrl = urlParams.get('object_id');
+            const orgUnitIdFromUrl = urlParams.get('org_unit_id');
             
             if (objectIds && objectIds.length > 0) {
                 params.append('object_ids', objectIds.join(','));
             } else if (objectIdFromUrl) {
                 params.append('object_ids', objectIdFromUrl);
+            }
+            
+            // Добавляем фильтр по подразделению если есть
+            if (orgUnitIdFromUrl) {
+                params.append('org_unit_id', orgUnitIdFromUrl);
             }
             
             const response = await fetch(`${this.apiEndpoint}?${params}`);
