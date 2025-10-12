@@ -412,9 +412,9 @@ class UniversalCalendarManager {
             start.setMonth(currentMonth - 1);
             start.setDate(1);
             
-            // 2 месяца вперед
-            end.setMonth(currentMonth + 2);
-            end.setDate(0); // Последний день 2-го месяца вперед
+            // 2 месяца вперед - последний день второго месяца вперед
+            end.setMonth(currentMonth + 3);  // Переходим к +3 месяцу
+            end.setDate(0);  // setDate(0) = последний день предыдущего месяца = последний день +2 месяца
             
             console.log(`[UniversalCalendar] Loading data for 4 months: ${this.formatDateLocal(start)} to ${this.formatDateLocal(end)}`);
         } else if (this.viewType === 'week') {
