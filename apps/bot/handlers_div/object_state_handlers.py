@@ -12,7 +12,7 @@ from shared.services.shift_service import ShiftService
 from apps.bot.services.shift_service import ShiftService as BotShiftService
 from domain.entities.object import Object
 from domain.entities.contract import Contract
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 
 
