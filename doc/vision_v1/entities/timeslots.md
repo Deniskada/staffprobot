@@ -1,6 +1,23 @@
 # Сущность: Тайм-слоты (TimeSlots)
 
 ## Веб-роуты и API
+
+### Owner тайм-слоты (Итерация 26)
+- [GET] `/owner/timeslots/` — (apps/web/routes/owner_timeslots.py) — список всех тайм-слотов владельца с фильтром по объектам
+  - Query: `object_id` (int) — фильтр по объекту
+  - Query: `date_from`, `date_to` (str) — фильтр по периоду
+  - Query: `sort_by`, `sort_order` — сортировка
+  - Шаблон: `owner/timeslots/list_all.html`
+- [GET] `/owner/timeslots/object/{object_id}` — (apps/web/routes/owner_timeslots.py) — редирект на `/owner/timeslots?object_id={id}` (303)
+- [GET] `/owner/timeslots/object/{object_id}/create` — (apps/web/routes/owner_timeslots.py) — форма создания тайм-слота
+- [POST] `/owner/timeslots/object/{object_id}/create` — (apps/web/routes/owner_timeslots.py) — создание тайм-слота
+- [GET] `/owner/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py) — форма редактирования
+- [POST] `/owner/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py) — обновление тайм-слота
+- [POST] `/owner/timeslots/{timeslot_id}/delete` — (apps/web/routes/owner_timeslots.py) — удаление
+- [POST] `/owner/timeslots/bulk-edit` — (apps/web/routes/owner_timeslots.py) — массовое редактирование
+- [POST] `/owner/timeslots/bulk-delete` — (apps/web/routes/owner_timeslots.py) — массовое удаление
+
+### Старые роуты (в owner.py, дублируют функциональность)
 - [GET] `/` — (apps/web/routes/owner.py) — роль: owner
 - [GET] `/` — (apps/web/routes/manager.py) — роль: owner
 - [GET] `/` — (apps/web/routes/manager.py) — роль: owner
@@ -173,4 +190,5 @@
 - `owner/timeslots/create.html`
 - `owner/timeslots/detail.html`
 - `owner/timeslots/edit.html`
-- `owner/timeslots/list.html`
+- `owner/timeslots/list.html` — для отдельного объекта (deprecated, используется редирект)
+- `owner/timeslots/list_all.html` — для всех объектов с фильтром (Итерация 26)
