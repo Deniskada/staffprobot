@@ -46,7 +46,8 @@ class EmployeeObjectsService:
                 contracts_query = select(Contract).where(
                     and_(
                         Contract.employee_id == user.id,
-                        Contract.status == 'active'
+                        Contract.status == 'active',
+                        Contract.is_active == True
                     )
                 )
                 
