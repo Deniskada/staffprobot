@@ -162,7 +162,18 @@ class ContractService:
             # TODO: В будущем можно добавить проверку пересечения объектов
             
             # Валидация обязательных полей
+            use_contract_rate = contract_data.get("use_contract_rate", False)
+            use_contract_payment_system = contract_data.get("use_contract_payment_system", False)
             hourly_rate = contract_data.get("hourly_rate")
+            
+            # Если включен флаг use_contract_rate, hourly_rate обязателен
+            if use_contract_rate and not hourly_rate:
+                raise ValueError("При использовании ставки договора необходимо указать почасовую ставку")
+            
+            # Если включен флаг use_contract_payment_system, payment_system_id обязателен
+            if use_contract_payment_system and not contract_data.get("payment_system_id"):
+                raise ValueError("При использовании системы оплаты договора необходимо указать систему оплаты")
+            
             if not hourly_rate:
                 # Пытаемся получить ставку из объекта
                 if contract_data.get("allowed_objects"):
@@ -173,8 +184,8 @@ class ContractService:
                     object_entity = object_result.scalar_one_or_none()
                     
                     if object_entity and object_entity.hourly_rate:
-                        hourly_rate = object_entity.hourly_rate
-                        logger.info(f"Автоматически установлена ставка {hourly_rate} из объекта {object_entity.id}")
+                        hourly_rate = float(object_entity.hourly_rate)
+                        logger.info(f"Автоматически установлена ставка {hourly_rate} руб/час из объекта {object_entity.id}")
                     else:
                         raise ValueError("Часовая ставка обязательна. Укажите ставку в договоре или выберите объект с установленной ставкой.")
                 else:
@@ -225,6 +236,9 @@ class ContractService:
                 content=content,
                 values=values if values else None,
                 hourly_rate=hourly_rate,
+                use_contract_rate=use_contract_rate,
+                payment_system_id=contract_data.get("payment_system_id", 1),  # По умолчанию simple_hourly
+                use_contract_payment_system=use_contract_payment_system,
                 start_date=start_date,
                 end_date=end_date,
                 allowed_objects=contract_data.get("allowed_objects", []),
@@ -962,7 +976,8 @@ class ContractService:
             accessible_object_ids = set()
             
             for contract in contracts:
-                if contract.allowed_objects:
+                # Только из активных договоров
+                if contract.is_active and contract.allowed_objects:
                     for obj_id in contract.allowed_objects:
                         if obj_id in objects_info and obj_id not in accessible_object_ids:
                             obj = objects_info[obj_id]
@@ -1043,7 +1058,8 @@ class ContractService:
             query = select(Contract).where(
                 and_(
                     Contract.employee_id == employee_id,
-                    Contract.owner_id.in_(owner_ids)
+                    Contract.owner_id.in_(owner_ids),
+                    Contract.is_active == True  # Только активные договоры
                 )
             ).options(
                 selectinload(Contract.employee)
@@ -1071,7 +1087,8 @@ class ContractService:
             accessible_object_ids = set()
             
             for contract in contracts:
-                if contract.allowed_objects:
+                # Только из активных договоров
+                if contract.is_active and contract.allowed_objects:
                     for obj_id in contract.allowed_objects:
                         if obj_id in objects_info and obj_id not in accessible_object_ids:
                             obj = objects_info[obj_id]
@@ -1203,6 +1220,9 @@ class ContractService:
                 "title": contract.title,
                 "content": contract.content,
                 "hourly_rate": contract.hourly_rate,
+                "use_contract_rate": contract.use_contract_rate,
+                "payment_system_id": contract.payment_system_id,
+                "use_contract_payment_system": contract.use_contract_payment_system,
                 "start_date": contract.start_date,
                 "end_date": contract.end_date,
                 "status": contract.status,
@@ -1350,6 +1370,7 @@ class ContractService:
             if "manager_permissions" in update_data:
                 contract.manager_permissions = update_data["manager_permissions"]
             
+            session.add(contract)
             await session.commit()
             return True
     
@@ -1476,6 +1497,22 @@ class ContractService:
             old_status = contract.status
             old_is_active = contract.is_active
             
+            # Валидация use_contract_rate + hourly_rate
+            if "use_contract_rate" in contract_data:
+                use_contract_rate = contract_data["use_contract_rate"]
+                hourly_rate_value = contract_data.get("hourly_rate", contract.hourly_rate)
+                
+                if use_contract_rate and not hourly_rate_value:
+                    raise ValueError("При использовании ставки договора необходимо указать почасовую ставку")
+            
+            # Валидация use_contract_payment_system + payment_system_id
+            if "use_contract_payment_system" in contract_data:
+                use_contract_payment_system = contract_data["use_contract_payment_system"]
+                payment_system_id_value = contract_data.get("payment_system_id", contract.payment_system_id)
+                
+                if use_contract_payment_system and not payment_system_id_value:
+                    raise ValueError("При использовании системы оплаты договора необходимо указать систему оплаты")
+            
             # Обновляем поля
             if "title" in contract_data:
                 contract.title = contract_data["title"]
@@ -1483,6 +1520,12 @@ class ContractService:
                 contract.content = contract_data["content"]
             if "hourly_rate" in contract_data:
                 contract.hourly_rate = contract_data["hourly_rate"]
+            if "use_contract_rate" in contract_data:
+                contract.use_contract_rate = contract_data["use_contract_rate"]
+            if "payment_system_id" in contract_data:
+                contract.payment_system_id = contract_data["payment_system_id"]
+            if "use_contract_payment_system" in contract_data:
+                contract.use_contract_payment_system = contract_data["use_contract_payment_system"]
             if "start_date" in contract_data:
                 contract.start_date = contract_data["start_date"]
             if "end_date" in contract_data:

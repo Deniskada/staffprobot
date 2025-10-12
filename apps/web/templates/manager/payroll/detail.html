@@ -1,0 +1,154 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block manager_content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Шапка -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2>
+                    <i class="fas fa-receipt"></i> {{ title }}
+                </h2>
+                <div>
+                    <a href="/manager/payroll" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Назад к списку
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Основная информация -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Информация о начислении</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Сотрудник:</dt>
+                                <dd class="col-sm-8">
+                                    <strong>{{ entry.employee.first_name }} {{ entry.employee.last_name or '' }}</strong>
+                                </dd>
+                                
+                                <dt class="col-sm-4">Период:</dt>
+                                <dd class="col-sm-8">
+                                    {{ entry.period_start.strftime('%d.%m.%Y') }} - {{ entry.period_end.strftime('%d.%m.%Y') }}
+                                </dd>
+                                
+                                <dt class="col-sm-4">Статус:</dt>
+                                <dd class="col-sm-8">
+                                    {% if entry.status == 'draft' %}
+                                    <span class="badge bg-secondary">Черновик</span>
+                                    {% elif entry.status == 'approved' %}
+                                    <span class="badge bg-success">Одобрено</span>
+                                    {% elif entry.status == 'paid' %}
+                                    <span class="badge bg-primary">Выплачено</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">{{ entry.status }}</span>
+                                    {% endif %}
+                                </dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-5">Начислено:</dt>
+                                <dd class="col-sm-7">
+                                    <strong class="text-success">{{ "%.2f"|format(entry.gross_amount) }} ₽</strong>
+                                </dd>
+                                
+                                <dt class="col-sm-5">Доплаты:</dt>
+                                <dd class="col-sm-7">
+                                    <span class="text-success">+{{ "%.2f"|format(entry.total_bonuses or 0) }} ₽</span>
+                                </dd>
+                                
+                                <dt class="col-sm-5">Удержания:</dt>
+                                <dd class="col-sm-7">
+                                    <span class="text-danger">-{{ "%.2f"|format(entry.total_deductions or 0) }} ₽</span>
+                                </dd>
+                                
+                                <dt class="col-sm-5"><strong>Итого:</strong></dt>
+                                <dd class="col-sm-7">
+                                    <strong class="text-primary fs-5">{{ "%.2f"|format(entry.net_amount) }} ₽</strong>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Примечание: смены не отображаются в детализации начисления -->
+            <!-- Информация о часах содержится в entry.hours_worked -->
+            
+            <!-- Удержания и доплаты -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-minus-circle text-danger"></i> Удержания
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if entry.deductions %}
+                            <ul class="list-group list-group-flush">
+                                {% for deduction in entry.deductions %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ deduction.description }}</strong>
+                                        <br><small class="text-muted"><span class="badge bg-secondary">{{ deduction.deduction_type }}</span></small>
+                                    </div>
+                                    <span class="text-danger">-{{ "%.2f"|format(deduction.amount) }} ₽</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="text-muted">Нет удержаний</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-plus-circle text-success"></i> Доплаты/Премии
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if entry.bonuses %}
+                            <ul class="list-group list-group-flush">
+                                {% for bonus in entry.bonuses %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ bonus.description }}</strong>
+                                        <br><small class="text-muted"><span class="badge bg-info">{{ bonus.bonus_type }}</span></small>
+                                    </div>
+                                    <span class="text-success">+{{ "%.2f"|format(bonus.amount) }} ₽</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="text-muted">Нет доплат</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Примечание для управляющих -->
+            {% if is_manager %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <strong>Информация:</strong> Управляющие могут просматривать начисления по доступным объектам. 
+                Только владелец может одобрить начисление и записать выплату.
+            </div>
+            {% endif %}
+            
+        </div>
+    </div>
+</div>
+{% endblock %}
+

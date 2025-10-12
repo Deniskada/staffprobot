@@ -126,6 +126,119 @@
                         </div>
 
                         <hr class="my-4">
+                        
+                        <!-- Настройки опозданий и задач -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           name="penalize_late_start" 
+                                           id="penalize_late_start"
+                                           {% if timeslot.penalize_late_start %}checked{% endif %}>
+                                    <label class="form-check-label" for="penalize_late_start">
+                                        <i class="bi bi-exclamation-triangle text-warning"></i> Штрафовать за опоздание
+                                    </label>
+                                    <div class="form-text">Применять штраф за опоздание на начало этого тайм-слота</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           name="ignore_object_tasks" 
+                                           id="ignore_object_tasks"
+                                           {% if timeslot.ignore_object_tasks %}checked{% endif %}>
+                                    <label class="form-check-label" for="ignore_object_tasks">
+                                        <i class="bi bi-x-circle text-danger"></i> Игнорировать задачи объекта
+                                    </label>
+                                    <div class="form-text">Использовать только задачи этого тайм-слота</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Задачи тайм-слота -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label class="form-label">
+                                        <i class="fas fa-tasks"></i> Задачи на смену
+                                        <i class="fas fa-info-circle text-muted" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Задачи, специфичные для этого тайм-слота"></i>
+                                    </label>
+                                    <div id="tasks-container">
+                                        {% if timeslot.shift_tasks %}
+                                            {% for task in timeslot.shift_tasks %}
+                                            <div class="task-item mb-3 border rounded p-3">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small">Описание задачи</label>
+                                                        <input type="text" 
+                                                               class="form-control" 
+                                                               name="task_texts[]" 
+                                                               value="{{ task.text if task is mapping else task }}"
+                                                               placeholder="Например: Проверить оборудование">
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Премия (₽)</label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               name="task_amounts[]" 
+                                                               value="{{ task.bonus_amount if task is mapping and task.bonus_amount else (task.deduction_amount if task is mapping else 0) }}"
+                                                               step="0.01">
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Обязательная</label>
+                                                        <div class="form-check mt-2">
+                                                            <input class="form-check-input" 
+                                                                   type="checkbox" 
+                                                                   name="task_mandatory[]" 
+                                                                   value="{{ loop.index0 }}"
+                                                                   {% if task is mapping and task.is_mandatory %}checked{% elif task is not mapping %}checked{% endif %}>
+                                                            <label class="form-check-label">Да</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Медиа отчет</label>
+                                                        <div class="form-check mt-2">
+                                                            <input class="form-check-input" 
+                                                                   type="checkbox" 
+                                                                   name="task_requires_media[]" 
+                                                                   value="{{ loop.index0 }}"
+                                                                   {% if task is mapping and task.requires_media %}checked{% endif %}>
+                                                            <label class="form-check-label">📸</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-1 d-flex align-items-end">
+                                                        <button type="button" 
+                                                                class="btn btn-outline-danger btn-sm w-100" 
+                                                                onclick="removeTask(this)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        {% endif %}
+                                    </div>
+                                    <button type="button" 
+                                            class="btn btn-outline-primary btn-sm mt-2" 
+                                            onclick="addTask()">
+                                        <i class="bi bi-plus"></i> Добавить задачу
+                                    </button>
+                                    <div class="form-text">
+                                        {% if timeslot.ignore_object_tasks %}
+                                            Будут использованы только эти задачи (задачи объекта игнорируются)
+                                        {% else %}
+                                            Эти задачи дополнят задачи объекта при открытии смены
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
 
                         <div class="d-flex justify-content-between">
                             <a href="/owner/timeslots/object/{{ timeslot.object_id }}" class="btn btn-outline-secondary">
@@ -279,6 +392,87 @@ document.getElementById('editForm').addEventListener('submit', function(e) {
         alert('Время начала должно быть меньше времени окончания');
         return false;
     }
+    
+    // Обработка unchecked checkbox'ов
+    const form = e.target;
+    
+    // penalize_late_start
+    if (!document.getElementById('penalize_late_start').checked) {
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'penalize_late_start';
+        hidden.value = 'false';
+        form.appendChild(hidden);
+    }
+    
+    // ignore_object_tasks  
+    if (!document.getElementById('ignore_object_tasks').checked) {
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'ignore_object_tasks';
+        hidden.value = 'false';
+        form.appendChild(hidden);
+    }
 });
+
+// Управление задачами тайм-слота
+function addTask() {
+    const container = document.getElementById('tasks-container');
+    const taskCount = container.querySelectorAll('.task-item').length;
+    const taskItem = document.createElement('div');
+    taskItem.className = 'task-item mb-3 border rounded p-3';
+    taskItem.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label small">Описание задачи</label>
+                <input type="text" 
+                       class="form-control" 
+                       name="task_texts[]" 
+                       placeholder="Например: Проверить оборудование">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Премия (₽)</label>
+                <input type="number" 
+                       class="form-control" 
+                       name="task_amounts[]" 
+                       value="0"
+                       step="0.01">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Обязательная</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="task_mandatory[]" 
+                           value="${taskCount}" checked>
+                    <label class="form-check-label">Да</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Медиа отчет</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="task_requires_media[]" 
+                           value="${taskCount}">
+                    <label class="form-check-label">📸</label>
+                </div>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="button" 
+                        class="btn btn-outline-danger btn-sm w-100" 
+                        onclick="removeTask(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    container.appendChild(taskItem);
+}
+
+function removeTask(button) {
+    const taskItem = button.closest('.task-item');
+    taskItem.remove();
+}
 </script>
 {% endblock %}

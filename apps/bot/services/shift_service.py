@@ -66,6 +66,14 @@ class ShiftService:
                         'error': 'Объект не найден'
                     }
                 
+                # Загружаем TimeSlot заранее (если есть), чтобы избежать greenlet ошибок
+                timeslot_obj = None
+                if timeslot_id:
+                    from domain.entities.time_slot import TimeSlot
+                    timeslot_query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
+                    timeslot_result = await session.execute(timeslot_query)
+                    timeslot_obj = timeslot_result.scalar_one_or_none()
+                
                 # Находим пользователя по telegram_id для получения его id в БД
                 from domain.entities.user import User
                 user_query = select(User).where(User.telegram_id == user_id)
@@ -99,11 +107,32 @@ class ShiftService:
                         'max_distance_meters': location_validation.get('max_distance_meters')
                     }
                 
-                # Создаем смену
-                # Получаем данные для смены
-                hourly_rate = obj.hourly_rate
+                # Автоматически открываем объект (если еще не открыт)
+                from shared.services.object_opening_service import ObjectOpeningService
+                opening_service = ObjectOpeningService(session)
                 
-                # Если это запланированная смена, получаем данные из расписания
+                is_open = await opening_service.is_object_open(object_id)
+                if not is_open:
+                    try:
+                        await opening_service.open_object(
+                            object_id=object_id,
+                            user_id=db_user.id,
+                            coordinates=coordinates
+                        )
+                        logger.info(
+                            f"Object auto-opened before shift opening",
+                            object_id=object_id,
+                            user_id=user_id
+                        )
+                    except ValueError as e:
+                        logger.warning(f"Failed to auto-open object: {e}")
+                        # Продолжаем открытие смены даже если объект не открылся
+                
+                # Определяем ставку с учетом приоритета договора
+                timeslot_rate = None
+                rate_source = "object"
+                
+                # Если это запланированная смена, получаем ставку из расписания/тайм-слота
                 logger.info(f"Shift type: {shift_type}, schedule_id: {schedule_id}, timeslot_id: {timeslot_id}")
                 if shift_type == "planned" and schedule_id:
                     from apps.bot.services.shift_schedule_service import ShiftScheduleService
@@ -112,15 +141,11 @@ class ShiftService:
                     
                     if schedule_data:
                         logger.info(f"Schedule data: {schedule_data}")
-                        # Приоритет: ставка из запланированной смены, если есть
                         schedule_rate = schedule_data.get('hourly_rate')
                         if schedule_rate:
-                            hourly_rate = schedule_rate
-                            logger.info(f"Using schedule rate: {hourly_rate}")
-                        else:
-                            # Fallback: ставка из объекта
-                            hourly_rate = obj.hourly_rate
-                            logger.info(f"Using object rate: {hourly_rate}")
+                            timeslot_rate = schedule_rate
+                            rate_source = "schedule"
+                            logger.info(f"Found schedule rate: {schedule_rate}")
                     else:
                         logger.warning(f"No schedule data found for schedule_id: {schedule_id}")
                 else:
@@ -136,22 +161,139 @@ class ShiftService:
                         if available_timeslots:
                             # Есть доступные тайм-слоты - берем ставку из первого
                             first_timeslot = available_timeslots[0]
-                            timeslot_rate = first_timeslot.get('hourly_rate')
-                            if timeslot_rate:
-                                hourly_rate = timeslot_rate
-                                logger.info(f"Using timeslot rate for spontaneous shift: {hourly_rate}")
-                            else:
-                                logger.info(f"Using object rate for spontaneous shift (no timeslot rate): {hourly_rate}")
-                        else:
-                            logger.info(f"Using object rate for spontaneous shift (no available timeslots): {hourly_rate}")
+                            if first_timeslot.get('hourly_rate'):
+                                timeslot_rate = first_timeslot.get('hourly_rate')
+                                rate_source = "timeslot"
+                                logger.info(f"Found timeslot rate for spontaneous shift: {timeslot_rate}")
+                
+                # Получаем активный договор сотрудника для КОНКРЕТНОГО объекта
+                from domain.entities.contract import Contract
+                from sqlalchemy import or_, cast, func
+                from sqlalchemy.dialects.postgresql import JSONB
+                
+                # Ищем договор для этого объекта (allowed_objects содержит object_id)
+                # Cast allowed_objects к JSONB для использования оператора @>
+                contract_query = select(Contract).where(
+                    and_(
+                        Contract.employee_id == db_user.id,
+                        Contract.status == 'active',
+                        Contract.is_active == True,
+                        cast(Contract.allowed_objects, JSONB).op('@>')(cast([object_id], JSONB))
+                    )
+                ).order_by(Contract.use_contract_rate.desc())  # Приоритет договорам с use_contract_rate=True
+                
+                contract_result = await session.execute(contract_query)
+                active_contract = contract_result.scalars().first()
+                
+                # Логирование цепочки принятия решений по ставке
+                logger.info(
+                    "Rate calculation chain started",
+                    object_id=object_id,
+                    object_rate=float(obj.hourly_rate),
+                    timeslot_rate=timeslot_rate,
+                    has_contract=active_contract is not None,
+                    contract_rate=float(active_contract.hourly_rate) if active_contract and active_contract.hourly_rate else None,
+                    use_contract_rate=active_contract.use_contract_rate if active_contract else None,
+                    payment_system_id=active_contract.payment_system_id if active_contract else None,
+                    org_unit_id=obj.org_unit_id if hasattr(obj, 'org_unit_id') else None
+                )
+                
+                # Определяем финальную ставку с учетом приоритетов
+                if active_contract:
+                    hourly_rate = active_contract.get_effective_hourly_rate(
+                        timeslot_rate=timeslot_rate,
+                        object_rate=float(obj.hourly_rate)
+                    )
+                    
+                    if active_contract.use_contract_rate and active_contract.hourly_rate:
+                        rate_source = "contract"
+                        logger.info(
+                            "Final rate decision: contract (highest priority)",
+                            hourly_rate=hourly_rate,
+                            contract_id=active_contract.id,
+                            payment_system_id=active_contract.payment_system_id
+                        )
+                    elif timeslot_rate:
+                        rate_source = "timeslot"
+                        logger.info(
+                            "Final rate decision: timeslot",
+                            hourly_rate=hourly_rate,
+                            timeslot_id=timeslot_id
+                        )
                     else:
-                        logger.info(f"Using object rate for shift: {hourly_rate}")
+                        rate_source = "object"
+                        logger.info(
+                            "Final rate decision: object",
+                            hourly_rate=hourly_rate,
+                            object_id=object_id,
+                            org_unit_id=obj.org_unit_id if hasattr(obj, 'org_unit_id') else None
+                        )
+                else:
+                    # Нет активного договора - используем timeslot или object
+                    hourly_rate = timeslot_rate if timeslot_rate else float(obj.hourly_rate)
+                    rate_source = "timeslot" if timeslot_rate else "object"
+                    logger.info(
+                        "Final rate decision: no contract",
+                        hourly_rate=hourly_rate,
+                        rate_source=rate_source
+                    )
+                
+                # Вычисляем planned_start и actual_start для штрафов за опоздание
+                from datetime import date as date_class, time as time_class
+                from domain.entities.time_slot import TimeSlot
+                
+                current_time = datetime.now()
+                planned_start = None
+                
+                # Получить late_threshold_minutes из объекта или org_unit
+                late_threshold_minutes = 0
+                if not obj.inherit_late_settings and obj.late_threshold_minutes is not None:
+                    late_threshold_minutes = obj.late_threshold_minutes
+                elif obj.org_unit:
+                    org_unit = obj.org_unit
+                    while org_unit:
+                        if not org_unit.inherit_late_settings and org_unit.late_threshold_minutes is not None:
+                            late_threshold_minutes = org_unit.late_threshold_minutes
+                            break
+                        org_unit = org_unit.parent
+                
+                # Вычисляем planned_start только для ЗАПЛАНИРОВАННЫХ смен
+                planned_start = None
+                
+                if shift_type == "planned" and timeslot_obj:
+                    # Запланированная смена: planned_start = timeslot.start_time + threshold
+                    import pytz
+                    from datetime import datetime as dt, timedelta
+                    
+                    object_timezone = obj.timezone or 'Europe/Moscow'
+                    object_tz = pytz.timezone(object_timezone)
+                    
+                    # Получить late_threshold_minutes из объекта или org_unit
+                    late_threshold_minutes = 0
+                    if not obj.inherit_late_settings and obj.late_threshold_minutes is not None:
+                        late_threshold_minutes = obj.late_threshold_minutes
+                    elif obj.org_unit:
+                        org_unit = obj.org_unit
+                        while org_unit:
+                            if not org_unit.inherit_late_settings and org_unit.late_threshold_minutes is not None:
+                                late_threshold_minutes = org_unit.late_threshold_minutes
+                                break
+                            org_unit = org_unit.parent
+                    
+                    # timeslot.start_time уже в локальном времени объекта
+                    base_time = dt.combine(timeslot_obj.slot_date, timeslot_obj.start_time)
+                    # Локализуем naive datetime в timezone объекта
+                    base_time = object_tz.localize(base_time)
+                    planned_start = base_time + timedelta(minutes=late_threshold_minutes)
+                # Для спонтанных смен planned_start = NULL (нет опозданий)
                 
                 # Создаем новую смену
                 new_shift = Shift(
                     user_id=db_user.id,  # Используем id из БД, а не telegram_id
                     object_id=object_id,
-                    start_time=datetime.now(),
+                    start_time=current_time,
+                    actual_start=current_time,  # Фактическое время начала работы
+                    planned_start=planned_start,  # Плановое время (для штрафов)
                     status='active',
                     start_coordinates=coordinates,
                     hourly_rate=hourly_rate,
@@ -161,8 +303,27 @@ class ShiftService:
                 )
                 
                 session.add(new_shift)
+                
+                # Обновляем статус shift_schedule, если это запланированная смена
+                if shift_type == "planned" and schedule_id:
+                    from domain.entities.shift_schedule import ShiftSchedule
+                    schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == schedule_id)
+                    schedule_result = await session.execute(schedule_query)
+                    schedule = schedule_result.scalar_one_or_none()
+                    
+                    if schedule:
+                        schedule.status = "in_progress"
+                        session.add(schedule)
+                        logger.info(
+                            f"Updated shift_schedule status to in_progress",
+                            schedule_id=schedule_id,
+                            shift_id=new_shift.id
+                        )
+                
                 await session.commit()
                 await session.refresh(new_shift)
+                
+                # Phase 4A: Задачи обрабатываются при закрытии смены через Celery
                 
                 logger.info(
                     f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}"
@@ -286,6 +447,23 @@ class ShiftService:
                         'error': 'Ошибка при закрытии смены'
                     }
                 
+                # Обновляем статус shift_schedule, если это была запланированная смена
+                if shift.is_planned and shift.schedule_id:
+                    from domain.entities.shift_schedule import ShiftSchedule
+                    schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == shift.schedule_id)
+                    schedule_result = await session.execute(schedule_query)
+                    schedule = schedule_result.scalar_one_or_none()
+                    
+                    if schedule:
+                        schedule.status = "completed"
+                        session.add(schedule)
+                        await session.commit()
+                        logger.info(
+                            f"Updated shift_schedule status to completed",
+                            schedule_id=shift.schedule_id,
+                            shift_id=shift_id
+                        )
+                
                 # Получаем обновленную информацию о смене в новой сессии (после коммита close_shift_manually)
                 async with get_async_session() as fresh_session:
                     updated_shift = await self._get_shift(fresh_session, shift_id)
@@ -305,6 +483,8 @@ class ShiftService:
                         f"Shift closed successfully: shift_id={shift_id}, user_id={user_id}, object_id={shift.object_id}, coordinates={coordinates}, total_hours={updated_shift.total_hours}, total_payment={updated_shift.total_payment}"
                     )
                     
+                    # Phase 4A: Корректировки создаются через Celery задачу
+                    
                     # Форматируем время в часовом поясе объекта
                     object_timezone = getattr(shift.object, 'timezone', None) or 'Europe/Moscow'
                     local_end_time = timezone_helper.format_local_time(updated_shift.end_time, object_timezone) if updated_shift.end_time else None
@@ -313,6 +493,7 @@ class ShiftService:
                         'success': True,
                         'message': f'Смена успешно закрыта! {location_validation["message"]}',
                         'shift_id': shift_id,
+                        'object_id': shift.object_id,
                         'total_hours': float(updated_shift.total_hours) if updated_shift.total_hours else 0,
                         'total_payment': float(updated_shift.total_payment) if updated_shift.total_payment else 0,
                         'end_time': local_end_time
@@ -454,9 +635,22 @@ class ShiftService:
             return None
     
     async def _get_object(self, session, object_id: int) -> Optional[Object]:
-        """Получает объект по ID."""
+        """Получает объект по ID с загрузкой организационной структуры."""
         try:
-            query = select(Object).where(Object.id == object_id)
+            from sqlalchemy.orm import selectinload
+            from domain.entities.org_structure import OrgStructureUnit
+            
+            # Загружаем объект с org_unit и всей цепочкой родителей
+            def load_org_hierarchy():
+                loader = selectinload(Object.org_unit)
+                current = loader
+                for _ in range(10):  # До 10 уровней иерархии
+                    current = current.selectinload(OrgStructureUnit.parent)
+                return loader
+            
+            query = select(Object).options(
+                load_org_hierarchy()
+            ).where(Object.id == object_id)
             result = await session.execute(query)
             return result.scalar_one_or_none()
         except Exception as e:

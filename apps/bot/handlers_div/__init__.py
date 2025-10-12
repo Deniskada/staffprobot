@@ -27,6 +27,13 @@ from .object_handlers import (
     _show_updated_object_info
 )
 
+# Обработчики состояния объектов
+from .object_state_handlers import (
+    _handle_open_object,
+    _handle_close_object,
+    _handle_select_object_to_open
+)
+
 # Обработчики тайм-слотов
 from .timeslot_handlers import (
     _handle_manage_timeslots,
@@ -84,6 +91,11 @@ __all__ = [
     '_handle_edit_field',
     '_handle_edit_object_input',
     '_show_updated_object_info',
+    
+    # Обработчики состояния объектов
+    '_handle_open_object',
+    '_handle_close_object',
+    '_handle_select_object_to_open',
     
     # Обработчики тайм-слотов
     '_handle_manage_timeslots',

@@ -1,6 +1,7 @@
 """Модель тайм-слота объекта."""
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Time, Numeric, ForeignKey, Text, Date
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .base import Base
@@ -23,11 +24,20 @@ class TimeSlot(Base):
     is_additional = Column(Boolean, default=False)  # Дополнительный слот (вне рабочего времени)
     is_active = Column(Boolean, default=True)
     notes = Column(Text, nullable=True)  # Заметки владельца
+    
+    # Штрафы за опоздание
+    penalize_late_start = Column(Boolean, default=True, nullable=False)  # Штрафовать за опоздание на запланированную смену
+    
+    # Задачи тайм-слота
+    ignore_object_tasks = Column(Boolean, default=False, nullable=False)  # Игнорировать задачи объекта
+    shift_tasks = Column(JSONB, nullable=True)  # Собственные задачи тайм-слота (массив объектов)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Отношения
     object = relationship("Object", backref="time_slots")
+    task_templates = relationship("TimeslotTaskTemplate", backref="timeslot", cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f"<TimeSlot(id={self.id}, object_id={self.object_id}, date={self.slot_date}, time={self.start_time}-{self.end_time})>"

@@ -2,6 +2,16 @@
 
 {% block title %}{{ title }}{% endblock %}
 
+<!-- Макрос для рендеринга подразделений в dropdown -->
+{% macro render_org_unit_option(unit, indent, selected_id) %}
+<option value="{{ unit.id }}" {% if unit.id == selected_id %}selected{% endif %}>{{ '├─ ' * indent }}{{ unit.name }}</option>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_org_unit_option(child, indent + 1, selected_id) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
+
 {% block content %}
 <div class="container">
     <div class="row justify-content-center">
@@ -14,7 +24,29 @@
                     </h3>
                 </div>
                 <div class="card-body">
+                    <!-- Навигация по вкладкам -->
+                    <ul class="nav nav-tabs mb-4" id="objectTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="main-tab" data-bs-toggle="tab" data-bs-target="#main" type="button" role="tab">
+                                <i class="fas fa-building"></i> Основное
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="finance-tab" data-bs-toggle="tab" data-bs-target="#finance" type="button" role="tab">
+                                <i class="fas fa-coins"></i> Финансы
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tasks-tab" data-bs-toggle="tab" data-bs-target="#tasks" type="button" role="tab">
+                                <i class="fas fa-tasks"></i> Условия работы и задачи
+                            </button>
+                        </li>
+                    </ul>
+                    
                     <form method="POST" action="/owner/objects/{{ object.id }}/edit">
+                        <div class="tab-content" id="objectTabsContent">
+                            <!-- Вкладка 1: Основное -->
+                            <div class="tab-pane fade show active" id="main" role="tabpanel">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
@@ -61,18 +93,6 @@
                                         </div>
                                     </div>
                                     <div class="form-text">Координаты для геолокации (необязательно)</div>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
-                                    <input type="number" 
-                                           class="form-control" 
-                                           id="hourly_rate" 
-                                           name="hourly_rate" 
-                                           min="1"
-                                           value="{{ object.hourly_rate }}"
-                                           required>
-                                    <div class="form-text">Минимальная ставка: 1 ₽/час</div>
                                 </div>
                             </div>
                             
@@ -175,12 +195,217 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="card mt-3">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><i class="bi bi-briefcase"></i> Условия работы и задачи</h5>
                             </div>
-                            <div class="card-body">
+                            <!-- Конец вкладки 1: Основное -->
+                            
+                            <!-- Вкладка 2: Финансы -->
+                            <div class="tab-pane fade" id="finance" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <label for="org_unit_id" class="form-label">
+                                                Подразделение
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Объект наследует финансовые настройки от подразделения"></i>
+                                            </label>
+                                            <select class="form-select" id="org_unit_id" name="org_unit_id">
+                                                {% for root in org_tree %}
+                                                    {{ render_org_unit_option(root, 0, object.org_unit_id) }}
+                                                {% endfor %}
+                                            </select>
+                                            <small class="form-text text-muted">Выберите подразделение для наследования настроек оплаты и штрафов</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <hr>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="hourly_rate" 
+                                                   name="hourly_rate" 
+                                                   min="1"
+                                                   step="0.01"
+                                                   value="{{ object.hourly_rate }}"
+                                                   required>
+                                            <div class="form-text">Минимальная ставка: 1 ₽/час</div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="payment_system_id" class="form-label">
+                                                Система оплаты труда
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Определяет метод расчета для сотрудников объекта"></i>
+                                            </label>
+                                            <select class="form-select" id="payment_system_id" name="payment_system_id">
+                                                <option value="">Не указано (наследуется от подразделения)</option>
+                                                <option value="1" {% if object.payment_system_id == 1 %}selected{% endif %}>Простая повременная</option>
+                                                <option value="2" {% if object.payment_system_id == 2 %}selected{% endif %}>Окладная</option>
+                                                <option value="3" {% if object.payment_system_id == 3 %}selected{% endif %}>Повременно-премиальная</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="payment_schedule_id" class="form-label">
+                                                График выплат
+                                                <i class="bi bi-info-circle" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Определяет периодичность выплат сотрудникам объекта"></i>
+                                            </label>
+                                            <div class="input-group">
+                                                <select class="form-select" id="payment_schedule_id" name="payment_schedule_id" onchange="updateScheduleActions()">
+                                                    <option value="">Не указано (наследуется от подразделения)</option>
+                                                    {% for schedule in payment_schedules %}
+                                                    <option value="{{ schedule.id }}" 
+                                                            data-description="{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}"
+                                                            data-is-custom="{{ 'true' if schedule.is_custom else 'false' }}"
+                                                            {% if object.payment_schedule_id == schedule.id %}selected{% endif %}>
+                                                        {{ schedule.name }}{% if schedule.is_custom %} (кастомный){% endif %}
+                                                    </option>
+                                                    {% endfor %}
+                                                    <option value="create_new" style="font-weight: bold; color: #0d6efd;">
+                                                        ➕ Создать новый график
+                                                    </option>
+                                                </select>
+                                                <button type="button" id="view_schedule_btn" class="btn btn-outline-info" onclick="viewSchedule()" style="display: none;">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button type="button" id="edit_schedule_btn" class="btn btn-outline-primary" onclick="editSchedule()" style="display: none;">
+                                                    <i class="fas fa-pencil-alt"></i>
+                                                </button>
+                                            </div>
+                                            <small class="text-muted" id="schedule_description_text">
+                                                {% if object.payment_schedule_id %}
+                                                {% for schedule in payment_schedules %}
+                                                {% if schedule.id == object.payment_schedule_id %}
+                                                {{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}
+                                                {% endif %}
+                                                {% endfor %}
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-4">
+                                <h5 class="mb-3"><i class="fas fa-clock"></i> Настройки штрафов за опоздание</h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="inherit_late_settings" 
+                                                       name="inherit_late_settings"
+                                                       {% if object.inherit_late_settings %}checked{% endif %}
+                                                       onchange="toggleLateSettings()">
+                                                <label class="form-check-label" for="inherit_late_settings">
+                                                    <strong>Наследовать настройки от подразделения</strong>
+                                                </label>
+                                            </div>
+                                            <small class="form-text text-muted">Если включено, будут использоваться настройки подразделения (реализуется в Фазе 4)</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row" id="late_settings_fields">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="late_threshold_minutes" class="form-label">
+                                                Допустимое время опозданий (минут)
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Может быть отрицательным. Например: -5 = штраф начинается за 5 минут до начала смены"></i>
+                                            </label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="late_threshold_minutes" 
+                                                   name="late_threshold_minutes" 
+                                                   value="{{ object.late_threshold_minutes or '' }}"
+                                                   placeholder="0">
+                                            <div class="form-text">Допустимое опоздание без штрафа. Может быть отрицательным</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="late_penalty_per_minute" class="form-label">
+                                                Стоимость минуты штрафа (₽)
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Размер штрафа за каждую минуту опоздания сверх допустимого"></i>
+                                            </label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="late_penalty_per_minute" 
+                                                   name="late_penalty_per_minute" 
+                                                   step="0.01"
+                                                   min="0"
+                                                   value="{{ object.late_penalty_per_minute or '' }}"
+                                                   placeholder="10.00">
+                                            <div class="form-text">Стоимость одной минуты опоздания</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-4">
+                                <h5 class="mb-3"><i class="fas fa-paper-plane"></i> Telegram группа для отчетов</h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="inherit_telegram_chat" 
+                                                       name="inherit_telegram_chat"
+                                                       {% if object.inherit_telegram_chat %}checked{% endif %}
+                                                       onchange="toggleTelegramChatField()">
+                                                <label class="form-check-label" for="inherit_telegram_chat">
+                                                    <strong>Наследовать от подразделения</strong>
+                                                </label>
+                                            </div>
+                                            <small class="form-text text-muted">Если включено, будет использоваться группа подразделения</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row" id="telegram_chat_field">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <label for="telegram_report_chat_id" class="form-label">
+                                                ID Telegram группы
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="ID группы для отправки фото/видео отчетов по задачам. Формат: -1001234567890"></i>
+                                            </label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="telegram_report_chat_id" 
+                                                   name="telegram_report_chat_id" 
+                                                   value="{{ object.telegram_report_chat_id or '' }}"
+                                                   placeholder="-1001234567890">
+                                            <div class="form-text">
+                                                Добавьте бота в группу и напишите в ней команду <code>/get_chat_id</code>. 
+                                                Бот должен быть администратором группы с правами на отправку медиа.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Конец вкладки 2: Финансы -->
+                            
+                            <!-- Вкладка 3: Условия работы и задачи -->
+                            <div class="tab-pane fade" id="tasks" role="tabpanel">
                                 <div class="mb-3">
                                     <label for="work_conditions" class="form-label">Условия работы</label>
                                     <textarea class="form-control" 
@@ -202,37 +427,111 @@
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label for="shift_tasks" class="form-label">Задачи на смене</label>
+                                    <label for="shift_tasks" class="form-label">
+                                        Задачи на смене
+                                        <i class="fas fa-info-circle text-muted" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Задачи, которые сотрудник должен выполнить на смене"></i>
+                                    </label>
                                     <div id="tasks-container">
                                         {% if object.shift_tasks %}
                                             {% for task in object.shift_tasks %}
-                                            <div class="task-item mb-2">
-                                                <div class="input-group">
-                                                    <input type="text" 
-                                                           class="form-control" 
-                                                           name="shift_tasks[]" 
-                                                           value="{{ task }}"
-                                                           placeholder="Например: Уборка торгового зала">
-                                                    <button type="button" 
-                                                            class="btn btn-outline-danger" 
-                                                            onclick="removeTask(this)">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
+                                            <div class="task-item mb-3 border rounded p-3">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small">Описание задачи</label>
+                                                        <input type="text" 
+                                                               class="form-control" 
+                                                               name="task_texts[]" 
+                                                               value="{{ task.text if task is mapping else task }}"
+                                                               placeholder="Например: Уборка торгового зала">
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Премия (₽)</label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               name="task_deductions[]" 
+                                                               value="{{ task.deduction_amount if task is mapping else 100 }}"
+                                                               step="0.01">
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Обязательная</label>
+                                                        <div class="form-check mt-2">
+                                                            <input class="form-check-input" 
+                                                                   type="checkbox" 
+                                                                   name="task_mandatory[]" 
+                                                                   value="{{ loop.index0 }}"
+                                                                   {% if task is mapping and task.is_mandatory %}checked{% elif task is not mapping %}checked{% endif %}>
+                                                            <label class="form-check-label">Да</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Медиа отчет</label>
+                                                        <div class="form-check mt-2">
+                                                            <input class="form-check-input" 
+                                                                   type="checkbox" 
+                                                                   name="task_requires_media[]" 
+                                                                   value="{{ loop.index0 }}"
+                                                                   {% if task is mapping and task.requires_media %}checked{% endif %}>
+                                                            <label class="form-check-label">📸</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-1 d-flex align-items-end">
+                                                        <button type="button" 
+                                                                class="btn btn-outline-danger btn-sm w-100" 
+                                                                onclick="removeTask(this)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                             {% endfor %}
                                         {% else %}
-                                            <div class="task-item mb-2">
-                                                <div class="input-group">
-                                                    <input type="text" 
-                                                           class="form-control" 
-                                                           name="shift_tasks[]" 
-                                                           placeholder="Например: Уборка торгового зала">
-                                                    <button type="button" 
-                                                            class="btn btn-outline-danger" 
-                                                            onclick="removeTask(this)">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
+                                            <div class="task-item mb-3 border rounded p-3">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small">Описание задачи</label>
+                                                        <input type="text" 
+                                                               class="form-control" 
+                                                               name="task_texts[]" 
+                                                               placeholder="Например: Уборка торгового зала">
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Премия (₽)</label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               name="task_deductions[]" 
+                                                               value="100"
+                                                               step="0.01">
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Обязательная</label>
+                                                        <div class="form-check mt-2">
+                                                            <input class="form-check-input" 
+                                                                   type="checkbox" 
+                                                                   name="task_mandatory[]" 
+                                                                   value="0"
+                                                                   checked>
+                                                            <label class="form-check-label">Да</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small">Медиа отчет</label>
+                                                        <div class="form-check mt-2">
+                                                            <input class="form-check-input" 
+                                                                   type="checkbox" 
+                                                                   name="task_requires_media[]" 
+                                                                   value="0">
+                                                            <label class="form-check-label">📸</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-1 d-flex align-items-end">
+                                                        <button type="button" 
+                                                                class="btn btn-outline-danger btn-sm w-100" 
+                                                                onclick="removeTask(this)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         {% endif %}
@@ -242,7 +541,7 @@
                                             onclick="addTask()">
                                         <i class="bi bi-plus"></i> Добавить задачу
                                     </button>
-                                    <div class="form-text">Список основных задач, которые выполняет сотрудник на смене</div>
+                                    <div class="form-text">Задачи с штрафами за невыполнение. Обязательные задачи должны быть выполнены перед закрытием смены.</div>
                                 </div>
                             </div>
                         </div>
@@ -275,9 +574,12 @@
                                     </div>
                                 </div>
                             </div>
+                            </div>
+                            <!-- Конец вкладки 3: Условия работы и задачи -->
                         </div>
+                        <!-- Конец tab-content -->
                         
-                        <div class="alert alert-warning">
+                        <div class="alert alert-warning mt-4">
                             <i class="bi bi-exclamation-triangle"></i>
                             <strong>Внимание:</strong> Изменение времени работы, ставки или графика работы может повлиять 
                             на существующие тайм-слоты и запланированные смены.
@@ -340,6 +642,18 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             alert('Почасовая ставка должна быть больше 0');
             return;
+        }
+        
+        // Валидация Telegram chat_id
+        const telegramChatId = document.getElementById('telegram_report_chat_id').value.trim();
+        const inheritTelegramChat = document.getElementById('inherit_telegram_chat').checked;
+        if (telegramChatId && !inheritTelegramChat) {
+            // Проверяем формат: должен начинаться с минуса и быть числом
+            if (!telegramChatId.match(/^-\d+$/)) {
+                e.preventDefault();
+                alert('ID Telegram группы должен быть отрицательным числом (например: -1001234567890 или -4814585284).\n\nОтправьте команду /get_chat_id в вашу группу, чтобы получить правильный ID.');
+                return;
+            }
         }
         
         // Логируем данные формы перед отправкой
@@ -416,19 +730,54 @@ document.addEventListener('DOMContentLoaded', function() {
 // Функции для управления задачами
 function addTask() {
     const container = document.getElementById('tasks-container');
+    const currentTaskCount = container.children.length;
     const taskItem = document.createElement('div');
-    taskItem.className = 'task-item mb-2';
+    taskItem.className = 'task-item mb-3 border rounded p-3';
     taskItem.innerHTML = `
-        <div class="input-group">
-            <input type="text" 
-                   class="form-control" 
-                   name="shift_tasks[]" 
-                   placeholder="Например: Уборка торгового зала">
-            <button type="button" 
-                    class="btn btn-outline-danger" 
-                    onclick="removeTask(this)">
-                <i class="bi bi-trash"></i>
-            </button>
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label small">Описание задачи</label>
+                <input type="text" 
+                       class="form-control" 
+                       name="task_texts[]" 
+                       placeholder="Например: Уборка торгового зала">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Премия (₽)</label>
+                <input type="number" 
+                       class="form-control" 
+                       name="task_deductions[]" 
+                       value="100"
+                       step="0.01">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Обязательная</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="task_mandatory[]" 
+                           value="${currentTaskCount}"
+                           checked>
+                    <label class="form-check-label">Да</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Медиа отчет</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="task_requires_media[]" 
+                           value="${currentTaskCount}">
+                    <label class="form-check-label">📸</label>
+                </div>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="button" 
+                        class="btn btn-outline-danger btn-sm w-100" 
+                        onclick="removeTask(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
         </div>
     `;
     container.appendChild(taskItem);
@@ -447,6 +796,152 @@ function removeTask(button) {
         input.value = '';
     }
 }
+
+// Управление действиями с графиком выплат
+function toggleLateSettings() {
+    const inheritCheckbox = document.getElementById('inherit_late_settings');
+    const lateThresholdInput = document.getElementById('late_threshold_minutes');
+    const latePenaltyInput = document.getElementById('late_penalty_per_minute');
+    
+    // Если чекбокс включен (наследуем), делаем поля readonly
+    const readonly = inheritCheckbox.checked;
+    lateThresholdInput.readOnly = readonly;
+    latePenaltyInput.readOnly = readonly;
+    
+    // Визуально обозначаем неактивность
+    if (readonly) {
+        lateThresholdInput.style.backgroundColor = '#e9ecef';
+        latePenaltyInput.style.backgroundColor = '#e9ecef';
+        lateThresholdInput.style.cursor = 'not-allowed';
+        latePenaltyInput.style.cursor = 'not-allowed';
+    } else {
+        lateThresholdInput.style.backgroundColor = '';
+        latePenaltyInput.style.backgroundColor = '';
+        lateThresholdInput.style.cursor = '';
+        latePenaltyInput.style.cursor = '';
+    }
+}
+
+function toggleTelegramChatField() {
+    const inheritCheckbox = document.getElementById('inherit_telegram_chat');
+    const telegramChatInput = document.getElementById('telegram_report_chat_id');
+    
+    // Если чекбокс включен (наследуем), делаем поле readonly
+    const readonly = inheritCheckbox.checked;
+    telegramChatInput.readOnly = readonly;
+    
+    // Визуально обозначаем неактивность
+    if (readonly) {
+        telegramChatInput.style.backgroundColor = '#e9ecef';
+        telegramChatInput.style.cursor = 'not-allowed';
+    } else {
+        telegramChatInput.style.backgroundColor = '';
+        telegramChatInput.style.cursor = '';
+    }
+}
+
+function updateScheduleActions() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const descEl = document.getElementById('schedule_description_text');
+    const viewBtn = document.getElementById('view_schedule_btn');
+    const editBtn = document.getElementById('edit_schedule_btn');
+    
+    // Обновить описание
+    const description = selectedOption.getAttribute('data-description') || '';
+    descEl.textContent = description;
+    
+    const selectedValue = scheduleSelect.value;
+    
+    // Если выбрано "Создать новый"
+    if (selectedValue === 'create_new') {
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        createNewSchedule();
+        return;
+    }
+    
+    // Если "Не указано"
+    if (selectedValue === '') {
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        return;
+    }
+    
+    // Проверить, является ли график кастомным
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    // Показать кнопки для выбранного графика
+    viewBtn.style.display = 'inline-block';
+    editBtn.style.display = isCustom ? 'inline-block' : 'none';
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    updateScheduleActions();
+    toggleLateSettings();
+    toggleTelegramChatField();
+});
+
+// Инициализация редактора графиков выплат
+let paymentScheduleEditor;
+
+function createNewSchedule() {
+    const objectId = {{ object.id }};
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    
+    if (!paymentScheduleEditor) {
+        paymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', objectId);
+        paymentScheduleEditor.init();
+    }
+    
+    window.paymentScheduleEditor = paymentScheduleEditor;
+    paymentScheduleEditor.show();
+    
+    // Сбросить выбор на предыдущий
+    scheduleSelect.selectedIndex = 0;
+}
+
+function viewSchedule() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const scheduleId = scheduleSelect.value;
+    
+    if (scheduleId) {
+        // Открыть модальное окно с превью графика (только чтение)
+        window.open(`/owner/payment-schedules/${scheduleId}/view`, '_blank', 'width=800,height=600');
+    }
+}
+
+function editSchedule() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const scheduleId = scheduleSelect.value;
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    if (!isCustom) {
+        alert('Можно редактировать только кастомные графики');
+        return;
+    }
+    
+    const objectId = {{ object.id }};
+    
+    if (!paymentScheduleEditor) {
+        paymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', objectId);
+        paymentScheduleEditor.init();
+    }
+    
+    // Загрузить данные графика для редактирования
+    paymentScheduleEditor.loadSchedule(scheduleId);
+    window.paymentScheduleEditor = paymentScheduleEditor;
+    paymentScheduleEditor.show();
+}
 </script>
+
+<!-- Подключение редактора графиков выплат -->
+<script src="{{ 'js/shared/payment_schedule_editor.js' | static_version }}"></script>
+
+<!-- Модальное окно редактора графиков -->
+{% include 'shared/payment_schedule_editor_modal.html' %}
+
 {% endblock %}
 {% endblock %}

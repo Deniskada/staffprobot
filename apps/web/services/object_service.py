@@ -67,12 +67,16 @@ class ObjectService:
     async def get_object_by_id(self, object_id: int, telegram_id: int) -> Optional[Object]:
         """Получить объект по ID с проверкой владельца"""
         try:
+            from sqlalchemy.orm import selectinload
+            
             # Получаем внутренний ID пользователя
             internal_id = await self._get_user_internal_id(telegram_id)
             if not internal_id:
                 return None
             
-            query = select(Object).where(
+            query = select(Object).options(
+                selectinload(Object.org_unit)
+            ).where(
                 Object.id == object_id,
                 Object.owner_id == internal_id
             )
@@ -112,6 +116,8 @@ class ObjectService:
                 opening_time=time.fromisoformat(object_data['opening_time']),
                 closing_time=time.fromisoformat(object_data['closing_time']),
                 hourly_rate=object_data['hourly_rate'],
+                payment_system_id=object_data.get('payment_system_id'),
+                payment_schedule_id=object_data.get('payment_schedule_id'),
                 max_distance_meters=object_data.get('max_distance', 500),
                 auto_close_minutes=object_data.get('auto_close_minutes', 60),
                 available_for_applicants=object_data.get('available_for_applicants', False),
@@ -120,7 +126,13 @@ class ObjectService:
                 schedule_repeat_weeks=object_data.get('schedule_repeat_weeks', 1),
                 work_conditions=object_data.get('work_conditions'),
                 employee_position=object_data.get('employee_position'),
-                shift_tasks=object_data.get('shift_tasks')
+                shift_tasks=object_data.get('shift_tasks'),
+                inherit_late_settings=object_data.get('inherit_late_settings', True),
+                late_threshold_minutes=object_data.get('late_threshold_minutes'),
+                late_penalty_per_minute=object_data.get('late_penalty_per_minute'),
+                inherit_telegram_chat=object_data.get('inherit_telegram_chat', True),
+                telegram_report_chat_id=object_data.get('telegram_report_chat_id'),
+                org_unit_id=object_data.get('org_unit_id')
             )
             
             self.db.add(new_object)
@@ -174,6 +186,8 @@ class ObjectService:
             obj.closing_time = time.fromisoformat(object_data['closing_time'])
             obj.timezone = object_data.get('timezone', 'Europe/Moscow')
             obj.hourly_rate = object_data['hourly_rate']
+            obj.payment_system_id = object_data.get('payment_system_id')
+            obj.payment_schedule_id = object_data.get('payment_schedule_id')
             obj.max_distance_meters = object_data.get('max_distance', obj.max_distance_meters)
             obj.auto_close_minutes = object_data.get('auto_close_minutes', obj.auto_close_minutes)
             obj.is_active = object_data.get('is_active', obj.is_active)
@@ -185,6 +199,24 @@ class ObjectService:
             obj.work_conditions = object_data.get('work_conditions', obj.work_conditions)
             obj.employee_position = object_data.get('employee_position', obj.employee_position)
             obj.shift_tasks = object_data.get('shift_tasks', obj.shift_tasks)
+            
+            # Обновляем настройки штрафов за опоздание
+            if 'inherit_late_settings' in object_data:
+                obj.inherit_late_settings = object_data['inherit_late_settings']
+            if 'late_threshold_minutes' in object_data:
+                obj.late_threshold_minutes = object_data['late_threshold_minutes']
+            if 'late_penalty_per_minute' in object_data:
+                obj.late_penalty_per_minute = object_data['late_penalty_per_minute']
+            
+            # Обновляем подразделение
+            if 'org_unit_id' in object_data:
+                obj.org_unit_id = object_data['org_unit_id']
+            
+            # Обновляем Telegram группу для отчетов
+            if 'inherit_telegram_chat' in object_data:
+                obj.inherit_telegram_chat = object_data['inherit_telegram_chat']
+            if 'telegram_report_chat_id' in object_data:
+                obj.telegram_report_chat_id = object_data['telegram_report_chat_id']
             
             logger.info(f"Updating object {object_id} - work_conditions: '{obj.work_conditions}', shift_tasks: {obj.shift_tasks}")
             
@@ -243,6 +275,8 @@ class ObjectService:
             
             obj.timezone = object_data.get('timezone', 'Europe/Moscow')
             obj.hourly_rate = object_data['hourly_rate']
+            obj.payment_system_id = object_data.get('payment_system_id')
+            obj.payment_schedule_id = object_data.get('payment_schedule_id')
             obj.max_distance_meters = object_data.get('max_distance_meters', obj.max_distance_meters)
             obj.is_active = object_data.get('is_active', obj.is_active)
             obj.available_for_applicants = object_data.get('available_for_applicants', obj.available_for_applicants)
@@ -759,7 +793,10 @@ class TimeSlotService:
                 max_employees=timeslot_data.get('max_employees', 1),
                 is_additional=timeslot_data.get('is_additional', False),
                 is_active=timeslot_data.get('is_active', True),
-                notes=timeslot_data.get('notes', '')
+                notes=timeslot_data.get('notes', ''),
+                penalize_late_start=timeslot_data.get('penalize_late_start', True),
+                ignore_object_tasks=timeslot_data.get('ignore_object_tasks', False),
+                shift_tasks=timeslot_data.get('shift_tasks')
             )
             
             self.db.add(new_timeslot)
@@ -830,6 +867,14 @@ class TimeSlotService:
             timeslot.is_additional = timeslot_data.get('is_additional', timeslot.is_additional)
             timeslot.is_active = timeslot_data.get('is_active', timeslot.is_active)
             timeslot.notes = timeslot_data.get('notes', timeslot.notes)
+            
+            # Новые поля Phase 4C
+            if 'penalize_late_start' in timeslot_data:
+                timeslot.penalize_late_start = timeslot_data['penalize_late_start']
+            if 'ignore_object_tasks' in timeslot_data:
+                timeslot.ignore_object_tasks = timeslot_data['ignore_object_tasks']
+            if 'shift_tasks' in timeslot_data:
+                timeslot.shift_tasks = timeslot_data['shift_tasks']
             
             await self.db.commit()
             await self.db.refresh(timeslot)
@@ -981,7 +1026,10 @@ class TimeSlotService:
                 max_employees=timeslot_data.get('max_employees', 1),
                 is_additional=timeslot_data.get('is_additional', False),
                 is_active=timeslot_data.get('is_active', True),
-                notes=timeslot_data.get('notes', '')
+                notes=timeslot_data.get('notes', ''),
+                penalize_late_start=timeslot_data.get('penalize_late_start', True),
+                ignore_object_tasks=timeslot_data.get('ignore_object_tasks', False),
+                shift_tasks=timeslot_data.get('shift_tasks')
             )
             
             self.db.add(new_timeslot)
@@ -1059,6 +1107,14 @@ class TimeSlotService:
             timeslot.is_additional = timeslot_data.get('is_additional', timeslot.is_additional)
             timeslot.is_active = timeslot_data.get('is_active', timeslot.is_active)
             timeslot.notes = timeslot_data.get('notes', timeslot.notes)
+            
+            # Новые поля Phase 4C
+            if 'penalize_late_start' in timeslot_data:
+                timeslot.penalize_late_start = timeslot_data['penalize_late_start']
+            if 'ignore_object_tasks' in timeslot_data:
+                timeslot.ignore_object_tasks = timeslot_data['ignore_object_tasks']
+            if 'shift_tasks' in timeslot_data:
+                timeslot.shift_tasks = timeslot_data['shift_tasks']
             
             await self.db.commit()
             await self.db.refresh(timeslot)

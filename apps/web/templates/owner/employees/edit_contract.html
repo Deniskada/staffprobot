@@ -72,8 +72,52 @@
                                    id="hourly_rate" 
                                    name="hourly_rate" 
                                    min="0"
+                                   step="0.01"
                                    value="{{ contract.hourly_rate or '' }}"
                                    placeholder="500">
+                            <div class="form-check mt-2">
+                                <input type="checkbox" 
+                                       class="form-check-input" 
+                                       id="use_contract_rate" 
+                                       name="use_contract_rate"
+                                       value="1"
+                                       {% if contract.use_contract_rate %}checked{% endif %}>
+                                <label class="form-check-label" for="use_contract_rate">
+                                    Использовать ставку из договора
+                                    <i class="fas fa-info-circle text-muted" 
+                                       data-bs-toggle="tooltip" 
+                                       title="Приоритет над ставками объекта и тайм-слота"></i>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="payment_system_id" class="form-label">
+                                Система оплаты труда
+                                <i class="fas fa-info-circle text-muted" 
+                                   data-bs-toggle="tooltip" 
+                                   title="Определяет метод расчета заработной платы"></i>
+                            </label>
+                            <select class="form-select" id="payment_system_id" name="payment_system_id">
+                                <option value="1" {% if contract.payment_system_id == 1 %}selected{% endif %}>Простая повременная</option>
+                                <option value="2" {% if contract.payment_system_id == 2 %}selected{% endif %}>Окладная</option>
+                                <option value="3" {% if contract.payment_system_id == 3 %}selected{% endif %}>Повременно-премиальная</option>
+                            </select>
+                            <div class="form-check mt-2">
+                                <input type="checkbox" 
+                                       class="form-check-input" 
+                                       id="use_contract_payment_system" 
+                                       name="use_contract_payment_system"
+                                       value="1"
+                                       {% if contract.use_contract_payment_system %}checked{% endif %}>
+                                <label class="form-check-label" for="use_contract_payment_system">
+                                    Использовать систему оплаты из договора
+                                    <i class="fas fa-info-circle text-muted" 
+                                       data-bs-toggle="tooltip" 
+                                       title="Приоритет над системой объекта (с наследованием от подразделения)"></i>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -207,6 +251,17 @@
                                        {% if contract.manager_permissions and contract.manager_permissions.get('can_manage_employees') %}checked{% endif %}>
                                 <label class="form-check-label" for="can_manage_employees">
                                     Управление сотрудниками
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="can_manage_payroll" 
+                                       name="manager_permissions" 
+                                       value="can_manage_payroll"
+                                       {% if contract.manager_permissions and contract.manager_permissions.get('can_manage_payroll') %}checked{% endif %}>
+                                <label class="form-check-label" for="can_manage_payroll">
+                                    Управление начислениями и выплатами
                                 </label>
                             </div>
                             <div class="form-check">

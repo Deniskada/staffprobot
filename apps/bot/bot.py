@@ -24,7 +24,8 @@ from .handlers_div import (
 )
 from .handlers import (
     help_command,
-    status_command
+    status_command,
+    get_chat_id_command
 )
 # Импорты удаленных файлов убраны
 # from .analytics_handlers import AnalyticsHandlers
@@ -98,11 +99,28 @@ class StaffProBot:
         self.application.add_handler(CommandHandler("start", start_command))
         self.application.add_handler(CommandHandler("help", help_command))
         self.application.add_handler(CommandHandler("status", status_command))
+        self.application.add_handler(CommandHandler("get_chat_id", get_chat_id_command))
         
         # Обработка геопозиции (ВАЖНО: до ConversationHandler!)
         self.application.add_handler(
             MessageHandler(filters.LOCATION, handle_location)
         )
+        
+        # Обработка фото/видео для отчетов по задачам
+        from .handlers_div.shift_handlers import _handle_received_media
+        self.application.add_handler(
+            MessageHandler(filters.PHOTO | filters.VIDEO, _handle_received_media)
+        )
+        
+        # Обработка открытия/закрытия объектов
+        from .handlers_div.object_state_handlers import (
+            _handle_open_object,
+            _handle_close_object,
+            _handle_select_object_to_open
+        )
+        self.application.add_handler(CallbackQueryHandler(_handle_open_object, pattern="^open_object$"))
+        self.application.add_handler(CallbackQueryHandler(_handle_close_object, pattern="^close_object$"))
+        self.application.add_handler(CallbackQueryHandler(_handle_select_object_to_open, pattern="^select_object_to_open:.*$"))
         
         # Добавляем ConversationHandler для отчетов
         # Временно отключаем для исправления проблемы с геолокацией

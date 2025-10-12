@@ -126,7 +126,7 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-table"></i>
-                        Детализация смен
+                        Начисления
                     </h5>
                     <span class="badge bg-primary badge-hours">{{ earnings|length }} записей</span>
                 </div>
@@ -135,37 +135,120 @@
                         <thead>
                             <tr>
                                 <th>Дата</th>
+                                <th>Тип</th>
+                                <th>Описание</th>
                                 <th>Объект</th>
-                                <th>Начало</th>
-                                <th>Окончание</th>
                                 <th class="text-center">Часы</th>
                                 <th class="text-end">Ставка, ₽</th>
-                                <th class="text-end">Итого, ₽</th>
+                                <th class="text-end">Сумма, ₽</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in earnings %}
                             <tr>
                                 <td>{{ row.date_label }}</td>
+                                <td>
+                                    {% if row.type == 'shift' %}
+                                    <span class="badge bg-primary">Смена</span>
+                                    {% elif row.type == 'deduction' %}
+                                    <span class="badge bg-danger">Штраф</span>
+                                    {% if row.is_automatic %}
+                                    <i class="fas fa-robot text-muted" title="Автоматическое"></i>
+                                    {% endif %}
+                                    {% elif row.type == 'bonus' %}
+                                    <span class="badge bg-success">Премия</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if row.description %}
+                                    {{ row.description }}
+                                    {% elif row.type == 'shift' %}
+                                    Смена на объекте
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
                                 <td>{{ row.object_name }}</td>
-                                <td>{{ row.start_label }}</td>
-                                <td>{{ row.end_label }}</td>
-                                <td class="text-center">{{ '%.2f'|format(row.duration_hours) }}</td>
-                                <td class="text-end">{{ '%.2f'|format(row.hourly_rate) }}</td>
-                                <td class="text-end fw-semibold">{{ '%.2f'|format(row.amount) }}</td>
+                                <td class="text-center">
+                                    {% if row.type == 'shift' %}
+                                    {{ '%.2f'|format(row.duration_hours) }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if row.type == 'shift' %}
+                                    {{ '%.2f'|format(row.hourly_rate) }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td class="text-end fw-semibold">
+                                    {% if row.amount < 0 %}
+                                    <span class="text-danger">{{ '%.2f'|format(row.amount) }}</span>
+                                    {% else %}
+                                    <span class="text-success">+{{ '%.2f'|format(row.amount) }}</span>
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="4" class="text-end">Итого за период:</td>
-                                <td class="text-center">{{ '%.2f'|format(total_hours) }}</td>
+                                <td colspan="4" class="text-end fw-bold">Итого за период:</td>
+                                <td class="text-center fw-bold">{{ '%.2f'|format(total_hours) }} ч</td>
                                 <td></td>
-                                <td class="text-end">{{ '%.2f'|format(total_amount) }} ₽</td>
+                                <td class="text-end fw-bold">
+                                    {% if total_amount < 0 %}
+                                    <span class="text-danger">{{ '%.2f'|format(total_amount) }} ₽</span>
+                                    {% else %}
+                                    <span class="text-success">{{ '%.2f'|format(total_amount) }} ₽</span>
+                                    {% endif %}
+                                </td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
+                
+                <!-- Пагинация -->
+                {% if total_pages > 1 %}
+                <div class="card-footer">
+                    <nav aria-label="Пагинация по заработкам">
+                        <ul class="pagination pagination-sm mb-0 justify-content-center">
+                            <li class="page-item {% if not has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page=1&per_page={{ per_page }}" aria-label="Первая">
+                                    <span aria-hidden="true">&laquo;&laquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item {% if not has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ page - 1 }}&per_page={{ per_page }}" aria-label="Предыдущая">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                            
+                            {% for p in range([1, page - 2]|max, [total_pages, page + 2]|min + 1) %}
+                            <li class="page-item {% if p == page %}active{% endif %}">
+                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
+                            </li>
+                            {% endfor %}
+                            
+                            <li class="page-item {% if not has_next %}disabled{% endif %}">
+                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ page + 1 }}&per_page={{ per_page }}" aria-label="Следующая">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item {% if not has_next %}disabled{% endif %}">
+                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ total_pages }}&per_page={{ per_page }}" aria-label="Последняя">
+                                    <span aria-hidden="true">&raquo;&raquo;</span>
+                                </a>
+                            </li>
+                        </ul>
+                        <div class="text-center mt-2">
+                            <small class="text-muted">Страница {{ page }} из {{ total_pages }} (всего {{ total_count }} записей)</small>
+                        </div>
+                    </nav>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

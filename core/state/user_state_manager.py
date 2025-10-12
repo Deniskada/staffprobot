@@ -11,6 +11,8 @@ class UserAction(str, Enum):
     """Возможные действия пользователя."""
     OPEN_SHIFT = "open_shift"
     CLOSE_SHIFT = "close_shift"
+    OPEN_OBJECT = "open_object"  # Открытие объекта
+    CLOSE_OBJECT = "close_object"  # Закрытие объекта
     CREATE_OBJECT = "create_object"
     EDIT_OBJECT = "edit_object"
     SCHEDULE_SHIFT = "schedule_shift"
@@ -28,7 +30,11 @@ class UserStep(str, Enum):
     """Шаги в диалоге."""
     OBJECT_SELECTION = "object_selection"
     SHIFT_SELECTION = "shift_selection"
+    TASK_COMPLETION = "task_completion"  # Phase 4A: отметка задач при закрытии смены
+    MEDIA_UPLOAD = "media_upload"  # Загрузка фото/видео отчета для задачи
     LOCATION_REQUEST = "location_request"
+    OPENING_OBJECT_LOCATION = "opening_object_location"  # Геолокация при открытии объекта
+    CLOSING_OBJECT_LOCATION = "closing_object_location"  # Геолокация при закрытии объекта
     PROCESSING = "processing"
     INPUT_MAX_DISTANCE = "input_max_distance"
     INPUT_FIELD_VALUE = "input_field_value"
@@ -53,6 +59,10 @@ class UserState:
         selected_timeslot_id: Optional[int] = None,
         selected_schedule_id: Optional[int] = None,
         shift_type: Optional[str] = None,
+        shift_tasks: Optional[list] = None,  # Phase 4A: задачи смены
+        completed_tasks: Optional[list] = None,  # Phase 4A: выполненные задачи
+        pending_media_task_idx: Optional[int] = None,  # Индекс задачи, ожидающей медиа
+        task_media: Optional[dict] = None,  # {task_idx: {media_url, media_type}}
         data: Optional[Dict[str, Any]] = None,
         timeout_minutes: int = 5
     ):
@@ -64,6 +74,10 @@ class UserState:
         self.selected_timeslot_id = selected_timeslot_id
         self.selected_schedule_id = selected_schedule_id
         self.shift_type = shift_type
+        self.shift_tasks = shift_tasks or []  # Phase 4A
+        self.completed_tasks = completed_tasks or []  # Phase 4A
+        self.pending_media_task_idx = pending_media_task_idx
+        self.task_media = task_media or {}
         self.data = data or {}
         self.created_at = datetime.now()
         self.expires_at = self.created_at + timedelta(minutes=timeout_minutes)
@@ -149,6 +163,14 @@ class UserStateManager:
             state.selected_schedule_id = kwargs['selected_schedule_id']
         if 'shift_type' in kwargs:
             state.shift_type = kwargs['shift_type']
+        if 'shift_tasks' in kwargs:
+            state.shift_tasks = kwargs['shift_tasks']
+        if 'completed_tasks' in kwargs:
+            state.completed_tasks = kwargs['completed_tasks']
+        if 'pending_media_task_idx' in kwargs:
+            state.pending_media_task_idx = kwargs['pending_media_task_idx']
+        if 'task_media' in kwargs:
+            state.task_media = kwargs['task_media']
         if 'data' in kwargs:
             for key, value in kwargs['data'].items():
                 state.add_data(key, value)

@@ -154,6 +154,22 @@ async def owner_dashboard(request: Request):
                     })
                 )
             
+            # Получаем открытые объекты
+            from domain.entities.object_opening import ObjectOpening
+            open_objects_query = select(ObjectOpening).where(
+                and_(
+                    ObjectOpening.object_id.in_(
+                        select(Object.id).where(Object.owner_id == user_id)
+                    ),
+                    ObjectOpening.closed_at.is_(None)
+                )
+            ).options(
+                selectinload(ObjectOpening.object),
+                selectinload(ObjectOpening.opener)
+            ).order_by(ObjectOpening.opened_at.desc())
+            result = await session.execute(open_objects_query)
+            open_objects = result.scalars().all()
+            
             # Получаем данные для переключения интерфейсов
             available_interfaces = await get_available_interfaces_for_user(user_id)
         
@@ -169,6 +185,7 @@ async def owner_dashboard(request: Request):
             "title": "Дашборд владельца",
             "stats": stats,
             "recent_objects": recent_objects,
+            "open_objects": open_objects,
             "available_interfaces": available_interfaces,
         })
     except Exception as e:
@@ -256,16 +273,36 @@ async def owner_objects_create(request: Request):
     if user_role != "owner":
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     
-    # Получаем данные для переключения интерфейсов
+    # Получаем данные для переключения интерфейсов, графики выплат и подразделения
     async with get_async_session() as session:
         user_id = await get_user_id_from_current_user(current_user, session)
         available_interfaces = await get_available_interfaces_for_user(user_id)
+        
+        # Загрузить графики выплат (системные + кастомные владельца)
+        from domain.entities.payment_schedule import PaymentSchedule
+        schedules_query = select(PaymentSchedule).where(
+            PaymentSchedule.is_active == True
+        ).where(
+            (PaymentSchedule.owner_id == None) |  # Системные
+            (PaymentSchedule.owner_id == user_id)  # Кастомные владельца
+        ).order_by(PaymentSchedule.is_custom.asc(), PaymentSchedule.id.asc())
+        schedules_result = await session.execute(schedules_query)
+        payment_schedules = schedules_result.scalars().all()
+        
+        # Загрузить подразделения владельца
+        from apps.web.services.org_structure_service import OrgStructureService
+        org_service = OrgStructureService(session)
+        org_units = await org_service.get_units_by_owner(user_id)
+        org_tree = await org_service.get_org_tree(user_id)
     
     return templates.TemplateResponse("owner/objects/create.html", {
         "request": request,
         "title": "Создание объекта",
         "current_user": current_user,
-        "available_interfaces": available_interfaces
+        "available_interfaces": available_interfaces,
+        "payment_schedules": payment_schedules,
+        "org_units": org_units,
+        "org_tree": org_tree
     })
 
 
@@ -338,9 +375,49 @@ async def owner_objects_create_post(
         # Обработка новых полей
         work_conditions = form_data.get("work_conditions", "").strip()
         employee_position = form_data.get("employee_position", "").strip()
-        shift_tasks = form_data.getlist("shift_tasks")
-        # Фильтруем пустые задачи
-        shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
+        payment_system_id_str = form_data.get("payment_system_id", "").strip()
+        payment_system_id = int(payment_system_id_str) if payment_system_id_str else None
+        payment_schedule_id_str = form_data.get("payment_schedule_id", "").strip()
+        payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
+        
+        # Обработка настроек штрафов за опоздание
+        # JavaScript создает скрытое поле со значением 'false' при снятии галочки
+        inherit_late_settings_value = form_data.get("inherit_late_settings", "false")
+        inherit_late_settings = inherit_late_settings_value not in ["false", ""]
+        late_threshold_minutes_str = form_data.get("late_threshold_minutes", "").strip()
+        late_threshold_minutes = int(late_threshold_minutes_str) if late_threshold_minutes_str else None
+        late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
+        late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
+        
+        # Обработка Telegram группы для отчетов
+        # JavaScript создает скрытое поле со значением 'false' при снятии галочки
+        inherit_telegram_chat_value = form_data.get("inherit_telegram_chat", "false")
+        inherit_telegram_chat = inherit_telegram_chat_value not in ["false", ""]
+        telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
+        telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
+        
+        # Обработка подразделения
+        org_unit_id_str = form_data.get("org_unit_id", "").strip()
+        org_unit_id = int(org_unit_id_str) if org_unit_id_str else None
+        
+        # Парсинг задач с новой структурой
+        task_texts = form_data.getlist("task_texts[]")
+        task_deductions = form_data.getlist("task_deductions[]")
+        task_mandatory = form_data.getlist("task_mandatory[]")
+        task_requires_media = form_data.getlist("task_requires_media[]")
+        
+        logger.info(f"Task parsing - texts: {task_texts}, deductions: {task_deductions}, mandatory: {task_mandatory}")
+        
+        shift_tasks = []
+        for idx, text in enumerate(task_texts):
+            if text.strip():
+                is_mandatory = str(idx) in task_mandatory
+                logger.info(f"Task {idx}: text='{text}', is_mandatory={is_mandatory} (checking '{idx}' in {task_mandatory})")
+                shift_tasks.append({
+                    "text": text.strip(),
+                    "is_mandatory": is_mandatory,
+                    "deduction_amount": float(task_deductions[idx]) if idx < len(task_deductions) else 100.0
+                })
         
         # Обработка графика работы
         work_days = form_data.getlist("work_days")
@@ -364,13 +441,19 @@ async def owner_objects_create_post(
             "closing_time": closing_time,
             "max_distance": max_distance,
             "available_for_applicants": available_for_applicants,
+            "payment_system_id": payment_system_id,
+            "payment_schedule_id": payment_schedule_id,
+            "org_unit_id": org_unit_id,
             "is_active": True,
             "coordinates": coordinates,
             "work_days_mask": work_days_mask,
             "schedule_repeat_weeks": schedule_repeat_weeks,
             "work_conditions": work_conditions if work_conditions else None,
             "employee_position": employee_position if employee_position else None,
-            "shift_tasks": shift_tasks if shift_tasks else None
+            "shift_tasks": shift_tasks if shift_tasks else None,
+            "inherit_late_settings": inherit_late_settings,
+            "late_threshold_minutes": late_threshold_minutes,
+            "late_penalty_per_minute": late_penalty_per_minute
         }
         
         # Передаем telegram_id в create_object (метод ожидает telegram_id)
@@ -432,6 +515,9 @@ async def owner_objects_detail(request: Request, object_id: int):
                 "owner_id": obj.owner_id,
                 "work_days_mask": obj.work_days_mask,
                 "schedule_repeat_weeks": obj.schedule_repeat_weeks,
+                "shift_tasks": obj.shift_tasks or [],
+                "payment_system_id": obj.payment_system_id,
+                "payment_schedule_id": obj.payment_schedule_id,
                 "timeslots": [
                     {
                         "id": slot.id,
@@ -487,6 +573,26 @@ async def owner_objects_edit(request: Request, object_id: int):
             if not obj:
                 raise HTTPException(status_code=404, detail="Объект не найден")
             
+            # Загрузить графики выплат (системные + кастомные владельца + кастомные объекта)
+            from domain.entities.payment_schedule import PaymentSchedule
+            user_id = await get_user_id_from_current_user(current_user, session)
+            
+            schedules_query = select(PaymentSchedule).where(
+                PaymentSchedule.is_active == True
+            ).where(
+                (PaymentSchedule.owner_id == None) |  # Системные
+                (PaymentSchedule.owner_id == user_id) |  # Кастомные владельца
+                (PaymentSchedule.object_id == object_id)  # Кастомные объекта
+            ).order_by(PaymentSchedule.is_custom.asc(), PaymentSchedule.id.asc())
+            schedules_result = await session.execute(schedules_query)
+            payment_schedules = schedules_result.scalars().all()
+            
+            # Загрузить подразделения владельца
+            from apps.web.services.org_structure_service import OrgStructureService
+            org_service = OrgStructureService(session)
+            org_units = await org_service.get_units_by_owner(user_id)
+            org_tree = await org_service.get_org_tree(user_id)
+            
             # Преобразуем в формат для шаблона
             object_data = {
                 "id": obj.id,
@@ -503,19 +609,36 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "schedule_repeat_weeks": obj.schedule_repeat_weeks,
                 "work_conditions": obj.work_conditions or "",
                 "employee_position": obj.employee_position or "",
-                "shift_tasks": obj.shift_tasks or []
+                "shift_tasks": obj.shift_tasks or [],
+                "payment_system_id": obj.payment_system_id,
+                "payment_schedule_id": obj.payment_schedule_id,
+                "org_unit_id": obj.org_unit_id if hasattr(obj, 'org_unit_id') else None,
+                "inherit_late_settings": obj.inherit_late_settings if hasattr(obj, 'inherit_late_settings') else True,
+                "late_threshold_minutes": obj.late_threshold_minutes if hasattr(obj, 'late_threshold_minutes') else None,
+                "late_penalty_per_minute": obj.late_penalty_per_minute if hasattr(obj, 'late_penalty_per_minute') else None,
+                "inherit_telegram_chat": obj.inherit_telegram_chat if hasattr(obj, 'inherit_telegram_chat') else True,
+                "telegram_report_chat_id": obj.telegram_report_chat_id if hasattr(obj, 'telegram_report_chat_id') else None
             }
             
             # Получаем данные для переключения интерфейсов
             user_id = await get_user_id_from_current_user(current_user, session)
             available_interfaces = await get_available_interfaces_for_user(user_id)
             
+            # Загрузить подразделения (уже получили user_id и org_service выше, повторно создаем)
+            from apps.web.services.org_structure_service import OrgStructureService
+            org_service = OrgStructureService(session)
+            org_units = await org_service.get_units_by_owner(user_id)
+            org_tree = await org_service.get_org_tree(user_id)
+            
             return templates.TemplateResponse("owner/objects/edit.html", {
                 "request": request,
                 "title": f"Редактирование: {object_data['name']}",
                 "object": object_data,
                 "available_interfaces": available_interfaces,
-                "current_user": current_user
+                "current_user": current_user,
+                "payment_schedules": payment_schedules,
+                "org_units": org_units,
+                "org_tree": org_tree
             })
             
     except HTTPException:
@@ -607,9 +730,51 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         # Обработка новых полей
         work_conditions = form_data.get("work_conditions", "").strip()
         employee_position = form_data.get("employee_position", "").strip()
-        shift_tasks = form_data.getlist("shift_tasks[]")
-        # Фильтруем пустые задачи
-        shift_tasks = [task.strip() for task in shift_tasks if task.strip()]
+        payment_system_id_str = form_data.get("payment_system_id", "").strip()
+        payment_system_id = int(payment_system_id_str) if payment_system_id_str else None
+        payment_schedule_id_str = form_data.get("payment_schedule_id", "").strip()
+        payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
+        
+        # Обработка настроек штрафов за опоздание
+        # JavaScript создает скрытое поле со значением 'false' при снятии галочки
+        inherit_late_settings_value = form_data.get("inherit_late_settings", "false")
+        inherit_late_settings = inherit_late_settings_value not in ["false", ""]
+        late_threshold_minutes_str = form_data.get("late_threshold_minutes", "").strip()
+        late_threshold_minutes = int(late_threshold_minutes_str) if late_threshold_minutes_str else None
+        late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
+        late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
+        
+        # Обработка Telegram группы для отчетов
+        # JavaScript создает скрытое поле со значением 'false' при снятии галочки
+        inherit_telegram_chat_value = form_data.get("inherit_telegram_chat", "false")
+        inherit_telegram_chat = inherit_telegram_chat_value not in ["false", ""]
+        telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
+        telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
+        
+        # Обработка подразделения
+        org_unit_id_str = form_data.get("org_unit_id", "").strip()
+        org_unit_id = int(org_unit_id_str) if org_unit_id_str else None
+        
+        # Парсинг задач с новой структурой
+        task_texts = form_data.getlist("task_texts[]")
+        task_deductions = form_data.getlist("task_deductions[]")
+        task_mandatory = form_data.getlist("task_mandatory[]")
+        task_requires_media = form_data.getlist("task_requires_media[]")
+        
+        logger.info(f"Task parsing (edit) - texts: {task_texts}, deductions: {task_deductions}, mandatory: {task_mandatory}, requires_media: {task_requires_media}")
+        
+        shift_tasks = []
+        for idx, text in enumerate(task_texts):
+            if text.strip():
+                is_mandatory = str(idx) in task_mandatory
+                requires_media = str(idx) in task_requires_media
+                logger.info(f"Task {idx}: text='{text}', is_mandatory={is_mandatory}, requires_media={requires_media}")
+                shift_tasks.append({
+                    "text": text.strip(),
+                    "is_mandatory": is_mandatory,
+                    "deduction_amount": float(task_deductions[idx]) if idx < len(task_deductions) else 100.0,
+                    "requires_media": requires_media
+                })
         
         logger.info(f"Form data - work_conditions: '{work_conditions}', shift_tasks: {shift_tasks}")
         
@@ -641,13 +806,21 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "timezone": timezone,
                 "max_distance": max_distance,
                 "available_for_applicants": available_for_applicants,
+                "payment_system_id": payment_system_id,
+                "payment_schedule_id": payment_schedule_id,
                 "is_active": is_active,
                 "coordinates": coordinates,
                 "work_days_mask": work_days_mask,
                 "schedule_repeat_weeks": schedule_repeat_weeks,
                 "work_conditions": work_conditions if work_conditions else None,
                 "employee_position": employee_position if employee_position else None,
-                "shift_tasks": shift_tasks if shift_tasks else None
+                "shift_tasks": shift_tasks if shift_tasks else None,
+                "inherit_late_settings": inherit_late_settings,
+                "late_threshold_minutes": late_threshold_minutes,
+                "late_penalty_per_minute": late_penalty_per_minute,
+                "inherit_telegram_chat": inherit_telegram_chat,
+                "telegram_report_chat_id": telegram_report_chat_id,
+                "org_unit_id": org_unit_id
             }
             
             # Получаем внутренний ID пользователя
@@ -1612,7 +1785,7 @@ async def owner_analysis_chart_data(
         return chart_data
         
     except Exception as e:
-        logger.error(f"Error getting chart data: {e}", exc_info=True)
+        logger.error(f"Error getting chart data: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения данных графика")
 
 
@@ -2056,7 +2229,7 @@ async def owner_calendar_api_data(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting owner calendar data: {e}", exc_info=True)
+        logger.error(f"Error getting owner calendar data: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения данных календаря")
 
 
@@ -2746,7 +2919,7 @@ async def check_employee_availability_owner(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error checking employee availability: {e}", exc_info=True)
+        logger.error(f"Error checking employee availability: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка проверки доступности: {str(e)}")
 
 
@@ -3426,15 +3599,36 @@ async def owner_timeslot_update(
         except ValueError:
             raise HTTPException(status_code=400, detail="Неверный формат времени")
         
+        # Обработка задач тайм-слота
+        task_texts = form_data.getlist("task_texts[]")
+        task_amounts = form_data.getlist("task_amounts[]")
+        task_mandatory_indices = [int(i) for i in form_data.getlist("task_mandatory[]")]
+        task_media_indices = [int(i) for i in form_data.getlist("task_requires_media[]")]
+        
+        shift_tasks = []
+        for idx, text in enumerate(task_texts):
+            if text.strip():
+                amount = float(task_amounts[idx]) if idx < len(task_amounts) and task_amounts[idx] else 0
+                task = {
+                    "text": text.strip(),
+                    "is_mandatory": idx in task_mandatory_indices,
+                    "requires_media": idx in task_media_indices,
+                    "bonus_amount": amount if amount >= 0 else 0,
+                    "deduction_amount": abs(amount) if amount < 0 else 0
+                }
+                shift_tasks.append(task)
+        
         # Обновление тайм-слота в базе данных
         timeslot_service = TimeSlotService(db)
         timeslot_data = {
             "start_time": start_time,
             "end_time": end_time,
             "hourly_rate": hourly_rate,
-            # Новое поле лимита сотрудников
-            "max_employees": int((await request.form()).get("max_employees", 1)),
-            "is_active": is_active
+            "max_employees": int(form_data.get("max_employees", 1)),
+            "is_active": is_active,
+            "penalize_late_start": "penalize_late_start" in form_data and form_data.get("penalize_late_start") not in ["false", ""],
+            "ignore_object_tasks": "ignore_object_tasks" in form_data and form_data.get("ignore_object_tasks") not in ["false", ""],
+            "shift_tasks": shift_tasks if shift_tasks else None
         }
         
         updated_timeslot = await timeslot_service.update_timeslot(timeslot_id, timeslot_data, telegram_id)
@@ -3592,6 +3786,37 @@ async def owner_timeslots_bulk_edit(
             update_data["is_active"] = True
         elif is_inactive and not is_active:
             update_data["is_active"] = False
+        
+        # Новые поля для Phase 4B/4C
+        if "penalize_late_start" in form_data:
+            update_data["penalize_late_start"] = form_data.get("penalize_late_start") not in ["false", ""]
+        
+        if "ignore_object_tasks" in form_data:
+            update_data["ignore_object_tasks"] = form_data.get("ignore_object_tasks") not in ["false", ""]
+        
+        # Обработка задач из формы (JSONB)
+        shift_tasks = []
+        task_index = 0
+        while f"task_description_{task_index}" in form_data:
+            task_desc = form_data.get(f"task_description_{task_index}", "").strip()
+            if task_desc:
+                task = {"description": task_desc}
+                
+                amount_str = form_data.get(f"task_amount_{task_index}", "").strip()
+                if amount_str:
+                    try:
+                        task["amount"] = float(amount_str)
+                    except ValueError:
+                        pass
+                
+                task["is_mandatory"] = f"task_mandatory_{task_index}" in form_data
+                task["requires_media"] = f"task_media_{task_index}" in form_data
+                
+                shift_tasks.append(task)
+            task_index += 1
+        
+        if shift_tasks:
+            update_data["shift_tasks"] = shift_tasks
         
         if not update_data:
             raise HTTPException(status_code=400, detail="Не указано ни одного параметра для изменения")
@@ -3951,6 +4176,13 @@ async def owner_shift_detail_legacy(
         # Получаем объект для передачи в шаблон
         object = shift.object
         
+        # Получаем задачи смены (только для реальных смен)
+        shift_tasks = []
+        if actual_shift_type != "schedule":
+            from apps.web.services.shift_task_service import ShiftTaskService
+            task_service = ShiftTaskService(db)
+            shift_tasks = await task_service.get_shift_tasks(actual_shift_id)
+        
         # Получаем данные для переключения интерфейсов
         available_interfaces = await get_available_interfaces_for_user(user_id)
         
@@ -3959,6 +4191,7 @@ async def owner_shift_detail_legacy(
             "current_user": current_user,
             "shift": shift,
             "shift_type": shift_type,
+            "shift_tasks": shift_tasks,
             "available_interfaces": available_interfaces,
             "object": object,
             "web_timezone_helper": web_timezone_helper
@@ -3967,6 +4200,12 @@ async def owner_shift_detail_legacy(
     except Exception as e:
         logger.error(f"Error loading shift detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
+
+
+# Phase 4A: shift-tasks роуты удалены, используйте /owner/payroll-adjustments для управления корректировками
+# См. apps/web/routes/owner_payroll_adjustments.py
+
+
 
 
 @router.post("/shifts_legacy/{shift_id}/cancel")
@@ -5175,7 +5414,10 @@ async def owner_employees_create_contract(
     employee_telegram_id: int = Form(...),
     title: str = Form(...),
     content: str = Form(""),
-    hourly_rate: Optional[int] = Form(None),
+    hourly_rate: Optional[float] = Form(None),
+    use_contract_rate: bool = Form(False),
+    payment_system_id: Optional[int] = Form(1),  # По умолчанию simple_hourly
+    use_contract_payment_system: bool = Form(False),
     start_date: str = Form(...),
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
@@ -5190,13 +5432,6 @@ async def owner_employees_create_contract(
         from apps.web.services.contract_service import ContractService
         
         contract_service = ContractService()
-        
-        # Валидация
-        if not hourly_rate:
-            raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
-        
-        if hourly_rate <= 0:
-            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
         
         # Парсим даты
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
@@ -5224,6 +5459,9 @@ async def owner_employees_create_contract(
             "title": title,
             "content": content if content else None,
             "hourly_rate": hourly_rate,
+            "use_contract_rate": use_contract_rate,
+            "payment_system_id": payment_system_id,
+            "use_contract_payment_system": use_contract_payment_system,
             "start_date": start_date_obj,
             "end_date": end_date_obj,
             "template_id": template_id,
@@ -5368,7 +5606,10 @@ async def owner_contract_edit(
     request: Request,
     title: str = Form(...),
     content: str = Form(""),
-    hourly_rate: Optional[int] = Form(None),
+    hourly_rate: Optional[float] = Form(None),
+    use_contract_rate: bool = Form(False),
+    payment_system_id: Optional[int] = Form(1),
+    use_contract_payment_system: bool = Form(False),
     start_date: str = Form(...),
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
@@ -5383,13 +5624,6 @@ async def owner_contract_edit(
         from apps.web.services.contract_service import ContractService
         
         contract_service = ContractService()
-        
-        # Валидация
-        if not hourly_rate:
-            raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
-        
-        if hourly_rate <= 0:
-            raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
         
         # Парсим даты
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
@@ -5416,6 +5650,9 @@ async def owner_contract_edit(
             "title": title,
             "content": content if content else None,
             "hourly_rate": hourly_rate,
+            "use_contract_rate": use_contract_rate,
+            "payment_system_id": payment_system_id,
+            "use_contract_payment_system": use_contract_payment_system,
             "start_date": start_date_obj,
             "end_date": end_date_obj,
             "template_id": template_id,
@@ -5525,7 +5762,7 @@ async def owner_contract_terminate(
         logger.error(f"=== ROUTE: Contract termination failed ===")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Error message: {str(e)}")
-        logger.error(f"Full traceback:", exc_info=True)
+        logger.error(f"Full traceback:")
         
         # Проверяем тип запроса для правильного ответа
         content_type = request.headers.get("content-type", "")
@@ -6073,3 +6310,37 @@ async def owner_change_tariff_post(
     except Exception as e:
         logger.error(f"Error changing tariff: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка смены тарифа: {str(e)}")
+
+
+@router.get("/payment-systems", response_class=HTMLResponse)
+async def owner_payment_systems_list(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница справочника систем оплаты труда."""
+    try:
+        from apps.web.services.payment_system_service import PaymentSystemService
+        
+        payment_system_service = PaymentSystemService(db)
+        
+        # Получить все активные системы оплаты
+        systems = await payment_system_service.get_all_systems()
+        
+        # Получить внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, db)
+        owner_context = await get_owner_context(user_id, db)
+        
+        return templates.TemplateResponse(
+            "owner/payment_systems/list.html",
+            {
+                "request": request,
+                "systems": systems,
+                "title": "Системы оплаты труда",
+                "current_user": current_user,
+                **owner_context
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error loading payment systems: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки систем оплаты: {str(e)}")

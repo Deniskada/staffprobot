@@ -139,3 +139,33 @@
 - [GET] `/api/calendar/shifts`
 - [GET] `/api/calendar/stats`
 - [GET] `/api/calendar/objects`
+
+## Начисления и выплаты (Payroll) — Итерация 23
+- [GET] `/owner/payroll` — (apps/web/routes/payroll.py) — список начислений всех сотрудников
+- [GET] `/owner/payroll/{entry_id}` — детализация начисления
+- [POST] `/owner/payroll/calculate` — рассчитать начисление за период
+- [POST] `/owner/payroll/{entry_id}/add-deduction` — добавить удержание
+- [POST] `/owner/payroll/{entry_id}/add-bonus` — добавить доплату
+- [POST] `/owner/payroll/{entry_id}/approve` — одобрить начисление
+- [POST] `/owner/payroll/{entry_id}/payment` — записать выплату
+
+## Графики выплат (Payment Schedules) — Итерация 23
+- [GET] `/owner/payment-schedules/{schedule_id}/data` — (apps/web/routes/payment_schedule.py) — данные графика (JSON)
+- [GET] `/owner/payment-schedules/{schedule_id}/view` — просмотр графика (HTML)
+- [POST] `/owner/payment-schedules/create` — создать кастомный график
+- [GET] `/owner/payment-schedules/available` — список доступных графиков
+
+## Организационная структура (Org Structure) — Итерация 23
+- [GET] `/owner/org-structure` — (apps/web/routes/org_structure.py) — список подразделений (дерево)
+- [POST] `/owner/org-structure/create` — создать подразделение
+- [POST] `/owner/org-structure/{unit_id}/edit` — редактировать подразделение
+- [POST] `/owner/org-structure/{unit_id}/delete` — удалить подразделение (soft delete)
+- [POST] `/owner/org-structure/{unit_id}/move` — переместить подразделение
+- [GET] `/owner/org-structure/{unit_id}/data` — получить данные (JSON)
+
+## Задачи на смену (Shift Tasks) — Итерация 23
+- [GET] `/owner/shift-tasks` — (apps/web/routes/owner.py) — список всех задач по сменам
+  - Query: `object_id` — фильтр по объекту
+  - Query: `is_completed` — фильтр по выполнению
+  - Query: `is_mandatory` — фильтр по обязательности
+- Задачи настраиваются в формах объектов и тайм-слотов

@@ -81,3 +81,16 @@
 - [GET] `/api/calendar/shifts`
 - [GET] `/api/calendar/stats`
 - [GET] `/api/calendar/objects`
+
+## Начисления и выплаты (Payroll) — Итерация 23
+**Требуется право:** `manager_permissions.can_manage_payroll = true`
+
+- [GET] `/manager/payroll` — (apps/web/routes/manager_payroll.py) — список начислений сотрудников
+  - Query: `period_start` — начало периода (YYYY-MM-DD)
+  - Query: `period_end` — конец периода (YYYY-MM-DD)
+  - Query: `object_id` — фильтр по объекту (только доступные)
+  - Показываются только сотрудники, работающие на доступных управляющему объектах
+- [GET] `/manager/payroll/{entry_id}` — детализация начисления
+  - Смены за период (только по доступным объектам)
+  - Удержания и доплаты (автоматические и ручные)
+  - **Примечание:** Управляющий НЕ может одобрить или записать выплату (только владелец)

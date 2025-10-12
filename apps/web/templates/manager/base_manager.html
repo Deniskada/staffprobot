@@ -65,6 +65,11 @@
                                 </a>
                             </li>
                             <li class="nav-item">
+                                <a class="nav-link {% if request.url.path.startswith('/manager/payroll') %}active{% endif %}" href="/manager/payroll">
+                                    <i class="fas fa-money-bill-wave"></i> Начисления
+                                </a>
+                            </li>
+                            <li class="nav-item">
                                 <a class="nav-link {% if request.url.path.startswith('/manager/reviews') %}active{% endif %}" href="/manager/reviews">
                                     <i class="bi bi-star"></i> Отзывы
                                 </a>

@@ -18,6 +18,8 @@ from core.database.session import get_db_session, get_async_session
 from apps.web.middleware.role_middleware import require_employee_or_applicant
 from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift, TimeSlot
 from domain.entities.application import ApplicationStatus
+from domain.entities.payroll_entry import PayrollEntry
+from domain.entities.payroll_adjustment import PayrollAdjustment
 from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from shared.services.calendar_filter_service import CalendarFilterService
@@ -46,9 +48,24 @@ async def load_employee_earnings(
     db: AsyncSession,
     user_id: int,
     start_date: date,
-    end_date: date
-) -> tuple[List[Dict[str, Any]], float, float, List[Dict[str, Any]]]:
+    end_date: date,
+    page: int = 1,
+    per_page: int = 50
+) -> tuple[List[Dict[str, Any]], float, float, List[Dict[str, Any]], int]:
     """Загружает завершенные смены сотрудника и агрегирует данные."""
+
+    # Подсчет общего количества для пагинации
+    count_query = (
+        select(func.count(Shift.id))
+        .where(
+            Shift.user_id == user_id,
+            Shift.status == "completed",
+            func.date(Shift.start_time) >= start_date,
+            func.date(Shift.start_time) <= end_date,
+        )
+    )
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar() or 0
 
     query = (
         select(Shift, Object)
@@ -59,7 +76,9 @@ async def load_employee_earnings(
             func.date(Shift.start_time) >= start_date,
             func.date(Shift.start_time) <= end_date,
         )
-        .order_by(Shift.start_time.asc())
+        .order_by(Shift.start_time.desc())
+        .limit(per_page)
+        .offset((page - 1) * per_page)
     )
 
     result = await db.execute(query)
@@ -70,6 +89,7 @@ async def load_employee_earnings(
     total_amount = 0.0
     summary_by_object: Dict[int, Dict[str, Any]] = {}
 
+    # 1. Добавить смены
     for shift, obj in rows:
         timezone_str = getattr(obj, "timezone", None) or "Europe/Moscow"
         date_label = web_timezone_helper.format_datetime_with_timezone(
@@ -99,6 +119,7 @@ async def load_employee_earnings(
 
         earnings.append(
             {
+                "type": "shift",
                 "shift_id": shift.id,
                 "object_name": obj.name,
                 "date_label": date_label,
@@ -107,6 +128,7 @@ async def load_employee_earnings(
                 "duration_hours": duration_hours,
                 "hourly_rate": hourly_rate,
                 "amount": amount,
+                "description": ""
             }
         )
 
@@ -123,11 +145,45 @@ async def load_employee_earnings(
         summary_entry["amount"] += amount
         summary_entry["shifts"] += 1
 
+    # 2. Добавить корректировки начислений (Phase 4A: новая архитектура)
+    adjustments_query = select(PayrollAdjustment).where(
+        PayrollAdjustment.employee_id == user_id,
+        func.date(PayrollAdjustment.created_at) >= start_date,
+        func.date(PayrollAdjustment.created_at) <= end_date
+    ).order_by(PayrollAdjustment.created_at)
+    
+    adjustments_result = await db.execute(adjustments_query)
+    adjustments = adjustments_result.scalars().all()
+    
+    # Добавляем корректировки к списку заработка
+    for adj in adjustments:
+        # Пропускаем базовую оплату за смену (она уже учтена выше)
+        if adj.adjustment_type == 'shift_base':
+            continue
+        
+        earnings.append({
+            "type": "adjustment",
+            "adjustment_type": adj.adjustment_type,
+            "object_name": "-",
+            "date_label": adj.created_at.strftime('%d.%m.%Y'),
+            "start_label": "-",
+            "end_label": "-",
+            "duration_hours": 0.0,
+            "hourly_rate": 0.0,
+            "amount": float(adj.amount),
+            "description": adj.get_type_label() + (f": {adj.description}" if adj.description else ""),
+            "is_automatic": adj.adjustment_type in ['late_start', 'task_bonus', 'task_penalty']
+        })
+        total_amount += float(adj.amount)
+    
+    # Сортируем earnings по дате
+    earnings.sort(key=lambda x: x["date_label"], reverse=True)
+
     summary_list = sorted(
         summary_by_object.values(), key=lambda item: item["amount"], reverse=True
     )
 
-    return earnings, total_hours, total_amount, summary_list
+    return earnings, total_hours, total_amount, summary_list, total_count
 
 
 async def get_user_id_from_current_user(current_user, session):
@@ -155,6 +211,8 @@ async def employee_earnings(
     request: Request,
     date_from: Optional[str] = Query(None, description="Дата начала периода (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Дата окончания периода (YYYY-MM-DD)"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    per_page: int = Query(50, ge=10, le=100, description="Записей на странице"),
     current_user: dict = Depends(require_employee_or_applicant),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -176,9 +234,14 @@ async def employee_earnings(
     if start_date > end_date:
         start_date, end_date = end_date, start_date
 
-    earnings, total_hours, total_amount, summary_by_object = await load_employee_earnings(
-        db, user_id, start_date, end_date
+    earnings, total_hours, total_amount, summary_by_object, total_count = await load_employee_earnings(
+        db, user_id, start_date, end_date, page, per_page
     )
+
+    # Вычисляем параметры пагинации
+    total_pages = (total_count + per_page - 1) // per_page
+    has_prev = page > 1
+    has_next = page < total_pages
 
     available_interfaces = await get_available_interfaces_for_user(current_user, db)
     applications_count_result = await db.execute(
@@ -199,6 +262,12 @@ async def employee_earnings(
             "total_hours": total_hours,
             "total_amount": total_amount,
             "summary_by_object": summary_by_object,
+            "page": page,
+            "per_page": per_page,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_prev": has_prev,
+            "has_next": has_next,
         },
     )
 
@@ -250,25 +319,26 @@ async def employee_earnings_export(
             round(item["amount"], 2),
         ])
 
-    detail_sheet = workbook.create_sheet("Детализация")
+    detail_sheet = workbook.create_sheet("Начисления")
     detail_sheet.append([
         "Дата",
+        "Тип",
+        "Описание",
         "Объект",
-        "Время начала",
-        "Время окончания",
         "Часы",
         "Ставка, ₽",
         "Сумма, ₽",
     ])
 
     for row in earnings:
+        row_type = "Смена" if row["type"] == "shift" else ("Штраф" if row["type"] == "deduction" else "Премия")
         detail_sheet.append([
             row["date_label"],
+            row_type,
+            row.get("description", "Смена на объекте" if row["type"] == "shift" else "-"),
             row["object_name"],
-            row["start_label"],
-            row["end_label"],
-            round(row["duration_hours"], 2),
-            round(row["hourly_rate"], 2),
+            round(row["duration_hours"], 2) if row["type"] == "shift" else "-",
+            round(row["hourly_rate"], 2) if row["type"] == "shift" else "-",
             round(row["amount"], 2),
         ])
 
@@ -741,7 +811,7 @@ async def employee_create_application(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(f"Ошибка создания заявки: {exc}", exc_info=True)
+        logger.error(f"Ошибка создания заявки: {exc}")
         raise HTTPException(status_code=500, detail=f"Ошибка создания заявки: {exc}")
 
 @router.get("/api/applications/{application_id}")
@@ -1032,7 +1102,7 @@ async def employee_calendar(
             "show_today_button": True,
         })
     except Exception as e:
-        logger.error(f"Ошибка загрузки календаря: {e}", exc_info=True)
+        logger.error(f"Ошибка загрузки календаря: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки календаря: {e}")
 
 
@@ -1160,7 +1230,7 @@ async def employee_api_employees(
         
         return employee_data
     except Exception as e:
-        logger.error(f"Ошибка загрузки сотрудника: {e}", exc_info=True)
+        logger.error(f"Ошибка загрузки сотрудника: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
 
 
@@ -1345,7 +1415,7 @@ async def employee_shifts_list(
             "pagination": {"page": page, "per_page": per_page, "total": total, "pages": (total + per_page - 1)//per_page}
         })
     except Exception as e:
-        logger.error(f"Error loading employee shifts: {e}", exc_info=True)
+        logger.error(f"Error loading employee shifts: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки смен сотрудника")
 
 @router.get("/profile", response_class=HTMLResponse)
@@ -1540,7 +1610,7 @@ async def employee_profile_update(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating profile: {e}", exc_info=True)
+        logger.error(f"Error updating profile: {e}")
         raise HTTPException(status_code=500, detail="Ошибка обновления профиля")
 
 
@@ -1885,7 +1955,7 @@ async def employee_calendar_api_data(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting employee calendar data: {e}", exc_info=True)
+        logger.error(f"Error getting employee calendar data: {e}")
         logger.error(f"Exception details: {type(e).__name__}: {str(e)}")
         raise HTTPException(status_code=500, detail="Ошибка получения данных календаря")
 
@@ -2019,7 +2089,7 @@ async def employee_shift_detail(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in employee shift detail: {e}", exc_info=True)
+        logger.error(f"Error in employee shift detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
 
 
@@ -2113,7 +2183,7 @@ async def employee_timeslot_detail(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in employee timeslot detail: {e}", exc_info=True)
+        logger.error(f"Error in employee timeslot detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
 
 
@@ -2224,7 +2294,7 @@ async def employee_plan_shift(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error planning shift for employee: {e}", exc_info=True)
+        logger.error(f"Error planning shift for employee: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
 
 
@@ -2261,5 +2331,5 @@ async def employee_cancel_planned_shift(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error cancelling planned shift: {e}", exc_info=True)
+        logger.error(f"Error cancelling planned shift: {e}")
         raise HTTPException(status_code=500, detail="Ошибка отмены смены")
