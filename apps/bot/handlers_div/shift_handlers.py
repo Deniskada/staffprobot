@@ -1692,9 +1692,19 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
                 logger.info(f"[MY_TASKS] Shift found: {shift_obj is not None}, object_id: {shift_obj.object_id if shift_obj else None}")
                 
                 if shift_obj:
-                    object_query = select(Object).where(Object.id == shift_obj.object_id)
-                    object_result = await session.execute(object_query)
-                    obj = object_result.scalar_one_or_none()
+                    try:
+                        object_query = select(Object).where(Object.id == shift_obj.object_id)
+                        logger.info(f"[MY_TASKS] Executing object query for object_id={shift_obj.object_id}")
+                        object_result = await session.execute(object_query)
+                        logger.info(f"[MY_TASKS] Object query executed, getting scalar")
+                        obj = object_result.scalar_one_or_none()
+                        logger.info(f"[MY_TASKS] Object scalar retrieved: {obj is not None}")
+                        
+                        if obj:
+                            logger.info(f"[MY_TASKS] Object details: id={obj.id}, name={obj.name}, telegram_chat_id={obj.telegram_chat_id}")
+                    except Exception as obj_err:
+                        logger.error(f"[MY_TASKS] Error getting object: {obj_err}", exc_info=True)
+                        obj = None
                     
                     logger.info(f"[MY_TASKS] Object found: {obj is not None}, telegram_chat_id: {obj.telegram_chat_id if obj else None}")
                     
