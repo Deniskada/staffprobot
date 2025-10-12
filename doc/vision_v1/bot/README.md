@@ -8,10 +8,16 @@
 ## Callback data (паттерны)
 - `analytics`
 - `analytics_cancel`
+- `cancel_media_upload:*` - отмена загрузки медиа для задачи (при закрытии смены)
+- `cancel_my_task_media:*` - отмена загрузки медиа для задачи (во время смены)
 - `cancel_shift_*`
+- `close_object` - закрыть объект (Phase 4B)
 - `close_shift`
 - `close_shift_*`
 - `close_shift_select:*`
+- `close_shift_with_tasks:*` - продолжить закрытие смены после отметки задач
+- `complete_my_task:shift_id:task_idx` - отметить задачу во время смены (Phase 4C)
+- `complete_shift_task:shift_id:task_idx` - отметить задачу при закрытии смены (Phase 4A)
 - `confirm_delete_*`
 - `confirm_delete_object:*`
 - `confirm_delete_timeslot:*`
@@ -53,10 +59,11 @@
 - `format_*`
 - `get_report`
 - `get_telegram_id`
-- `help`
 - `main_menu`
 - `manage_*`
 - `manage_timeslots:*`
+- `my_tasks` - показать задачи активной смены (Phase 4C, заменяет кнопку "Помощь")
+- `open_object` - открыть объект (Phase 4B)
 - `open_planned_*`
 - `open_planned_shift:*`
 - `open_shift`
@@ -71,6 +78,7 @@
 - `schedule_select_object_*`
 - `schedule_select_slot_*`
 - `schedule_shift`
+- `select_object_to_open:*` - выбор объекта для открытия (Phase 4B)
 - `status`
 - `toggle_timeslot_*`
 - `toggle_timeslot_status:*`
@@ -78,3 +86,30 @@
 - `view_schedule`
 - `view_timeslots:*`
 - `week_*`
+
+## Основные кнопки главного меню
+- 🏢 Открыть объект (`open_object`)
+- 🔒 Закрыть объект (`close_object`)
+- 🔄 Открыть смену (`open_shift`)
+- 🔚 Закрыть смену (`close_shift`)
+- 📅 Запланировать смену (`schedule_shift`)
+- 📋 Мои планы (`view_schedule`)
+- 📊 Отчет (`get_report`)
+- 📝 Мои задачи (`my_tasks`) - заменяет кнопку "Помощь" (с 12.10.2025)
+- 📈 Статус (`status`)
+- 🆔 Мой Telegram ID (`get_telegram_id`)
+
+## UserAction (типы состояний)
+- `OPEN_SHIFT` - открытие смены
+- `CLOSE_SHIFT` - закрытие смены
+- `OPEN_OBJECT` - открытие объекта (Phase 4B)
+- `CLOSE_OBJECT` - закрытие объекта (Phase 4B)
+- `MY_TASKS` - просмотр и выполнение задач во время смены (Phase 4C)
+- `CREATE_OBJECT` - создание объекта
+- `EDIT_OBJECT` - редактирование объекта
+- `SCHEDULE_SHIFT` - планирование смены
+- `VIEW_SCHEDULE` - просмотр расписания
+- `CANCEL_SCHEDULE` - отмена запланированной смены
+- `CREATE_TIMESLOT` - создание тайм-слота
+- `EDIT_TIMESLOT_*` - редактирование тайм-слота
+- `REPORT_DATES` - выбор дат для отчета
