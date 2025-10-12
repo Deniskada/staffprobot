@@ -527,6 +527,17 @@ function createNewScheduleForCreate() {
     // Установить глобально для работы onchange в HTML
     window.paymentScheduleEditor = createPaymentScheduleEditor;
     
+    // Очистить форму перед показом
+    document.getElementById('schedule_name').value = '';
+    document.getElementById('schedule_frequency').value = 'daily';
+    createPaymentScheduleEditor.scheduleData = [];
+    createPaymentScheduleEditor.onFrequencyChange();
+    
+    // Генерировать график после того как DOM обновится
+    setTimeout(() => {
+        createPaymentScheduleEditor.generateSchedule();
+    }, 100);
+    
     createPaymentScheduleEditor.show();
     
     // Сбросить выбор
@@ -612,6 +623,17 @@ function createNewScheduleForEdit() {
     
     // Установить глобально для работы onchange в HTML
     window.paymentScheduleEditor = editPaymentScheduleEditor;
+    
+    // Очистить форму перед показом
+    document.getElementById('schedule_name').value = '';
+    document.getElementById('schedule_frequency').value = 'daily';
+    editPaymentScheduleEditor.scheduleData = [];
+    editPaymentScheduleEditor.onFrequencyChange();
+    
+    // Генерировать график после того как DOM обновится
+    setTimeout(() => {
+        editPaymentScheduleEditor.generateSchedule();
+    }, 100);
     
     editPaymentScheduleEditor.show();
     
