@@ -1325,7 +1325,7 @@ async def manager_contract_edit(
         # Получаем данные формы
         title = form_data.get("title", "").strip()
         hourly_rate_str = form_data.get("hourly_rate", "").strip()
-        hourly_rate = int(hourly_rate_str) if hourly_rate_str else None
+        hourly_rate = float(hourly_rate_str) if hourly_rate_str else None
         start_date_str = form_data.get("start_date")
         end_date_str = form_data.get("end_date")
         status = form_data.get("status", "active")
