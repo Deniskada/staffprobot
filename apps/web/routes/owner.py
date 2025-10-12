@@ -921,25 +921,27 @@ async def owner_calendar(
             # Преобразуем в список словарей для шаблона
             org_units = [{"id": u.id, "name": u.name, "level": u.level} for u in org_units_raw]
             
-            # Получаем объекты
-            objects = await object_service.get_objects_by_owner(owner_telegram_id)
+            # Получаем ВСЕ объекты владельца (для JS фильтра)
+            all_objects = await object_service.get_objects_by_owner(owner_telegram_id)
             
-            # Фильтрация по подразделению если выбрано
+            # Фильтрация по подразделению если выбрано (для календаря)
             if org_unit_id:
-                objects = [obj for obj in objects if obj.org_unit_id == org_unit_id]
+                filtered_objects = [obj for obj in all_objects if obj.org_unit_id == org_unit_id]
+            else:
+                filtered_objects = all_objects
             
             # Если выбран конкретный объект, проверяем доступ
             selected_object = None
             if object_id:
-                for obj in objects:
+                for obj in filtered_objects:
                     if obj.id == object_id:
                         selected_object = obj
                         break
                 if not selected_object:
                     raise HTTPException(status_code=404, detail="Объект не найден")
             
-            # Определяем объекты для загрузки данных
-            objects_to_load = [selected_object] if selected_object else objects
+            # Определяем объекты для загрузки данных (используем отфильтрованные)
+            objects_to_load = [selected_object] if selected_object else filtered_objects
             
             # Получаем тайм-слоты для выбранного объекта или всех объектов
             timeslots_data = []
@@ -1016,7 +1018,7 @@ async def owner_calendar(
                     
                     for shift in shifts:
                         # Находим объект для смены
-                        shift_object = next((obj for obj in objects if obj.id == shift.object_id), None)
+                        shift_object = next((obj for obj in all_objects if obj.id == shift.object_id), None)
                         object_name = shift_object.name if shift_object else "Неизвестный объект"
                         
                         shifts_data.append({
@@ -1047,7 +1049,7 @@ async def owner_calendar(
                     
                     for schedule in schedules:
                         # Находим объект для запланированной смены
-                        schedule_object = next((obj for obj in objects if obj.id == schedule.object_id), None)
+                        schedule_object = next((obj for obj in all_objects if obj.id == schedule.object_id), None)
                         object_name = schedule_object.name if schedule_object else "Неизвестный объект"
                         
                         shifts_data.append({
@@ -1076,7 +1078,8 @@ async def owner_calendar(
             logger.info(f"Calendar grid created with {len(calendar_data)} weeks")
             
             # Подготавливаем данные для шаблона
-            objects_list = [{"id": obj.id, "name": obj.name, "org_unit_id": obj.org_unit_id} for obj in objects]
+            # ВСЕ объекты для JS фильтра (не отфильтрованные)
+            objects_list = [{"id": obj.id, "name": obj.name, "org_unit_id": obj.org_unit_id} for obj in all_objects]
             org_units_list = org_units
             
             # Навигация по месяцам
