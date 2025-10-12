@@ -156,13 +156,34 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="create_payment_schedule_id" class="form-label">График выплат</label>
-                        <select class="form-select" id="create_payment_schedule_id" name="payment_schedule_id">
-                            <option value="">Наследовать от родителя</option>
-                            {% for schedule in payment_schedules %}
-                            <option value="{{ schedule.id }}">{{ schedule.name }}</option>
-                            {% endfor %}
-                        </select>
+                        <label for="create_payment_schedule_id" class="form-label">
+                            График выплат
+                            <i class="bi bi-info-circle" 
+                               data-bs-toggle="tooltip" 
+                               title="Определяет периодичность выплат сотрудникам подразделения"></i>
+                        </label>
+                        <div class="input-group">
+                            <select class="form-select" id="create_payment_schedule_id" name="payment_schedule_id" onchange="updateCreateScheduleActions()">
+                                <option value="">Наследовать от родителя</option>
+                                {% for schedule in payment_schedules %}
+                                <option value="{{ schedule.id }}" 
+                                        data-description="{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}"
+                                        data-is-custom="{{ 'true' if schedule.is_custom else 'false' }}">
+                                    {{ schedule.name }}{% if schedule.is_custom %} (кастомный){% endif %}
+                                </option>
+                                {% endfor %}
+                                <option value="create_new" style="font-weight: bold; color: #0d6efd;">
+                                    ➕ Создать новый график
+                                </option>
+                            </select>
+                            <button type="button" id="view_create_schedule_btn" class="btn btn-outline-info" onclick="viewCreateSchedule()" style="display: none;">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button type="button" id="edit_create_schedule_btn" class="btn btn-outline-primary" onclick="editCreateSchedule()" style="display: none;">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted" id="create_schedule_description_text"></small>
                     </div>
                     
                     <hr>
@@ -254,13 +275,34 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="edit_payment_schedule_id" class="form-label">График выплат</label>
-                        <select class="form-select" id="edit_payment_schedule_id" name="payment_schedule_id">
-                            <option value="">Наследовать от родителя</option>
-                            {% for schedule in payment_schedules %}
-                            <option value="{{ schedule.id }}">{{ schedule.name }}</option>
-                            {% endfor %}
-                        </select>
+                        <label for="edit_payment_schedule_id" class="form-label">
+                            График выплат
+                            <i class="bi bi-info-circle" 
+                               data-bs-toggle="tooltip" 
+                               title="Определяет периодичность выплат сотрудникам подразделения"></i>
+                        </label>
+                        <div class="input-group">
+                            <select class="form-select" id="edit_payment_schedule_id" name="payment_schedule_id" onchange="updateEditScheduleActions()">
+                                <option value="">Наследовать от родителя</option>
+                                {% for schedule in payment_schedules %}
+                                <option value="{{ schedule.id }}" 
+                                        data-description="{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}"
+                                        data-is-custom="{{ 'true' if schedule.is_custom else 'false' }}">
+                                    {{ schedule.name }}{% if schedule.is_custom %} (кастомный){% endif %}
+                                </option>
+                                {% endfor %}
+                                <option value="create_new" style="font-weight: bold; color: #0d6efd;">
+                                    ➕ Создать новый график
+                                </option>
+                            </select>
+                            <button type="button" id="view_edit_schedule_btn" class="btn btn-outline-info" onclick="viewEditSchedule()" style="display: none;">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button type="button" id="edit_edit_schedule_btn" class="btn btn-outline-primary" onclick="editEditSchedule()" style="display: none;">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted" id="edit_schedule_description_text"></small>
                     </div>
                     
                     <hr>
@@ -428,6 +470,126 @@ function toggleEditLateFields() {
         thresholdInput.style.backgroundColor = '';
         penaltyInput.style.backgroundColor = '';
     }
+}
+
+// Функции для работы с графиками выплат (создание подразделения)
+function updateCreateScheduleActions() {
+    const scheduleSelect = document.getElementById('create_payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const descEl = document.getElementById('create_schedule_description_text');
+    const viewBtn = document.getElementById('view_create_schedule_btn');
+    const editBtn = document.getElementById('edit_create_schedule_btn');
+    
+    // Обновить описание
+    const description = selectedOption.getAttribute('data-description') || '';
+    descEl.textContent = description;
+    
+    const selectedValue = scheduleSelect.value;
+    
+    // Если выбрано "Создать новый"
+    if (selectedValue === 'create_new') {
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        // Открыть модальное окно создания графика
+        window.open('/owner/payment-schedules/create', '_blank', 'width=900,height=700');
+        // Сбросить выбор
+        scheduleSelect.value = '';
+        descEl.textContent = '';
+    } else if (selectedValue) {
+        // Показать кнопку просмотра
+        viewBtn.style.display = 'inline-block';
+        
+        // Показать кнопку редактирования только для кастомных
+        const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+        editBtn.style.display = isCustom ? 'inline-block' : 'none';
+    } else {
+        // Нет выбора
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+    }
+}
+
+function viewCreateSchedule() {
+    const scheduleSelect = document.getElementById('create_payment_schedule_id');
+    const scheduleId = scheduleSelect.value;
+    
+    if (scheduleId) {
+        window.open(`/owner/payment-schedules/${scheduleId}/view`, '_blank', 'width=800,height=600');
+    }
+}
+
+function editCreateSchedule() {
+    const scheduleSelect = document.getElementById('create_payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const scheduleId = scheduleSelect.value;
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    if (!isCustom) {
+        alert('Можно редактировать только кастомные графики');
+        return;
+    }
+    
+    window.open(`/owner/payment-schedules/${scheduleId}/edit`, '_blank', 'width=900,height=700');
+}
+
+// Функции для работы с графиками выплат (редактирование подразделения)
+function updateEditScheduleActions() {
+    const scheduleSelect = document.getElementById('edit_payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const descEl = document.getElementById('edit_schedule_description_text');
+    const viewBtn = document.getElementById('view_edit_schedule_btn');
+    const editBtn = document.getElementById('edit_edit_schedule_btn');
+    
+    // Обновить описание
+    const description = selectedOption.getAttribute('data-description') || '';
+    descEl.textContent = description;
+    
+    const selectedValue = scheduleSelect.value;
+    
+    // Если выбрано "Создать новый"
+    if (selectedValue === 'create_new') {
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        // Открыть модальное окно создания графика
+        window.open('/owner/payment-schedules/create', '_blank', 'width=900,height=700');
+        // Сбросить выбор
+        scheduleSelect.value = '';
+        descEl.textContent = '';
+    } else if (selectedValue) {
+        // Показать кнопку просмотра
+        viewBtn.style.display = 'inline-block';
+        
+        // Показать кнопку редактирования только для кастомных
+        const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+        editBtn.style.display = isCustom ? 'inline-block' : 'none';
+    } else {
+        // Нет выбора
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+    }
+}
+
+function viewEditSchedule() {
+    const scheduleSelect = document.getElementById('edit_payment_schedule_id');
+    const scheduleId = scheduleSelect.value;
+    
+    if (scheduleId) {
+        window.open(`/owner/payment-schedules/${scheduleId}/view`, '_blank', 'width=800,height=600');
+    }
+}
+
+function editEditSchedule() {
+    const scheduleSelect = document.getElementById('edit_payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const scheduleId = scheduleSelect.value;
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    if (!isCustom) {
+        alert('Можно редактировать только кастомные графики');
+        return;
+    }
+    
+    window.open(`/owner/payment-schedules/${scheduleId}/edit`, '_blank', 'width=900,height=700');
 }
 </script>
 
