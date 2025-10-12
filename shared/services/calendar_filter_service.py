@@ -227,7 +227,7 @@ class CalendarFilterService:
                 and_(
                     TimeSlot.object_id.in_(object_ids),
                     TimeSlot.slot_date >= date_range_start,
-                    TimeSlot.slot_date < date_range_end,
+                    TimeSlot.slot_date <= date_range_end,  # Включаем конечную дату
                     TimeSlot.is_active == True
                 )
             ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
