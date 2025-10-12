@@ -1075,7 +1075,8 @@ async def owner_calendar(
             
             # Подготавливаем данные для шаблона
             objects_list = [{"id": obj.id, "name": obj.name, "org_unit_id": obj.org_unit_id} for obj in objects]
-            org_units_list = [{"id": unit.id, "name": unit.name, "level": unit.level} for unit in org_units]
+            # get_org_tree возвращает словари, не объекты
+            org_units_list = org_units if isinstance(org_units, list) else []
             
             # Навигация по месяцам
             prev_month = month - 1 if month > 1 else 12
