@@ -3607,8 +3607,9 @@ async def manager_shift_detail(
                 
                 # Получаем contract для hourly_rate
                 hourly_rate = None
-                if shift.contract_id:
-                    contract_query = select(Contract).where(Contract.id == shift.contract_id)
+                contract_id = getattr(shift, 'contract_id', None)
+                if contract_id:
+                    contract_query = select(Contract).where(Contract.id == contract_id)
                     contract_result = await db.execute(contract_query)
                     contract = contract_result.scalar_one_or_none()
                     if contract:
@@ -3616,16 +3617,19 @@ async def manager_shift_detail(
                 
                 # Получаем задачи из timeslot или object
                 shift_tasks = []
-                if shift.time_slot_id:
-                    timeslot_query = select(TimeSlot).where(TimeSlot.id == shift.time_slot_id)
+                time_slot_id = getattr(shift, 'time_slot_id', None)
+                if time_slot_id:
+                    timeslot_query = select(TimeSlot).where(TimeSlot.id == time_slot_id)
                     timeslot_result = await db.execute(timeslot_query)
                     timeslot = timeslot_result.scalar_one_or_none()
                     if timeslot and timeslot.shift_tasks:
                         shift_tasks = timeslot.shift_tasks if isinstance(timeslot.shift_tasks, list) else []
                 
                 # Если задач нет в timeslot, берем из объекта
-                if not shift_tasks and shift.object and shift.object.shift_tasks:
-                    shift_tasks = shift.object.shift_tasks if isinstance(shift.object.shift_tasks, list) else []
+                if not shift_tasks and shift.object:
+                    object_tasks = getattr(shift.object, 'shift_tasks', None)
+                    if object_tasks:
+                        shift_tasks = object_tasks if isinstance(object_tasks, list) else []
                 
                 shift_data = {
                     'id': shift.id,
