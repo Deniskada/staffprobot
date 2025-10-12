@@ -7,11 +7,13 @@
 <style>
 /* Owner-specific calendar styles */
 
-/* Drag & Drop Panels */
-.drag-drop-panel {
-    position: fixed;
-    right: 20px;
-    top: 100px;
+/* Drag & Drop Panels - Owner Override */
+#dragDropPanel.drag-drop-panel {
+    position: fixed !important;
+    right: 20px !important;
+    left: auto !important;
+    top: 100px !important;
+    transform: none !important;
     width: 280px;
     background: white;
     border-radius: 10px;
@@ -67,10 +69,12 @@
     padding: 0.25rem 0.4rem;
 }
 
-.employees-panel {
-    position: fixed;
-    right: 20px;
-    bottom: 100px;
+#employeesPanel.employees-panel {
+    position: fixed !important;
+    right: 20px !important;
+    bottom: 100px !important;
+    top: auto !important;
+    transform: none !important;
     width: 280px;
     max-height: 400px;
     background: white;
