@@ -5,6 +5,51 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', path='css/shared/calendar.css') }}">
 <style>
+/* Фиксированная высота страницы календаря - без вертикального скролла */
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Скрываем footer на странице календаря */
+footer {
+    display: none !important;
+}
+
+.content-wrapper {
+    height: calc(100vh - var(--topbar-height, 60px)) !important;
+    min-height: unset !important;
+    padding: 0 !important;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Календарь занимает всю высоту */
+.calendar-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.calendar-header-fixed {
+    flex-shrink: 0;
+}
+
+.calendar-scrollable {
+    flex: 1;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
 /* Owner-specific calendar styles */
 
 /* Employees Panel - Owner Override */
