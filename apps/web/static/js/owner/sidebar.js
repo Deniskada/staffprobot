@@ -158,6 +158,11 @@ class OwnerSidebar {
         this.isExpanded = false;
         this.sidebar.classList.remove('expanded');
         
+        // Сворачиваем все открытые пункты меню при сворачивании сайдбара
+        this.menuItems.forEach(item => {
+            item.classList.remove('open');
+        });
+        
         if (this.overlay) {
             this.overlay.classList.remove('active');
         }
@@ -181,6 +186,11 @@ class OwnerSidebar {
             // Всегда сворачиваем при отключении pin
             this.sidebar.classList.remove('expanded');
             this.isExpanded = false;
+            
+            // Сворачиваем все открытые пункты меню
+            this.menuItems.forEach(item => {
+                item.classList.remove('open');
+            });
         }
         
         this.saveState();
