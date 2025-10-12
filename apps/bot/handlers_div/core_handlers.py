@@ -994,7 +994,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         ],
         [
             InlineKeyboardButton("📊 Отчет", callback_data="get_report"),
-            InlineKeyboardButton("❓ Помощь", callback_data="help")
+            InlineKeyboardButton("📝 Мои задачи", callback_data="my_tasks")
         ],
         [
             InlineKeyboardButton("📈 Статус", callback_data="status"),
