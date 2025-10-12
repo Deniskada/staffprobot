@@ -125,19 +125,29 @@ console.log('Unified calendar grid script loading...');
 
 // Каскадная фильтрация по подразделениям и объектам
 function filterByOrgUnit() {
-    const orgUnitId = document.getElementById('orgUnitFilter').value;
+    const orgUnitId = document.getElementById('orgUnitFilter')?.value;
     const objectFilter = document.getElementById('objectFilter');
     
-    // Фильтруем объекты по подразделению
+    // Фильтруем объекты по подразделению в выпадающем списке
     if (objectFilter) {
         const allOptions = objectFilter.querySelectorAll('option[data-org-unit]');
+        let hasVisibleObjects = false;
+        
         allOptions.forEach(option => {
             if (orgUnitId === '' || option.dataset.orgUnit === orgUnitId) {
                 option.style.display = '';
+                hasVisibleObjects = true;
             } else {
                 option.style.display = 'none';
             }
         });
+        
+        // Показываем "Все объекты" только если есть видимые объекты
+        const allObjectsOption = objectFilter.querySelector('option[value=""]');
+        if (allObjectsOption) {
+            allObjectsOption.style.display = hasVisibleObjects ? '' : 'none';
+        }
+        
         // Сбрасываем выбор объекта если он не соответствует подразделению
         if (objectFilter.value) {
             const selectedOption = objectFilter.querySelector(`option[value="${objectFilter.value}"]`);
@@ -147,8 +157,19 @@ function filterByOrgUnit() {
         }
     }
     
-    // Обновляем URL
-    updateCalendarURL({ org_unit_id: orgUnitId, object_id: objectFilter?.value || '' });
+    // Обновляем URL для серверной фильтрации
+    const url = new URL(window.location);
+    
+    if (orgUnitId) {
+        url.searchParams.set('org_unit_id', orgUnitId);
+    } else {
+        url.searchParams.delete('org_unit_id');
+    }
+    
+    // Сбрасываем фильтр объектов при смене подразделения
+    url.searchParams.delete('object_id');
+    
+    window.location.href = url.toString();
 }
 
 function filterByObject() {
