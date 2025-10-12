@@ -2023,6 +2023,10 @@ async def manager_timeslot_detail(
         actual_result = await db.execute(actual_query)
         actual_shifts = actual_result.scalars().all()
         
+        # Получаем available_interfaces
+        login_service = RoleBasedLoginService(db)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
         return templates.TemplateResponse(
             "manager/timeslot_detail.html",
             {
@@ -2031,7 +2035,8 @@ async def manager_timeslot_detail(
                 "timeslot": timeslot,
                 "scheduled_shifts": scheduled_shifts,
                 "actual_shifts": actual_shifts,
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
         
@@ -3600,6 +3605,28 @@ async def manager_shift_detail(
                 # Приводим статус к строке (если Enum)
                 status_value = getattr(shift.status, 'value', shift.status)
                 
+                # Получаем contract для hourly_rate
+                hourly_rate = None
+                if shift.contract_id:
+                    contract_query = select(Contract).where(Contract.id == shift.contract_id)
+                    contract_result = await db.execute(contract_query)
+                    contract = contract_result.scalar_one_or_none()
+                    if contract:
+                        hourly_rate = contract.hourly_rate
+                
+                # Получаем задачи из timeslot или object
+                shift_tasks = []
+                if shift.time_slot_id:
+                    timeslot_query = select(TimeSlot).where(TimeSlot.id == shift.time_slot_id)
+                    timeslot_result = await db.execute(timeslot_query)
+                    timeslot = timeslot_result.scalar_one_or_none()
+                    if timeslot and timeslot.shift_tasks:
+                        shift_tasks = timeslot.shift_tasks if isinstance(timeslot.shift_tasks, list) else []
+                
+                # Если задач нет в timeslot, берем из объекта
+                if not shift_tasks and shift.object and shift.object.shift_tasks:
+                    shift_tasks = shift.object.shift_tasks if isinstance(shift.object.shift_tasks, list) else []
+                
                 shift_data = {
                     'id': shift.id,
                     'type': 'shift',
@@ -3612,6 +3639,8 @@ async def manager_shift_detail(
                     'status': status_value,
                     'total_hours': shift.total_hours,
                     'total_payment': shift.total_payment,
+                    'hourly_rate': hourly_rate,
+                    'shift_tasks': shift_tasks,
                     'notes': shift.notes,
                     'created_at': shift.created_at
                 }
