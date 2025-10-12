@@ -504,23 +504,26 @@ async def manager_timeslots_bulk_edit(
         if "ignore_object_tasks" in form_data:
             update_params["ignore_object_tasks"] = form_data.get("ignore_object_tasks") not in ["false", ""]
         
-        # Обработка задач (shift_tasks)
+        # Обработка задач (shift_tasks) - новый формат с task_description_N
         shift_tasks = []
-        task_texts = form_data.getlist("task_text[]")
-        task_amounts = form_data.getlist("task_amount[]")
-        
-        for idx, text in enumerate(task_texts):
-            if text.strip():
-                is_mandatory = f"task_mandatory_{idx}" in form_data
-                requires_media = f"task_media_{idx}" in form_data
+        task_index = 0
+        while f"task_description_{task_index}" in form_data:
+            task_desc = form_data.get(f"task_description_{task_index}", "").strip()
+            if task_desc:
+                task = {"description": task_desc}
                 
-                task = {
-                    "description": text.strip(),
-                    "amount": float(task_amounts[idx]) if idx < len(task_amounts) and task_amounts[idx] else 0.0,
-                    "is_mandatory": is_mandatory,
-                    "requires_media": requires_media
-                }
+                amount_str = form_data.get(f"task_amount_{task_index}", "").strip()
+                if amount_str:
+                    try:
+                        task["amount"] = float(amount_str)
+                    except ValueError:
+                        pass
+                
+                task["is_mandatory"] = f"task_mandatory_{task_index}" in form_data
+                task["requires_media"] = f"task_media_{task_index}" in form_data
+                
                 shift_tasks.append(task)
+            task_index += 1
         
         if shift_tasks:
             update_params["shift_tasks"] = shift_tasks
