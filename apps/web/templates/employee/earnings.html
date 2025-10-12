@@ -209,6 +209,46 @@
                         </tfoot>
                     </table>
                 </div>
+                
+                <!-- Пагинация -->
+                {% if total_pages > 1 %}
+                <div class="card-footer">
+                    <nav aria-label="Пагинация по заработкам">
+                        <ul class="pagination pagination-sm mb-0 justify-content-center">
+                            <li class="page-item {% if not has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page=1&per_page={{ per_page }}" aria-label="Первая">
+                                    <span aria-hidden="true">&laquo;&laquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item {% if not has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ page - 1 }}&per_page={{ per_page }}" aria-label="Предыдущая">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                            
+                            {% for p in range([1, page - 2]|max, [total_pages, page + 2]|min + 1) %}
+                            <li class="page-item {% if p == page %}active{% endif %}">
+                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
+                            </li>
+                            {% endfor %}
+                            
+                            <li class="page-item {% if not has_next %}disabled{% endif %}">
+                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ page + 1 }}&per_page={{ per_page }}" aria-label="Следующая">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item {% if not has_next %}disabled{% endif %}">
+                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ total_pages }}&per_page={{ per_page }}" aria-label="Последняя">
+                                    <span aria-hidden="true">&raquo;&raquo;</span>
+                                </a>
+                            </li>
+                        </ul>
+                        <div class="text-center mt-2">
+                            <small class="text-muted">Страница {{ page }} из {{ total_pages }} (всего {{ total_count }} записей)</small>
+                        </div>
+                    </nav>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

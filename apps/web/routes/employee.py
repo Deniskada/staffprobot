@@ -48,9 +48,24 @@ async def load_employee_earnings(
     db: AsyncSession,
     user_id: int,
     start_date: date,
-    end_date: date
-) -> tuple[List[Dict[str, Any]], float, float, List[Dict[str, Any]]]:
+    end_date: date,
+    page: int = 1,
+    per_page: int = 50
+) -> tuple[List[Dict[str, Any]], float, float, List[Dict[str, Any]], int]:
     """Загружает завершенные смены сотрудника и агрегирует данные."""
+
+    # Подсчет общего количества для пагинации
+    count_query = (
+        select(func.count(Shift.id))
+        .where(
+            Shift.user_id == user_id,
+            Shift.status == "completed",
+            func.date(Shift.start_time) >= start_date,
+            func.date(Shift.start_time) <= end_date,
+        )
+    )
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar() or 0
 
     query = (
         select(Shift, Object)
@@ -61,7 +76,9 @@ async def load_employee_earnings(
             func.date(Shift.start_time) >= start_date,
             func.date(Shift.start_time) <= end_date,
         )
-        .order_by(Shift.start_time.asc())
+        .order_by(Shift.start_time.desc())
+        .limit(per_page)
+        .offset((page - 1) * per_page)
     )
 
     result = await db.execute(query)
@@ -160,13 +177,13 @@ async def load_employee_earnings(
         total_amount += float(adj.amount)
     
     # Сортируем earnings по дате
-    earnings.sort(key=lambda x: x["date_label"])
+    earnings.sort(key=lambda x: x["date_label"], reverse=True)
 
     summary_list = sorted(
         summary_by_object.values(), key=lambda item: item["amount"], reverse=True
     )
 
-    return earnings, total_hours, total_amount, summary_list
+    return earnings, total_hours, total_amount, summary_list, total_count
 
 
 async def get_user_id_from_current_user(current_user, session):
@@ -194,6 +211,8 @@ async def employee_earnings(
     request: Request,
     date_from: Optional[str] = Query(None, description="Дата начала периода (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Дата окончания периода (YYYY-MM-DD)"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    per_page: int = Query(50, ge=10, le=100, description="Записей на странице"),
     current_user: dict = Depends(require_employee_or_applicant),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -215,9 +234,14 @@ async def employee_earnings(
     if start_date > end_date:
         start_date, end_date = end_date, start_date
 
-    earnings, total_hours, total_amount, summary_by_object = await load_employee_earnings(
-        db, user_id, start_date, end_date
+    earnings, total_hours, total_amount, summary_by_object, total_count = await load_employee_earnings(
+        db, user_id, start_date, end_date, page, per_page
     )
+
+    # Вычисляем параметры пагинации
+    total_pages = (total_count + per_page - 1) // per_page
+    has_prev = page > 1
+    has_next = page < total_pages
 
     available_interfaces = await get_available_interfaces_for_user(current_user, db)
     applications_count_result = await db.execute(
@@ -238,6 +262,12 @@ async def employee_earnings(
             "total_hours": total_hours,
             "total_amount": total_amount,
             "summary_by_object": summary_by_object,
+            "page": page,
+            "per_page": per_page,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_prev": has_prev,
+            "has_next": has_next,
         },
     )
 
