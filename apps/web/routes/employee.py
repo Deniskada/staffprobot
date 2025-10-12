@@ -811,7 +811,7 @@ async def employee_create_application(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(f"Ошибка создания заявки: {exc}", exc_info=True)
+        logger.error(f"Ошибка создания заявки: {exc}")
         raise HTTPException(status_code=500, detail=f"Ошибка создания заявки: {exc}")
 
 @router.get("/api/applications/{application_id}")
@@ -1102,7 +1102,7 @@ async def employee_calendar(
             "show_today_button": True,
         })
     except Exception as e:
-        logger.error(f"Ошибка загрузки календаря: {e}", exc_info=True)
+        logger.error(f"Ошибка загрузки календаря: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки календаря: {e}")
 
 
@@ -1230,7 +1230,7 @@ async def employee_api_employees(
         
         return employee_data
     except Exception as e:
-        logger.error(f"Ошибка загрузки сотрудника: {e}", exc_info=True)
+        logger.error(f"Ошибка загрузки сотрудника: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
 
 
@@ -1415,7 +1415,7 @@ async def employee_shifts_list(
             "pagination": {"page": page, "per_page": per_page, "total": total, "pages": (total + per_page - 1)//per_page}
         })
     except Exception as e:
-        logger.error(f"Error loading employee shifts: {e}", exc_info=True)
+        logger.error(f"Error loading employee shifts: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки смен сотрудника")
 
 @router.get("/profile", response_class=HTMLResponse)
@@ -1610,7 +1610,7 @@ async def employee_profile_update(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating profile: {e}", exc_info=True)
+        logger.error(f"Error updating profile: {e}")
         raise HTTPException(status_code=500, detail="Ошибка обновления профиля")
 
 
@@ -1955,7 +1955,7 @@ async def employee_calendar_api_data(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting employee calendar data: {e}", exc_info=True)
+        logger.error(f"Error getting employee calendar data: {e}")
         logger.error(f"Exception details: {type(e).__name__}: {str(e)}")
         raise HTTPException(status_code=500, detail="Ошибка получения данных календаря")
 
@@ -2089,7 +2089,7 @@ async def employee_shift_detail(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in employee shift detail: {e}", exc_info=True)
+        logger.error(f"Error in employee shift detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
 
 
@@ -2183,7 +2183,7 @@ async def employee_timeslot_detail(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in employee timeslot detail: {e}", exc_info=True)
+        logger.error(f"Error in employee timeslot detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
 
 
@@ -2294,7 +2294,7 @@ async def employee_plan_shift(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error planning shift for employee: {e}", exc_info=True)
+        logger.error(f"Error planning shift for employee: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
 
 
@@ -2331,5 +2331,5 @@ async def employee_cancel_planned_shift(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error cancelling planned shift: {e}", exc_info=True)
+        logger.error(f"Error cancelling planned shift: {e}")
         raise HTTPException(status_code=500, detail="Ошибка отмены смены")

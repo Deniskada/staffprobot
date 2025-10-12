@@ -1785,7 +1785,7 @@ async def owner_analysis_chart_data(
         return chart_data
         
     except Exception as e:
-        logger.error(f"Error getting chart data: {e}", exc_info=True)
+        logger.error(f"Error getting chart data: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения данных графика")
 
 
@@ -2229,7 +2229,7 @@ async def owner_calendar_api_data(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting owner calendar data: {e}", exc_info=True)
+        logger.error(f"Error getting owner calendar data: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения данных календаря")
 
 
@@ -2919,7 +2919,7 @@ async def check_employee_availability_owner(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error checking employee availability: {e}", exc_info=True)
+        logger.error(f"Error checking employee availability: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка проверки доступности: {str(e)}")
 
 
@@ -5762,7 +5762,7 @@ async def owner_contract_terminate(
         logger.error(f"=== ROUTE: Contract termination failed ===")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Error message: {str(e)}")
-        logger.error(f"Full traceback:", exc_info=True)
+        logger.error(f"Full traceback:")
         
         # Проверяем тип запроса для правильного ответа
         content_type = request.headers.get("content-type", "")

@@ -663,7 +663,7 @@ async def manager_employees(
             })
         
     except Exception as e:
-        logger.error(f"Error in manager employees: {e}", exc_info=True)
+        logger.error(f"Error in manager employees: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
 
 
@@ -1493,7 +1493,7 @@ async def manager_calendar(
         })
         
     except Exception as e:
-        logger.error(f"Error in manager calendar: {e}", exc_info=True)
+        logger.error(f"Error in manager calendar: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки календаря")
 
 
@@ -1680,7 +1680,7 @@ async def manager_calendar_api_data(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting manager calendar data: {e}", exc_info=True)
+        logger.error(f"Error getting manager calendar data: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения данных календаря")
 
 
@@ -1821,7 +1821,7 @@ async def get_timeslots_status_manager(
         return test_data
         
     except Exception as e:
-        logger.error(f"Error getting timeslots status for manager: {e}", exc_info=True)
+        logger.error(f"Error getting timeslots status for manager: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки статуса тайм-слотов")
 
 
@@ -2644,7 +2644,7 @@ async def get_employees_for_manager(
             return employees_data
             
     except Exception as e:
-        logger.error(f"Error getting employees for manager: {e}", exc_info=True)
+        logger.error(f"Error getting employees for manager: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
 
 
@@ -2709,7 +2709,7 @@ async def get_objects_for_manager_calendar(
             return objects_data
             
     except Exception as e:
-        logger.error(f"Error getting objects for manager calendar: {e}", exc_info=True)
+        logger.error(f"Error getting objects for manager calendar: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки объектов")
 
 
@@ -2839,7 +2839,7 @@ async def get_employees_for_object_manager(
             return employees_data
             
     except Exception as e:
-        logger.error(f"Error getting employees for object {object_id}: {e}", exc_info=True)
+        logger.error(f"Error getting employees for object {object_id}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников для объекта")
 
 
@@ -3065,7 +3065,7 @@ async def plan_shift_manager(
         logger.error(f"HTTPException in planning shift: {e.detail}")
         raise e
     except Exception as e:
-        logger.error(f"Error planning shift: {e}", exc_info=True)
+        logger.error(f"Error planning shift: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
 
 
@@ -3220,7 +3220,7 @@ async def check_employee_availability(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error checking employee availability: {e}", exc_info=True)
+        logger.error(f"Error checking employee availability: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка проверки доступности: {str(e)}")
 
 
@@ -3660,7 +3660,7 @@ async def manager_shift_detail(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error loading manager shift detail: {e}", exc_info=True)
+        logger.error(f"Error loading manager shift detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
 
 
@@ -3748,7 +3748,7 @@ async def quick_create_timeslot_manager(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating timeslot: {e}", exc_info=True)
+        logger.error(f"Error creating timeslot: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слота: {str(e)}")
 
 
