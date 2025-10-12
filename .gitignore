@@ -69,6 +69,7 @@ docs/marketing
 tmp/
 temp/
 *.tmp
+.~lock.*#
 
 # Coverage reports
 .coverage
