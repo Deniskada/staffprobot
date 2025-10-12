@@ -10,7 +10,7 @@ from core.database.session import get_async_session
 from core.utils.timezone_helper import timezone_helper
 from domain.entities.object import Object
 from domain.entities.shift import Shift
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from core.state import user_state_manager, UserAction, UserStep
 # from .utils import get_location_keyboard  # Удалено, создаем клавиатуру прямо в коде
 
@@ -1377,7 +1377,7 @@ async def _show_task_list(context, user_id: int, shift_id: int, shift_tasks: lis
     )
 
 
-async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE, shift_id: int):
+async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать задачи активной смены без закрытия смены."""
     query = update.callback_query
     user_id = query.from_user.id
@@ -1385,24 +1385,45 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE, s
     try:
         # Получаем информацию о смене
         async with get_async_session() as session:
-            shift_query = select(Shift).where(Shift.id == shift_id)
-            shift_result = await session.execute(shift_query)
-            shift_obj = shift_result.scalar_one_or_none()
+            from domain.entities.user import User
+            from domain.entities.time_slot import TimeSlot
             
-            if not shift_obj:
+            # Получаем внутренний user_id
+            user_query = select(User).where(User.telegram_id == user_id)
+            user_result = await session.execute(user_query)
+            db_user = user_result.scalar_one_or_none()
+            
+            if not db_user:
                 await query.edit_message_text(
-                    text="❌ Смена не найдена.",
+                    text="❌ Пользователь не найден.",
                     parse_mode='HTML'
                 )
                 return
             
-            # Проверяем что смена активна
-            if shift_obj.end_time:
+            # Находим активную смену
+            shifts_query = select(Shift).where(
+                and_(
+                    Shift.user_id == db_user.id,
+                    Shift.status == "active"
+                )
+            )
+            shifts_result = await session.execute(shifts_query)
+            active_shifts = shifts_result.scalars().all()
+            
+            if not active_shifts:
                 await query.edit_message_text(
-                    text="❌ Смена уже закрыта.",
-                    parse_mode='HTML'
+                    text="📋 <b>Мои задачи</b>\n\n"
+                         "❌ У вас нет активной смены.\n\n"
+                         "Откройте смену, чтобы увидеть задачи.",
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+                    ]])
                 )
                 return
+            
+            shift_obj = active_shifts[0]
+            shift_id = shift_obj.id
             
             # Получаем задачи
             shift_tasks = []
@@ -1430,7 +1451,9 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE, s
             
             if not shift_tasks:
                 await query.edit_message_text(
-                    text="📋 <b>Задачи на смену не назначены</b>",
+                    text="📋 <b>Мои задачи</b>\n\n"
+                         "✅ На эту смену задачи не назначены.\n\n"
+                         "Выполняйте свою работу согласно инструкциям.",
                     parse_mode='HTML',
                     reply_markup=InlineKeyboardMarkup([[
                         InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")

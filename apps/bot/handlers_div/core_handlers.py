@@ -91,68 +91,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f"Existing user returned: user_id={user.id}, username={user.username}, chat_id={chat_id}"
         )
     
-    # Проверяем активную смену и наличие задач
-    has_tasks = False
-    active_shift_id = None
-    
-    try:
-        async with get_async_session() as session:
-            from domain.entities.shift import Shift
-            from domain.entities.user import User
-            from domain.entities.time_slot import TimeSlot
-            from domain.entities.object import Object
-            from sqlalchemy import select, and_
-            
-            # Получаем внутренний user_id из БД по telegram_id
-            user_query = select(User).where(User.telegram_id == user.id)
-            user_result = await session.execute(user_query)
-            db_user = user_result.scalar_one_or_none()
-            
-            if db_user:
-                # Получаем активные смены напрямую (без вложенных сессий)
-                shifts_query = select(Shift).where(
-                    and_(
-                        Shift.user_id == db_user.id,
-                        Shift.status == "active"
-                    )
-                )
-                shifts_result = await session.execute(shifts_query)
-                active_shifts = shifts_result.scalars().all()
-                
-                logger.info(f"[MY_TASKS] User telegram_id={user.id}, db_user.id={db_user.id}, active_shifts count={len(active_shifts)}")
-                
-                if active_shifts:
-                    active_shift = active_shifts[0]
-                    active_shift_id = active_shift.id
-                    
-                    logger.info(f"[MY_TASKS] Active shift: id={active_shift_id}, time_slot_id={active_shift.time_slot_id}, object_id={active_shift.object_id}")
-                    
-                    # Проверяем задачи в тайм-слоте
-                    if active_shift.time_slot_id:
-                        timeslot_query = select(TimeSlot).where(TimeSlot.id == active_shift.time_slot_id)
-                        timeslot_result = await session.execute(timeslot_query)
-                        timeslot = timeslot_result.scalar_one_or_none()
-                        
-                        logger.info(f"[MY_TASKS] Timeslot found: {timeslot is not None}, has shift_tasks: {timeslot.shift_tasks if timeslot else None}")
-                        
-                        if timeslot and timeslot.shift_tasks:
-                            has_tasks = True
-                    
-                    # Если задач нет в тайм-слоте, проверяем объект
-                    if not has_tasks and active_shift.object_id:
-                        object_query = select(Object).where(Object.id == active_shift.object_id)
-                        object_result = await session.execute(object_query)
-                        obj = object_result.scalar_one_or_none()
-                        
-                        logger.info(f"[MY_TASKS] Object found: {obj is not None}, has shift_tasks: {obj.shift_tasks if obj else None}")
-                        
-                        if obj and obj.shift_tasks:
-                            has_tasks = True
-                            logger.info(f"[MY_TASKS] Tasks found in object! Count: {len(obj.shift_tasks)}")
-                
-                logger.info(f"[MY_TASKS] Final result: has_tasks={has_tasks}, active_shift_id={active_shift_id}")
-    except Exception as e:
-        logger.error(f"Error checking tasks for user {user.id}: {e}")
+    # Всегда показываем кнопку "Мои задачи" (без проверки наличия задач)
     
     # Создаем кнопки для основных действий
     keyboard = [
@@ -170,10 +109,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         ],
         [
             InlineKeyboardButton("📊 Отчет", callback_data="get_report"),
-            InlineKeyboardButton(
-                "📝 Мои задачи" if has_tasks else "❓ Помощь",
-                callback_data=f"my_tasks:{active_shift_id}" if has_tasks else "help"
-            )
+            InlineKeyboardButton("📝 Мои задачи", callback_data="my_tasks")
         ],
         [
             InlineKeyboardButton("📈 Статус", callback_data="status"),
@@ -770,10 +706,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await _show_task_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
         return
     # Мои задачи (во время смены)
-    elif query.data.startswith("my_tasks:"):
-        shift_id = int(query.data.split(":", 1)[1])
+    elif query.data == "my_tasks":
         from .shift_handlers import _handle_my_tasks
-        await _handle_my_tasks(update, context, shift_id)
+        await _handle_my_tasks(update, context)
         return
     elif query.data.startswith("complete_my_task:"):
         from .shift_handlers import _handle_complete_my_task
