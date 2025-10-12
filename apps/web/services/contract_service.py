@@ -976,7 +976,8 @@ class ContractService:
             accessible_object_ids = set()
             
             for contract in contracts:
-                if contract.allowed_objects:
+                # Только из активных договоров
+                if contract.is_active and contract.allowed_objects:
                     for obj_id in contract.allowed_objects:
                         if obj_id in objects_info and obj_id not in accessible_object_ids:
                             obj = objects_info[obj_id]
@@ -1057,7 +1058,8 @@ class ContractService:
             query = select(Contract).where(
                 and_(
                     Contract.employee_id == employee_id,
-                    Contract.owner_id.in_(owner_ids)
+                    Contract.owner_id.in_(owner_ids),
+                    Contract.is_active == True  # Только активные договоры
                 )
             ).options(
                 selectinload(Contract.employee)
@@ -1085,7 +1087,8 @@ class ContractService:
             accessible_object_ids = set()
             
             for contract in contracts:
-                if contract.allowed_objects:
+                # Только из активных договоров
+                if contract.is_active and contract.allowed_objects:
                     for obj_id in contract.allowed_objects:
                         if obj_id in objects_info and obj_id not in accessible_object_ids:
                             obj = objects_info[obj_id]
@@ -1367,6 +1370,7 @@ class ContractService:
             if "manager_permissions" in update_data:
                 contract.manager_permissions = update_data["manager_permissions"]
             
+            session.add(contract)
             await session.commit()
             return True
     
