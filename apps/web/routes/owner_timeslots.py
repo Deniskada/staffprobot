@@ -88,6 +88,7 @@ async def timeslots_all_list(
                 "start_time": slot.start_time.strftime("%H:%M"),
                 "end_time": slot.end_time.strftime("%H:%M"),
                 "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else (float(slot_obj.hourly_rate) if slot_obj else 0),
+                "max_employees": slot.max_employees,
                 "is_active": slot.is_active,
                 "created_at": slot.created_at.strftime("%Y-%m-%d")
             })
