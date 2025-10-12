@@ -13,6 +13,7 @@ class UserAction(str, Enum):
     CLOSE_SHIFT = "close_shift"
     OPEN_OBJECT = "open_object"  # Открытие объекта
     CLOSE_OBJECT = "close_object"  # Закрытие объекта
+    MY_TASKS = "my_tasks"  # Просмотр и выполнение задач во время смены
     CREATE_OBJECT = "create_object"
     EDIT_OBJECT = "edit_object"
     SCHEDULE_SHIFT = "schedule_shift"
