@@ -1701,15 +1701,15 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
                         logger.info(f"[MY_TASKS] Object scalar retrieved: {obj is not None}")
                         
                         if obj:
-                            logger.info(f"[MY_TASKS] Object details: id={obj.id}, name={obj.name}, telegram_chat_id={obj.telegram_chat_id}")
+                            logger.info(f"[MY_TASKS] Object details: id={obj.id}, name={obj.name}, telegram_report_chat_id={obj.telegram_report_chat_id}")
                     except Exception as obj_err:
                         logger.error(f"[MY_TASKS] Error getting object: {obj_err}", exc_info=True)
                         obj = None
                     
-                    logger.info(f"[MY_TASKS] Object found: {obj is not None}, telegram_chat_id: {obj.telegram_chat_id if obj else None}")
+                    logger.info(f"[MY_TASKS] Object found: {obj is not None}, telegram_report_chat_id: {obj.telegram_report_chat_id if obj else None}")
                     
                     if obj:
-                        telegram_chat_id = obj.telegram_chat_id
+                        telegram_chat_id = obj.telegram_report_chat_id
                         object_name = obj.name
                         
                         logger.info(f"[MY_TASKS] telegram_chat_id={telegram_chat_id}, object_name={object_name}")
