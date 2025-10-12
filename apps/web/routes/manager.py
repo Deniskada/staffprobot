@@ -3622,8 +3622,10 @@ async def manager_shift_detail(
                     timeslot_query = select(TimeSlot).where(TimeSlot.id == time_slot_id)
                     timeslot_result = await db.execute(timeslot_query)
                     timeslot = timeslot_result.scalar_one_or_none()
-                    if timeslot and timeslot.shift_tasks:
-                        shift_tasks = timeslot.shift_tasks if isinstance(timeslot.shift_tasks, list) else []
+                    if timeslot:
+                        timeslot_tasks = getattr(timeslot, 'shift_tasks', None)
+                        if timeslot_tasks:
+                            shift_tasks = timeslot_tasks if isinstance(timeslot_tasks, list) else []
                 
                 # Если задач нет в timeslot, берем из объекта
                 if not shift_tasks and shift.object:
