@@ -1682,37 +1682,51 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
         object_name = user_state.data.get('object_name')
         
         if not telegram_chat_id:
+            logger.info(f"[MY_TASKS] Getting telegram_chat_id from DB for shift {shift_id}")
             # Получаем из БД
             async with get_async_session() as session:
                 shift_query = select(Shift).where(Shift.id == shift_id)
                 shift_result = await session.execute(shift_query)
                 shift_obj = shift_result.scalar_one_or_none()
                 
+                logger.info(f"[MY_TASKS] Shift found: {shift_obj is not None}, object_id: {shift_obj.object_id if shift_obj else None}")
+                
                 if shift_obj:
                     object_query = select(Object).where(Object.id == shift_obj.object_id)
                     object_result = await session.execute(object_query)
                     obj = object_result.scalar_one_or_none()
                     
+                    logger.info(f"[MY_TASKS] Object found: {obj is not None}, telegram_chat_id: {obj.telegram_chat_id if obj else None}")
+                    
                     if obj:
                         telegram_chat_id = obj.telegram_chat_id
                         object_name = obj.name
                         
+                        logger.info(f"[MY_TASKS] telegram_chat_id={telegram_chat_id}, object_name={object_name}")
+                        
                         # Если нет в объекте - проверяем подразделение
                         if not telegram_chat_id and obj.division_id:
+                            logger.info(f"[MY_TASKS] Checking division {obj.division_id} for telegram_chat_id")
                             from domain.entities.org_structure_unit import OrgStructureUnit
                             division_query = select(OrgStructureUnit).where(OrgStructureUnit.id == obj.division_id)
                             division_result = await session.execute(division_query)
                             division = division_result.scalar_one_or_none()
                             if division:
                                 telegram_chat_id = division.telegram_chat_id
+                                logger.info(f"[MY_TASKS] Found telegram_chat_id in division: {telegram_chat_id}")
+        
+        logger.info(f"[MY_TASKS] Final telegram_chat_id check: {telegram_chat_id}")
         
         if not telegram_chat_id:
+            logger.warning(f"[MY_TASKS] No telegram_chat_id found, showing error to user")
             await query.edit_message_text(
                 text="❌ Telegram группа для отчетов не настроена.\n\n"
                      "Обратитесь к администратору для настройки группы в объекте или подразделении.",
                 parse_mode='HTML'
             )
             return
+        
+        logger.info(f"[MY_TASKS] Updating user state with telegram_chat_id={telegram_chat_id}")
         
         # Обновляем состояние
         user_state_manager.update_state(
@@ -1726,11 +1740,15 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
         task = shift_tasks[task_idx]
         task_text = task.get('text') or task.get('task_text', 'Задача')
         
+        logger.info(f"[MY_TASKS] Task text: {task_text}, preparing media request")
+        
         media_types = task.get('media_types', ['photo', 'video'])
         if isinstance(media_types, str):
             media_types = media_types.split(',')
         
         media_text = "фото" if media_types == ["photo"] else "видео" if media_types == ["video"] else "фото или видео"
+        
+        logger.info(f"[MY_TASKS] Sending media request message")
         
         await query.edit_message_text(
             text=f"📸 <b>Требуется отчет</b>\n\n"
@@ -1742,6 +1760,8 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
                 InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_my_task_media:{shift_id}")
             ]])
         )
+        
+        logger.info(f"[MY_TASKS] Media request sent successfully")
         
     except Exception as e:
         logger.error(f"Error handling my task media upload: {e}")
