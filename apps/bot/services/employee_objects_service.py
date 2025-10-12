@@ -39,11 +39,8 @@ class EmployeeObjectsService:
                 
                 # Проверяем роль пользователя
                 user_role = user.role if hasattr(user, 'role') else None
-                logger.info(f"User {telegram_id} role: {user_role}")
-                
-                # Если пользователь - владелец, получаем его объекты
-                if user_role == 'owner':
-                    return await self._get_owner_objects(session, user.id)
+                user_roles = user.roles if hasattr(user, 'roles') else []
+                logger.info(f"User {telegram_id} role: {user_role}, roles: {user_roles}")
                 
                 # Получаем активные договоры пользователя
                 contracts_query = select(Contract).where(
@@ -115,6 +112,16 @@ class EmployeeObjectsService:
                                 })
                 
                 objects_list = list(objects_dict.values())
+                
+                # Дополнительно: если пользователь владелец - добавляем его собственные объекты
+                if user_role == 'owner' or 'owner' in user_roles:
+                    owner_objects = await self._get_owner_objects(session, user.id)
+                    # Добавляем объекты владельца, которых еще нет в списке
+                    existing_ids = set(objects_dict.keys())
+                    for owner_obj in owner_objects:
+                        if owner_obj['id'] not in existing_ids:
+                            objects_list.append(owner_obj)
+                            logger.info(f"Added owner object {owner_obj['id']} ({owner_obj['name']}) to list")
                 
                 logger.info(
                     f"Found {len(objects_list)} objects for employee {telegram_id} "

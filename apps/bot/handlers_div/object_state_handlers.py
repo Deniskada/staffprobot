@@ -81,31 +81,52 @@ async def _handle_open_object(update: Update, context: ContextTypes.DEFAULT_TYPE
         contracts_result = await session.execute(contracts_query)
         contracts = contracts_result.scalars().all()
         
-        if not contracts:
-            await query.edit_message_text(
-                text="❌ У вас нет активных договоров.\n\nОбратитесь к работодателю.",
-                parse_mode='HTML'
-            )
-            return
-        
-        # Собрать список объектов
+        # Собрать список объектов из договоров
         available_objects = []
-        for contract in contracts:
-            if contract.allowed_objects:
-                for obj_id in contract.allowed_objects:
-                    if obj_id not in [o['id'] for o in available_objects]:
-                        obj_query = select(Object).where(Object.id == obj_id)
-                        obj_result = await session.execute(obj_query)
-                        obj = obj_result.scalar_one_or_none()
-                        if obj and obj.is_active:
-                            # Проверить: уже открыт?
-                            opening_service = ObjectOpeningService(session)
-                            is_open = await opening_service.is_object_open(obj.id)
-                            available_objects.append({
-                                'id': obj.id,
-                                'name': obj.name,
-                                'is_open': is_open
-                            })
+        if contracts:
+            for contract in contracts:
+                if contract.allowed_objects:
+                    for obj_id in contract.allowed_objects:
+                        if obj_id not in [o['id'] for o in available_objects]:
+                            obj_query = select(Object).where(Object.id == obj_id)
+                            obj_result = await session.execute(obj_query)
+                            obj = obj_result.scalar_one_or_none()
+                            if obj and obj.is_active:
+                                # Проверить: уже открыт?
+                                opening_service = ObjectOpeningService(session)
+                                is_open = await opening_service.is_object_open(obj.id)
+                                available_objects.append({
+                                    'id': obj.id,
+                                    'name': obj.name,
+                                    'is_open': is_open
+                                })
+        
+        # Дополнительно: если пользователь владелец - добавляем его собственные объекты
+        user_role = db_user.role if hasattr(db_user, 'role') else None
+        user_roles = db_user.roles if hasattr(db_user, 'roles') else []
+        
+        if user_role == 'owner' or 'owner' in user_roles:
+            # Получаем объекты владельца
+            owner_objects_query = select(Object).where(
+                and_(
+                    Object.owner_id == db_user.id,
+                    Object.is_active == True
+                )
+            )
+            owner_objects_result = await session.execute(owner_objects_query)
+            owner_objects_list = owner_objects_result.scalars().all()
+            
+            # Добавляем к списку, убирая дубли
+            existing_ids = [o['id'] for o in available_objects]
+            for owner_obj in owner_objects_list:
+                if owner_obj.id not in existing_ids:
+                    opening_service = ObjectOpeningService(session)
+                    is_open = await opening_service.is_object_open(owner_obj.id)
+                    available_objects.append({
+                        'id': owner_obj.id,
+                        'name': owner_obj.name,
+                        'is_open': is_open
+                    })
         
         if not available_objects:
             await query.edit_message_text(
