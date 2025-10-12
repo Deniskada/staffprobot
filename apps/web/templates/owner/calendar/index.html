@@ -270,8 +270,9 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Override universal calendar manager methods for drag&drop
+// Override universal calendar manager methods
 if (window.universalCalendar) {
+    // Назначение сотрудника на тайм-слот (drag&drop)
     window.universalCalendar.assignEmployeeToTimeslot = async function(employeeId, timeslotId) {
     try {
         console.log(`Planning shift: employeeId=${employeeId}, timeslotId=${timeslotId}`);
@@ -329,36 +330,6 @@ if (window.universalCalendar) {
         calendarPanels.showNotification(`Ошибка назначения сотрудника: ${error.message}`, 'error');
     }
 };
-}
-
-if (window.universalCalendar) {
-    window.universalCalendar.createTimeslotFromObject = async function(objectId, date) {
-        try {
-            // Используем данные из памяти вместо повторного запроса
-            let objects = window.calendarPanels?.objectsData || [];
-            if (objects.length === 0) {
-                // Если данных нет в памяти, загружаем
-                const objectResponse = await fetch(`/owner/calendar/api/objects`);
-                objects = await objectResponse.json();
-            }
-            
-            const object = objects.find(obj => obj.id == objectId);
-            if (!object) {
-                calendarPanels.showNotification('Объект не найден', 'error');
-                return;
-            }
-            await calendarPanels.showQuickCreateForm({
-                id: objectId,
-                name: object.name,
-                hourlyRate: object.hourly_rate || 0,
-                openingTime: object.opening_time || '09:00',
-                closingTime: object.closing_time || '18:00'
-            }, date);
-        } catch (error) {
-            console.error('Error creating timeslot from object:', error);
-            calendarPanels.showNotification('Ошибка создания тайм-слота', 'error');
-        }
-    };
 }
 
 // NOTE: calendarPanels.init() уже вызван в основном DOMContentLoaded выше (строка 258)
