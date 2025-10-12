@@ -131,28 +131,8 @@
                                 {% else %}
                                 <span class="badge bg-warning">Нет</span>
                                 {% endif %}
-                            </div>
+                            </div>                          
                             
-                            {% if object.work_conditions %}
-                            <div class="mb-2">
-                                <small class="text-muted">Условия работы:</small><br>
-                                <small class="text-truncate d-block" title="{{ object.work_conditions }}">
-                                    {{ object.work_conditions[:50] }}{% if object.work_conditions|length > 50 %}...{% endif %}
-                                </small>
-                            </div>
-                            {% endif %}
-                            
-                            {% if object.shift_tasks %}
-                            <div class="mb-2">
-                                <small class="text-muted">Задачи смены:</small><br>
-                                {% for task in object.shift_tasks[:3] %}
-                                <small class="badge bg-light text-dark me-1">{{ task }}</small>
-                                {% endfor %}
-                                {% if object.shift_tasks|length > 3 %}
-                                <small class="text-muted">+{{ object.shift_tasks|length - 3 }} еще</small>
-                                {% endif %}
-                            </div>
-                            {% endif %}
                             
                             <div class="text-muted">
                                 <small>Создан: {{ object.created_at }}</small>

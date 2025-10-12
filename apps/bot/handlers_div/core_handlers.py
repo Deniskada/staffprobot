@@ -94,6 +94,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # Создаем кнопки для основных действий
     keyboard = [
         [
+            InlineKeyboardButton("🏢 Открыть объект", callback_data="open_object"),
+            InlineKeyboardButton("🔒 Закрыть объект", callback_data="close_object")
+        ],
+        [
             InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift"),
             InlineKeyboardButton("🔚 Закрыть смену", callback_data="close_shift")
         ],
@@ -150,15 +154,36 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_id = update.effective_user.id
     location = update.message.location
     
+    logger.info(
+        f"Location received from user",
+        user_id=user_id,
+        latitude=location.latitude,
+        longitude=location.longitude
+    )
+    
     # Получаем состояние пользователя
     user_state = user_state_manager.get_state(user_id)
     if not user_state:
+        logger.warning(f"No state found for user {user_id} when processing location")
         await update.message.reply_text(
             "❌ Сначала выберите действие (открыть или закрыть смену)"
         )
         return
     
-    if user_state.step != UserStep.LOCATION_REQUEST:
+    logger.info(
+        f"User state retrieved",
+        user_id=user_id,
+        action=user_state.action,
+        step=user_state.step
+    )
+    
+    if user_state.step not in [UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION]:
+        logger.warning(
+            f"Location not expected at this step",
+            user_id=user_id,
+            current_step=user_state.step,
+            expected_steps=[UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION]
+        )
         await update.message.reply_text(
             "❌ Геопозиция не ожидается на данном этапе"
         )
@@ -201,6 +226,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     f"💰 Часовая ставка: {hourly_rate}₽",
                     reply_markup=ReplyKeyboardRemove()
                 )
+                
+                # Очищаем состояние ТОЛЬКО при успехе
+                user_state_manager.clear_state(user_id)
+                
             else:
                 error_msg = f"❌ Ошибка при открытии смены: {result['error']}"
                 if 'distance_meters' in result:
@@ -208,7 +237,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     error_msg += f"\n📐 Максимум: {result.get('max_distance_meters', 100)}м"
                 
                 # Добавляем кнопки для повторной отправки или отмены
-                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
                 keyboard = [
                     [InlineKeyboardButton("📍 Отправить геопозицию повторно", callback_data=f"retry_location:{user_state.selected_object_id}")],
                     [InlineKeyboardButton("❌ Отмена", callback_data="main_menu")]
@@ -216,6 +244,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 await update.message.reply_text(error_msg, reply_markup=reply_markup)
+                # НЕ очищаем состояние - пользователь может попробовать снова
                             
         elif user_state.action == UserAction.CLOSE_SHIFT:
             # Закрываем смену
@@ -229,6 +258,38 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 total_hours = result.get('total_hours', 0) or 0
                 total_payment = result.get('total_payment', 0) or 0
                 
+                # Phase 4A: Сохраняем информацию о выполненных задачах в БД
+                shift_tasks = getattr(user_state, 'shift_tasks', [])
+                completed_tasks = getattr(user_state, 'completed_tasks', [])
+                task_media = getattr(user_state, 'task_media', {})
+                
+                if shift_tasks:
+                    # Сохраняем выполнение задач в shift.notes для Celery
+                    async with get_async_session() as session:
+                        from domain.entities.shift import Shift
+                        import json
+                        
+                        shift_query = select(Shift).where(Shift.id == user_state.selected_shift_id)
+                        shift_result = await session.execute(shift_query)
+                        shift_obj = shift_result.scalar_one_or_none()
+                        
+                        if shift_obj:
+                            # Добавляем JSON с completed_tasks и task_media в notes
+                            completed_info = json.dumps({
+                                'completed_tasks': completed_tasks,
+                                'task_media': task_media
+                            })
+                            shift_obj.notes = (shift_obj.notes or '') + f"\n[TASKS]{completed_info}"
+                            await session.commit()
+                            
+                            logger.info(
+                                f"Saved completed tasks info",
+                                shift_id=shift_obj.id,
+                                completed_count=len(completed_tasks),
+                                total_count=len(shift_tasks),
+                                media_count=len(task_media)
+                            )
+                
                 # Отладочный вывод
                 logger.info(
                     f"Close shift result for user {user_id}: result={result}, "
@@ -237,12 +298,90 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 # Убираем клавиатуру
                 from telegram import ReplyKeyboardRemove
-                await update.message.reply_text(
+                shift_close_message = (
                     f"✅ Смена успешно закрыта!\n"
                     f"⏱️ Отработано: {total_hours:.1f} часов\n"
-                    f"💰 Заработано: {total_payment}₽",
-                    reply_markup=ReplyKeyboardRemove()
+                    f"💰 Заработано: {total_payment}₽"
                 )
+                
+                await update.message.reply_text(shift_close_message, reply_markup=ReplyKeyboardRemove())
+                
+                # Проверяем: была ли это последняя смена на объекте?
+                # Если да - автоматически закрываем объект
+                from shared.services.object_opening_service import ObjectOpeningService
+                from domain.entities.user import User
+                
+                # Получаем object_id из закрытой смены
+                closed_shift_object_id = result.get('object_id')
+                
+                logger.info(
+                    f"Checking for auto-close object",
+                    user_id=user_id,
+                    shift_id=result.get('shift_id'),
+                    object_id=closed_shift_object_id,
+                    result_keys=list(result.keys())
+                )
+                
+                if closed_shift_object_id:
+                    async with get_async_session() as session:
+                        opening_service = ObjectOpeningService(session)
+                        
+                        # Проверяем: есть ли еще активные смены на этом объекте?
+                        active_count = await opening_service.get_active_shifts_count(closed_shift_object_id)
+                        
+                        if active_count == 0:
+                            # Это была последняя смена - закрываем объект
+                            # Получить пользователя по telegram_id
+                            user_query = select(User).where(User.telegram_id == user_id)
+                            user_result = await session.execute(user_query)
+                            db_user = user_result.scalar_one_or_none()
+                            
+                            if db_user:
+                                try:
+                                    opening = await opening_service.close_object(
+                                        object_id=closed_shift_object_id,
+                                        user_id=db_user.id,
+                                        coordinates=coordinates
+                                    )
+                                    
+                                    # Форматируем время с учетом часового пояса
+                                    from core.utils.timezone_helper import timezone_helper
+                                    # Получаем объект для timezone
+                                    obj_query = select(Object).where(Object.id == closed_shift_object_id)
+                                    obj_result = await session.execute(obj_query)
+                                    obj = obj_result.scalar_one_or_none()
+                                    
+                                    object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
+                                    close_time = timezone_helper.format_local_time(opening.closed_at, object_timezone, '%H:%M')
+                                    
+                                    await update.message.reply_text(
+                                        f"✅ <b>Объект автоматически закрыт!</b>\n\n"
+                                        f"(Это была последняя активная смена)\n\n"
+                                        f"⏰ Время закрытия: {close_time}\n"
+                                        f"⏱️ Время работы объекта: {opening.duration_hours:.1f}ч",
+                                        parse_mode='HTML'
+                                    )
+                                    
+                                    logger.info(
+                                        f"Object auto-closed after last shift closed",
+                                        object_id=closed_shift_object_id,
+                                        user_id=user_id,
+                                        shift_id=user_state.selected_shift_id
+                                    )
+                                except ValueError as e:
+                                    logger.warning(
+                                        f"Failed to auto-close object",
+                                        object_id=closed_shift_object_id,
+                                        error=str(e)
+                                    )
+                                    await update.message.reply_text(
+                                        f"⚠️ Не удалось автоматически закрыть объект: {str(e)}\n"
+                                        f"Используйте кнопку 'Закрыть объект' для закрытия вручную."
+                                    )
+                
+                # Очищаем состояние ТОЛЬКО при успехе
+                user_state_manager.clear_state(user_id)
+                
             else:
                 error_msg = f"❌ Ошибка при закрытии смены: {result['error']}"
                 if 'distance_meters' in result:
@@ -257,16 +396,199 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 await update.message.reply_text(error_msg, reply_markup=reply_markup)
+                # НЕ очищаем состояние - пользователь может попробовать снова
         
+        elif user_state.action == UserAction.OPEN_OBJECT:
+            # Открытие объекта + автоматическое открытие смены
+            from shared.services.object_opening_service import ObjectOpeningService
+            from core.geolocation.location_validator import LocationValidator
+            from domain.entities.user import User
+            
+            async with get_async_session() as session:
+                opening_service = ObjectOpeningService(session)
+                location_validator = LocationValidator()
+                
+                # Получить пользователя по telegram_id
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = await session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    await update.message.reply_text("❌ Пользователь не найден.")
+                    user_state_manager.clear_state(user_id)
+                    return
+                
+                # Получить объект
+                obj_query = select(Object).where(Object.id == user_state.selected_object_id)
+                obj_result = await session.execute(obj_query)
+                obj = obj_result.scalar_one_or_none()
+                
+                if not obj:
+                    await update.message.reply_text("❌ Объект не найден.")
+                    user_state_manager.clear_state(user_id)
+                    return
+                
+                # Проверить расстояние
+                validation_result = location_validator.validate_shift_location(
+                    user_coordinates=coordinates,
+                    object_coordinates=obj.coordinates,
+                    max_distance_meters=obj.max_distance_meters
+                )
+                
+                if not validation_result['valid']:
+                    await update.message.reply_text(
+                        f"❌ Вы слишком далеко от объекта!\n"
+                        f"📏 Расстояние: {validation_result['distance_meters']:.0f}м\n"
+                        f"📐 Максимум: {validation_result['max_distance_meters']}м"
+                    )
+                    return
+                
+                # Открыть объект
+                try:
+                    opening = await opening_service.open_object(
+                        object_id=obj.id,
+                        user_id=db_user.id,  # Используем внутренний ID, а не telegram_id
+                        coordinates=coordinates
+                    )
+                    
+                    # Проверяем: есть ли запланированная смена на сегодня на этом объекте?
+                    from apps.bot.services.shift_schedule_service import ShiftScheduleService
+                    from datetime import date
+                    
+                    shift_schedule_service = ShiftScheduleService()
+                    today = date.today()
+                    planned_shifts = await shift_schedule_service.get_user_planned_shifts_for_date(user_id, today)
+                    
+                    # Ищем смену для текущего объекта
+                    schedule_for_object = None
+                    for shift_data in planned_shifts:
+                        if shift_data.get('object_id') == obj.id:
+                            schedule_for_object = shift_data
+                            break
+                    
+                    # Определяем параметры для открытия смены
+                    if schedule_for_object:
+                        # Есть запланированная смена - открываем её
+                        result = await shift_service.open_shift(
+                            user_id=user_id,
+                            object_id=obj.id,
+                            coordinates=coordinates,
+                            shift_type='planned',
+                            timeslot_id=schedule_for_object.get('time_slot_id'),
+                            schedule_id=schedule_for_object.get('id')
+                        )
+                    else:
+                        # Нет запланированной смены - открываем спонтанную
+                        result = await shift_service.open_shift(
+                            user_id=user_id,
+                            object_id=obj.id,
+                            coordinates=coordinates,
+                            shift_type='spontaneous'
+                        )
+                    
+                    if result['success']:
+                        # Форматируем время с учетом часового пояса объекта
+                        from core.utils.timezone_helper import timezone_helper
+                        object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
+                        local_time = timezone_helper.format_local_time(opening.opened_at, object_timezone, '%H:%M')
+                        
+                        await update.message.reply_text(
+                            f"✅ <b>Объект открыт!</b>\n\n"
+                            f"🏢 Объект: {obj.name}\n"
+                            f"⏰ Время: {local_time}\n\n"
+                            f"✅ <b>Смена автоматически открыта</b>\n"
+                            f"💰 Ставка: {result.get('hourly_rate', 0)}₽/час",
+                            parse_mode='HTML'
+                        )
+                        user_state_manager.clear_state(user_id)
+                    else:
+                        # Откатываем открытие объекта
+                        await opening_service.close_object(obj.id, db_user.id, coordinates)
+                        await update.message.reply_text(
+                            f"❌ Объект открыт, но не удалось открыть смену:\n{result['error']}"
+                        )
+                        user_state_manager.clear_state(user_id)
+                        
+                except ValueError as e:
+                    await update.message.reply_text(f"❌ {str(e)}")
+                    user_state_manager.clear_state(user_id)
+        
+        elif user_state.action == UserAction.CLOSE_OBJECT:
+            # Закрытие объекта - СНАЧАЛА закрываем смену, ПОТОМ объект
+            from shared.services.object_opening_service import ObjectOpeningService
+            from domain.entities.user import User
+            
+            # 1. Закрыть смену
+            result = await shift_service.close_shift(
+                user_id=user_id,
+                shift_id=user_state.selected_shift_id,
+                coordinates=coordinates
+            )
+            
+            if not result['success']:
+                await update.message.reply_text(
+                    f"❌ Ошибка при закрытии смены: {result.get('error', 'Неизвестная ошибка')}"
+                )
+                user_state_manager.clear_state(user_id)
+                return
+            
+            # 2. Закрыть объект
+            async with get_async_session() as session:
+                opening_service = ObjectOpeningService(session)
+                
+                # Получить пользователя по telegram_id
+                user_query = select(User).where(User.telegram_id == user_id)
+                user_result = await session.execute(user_query)
+                db_user = user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    await update.message.reply_text("❌ Пользователь не найден.")
+                    user_state_manager.clear_state(user_id)
+                    return
+                
+                try:
+                    opening = await opening_service.close_object(
+                        object_id=user_state.selected_object_id,
+                        user_id=db_user.id,
+                        coordinates=coordinates
+                    )
+                    
+                    # Форматируем время с учетом часового пояса
+                    from core.utils.timezone_helper import timezone_helper
+                    close_time = timezone_helper.format_local_time(opening.closed_at, 'Europe/Moscow', '%H:%M')
+                    
+                    await update.message.reply_text(
+                        f"✅ <b>Смена и объект закрыты!</b>\n\n"
+                        f"⏱️ Время смены: {result.get('total_hours', 0):.1f}ч\n"
+                        f"💰 Оплата: {result.get('total_payment', 0):.0f}₽\n"
+                        f"⏰ Объект закрыт в: {close_time}\n"
+                        f"⏱️ Время работы объекта: {opening.duration_hours:.1f}ч",
+                        parse_mode='HTML'
+                    )
+                    user_state_manager.clear_state(user_id)
+                    
+                except ValueError as e:
+                    await update.message.reply_text(f"❌ {str(e)}")
+                    user_state_manager.clear_state(user_id)
+        
+        else:
+            logger.warning(
+                f"No handler for action/step combination",
+                user_id=user_id,
+                action=user_state.action,
+                step=user_state.step
+            )
+            await update.message.reply_text(
+                "❌ Непредвиденная ситуация. Попробуйте начать с /start"
+            )
+            user_state_manager.clear_state(user_id)
+    
     except Exception as e:
         logger.error(f"Error processing location for user {user_id}: {e}")
         await update.message.reply_text(
             "❌ Произошла ошибка при обработке геопозиции. Попробуйте еще раз."
         )
-    
-    finally:
-        # Очищаем состояние пользователя
-        user_state_manager.clear_state(user_id)
+        # НЕ очищаем состояние при ошибке - пользователь может попробовать снова
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -287,7 +609,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Обработчики уже импортированы в начале файла
     
     # Обрабатываем разные типы кнопок
-    if query.data == "open_shift":
+    if query.data == "open_object":
+        from .object_state_handlers import _handle_open_object
+        await _handle_open_object(update, context)
+        return
+    elif query.data == "close_object":
+        from .object_state_handlers import _handle_close_object
+        await _handle_close_object(update, context)
+        return
+    elif query.data.startswith("select_object_to_open:"):
+        from .object_state_handlers import _handle_select_object_to_open
+        await _handle_select_object_to_open(update, context)
+        return
+    elif query.data == "open_shift":
         await _handle_open_shift(update, context)
         return
     elif query.data == "close_shift":
@@ -343,6 +677,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Формат: retry_close_location:shift_id
         shift_id = int(query.data.split(":", 1)[1])
         await _handle_retry_location_close(update, context, shift_id)
+        return
+    # Задачи на смену (Phase 4A: восстановлено)
+    elif query.data.startswith("complete_shift_task:"):
+        from .shift_handlers import _handle_complete_shift_task
+        parts = query.data.split(":", 2)
+        shift_id = int(parts[1])
+        task_idx = int(parts[2])
+        await _handle_complete_shift_task(update, context, shift_id, task_idx)
+        return
+    elif query.data.startswith("close_shift_with_tasks:"):
+        from .shift_handlers import _handle_close_shift_with_tasks
+        shift_id = int(query.data.split(":", 1)[1])
+        await _handle_close_shift_with_tasks(update, context, shift_id)
+        return
+    elif query.data.startswith("cancel_media_upload:"):
+        # Отмена загрузки медиа - возврат к списку задач
+        shift_id = int(query.data.split(":", 1)[1])
+        user_state = user_state_manager.get_state(user_id)
+        if user_state:
+            user_state_manager.update_state(user_id, step=UserStep.TASK_COMPLETION, pending_media_task_idx=None)
+            shift_tasks = getattr(user_state, 'shift_tasks', [])
+            completed_tasks = getattr(user_state, 'completed_tasks', [])
+            task_media = getattr(user_state, 'task_media', {})
+            from .shift_handlers import _show_task_list
+            await _show_task_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
         return
     # Планирование смен
     elif query.data == "schedule_shift":
@@ -596,6 +955,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     # Создаем кнопки для ответа
     keyboard = [
+        [
+            InlineKeyboardButton("🏢 Открыть объект", callback_data="open_object"),
+            InlineKeyboardButton("🔒 Закрыть объект", callback_data="close_object")
+        ],
         [
             InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift"),
             InlineKeyboardButton("🔚 Закрыть смену", callback_data="close_shift")

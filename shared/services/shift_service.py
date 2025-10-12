@@ -194,6 +194,22 @@ class ShiftService(BaseService):
                 active_shift.total_hours = hours
                 active_shift.total_payment = hours * active_shift.hourly_rate
                 
+                # Обновляем статус shift_schedule, если это была запланированная смена
+                if active_shift.is_planned and active_shift.schedule_id:
+                    from domain.entities.shift_schedule import ShiftSchedule
+                    schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == active_shift.schedule_id)
+                    schedule_result = await session.execute(schedule_query)
+                    schedule = schedule_result.scalar_one_or_none()
+                    
+                    if schedule:
+                        schedule.status = "completed"
+                        session.add(schedule)
+                        logger.info(
+                            f"Updated shift_schedule status to completed",
+                            schedule_id=active_shift.schedule_id,
+                            shift_id=active_shift.id
+                        )
+                
                 await session.commit()
                 
                 logger.info(
@@ -207,6 +223,7 @@ class ShiftService(BaseService):
                 return {
                     'success': True,
                     'shift_id': active_shift.id,
+                    'object_id': active_shift.object_id,
                     'hours': hours,
                     'payment': active_shift.total_payment,
                     'message': f'Смена закрыта. Время: {hours:.1f}ч, Оплата: {active_shift.total_payment:.0f}₽'
@@ -325,6 +342,7 @@ class ShiftService(BaseService):
         except Exception as e:
             logger.error(f"Error getting user shift history: {e}")
             return []
+
 
 
 

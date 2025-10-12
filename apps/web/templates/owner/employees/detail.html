@@ -146,6 +146,7 @@
                                                 <th>Название</th>
                                                 <th>Статус</th>
                                                 <th>Ставка</th>
+                                                <th>Система оплаты</th>
                                                 <th>Период</th>
                                                 <th>Действия</th>
                                             </tr>
@@ -178,9 +179,27 @@
                                                 <td>
                                                     {% if contract.hourly_rate %}
                                                         {{ contract.hourly_rate }} ₽/ч
+                                                        {% if contract.use_contract_rate %}
+                                                            <br><span class="badge bg-primary mt-1">
+                                                                <i class="fas fa-star"></i> Приоритетная ставка
+                                                            </span>
+                                                        {% endif %}
                                                     {% else %}
                                                         <span class="text-muted">—</span>
                                                     {% endif %}
+                                                </td>
+                                                <td>
+                                                    <small>
+                                                        {% if contract.payment_system_id == 1 %}
+                                                            Простая повременная
+                                                        {% elif contract.payment_system_id == 2 %}
+                                                            Окладная
+                                                        {% elif contract.payment_system_id == 3 %}
+                                                            Повременно-премиальная
+                                                        {% else %}
+                                                            <span class="text-muted">—</span>
+                                                        {% endif %}
+                                                    </small>
                                                 </td>
                                                 <td>
                                                     <small>

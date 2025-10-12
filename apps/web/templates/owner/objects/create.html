@@ -2,6 +2,16 @@
 
 {% block title %}{{ title }}{% endblock %}
 
+<!-- Макрос для рендеринга подразделений в dropdown -->
+{% macro render_org_unit_option(unit, indent) %}
+<option value="{{ unit.id }}">{{ '├─ ' * indent }}{{ unit.name }}</option>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_org_unit_option(child, indent + 1) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
+
 {% block content %}
 <div class="container">
     <div class="row justify-content-center">
@@ -14,7 +24,29 @@
                     </h3>
                 </div>
                 <div class="card-body">
+                    <!-- Навигация по вкладкам -->
+                    <ul class="nav nav-tabs mb-4" id="objectTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="main-tab" data-bs-toggle="tab" data-bs-target="#main" type="button" role="tab">
+                                <i class="fas fa-building"></i> Основное
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="finance-tab" data-bs-toggle="tab" data-bs-target="#finance" type="button" role="tab">
+                                <i class="fas fa-coins"></i> Финансы
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tasks-tab" data-bs-toggle="tab" data-bs-target="#tasks" type="button" role="tab">
+                                <i class="fas fa-tasks"></i> Условия работы и задачи
+                            </button>
+                        </li>
+                    </ul>
+                    
                     <form method="POST" action="/owner/objects/create">
+                        <div class="tab-content" id="objectTabsContent">
+                            <!-- Вкладка 1: Основное -->
+                            <div class="tab-pane fade show active" id="main" role="tabpanel">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
@@ -60,18 +92,6 @@
                                         </div>
                                     </div>
                                     <div class="form-text">Координаты для геолокации (необязательно)</div>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
-                                    <input type="number" 
-                                           class="form-control" 
-                                           id="hourly_rate" 
-                                           name="hourly_rate" 
-                                           min="1"
-                                           placeholder="500"
-                                           required>
-                                    <div class="form-text">Минимальная ставка: 1 ₽/час</div>
                                 </div>
                             </div>
                             
@@ -164,12 +184,162 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="card mt-3">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><i class="bi bi-briefcase"></i> Условия работы и задачи</h5>
                             </div>
-                            <div class="card-body">
+                            <!-- Конец вкладки 1: Основное -->
+                            
+                            <!-- Вкладка 2: Финансы -->
+                            <div class="tab-pane fade" id="finance" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <label for="org_unit_id" class="form-label">
+                                                Подразделение
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Объект наследует финансовые настройки от подразделения"></i>
+                                            </label>
+                                            <select class="form-select" id="org_unit_id" name="org_unit_id">
+                                                {% for root in org_tree %}
+                                                    {{ render_org_unit_option(root, 0) }}
+                                                {% endfor %}
+                                            </select>
+                                            <small class="form-text text-muted">Выберите подразделение для наследования настроек оплаты и штрафов</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <hr>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="hourly_rate" class="form-label">Почасовая ставка (₽) *</label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="hourly_rate" 
+                                                   name="hourly_rate" 
+                                                   min="1"
+                                                   step="0.01"
+                                                   placeholder="500"
+                                                   required>
+                                            <div class="form-text">Минимальная ставка: 1 ₽/час</div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="payment_system_id" class="form-label">
+                                                Система оплаты труда
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Определяет метод расчета для сотрудников объекта"></i>
+                                            </label>
+                                            <select class="form-select" id="payment_system_id" name="payment_system_id">
+                                                <option value="">Не указано (наследуется от подразделения)</option>
+                                                <option value="1">Простая повременная</option>
+                                                <option value="2">Окладная</option>
+                                                <option value="3">Повременно-премиальная</option>
+                                            </select>
+                                            <small class="form-text text-muted">Оставьте пустым для наследования от подразделения (будет реализовано в Фазе 4)</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="payment_schedule_id" class="form-label">
+                                                График выплат
+                                                <i class="bi bi-info-circle" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Определяет периодичность выплат сотрудникам объекта"></i>
+                                            </label>
+                                            <div class="input-group">
+                                                <select class="form-select" id="payment_schedule_id" name="payment_schedule_id" onchange="updateScheduleActions()">
+                                                    <option value="">Не указано (наследуется от подразделения)</option>
+                                                    {% for schedule in payment_schedules %}
+                                                    <option value="{{ schedule.id }}" 
+                                                            data-description="{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}"
+                                                            data-is-custom="{{ 'true' if schedule.is_custom else 'false' }}">
+                                                        {{ schedule.name }}{% if schedule.is_custom %} (кастомный){% endif %}
+                                                    </option>
+                                                    {% endfor %}
+                                                    <option value="create_new" style="font-weight: bold; color: #0d6efd;">
+                                                        ➕ Создать новый график
+                                                    </option>
+                                                </select>
+                                                <button type="button" id="view_schedule_btn" class="btn btn-outline-info" onclick="viewSchedule()" style="display: none;">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button type="button" id="edit_schedule_btn" class="btn btn-outline-primary" onclick="editSchedule()" style="display: none;">
+                                                    <i class="fas fa-pencil-alt"></i>
+                                                </button>
+                                            </div>
+                                            <small class="form-text text-muted" id="schedule_description"></small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-4">
+                                <h5 class="mb-3"><i class="fas fa-clock"></i> Настройки штрафов за опоздание</h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="inherit_late_settings" 
+                                                       name="inherit_late_settings"
+                                                       checked
+                                                       onchange="toggleLateSettings()">
+                                                <label class="form-check-label" for="inherit_late_settings">
+                                                    <strong>Наследовать настройки от подразделения</strong>
+                                                </label>
+                                            </div>
+                                            <small class="form-text text-muted">Если включено, будут использоваться настройки подразделения (реализуется в Фазе 4)</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row" id="late_settings_fields">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="late_threshold_minutes" class="form-label">
+                                                Допустимое время опозданий (минут)
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Может быть отрицательным. Например: -5 = штраф начинается за 5 минут до начала смены"></i>
+                                            </label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="late_threshold_minutes" 
+                                                   name="late_threshold_minutes" 
+                                                   placeholder="0">
+                                            <div class="form-text">Допустимое опоздание без штрафа. Может быть отрицательным</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="late_penalty_per_minute" class="form-label">
+                                                Стоимость минуты штрафа (₽)
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Размер штрафа за каждую минуту опоздания сверх допустимого"></i>
+                                            </label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="late_penalty_per_minute" 
+                                                   name="late_penalty_per_minute" 
+                                                   step="0.01"
+                                                   min="0"
+                                                   placeholder="10.00">
+                                            <div class="form-text">Стоимость одной минуты опоздания</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Конец вкладки 2: Финансы -->
+                            
+                            <!-- Вкладка 3: Условия работы и задачи -->
+                            <div class="tab-pane fade" id="tasks" role="tabpanel">
                                 <div class="mb-3">
                                     <label for="work_conditions" class="form-label">Условия работы</label>
                                     <textarea class="form-control" 
@@ -244,9 +414,11 @@
                                     </div>
                                 </div>
                             </div>
+                            <!-- Конец вкладки 3: Условия работы и задачи -->
                         </div>
+                        <!-- Конец tab-content -->
                         
-                        <div class="alert alert-info">
+                        <div class="alert alert-info mt-4">
                             <i class="bi bi-info-circle"></i>
                             <strong>Информация:</strong> После создания объекта система автоматически спланирует тайм-слоты 
                             до конца года согласно выбранному графику работы.
@@ -300,6 +472,25 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// Динамическое отображение описания графика выплат
+document.addEventListener('DOMContentLoaded', function() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const descriptionEl = document.getElementById('schedule_description');
+    
+    if (scheduleSelect && descriptionEl) {
+        const scheduleData = {
+            {% for schedule in payment_schedules %}
+            {{ schedule.id }}: "{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}",
+            {% endfor %}
+        };
+        
+        scheduleSelect.addEventListener('change', function() {
+            const scheduleId = parseInt(this.value);
+            descriptionEl.textContent = scheduleData[scheduleId] || '';
+        });
+    }
+});
+
 // Функции для управления задачами
 function addTask() {
     const container = document.getElementById('tasks-container');
@@ -334,6 +525,134 @@ function removeTask(button) {
         input.value = '';
     }
 }
+
+// Управление активностью полей настроек штрафов
+function toggleLateSettings() {
+    const inheritCheckbox = document.getElementById('inherit_late_settings');
+    const lateThresholdInput = document.getElementById('late_threshold_minutes');
+    const latePenaltyInput = document.getElementById('late_penalty_per_minute');
+    
+    // Если чекбокс включен (наследуем), делаем поля readonly
+    const readonly = inheritCheckbox.checked;
+    lateThresholdInput.readOnly = readonly;
+    latePenaltyInput.readOnly = readonly;
+    
+    // Визуально обозначаем неактивность
+    if (readonly) {
+        lateThresholdInput.style.backgroundColor = '#e9ecef';
+        latePenaltyInput.style.backgroundColor = '#e9ecef';
+        lateThresholdInput.style.cursor = 'not-allowed';
+        latePenaltyInput.style.cursor = 'not-allowed';
+    } else {
+        lateThresholdInput.style.backgroundColor = '';
+        latePenaltyInput.style.backgroundColor = '';
+        lateThresholdInput.style.cursor = '';
+        latePenaltyInput.style.cursor = '';
+    }
+}
+
+// Управление действиями с графиком выплат
+function updateScheduleActions() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const descEl = document.getElementById('schedule_description');
+    const viewBtn = document.getElementById('view_schedule_btn');
+    const editBtn = document.getElementById('edit_schedule_btn');
+    
+    // Обновить описание
+    const description = selectedOption.getAttribute('data-description') || '';
+    descEl.textContent = description;
+    
+    const selectedValue = scheduleSelect.value;
+    
+    // Если выбрано "Создать новый"
+    if (selectedValue === 'create_new') {
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        createNewSchedule();
+        return;
+    }
+    
+    // Если "Не указано"
+    if (selectedValue === '') {
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        return;
+    }
+    
+    // Проверить, является ли график кастомным
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    // Показать кнопки для выбранного графика
+    viewBtn.style.display = 'inline-block';
+    editBtn.style.display = isCustom ? 'inline-block' : 'none';
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    updateScheduleActions();
+    toggleLateSettings();
+});
+
+// Инициализация редактора графиков выплат
+let paymentScheduleEditor;
+
+function createNewSchedule() {
+    const objectId = null; // Объект еще не создан
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    
+    if (!paymentScheduleEditor) {
+        paymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', objectId);
+        paymentScheduleEditor.init();
+    }
+    
+    window.paymentScheduleEditor = paymentScheduleEditor;
+    paymentScheduleEditor.show();
+    
+    // Сбросить выбор на предыдущий
+    scheduleSelect.selectedIndex = 0;
+}
+
+function viewSchedule() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const scheduleId = scheduleSelect.value;
+    
+    if (scheduleId) {
+        // Открыть модальное окно с превью графика (только чтение)
+        window.open(`/owner/payment-schedules/${scheduleId}/view`, '_blank', 'width=800,height=600');
+    }
+}
+
+function editSchedule() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const scheduleId = scheduleSelect.value;
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    if (!isCustom) {
+        alert('Можно редактировать только кастомные графики');
+        return;
+    }
+    
+    const objectId = null; // Объект еще не создан
+    
+    if (!paymentScheduleEditor) {
+        paymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', objectId);
+        paymentScheduleEditor.init();
+    }
+    
+    // Загрузить данные графика для редактирования
+    paymentScheduleEditor.loadSchedule(scheduleId);
+    window.paymentScheduleEditor = paymentScheduleEditor;
+    paymentScheduleEditor.show();
+}
 </script>
+
+<!-- Подключение редактора графиков выплат -->
+<script src="{{ 'js/shared/payment_schedule_editor.js' | static_version }}"></script>
+
+<!-- Модальное окно редактора графиков -->
+{% include 'shared/payment_schedule_editor_modal.html' %}
+
 {% endblock %}
 {% endblock %}

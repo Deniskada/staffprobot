@@ -182,6 +182,61 @@
                             <div class="form-text">Можно добавить несколько интервалов за один день</div>
                         </div>
 
+                        <hr class="my-4">
+                        
+                        <!-- Настройки опозданий и задач -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           name="penalize_late_start" 
+                                           id="penalize_late_start" checked>
+                                    <label class="form-check-label" for="penalize_late_start">
+                                        <i class="bi bi-exclamation-triangle text-warning"></i> Штрафовать за опоздание
+                                    </label>
+                                    <div class="form-text">Применять штраф за опоздание на начало тайм-слота</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           name="ignore_object_tasks" 
+                                           id="ignore_object_tasks">
+                                    <label class="form-check-label" for="ignore_object_tasks">
+                                        <i class="bi bi-x-circle text-danger"></i> Игнорировать задачи объекта
+                                    </label>
+                                    <div class="form-text">Использовать только задачи этого тайм-слота</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Задачи тайм-слота -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label class="form-label">
+                                        <i class="fas fa-tasks"></i> Задачи на смену
+                                        <i class="fas fa-info-circle text-muted" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Задачи будут применены ко всем создаваемым тайм-слотам"></i>
+                                    </label>
+                                    <div id="tasks-container">
+                                        <!-- Пустой контейнер для задач -->
+                                    </div>
+                                    <button type="button" 
+                                            class="btn btn-outline-primary btn-sm mt-2" 
+                                            onclick="addTask()">
+                                        <i class="bi bi-plus"></i> Добавить задачу
+                                    </button>
+                                    <div class="form-text">Эти задачи будут применены ко всем создаваемым тайм-слотам</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
                         <div class="row">
                             <div class="col-12">
                                 <div class="form-check mb-3">
@@ -518,5 +573,65 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     updateEstimate();
 });
+
+// Управление задачами тайм-слота
+function addTask() {
+    const container = document.getElementById('tasks-container');
+    const taskCount = container.querySelectorAll('.task-item').length;
+    const taskItem = document.createElement('div');
+    taskItem.className = 'task-item mb-3 border rounded p-3';
+    taskItem.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label small">Описание задачи</label>
+                <input type="text" 
+                       class="form-control" 
+                       name="task_texts[]" 
+                       placeholder="Например: Проверить оборудование">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Премия (₽)</label>
+                <input type="number" 
+                       class="form-control" 
+                       name="task_amounts[]" 
+                       value="0"
+                       step="0.01">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Обязательная</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="task_mandatory[]" 
+                           value="${taskCount}" checked>
+                    <label class="form-check-label">Да</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Медиа отчет</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="task_requires_media[]" 
+                           value="${taskCount}">
+                    <label class="form-check-label">📸</label>
+                </div>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="button" 
+                        class="btn btn-outline-danger btn-sm w-100" 
+                        onclick="removeTask(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    container.appendChild(taskItem);
+}
+
+function removeTask(button) {
+    const taskItem = button.closest('.task-item');
+    taskItem.remove();
+}
 </script>
 {% endblock %}

@@ -228,6 +228,41 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Новые настройки штрафов и задач -->
+                    <hr>
+                    <h6 class="mb-3"><i class="fas fa-cog"></i> Настройки штрафов и задач</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="bulk-penalize-late" name="penalize_late_start">
+                                <label class="form-check-label" for="bulk-penalize-late">
+                                    <i class="bi bi-clock-history"></i> Штрафовать за опоздание
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="bulk-ignore-tasks" name="ignore_object_tasks">
+                                <label class="form-check-label" for="bulk-ignore-tasks">
+                                    <i class="bi bi-list-task"></i> Игнорировать задачи объекта
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Задачи на смену -->
+                    <div class="mb-3">
+                        <label class="form-label"><i class="bi bi-list-check"></i> Задачи на смену</label>
+                        <div id="bulk-tasks-container">
+                            <!-- Задачи будут добавлены через JS -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addBulkTask()">
+                            <i class="bi bi-plus-circle"></i> Добавить задачу
+                        </button>
+                        <div class="form-text">Оставьте пустым, чтобы не изменять задачи</div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
@@ -313,5 +348,66 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Управление задачами в bulk edit
+let bulkTaskCounter = 0;
+
+function addBulkTask() {
+    const container = document.getElementById('bulk-tasks-container');
+    const taskId = bulkTaskCounter++;
+    
+    const taskHtml = `
+        <div class="card mb-2" id="bulk-task-${taskId}">
+            <div class="card-body p-2">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <input type="text" class="form-control form-control-sm" 
+                               name="task_description_${taskId}" 
+                               placeholder="Описание задачи">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="number" class="form-control form-control-sm" 
+                               name="task_amount_${taskId}" 
+                               placeholder="Сумма (₽)" 
+                               step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" 
+                                   name="task_mandatory_${taskId}" 
+                                   id="bulk-task-mandatory-${taskId}">
+                            <label class="form-check-label small" for="bulk-task-mandatory-${taskId}">
+                                Обязательная
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" 
+                                   name="task_media_${taskId}" 
+                                   id="bulk-task-media-${taskId}">
+                            <label class="form-check-label small" for="bulk-task-media-${taskId}">
+                                Медиа
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-sm btn-outline-danger" 
+                                onclick="removeBulkTask(${taskId})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', taskHtml);
+}
+
+function removeBulkTask(taskId) {
+    const taskElement = document.getElementById(`bulk-task-${taskId}`);
+    if (taskElement) {
+        taskElement.remove();
+    }
+}
 </script>
 {% endblock %}

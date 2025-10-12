@@ -1,0 +1,336 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Начисление #{{ entry.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-money-bill-wave text-success"></i> Начисление #{{ entry.id }}</h1>
+                <a href="/owner/payroll" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> К списку
+                </a>
+            </div>
+            
+            <!-- Основная информация -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Основная информация</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Сотрудник:</strong></td>
+                                    <td>{{ entry.employee.name if entry.employee else 'ID: ' ~ entry.employee_id }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Период:</strong></td>
+                                    <td>
+                                        {{ entry.period_start.strftime('%d.%m.%Y') }} - 
+                                        {{ entry.period_end.strftime('%d.%m.%Y') }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Часов отработано:</strong></td>
+                                    <td>{{ "%.2f"|format(entry.hours_worked) }} ч</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Почасовая ставка:</strong></td>
+                                    <td>{{ "%.2f"|format(entry.hourly_rate) }}₽</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Начислено:</strong></td>
+                                    <td><span class="badge bg-primary fs-6">{{ "%.2f"|format(entry.gross_amount) }}₽</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Удержания:</strong></td>
+                                    <td><span class="badge bg-danger fs-6">-{{ "%.2f"|format(entry.total_deductions) }}₽</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Доплаты:</strong></td>
+                                    <td><span class="badge bg-success fs-6">+{{ "%.2f"|format(entry.total_bonuses) }}₽</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>К выплате:</strong></td>
+                                    <td><span class="badge bg-success fs-5">{{ "%.2f"|format(entry.net_amount) }}₽</span></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    {% if entry.notes %}
+                    <div class="alert alert-info mt-3">
+                        <strong>Комментарий:</strong> {{ entry.notes }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Удержания -->
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-minus-circle"></i> Удержания</h5>
+                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addDeductionModal">
+                        <i class="fas fa-plus"></i> Добавить
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if entry.deductions %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Тип</th>
+                                    <th>Описание</th>
+                                    <th>Сумма</th>
+                                    <th>Авто</th>
+                                    <th>Дата</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for deduction in entry.deductions %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ deduction.deduction_type }}</span>
+                                    </td>
+                                    <td>{{ deduction.description }}</td>
+                                    <td class="text-danger"><strong>{{ "%.2f"|format(deduction.amount) }}₽</strong></td>
+                                    <td>
+                                        {% if deduction.is_automatic %}
+                                        <span class="badge bg-info">Авто</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Ручное</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ deduction.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">Удержаний нет</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Доплаты -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-plus-circle"></i> Доплаты</h5>
+                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addBonusModal">
+                        <i class="fas fa-plus"></i> Добавить
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if entry.bonuses %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Тип</th>
+                                    <th>Описание</th>
+                                    <th>Сумма</th>
+                                    <th>Дата</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for bonus in entry.bonuses %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ bonus.bonus_type }}</span>
+                                    </td>
+                                    <td>{{ bonus.description }}</td>
+                                    <td class="text-success"><strong>{{ "%.2f"|format(bonus.amount) }}₽</strong></td>
+                                    <td>{{ bonus.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">Доплат нет</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Выплаты -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-hand-holding-usd"></i> Выплаты</h5>
+                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#createPaymentModal">
+                        <i class="fas fa-plus"></i> Записать выплату
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if entry.payments %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Дата выплаты</th>
+                                    <th>Сумма</th>
+                                    <th>Способ</th>
+                                    <th>Статус</th>
+                                    <th>Подтверждение</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in entry.payments %}
+                                <tr>
+                                    <td>{{ payment.payment_date.strftime('%d.%m.%Y') }}</td>
+                                    <td><strong>{{ "%.2f"|format(payment.amount) }}₽</strong></td>
+                                    <td>{{ payment.payment_method }}</td>
+                                    <td>
+                                        {% if payment.status == 'completed' %}
+                                        <span class="badge bg-success">Выполнена</span>
+                                        {% elif payment.status == 'pending' %}
+                                        <span class="badge bg-warning">Ожидание</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Ошибка</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ payment.confirmation_code or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">Выплат нет</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления удержания -->
+<div class="modal fade" id="addDeductionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/owner/payroll/{{ entry.id }}/add-deduction">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Добавить удержание</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="deduction_type" class="form-label">Тип удержания *</label>
+                        <select class="form-select" id="deduction_type" name="deduction_type" required>
+                            <option value="manual">Ручное удержание</option>
+                            <option value="tax">Налог</option>
+                            <option value="other">Другое</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="deduction_amount" class="form-label">Сумма (₽) *</label>
+                        <input type="number" class="form-control" id="deduction_amount" name="amount" 
+                               step="0.01" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="deduction_description" class="form-label">Описание *</label>
+                        <textarea class="form-control" id="deduction_description" name="description" 
+                                  rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-danger">Добавить удержание</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления доплаты -->
+<div class="modal fade" id="addBonusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/owner/payroll/{{ entry.id }}/add-bonus">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Добавить доплату</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="bonus_type" class="form-label">Тип доплаты *</label>
+                        <select class="form-select" id="bonus_type" name="bonus_type" required>
+                            <option value="performance">За результат</option>
+                            <option value="overtime">Сверхурочные</option>
+                            <option value="manual">Ручная доплата</option>
+                            <option value="other">Другое</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bonus_amount" class="form-label">Сумма (₽) *</label>
+                        <input type="number" class="form-control" id="bonus_amount" name="amount" 
+                               step="0.01" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bonus_description" class="form-label">Описание *</label>
+                        <textarea class="form-control" id="bonus_description" name="description" 
+                                  rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-success">Добавить доплату</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно записи выплаты -->
+<div class="modal fade" id="createPaymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/owner/payroll/{{ entry.id }}/create-payment">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">Записать выплату</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="payment_amount" class="form-label">Сумма (₽) *</label>
+                        <input type="number" class="form-control" id="payment_amount" name="amount" 
+                               step="0.01" min="0" value="{{ "%.2f"|format(entry.net_amount) }}" required>
+                        <small class="form-text text-muted">К выплате: {{ "%.2f"|format(entry.net_amount) }}₽</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="payment_date" class="form-label">Дата выплаты *</label>
+                        <input type="date" class="form-control" id="payment_date" name="payment_date" 
+                               value="{{ today.strftime('%Y-%m-%d') if today else '' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="payment_method" class="form-label">Способ выплаты *</label>
+                        <select class="form-select" id="payment_method" name="payment_method" required>
+                            <option value="cash">Наличные</option>
+                            <option value="bank_transfer">Банковский перевод</option>
+                            <option value="card">Карта</option>
+                            <option value="other">Другое</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="payment_notes" class="form-label">Комментарий</label>
+                        <textarea class="form-control" id="payment_notes" name="notes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-info">Записать выплату</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

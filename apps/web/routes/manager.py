@@ -152,6 +152,20 @@ async def manager_dashboard(
                 "can_edit_schedule": "Редактирование расписания"
             }
             
+            # Получаем открытые объекты
+            from domain.entities.object_opening import ObjectOpening
+            open_objects_query = select(ObjectOpening).where(
+                and_(
+                    ObjectOpening.object_id.in_(object_ids) if object_ids else False,
+                    ObjectOpening.closed_at.is_(None)
+                )
+            ).options(
+                selectinload(ObjectOpening.object),
+                selectinload(ObjectOpening.opener)
+            ).order_by(ObjectOpening.opened_at.desc())
+            result = await db.execute(open_objects_query)
+            open_objects = result.scalars().all()
+            
             # Получаем данные для переключения интерфейсов
             manager_context = await get_manager_context(user_id, db)
 
@@ -160,6 +174,7 @@ async def manager_dashboard(
                 "current_user": current_user,
                 "accessible_objects": accessible_objects,
                 "accessible_objects_count": accessible_objects_count,
+                "open_objects": open_objects,
                 "active_shifts_count": len(active_shifts),
                 "scheduled_shifts_count": len(scheduled_shifts),
                 "employees_count": len(set(shift.user_id for shift in recent_shifts)),
@@ -648,7 +663,7 @@ async def manager_employees(
             })
         
     except Exception as e:
-        logger.error(f"Error in manager employees: {e}", exc_info=True)
+        logger.error(f"Error in manager employees: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
 
 
@@ -1310,7 +1325,7 @@ async def manager_contract_edit(
         # Получаем данные формы
         title = form_data.get("title", "").strip()
         hourly_rate_str = form_data.get("hourly_rate", "").strip()
-        hourly_rate = int(hourly_rate_str) if hourly_rate_str else None
+        hourly_rate = float(hourly_rate_str) if hourly_rate_str else None
         start_date_str = form_data.get("start_date")
         end_date_str = form_data.get("end_date")
         status = form_data.get("status", "active")
@@ -1478,7 +1493,7 @@ async def manager_calendar(
         })
         
     except Exception as e:
-        logger.error(f"Error in manager calendar: {e}", exc_info=True)
+        logger.error(f"Error in manager calendar: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки календаря")
 
 
@@ -1665,7 +1680,7 @@ async def manager_calendar_api_data(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting manager calendar data: {e}", exc_info=True)
+        logger.error(f"Error getting manager calendar data: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения данных календаря")
 
 
@@ -1806,7 +1821,7 @@ async def get_timeslots_status_manager(
         return test_data
         
     except Exception as e:
-        logger.error(f"Error getting timeslots status for manager: {e}", exc_info=True)
+        logger.error(f"Error getting timeslots status for manager: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки статуса тайм-слотов")
 
 
@@ -2008,6 +2023,10 @@ async def manager_timeslot_detail(
         actual_result = await db.execute(actual_query)
         actual_shifts = actual_result.scalars().all()
         
+        # Получаем available_interfaces
+        login_service = RoleBasedLoginService(db)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
         return templates.TemplateResponse(
             "manager/timeslot_detail.html",
             {
@@ -2016,7 +2035,8 @@ async def manager_timeslot_detail(
                 "timeslot": timeslot,
                 "scheduled_shifts": scheduled_shifts,
                 "actual_shifts": actual_shifts,
-                "current_user": current_user
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
         
@@ -2624,7 +2644,7 @@ async def get_employees_for_manager(
             return employees_data
             
     except Exception as e:
-        logger.error(f"Error getting employees for manager: {e}", exc_info=True)
+        logger.error(f"Error getting employees for manager: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
 
 
@@ -2689,7 +2709,7 @@ async def get_objects_for_manager_calendar(
             return objects_data
             
     except Exception as e:
-        logger.error(f"Error getting objects for manager calendar: {e}", exc_info=True)
+        logger.error(f"Error getting objects for manager calendar: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки объектов")
 
 
@@ -2819,7 +2839,7 @@ async def get_employees_for_object_manager(
             return employees_data
             
     except Exception as e:
-        logger.error(f"Error getting employees for object {object_id}: {e}", exc_info=True)
+        logger.error(f"Error getting employees for object {object_id}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников для объекта")
 
 
@@ -3045,7 +3065,7 @@ async def plan_shift_manager(
         logger.error(f"HTTPException in planning shift: {e.detail}")
         raise e
     except Exception as e:
-        logger.error(f"Error planning shift: {e}", exc_info=True)
+        logger.error(f"Error planning shift: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
 
 
@@ -3200,7 +3220,7 @@ async def check_employee_availability(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error checking employee availability: {e}", exc_info=True)
+        logger.error(f"Error checking employee availability: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка проверки доступности: {str(e)}")
 
 
@@ -3585,6 +3605,34 @@ async def manager_shift_detail(
                 # Приводим статус к строке (если Enum)
                 status_value = getattr(shift.status, 'value', shift.status)
                 
+                # Получаем contract для hourly_rate
+                hourly_rate = None
+                contract_id = getattr(shift, 'contract_id', None)
+                if contract_id:
+                    contract_query = select(Contract).where(Contract.id == contract_id)
+                    contract_result = await db.execute(contract_query)
+                    contract = contract_result.scalar_one_or_none()
+                    if contract:
+                        hourly_rate = contract.hourly_rate
+                
+                # Получаем задачи из timeslot или object
+                shift_tasks = []
+                time_slot_id = getattr(shift, 'time_slot_id', None)
+                if time_slot_id:
+                    timeslot_query = select(TimeSlot).where(TimeSlot.id == time_slot_id)
+                    timeslot_result = await db.execute(timeslot_query)
+                    timeslot = timeslot_result.scalar_one_or_none()
+                    if timeslot:
+                        timeslot_tasks = getattr(timeslot, 'shift_tasks', None)
+                        if timeslot_tasks:
+                            shift_tasks = timeslot_tasks if isinstance(timeslot_tasks, list) else []
+                
+                # Если задач нет в timeslot, берем из объекта
+                if not shift_tasks and shift.object:
+                    object_tasks = getattr(shift.object, 'shift_tasks', None)
+                    if object_tasks:
+                        shift_tasks = object_tasks if isinstance(object_tasks, list) else []
+                
                 shift_data = {
                     'id': shift.id,
                     'type': 'shift',
@@ -3597,6 +3645,8 @@ async def manager_shift_detail(
                     'status': status_value,
                     'total_hours': shift.total_hours,
                     'total_payment': shift.total_payment,
+                    'hourly_rate': hourly_rate,
+                    'shift_tasks': shift_tasks,
                     'notes': shift.notes,
                     'created_at': shift.created_at
                 }
@@ -3616,7 +3666,7 @@ async def manager_shift_detail(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error loading manager shift detail: {e}", exc_info=True)
+        logger.error(f"Error loading manager shift detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
 
 
@@ -3704,7 +3754,7 @@ async def quick_create_timeslot_manager(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating timeslot: {e}", exc_info=True)
+        logger.error(f"Error creating timeslot: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка создания тайм-слота: {str(e)}")
 
 
@@ -4312,3 +4362,134 @@ async def manager_cancel_shift(
             status_code=500,
             content={"success": False, "message": "Ошибка отмены смены"}
         )
+
+
+@router.get("/payroll-adjustments", response_class=HTMLResponse)
+async def manager_payroll_adjustments_list(
+    request: Request,
+    adjustment_type: Optional[str] = Query(None, description="Тип корректировки"),
+    employee_id: Optional[int] = Query(None, description="ID сотрудника"),
+    object_id: Optional[int] = Query(None, description="ID объекта"),
+    date_from: Optional[str] = Query(None, description="Дата начала (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    per_page: int = Query(50, ge=1, le=200, description="Записей на странице"),
+    current_user: dict = Depends(require_manager_or_owner),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Список корректировок начислений для управляющего (только по доступным объектам)."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, session)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем доступные объекты управляющего
+        permission_service = ManagerPermissionService(session)
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        accessible_object_ids = [obj.id for obj in accessible_objects]
+        
+        if not accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступных объектов")
+        
+        # Парсинг дат
+        if date_from:
+            try:
+                start_date = date.fromisoformat(date_from)
+            except ValueError:
+                start_date = date.today().replace(day=1)
+        else:
+            start_date = date.today().replace(day=1)
+        
+        if date_to:
+            try:
+                end_date = date.fromisoformat(date_to)
+            except ValueError:
+                end_date = date.today()
+        else:
+            end_date = date.today()
+        
+        # Базовый запрос с фильтрацией по доступным объектам
+        from domain.entities.payroll_adjustment import PayrollAdjustment
+        query = select(PayrollAdjustment).where(
+            and_(
+                func.date(PayrollAdjustment.created_at) >= start_date,
+                func.date(PayrollAdjustment.created_at) <= end_date,
+                PayrollAdjustment.object_id.in_(accessible_object_ids)  # Фильтр по доступным объектам!
+            )
+        ).options(
+            selectinload(PayrollAdjustment.employee),
+            selectinload(PayrollAdjustment.object),
+            selectinload(PayrollAdjustment.shift)
+        )
+        
+        # Дополнительные фильтры
+        if adjustment_type:
+            query = query.where(PayrollAdjustment.adjustment_type == adjustment_type)
+        
+        if employee_id:
+            query = query.where(PayrollAdjustment.employee_id == employee_id)
+        
+        if object_id and object_id in accessible_object_ids:
+            query = query.where(PayrollAdjustment.object_id == object_id)
+        
+        # Подсчет общего количества
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await session.execute(count_query)
+        total_count = total_result.scalar() or 0
+        
+        # Пагинация
+        query = query.order_by(desc(PayrollAdjustment.created_at))
+        query = query.offset((page - 1) * per_page).limit(per_page)
+        
+        result = await session.execute(query)
+        adjustments = result.scalars().all()
+        
+        # Получить доступные интерфейсы
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
+        # Пагинация
+        total_pages = (total_count + per_page - 1) // per_page
+        has_prev = page > 1
+        has_next = page < total_pages
+        
+        # Типы корректировок для фильтра
+        adjustment_types = [
+            {"value": "base_payment", "label": "Базовая оплата"},
+            {"value": "late_start", "label": "Опоздание"},
+            {"value": "task_bonus", "label": "Премия за задачу"},
+            {"value": "task_penalty", "label": "Штраф за задачу"},
+            {"value": "manual", "label": "Ручная корректировка"}
+        ]
+        
+        return templates.TemplateResponse(
+            "manager/payroll_adjustments/list.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "available_interfaces": available_interfaces,
+                "adjustments": adjustments,
+                "adjustment_types": adjustment_types,
+                "selected_type": adjustment_type,
+                "selected_employee_id": employee_id,
+                "selected_object_id": object_id,
+                "date_from": start_date,
+                "date_to": end_date,
+                "page": page,
+                "per_page": per_page,
+                "total_count": total_count,
+                "total_pages": total_pages,
+                "has_prev": has_prev,
+                "has_next": has_next,
+                "accessible_objects": accessible_objects
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка загрузки корректировок начислений для управляющего: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки данных")

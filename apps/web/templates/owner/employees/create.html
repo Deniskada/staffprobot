@@ -148,10 +148,55 @@
                                            id="hourly_rate" 
                                            name="hourly_rate" 
                                            min="0"
+                                           step="0.01"
                                            required
                                            placeholder="500 (или выберите объект с установленной ставкой)">
+                                    <div class="form-check mt-2">
+                                        <input type="checkbox" 
+                                               class="form-check-input" 
+                                               id="use_contract_rate" 
+                                               name="use_contract_rate"
+                                               value="1">
+                                        <label class="form-check-label" for="use_contract_rate">
+                                            Использовать ставку из договора
+                                            <i class="fas fa-info-circle text-muted" 
+                                               data-bs-toggle="tooltip" 
+                                               title="Если включено, при открытии смены будет использоваться ставка из этого договора, а не из объекта или тайм-слота"></i>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="payment_system_id" class="form-label">
+                                        Система оплаты труда
+                                        <i class="fas fa-info-circle text-muted" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Определяет метод расчета заработной платы"></i>
+                                    </label>
+                                    <select class="form-select" id="payment_system_id" name="payment_system_id">
+                                        <option value="1" selected>Простая повременная</option>
+                                        <option value="2">Окладная</option>
+                                        <option value="3">Повременно-премиальная</option>
+                                    </select>
+                                    <div class="form-check mt-2">
+                                        <input type="checkbox" 
+                                               class="form-check-input" 
+                                               id="use_contract_payment_system" 
+                                               name="use_contract_payment_system"
+                                               value="1">
+                                        <label class="form-check-label" for="use_contract_payment_system">
+                                            Использовать систему оплаты из договора
+                                            <i class="fas fa-info-circle text-muted" 
+                                               data-bs-toggle="tooltip" 
+                                               title="Если включено, при расчете выплат будет использоваться система оплаты из договора, а не из объекта (с наследованием от подразделения)"></i>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="template_id" class="form-label">Шаблон договора</label>
@@ -290,6 +335,16 @@
                                                            checked>
                                                     <label class="form-check-label" for="can_manage_employees">
                                                         Управление сотрудниками
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="can_manage_payroll" 
+                                                           name="manager_permissions" 
+                                                           value="can_manage_payroll">
+                                                    <label class="form-check-label" for="can_manage_payroll">
+                                                        Управление начислениями и выплатами
                                                     </label>
                                                 </div>
                                                 <div class="form-check">
