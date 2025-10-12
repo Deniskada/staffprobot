@@ -233,7 +233,6 @@
 {% block content %}
 
 <!-- Shared panels -->
-{% include 'shared/calendar/objects_panel.html' %}
 {% include 'shared/calendar/employees_panel.html' %}
 {% include 'shared/calendar/quick_create_form.html' %}
 
@@ -317,6 +316,20 @@ function showDateDetails(date) {}
 
 // Initialize calendar panels for owner role (use global instance only)
 // Already initialized above as window.calendarPanels
+
+// Добавляем обработчик клика на день календаря для быстрого создания тайм-слота
+document.addEventListener('click', function(e) {
+    const calendarDay = e.target.closest('.calendar-day');
+    if (calendarDay && !e.target.closest('.timeslot-item') && !e.target.closest('.shift-item')) {
+        const dateStr = calendarDay.dataset.date;
+        if (dateStr && !calendarDay.classList.contains('other-month')) {
+            // Открываем форму быстрого создания тайм-слота
+            if (window.calendarPanels) {
+                window.calendarPanels.showQuickCreateForm(null, dateStr);
+            }
+        }
+    }
+});
 
 // Override universal calendar manager methods for drag&drop
 if (window.universalCalendar) {
