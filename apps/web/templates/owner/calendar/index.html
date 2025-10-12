@@ -340,6 +340,16 @@ setTimeout(() => {
     initializeTimeslotOccupancy();
 }, 1000);
 
+// Автоматический скролл к текущему дню при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        const todayElement = document.querySelector('.calendar-day.today');
+        if (todayElement) {
+            todayElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 500);
+});
+
 // Initialize timeslot occupancy
 function initializeTimeslotOccupancy() {
     // Собираем смены только из данных страницы, не из DOM

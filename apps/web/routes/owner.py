@@ -3056,18 +3056,18 @@ def _create_calendar_grid(year: int, month: int, timeslots: List[Dict[str, Any]]
     # Находим понедельник для начала календаря
     today = date.today()
     if today.year == year and today.month == month:
-        # Если смотрим текущий месяц - начинаем за 2 недели до текущей
+        # Если смотрим текущий месяц - начинаем за 1 неделю до текущей
         current_monday = today - timedelta(days=today.weekday())
-        first_monday = current_monday - timedelta(weeks=2)
+        first_monday = current_monday - timedelta(weeks=1)
     else:
         # Для других месяцев - начинаем с первого понедельника месяца
         first_monday = first_day - timedelta(days=first_day.weekday())
     
-    # Создаем сетку 6x7 (6 недель, 7 дней) - текущая неделя будет 3-й строкой
+    # Создаем сетку 4x7 (4 недели, 7 дней) - 1 назад + текущая + 2 вперед
     calendar_grid = []
     current_date = first_monday
     
-    for week in range(6):
+    for week in range(4):
         week_data = []
         for day in range(7):
             # Фильтруем смены: скрываем запланированные, если есть активные или завершенные для того же объекта
