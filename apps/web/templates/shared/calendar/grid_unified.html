@@ -147,13 +147,13 @@ window.unifiedCalendar = {
         // Очищаем существующую сетку
         calendarGrid.innerHTML = '';
         
-        // Создаем дни календаря (13 месяцев: 6 до + текущий + 6 после)
+        // Создаем дни календаря (4 месяца: 1 до + текущий + 2 после)
         const today = new Date();
         const currentYear = today.getFullYear();
         const currentMonth = today.getMonth() + 1;
         
         const months = [];
-        for (let i = -6; i <= 6; i++) {
+        for (let i = -1; i <= 2; i++) {
             const targetMonth = currentMonth + i;
             let targetYear = currentYear;
             let monthNumber = targetMonth;
