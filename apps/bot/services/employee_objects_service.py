@@ -54,7 +54,8 @@ class EmployeeObjectsService:
                 contracts_result = await session.execute(contracts_query)
                 contracts = contracts_result.scalars().all()
                 
-                if not contracts:
+                # Если нет договоров, но пользователь владелец - продолжаем (получим его объекты позже)
+                if not contracts and user_role != 'owner' and 'owner' not in user_roles:
                     logger.info(f"No active contracts found for user {telegram_id}")
                     return []
                 
