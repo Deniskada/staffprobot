@@ -1525,10 +1525,13 @@ async def _handle_complete_my_task(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     user_id = query.from_user.id
     
+    logger.info(f"[MY_TASKS] _handle_complete_my_task called: shift_id={shift_id}, task_idx={task_idx}, user_id={user_id}")
+    
     try:
         # Получаем состояние
         user_state = user_state_manager.get_state(user_id)
         if not user_state or user_state.action != UserAction.MY_TASKS:
+            logger.error(f"[MY_TASKS] Invalid state: user_state={user_state}, action={user_state.action if user_state else None}")
             await query.answer("❌ Состояние утеряно. Начните заново", show_alert=True)
             return
         
@@ -1536,8 +1539,11 @@ async def _handle_complete_my_task(update: Update, context: ContextTypes.DEFAULT
         shift_tasks = getattr(user_state, 'shift_tasks', [])
         completed_tasks = getattr(user_state, 'completed_tasks', [])
         
+        logger.info(f"[MY_TASKS] Tasks count: {len(shift_tasks)}, completed: {completed_tasks}")
+        
         # Проверяем индекс
         if task_idx >= len(shift_tasks):
+            logger.error(f"[MY_TASKS] Task index out of range: {task_idx} >= {len(shift_tasks)}")
             await query.answer("❌ Задача не найдена", show_alert=True)
             return
         
@@ -1545,6 +1551,8 @@ async def _handle_complete_my_task(update: Update, context: ContextTypes.DEFAULT
         current_task = shift_tasks[task_idx]
         requires_media = current_task.get('requires_media', False)
         task_media = getattr(user_state, 'task_media', {})
+        
+        logger.info(f"[MY_TASKS] Task: {current_task.get('text')}, requires_media={requires_media}, already_completed={task_idx in completed_tasks}")
         
         # Переключаем статус
         if task_idx in completed_tasks:
@@ -1554,9 +1562,11 @@ async def _handle_complete_my_task(update: Update, context: ContextTypes.DEFAULT
                 del task_media[task_idx]
             status_msg = "Задача снята с отметки"
             user_state_manager.update_state(user_id, completed_tasks=completed_tasks, task_media=task_media)
+            logger.info(f"[MY_TASKS] Task unmarked")
         else:
             # Проверяем, требуется ли медиа
             if requires_media:
+                logger.info(f"[MY_TASKS] Task requires media, calling _handle_my_task_media_upload")
                 # Переходим к загрузке медиа
                 await _handle_my_task_media_upload(update, context, shift_id, task_idx)
                 return
@@ -1635,9 +1645,12 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
     query = update.callback_query
     user_id = query.from_user.id
     
+    logger.info(f"[MY_TASKS] _handle_my_task_media_upload called: shift_id={shift_id}, task_idx={task_idx}, user_id={user_id}")
+    
     try:
         user_state = user_state_manager.get_state(user_id)
         if not user_state:
+            logger.error(f"[MY_TASKS] User state is None for user {user_id}")
             await query.answer("❌ Состояние утеряно", show_alert=True)
             return
         

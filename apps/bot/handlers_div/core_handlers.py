@@ -119,15 +119,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 shifts_result = await session.execute(shifts_query)
                 active_shifts = shifts_result.scalars().all()
                 
+                logger.info(f"[MY_TASKS] User telegram_id={user.id}, db_user.id={db_user.id}, active_shifts count={len(active_shifts)}")
+                
                 if active_shifts:
                     active_shift = active_shifts[0]
                     active_shift_id = active_shift.id
+                    
+                    logger.info(f"[MY_TASKS] Active shift: id={active_shift_id}, time_slot_id={active_shift.time_slot_id}, object_id={active_shift.object_id}")
                     
                     # Проверяем задачи в тайм-слоте
                     if active_shift.time_slot_id:
                         timeslot_query = select(TimeSlot).where(TimeSlot.id == active_shift.time_slot_id)
                         timeslot_result = await session.execute(timeslot_query)
                         timeslot = timeslot_result.scalar_one_or_none()
+                        
+                        logger.info(f"[MY_TASKS] Timeslot found: {timeslot is not None}, has shift_tasks: {timeslot.shift_tasks if timeslot else None}")
                         
                         if timeslot and timeslot.shift_tasks:
                             has_tasks = True
@@ -138,8 +144,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                         object_result = await session.execute(object_query)
                         obj = object_result.scalar_one_or_none()
                         
+                        logger.info(f"[MY_TASKS] Object found: {obj is not None}, has shift_tasks: {obj.shift_tasks if obj else None}")
+                        
                         if obj and obj.shift_tasks:
                             has_tasks = True
+                            logger.info(f"[MY_TASKS] Tasks found in object! Count: {len(obj.shift_tasks)}")
+                
+                logger.info(f"[MY_TASKS] Final result: has_tasks={has_tasks}, active_shift_id={active_shift_id}")
     except Exception as e:
         logger.error(f"Error checking tasks for user {user.id}: {e}")
     
