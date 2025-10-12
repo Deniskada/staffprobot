@@ -917,7 +917,9 @@ async def owner_calendar(
             from apps.web.services.org_structure_service import OrgStructureService
             org_service = OrgStructureService(session)
             user_id = await get_user_id_from_current_user(current_user, session)
-            org_units = await org_service.get_org_tree(user_id)
+            org_units_raw = await org_service.get_units_by_owner(user_id)
+            # Преобразуем в список словарей для шаблона
+            org_units = [{"id": u.id, "name": u.name, "level": u.level} for u in org_units_raw]
             
             # Получаем объекты
             objects = await object_service.get_objects_by_owner(owner_telegram_id)
@@ -1075,8 +1077,7 @@ async def owner_calendar(
             
             # Подготавливаем данные для шаблона
             objects_list = [{"id": obj.id, "name": obj.name, "org_unit_id": obj.org_unit_id} for obj in objects]
-            # get_org_tree возвращает словари, не объекты
-            org_units_list = org_units if isinstance(org_units, list) else []
+            org_units_list = org_units
             
             # Навигация по месяцам
             prev_month = month - 1 if month > 1 else 12
