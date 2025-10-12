@@ -13,6 +13,7 @@ from core.database.session import get_db_session
 from apps.web.services.org_structure_service import OrgStructureService
 from apps.web.services.payment_system_service import PaymentSystemService
 from core.logging.logger import logger
+from apps.web.routes.owner import get_available_interfaces_for_user
 
 router = APIRouter()
 
@@ -53,6 +54,15 @@ async def owner_org_structure_list(
         schedules_result = await db.execute(schedules_query)
         payment_schedules = schedules_result.scalars().all()
         
+        from domain.entities.object import Object
+        objects_query = select(Object).where(
+            Object.owner_id == owner_id,
+            Object.is_active == True
+        )
+        objects_result = await db.execute(objects_query)
+        objects_list = objects_result.scalars().all()
+        available_interfaces = await get_available_interfaces_for_user(owner_id)
+
         return templates.TemplateResponse(
             "owner/org_structure/list.html",
             {
@@ -61,7 +71,10 @@ async def owner_org_structure_list(
                 "org_tree": org_tree,
                 "units_count": units_count,
                 "payment_systems": payment_systems,
-                "payment_schedules": payment_schedules
+                "payment_schedules": payment_schedules,
+                "objects": objects_list,
+                "current_user": current_user,
+                "available_interfaces": available_interfaces
             }
         )
         
