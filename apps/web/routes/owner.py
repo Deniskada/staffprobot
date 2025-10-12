@@ -3787,6 +3787,37 @@ async def owner_timeslots_bulk_edit(
         elif is_inactive and not is_active:
             update_data["is_active"] = False
         
+        # Новые поля для Phase 4B/4C
+        if "penalize_late_start" in form_data:
+            update_data["penalize_late_start"] = form_data.get("penalize_late_start") not in ["false", ""]
+        
+        if "ignore_object_tasks" in form_data:
+            update_data["ignore_object_tasks"] = form_data.get("ignore_object_tasks") not in ["false", ""]
+        
+        # Обработка задач из формы (JSONB)
+        shift_tasks = []
+        task_index = 0
+        while f"task_description_{task_index}" in form_data:
+            task_desc = form_data.get(f"task_description_{task_index}", "").strip()
+            if task_desc:
+                task = {"description": task_desc}
+                
+                amount_str = form_data.get(f"task_amount_{task_index}", "").strip()
+                if amount_str:
+                    try:
+                        task["amount"] = float(amount_str)
+                    except ValueError:
+                        pass
+                
+                task["is_mandatory"] = f"task_mandatory_{task_index}" in form_data
+                task["requires_media"] = f"task_media_{task_index}" in form_data
+                
+                shift_tasks.append(task)
+            task_index += 1
+        
+        if shift_tasks:
+            update_data["shift_tasks"] = shift_tasks
+        
         if not update_data:
             raise HTTPException(status_code=400, detail="Не указано ни одного параметра для изменения")
         

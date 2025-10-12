@@ -4356,3 +4356,134 @@ async def manager_cancel_shift(
             status_code=500,
             content={"success": False, "message": "Ошибка отмены смены"}
         )
+
+
+@router.get("/payroll-adjustments", response_class=HTMLResponse)
+async def manager_payroll_adjustments_list(
+    request: Request,
+    adjustment_type: Optional[str] = Query(None, description="Тип корректировки"),
+    employee_id: Optional[int] = Query(None, description="ID сотрудника"),
+    object_id: Optional[int] = Query(None, description="ID объекта"),
+    date_from: Optional[str] = Query(None, description="Дата начала (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    per_page: int = Query(50, ge=1, le=200, description="Записей на странице"),
+    current_user: dict = Depends(require_manager_or_owner),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Список корректировок начислений для управляющего (только по доступным объектам)."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+            
+        # Получаем внутренний ID пользователя
+        user_id = await get_user_id_from_current_user(current_user, session)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем доступные объекты управляющего
+        permission_service = ManagerPermissionService(session)
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        accessible_object_ids = [obj.id for obj in accessible_objects]
+        
+        if not accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступных объектов")
+        
+        # Парсинг дат
+        if date_from:
+            try:
+                start_date = date.fromisoformat(date_from)
+            except ValueError:
+                start_date = date.today().replace(day=1)
+        else:
+            start_date = date.today().replace(day=1)
+        
+        if date_to:
+            try:
+                end_date = date.fromisoformat(date_to)
+            except ValueError:
+                end_date = date.today()
+        else:
+            end_date = date.today()
+        
+        # Базовый запрос с фильтрацией по доступным объектам
+        from domain.entities.payroll_adjustment import PayrollAdjustment
+        query = select(PayrollAdjustment).where(
+            and_(
+                func.date(PayrollAdjustment.created_at) >= start_date,
+                func.date(PayrollAdjustment.created_at) <= end_date,
+                PayrollAdjustment.object_id.in_(accessible_object_ids)  # Фильтр по доступным объектам!
+            )
+        ).options(
+            selectinload(PayrollAdjustment.employee),
+            selectinload(PayrollAdjustment.object),
+            selectinload(PayrollAdjustment.shift)
+        )
+        
+        # Дополнительные фильтры
+        if adjustment_type:
+            query = query.where(PayrollAdjustment.adjustment_type == adjustment_type)
+        
+        if employee_id:
+            query = query.where(PayrollAdjustment.employee_id == employee_id)
+        
+        if object_id and object_id in accessible_object_ids:
+            query = query.where(PayrollAdjustment.object_id == object_id)
+        
+        # Подсчет общего количества
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await session.execute(count_query)
+        total_count = total_result.scalar() or 0
+        
+        # Пагинация
+        query = query.order_by(desc(PayrollAdjustment.created_at))
+        query = query.offset((page - 1) * per_page).limit(per_page)
+        
+        result = await session.execute(query)
+        adjustments = result.scalars().all()
+        
+        # Получить доступные интерфейсы
+        login_service = RoleBasedLoginService(session)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
+        # Пагинация
+        total_pages = (total_count + per_page - 1) // per_page
+        has_prev = page > 1
+        has_next = page < total_pages
+        
+        # Типы корректировок для фильтра
+        adjustment_types = [
+            {"value": "base_payment", "label": "Базовая оплата"},
+            {"value": "late_start", "label": "Опоздание"},
+            {"value": "task_bonus", "label": "Премия за задачу"},
+            {"value": "task_penalty", "label": "Штраф за задачу"},
+            {"value": "manual", "label": "Ручная корректировка"}
+        ]
+        
+        return templates.TemplateResponse(
+            "manager/payroll_adjustments/list.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "available_interfaces": available_interfaces,
+                "adjustments": adjustments,
+                "adjustment_types": adjustment_types,
+                "selected_type": adjustment_type,
+                "selected_employee_id": employee_id,
+                "selected_object_id": object_id,
+                "date_from": start_date,
+                "date_to": end_date,
+                "page": page,
+                "per_page": per_page,
+                "total_count": total_count,
+                "total_pages": total_pages,
+                "has_prev": has_prev,
+                "has_next": has_next,
+                "accessible_objects": accessible_objects
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка загрузки корректировок начислений для управляющего: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки данных")
