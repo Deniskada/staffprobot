@@ -17,6 +17,105 @@ router = APIRouter()
 from apps.web.jinja import templates
 
 
+@router.get("/", response_class=HTMLResponse)
+async def timeslots_all_list(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session),
+    object_id: Optional[int] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    sort_by: str = Query("slot_date"),
+    sort_order: str = Query("desc")
+):
+    """Список всех тайм-слотов с фильтром по объектам"""
+    try:
+        logger.info(f"Loading all timeslots with filters: object_id={object_id}, date_from={date_from}, date_to={date_to}")
+        
+        object_service = ObjectService(db)
+        timeslot_service = TimeSlotService(db)
+        
+        # Получаем все объекты владельца для фильтра
+        all_objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
+        
+        # Если указан object_id, фильтруем по нему
+        if object_id:
+            obj = await object_service.get_object_by_id(object_id, current_user["telegram_id"])
+            if not obj:
+                raise HTTPException(status_code=404, detail="Объект не найден")
+            
+            timeslots = await timeslot_service.get_timeslots_by_object(
+                object_id, 
+                current_user["telegram_id"],
+                date_from=date_from,
+                date_to=date_to,
+                sort_by=sort_by,
+                sort_order=sort_order
+            )
+            
+            selected_object = {
+                "id": obj.id,
+                "name": obj.name,
+                "address": obj.address or "",
+                "hourly_rate": float(getattr(obj, "hourly_rate", 0) or 0)
+            }
+        else:
+            # Показываем тайм-слоты всех объектов
+            timeslots = []
+            for obj in all_objects:
+                obj_timeslots = await timeslot_service.get_timeslots_by_object(
+                    obj.id, 
+                    current_user["telegram_id"],
+                    date_from=date_from,
+                    date_to=date_to,
+                    sort_by=sort_by,
+                    sort_order=sort_order
+                )
+                timeslots.extend(obj_timeslots)
+            
+            selected_object = None
+        
+        # Преобразуем в формат для шаблона
+        timeslots_data = []
+        for slot in timeslots:
+            # Получаем объект для каждого слота
+            slot_obj = next((o for o in all_objects if o.id == slot.object_id), None)
+            timeslots_data.append({
+                "id": slot.id,
+                "object_id": slot.object_id,
+                "object_name": slot_obj.name if slot_obj else "Неизвестный объект",
+                "slot_date": slot.slot_date.strftime("%Y-%m-%d"),
+                "start_time": slot.start_time.strftime("%H:%M"),
+                "end_time": slot.end_time.strftime("%H:%M"),
+                "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else (float(slot_obj.hourly_rate) if slot_obj else 0),
+                "is_active": slot.is_active,
+                "created_at": slot.created_at.strftime("%Y-%m-%d")
+            })
+        
+        # Список объектов для фильтра
+        objects_list = [{"id": obj.id, "name": obj.name} for obj in all_objects]
+        
+        return templates.TemplateResponse("owner/timeslots/list_all.html", {
+            "request": request,
+            "title": "Тайм-слоты",
+            "timeslots": timeslots_data,
+            "objects": objects_list,
+            "selected_object_id": object_id,
+            "selected_object": selected_object,
+            "current_user": current_user,
+            "date_from": date_from,
+            "date_to": date_to,
+            "sort_by": sort_by,
+            "sort_order": sort_order
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading timeslots: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки тайм-слотов")
+
+
 @router.get("/object/{object_id}", response_class=HTMLResponse)
 async def timeslots_list(
     request: Request,
@@ -28,7 +127,32 @@ async def timeslots_list(
     sort_by: str = Query("slot_date"),
     sort_order: str = Query("desc")
 ):
-    """Список тайм-слотов объекта"""
+    """Редирект на новый роут с фильтром по объекту"""
+    # Формируем URL с query параметрами
+    params = [f"object_id={object_id}"]
+    if date_from:
+        params.append(f"date_from={date_from}")
+    if date_to:
+        params.append(f"date_to={date_to}")
+    params.append(f"sort_by={sort_by}")
+    params.append(f"sort_order={sort_order}")
+    
+    redirect_url = f"/owner/timeslots?{'&'.join(params)}"
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+@router.get("/object/{object_id}/old", response_class=HTMLResponse)
+async def timeslots_list_old(
+    request: Request,
+    object_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    sort_by: str = Query("slot_date"),
+    sort_order: str = Query("desc")
+):
+    """Старый список тайм-слотов объекта (deprecated, оставлен для совместимости)"""
     try:
         logger.info(f"Loading timeslots for object {object_id} with filters: date_from={date_from}, date_to={date_to}, sort_by={sort_by}, sort_order={sort_order}")
         

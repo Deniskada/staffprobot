@@ -1,0 +1,219 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="bi bi-clock-history"></i> {{ title }}
+                    </h1>
+                    <p class="text-muted mb-0">Управление тайм-слотами всех объектов</p>
+                </div>
+                <div class="d-flex gap-2">
+                    {% if selected_object_id %}
+                    <a href="/owner/timeslots/object/{{ selected_object_id }}/create" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Создать тайм-слот
+                    </a>
+                    <a href="/owner/objects/{{ selected_object_id }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> К объекту
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if request.query_params.get('success') == 'bulk_updated' %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle"></i>
+        Успешно обновлено {{ request.query_params.get('count', 0) }} тайм-слотов
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    <!-- Фильтры -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-funnel"></i> Фильтры
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="/owner/timeslots" id="filterForm">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label for="object_id" class="form-label">Объект</label>
+                                <select class="form-select" id="object_id" name="object_id" onchange="document.getElementById('filterForm').submit()">
+                                    <option value="">Все объекты</option>
+                                    {% for obj in objects %}
+                                    <option value="{{ obj.id }}" {% if obj.id == selected_object_id %}selected{% endif %}>
+                                        {{ obj.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="date_from" class="form-label">Период с</label>
+                                <input type="date" class="form-control" id="date_from" name="date_from" value="{{ date_from or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="date_to" class="form-label">Период по</label>
+                                <input type="date" class="form-control" id="date_to" name="date_to" value="{{ date_to or '' }}">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary me-2">
+                                    <i class="bi bi-search"></i> Применить
+                                </button>
+                                <a href="/owner/timeslots" class="btn btn-outline-secondary">
+                                    <i class="bi bi-x-circle"></i> Сбросить
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if timeslots %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-list-ul"></i> Тайм-слоты ({{ timeslots|length }})
+                    </h5>
+                    <small class="text-muted">Кликните на заголовки столбцов для сортировки</small>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Объект</th>
+                                    <th>
+                                        <a href="?{% if selected_object_id %}object_id={{ selected_object_id }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}sort_by=slot_date&sort_order={% if sort_by == 'slot_date' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Дата
+                                            {% if sort_by == 'slot_date' %}
+                                                {% if sort_order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if selected_object_id %}object_id={{ selected_object_id }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}sort_by=start_time&sort_order={% if sort_by == 'start_time' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Время
+                                            {% if sort_by == 'start_time' %}
+                                                {% if sort_order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if selected_object_id %}object_id={{ selected_object_id }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}sort_by=hourly_rate&sort_order={% if sort_by == 'hourly_rate' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Ставка
+                                            {% if sort_by == 'hourly_rate' %}
+                                                {% if sort_order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>Статус</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for timeslot in timeslots %}
+                                <tr>
+                                    <td>
+                                        <a href="/owner/timeslots?object_id={{ timeslot.object_id }}" class="text-decoration-none">
+                                            <i class="bi bi-building"></i> {{ timeslot.object_name }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">
+                                            {{ timeslot.slot_date }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">
+                                            {{ timeslot.start_time }} - {{ timeslot.end_time }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-success">
+                                            {{ timeslot.hourly_rate }} ₽/час
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if timeslot.is_active %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle"></i> Активен
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="bi bi-pause-circle"></i> Неактивен
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="/owner/timeslots/{{ timeslot.id }}" 
+                                               class="btn btn-outline-info" 
+                                               title="Просмотр">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <a href="/owner/timeslots/{{ timeslot.id }}/edit" 
+                                               class="btn btn-outline-primary" 
+                                               title="Редактировать">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-info" role="alert">
+                <i class="bi bi-info-circle"></i>
+                {% if selected_object_id %}
+                Тайм-слотов для выбранного объекта не найдено.
+                {% else %}
+                Тайм-слотов не найдено. 
+                {% endif %}
+                {% if selected_object_id %}
+                <a href="/owner/timeslots/object/{{ selected_object_id }}/create" class="alert-link">Создать первый тайм-слот</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
