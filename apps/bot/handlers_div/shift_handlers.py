@@ -1296,8 +1296,11 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
                 parse_mode='HTML'
             )
             
-            # Возвращаемся к списку задач
-            await _show_task_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
+            # Возвращаемся к списку задач (выбираем функцию в зависимости от action)
+            if user_state.action == UserAction.MY_TASKS:
+                await _show_my_tasks_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
+            else:
+                await _show_task_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
             
         except Exception as e:
             logger.error(f"Error sending media to Telegram group: {e}")
@@ -1372,5 +1375,340 @@ async def _show_task_list(context, user_id: int, shift_id: int, shift_tasks: lis
         parse_mode='HTML',
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
+
+async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE, shift_id: int):
+    """Показать задачи активной смены без закрытия смены."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        # Получаем информацию о смене
+        async with get_async_session() as session:
+            shift_query = select(Shift).where(Shift.id == shift_id)
+            shift_result = await session.execute(shift_query)
+            shift_obj = shift_result.scalar_one_or_none()
+            
+            if not shift_obj:
+                await query.edit_message_text(
+                    text="❌ Смена не найдена.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Проверяем что смена активна
+            if shift_obj.end_time:
+                await query.edit_message_text(
+                    text="❌ Смена уже закрыта.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Получаем задачи
+            shift_tasks = []
+            
+            if shift_obj.time_slot_id:
+                timeslot_query = select(TimeSlot).where(TimeSlot.id == shift_obj.time_slot_id)
+                timeslot_result = await session.execute(timeslot_query)
+                timeslot = timeslot_result.scalar_one_or_none()
+                
+                if timeslot:
+                    timeslot_tasks = getattr(timeslot, 'shift_tasks', None)
+                    if timeslot_tasks:
+                        shift_tasks = timeslot_tasks if isinstance(timeslot_tasks, list) else []
+            
+            # Если нет задач в тайм-слоте - берем из объекта
+            if not shift_tasks and shift_obj.object_id:
+                object_query = select(Object).where(Object.id == shift_obj.object_id)
+                object_result = await session.execute(object_query)
+                obj = object_result.scalar_one_or_none()
+                
+                if obj:
+                    object_tasks = getattr(obj, 'shift_tasks', None)
+                    if object_tasks:
+                        shift_tasks = object_tasks if isinstance(object_tasks, list) else []
+            
+            if not shift_tasks:
+                await query.edit_message_text(
+                    text="📋 <b>Задачи на смену не назначены</b>",
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+                    ]])
+                )
+                return
+            
+            # Создаем состояние для отслеживания выполнения задач
+            user_state_manager.create_state(
+                user_id=user_id,
+                action=UserAction.MY_TASKS,
+                step=UserStep.TASK_COMPLETION,
+                selected_shift_id=shift_id,
+                shift_tasks=shift_tasks,
+                completed_tasks=[],
+                task_media={}
+            )
+            
+            # Показываем список задач
+            await _show_my_tasks_list(context, user_id, shift_id, shift_tasks, [], {})
+            
+    except Exception as e:
+        logger.error(f"Error showing my tasks: {e}")
+        await query.edit_message_text(
+            text="❌ Ошибка загрузки задач. Попробуйте позже.",
+            parse_mode='HTML'
+        )
+
+
+async def _show_my_tasks_list(context, user_id: int, shift_id: int, shift_tasks: list, completed_tasks: list, task_media: dict):
+    """Показать список задач (версия для просмотра во время смены)."""
+    tasks_text = "📋 <b>Мои задачи на смену:</b>\n\n"
+    tasks_text += "Отметьте выполненные задачи:\n\n"
+    
+    for idx, task in enumerate(shift_tasks):
+        task_text = task.get('text') or task.get('task_text', 'Задача')
+        is_mandatory = task.get('is_mandatory', True)
+        deduction_amount = task.get('deduction_amount') or task.get('bonus_amount', 0)
+        requires_media = task.get('requires_media', False)
+        
+        # Иконки
+        mandatory_icon = "⚠️" if is_mandatory else "⭐"
+        completed_icon = "✅ " if idx in completed_tasks else ""
+        media_icon = "📸 " if requires_media else ""
+        
+        # Стоимость
+        cost_text = ""
+        if deduction_amount and float(deduction_amount) != 0:
+            amount = float(deduction_amount)
+            if amount > 0:
+                cost_text = f" (+{amount}₽)"
+            else:
+                cost_text = f" ({amount}₽)"
+        
+        task_line = f"{completed_icon}{media_icon}{mandatory_icon} {task_text}{cost_text}"
+        if idx in completed_tasks:
+            task_line = f"<s>{task_line}</s>"
+        tasks_text += task_line + "\n"
+    
+    # Формируем кнопки
+    keyboard = []
+    for idx, task in enumerate(shift_tasks):
+        task_text = task.get('text') or task.get('task_text', 'Задача')
+        is_mandatory = task.get('is_mandatory', True)
+        requires_media = task.get('requires_media', False)
+        
+        icon = "⚠️" if is_mandatory else "⭐"
+        media_icon = "📸 " if requires_media else ""
+        check = "✓ " if idx in completed_tasks else "☐ "
+        keyboard.append([
+            InlineKeyboardButton(
+                f"{check}{media_icon}{icon} {task_text[:30]}...",
+                callback_data=f"complete_my_task:{shift_id}:{idx}"
+            )
+        ])
+    
+    # Вместо "Продолжить закрытие смены" - кнопка "Главное меню"
+    keyboard.append([
+        InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+    ])
+    
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=tasks_text,
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def _handle_complete_my_task(update: Update, context: ContextTypes.DEFAULT_TYPE, shift_id: int, task_idx: int):
+    """Обработчик отметки задачи (во время смены, не при закрытии)."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        # Получаем состояние
+        user_state = user_state_manager.get_state(user_id)
+        if not user_state or user_state.action != UserAction.MY_TASKS:
+            await query.answer("❌ Состояние утеряно. Начните заново", show_alert=True)
+            return
+        
+        # Получаем задачи из состояния
+        shift_tasks = getattr(user_state, 'shift_tasks', [])
+        completed_tasks = getattr(user_state, 'completed_tasks', [])
+        
+        # Проверяем индекс
+        if task_idx >= len(shift_tasks):
+            await query.answer("❌ Задача не найдена", show_alert=True)
+            return
+        
+        # Получаем информацию о задаче
+        current_task = shift_tasks[task_idx]
+        requires_media = current_task.get('requires_media', False)
+        task_media = getattr(user_state, 'task_media', {})
+        
+        # Переключаем статус
+        if task_idx in completed_tasks:
+            # Снимаем отметку
+            completed_tasks.remove(task_idx)
+            if task_idx in task_media:
+                del task_media[task_idx]
+            status_msg = "Задача снята с отметки"
+            user_state_manager.update_state(user_id, completed_tasks=completed_tasks, task_media=task_media)
+        else:
+            # Проверяем, требуется ли медиа
+            if requires_media:
+                # Переходим к загрузке медиа
+                await _handle_my_task_media_upload(update, context, shift_id, task_idx)
+                return
+            else:
+                # Простая отметка без медиа
+                completed_tasks.append(task_idx)
+                status_msg = "✅ Задача отмечена"
+                user_state_manager.update_state(user_id, completed_tasks=completed_tasks)
+        
+        # Обновляем список задач
+        await _show_my_tasks_list_update(query, shift_id, shift_tasks, completed_tasks, task_media)
+        await query.answer(status_msg)
+        
+    except Exception as e:
+        logger.error(f"Error toggling my task: {e}")
+        await query.answer("❌ Ошибка отметки задачи", show_alert=True)
+
+
+async def _show_my_tasks_list_update(query, shift_id: int, shift_tasks: list, completed_tasks: list, task_media: dict):
+    """Обновить список задач в существующем сообщении."""
+    tasks_text = "📋 <b>Мои задачи на смену:</b>\n\n"
+    tasks_text += "Отметьте выполненные задачи:\n\n"
+    
+    for idx, task in enumerate(shift_tasks):
+        task_text = task.get('text') or task.get('task_text', 'Задача')
+        is_mandatory = task.get('is_mandatory', True)
+        deduction_amount = task.get('deduction_amount') or task.get('bonus_amount', 0)
+        requires_media = task.get('requires_media', False)
+        
+        mandatory_icon = "⚠️" if is_mandatory else "⭐"
+        completed_icon = "✅ " if idx in completed_tasks else ""
+        media_icon = "📸 " if requires_media else ""
+        
+        cost_text = ""
+        if deduction_amount and float(deduction_amount) != 0:
+            amount = float(deduction_amount)
+            if amount > 0:
+                cost_text = f" (+{amount}₽)"
+            else:
+                cost_text = f" ({amount}₽)"
+        
+        task_line = f"{completed_icon}{media_icon}{mandatory_icon} {task_text}{cost_text}"
+        if idx in completed_tasks:
+            task_line = f"<s>{task_line}</s>"
+        tasks_text += task_line + "\n"
+    
+    keyboard = []
+    for idx, task in enumerate(shift_tasks):
+        task_text = task.get('text') or task.get('task_text', 'Задача')
+        is_mandatory = task.get('is_mandatory', True)
+        requires_media = task.get('requires_media', False)
+        
+        icon = "⚠️" if is_mandatory else "⭐"
+        media_icon = "📸 " if requires_media else ""
+        check = "✓ " if idx in completed_tasks else "☐ "
+        keyboard.append([
+            InlineKeyboardButton(
+                f"{check}{media_icon}{icon} {task_text[:30]}...",
+                callback_data=f"complete_my_task:{shift_id}:{idx}"
+            )
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+    ])
+    
+    await query.edit_message_text(
+        text=tasks_text,
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEFAULT_TYPE, shift_id: int, task_idx: int):
+    """Запрос на загрузку медиа для задачи (во время смены)."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        user_state = user_state_manager.get_state(user_id)
+        if not user_state:
+            await query.answer("❌ Состояние утеряно", show_alert=True)
+            return
+        
+        # Получаем telegram_chat_id из БД
+        telegram_chat_id = user_state.data.get('telegram_chat_id')
+        object_name = user_state.data.get('object_name')
+        
+        if not telegram_chat_id:
+            # Получаем из БД
+            async with get_async_session() as session:
+                shift_query = select(Shift).where(Shift.id == shift_id)
+                shift_result = await session.execute(shift_query)
+                shift_obj = shift_result.scalar_one_or_none()
+                
+                if shift_obj:
+                    object_query = select(Object).where(Object.id == shift_obj.object_id)
+                    object_result = await session.execute(object_query)
+                    obj = object_result.scalar_one_or_none()
+                    
+                    if obj:
+                        telegram_chat_id = obj.telegram_chat_id
+                        object_name = obj.name
+                        
+                        # Если нет в объекте - проверяем подразделение
+                        if not telegram_chat_id and obj.division_id:
+                            from domain.entities.org_structure_unit import OrgStructureUnit
+                            division_query = select(OrgStructureUnit).where(OrgStructureUnit.id == obj.division_id)
+                            division_result = await session.execute(division_query)
+                            division = division_result.scalar_one_or_none()
+                            if division:
+                                telegram_chat_id = division.telegram_chat_id
+        
+        if not telegram_chat_id:
+            await query.edit_message_text(
+                text="❌ Telegram группа для отчетов не настроена.\n\n"
+                     "Обратитесь к администратору для настройки группы в объекте или подразделении.",
+                parse_mode='HTML'
+            )
+            return
+        
+        # Обновляем состояние
+        user_state_manager.update_state(
+            user_id,
+            step=UserStep.MEDIA_UPLOAD,
+            pending_media_task_idx=task_idx,
+            data={'telegram_chat_id': telegram_chat_id, 'object_name': object_name}
+        )
+        
+        shift_tasks = getattr(user_state, 'shift_tasks', [])
+        task = shift_tasks[task_idx]
+        task_text = task.get('text') or task.get('task_text', 'Задача')
+        
+        media_types = task.get('media_types', ['photo', 'video'])
+        if isinstance(media_types, str):
+            media_types = media_types.split(',')
+        
+        media_text = "фото" if media_types == ["photo"] else "видео" if media_types == ["video"] else "фото или видео"
+        
+        await query.edit_message_text(
+            text=f"📸 <b>Требуется отчет</b>\n\n"
+                 f"Задача: <i>{task_text}</i>\n\n"
+                 f"📷 Отправьте {media_text} отчет о выполнении задачи.\n\n"
+                 f"⚠️ <b>Важно:</b> отправьте медиа БЕЗ использования команд /start или других кнопок, иначе состояние потеряется!",
+            parse_mode='HTML',
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_my_task_media:{shift_id}")
+            ]])
+        )
+        
+    except Exception as e:
+        logger.error(f"Error handling my task media upload: {e}")
+        await query.answer("❌ Ошибка запроса медиа", show_alert=True)
 
 

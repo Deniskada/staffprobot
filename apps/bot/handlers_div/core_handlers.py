@@ -91,6 +91,58 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f"Existing user returned: user_id={user.id}, username={user.username}, chat_id={chat_id}"
         )
     
+    # Проверяем активную смену и наличие задач
+    has_tasks = False
+    active_shift_id = None
+    
+    try:
+        async with get_async_session() as session:
+            from domain.entities.shift import Shift
+            from domain.entities.user import User
+            from domain.entities.time_slot import TimeSlot
+            from domain.entities.object import Object
+            from sqlalchemy import select, and_
+            
+            # Получаем внутренний user_id из БД по telegram_id
+            user_query = select(User).where(User.telegram_id == user.id)
+            user_result = await session.execute(user_query)
+            db_user = user_result.scalar_one_or_none()
+            
+            if db_user:
+                # Получаем активные смены напрямую (без вложенных сессий)
+                shifts_query = select(Shift).where(
+                    and_(
+                        Shift.user_id == db_user.id,
+                        Shift.status == "active"
+                    )
+                )
+                shifts_result = await session.execute(shifts_query)
+                active_shifts = shifts_result.scalars().all()
+                
+                if active_shifts:
+                    active_shift = active_shifts[0]
+                    active_shift_id = active_shift.id
+                    
+                    # Проверяем задачи в тайм-слоте
+                    if active_shift.time_slot_id:
+                        timeslot_query = select(TimeSlot).where(TimeSlot.id == active_shift.time_slot_id)
+                        timeslot_result = await session.execute(timeslot_query)
+                        timeslot = timeslot_result.scalar_one_or_none()
+                        
+                        if timeslot and timeslot.shift_tasks:
+                            has_tasks = True
+                    
+                    # Если задач нет в тайм-слоте, проверяем объект
+                    if not has_tasks and active_shift.object_id:
+                        object_query = select(Object).where(Object.id == active_shift.object_id)
+                        object_result = await session.execute(object_query)
+                        obj = object_result.scalar_one_or_none()
+                        
+                        if obj and obj.shift_tasks:
+                            has_tasks = True
+    except Exception as e:
+        logger.error(f"Error checking tasks for user {user.id}: {e}")
+    
     # Создаем кнопки для основных действий
     keyboard = [
         [
@@ -107,7 +159,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         ],
         [
             InlineKeyboardButton("📊 Отчет", callback_data="get_report"),
-            InlineKeyboardButton("❓ Помощь", callback_data="help")
+            InlineKeyboardButton(
+                "📝 Мои задачи" if has_tasks else "❓ Помощь",
+                callback_data=f"my_tasks:{active_shift_id}" if has_tasks else "help"
+            )
         ],
         [
             InlineKeyboardButton("📈 Статус", callback_data="status"),
@@ -702,6 +757,30 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             task_media = getattr(user_state, 'task_media', {})
             from .shift_handlers import _show_task_list
             await _show_task_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
+        return
+    # Мои задачи (во время смены)
+    elif query.data.startswith("my_tasks:"):
+        shift_id = int(query.data.split(":", 1)[1])
+        from .shift_handlers import _handle_my_tasks
+        await _handle_my_tasks(update, context, shift_id)
+        return
+    elif query.data.startswith("complete_my_task:"):
+        from .shift_handlers import _handle_complete_my_task
+        parts = query.data.split(":", 2)
+        shift_id = int(parts[1])
+        task_idx = int(parts[2])
+        await _handle_complete_my_task(update, context, shift_id, task_idx)
+        return
+    elif query.data.startswith("cancel_my_task_media:"):
+        shift_id = int(query.data.split(":", 1)[1])
+        user_state = user_state_manager.get_state(user_id)
+        if user_state:
+            user_state_manager.update_state(user_id, step=UserStep.TASK_COMPLETION, pending_media_task_idx=None)
+            shift_tasks = getattr(user_state, 'shift_tasks', [])
+            completed_tasks = getattr(user_state, 'completed_tasks', [])
+            task_media = getattr(user_state, 'task_media', {})
+            from .shift_handlers import _show_my_tasks_list
+            await _show_my_tasks_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
         return
     # Планирование смен
     elif query.data == "schedule_shift":
