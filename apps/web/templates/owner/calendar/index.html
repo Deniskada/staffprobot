@@ -7,68 +7,7 @@
 <style>
 /* Owner-specific calendar styles */
 
-/* Drag & Drop Panels - Owner Override */
-#dragDropPanel.drag-drop-panel {
-    position: fixed !important;
-    right: 20px !important;
-    left: auto !important;
-    top: 100px !important;
-    transform: none !important;
-    width: 280px;
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 999;
-    transition: all 0.3s ease;
-}
-
-.drag-drop-panel.collapsed {
-    width: 60px;
-    height: 60px;
-}
-
-.drag-drop-panel.collapsed .panel-content {
-    display: none;
-}
-
-.drag-drop-panel.collapsed .panel-header h6 {
-    display: none;
-}
-
-.drag-drop-panel.collapsed .panel-header {
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 5px;
-    height: 60px;
-    width: 60px;
-    border-radius: 50%;
-    background: #007bff;
-}
-
-.drag-drop-panel.collapsed .panel-header button {
-    display: none;
-}
-
-.drag-drop-panel.collapsed .collapsed-icon {
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.2rem;
-}
-
-.drag-drop-panel.collapsed .objects-count {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-}
-
-.drag-drop-panel.collapsed .objects-count .badge {
-    font-size: 0.7rem;
-    padding: 0.25rem 0.4rem;
-}
-
+/* Employees Panel - Owner Override */
 #employeesPanel.employees-panel {
     position: fixed !important;
     right: 20px !important;
