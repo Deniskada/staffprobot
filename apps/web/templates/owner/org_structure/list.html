@@ -374,6 +374,8 @@ function showCreateModal() {
     const modal = new bootstrap.Modal(document.getElementById('createUnitModal'));
     modal.show();
     toggleCreateLateFields();
+    // Инициализация кнопок графика выплат
+    updateCreateScheduleActions();
 }
 
 // Показать модальное окно редактирования
@@ -404,6 +406,8 @@ async function showEditModal(unitId) {
         modal.show();
         
         toggleEditLateFields();
+        // Инициализация кнопок графика выплат
+        updateEditScheduleActions();
         
     } catch (e) {
         alert(`Ошибка загрузки: ${e.message}`);
@@ -490,11 +494,9 @@ function updateCreateScheduleActions() {
     if (selectedValue === 'create_new') {
         viewBtn.style.display = 'none';
         editBtn.style.display = 'none';
-        // Открыть модальное окно создания графика
-        window.open('/owner/payment-schedules/create', '_blank', 'width=900,height=700');
-        // Сбросить выбор
-        scheduleSelect.value = '';
-        descEl.textContent = '';
+        // Открыть страницу справочника графиков выплат
+        window.location.href = '/owner/payment-schedules';
+        return;
     } else if (selectedValue) {
         // Показать кнопку просмотра
         viewBtn.style.display = 'inline-block';
@@ -529,7 +531,8 @@ function editCreateSchedule() {
         return;
     }
     
-    window.open(`/owner/payment-schedules/${scheduleId}/edit`, '_blank', 'width=900,height=700');
+    // Открыть страницу справочника с прокруткой к графику
+    window.location.href = `/owner/payment-schedules#schedule-${scheduleId}`;
 }
 
 // Функции для работы с графиками выплат (редактирование подразделения)
@@ -550,11 +553,9 @@ function updateEditScheduleActions() {
     if (selectedValue === 'create_new') {
         viewBtn.style.display = 'none';
         editBtn.style.display = 'none';
-        // Открыть модальное окно создания графика
-        window.open('/owner/payment-schedules/create', '_blank', 'width=900,height=700');
-        // Сбросить выбор
-        scheduleSelect.value = '';
-        descEl.textContent = '';
+        // Открыть страницу справочника графиков выплат
+        window.location.href = '/owner/payment-schedules';
+        return;
     } else if (selectedValue) {
         // Показать кнопку просмотра
         viewBtn.style.display = 'inline-block';
@@ -589,7 +590,8 @@ function editEditSchedule() {
         return;
     }
     
-    window.open(`/owner/payment-schedules/${scheduleId}/edit`, '_blank', 'width=900,height=700');
+    // Открыть страницу справочника с прокруткой к графику
+    window.location.href = `/owner/payment-schedules#schedule-${scheduleId}`;
 }
 </script>
 
