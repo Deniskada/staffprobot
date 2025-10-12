@@ -524,6 +524,9 @@ function createNewScheduleForCreate() {
         createPaymentScheduleEditor.init();
     }
     
+    // Установить глобально для работы onchange в HTML
+    window.paymentScheduleEditor = createPaymentScheduleEditor;
+    
     createPaymentScheduleEditor.show();
     
     // Сбросить выбор
@@ -555,6 +558,9 @@ function editCreateSchedule() {
         createPaymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', null);
         createPaymentScheduleEditor.init();
     }
+    
+    // Установить глобально для работы onchange в HTML
+    window.paymentScheduleEditor = createPaymentScheduleEditor;
     
     createPaymentScheduleEditor.edit(scheduleId);
 }
@@ -603,6 +609,9 @@ function createNewScheduleForEdit() {
         editPaymentScheduleEditor.init();
     }
     
+    // Установить глобально для работы onchange в HTML
+    window.paymentScheduleEditor = editPaymentScheduleEditor;
+    
     editPaymentScheduleEditor.show();
     
     // Сбросить выбор
@@ -634,6 +643,9 @@ function editEditSchedule() {
         editPaymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', null);
         editPaymentScheduleEditor.init();
     }
+    
+    // Установить глобально для работы onchange в HTML
+    window.paymentScheduleEditor = editPaymentScheduleEditor;
     
     editPaymentScheduleEditor.edit(scheduleId);
 }
