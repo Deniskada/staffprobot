@@ -18,6 +18,17 @@
                     <a href="/owner/timeslots/object/{{ selected_object_id }}/create" class="btn btn-primary">
                         <i class="bi bi-plus-circle"></i> Создать тайм-слот
                     </a>
+                    {% endif %}
+                    <button type="button" class="btn btn-outline-warning" id="bulkEditBtn" disabled onclick="openBulkEditModal()">
+                        <i class="bi bi-pencil-square"></i> Редактировать выбранные
+                    </button>
+                    <form id="bulkDeleteForm" method="POST" action="/owner/timeslots/bulk-delete" onsubmit="return confirmBulkDelete()">
+                        <input type="hidden" name="timeslot_ids" id="bulk_ids">
+                        <button type="submit" class="btn btn-outline-danger" id="bulkDeleteBtn" disabled>
+                            <i class="bi bi-trash"></i> Удалить выбранные
+                        </button>
+                    </form>
+                    {% if selected_object_id %}
                     <a href="/owner/objects/{{ selected_object_id }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-left"></i> К объекту
                     </a>
@@ -85,17 +96,24 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-list-ul"></i> Тайм-слоты ({{ timeslots|length }})
-                    </h5>
-                    <small class="text-muted">Кликните на заголовки столбцов для сортировки</small>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-list-ul"></i> Тайм-слоты ({{ timeslots|length }})
+                        </h5>
+                        <small class="text-muted">Кликните на заголовки столбцов для сортировки</small>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                        <label class="form-check-label" for="selectAll">Выбрать все</label>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
                             <thead class="table-light">
                                 <tr>
+                                    <th style="width:40px"></th>
                                     <th>Объект</th>
                                     <th>
                                         <a href="?{% if selected_object_id %}object_id={{ selected_object_id }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}sort_by=slot_date&sort_order={% if sort_by == 'slot_date' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}"
@@ -143,6 +161,9 @@
                             <tbody>
                                 {% for timeslot in timeslots %}
                                 <tr>
+                                    <td>
+                                        <input class="form-check-input ts-check" type="checkbox" value="{{ timeslot.id }}" onchange="updateBulkState()">
+                                    </td>
                                     <td>
                                         <a href="/owner/timeslots?object_id={{ timeslot.object_id }}" class="text-decoration-none">
                                             <i class="bi bi-building"></i> {{ timeslot.object_name }}
@@ -215,5 +236,96 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Модальное окно для массового редактирования -->
+<div class="modal fade" id="bulkEditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Массовое редактирование тайм-слотов</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="/owner/timeslots/bulk-edit">
+                <div class="modal-body">
+                    <input type="hidden" name="timeslot_ids" id="bulk_edit_ids">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Будут обновлены выбранные тайм-слоты (<span id="selectedCount">0</span> шт.)
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Почасовая ставка (₽/час)</label>
+                        <input type="number" class="form-control" name="hourly_rate" step="0.01" min="0">
+                        <small class="text-muted">Оставьте пустым, чтобы не изменять</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Статус</label>
+                        <select class="form-select" name="is_active">
+                            <option value="">Не изменять</option>
+                            <option value="true">Активен</option>
+                            <option value="false">Неактивен</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Применить изменения</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Управление выбором всех чекбоксов
+function toggleSelectAll(checkbox) {
+    const checkboxes = document.querySelectorAll('.ts-check');
+    checkboxes.forEach(cb => cb.checked = checkbox.checked);
+    updateBulkState();
+}
+
+// Обновление состояния кнопок массовых операций
+function updateBulkState() {
+    const checkedBoxes = document.querySelectorAll('.ts-check:checked');
+    const bulkEditBtn = document.getElementById('bulkEditBtn');
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const selectAll = document.getElementById('selectAll');
+    const allBoxes = document.querySelectorAll('.ts-check');
+    
+    // Обновление состояния "Выбрать все"
+    selectAll.checked = allBoxes.length > 0 && checkedBoxes.length === allBoxes.length;
+    selectAll.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < allBoxes.length;
+    
+    // Включение/выключение кнопок
+    if (checkedBoxes.length > 0) {
+        bulkEditBtn.disabled = false;
+        bulkDeleteBtn.disabled = false;
+    } else {
+        bulkEditBtn.disabled = true;
+        bulkDeleteBtn.disabled = true;
+    }
+}
+
+// Открытие модального окна массового редактирования
+function openBulkEditModal() {
+    const checkedBoxes = document.querySelectorAll('.ts-check:checked');
+    const ids = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    document.getElementById('bulk_edit_ids').value = ids.join(',');
+    document.getElementById('selectedCount').textContent = ids.length;
+    
+    const modal = new bootstrap.Modal(document.getElementById('bulkEditModal'));
+    modal.show();
+}
+
+// Подтверждение массового удаления
+function confirmBulkDelete() {
+    const checkedBoxes = document.querySelectorAll('.ts-check:checked');
+    const ids = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    document.getElementById('bulk_ids').value = ids.join(',');
+    
+    return confirm(`Вы уверены, что хотите удалить ${ids.length} тайм-слот(ов)?\n\nЭто действие нельзя отменить.`);
+}
+</script>
 {% endblock %}
 
