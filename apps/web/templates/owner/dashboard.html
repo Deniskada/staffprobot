@@ -67,6 +67,45 @@
     transform: translateY(-2px);
     text-decoration: none;
 }
+
+/* Quick Actions */
+.quick-action-card {
+    display: block;
+    text-decoration: none;
+    padding: 1.25rem;
+    border-radius: 12px;
+    background: white;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+    text-align: center;
+    height: 100%;
+}
+
+.quick-action-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    border-color: #0d6efd;
+    text-decoration: none;
+}
+
+.quick-action-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 0.75rem;
+    color: white;
+    font-size: 1.75rem;
+}
+
+.quick-action-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #212529;
+    line-height: 1.3;
+}
 </style>
 {% endblock %}
 
@@ -170,33 +209,56 @@
         <div class="col-md-6">
             <div class="card owner-card">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">⚡ Быстрые действия</h5>
+                    <h5 class="mb-0"><i class="bi bi-lightning-charge"></i> Быстрые действия</h5>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <a href="/owner/employees" class="btn btn-outline-primary btn-block w-100">
-                                👥 Управление сотрудниками
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <a href="/owner/employees/add" class="quick-action-card">
+                                <div class="quick-action-icon bg-primary">
+                                    <i class="bi bi-person-plus"></i>
+                                </div>
+                                <div class="quick-action-title">Добавить сотрудника</div>
                             </a>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <a href="/owner/calendar" class="btn btn-outline-success btn-block w-100">
-                                📅 Календарь смен
+                        <div class="col-6">
+                            <a href="/owner/shifts/create" class="quick-action-card">
+                                <div class="quick-action-icon bg-success">
+                                    <i class="bi bi-calendar-plus"></i>
+                                </div>
+                                <div class="quick-action-title">Создать смену</div>
                             </a>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <a href="/owner/templates" class="btn btn-outline-warning btn-block w-100">
-                                📋 Шаблоны договоров
+                        <div class="col-6">
+                            <a href="/owner/calendar" class="quick-action-card">
+                                <div class="quick-action-icon bg-warning">
+                                    <i class="bi bi-calendar3"></i>
+                                </div>
+                                <div class="quick-action-title">Календарь</div>
                             </a>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <a href="/owner/reviews" class="btn btn-outline-info btn-block w-100">
-                                ⭐ Отзывы и рейтинги
+                        <div class="col-6">
+                            <a href="/owner/payroll" class="quick-action-card">
+                                <div class="quick-action-icon bg-info">
+                                    <i class="bi bi-wallet2"></i>
+                                </div>
+                                <div class="quick-action-title">Выплаты</div>
                             </a>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <a href="/owner/reports" class="btn btn-outline-info btn-block w-100">
-                                📊 Отчеты
+                        <div class="col-6">
+                            <a href="/owner/reports" class="quick-action-card">
+                                <div class="quick-action-icon bg-secondary">
+                                    <i class="bi bi-graph-up"></i>
+                                </div>
+                                <div class="quick-action-title">Отчеты</div>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="/owner/reviews" class="quick-action-card">
+                                <div class="quick-action-icon bg-warning">
+                                    <i class="bi bi-star"></i>
+                                </div>
+                                <div class="quick-action-title">Отзывы</div>
                             </a>
                         </div>
                     </div>
