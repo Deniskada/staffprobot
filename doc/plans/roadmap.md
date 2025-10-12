@@ -1,7 +1,8 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 279/362 (77.1%)  
-**Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев
+**Общий прогресс:** 286/370 (77.3%)  
+**Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
+**Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)
 
 ## 🎯 Итерация 1: MVP (1-2 недели)
 - [x] **Создать структуру проекта** - папки, файлы, базовые модули
@@ -1281,4 +1282,60 @@
 - Интеграция задач на смену в существующий процесс открытия/закрытия смен
 - Точность определения опозданий и невыполненных задач для автоудержаний
 - Права управляющих на начисления (проверка доступа к объектам и сотрудникам)
+
+---
+
+## 🎯 Итерация 24: Система уведомлений ✅ (октябрь 2025, завершена 10.10.2025)
+**Базируется на:** Итерация 10 из roadmap.md  
+**Статус:** ✅ Завершена  
+**Отчет:** [doc/plans/iteration24/ITERATION_24_FINAL_REPORT.md](iteration24/ITERATION_24_FINAL_REPORT.md)  
+**Документация:** [doc/NOTIFICATIONS.md](../NOTIFICATIONS.md)
+
+### **Фаза 1: Основа системы ✅ (7/7 задач)**
+- [x] **1.1. Создать единую модель уведомлений (1 день)**
+  - Type: feature | Files: domain/entities/notification.py, migrations/versions/21bdf8e9a3c7_*
+  - Acceptance: ✅ Модель Notification; 5 ENUM типов; 19 типов уведомлений; методы is_scheduled/is_overdue/is_read
+  - Commit: 6372959
+
+- [x] **1.2. Восстановить NotificationService (1 день)**
+  - Type: refactor | Files: shared/services/notification_service.py
+  - Acceptance: ✅ CRUD операции; фильтрация, пагинация; Redis кэширование (TTL 5мин)
+  - Commit: a99a173
+
+- [x] **1.3. Создать систему шаблонов (1 день)**
+  - Type: feature | Files: shared/templates/notifications/base_templates.py
+  - Acceptance: ✅ NotificationTemplateManager; 19 шаблонов; переменные; HTML/Plain рендеринг
+  - Commit: d09b356
+
+- [x] **2.1. Telegram уведомления (1 день)**
+  - Type: feature | Files: shared/services/senders/telegram_sender.py, notification_dispatcher.py
+  - Acceptance: ✅ TelegramNotificationSender; HTML форматирование; retry логика
+  - Commit: 6e39e58
+
+- [x] **2.2. Email уведомления (1 день)**
+  - Type: feature | Files: shared/services/senders/email_sender.py, core/config/settings.py
+  - Acceptance: ✅ EmailNotificationSender; SMTP; HTML/Plain; красивый шаблон
+  - Commit: 8c123b2
+
+- [x] **2.3. SMS уведомления заглушка (0.5 дня)**
+  - Type: feature | Files: shared/services/senders/sms_sender.py
+  - Acceptance: ✅ SMSNotificationSender stub; готов к интеграции
+  - Commit: 32b5bff
+
+- [x] **3.1. Тестирование системы (0.5 дня)**
+  - Type: testing | Files: scripts/test_notifications.py
+  - Acceptance: ✅ Тест всех каналов; проверка шаблонов; логирование
+  - Commit: 29edb4c
+
+### **Технические улучшения**
+- SMTP настройки в env.example
+- Global Redis cache в SystemSettingsService
+- Документация NOTIFICATIONS.md (469 строк)
+
+### **Не реализовано (Future)**
+- Push уведомления (Web Push API)
+- Настройки пользователей (NotificationPreferences)
+- Планировщик Celery для scheduled_at
+- API роуты GET/PATCH /api/notifications
+- WebSocket для IN_APP в реальном времени
 
