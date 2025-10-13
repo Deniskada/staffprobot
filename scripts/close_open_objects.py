@@ -121,10 +121,21 @@ async def close_active_shifts():
         # Закрываем ObjectOpening для объектов без активных смен
         closed_openings_count = 0
         try:
-            logger.info(f"Checking {len(closed_object_ids)} objects for closing ObjectOpening")
+            # Получаем ВСЕ открытые ObjectOpening (не только из закрытых смен)
+            open_openings_query = text("""
+                SELECT id, object_id 
+                FROM object_openings 
+                WHERE closed_at IS NULL
+            """)
+            openings_result = await session.execute(open_openings_query)
+            open_openings = openings_result.fetchall()
             
-            # Для каждого объекта проверяем активные смены
-            for object_id in closed_object_ids:
+            logger.info(f"Checking {len(open_openings)} open ObjectOpenings for active shifts")
+            
+            # Для каждого открытого объекта проверяем активные смены
+            for opening_row in open_openings:
+                object_id = opening_row.object_id
+                opening_id = opening_row.id
                 # Проверяем количество активных смен
                 active_count_query = text("""
                     SELECT COUNT(*) FROM shifts 
@@ -139,20 +150,16 @@ async def close_active_shifts():
                         UPDATE object_openings 
                         SET closed_at = :closed_at,
                             closed_by = NULL
-                        WHERE object_id = :obj_id 
-                          AND closed_at IS NULL
-                        RETURNING id
+                        WHERE id = :opening_id
                     """)
                     
-                    close_result = await session.execute(close_opening_query, {
-                        "obj_id": object_id,
+                    await session.execute(close_opening_query, {
+                        "opening_id": opening_id,
                         "closed_at": now_utc.replace(tzinfo=None)
                     })
                     
-                    closed_opening = close_result.fetchone()
-                    if closed_opening:
-                        closed_openings_count += 1
-                        logger.info(f"Closed ObjectOpening {closed_opening.id} for object {object_id}")
+                    closed_openings_count += 1
+                    logger.info(f"Closed ObjectOpening {opening_id} for object {object_id}")
             
             if closed_openings_count > 0:
                 await session.commit()
