@@ -269,9 +269,16 @@ async def owner_verify_cancellation(
                 status_code=404
             )
         
-        # Проверяем владение объектом отмены
+        # Проверяем владение объектом отмены (с eager loading)
+        from sqlalchemy.orm import selectinload
         cancellation_query = (
             select(ShiftCancellation)
+            .options(
+                selectinload(ShiftCancellation.shift_schedule),
+                selectinload(ShiftCancellation.employee),
+                selectinload(ShiftCancellation.object),
+                selectinload(ShiftCancellation.payroll_adjustment)
+            )
             .join(Object, ShiftCancellation.object_id == Object.id)
             .where(
                 and_(
