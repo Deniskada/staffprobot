@@ -342,6 +342,10 @@ async def owner_org_structure_get_data(
             "inherit_late_settings": unit.inherit_late_settings,
             "late_threshold_minutes": unit.late_threshold_minutes,
             "late_penalty_per_minute": float(unit.late_penalty_per_minute) if unit.late_penalty_per_minute else None,
+            "inherit_cancellation_settings": getattr(unit, 'inherit_cancellation_settings', True),
+            "cancellation_short_notice_hours": getattr(unit, 'cancellation_short_notice_hours', None),
+            "cancellation_short_notice_fine": float(unit.cancellation_short_notice_fine) if getattr(unit, 'cancellation_short_notice_fine', None) else None,
+            "cancellation_invalid_reason_fine": float(unit.cancellation_invalid_reason_fine) if getattr(unit, 'cancellation_invalid_reason_fine', None) else None,
             "level": unit.level,
             "is_active": unit.is_active
         })
