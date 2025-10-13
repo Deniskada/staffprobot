@@ -1,5 +1,6 @@
 """Роуты для управления уведомлениями в админ-панели (только для суперадмина)."""
 
+import json
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from typing import Optional, List, Dict, Any
@@ -12,6 +13,7 @@ from apps.web.services.admin_notification_service import AdminNotificationServic
 from apps.web.services.notification_template_service import NotificationTemplateService
 from apps.web.services.notification_channel_service import NotificationChannelService
 from apps.web.services.notification_bulk_service import NotificationBulkService
+from domain.entities.notification import NotificationType, NotificationChannel
 from core.logging.logger import logger
 from apps.web.jinja import templates
 
@@ -848,4 +850,268 @@ async def admin_notifications_api_template_get(
     except Exception as e:
         logger.error(f"Error getting template: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка получения шаблона: {str(e)}")
+
+
+# ============================================================================
+# CRUD API ДЛЯ КАСТОМНЫХ ШАБЛОНОВ (Iteration 25, Phase 3)
+# ============================================================================
+
+@router.get("/templates/create", response_class=HTMLResponse)
+async def admin_notifications_template_create_page(
+    request: Request,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница создания нового кастомного шаблона"""
+    try:
+        service = NotificationTemplateService(db)
+        
+        # Получаем доступные типы и каналы
+        available_types = await service.get_available_types()
+        available_channels = await service.get_available_channels()
+        
+        return templates.TemplateResponse("admin/notifications/templates/create.html", {
+            "request": request,
+            "current_user": current_user,
+            "title": "Создание шаблона уведомления",
+            "available_types": available_types,
+            "available_channels": available_channels
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading template create page: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки страницы: {str(e)}")
+
+
+@router.post("/api/templates/create")
+async def admin_notifications_api_template_create(
+    request: Request,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Создание нового кастомного шаблона"""
+    try:
+        # Получаем данные из формы
+        form_data = await request.form()
+        
+        service = NotificationTemplateService(db)
+        
+        # Парсим данные
+        template_key = form_data.get("template_key")
+        notification_type = NotificationType(form_data.get("type"))
+        channel_value = form_data.get("channel")
+        channel = NotificationChannel(channel_value) if channel_value else None
+        name = form_data.get("name")
+        plain_template = form_data.get("plain_template")
+        subject_template = form_data.get("subject_template")
+        html_template = form_data.get("html_template")
+        description = form_data.get("description")
+        variables_str = form_data.get("variables")
+        variables = json.loads(variables_str) if variables_str else None
+        
+        # Создаём шаблон
+        template = await service.create_template(
+            template_key=template_key,
+            notification_type=notification_type,
+            channel=channel,
+            name=name,
+            plain_template=plain_template,
+            subject_template=subject_template,
+            html_template=html_template,
+            description=description,
+            variables=variables,
+            created_by_user_id=current_user.get("id")
+        )
+        
+        logger.info(f"Template created: {template.id} by user {current_user.get('id')}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Шаблон '{name}' успешно создан",
+            "data": {
+                "id": template.id,
+                "template_key": template.template_key
+            }
+        })
+        
+    except ValueError as e:
+        logger.error(f"Validation error creating template: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка создания шаблона: {str(e)}")
+
+
+@router.get("/templates/edit/{template_id}", response_class=HTMLResponse)
+async def admin_notifications_template_edit_page(
+    request: Request,
+    template_id: int,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница редактирования кастомного шаблона"""
+    try:
+        service = NotificationTemplateService(db)
+        
+        # Получаем шаблон
+        template = await service.get_template_by_id(template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail="Шаблон не найден")
+        
+        # Получаем доступные типы и каналы
+        available_types = await service.get_available_types()
+        available_channels = await service.get_available_channels()
+        
+        # Парсим variables
+        variables = json.loads(template.variables) if template.variables else []
+        
+        return templates.TemplateResponse("admin/notifications/templates/edit.html", {
+            "request": request,
+            "current_user": current_user,
+            "title": f"Редактирование шаблона: {template.name}",
+            "template": template,
+            "variables": variables,
+            "available_types": available_types,
+            "available_channels": available_channels,
+            "is_readonly": template.is_default  # Дефолтные шаблоны только для чтения
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading template edit page: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки страницы: {str(e)}")
+
+
+@router.post("/api/templates/edit/{template_id}")
+async def admin_notifications_api_template_update(
+    request: Request,
+    template_id: int,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Обновление кастомного шаблона"""
+    try:
+        # Получаем данные из формы
+        form_data = await request.form()
+        
+        service = NotificationTemplateService(db)
+        
+        # Парсим данные
+        name = form_data.get("name")
+        plain_template = form_data.get("plain_template")
+        subject_template = form_data.get("subject_template")
+        html_template = form_data.get("html_template")
+        description = form_data.get("description")
+        variables_str = form_data.get("variables")
+        variables = json.loads(variables_str) if variables_str else None
+        is_active_str = form_data.get("is_active")
+        is_active = is_active_str == "true" if is_active_str else None
+        
+        # Обновляем шаблон
+        template = await service.update_template(
+            template_id=template_id,
+            name=name,
+            plain_template=plain_template,
+            subject_template=subject_template,
+            html_template=html_template,
+            description=description,
+            variables=variables,
+            is_active=is_active,
+            updated_by_user_id=current_user.get("id")
+        )
+        
+        logger.info(f"Template updated: {template.id} by user {current_user.get('id')}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Шаблон '{template.name}' успешно обновлён (версия {template.version})",
+            "data": {
+                "id": template.id,
+                "version": template.version
+            }
+        })
+        
+    except ValueError as e:
+        logger.error(f"Validation error updating template: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления шаблона: {str(e)}")
+
+
+@router.post("/api/templates/delete/{template_id}")
+async def admin_notifications_api_template_delete(
+    template_id: int,
+    hard_delete: bool = Query(False),
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Удаление кастомного шаблона (мягкое или жёсткое)"""
+    try:
+        service = NotificationTemplateService(db)
+        
+        if hard_delete:
+            # Жёсткое удаление
+            await service.hard_delete_template(template_id)
+            message = "Шаблон удалён из базы данных"
+        else:
+            # Мягкое удаление (деактивация)
+            await service.delete_template(template_id)
+            message = "Шаблон деактивирован"
+        
+        logger.info(f"Template deleted: {template_id} (hard={hard_delete}) by user {current_user.get('id')}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": message
+        })
+        
+    except ValueError as e:
+        logger.error(f"Validation error deleting template: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления шаблона: {str(e)}")
+
+
+@router.post("/api/templates/toggle/{template_id}")
+async def admin_notifications_api_template_toggle(
+    template_id: int,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Переключение активности шаблона"""
+    try:
+        service = NotificationTemplateService(db)
+        
+        # Получаем шаблон
+        template = await service.get_template_by_id(template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail="Шаблон не найден")
+        
+        # Переключаем активность
+        new_status = not template.is_active
+        await service.update_template(
+            template_id=template_id,
+            is_active=new_status,
+            updated_by_user_id=current_user.get("id")
+        )
+        
+        status_text = "активирован" if new_status else "деактивирован"
+        logger.info(f"Template {template_id} {status_text} by user {current_user.get('id')}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Шаблон {status_text}",
+            "data": {
+                "is_active": new_status
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка переключения статуса: {str(e)}")
 
