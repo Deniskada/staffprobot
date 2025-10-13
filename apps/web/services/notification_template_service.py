@@ -324,13 +324,15 @@ class NotificationTemplateService:
         try:
             types = []
             for notification_type in NotificationType:
+                # Преобразуем enum в строку безопасно
+                value = notification_type.value if isinstance(notification_type.value, str) else str(notification_type.value)
                 types.append({
-                    "value": notification_type.value,
-                    "label": notification_type.value.replace("_", " ").title()
+                    "value": value,
+                    "label": value.replace("_", " ").title()
                 })
             return types
         except Exception as e:
-            logger.error(f"Error getting available types: {e}")
+            logger.error(f"Error getting available types: {e}", exc_info=True)
             return []
 
     async def get_available_channels(self) -> List[Dict[str, str]]:
@@ -338,13 +340,15 @@ class NotificationTemplateService:
         try:
             channels = []
             for channel in NotificationChannel:
+                # Преобразуем enum в строку безопасно
+                value = channel.value if isinstance(channel.value, str) else str(channel.value)
                 channels.append({
-                    "value": channel.value,
-                    "label": channel.value.replace("_", " ").title()
+                    "value": value,
+                    "label": value.replace("_", " ").title()
                 })
             return channels
         except Exception as e:
-            logger.error(f"Error getting available channels: {e}")
+            logger.error(f"Error getting available channels: {e}", exc_info=True)
             return []
 
     async def get_template_statistics(self) -> Dict[str, Any]:
