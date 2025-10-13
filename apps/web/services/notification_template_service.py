@@ -99,6 +99,10 @@ class NotificationTemplateService:
             template = await self.get_template_by_id(template_id)
             if not template:
                 raise ValueError(f"Шаблон с ID {template_id} не найден")
+            
+            # Не обновляем дефолтные шаблоны
+            if template.is_default:
+                raise ValueError("Нельзя обновить дефолтный шаблон")
 
             # Обновляем поля
             if name is not None:
@@ -119,7 +123,7 @@ class NotificationTemplateService:
                 template.updated_by = updated_by_user_id
 
             # Увеличиваем версию
-            template.version += 1
+            template.version = (template.version or 0) + 1
 
             await self.session.commit()
             await self.session.refresh(template)
@@ -154,6 +158,24 @@ class NotificationTemplateService:
             logger.error(f"Error deleting template: {e}")
             raise
 
+    async def restore_template(self, template_id: int) -> None:
+        """Восстановление шаблона (активация)"""
+        try:
+            template = await self.get_template_by_id(template_id)
+            if not template:
+                raise ValueError(f"Шаблон с ID {template_id} не найден")
+
+            # Активируем шаблон
+            template.is_active = True
+            await self.session.commit()
+
+            logger.info(f"Restored template ID {template_id}")
+
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error restoring template: {e}")
+            raise
+
     async def hard_delete_template(self, template_id: int) -> None:
         """Жёсткое удаление шаблона из БД"""
         try:
@@ -165,7 +187,7 @@ class NotificationTemplateService:
             if template.is_default:
                 raise ValueError("Нельзя удалить дефолтный шаблон")
 
-            await self.session.delete(template)
+            self.session.delete(template)
             await self.session.commit()
 
             logger.info(f"Hard deleted template ID {template_id}")
@@ -230,7 +252,10 @@ class NotificationTemplateService:
                 except ValueError:
                     pass
 
-            if is_active is not None:
+            # По умолчанию показываем только активные шаблоны
+            if is_active is None:
+                filters.append(NotificationTemplate.is_active == True)
+            elif is_active is not None:
                 filters.append(NotificationTemplate.is_active == is_active)
 
             if search_query:
@@ -351,6 +376,45 @@ class NotificationTemplateService:
             logger.error(f"Error getting available channels: {e}", exc_info=True)
             return []
 
+    async def get_all_static_templates(self) -> List[Dict[str, Any]]:
+        """Получение всех статических шаблонов для выбора"""
+        try:
+            templates = []
+            for notification_type, template_data in self.template_manager.ALL_TEMPLATES.items():
+                # Получаем переменные для этого типа
+                variables = self.template_manager.get_template_variables(notification_type)
+                
+                templates.append({
+                    "type": notification_type,
+                    "type_value": notification_type.value,
+                    "type_label": notification_type.value.replace("_", " ").title(),
+                    "title": template_data.get("title", ""),
+                    "plain_template": template_data.get("plain", ""),
+                    "html_template": template_data.get("html", ""),
+                    "subject_template": template_data.get("subject", ""),
+                    "variables": variables,
+                    "category": self._get_template_category(notification_type)
+                })
+            
+            return templates
+        except Exception as e:
+            logger.error(f"Error getting static templates: {e}", exc_info=True)
+            return []
+    
+    def _get_template_category(self, notification_type: NotificationType) -> str:
+        """Определение категории шаблона"""
+        type_value = notification_type.value
+        if type_value.startswith("shift_"):
+            return "Смены"
+        elif type_value.startswith("contract_"):
+            return "Договоры"
+        elif type_value.startswith("review_") or type_value.startswith("appeal_"):
+            return "Отзывы"
+        elif type_value.startswith("payment_") or type_value.startswith("subscription_") or type_value.startswith("usage_"):
+            return "Платежи"
+        else:
+            return "Системные"
+
     async def get_template_statistics(self) -> Dict[str, Any]:
         """Получение статистики по шаблонам"""
         try:
@@ -382,6 +446,43 @@ class NotificationTemplateService:
                 "active_custom": 0,
                 "last_updated": datetime.now()
             }
+
+    def _validate_template_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Валидация данных шаблона"""
+        required_fields = ["template_key", "name", "type", "channel", "plain_template"]
+        
+        # Проверяем обязательные поля
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+        
+        # Проверяем тип уведомления
+        try:
+            if isinstance(data["type"], str):
+                NotificationType(data["type"])
+        except ValueError:
+            raise ValueError(f"Invalid notification type: {data['type']}")
+        
+        # Проверяем канал
+        try:
+            if isinstance(data["channel"], str):
+                NotificationChannel(data["channel"])
+        except ValueError:
+            raise ValueError(f"Invalid notification channel: {data['channel']}")
+        
+        # Проверяем длину ключа
+        if len(data["template_key"]) < 3:
+            raise ValueError("Template key must be at least 3 characters long")
+        
+        # Проверяем длину имени
+        if len(data["name"]) < 3:
+            raise ValueError("Template name must be at least 3 characters long")
+        
+        # Проверяем длину шаблона
+        if len(data["plain_template"]) < 10:
+            raise ValueError("Plain template must be at least 10 characters long")
+        
+        return data
 
     def _get_missing_variables(
         self,

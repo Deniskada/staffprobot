@@ -67,6 +67,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_create_template_success(self, mock_get_db_session, mock_require_superadmin, 
                                          client, mock_superadmin_user, sample_template_data, created_template):
         """Тест успешного создания шаблона"""
@@ -93,6 +95,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_create_template_duplicate_key(self, mock_get_db_session, mock_require_superadmin, 
                                                client, mock_superadmin_user, sample_template_data):
         """Тест создания шаблона с дублирующимся ключом"""
@@ -116,6 +120,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_create_template_missing_required_fields(self, mock_get_db_session, mock_require_superadmin, 
                                                          client, mock_superadmin_user):
         """Тест создания шаблона с отсутствующими обязательными полями"""
@@ -137,6 +143,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_update_template_success(self, mock_get_db_session, mock_require_superadmin, 
                                          client, mock_superadmin_user, created_template):
         """Тест успешного обновления шаблона"""
@@ -177,6 +185,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_update_template_not_found(self, mock_get_db_session, mock_require_superadmin, 
                                            client, mock_superadmin_user):
         """Тест обновления несуществующего шаблона"""
@@ -202,6 +212,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_update_default_template(self, mock_get_db_session, mock_require_superadmin, 
                                          client, mock_superadmin_user):
         """Тест обновления дефолтного шаблона"""
@@ -227,6 +239,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_delete_template_success(self, mock_get_db_session, mock_require_superadmin, 
                                          client, mock_superadmin_user):
         """Тест успешного удаления шаблона (деактивация)"""
@@ -251,6 +265,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_delete_template_not_found(self, mock_get_db_session, mock_require_superadmin, 
                                            client, mock_superadmin_user):
         """Тест удаления несуществующего шаблона"""
@@ -274,6 +290,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_delete_default_template(self, mock_get_db_session, mock_require_superadmin, 
                                          client, mock_superadmin_user):
         """Тест удаления дефолтного шаблона"""
@@ -297,6 +315,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_restore_template_success(self, mock_get_db_session, mock_require_superadmin, 
                                           client, mock_superadmin_user):
         """Тест успешного восстановления шаблона (активация)"""
@@ -321,6 +341,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_restore_template_not_found(self, mock_get_db_session, mock_require_superadmin, 
                                             client, mock_superadmin_user):
         """Тест восстановления несуществующего шаблона"""
@@ -344,6 +366,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_hard_delete_template_success(self, mock_get_db_session, mock_require_superadmin, 
                                               client, mock_superadmin_user):
         """Тест жёсткого удаления шаблона"""
@@ -368,6 +392,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_toggle_template_activity_success(self, mock_get_db_session, mock_require_superadmin, 
                                                   client, mock_superadmin_user, created_template):
         """Тест переключения активности шаблона"""
@@ -395,6 +421,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_get_template_by_id_success(self, mock_get_db_session, mock_require_superadmin, 
                                             client, mock_superadmin_user, created_template):
         """Тест получения шаблона по ID"""
@@ -420,6 +448,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_get_template_by_id_not_found(self, mock_get_db_session, mock_require_superadmin, 
                                               client, mock_superadmin_user):
         """Тест получения несуществующего шаблона по ID"""
@@ -443,6 +473,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_get_templates_list_success(self, mock_get_db_session, mock_require_superadmin, 
                                             client, mock_superadmin_user, created_template):
         """Тест получения списка шаблонов"""
@@ -468,6 +500,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_get_templates_list_with_filters(self, mock_get_db_session, mock_require_superadmin, 
                                                   client, mock_superadmin_user, created_template):
         """Тест получения списка шаблонов с фильтрами"""
@@ -492,6 +526,8 @@ class TestTemplateCRUDOperations:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_database_error_handling(self, mock_get_db_session, mock_require_superadmin, 
                                          client, mock_superadmin_user):
         """Тест обработки ошибок базы данных"""

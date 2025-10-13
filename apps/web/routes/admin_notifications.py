@@ -173,72 +173,38 @@ async def admin_notifications_analytics(
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки аналитики: {str(e)}")
 
 
-@router.get("/templates", response_class=HTMLResponse)
-async def admin_notifications_templates(
+@router.get("/templates/select-static", response_class=HTMLResponse, name="admin_notifications_templates_select_static")
+async def admin_notifications_templates_select_static(
     request: Request,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
-    type_filter: Optional[str] = Query(None),
     current_user: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """Управление шаблонами уведомлений"""
+    """Страница выбора статического шаблона для переопределения"""
     try:
         service = NotificationTemplateService(db)
         
-        # Получаем шаблоны
-        templates_list, total_count = await service.get_templates_paginated(
-            page=page,
-            per_page=per_page,
-            type_filter=type_filter
-        )
+        # Получаем все статические шаблоны
+        static_templates = await service.get_all_static_templates()
         
-        # Получаем доступные типы
-        available_types = await service.get_available_types()
+        # Группируем по категориям
+        templates_by_category = {}
+        for template in static_templates:
+            category = template["category"]
+            if category not in templates_by_category:
+                templates_by_category[category] = []
+            templates_by_category[category].append(template)
         
-        return templates.TemplateResponse("admin/notifications/templates/list.html", {
+        return templates.TemplateResponse("admin/notifications/templates/select_static.html", {
             "request": request,
             "current_user": current_user,
-            "title": "Управление шаблонами",
-            "templates": templates_list,
-            "total_count": total_count,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": (total_count + per_page - 1) // per_page,
-            "type_filter": type_filter,
-            "available_types": available_types
+            "title": "Выбор шаблона для переопределения",
+            "templates_by_category": templates_by_category,
+            "categories": ["Смены", "Договоры", "Отзывы", "Платежи", "Системные"]
         })
         
     except Exception as e:
-        logger.error(f"Error loading notification templates: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки шаблонов: {str(e)}")
-
-
-@router.get("/templates/create", response_class=HTMLResponse)
-async def admin_notifications_templates_create(
-    request: Request,
-    current_user: dict = Depends(require_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Создание нового шаблона"""
-    try:
-        service = NotificationTemplateService(db)
-        
-        # Получаем доступные типы и каналы
-        available_types = await service.get_available_types()
-        available_channels = await service.get_available_channels()
-        
-        return templates.TemplateResponse("admin/notifications/templates/create.html", {
-                "request": request,
-                "current_user": current_user,
-                "title": "Создание шаблона",
-                "available_types": available_types,
-                "available_channels": available_channels
-            })
-            
-    except Exception as e:
-        logger.error(f"Error loading template creation form: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки формы: {str(e)}")
+        logger.error(f"Error loading static templates selection: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки: {str(e)}")
 
 
 @router.get("/templates/{template_id}/edit", response_class=HTMLResponse)
@@ -689,12 +655,13 @@ async def admin_notifications_test(
 # РОУТЫ ДЛЯ УПРАВЛЕНИЯ ШАБЛОНАМИ (Iteration 25, Phase 3)
 # ============================================================================
 
-@router.get("/templates", response_class=HTMLResponse)
+@router.get("/templates", response_class=HTMLResponse, name="admin_notifications_templates_list")
 async def admin_notifications_templates_list(
     request: Request,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     type_filter: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None),
     current_user: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -702,11 +669,19 @@ async def admin_notifications_templates_list(
     try:
         service = NotificationTemplateService(db)
         
+        # Преобразуем status_filter в is_active
+        is_active = None
+        if status_filter == 'active':
+            is_active = True
+        elif status_filter == 'inactive':
+            is_active = False
+        
         # Получаем шаблоны
         templates_list, total_count = await service.get_templates_paginated(
             page=page,
             per_page=per_page,
-            type_filter=type_filter
+            type_filter=type_filter,
+            is_active=is_active
         )
         
         # Получаем доступные типы
@@ -725,6 +700,7 @@ async def admin_notifications_templates_list(
             "per_page": per_page,
             "total_pages": (total_count + per_page - 1) // per_page,
             "type_filter": type_filter,
+            "status_filter": status_filter,
             "available_types": available_types,
             "stats": stats
         })
@@ -732,6 +708,53 @@ async def admin_notifications_templates_list(
     except Exception as e:
         logger.error(f"Error loading templates list: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки списка шаблонов: {str(e)}")
+
+
+@router.get("/templates/create", response_class=HTMLResponse, name="admin_notifications_template_create_page")
+async def admin_notifications_template_create_page(
+    request: Request,
+    from_static: str = None,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница создания нового кастомного шаблона"""
+    try:
+        service = NotificationTemplateService(db)
+        
+        # Получаем доступные типы и каналы
+        available_types = await service.get_available_types()
+        available_channels = await service.get_available_channels()
+        
+        # Если указан параметр from_static, загружаем данные статического шаблона
+        prefill_data = None
+        if from_static:
+            static_templates = await service.get_all_static_templates()
+            for template in static_templates:
+                if template["type_value"] == from_static:
+                    prefill_data = {
+                        "template_key": f"{from_static}_custom",
+                        "type": template["type_value"],
+                        "name": f"{template['title']} (кастомная версия)",
+                        "plain_template": template["plain_template"],
+                        "html_template": template["html_template"],
+                        "subject_template": template["subject_template"],
+                        "variables": template["variables"],
+                        "category": template["category"]
+                    }
+                    break
+        
+        return templates.TemplateResponse("admin/notifications/templates/create.html", {
+            "request": request,
+            "current_user": current_user,
+            "title": "Переопределение шаблона" if from_static else "Создание шаблона уведомления",
+            "available_types": available_types,
+            "available_channels": available_channels,
+            "prefill_data": prefill_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading template create page: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки страницы: {str(e)}")
 
 
 @router.get("/templates/{template_id}", response_class=HTMLResponse)
@@ -746,7 +769,7 @@ async def admin_notifications_template_view(
         service = NotificationTemplateService(db)
         
         # Получаем шаблон
-        template = await service.get_template(template_id)
+        template = await service.get_template_by_id(int(template_id))
         if not template:
             raise HTTPException(status_code=404, detail="Шаблон не найден")
         
@@ -754,14 +777,19 @@ async def admin_notifications_template_view(
         available_types = await service.get_available_types()
         available_channels = await service.get_available_channels()
         
+        # Парсим variables из JSON
+        import json
+        variables = json.loads(template.variables) if template.variables else []
+        
         return templates.TemplateResponse("admin/notifications/templates/edit.html", {
             "request": request,
             "current_user": current_user,
-            "title": f"Просмотр шаблона: {template['title']}",
+            "title": f"Просмотр шаблона: {template.name}",
             "template": template,
+            "variables": variables,
             "available_types": available_types,
             "available_channels": available_channels,
-            "is_readonly": True  # Шаблоны статические, только для просмотра
+            "is_readonly": True
         })
         
     except HTTPException:
@@ -852,36 +880,44 @@ async def admin_notifications_api_template_get(
         raise HTTPException(status_code=500, detail=f"Ошибка получения шаблона: {str(e)}")
 
 
-# ============================================================================
-# CRUD API ДЛЯ КАСТОМНЫХ ШАБЛОНОВ (Iteration 25, Phase 3)
-# ============================================================================
-
-@router.get("/templates/create", response_class=HTMLResponse)
-async def admin_notifications_template_create_page(
-    request: Request,
+@router.get("/api/templates/static/{template_type}")
+async def admin_notifications_api_static_template_get(
+    template_type: str,
     current_user: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """Страница создания нового кастомного шаблона"""
+    """API: Получение статического шаблона по типу"""
     try:
         service = NotificationTemplateService(db)
         
-        # Получаем доступные типы и каналы
-        available_types = await service.get_available_types()
-        available_channels = await service.get_available_channels()
+        # Получаем все статические шаблоны
+        static_templates = await service.get_all_static_templates()
         
-        return templates.TemplateResponse("admin/notifications/templates/create.html", {
-            "request": request,
-            "current_user": current_user,
-            "title": "Создание шаблона уведомления",
-            "available_types": available_types,
-            "available_channels": available_channels
+        # Находим нужный
+        template_data = None
+        for template in static_templates:
+            if template["type_value"] == template_type:
+                template_data = template
+                break
+        
+        if not template_data:
+            raise HTTPException(status_code=404, detail="Статический шаблон не найден")
+        
+        return JSONResponse({
+            "status": "success",
+            "data": template_data
         })
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error loading template create page: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки страницы: {str(e)}")
+        logger.error(f"Error getting static template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения статического шаблона: {str(e)}")
 
+
+# ============================================================================
+# CRUD API ДЛЯ КАСТОМНЫХ ШАБЛОНОВ (Iteration 25, Phase 3)
+# ============================================================================
 
 @router.post("/api/templates/create")
 async def admin_notifications_api_template_create(
@@ -1074,6 +1110,30 @@ async def admin_notifications_api_template_delete(
         logger.error(f"Error deleting template: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка удаления шаблона: {str(e)}")
 
+@router.post("/api/templates/restore/{template_id}")
+async def admin_notifications_api_template_restore(
+    template_id: int,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Восстановление кастомного шаблона (активация)"""
+    try:
+        service = NotificationTemplateService(db)
+        await service.restore_template(template_id)
+        
+        logger.info(f"Template restored: {template_id} by user {current_user.get('id')}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "Шаблон восстановлён"
+        })
+        
+    except ValueError as e:
+        logger.error(f"Validation error restoring template: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error restoring template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка восстановления шаблона: {str(e)}")
 
 @router.post("/api/templates/toggle/{template_id}")
 async def admin_notifications_api_template_toggle(
