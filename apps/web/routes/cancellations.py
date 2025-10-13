@@ -296,3 +296,98 @@ async def owner_verify_cancellation(
             status_code=500
         )
 
+
+@router.get("/owner/analytics/cancellations", response_class=HTMLResponse)
+async def owner_cancellations_analytics(
+    request: Request,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    object_id: Optional[int] = None,
+    employee_id: Optional[int] = None,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница аналитики отмен смен."""
+    from apps.analytics.analytics_service import AnalyticsService
+    from apps.web.services.object_service import ObjectService
+    from datetime import date, timedelta
+    
+    try:
+        # Получаем пользователя
+        user_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        # Обработка дат
+        if date_from:
+            start_date = date.fromisoformat(date_from)
+        else:
+            start_date = date.today() - timedelta(days=30)
+        
+        if date_to:
+            end_date = date.fromisoformat(date_to)
+        else:
+            end_date = date.today()
+        
+        # Получаем объекты владельца для фильтра
+        object_service = ObjectService(db)
+        objects = await object_service.get_objects_by_owner(user.telegram_id)
+        
+        # Получаем статистику
+        analytics_service = AnalyticsService()
+        stats = analytics_service.get_cancellation_statistics(
+            owner_id=user.id,
+            start_date=start_date,
+            end_date=end_date,
+            object_id=object_id,
+            employee_id=employee_id
+        )
+        
+        # Получаем детальный список отмен для таблицы
+        from sqlalchemy.orm import selectinload
+        
+        cancellations_query = (
+            select(ShiftCancellation)
+            .options(
+                selectinload(ShiftCancellation.employee),
+                selectinload(ShiftCancellation.object),
+                selectinload(ShiftCancellation.shift_schedule),
+                selectinload(ShiftCancellation.cancelled_by)
+            )
+            .join(Object, ShiftCancellation.object_id == Object.id)
+            .where(Object.owner_id == user.id)
+        )
+        
+        # Применяем фильтры
+        if object_id:
+            cancellations_query = cancellations_query.where(ShiftCancellation.object_id == object_id)
+        if employee_id:
+            cancellations_query = cancellations_query.where(ShiftCancellation.employee_id == employee_id)
+        
+        cancellations_query = cancellations_query.order_by(ShiftCancellation.created_at.desc())
+        
+        cancellations_result = await db.execute(cancellations_query)
+        cancellations = cancellations_result.scalars().all()
+        
+        return templates.TemplateResponse("owner/analytics/cancellations.html", {
+            "request": request,
+            "current_user": current_user,
+            "stats": stats,
+            "cancellations": cancellations,
+            "objects": objects,
+            "filters": {
+                'date_from': start_date.isoformat(),
+                'date_to': end_date.isoformat(),
+                'object_id': object_id,
+                'employee_id': employee_id
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"Error loading cancellations analytics: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки аналитики")
+

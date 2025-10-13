@@ -1,0 +1,237 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Аналитика отмен смен{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h2><i class="fas fa-chart-bar"></i> Аналитика отмен смен</h2>
+    
+    <!-- Фильтры -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Дата от</label>
+                    <input type="date" name="date_from" class="form-control" 
+                           value="{{ filters.date_from }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Дата до</label>
+                    <input type="date" name="date_to" class="form-control" 
+                           value="{{ filters.date_to }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Объект</label>
+                    <select name="object_id" class="form-select">
+                        <option value="">Все объекты</option>
+                        {% for obj in objects %}
+                        <option value="{{ obj.id }}" {% if filters.object_id == obj.id %}selected{% endif %}>
+                            {{ obj.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter"></i> Применить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    {% if stats.success %}
+    <!-- Статистика -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Всего отмен</h5>
+                    <h2 class="display-4">{{ stats.total_cancellations }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Штрафы начислено</h5>
+                    <h2 class="display-4 text-danger">{{ stats.total_fines }}₽</h2>
+                    <small class="text-muted">Применено: {{ stats.applied_fines }}₽</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Уважительные причины</h5>
+                    <h2 class="display-4 text-info">{{ stats.valid_reasons_percent }}%</h2>
+                    <small class="text-muted">{{ stats.valid_reasons_verified }}/{{ stats.valid_reasons_count }} проверено</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Отмен сотрудниками</h5>
+                    <h2 class="display-4 text-warning">{{ stats.by_type.get('employee', 0) }}</h2>
+                    <small class="text-muted">из {{ stats.total_cancellations }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Диаграммы -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-user-tag"></i> По типу отменившего</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        {% for type, count in stats.by_type.items() %}
+                        <tr>
+                            <td>{{ {'employee': 'Сотрудник', 'owner': 'Владелец', 'manager': 'Управляющий', 'system': 'Система'}.get(type, type) }}</td>
+                            <td class="text-end"><strong>{{ count }}</strong></td>
+                            <td class="text-end text-muted">{{ (count / stats.total_cancellations * 100) | round(1) }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-clipboard-list"></i> По причине</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        {% for reason, count in stats.by_reason.items() %}
+                        <tr>
+                            <td>{{ {'short_notice': 'Короткий срок', 'no_reason': 'Без причины', 'medical_cert': 'Медицинская справка', 'emergency_cert': 'МЧС', 'police_cert': 'Полиция', 'owner_decision': 'Решение владельца', 'contract_termination': 'Расторжение договора', 'other': 'Другое'}.get(reason, reason) }}</td>
+                            <td class="text-end"><strong>{{ count }}</strong></td>
+                            <td class="text-end text-muted">{{ (count / stats.total_cancellations * 100) | round(1) }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Топ сотрудников -->
+    {% if stats.top_employees %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-users"></i> Топ сотрудников по отменам</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Сотрудник</th>
+                        <th class="text-end">Отмен</th>
+                        <th class="text-end">Штрафов</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for emp in stats.top_employees %}
+                    <tr>
+                        <td>{{ emp.name }}</td>
+                        <td class="text-end">{{ emp.count }}</td>
+                        <td class="text-end text-danger">{{ emp.total_fine }}₽</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Детальная таблица отмен -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-list"></i> Детальный список отмен ({{ cancellations|length }})</h5>
+            <a href="/owner/analytics/cancellations/export?date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}" 
+               class="btn btn-sm btn-success">
+                <i class="fas fa-file-excel"></i> Экспорт в Excel
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Дата отмены</th>
+                            <th>Дата смены</th>
+                            <th>Сотрудник</th>
+                            <th>Объект</th>
+                            <th>Кто отменил</th>
+                            <th>Причина</th>
+                            <th>За сколько часов</th>
+                            <th>Штраф</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in cancellations %}
+                        <tr>
+                            <td>{{ c.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                            <td>{{ c.shift_schedule.planned_start.strftime('%d.%m.%Y %H:%M') }}</td>
+                            <td>{{ c.employee.first_name }} {{ c.employee.last_name|default('', true) }}</td>
+                            <td>{{ c.object.name }}</td>
+                            <td>
+                                {{ c.cancelled_by.first_name if c.cancelled_by else '—' }}<br>
+                                <small class="text-muted">{{ c.cancelled_by_type_label }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if c.is_valid_reason %}info{% else %}secondary{% endif %}">
+                                    {{ c.cancellation_reason_label }}
+                                </span>
+                                {% if c.reason_notes %}
+                                <br><small class="text-muted">{{ c.reason_notes[:50] }}...</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if c.hours_before_shift %}
+                                    {{ c.hours_before_shift }}ч
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if c.fine_amount %}
+                                    <span class="text-danger">{{ c.fine_amount }}₽</span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if c.is_valid_reason %}
+                                    {% if c.document_verified %}
+                                        <span class="badge bg-success"><i class="fas fa-check"></i> Подтв.</span>
+                                    {% elif c.verified_at %}
+                                        <span class="badge bg-danger"><i class="fas fa-times"></i> Откл.</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> Ожидает</span>
+                                    {% endif %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-danger">
+        <i class="fas fa-exclamation-triangle"></i> Ошибка загрузки статистики: {{ stats.error }}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
