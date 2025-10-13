@@ -1581,10 +1581,11 @@
   - **Детали:**
     - ✅ Celery задача auto_close_shifts проверяет активные смены для закрытых объектов
     - ✅ Если нет активных смен - устанавливает ObjectOpening.closed_at
-    - ✅ Скрипт close_open_objects.py закрывает и смены, и ObjectOpening
-    - ✅ Проверка через ObjectOpeningService.get_active_shifts_count()
+    - ✅ Скрипт close_open_objects.py использует прямые SQL запросы (избегает проблем с ORM)
+    - ✅ Скрипт проверяет ВСЕ открытые ObjectOpening, не только из закрытых смен
+    - ✅ На проде закрыто 4 открытых объекта без активных смен
     - ✅ Логирование закрытых ObjectOpening
-  - Commits: f03a22e, 883beba
+  - Commits: f03a22e, 883beba, 4bb512c, 0fa0728
 
 ### Техническая реализация
 
