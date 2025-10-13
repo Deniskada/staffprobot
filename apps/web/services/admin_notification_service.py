@@ -425,3 +425,61 @@ class AdminNotificationService(NotificationService):
             logger.error(f"Error sending test notification: {e}")
             raise Exception(f"Ошибка отправки тестового уведомления: {str(e)}")
 
+    # ========================================================================
+    # МЕТОДЫ ДЛЯ ОДИНОЧНЫХ ОПЕРАЦИЙ (Iteration 25, Phase 2)
+    # ========================================================================
+
+    async def get_notification_by_id(self, notification_id: int) -> Optional[Notification]:
+        """Получение уведомления по ID"""
+        try:
+            query = select(Notification).where(Notification.id == notification_id)
+            result = await self.session.execute(query)
+            notification = result.scalar_one_or_none()
+            return notification
+        except Exception as e:
+            logger.error(f"Error getting notification by ID: {e}")
+            return None
+
+    async def retry_notification(self, notification_id: int) -> None:
+        """Повторная отправка уведомления"""
+        try:
+            # Получаем уведомление
+            notification = await self.get_notification_by_id(notification_id)
+            if not notification:
+                raise ValueError(f"Notification {notification_id} not found")
+
+            # Сбрасываем статус и счетчик попыток
+            notification.status = NotificationStatus.PENDING
+            notification.retry_count = 0
+            notification.error_message = None
+            notification.sent_at = None
+
+            await self.session.commit()
+
+            logger.info(f"Notification {notification_id} reset for retry")
+
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error retrying notification: {e}")
+            raise
+
+    async def cancel_notification(self, notification_id: int) -> None:
+        """Отмена уведомления"""
+        try:
+            # Получаем уведомление
+            notification = await self.get_notification_by_id(notification_id)
+            if not notification:
+                raise ValueError(f"Notification {notification_id} not found")
+
+            # Устанавливаем статус "отменено"
+            notification.status = NotificationStatus.CANCELLED
+
+            await self.session.commit()
+
+            logger.info(f"Notification {notification_id} cancelled")
+
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error cancelling notification: {e}")
+            raise
+

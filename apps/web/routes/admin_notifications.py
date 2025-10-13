@@ -454,7 +454,113 @@ async def admin_notifications_settings_telegram(
         raise HTTPException(status_code=500, detail=f"Ошибка обновления настроек: {str(e)}")
 
 
-# API endpoints для AJAX операций
+# ============================================================================
+# API ENDPOINTS ДЛЯ ОДИНОЧНЫХ ОПЕРАЦИЙ (Iteration 25, Phase 2)
+# ============================================================================
+
+@router.get("/api/{notification_id}")
+async def admin_notifications_api_get_notification(
+    notification_id: int,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Получение одного уведомления"""
+    try:
+        service = AdminNotificationService(db)
+        
+        # Получаем уведомление
+        notification = await service.get_notification_by_id(notification_id)
+        if not notification:
+            raise HTTPException(status_code=404, detail="Уведомление не найдено")
+        
+        return JSONResponse({
+            "id": notification.id,
+            "type": notification.type.value if notification.type else None,
+            "status": notification.status.value if notification.status else None,
+            "channel": notification.channel.value if notification.channel else None,
+            "priority": notification.priority.value if notification.priority else None,
+            "subject": notification.subject,
+            "message": notification.message,
+            "user_id": notification.user_id,
+            "created_at": notification.created_at.isoformat() if notification.created_at else None,
+            "sent_at": notification.sent_at.isoformat() if notification.sent_at else None,
+            "read_at": notification.read_at.isoformat() if notification.read_at else None
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting notification: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения уведомления: {str(e)}")
+
+
+@router.post("/api/{notification_id}/retry")
+async def admin_notifications_api_retry_notification(
+    notification_id: int,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Повторная отправка уведомления"""
+    try:
+        service = AdminNotificationService(db)
+        
+        # Получаем уведомление
+        notification = await service.get_notification_by_id(notification_id)
+        if not notification:
+            raise HTTPException(status_code=404, detail="Уведомление не найдено")
+        
+        # Повторная отправка
+        await service.retry_notification(notification_id)
+        
+        logger.info(f"Notification {notification_id} retried by admin {current_user.get('id')}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Уведомление #{notification_id} поставлено в очередь на отправку"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrying notification: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка повторной отправки: {str(e)}")
+
+
+@router.post("/api/{notification_id}/cancel")
+async def admin_notifications_api_cancel_notification(
+    notification_id: int,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Отмена уведомления"""
+    try:
+        service = AdminNotificationService(db)
+        
+        # Получаем уведомление
+        notification = await service.get_notification_by_id(notification_id)
+        if not notification:
+            raise HTTPException(status_code=404, detail="Уведомление не найдено")
+        
+        # Отмена
+        await service.cancel_notification(notification_id)
+        
+        logger.info(f"Notification {notification_id} cancelled by admin {current_user.get('id')}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Уведомление #{notification_id} отменено"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cancelling notification: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка отмены уведомления: {str(e)}")
+
+
+# ============================================================================
+# API ENDPOINTS ДЛЯ МАССОВЫХ ОПЕРАЦИЙ (Iteration 25, Phase 2)
+# ============================================================================
 
 @router.post("/api/bulk/cancel")
 async def admin_notifications_bulk_cancel(

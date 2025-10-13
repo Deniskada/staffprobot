@@ -2,6 +2,17 @@
 
 {% block title %}{{ title }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .badge {
+        font-size: 0.875rem;
+    }
+    .notification-checkbox {
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row">
@@ -12,11 +23,14 @@
                     <a href="{{ url_for('admin_notifications_dashboard') }}" class="btn btn-outline-primary">
                         <i class="fas fa-tachometer-alt"></i> Дашборд
                     </a>
-                    <button class="btn btn-outline-success" onclick="exportNotifications()">
+                    <button class="btn btn-outline-warning" onclick="bulkRetry()">
+                        <i class="fas fa-redo"></i> Повторить отправку
+                    </button>
+                    <button class="btn btn-outline-success" onclick="exportNotifications('csv')">
                         <i class="fas fa-download"></i> Экспорт
                     </button>
                     <button class="btn btn-outline-danger" onclick="bulkDelete()">
-                        <i class="fas fa-trash"></i> Массовое удаление
+                        <i class="fas fa-trash"></i> Удалить
                     </button>
                 </div>
             </div>
@@ -31,7 +45,7 @@
                     <h5 class="card-title mb-0">Фильтры</h5>
                 </div>
                 <div class="card-body">
-                    <form method="GET" class="row g-3">
+                    <form method="GET" id="filtersForm" class="row g-3">
                         <div class="col-md-2">
                             <label for="status_filter" class="form-label">Статус</label>
                             <select class="form-select" id="status_filter" name="status_filter">
@@ -81,12 +95,12 @@
                                    value="{{ filters.date_to or '' }}">
                         </div>
                         <div class="col-12">
-                            <button type="submit" class="btn btn-primary">
+                            <button type="submit" id="applyFiltersBtn" class="btn btn-primary">
                                 <i class="fas fa-search"></i> Применить фильтры
                             </button>
-                            <a href="{{ url_for('admin_notifications_list') }}" class="btn btn-outline-secondary">
+                            <button type="button" class="btn btn-outline-secondary" onclick="resetFilters()">
                                 <i class="fas fa-times"></i> Сбросить
-                            </a>
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -102,6 +116,7 @@
                     <h5 class="card-title mb-0">
                         Уведомления 
                         <span class="badge badge-primary">{{ total_count }}</span>
+                        <span id="selectedCount" class="badge badge-warning d-none ms-2"></span>
                     </h5>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll()">
@@ -110,7 +125,7 @@
                         </label>
                     </div>
                 </div>
-                <div class="card-body">
+                <div class="card-body" id="notificationsTableContainer">
                     {% if notifications %}
                         <div class="table-responsive">
                             <table class="table table-hover">
@@ -263,68 +278,54 @@
     </div>
 </div>
 
-<script>
-function toggleSelectAll() {
-    const selectAll = document.getElementById('selectAll');
-    const checkboxes = document.querySelectorAll('.notification-checkbox');
-    
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAll.checked;
-    });
-}
+<!-- Toast Container -->
+<div id="toastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index: 11000;"></div>
 
-function viewNotification(id) {
-    // Заглушка для просмотра уведомления
-    alert('Просмотр уведомления #' + id);
-}
+<!-- Modal для просмотра уведомления -->
+<div class="modal fade" id="notificationModal" tabindex="-1" aria-labelledby="notificationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="notificationModalLabel">
+                    Уведомление #<span id="modalNotificationId"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Тип:</strong> <span id="modalNotificationType"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Статус:</strong> <span id="modalNotificationStatus"></span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Канал:</strong> <span id="modalNotificationChannel"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Создано:</strong> <span id="modalNotificationCreatedAt"></span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <strong>Заголовок:</strong><br>
+                    <span id="modalNotificationSubject"></span>
+                </div>
+                <div class="mb-3">
+                    <strong>Сообщение:</strong><br>
+                    <div id="modalNotificationMessage" style="white-space: pre-wrap;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-function retryNotification(id) {
-    if (confirm('Повторить отправку уведомления #' + id + '?')) {
-        // Заглушка для повторной отправки
-        alert('Повторная отправка уведомления #' + id);
-    }
-}
-
-function cancelNotification(id) {
-    if (confirm('Отменить уведомление #' + id + '?')) {
-        // Заглушка для отмены
-        alert('Отмена уведомления #' + id);
-    }
-}
-
-function viewUser(userId) {
-    // Заглушка для просмотра пользователя
-    alert('Просмотр пользователя #' + userId);
-}
-
-function exportNotifications() {
-    const selectedIds = getSelectedNotificationIds();
-    if (selectedIds.length === 0) {
-        alert('Выберите уведомления для экспорта');
-        return;
-    }
-    
-    // Заглушка для экспорта
-    alert('Экспорт ' + selectedIds.length + ' уведомлений');
-}
-
-function bulkDelete() {
-    const selectedIds = getSelectedNotificationIds();
-    if (selectedIds.length === 0) {
-        alert('Выберите уведомления для удаления');
-        return;
-    }
-    
-    if (confirm('Удалить ' + selectedIds.length + ' уведомлений?')) {
-        // Заглушка для массового удаления
-        alert('Удаление ' + selectedIds.length + ' уведомлений');
-    }
-}
-
-function getSelectedNotificationIds() {
-    const checkboxes = document.querySelectorAll('.notification-checkbox:checked');
-    return Array.from(checkboxes).map(cb => parseInt(cb.value));
-}
-</script>
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/admin/notifications.js') }}"></script>
 {% endblock %}
 
