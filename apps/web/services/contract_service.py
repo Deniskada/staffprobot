@@ -1742,13 +1742,116 @@ class ContractService:
                 owner.id
             )
             
+            # Автоотмена запланированных смен на недоступные объекты
+            cancelled_shifts_count = await self._cancel_shifts_on_contract_termination(
+                session, contract, reason
+            )
+            
             await session.commit()
+            
+            logger.info(f"Terminated contract: {contract.id}, cancelled {cancelled_shifts_count} shifts")
             
             # Проверяем, есть ли у сотрудника другие активные договоры
             await self._check_and_update_employee_role(session, contract.employee_id)
             
             logger.info(f"Terminated contract: {contract.id} by owner telegram_id: {owner_telegram_id}")
             return True
+    
+    async def _cancel_shifts_on_contract_termination(
+        self, 
+        session, 
+        terminated_contract: Contract, 
+        reason: str
+    ) -> int:
+        """
+        Отменить запланированные смены на объекты, к которым сотрудник потерял доступ.
+        
+        Args:
+            session: Сессия БД
+            terminated_contract: Расторгаемый договор
+            reason: Причина расторжения
+            
+        Returns:
+            int: Количество отмененных смен
+        """
+        from domain.entities.shift_schedule import ShiftSchedule
+        from domain.entities.shift_cancellation import ShiftCancellation
+        from datetime import datetime, timezone as dt_timezone
+        
+        try:
+            employee_id = terminated_contract.employee_id
+            terminated_allowed_objects = set(terminated_contract.allowed_objects or [])
+            
+            # Получаем все остальные активные договоры сотрудника
+            active_contracts_query = select(Contract).where(
+                and_(
+                    Contract.employee_id == employee_id,
+                    Contract.id != terminated_contract.id,
+                    Contract.is_active == True,
+                    Contract.status == "active"
+                )
+            )
+            active_contracts_result = await session.execute(active_contracts_query)
+            active_contracts = active_contracts_result.scalars().all()
+            
+            # Собираем объекты из остальных договоров
+            remaining_objects = set()
+            for contract in active_contracts:
+                if contract.allowed_objects:
+                    remaining_objects.update(contract.allowed_objects)
+            
+            # Вычисляем объекты, к которым утрачен доступ
+            lost_objects = terminated_allowed_objects - remaining_objects
+            
+            if not lost_objects:
+                logger.info(f"No lost objects for employee {employee_id}, all objects available in other contracts")
+                return 0
+            
+            logger.info(f"Employee {employee_id} lost access to objects: {lost_objects}")
+            
+            # Находим запланированные смены на эти объекты
+            now_utc = datetime.now(dt_timezone.utc)
+            shifts_query = select(ShiftSchedule).where(
+                and_(
+                    ShiftSchedule.user_id == employee_id,
+                    ShiftSchedule.status == 'planned',
+                    ShiftSchedule.object_id.in_(list(lost_objects)),
+                    ShiftSchedule.planned_start > now_utc
+                )
+            )
+            shifts_result = await session.execute(shifts_query)
+            shifts_to_cancel = shifts_result.scalars().all()
+            
+            cancelled_count = 0
+            for shift in shifts_to_cancel:
+                # Отменяем смену
+                shift.status = 'cancelled'
+                
+                # Создаем запись о отмене
+                cancellation = ShiftCancellation(
+                    shift_schedule_id=shift.id,
+                    employee_id=employee_id,
+                    object_id=shift.object_id,
+                    cancelled_by_id=terminated_contract.owner_id,
+                    cancelled_by_type='system',
+                    cancellation_reason='contract_termination',
+                    reason_notes=f"Расторгнут договор №{terminated_contract.contract_number}. Причина: {reason}",
+                    contract_id=terminated_contract.id,
+                    hours_before_shift=None,  # Не применяем штрафы при автоотмене
+                    fine_amount=None,
+                    fine_reason=None,
+                    fine_applied=False
+                )
+                session.add(cancellation)
+                cancelled_count += 1
+            
+            logger.info(f"Cancelled {cancelled_count} shifts for employee {employee_id} on lost objects")
+            return cancelled_count
+            
+        except Exception as e:
+            logger.error(f"Error cancelling shifts on contract termination: {e}")
+            # Не прерываем расторжение договора из-за ошибки отмены смен
+            return 0
     
     async def _generate_content_from_template(
         self, 

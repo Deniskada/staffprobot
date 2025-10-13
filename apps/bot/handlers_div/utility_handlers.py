@@ -171,6 +171,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await handle_custom_date_input(update, context)
             return
     
+    # Проверяем состояние пользователя для отмены смены (ввод описания справки)
+    if user_state and user_state.action == UserAction.CANCEL_SHIFT:
+        if user_state.step == UserStep.INPUT_DOCUMENT:
+            from .schedule_handlers import handle_cancellation_document_input
+            await handle_cancellation_document_input(update, context)
+            return
+    
     # Проверяем состояние пользователя для ввода дат отчета
     if user_state and user_state.action == UserAction.REPORT_DATES:
         from .earnings_report_handlers import EarningsReportHandlers
