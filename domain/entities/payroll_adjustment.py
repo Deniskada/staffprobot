@@ -70,7 +70,10 @@ class PayrollAdjustment(Base):
             'task_bonus': 'Премия за задачу',
             'task_penalty': 'Штраф за невыполнение задачи',
             'manual_bonus': 'Ручная премия',
-            'manual_deduction': 'Ручной штраф'
+            'manual_deduction': 'Ручной штраф',
+            'cancellation_fine': 'Штраф за отмену смены',
+            'cancellation_fine_short_notice': 'Штраф за отмену менее чем за X часов',
+            'cancellation_fine_invalid_reason': 'Штраф за отмену без уважительной причины'
         }
         return type_labels.get(self.adjustment_type, self.adjustment_type)
     

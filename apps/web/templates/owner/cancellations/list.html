@@ -1,0 +1,183 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Модерация отмен смен{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-clipboard-check"></i> Модерация отмен смен</h2>
+    </div>
+
+    {% if cancellations %}
+    <div class="card">
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                Отмены смен с уважительными причинами (справки), требующие проверки
+            </p>
+
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Сотрудник</th>
+                            <th>Объект</th>
+                            <th>Дата смены</th>
+                            <th>Причина</th>
+                            <th>Описание документа</th>
+                            <th>Штраф</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cancellation in cancellations %}
+                        <tr id="cancellation-row-{{ cancellation.id }}">
+                            <td>
+                                <strong>{{ cancellation.employee.first_name }} {{ cancellation.employee.last_name|default('', true) }}</strong><br>
+                                <small class="text-muted">ID: {{ cancellation.employee.telegram_id }}</small>
+                            </td>
+                            <td>{{ cancellation.object.name }}</td>
+                            <td>{{ cancellation.shift_schedule.planned_start.strftime('%d.%m.%Y %H:%M') }}</td>
+                            <td>
+                                <span class="badge bg-info">{{ cancellation.cancellation_reason_label }}</span>
+                            </td>
+                            <td>
+                                {% if cancellation.document_description %}
+                                    <small>{{ cancellation.document_description }}</small>
+                                {% else %}
+                                    <small class="text-muted">Нет описания</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if cancellation.fine_amount %}
+                                    <span class="text-danger"><strong>{{ cancellation.fine_amount }}₽</strong></span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if cancellation.document_verified %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check"></i> Подтверждено
+                                    </span>
+                                    {% if cancellation.verified_by %}
+                                        <br><small class="text-muted">
+                                            {{ cancellation.verified_by.first_name }}
+                                            {{ cancellation.verified_at.strftime('%d.%m.%Y') }}
+                                        </small>
+                                    {% endif %}
+                                {% elif cancellation.verified_at %}
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-times"></i> Отклонено
+                                    </span>
+                                    {% if cancellation.verified_by %}
+                                        <br><small class="text-muted">
+                                            {{ cancellation.verified_by.first_name }}
+                                            {{ cancellation.verified_at.strftime('%d.%m.%Y') }}
+                                        </small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-clock"></i> Ожидает проверки
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if not cancellation.verified_at %}
+                                <div class="btn-group" role="group">
+                                    <button type="button" 
+                                            class="btn btn-sm btn-success" 
+                                            onclick="verifyCancellation({{ cancellation.id }}, true)"
+                                            title="Подтвердить справку">
+                                        <i class="fas fa-check"></i> Подтвердить
+                                    </button>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-danger" 
+                                            onclick="verifyCancellation({{ cancellation.id }}, false)"
+                                            title="Отклонить справку">
+                                        <i class="fas fa-times"></i> Отклонить
+                                    </button>
+                                </div>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Нет отмен смен, требующих проверки
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function verifyCancellation(cancellationId, isApproved) {
+    if (!confirm(`Вы уверены, что хотите ${isApproved ? 'подтвердить' : 'отклонить'} эту справку?`)) {
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('is_approved', isApproved);
+
+    fetch(`/owner/cancellations/${cancellationId}/verify`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Обновляем строку таблицы
+            const row = document.getElementById(`cancellation-row-${cancellationId}`);
+            if (row) {
+                const statusCell = row.cells[6]; // Колонка "Статус"
+                const actionsCell = row.cells[7]; // Колонка "Действия"
+                
+                if (isApproved) {
+                    statusCell.innerHTML = '<span class="badge bg-success"><i class="fas fa-check"></i> Подтверждено</span>';
+                } else {
+                    statusCell.innerHTML = '<span class="badge bg-danger"><i class="fas fa-times"></i> Отклонено</span>';
+                }
+                
+                actionsCell.innerHTML = '<span class="text-muted">—</span>';
+            }
+            
+            // Показываем сообщение об успехе
+            showNotification('success', data.message);
+        } else {
+            showNotification('error', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('error', 'Ошибка верификации справки');
+    });
+}
+
+function showNotification(type, message) {
+    // Простое всплывающее уведомление
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+    
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+    alert.style.zIndex = '9999';
+    alert.innerHTML = `
+        <i class="fas ${icon}"></i> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alert);
+    
+    setTimeout(() => {
+        alert.remove();
+    }, 5000);
+}
+</script>
+{% endblock %}
+
