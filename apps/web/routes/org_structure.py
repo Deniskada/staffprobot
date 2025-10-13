@@ -109,6 +109,7 @@ async def owner_org_structure_create(
         late_threshold_minutes_str = form_data.get("late_threshold_minutes", "").strip()
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         
+        inherit_cancellation_settings = "inherit_cancellation_settings" in form_data
         cancellation_short_notice_hours_str = form_data.get("cancellation_short_notice_hours", "").strip()
         cancellation_short_notice_fine_str = form_data.get("cancellation_short_notice_fine", "").strip()
         cancellation_invalid_reason_fine_str = form_data.get("cancellation_invalid_reason_fine", "").strip()
@@ -143,7 +144,7 @@ async def owner_org_structure_create(
             inherit_late_settings=inherit_late_settings,
             late_threshold_minutes=late_threshold_minutes,
             late_penalty_per_minute=late_penalty_per_minute,
-            inherit_cancellation_settings=True,  # По умолчанию наследуем
+            inherit_cancellation_settings=inherit_cancellation_settings,
             cancellation_short_notice_hours=cancellation_short_notice_hours,
             cancellation_short_notice_fine=cancellation_short_notice_fine,
             cancellation_invalid_reason_fine=cancellation_invalid_reason_fine,

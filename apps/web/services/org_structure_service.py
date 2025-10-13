@@ -29,6 +29,10 @@ class OrgStructureService:
         inherit_late_settings: bool = True,
         late_threshold_minutes: Optional[int] = None,
         late_penalty_per_minute: Optional[Decimal] = None,
+        inherit_cancellation_settings: bool = True,
+        cancellation_short_notice_hours: Optional[int] = None,
+        cancellation_short_notice_fine: Optional[Decimal] = None,
+        cancellation_invalid_reason_fine: Optional[Decimal] = None,
         telegram_report_chat_id: Optional[str] = None
     ) -> OrgStructureUnit:
         """
@@ -78,6 +82,10 @@ class OrgStructureService:
                 inherit_late_settings=inherit_late_settings,
                 late_threshold_minutes=late_threshold_minutes,
                 late_penalty_per_minute=late_penalty_per_minute,
+                inherit_cancellation_settings=inherit_cancellation_settings,
+                cancellation_short_notice_hours=cancellation_short_notice_hours,
+                cancellation_short_notice_fine=cancellation_short_notice_fine,
+                cancellation_invalid_reason_fine=cancellation_invalid_reason_fine,
                 telegram_report_chat_id=telegram_report_chat_id,
                 level=level,
                 is_active=True
@@ -227,6 +235,14 @@ class OrgStructureService:
                 unit.late_threshold_minutes = data['late_threshold_minutes']
             if 'late_penalty_per_minute' in data:
                 unit.late_penalty_per_minute = data['late_penalty_per_minute']
+            if 'inherit_cancellation_settings' in data:
+                unit.inherit_cancellation_settings = data['inherit_cancellation_settings']
+            if 'cancellation_short_notice_hours' in data:
+                unit.cancellation_short_notice_hours = data['cancellation_short_notice_hours']
+            if 'cancellation_short_notice_fine' in data:
+                unit.cancellation_short_notice_fine = data['cancellation_short_notice_fine']
+            if 'cancellation_invalid_reason_fine' in data:
+                unit.cancellation_invalid_reason_fine = data['cancellation_invalid_reason_fine']
             if 'telegram_report_chat_id' in data:
                 unit.telegram_report_chat_id = data['telegram_report_chat_id']
             if 'is_active' in data:
