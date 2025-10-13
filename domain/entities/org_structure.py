@@ -37,6 +37,12 @@ class OrgStructureUnit(Base):
     late_threshold_minutes = Column(Integer, nullable=True)  # Допустимое опоздание в минутах
     late_penalty_per_minute = Column(Numeric(10, 2), nullable=True)  # Стоимость минуты штрафа
     
+    # Настройки штрафов за отмену смены (наследуются от родителя, если inherit_cancellation_settings=True)
+    inherit_cancellation_settings = Column(Boolean, default=True, nullable=False)
+    cancellation_short_notice_hours = Column(Integer, nullable=True)  # Минимальный срок отмены (часов)
+    cancellation_short_notice_fine = Column(Numeric(10, 2), nullable=True)  # Штраф за отмену в короткий срок (₽)
+    cancellation_invalid_reason_fine = Column(Numeric(10, 2), nullable=True)  # Штраф за неуважительную причину (₽)
+    
     # Telegram группа для фото/видео отчетов по задачам
     telegram_report_chat_id = Column(String(100), nullable=True)  # ID Telegram группы для отчетов
     
@@ -150,6 +156,40 @@ class OrgStructureUnit(Base):
         return {
             'threshold_minutes': None,
             'penalty_per_minute': None,
+            'inherited_from': None
+        }
+    
+    def get_inherited_cancellation_settings(self) -> dict:
+        """
+        Получить настройки штрафов за отмену смены с учетом наследования.
+        
+        Returns:
+            dict: {
+                'short_notice_hours': int or None,
+                'short_notice_fine': Decimal or None,
+                'invalid_reason_fine': Decimal or None,
+                'inherited_from': str or None (название подразделения, от которого унаследовано)
+            }
+        """
+        if not self.inherit_cancellation_settings and self.cancellation_short_notice_hours is not None:
+            return {
+                'short_notice_hours': self.cancellation_short_notice_hours,
+                'short_notice_fine': self.cancellation_short_notice_fine,
+                'invalid_reason_fine': self.cancellation_invalid_reason_fine,
+                'inherited_from': None
+            }
+        
+        if self.parent is not None:
+            parent_settings = self.parent.get_inherited_cancellation_settings()
+            if parent_settings['inherited_from'] is None:
+                parent_settings['inherited_from'] = self.parent.name
+            return parent_settings
+        
+        # По умолчанию возвращаем None, если настройки нигде не определены
+        return {
+            'short_notice_hours': None,
+            'short_notice_fine': None,
+            'invalid_reason_fine': None,
             'inherited_from': None
         }
 

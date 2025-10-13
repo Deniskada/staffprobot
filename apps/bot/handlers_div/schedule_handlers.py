@@ -343,18 +343,18 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def handle_cancel_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Отмена запланированной смены."""
+    """Отмена запланированной смены - выбор причины."""
     query = update.callback_query
     telegram_id = update.effective_user.id
     
     # Извлекаем ID смены из callback_data
     shift_id = int(query.data.split("_")[-1])
-    logger.info(f"Attempting to cancel shift {shift_id} for user {telegram_id}")
+    logger.info(f"User {telegram_id} initiating cancellation for shift {shift_id}")
     
     try:
         from core.database.session import get_async_session
         async with get_async_session() as session:
-            # Сначала находим пользователя по telegram_id
+            # Находим пользователя
             user_query = select(User).where(User.telegram_id == telegram_id)
             user_result = await session.execute(user_query)
             user = user_result.scalar_one_or_none()
@@ -372,34 +372,214 @@ async def handle_cancel_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
             shift_result = await session.execute(shift_query)
             shift = shift_result.scalar_one_or_none()
             
-            logger.info(f"Found shift: {shift.id if shift else 'None'}, user_id: {user.id}, shift_id: {shift_id}")
-            
             if not shift:
                 await query.edit_message_text("❌ Смена не найдена или уже отменена.")
                 return
             
-            # Отменяем смену
-            shift.status = "cancelled"
-            await session.commit()
+            # Сохраняем shift_id в контекст для следующего шага
+            context.user_data['cancelling_shift_id'] = shift_id
             
-            # Получаем информацию об объекте для уведомления
+            # Показываем кнопки выбора причины
+            keyboard = [
+                [InlineKeyboardButton("🏥 Медицинская справка", callback_data=f"cancel_reason_medical_cert")],
+                [InlineKeyboardButton("🚨 Справка от МЧС", callback_data=f"cancel_reason_emergency_cert")],
+                [InlineKeyboardButton("👮 Справка от полиции", callback_data=f"cancel_reason_police_cert")],
+                [InlineKeyboardButton("❓ Другая причина", callback_data=f"cancel_reason_other")],
+                [InlineKeyboardButton("🔙 Отмена", callback_data="view_schedule")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Получаем объект для отображения
             object_query = select(Object).where(Object.id == shift.object_id)
             object_result = await session.execute(object_query)
             obj = object_result.scalar_one_or_none()
             object_name = obj.name if obj else "Неизвестный объект"
             
             await query.edit_message_text(
-                f"✅ **Смена отменена**\n\n"
+                f"❌ **Отмена смены**\n\n"
                 f"🏢 **{object_name}**\n"
                 f"📅 {shift.planned_start.strftime('%d.%m.%Y %H:%M')}\n"
                 f"🕐 До {shift.planned_end.strftime('%H:%M')}\n\n"
-                f"Смена успешно отменена.",
-                parse_mode='Markdown'
+                f"Выберите причину отмены:",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
             
     except Exception as e:
-        logger.error(f"Error cancelling shift: {e}")
-        await query.edit_message_text("❌ Ошибка отмены смены. Попробуйте позже.")
+        logger.error(f"Error in cancellation flow: {e}")
+        await query.edit_message_text("❌ Ошибка. Попробуйте позже.")
+
+
+async def handle_cancel_reason_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработка выбора причины отмены."""
+    query = update.callback_query
+    telegram_id = update.effective_user.id
+    
+    # Извлекаем причину из callback_data
+    reason = query.data.replace("cancel_reason_", "")
+    shift_id = context.user_data.get('cancelling_shift_id')
+    
+    if not shift_id:
+        await query.edit_message_text("❌ Ошибка: смена не найдена в контексте.")
+        return
+    
+    # Сохраняем причину в контекст
+    context.user_data['cancel_reason'] = reason
+    
+    # Для справок просим ввести описание
+    if reason in ['medical_cert', 'emergency_cert', 'police_cert']:
+        reason_names = {
+            'medical_cert': 'медицинской справки',
+            'emergency_cert': 'справки от МЧС',
+            'police_cert': 'справки от полиции'
+        }
+        
+        # Устанавливаем состояние ожидания ввода
+        from core.state.user_state_manager import user_state_manager, UserAction, UserStep
+        user_state_manager.set_state(
+            telegram_id,
+            action=UserAction.CANCEL_SHIFT,
+            step=UserStep.INPUT_DOCUMENT
+        )
+        
+        await query.edit_message_text(
+            f"📄 **Описание {reason_names[reason]}**\n\n"
+            f"Укажите номер и дату документа.\n"
+            f"Например: `№123 от 10.10.2025`\n\n"
+            f"Справка будет проверена владельцем.",
+            parse_mode='Markdown'
+        )
+    else:
+        # Для других причин сразу отменяем
+        await _execute_shift_cancellation(
+            shift_id=shift_id,
+            telegram_id=telegram_id,
+            reason=reason,
+            reason_notes=None,
+            document_description=None,
+            context=context,
+            query=query
+        )
+
+
+async def handle_cancellation_document_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработка ввода описания документа для отмены."""
+    telegram_id = update.effective_user.id
+    document_description = update.message.text
+    
+    shift_id = context.user_data.get('cancelling_shift_id')
+    reason = context.user_data.get('cancel_reason')
+    
+    if not shift_id or not reason:
+        await update.message.reply_text("❌ Ошибка: данные отмены не найдены.")
+        return
+    
+    # Очищаем состояние
+    from core.state.user_state_manager import user_state_manager
+    user_state_manager.clear_state(telegram_id)
+    
+    # Выполняем отмену
+    await _execute_shift_cancellation(
+        shift_id=shift_id,
+        telegram_id=telegram_id,
+        reason=reason,
+        reason_notes=None,
+        document_description=document_description,
+        context=context,
+        message=update.message
+    )
+
+
+async def _execute_shift_cancellation(
+    shift_id: int,
+    telegram_id: int,
+    reason: str,
+    reason_notes: Optional[str],
+    document_description: Optional[str],
+    context: ContextTypes.DEFAULT_TYPE,
+    query: Optional[Any] = None,
+    message: Optional[Any] = None
+) -> None:
+    """Выполнить отмену смены с использованием сервиса."""
+    from core.database.session import get_async_session
+    from shared.services.shift_cancellation_service import ShiftCancellationService
+    
+    try:
+        async with get_async_session() as session:
+            # Находим пользователя
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await session.execute(user_query)
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                text = "❌ Пользователь не найден."
+                if query:
+                    await query.edit_message_text(text)
+                elif message:
+                    await message.reply_text(text)
+                return
+            
+            # Используем сервис для отмены
+            cancellation_service = ShiftCancellationService(session)
+            result = await cancellation_service.cancel_shift(
+                shift_schedule_id=shift_id,
+                cancelled_by_user_id=user.id,
+                cancelled_by_type='employee',
+                cancellation_reason=reason,
+                reason_notes=reason_notes,
+                document_description=document_description
+            )
+            
+            if result['success']:
+                # Получаем смену для отображения
+                shift_query = select(ShiftSchedule).where(ShiftSchedule.id == shift_id)
+                shift_result = await session.execute(shift_query)
+                shift = shift_result.scalar_one_or_none()
+                
+                # Получаем объект
+                object_query = select(Object).where(Object.id == shift.object_id)
+                object_result = await session.execute(object_query)
+                obj = object_result.scalar_one_or_none()
+                object_name = obj.name if obj else "Неизвестный объект"
+                
+                text = (
+                    f"✅ **Смена отменена**\n\n"
+                    f"🏢 **{object_name}**\n"
+                    f"📅 {shift.planned_start.strftime('%d.%m.%Y %H:%M')}\n"
+                    f"🕐 До {shift.planned_end.strftime('%H:%M')}\n"
+                )
+                
+                # Добавляем информацию о штрафе
+                if result['fine_amount']:
+                    text += f"\n💰 Штраф: {result['fine_amount']}₽"
+                    if reason in ['medical_cert', 'emergency_cert', 'police_cert']:
+                        text += "\n📄 Справка будет проверена владельцем."
+                
+                # Очищаем контекст
+                context.user_data.pop('cancelling_shift_id', None)
+                context.user_data.pop('cancel_reason', None)
+                
+                if query:
+                    await query.edit_message_text(text, parse_mode='Markdown')
+                elif message:
+                    await message.reply_text(text, parse_mode='Markdown')
+                
+                # TODO: Отправить уведомление владельцу/управляющему
+                
+            else:
+                text = f"❌ {result['message']}"
+                if query:
+                    await query.edit_message_text(text)
+                elif message:
+                    await message.reply_text(text)
+    
+    except Exception as e:
+        logger.error(f"Error executing shift cancellation: {e}")
+        text = "❌ Ошибка отмены смены. Попробуйте позже."
+        if query:
+            await query.edit_message_text(text)
+        elif message:
+            await message.reply_text(text)
 
 
 async def handle_close_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -19,6 +19,7 @@ class UserAction(str, Enum):
     SCHEDULE_SHIFT = "schedule_shift"
     VIEW_SCHEDULE = "view_schedule"
     CANCEL_SCHEDULE = "cancel_schedule"
+    CANCEL_SHIFT = "cancel_shift"  # Отмена запланированной смены
     CREATE_TIMESLOT = "create_timeslot"
     EDIT_TIMESLOT_TIME = "edit_timeslot_time"
     EDIT_TIMESLOT_RATE = "edit_timeslot_rate"
@@ -42,6 +43,7 @@ class UserStep(str, Enum):
     INPUT_START_TIME = "input_start_time"
     INPUT_END_TIME = "input_end_time"
     INPUT_DATE = "input_date"
+    INPUT_DOCUMENT = "input_document"  # Ввод описания документа (справки) для отмены смены
     CONFIRM_SCHEDULE = "confirm_schedule"
     SCHEDULE_SELECTION = "schedule_selection"
     WAITING_INPUT = "waiting_input"

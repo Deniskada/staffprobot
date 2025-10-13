@@ -122,6 +122,10 @@ class StaffProBot:
         self.application.add_handler(CallbackQueryHandler(_handle_close_object, pattern="^close_object$"))
         self.application.add_handler(CallbackQueryHandler(_handle_select_object_to_open, pattern="^select_object_to_open:.*$"))
         
+        # Обработка отмены смен
+        from .handlers_div.schedule_handlers import handle_cancel_reason_selection
+        self.application.add_handler(CallbackQueryHandler(handle_cancel_reason_selection, pattern="^cancel_reason_.*$"))
+        
         # Добавляем ConversationHandler для отчетов
         # Временно отключаем для исправления проблемы с геолокацией
         # self.application.add_handler(self.analytics_handlers.get_conversation_handler())
