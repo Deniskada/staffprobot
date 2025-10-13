@@ -345,6 +345,8 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
 async def handle_cancel_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Отмена запланированной смены - выбор причины."""
     query = update.callback_query
+    await query.answer()  # Обязательно отвечаем на callback
+    
     telegram_id = update.effective_user.id
     
     # Извлекаем ID смены из callback_data
@@ -413,6 +415,8 @@ async def handle_cancel_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_cancel_reason_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработка выбора причины отмены."""
     query = update.callback_query
+    await query.answer()  # Обязательно отвечаем на callback
+    
     telegram_id = update.effective_user.id
     
     # Извлекаем причину из callback_data
