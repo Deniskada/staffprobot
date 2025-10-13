@@ -259,8 +259,10 @@ class ShiftCancellationService:
             
             # Если справка отклонена и не было штрафа - создаем его
             elif not is_approved and not cancellation.fine_applied:
-                # Получаем объект для настроек
-                object_query = select(Object).where(Object.id == cancellation.object_id)
+                # Получаем объект для настроек (с eager loading org_unit и цепочки parent'ов)
+                object_query = select(Object).where(Object.id == cancellation.object_id).options(
+                    joinedload(Object.org_unit).joinedload('parent').joinedload('parent').joinedload('parent').joinedload('parent')
+                )
                 object_result = await self.session.execute(object_query)
                 obj = object_result.scalar_one_or_none()
                 
