@@ -867,6 +867,12 @@ class UniversalCalendarManager {
             }
         }, 5000);
     }
+    
+    refresh() {
+        // Перезагрузить данные календаря без изменения позиции
+        console.log('[UniversalCalendar] Refreshing calendar data...');
+        this.loadCalendarData(null, null, null, true); // skipAutoScroll = true
+    }
 }
 
 // Export for use in other modules
