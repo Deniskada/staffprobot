@@ -68,6 +68,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_dashboard_route_success(self, mock_get_db_session, mock_require_superadmin, 
                                          client, mock_superadmin_user):
         """Тест успешного доступа к дашборду"""
@@ -108,6 +110,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_dashboard_route_unauthorized(self, mock_get_db_session, mock_require_superadmin, client):
         """Тест доступа к дашборду без авторизации"""
         # Arrange
@@ -121,6 +125,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_notifications_list_route_success(self, mock_get_db_session, mock_require_superadmin, 
                                                   client, mock_superadmin_user, sample_notification):
         """Тест успешного доступа к списку уведомлений"""
@@ -144,6 +150,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_notifications_list_with_filters(self, mock_get_db_session, mock_require_superadmin, 
                                                   client, mock_superadmin_user):
         """Тест списка уведомлений с фильтрами"""
@@ -166,6 +174,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_templates_list_route_success(self, mock_get_db_session, mock_require_superadmin, 
                                               client, mock_superadmin_user, sample_template):
         """Тест успешного доступа к списку шаблонов"""
@@ -192,6 +202,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_templates_list_with_status_filter(self, mock_get_db_session, mock_require_superadmin, 
                                                    client, mock_superadmin_user):
         """Тест списка шаблонов с фильтром по статусу"""
@@ -215,6 +227,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_template_create_page_route_success(self, mock_get_db_session, mock_require_superadmin, 
                                                     client, mock_superadmin_user):
         """Тест страницы создания шаблона"""
@@ -242,6 +256,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_template_create_page_with_prefill(self, mock_get_db_session, mock_require_superadmin, 
                                                    client, mock_superadmin_user):
         """Тест страницы создания шаблона с предзаполнением"""
@@ -280,6 +296,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_template_view_route_success(self, mock_get_db_session, mock_require_superadmin, 
                                              client, mock_superadmin_user, sample_template):
         """Тест просмотра шаблона"""
@@ -302,6 +320,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_template_view_route_not_found(self, mock_get_db_session, mock_require_superadmin, 
                                                client, mock_superadmin_user):
         """Тест просмотра несуществующего шаблона"""
@@ -323,6 +343,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_api_notification_get_success(self, mock_get_db_session, mock_require_superadmin, 
                                               client, mock_superadmin_user, sample_notification):
         """Тест API получения уведомления"""
@@ -347,6 +369,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_api_notification_retry_success(self, mock_get_db_session, mock_require_superadmin, 
                                                 client, mock_superadmin_user):
         """Тест API повторной отправки уведомления"""
@@ -371,6 +395,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_api_notification_cancel_success(self, mock_get_db_session, mock_require_superadmin, 
                                                  client, mock_superadmin_user):
         """Тест API отмены уведомления"""
@@ -395,6 +421,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_api_template_create_success(self, mock_get_db_session, mock_require_superadmin, 
                                              client, mock_superadmin_user, sample_template):
         """Тест API создания шаблона"""
@@ -431,6 +459,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_api_template_delete_success(self, mock_get_db_session, mock_require_superadmin, 
                                              client, mock_superadmin_user):
         """Тест API удаления шаблона"""
@@ -455,6 +485,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_api_template_restore_success(self, mock_get_db_session, mock_require_superadmin, 
                                               client, mock_superadmin_user):
         """Тест API восстановления шаблона"""
@@ -479,6 +511,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_api_bulk_cancel_success(self, mock_get_db_session, mock_require_superadmin, 
                                          client, mock_superadmin_user):
         """Тест API массовой отмены уведомлений"""
@@ -509,6 +543,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_api_bulk_export_success(self, mock_get_db_session, mock_require_superadmin, 
                                          client, mock_superadmin_user):
         """Тест API массового экспорта"""
@@ -540,6 +576,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_error_handling_database_error(self, mock_get_db_session, mock_require_superadmin, 
                                                client, mock_superadmin_user):
         """Тест обработки ошибок базы данных"""
@@ -563,6 +601,8 @@ class TestAdminNotificationsRoutes:
 
     @patch('apps.web.routes.admin_notifications.require_superadmin')
     @patch('apps.web.routes.admin_notifications.get_db_session')
+    @pytest.mark.asyncio
+
     async def test_error_handling_validation_error(self, mock_get_db_session, mock_require_superadmin, 
                                                  client, mock_superadmin_user):
         """Тест обработки ошибок валидации"""

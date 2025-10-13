@@ -2,7 +2,7 @@
 
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
-from sqlalchemy import select, func, and_, or_, desc, text
+from sqlalchemy import select, func, and_, or_, desc, text, case
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -170,9 +170,9 @@ class AdminNotificationService(NotificationService):
                     "user_name": f"{n.user.first_name} {n.user.last_name}" if n.user else "Неизвестный",
                     "created_at": n.created_at,
                     "sent_at": n.sent_at,
-                    "delivered_at": n.delivered_at,
+                    "delivered_at": n.read_at,  # Используем read_at как delivered_at
                     "read_at": n.read_at,
-                    "subject": n.subject,
+                    "subject": n.title,  # Используем title как subject
                     "content": n.content[:100] + "..." if len(n.content) > 100 else n.content
                 }
                 for n in notifications
@@ -259,10 +259,10 @@ class AdminNotificationService(NotificationService):
                     "user_name": f"{n.user.first_name} {n.user.last_name}" if n.user else "Неизвестный",
                     "created_at": n.created_at,
                     "sent_at": n.sent_at,
-                    "delivered_at": n.delivered_at,
+                    "delivered_at": n.read_at,  # Используем read_at как delivered_at
                     "read_at": n.read_at,
-                    "subject": n.subject,
-                    "content": n.content[:200] + "..." if len(n.content) > 200 else n.content,
+                    "subject": n.title,  # Используем title как subject
+                    "content": n.message[:200] + "..." if len(n.message) > 200 else n.message,
                     "error_message": n.error_message
                 }
                 for n in notifications
@@ -440,7 +440,7 @@ class AdminNotificationService(NotificationService):
             logger.error(f"Error getting notification by ID: {e}")
             return None
 
-    async def retry_notification(self, notification_id: int) -> None:
+    async def retry_notification(self, notification_id: int) -> bool:
         """Повторная отправка уведомления"""
         try:
             # Получаем уведомление
@@ -448,22 +448,29 @@ class AdminNotificationService(NotificationService):
             if not notification:
                 raise ValueError(f"Notification {notification_id} not found")
 
+            # Проверяем, можно ли повторить отправку
+            retry_count = notification.retry_count or 0
+            if retry_count >= 3:  # Максимум 3 попытки
+                logger.warning(f"Notification {notification_id} exceeded max retries")
+                return False
+
             # Сбрасываем статус и счетчик попыток
             notification.status = NotificationStatus.PENDING
-            notification.retry_count = 0
+            notification.retry_count = retry_count + 1
             notification.error_message = None
             notification.sent_at = None
 
             await self.session.commit()
 
             logger.info(f"Notification {notification_id} reset for retry")
+            return True
 
         except Exception as e:
             await self.session.rollback()
             logger.error(f"Error retrying notification: {e}")
             raise
 
-    async def cancel_notification(self, notification_id: int) -> None:
+    async def cancel_notification(self, notification_id: int) -> bool:
         """Отмена уведомления"""
         try:
             # Получаем уведомление
@@ -471,15 +478,232 @@ class AdminNotificationService(NotificationService):
             if not notification:
                 raise ValueError(f"Notification {notification_id} not found")
 
+            # Проверяем, можно ли отменить уведомление
+            if notification.status in [NotificationStatus.SENT, NotificationStatus.DELIVERED, NotificationStatus.READ]:
+                logger.warning(f"Notification {notification_id} already sent, cannot cancel")
+                return False
+
             # Устанавливаем статус "отменено"
             notification.status = NotificationStatus.CANCELLED
 
             await self.session.commit()
 
             logger.info(f"Notification {notification_id} cancelled")
+            return True
 
         except Exception as e:
             await self.session.rollback()
             logger.error(f"Error cancelling notification: {e}")
+            raise
+
+    async def get_notification_statistics(self) -> Dict[str, Any]:
+        """Получение общей статистики уведомлений"""
+        try:
+            # Общее количество уведомлений
+            total_query = select(func.count(Notification.id))
+            total_result = await self.session.execute(total_query)
+            total_count = total_result.scalar() or 0
+            
+            # Убеждаемся, что total_count - это число, а не корутина
+            if hasattr(total_count, '__await__'):
+                total_count = 0
+
+            # Статистика по статусам
+            status_query = select(
+                Notification.status,
+                func.count(Notification.id).label('count')
+            ).group_by(Notification.status)
+            status_result = await self.session.execute(status_query)
+            status_stats = {row.status.value: row.count for row in status_result}
+
+            # Статистика по каналам
+            channel_query = select(
+                Notification.channel,
+                func.count(Notification.id).label('count')
+            ).group_by(Notification.channel)
+            channel_result = await self.session.execute(channel_query)
+            channel_stats = {row.channel.value: row.count for row in channel_result}
+
+            # Статистика по типам
+            type_query = select(
+                Notification.type,
+                func.count(Notification.id).label('count')
+            ).group_by(Notification.type)
+            type_result = await self.session.execute(type_query)
+            type_stats = {row.type.value: row.count for row in type_result}
+
+            # Успешность доставки
+            success_rate = 0
+            if total_count > 0:
+                success_count = status_stats.get('sent', 0) + status_stats.get('delivered', 0) + status_stats.get('read', 0)
+                success_rate = round((success_count / total_count) * 100, 2)
+
+            return {
+                "total_notifications": total_count,
+                "status_breakdown": status_stats,
+                "channel_breakdown": channel_stats,
+                "type_breakdown": type_stats,
+                "success_rate": success_rate
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting notification statistics: {e}")
+            return {
+                "total_notifications": 0,
+                "status_breakdown": {},
+                "channel_breakdown": {},
+                "type_breakdown": {},
+                "success_rate": 0
+            }
+
+    async def get_channel_statistics(self) -> Dict[str, int]:
+        """Получение статистики по каналам"""
+        try:
+            query = select(
+                Notification.channel,
+                func.count(Notification.id).label('count')
+            ).group_by(Notification.channel)
+            
+            result = await self.session.execute(query)
+            return {row.channel.value: row.count for row in result}
+
+        except Exception as e:
+            logger.error(f"Error getting channel statistics: {e}")
+            return {}
+
+    async def get_type_statistics(self) -> Dict[str, int]:
+        """Получение статистики по типам"""
+        try:
+            query = select(
+                Notification.type,
+                func.count(Notification.id).label('count')
+            ).group_by(Notification.type)
+            
+            result = await self.session.execute(query)
+            return {row.type.value: row.count for row in result}
+
+        except Exception as e:
+            logger.error(f"Error getting type statistics: {e}")
+            return {}
+
+    async def get_daily_statistics(self, days: int = 7) -> List[Dict[str, Any]]:
+        """Получение ежедневной статистики за последние N дней"""
+        try:
+            from datetime import datetime, timedelta
+            
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+            
+            query = select(
+                func.date(Notification.created_at).label('date'),
+                func.count(Notification.id).label('count'),
+                Notification.status
+            ).where(
+                Notification.created_at >= start_date
+            ).group_by(
+                func.date(Notification.created_at),
+                Notification.status
+            ).order_by(func.date(Notification.created_at))
+            
+            result = await self.session.execute(query)
+            
+            # Группируем по датам
+            daily_stats = {}
+            for row in result:
+                date_str = row.date.strftime('%Y-%m-%d')
+                if date_str not in daily_stats:
+                    daily_stats[date_str] = {'date': date_str, 'total': 0, 'by_status': {}}
+                
+                daily_stats[date_str]['total'] += row.count
+                daily_stats[date_str]['by_status'][row.status.value] = row.count
+            
+            return list(daily_stats.values())
+
+        except Exception as e:
+            logger.error(f"Error getting daily statistics: {e}")
+            return []
+
+    async def get_user_statistics(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Получение статистики по пользователям"""
+        try:
+            query = select(
+                Notification.user_id,
+                User.first_name,
+                User.last_name,
+                func.count(Notification.id).label('notification_count'),
+                func.count(case(
+                    (Notification.status.in_([NotificationStatus.SENT, NotificationStatus.DELIVERED, NotificationStatus.READ]), 1)
+                )).label('successful_count')
+            ).join(
+                User, Notification.user_id == User.id
+            ).group_by(
+                Notification.user_id, User.first_name, User.last_name
+            ).order_by(
+                func.count(Notification.id).desc()
+            ).limit(limit)
+            
+            result = await self.session.execute(query)
+            
+            user_stats = []
+            for row in result:
+                success_rate = 0
+                if row.notification_count > 0:
+                    success_rate = round((row.successful_count / row.notification_count) * 100, 2)
+                
+                user_stats.append({
+                    "user_id": row.user_id,
+                    "user_name": f"{row.first_name} {row.last_name}",
+                    "notification_count": row.notification_count,
+                    "successful_count": row.successful_count,
+                    "success_rate": success_rate
+                })
+            
+            return user_stats
+
+        except Exception as e:
+            logger.error(f"Error getting user statistics: {e}")
+            return []
+
+    async def export_notifications(
+        self,
+        format: str = "json",
+        status_filter: Optional[str] = None,
+        channel_filter: Optional[str] = None,
+        type_filter: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """Экспорт уведомлений в различных форматах"""
+        try:
+            # Получаем уведомления с фильтрами
+            notifications, _ = await self.get_notifications_paginated(
+                page=1,
+                per_page=10000,  # Большое число для получения всех
+                status_filter=status_filter,
+                channel_filter=channel_filter,
+                type_filter=type_filter,
+                date_from=date_from,
+                date_to=date_to
+            )
+            
+            if format.lower() == "json":
+                return {
+                    "format": "json",
+                    "data": notifications,
+                    "count": len(notifications)
+                }
+            elif format.lower() == "xlsx":
+                # Для Excel экспорта нужно будет добавить pandas
+                return {
+                    "format": "xlsx",
+                    "data": notifications,
+                    "count": len(notifications),
+                    "message": "Excel export requires pandas library"
+                }
+            else:
+                raise ValueError(f"Unsupported export format: {format}")
+
+        except Exception as e:
+            logger.error(f"Error exporting notifications: {e}")
             raise
 

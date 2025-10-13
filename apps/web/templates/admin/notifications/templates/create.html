@@ -236,6 +236,9 @@
 
 {% block extra_js %}
 <script>
+// Данные для предзаполнения
+const prefillData = {{ prefill_data | tojson if prefill_data else 'null' }};
+
 let variables = [];
 
 function addVariable() {
@@ -334,6 +337,117 @@ function showToast(message, type = 'info') {
     
     toast.addEventListener('hidden.bs.toast', () => {
         toast.remove();
+    });
+}
+
+// Функция вставки переменной в позицию курсора
+function insertVariableAt(textareaId, variable) {
+    const textarea = document.getElementById(textareaId);
+    const cursorPos = textarea.selectionStart;
+    const textBefore = textarea.value.substring(0, cursorPos);
+    const textAfter = textarea.value.substring(textarea.selectionEnd);
+    
+    // Вставляем переменную с $ префиксом
+    textarea.value = textBefore + '$' + variable + textAfter;
+    
+    // Устанавливаем курсор после вставленной переменной
+    const newCursorPos = cursorPos + variable.length + 1;
+    textarea.setSelectionRange(newCursorPos, newCursorPos);
+    textarea.focus();
+    
+    showToast(`Переменная $${variable} вставлена`, 'info');
+}
+
+// Функция создания кнопок для вставки переменных
+function createVariableButtons(variables) {
+    const variablesContainer = document.getElementById('variables-container');
+    
+    if (!variables || variables.length === 0) {
+        return;
+    }
+    
+    // Добавляем секцию с кнопками вставки ПЕРЕД существующими тегами
+    const buttonsHtml = `
+        <div class="mb-3 p-3 bg-light rounded">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong>Вставить в текст (клик для копирования):</strong>
+                <small class="text-muted">Нажмите для вставки в текущую позицию курсора</small>
+            </div>
+            <div id="insert-buttons" class="d-flex flex-wrap gap-2">
+                ${variables.map(v => `
+                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                            onclick="insertVariableIntoFocused('${v}')"
+                            title="Вставить в активное поле">
+                        <i class="fas fa-plus-circle"></i> $${v}
+                    </button>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    
+    // Вставляем кнопки ПЕРЕД существующим содержимым
+    variablesContainer.insertAdjacentHTML('afterbegin', buttonsHtml);
+}
+
+// Отслеживание последнего активного textarea
+let lastFocusedTextarea = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const textareas = document.querySelectorAll('textarea, input[type="text"]');
+    textareas.forEach(textarea => {
+        textarea.addEventListener('focus', function() {
+            lastFocusedTextarea = this.id;
+        });
+    });
+});
+
+// Вставка в последнее активное поле или в plain_template по умолчанию
+function insertVariableIntoFocused(variable) {
+    const targetId = lastFocusedTextarea || 'plain_template';
+    insertVariableAt(targetId, variable);
+}
+
+// Автозаполнение формы при наличии prefillData
+if (prefillData) {
+    document.addEventListener('DOMContentLoaded', function() {
+        // Заполняем основные поля
+        if (prefillData.template_key) {
+            document.getElementById('template_key').value = prefillData.template_key;
+        }
+        if (prefillData.name) {
+            document.getElementById('name').value = prefillData.name;
+        }
+        if (prefillData.type) {
+            document.getElementById('type').value = prefillData.type;
+            // Делаем поле disabled, чтобы не менять тип при переопределении
+            document.getElementById('type').disabled = true;
+            // Но добавляем скрытое поле для отправки
+            const hiddenType = document.createElement('input');
+            hiddenType.type = 'hidden';
+            hiddenType.name = 'type';
+            hiddenType.value = prefillData.type;
+            document.getElementById('createTemplateForm').appendChild(hiddenType);
+        }
+        if (prefillData.subject_template) {
+            document.getElementById('subject_template').value = prefillData.subject_template;
+        }
+        if (prefillData.plain_template) {
+            document.getElementById('plain_template').value = prefillData.plain_template;
+        }
+        if (prefillData.html_template) {
+            document.getElementById('html_template').value = prefillData.html_template;
+        }
+        
+        // Загружаем переменные
+        if (prefillData.variables && Array.isArray(prefillData.variables)) {
+            variables = prefillData.variables;
+            updateVariablesDisplay();
+            // Создаём кнопки для вставки
+            createVariableButtons(prefillData.variables);
+        }
+        
+        // Показываем подсказку
+        showToast('Шаблон загружен! Отредактируйте текст по необходимости', 'success');
     });
 }
 
