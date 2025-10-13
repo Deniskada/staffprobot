@@ -109,6 +109,10 @@ async def owner_org_structure_create(
         late_threshold_minutes_str = form_data.get("late_threshold_minutes", "").strip()
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         
+        cancellation_short_notice_hours_str = form_data.get("cancellation_short_notice_hours", "").strip()
+        cancellation_short_notice_fine_str = form_data.get("cancellation_short_notice_fine", "").strip()
+        cancellation_invalid_reason_fine_str = form_data.get("cancellation_invalid_reason_fine", "").strip()
+        
         telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
         telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
         
@@ -123,6 +127,10 @@ async def owner_org_structure_create(
         late_threshold_minutes = int(late_threshold_minutes_str) if late_threshold_minutes_str else None
         late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
         
+        cancellation_short_notice_hours = int(cancellation_short_notice_hours_str) if cancellation_short_notice_hours_str else None
+        cancellation_short_notice_fine = float(cancellation_short_notice_fine_str.replace(",", ".")) if cancellation_short_notice_fine_str else None
+        cancellation_invalid_reason_fine = float(cancellation_invalid_reason_fine_str.replace(",", ".")) if cancellation_invalid_reason_fine_str else None
+        
         # Создать подразделение
         org_service = OrgStructureService(db)
         new_unit = await org_service.create_unit(
@@ -135,6 +143,10 @@ async def owner_org_structure_create(
             inherit_late_settings=inherit_late_settings,
             late_threshold_minutes=late_threshold_minutes,
             late_penalty_per_minute=late_penalty_per_minute,
+            inherit_cancellation_settings=True,  # По умолчанию наследуем
+            cancellation_short_notice_hours=cancellation_short_notice_hours,
+            cancellation_short_notice_fine=cancellation_short_notice_fine,
+            cancellation_invalid_reason_fine=cancellation_invalid_reason_fine,
             telegram_report_chat_id=telegram_report_chat_id
         )
         
@@ -174,6 +186,12 @@ async def owner_org_structure_edit(
         inherit_late_settings = "inherit_late_settings" in form_data
         late_threshold_minutes_str = form_data.get("late_threshold_minutes", "").strip()
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
+        
+        inherit_cancellation_settings = "inherit_cancellation_settings" in form_data
+        cancellation_short_notice_hours_str = form_data.get("cancellation_short_notice_hours", "").strip()
+        cancellation_short_notice_fine_str = form_data.get("cancellation_short_notice_fine", "").strip()
+        cancellation_invalid_reason_fine_str = form_data.get("cancellation_invalid_reason_fine", "").strip()
+        
         is_active_str = form_data.get("is_active", "").strip()
         
         telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
@@ -188,6 +206,11 @@ async def owner_org_structure_edit(
         payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
         late_threshold_minutes = int(late_threshold_minutes_str) if late_threshold_minutes_str else None
         late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
+        
+        cancellation_short_notice_hours = int(cancellation_short_notice_hours_str) if cancellation_short_notice_hours_str else None
+        cancellation_short_notice_fine = float(cancellation_short_notice_fine_str.replace(",", ".")) if cancellation_short_notice_fine_str else None
+        cancellation_invalid_reason_fine = float(cancellation_invalid_reason_fine_str.replace(",", ".")) if cancellation_invalid_reason_fine_str else None
+        
         is_active = is_active_str.lower() in ("true", "on", "1", "yes") if is_active_str else True
         
         # Обновить подразделение
@@ -203,6 +226,10 @@ async def owner_org_structure_edit(
                 "inherit_late_settings": inherit_late_settings,
                 "late_threshold_minutes": late_threshold_minutes,
                 "late_penalty_per_minute": late_penalty_per_minute,
+                "inherit_cancellation_settings": inherit_cancellation_settings,
+                "cancellation_short_notice_hours": cancellation_short_notice_hours,
+                "cancellation_short_notice_fine": cancellation_short_notice_fine,
+                "cancellation_invalid_reason_fine": cancellation_invalid_reason_fine,
                 "telegram_report_chat_id": telegram_report_chat_id,
                 "is_active": is_active
             }
