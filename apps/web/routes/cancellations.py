@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import Optional
 
-from apps.web.dependencies import get_current_user_dependency, get_db_session
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin, require_manager_or_owner
+from core.database.session import get_db_session
 from apps.web.jinja import templates
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.shift_cancellation import ShiftCancellation
