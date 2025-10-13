@@ -576,3 +576,170 @@ async def admin_notifications_test(
         logger.error(f"Error sending test notification: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка отправки тестового уведомления: {str(e)}")
 
+
+# ============================================================================
+# РОУТЫ ДЛЯ УПРАВЛЕНИЯ ШАБЛОНАМИ (Iteration 25, Phase 3)
+# ============================================================================
+
+@router.get("/templates", response_class=HTMLResponse)
+async def admin_notifications_templates_list(
+    request: Request,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    type_filter: Optional[str] = Query(None),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Список шаблонов уведомлений"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationTemplateService(session)
+            
+            # Получаем шаблоны
+            templates, total_count = await service.get_templates_paginated(
+                page=page,
+                per_page=per_page,
+                type_filter=type_filter
+            )
+            
+            # Получаем доступные типы
+            available_types = await service.get_available_types()
+            
+            # Получаем статистику
+            stats = await service.get_template_statistics()
+            
+            return templates.TemplateResponse("admin/notifications/templates/list.html", {
+                "request": request,
+                "current_user": current_user,
+                "title": "Шаблоны уведомлений",
+                "templates": templates,
+                "total_count": total_count,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": (total_count + per_page - 1) // per_page,
+                "type_filter": type_filter,
+                "available_types": available_types,
+                "stats": stats
+            })
+            
+    except Exception as e:
+        logger.error(f"Error loading templates list: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки списка шаблонов: {str(e)}")
+
+
+@router.get("/templates/{template_id}", response_class=HTMLResponse)
+async def admin_notifications_template_view(
+    request: Request,
+    template_id: str,
+    current_user: dict = Depends(require_superadmin)
+):
+    """Просмотр шаблона уведомления"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationTemplateService(session)
+            
+            # Получаем шаблон
+            template = await service.get_template(template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="Шаблон не найден")
+            
+            # Получаем доступные типы и каналы
+            available_types = await service.get_available_types()
+            available_channels = await service.get_available_channels()
+            
+            return templates.TemplateResponse("admin/notifications/templates/edit.html", {
+                "request": request,
+                "current_user": current_user,
+                "title": f"Просмотр шаблона: {template['title']}",
+                "template": template,
+                "available_types": available_types,
+                "available_channels": available_channels,
+                "is_readonly": True  # Шаблоны статические, только для просмотра
+            })
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки шаблона: {str(e)}")
+
+
+@router.post("/api/templates/{template_id}/test")
+async def admin_notifications_template_test(
+    template_id: str,
+    test_data: Dict[str, Any],
+    current_user: dict = Depends(require_superadmin)
+):
+    """Тестирование шаблона"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationTemplateService(session)
+            
+            # Тестируем шаблон
+            result = await service.test_template(template_id, test_data)
+            
+            return JSONResponse(result)
+            
+    except Exception as e:
+        logger.error(f"Error testing template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка тестирования шаблона: {str(e)}")
+
+
+@router.get("/api/templates")
+async def admin_notifications_api_templates_list(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    type_filter: Optional[str] = Query(None),
+    current_user: dict = Depends(require_superadmin)
+):
+    """API: Список шаблонов"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationTemplateService(session)
+            
+            templates, total_count = await service.get_templates_paginated(
+                page=page,
+                per_page=per_page,
+                type_filter=type_filter
+            )
+            
+            return JSONResponse({
+                "status": "success",
+                "data": {
+                    "templates": templates,
+                    "total_count": total_count,
+                    "page": page,
+                    "per_page": per_page,
+                    "total_pages": (total_count + per_page - 1) // per_page
+                }
+            })
+            
+    except Exception as e:
+        logger.error(f"Error getting templates: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения шаблонов: {str(e)}")
+
+
+@router.get("/api/templates/{template_id}")
+async def admin_notifications_api_template_get(
+    template_id: str,
+    current_user: dict = Depends(require_superadmin)
+):
+    """API: Получение шаблона"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationTemplateService(session)
+            
+            template = await service.get_template(template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="Шаблон не найден")
+            
+            return JSONResponse({
+                "status": "success",
+                "data": template
+            })
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения шаблона: {str(e)}")
+

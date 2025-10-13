@@ -1,0 +1,310 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">{{ title }}</h1>
+                <div class="btn-group">
+                    <a href="/admin/notifications/templates" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Назад к списку
+                    </a>
+                    {% if not is_readonly %}
+                    <button type="button" class="btn btn-success" id="saveButton">
+                        <i class="bi bi-save"></i> Сохранить
+                    </button>
+                    {% endif %}
+                    <button type="button" class="btn btn-primary" id="testButton">
+                        <i class="bi bi-play-circle"></i> Тестировать
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if is_readonly %}
+    <div class="alert alert-info" role="alert">
+        <i class="bi bi-info-circle"></i> Этот шаблон является статическим и доступен только для просмотра. 
+        Для изменения шаблонов обратитесь к разработчикам.
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <!-- Основная информация -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Информация о шаблоне</h5>
+                </div>
+                <div class="card-body">
+                    <form id="templateForm">
+                        <div class="mb-3">
+                            <label for="template_id" class="form-label">ID шаблона</label>
+                            <input type="text" class="form-control" id="template_id" value="{{ template.id }}" readonly>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="template_type" class="form-label">Тип уведомления</label>
+                            <input type="text" class="form-control" id="template_type" value="{{ template.type }}" readonly>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="template_title" class="form-label">Заголовок</label>
+                            <input type="text" class="form-control" id="template_title" value="{{ template.title }}" 
+                                   {% if is_readonly %}readonly{% endif %}>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="template_plain" class="form-label">Текстовая версия</label>
+                            <textarea class="form-control" id="template_plain" rows="8" 
+                                      {% if is_readonly %}readonly{% endif %}>{{ template.plain_content }}</textarea>
+                            <small class="form-text text-muted">
+                                Используется для Email, SMS и простых уведомлений
+                            </small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="template_html" class="form-label">HTML версия</label>
+                            <textarea class="form-control" id="template_html" rows="12" 
+                                      {% if is_readonly %}readonly{% endif %}>{{ template.html_content }}</textarea>
+                            <small class="form-text text-muted">
+                                Используется для Email с HTML форматированием
+                            </small>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Предпросмотр -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Предпросмотр</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-tabs" id="previewTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="preview-plain-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#preview-plain" type="button" role="tab">
+                                Текст
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="preview-html-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#preview-html" type="button" role="tab">
+                                HTML
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content pt-3" id="previewTabContent">
+                        <div class="tab-pane fade show active" id="preview-plain" role="tabpanel">
+                            <pre class="border p-3 rounded">{{ template.plain_content }}</pre>
+                        </div>
+                        <div class="tab-pane fade" id="preview-html" role="tabpanel">
+                            <div class="border p-3 rounded">
+                                {{ template.html_content|safe }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Боковая панель -->
+        <div class="col-md-4">
+            <!-- Переменные шаблона -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Доступные переменные</h5>
+                </div>
+                <div class="card-body">
+                    {% if template.variables %}
+                    <div class="list-group list-group-flush">
+                        {% for variable in template.variables %}
+                        <div class="list-group-item px-0">
+                            <code>${{ variable }}</code>
+                            <button type="button" class="btn btn-sm btn-outline-primary float-end" 
+                                    onclick="copyVariable('{{ variable }}')">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">Нет доступных переменных</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Статистика использования -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Статистика</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-7">Использований:</dt>
+                        <dd class="col-sm-5 text-end">{{ template.usage_count }}</dd>
+
+                        <dt class="col-sm-7">Создан:</dt>
+                        <dd class="col-sm-5 text-end">{{ template.created_at.strftime('%d.%m.%Y') }}</dd>
+
+                        <dt class="col-sm-7">Обновлен:</dt>
+                        <dd class="col-sm-5 text-end">{{ template.updated_at.strftime('%d.%m.%Y') }}</dd>
+
+                        <dt class="col-sm-7">Статус:</dt>
+                        <dd class="col-sm-5 text-end">
+                            {% if template.is_active %}
+                            <span class="badge bg-success">Активен</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Неактивен</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Тестирование -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Тестирование шаблона</h5>
+                </div>
+                <div class="card-body">
+                    <form id="testForm">
+                        <div class="mb-3">
+                            <label class="form-label">Тестовые данные (JSON)</label>
+                            <textarea class="form-control" id="testData" rows="8" placeholder='{"user_name": "Иван", "object_name": "Объект 1"}'></textarea>
+                            <small class="form-text text-muted">
+                                Введите JSON с тестовыми значениями для переменных
+                            </small>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-play-circle"></i> Протестировать
+                        </button>
+                    </form>
+
+                    <!-- Результат тестирования -->
+                    <div id="testResult" class="mt-3" style="display: none;">
+                        <hr>
+                        <h6>Результат:</h6>
+                        <div id="testResultContent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для результатов теста -->
+<div class="modal fade" id="testResultModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Результат тестирования</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="testModalBody">
+                <!-- Динамический контент -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Копирование переменной в буфер обмена
+function copyVariable(variable) {
+    const text = '$' + variable;
+    navigator.clipboard.writeText(text).then(() => {
+        // Показываем уведомление
+        alert('Скопировано: ' + text);
+    });
+}
+
+// Тестирование шаблона
+document.getElementById('testForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const testDataInput = document.getElementById('testData').value;
+    let testData;
+    
+    try {
+        testData = JSON.parse(testDataInput);
+    } catch (error) {
+        alert('Ошибка парсинга JSON: ' + error.message);
+        return;
+    }
+    
+    try {
+        const response = await fetch('/admin/api/notifications/templates/{{ template.id }}/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(testData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            // Показываем результат в модальном окне
+            const modalBody = document.getElementById('testModalBody');
+            modalBody.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle"></i> ${result.message}
+                </div>
+                <h6>Заголовок:</h6>
+                <div class="border p-2 rounded mb-3">${result.result.title}</div>
+                
+                <h6>Сообщение:</h6>
+                <div class="border p-2 rounded mb-3"><pre>${result.result.message}</pre></div>
+                
+                ${result.result.variables_missing && result.result.variables_missing.length > 0 ? `
+                    <div class="alert alert-warning">
+                        <strong>Отсутствующие переменные:</strong>
+                        ${result.result.variables_missing.join(', ')}
+                    </div>
+                ` : ''}
+            `;
+            
+            const modal = new bootstrap.Modal(document.getElementById('testResultModal'));
+            modal.show();
+        } else {
+            alert('Ошибка: ' + result.message);
+        }
+    } catch (error) {
+        alert('Ошибка тестирования: ' + error.message);
+    }
+});
+
+// Кнопка сохранения (если не readonly)
+{% if not is_readonly %}
+document.getElementById('saveButton').addEventListener('click', function() {
+    alert('Сохранение статических шаблонов пока не поддерживается');
+});
+{% endif %}
+
+// Кнопка тестирования в хедере
+document.getElementById('testButton').addEventListener('click', function() {
+    document.getElementById('testForm').scrollIntoView({ behavior: 'smooth' });
+});
+</script>
+
+<style>
+pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+code {
+    background-color: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+</style>
+{% endblock %}
+
