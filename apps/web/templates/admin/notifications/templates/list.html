@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">{{ title }}</h1>
+                <div class="btn-group">
+                    <a href="{{ url_for('admin_notifications_dashboard') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-tachometer-alt"></i> Дашборд
+                    </a>
+                    <a href="{{ url_for('admin_notifications_templates_create') }}" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Создать шаблон
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Фильтры</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="type_filter" class="form-label">Тип уведомления</label>
+                            <select class="form-select" id="type_filter" name="type_filter">
+                                <option value="">Все типы</option>
+                                {% for type in available_types %}
+                                <option value="{{ type.value }}" {% if type_filter == type.value %}selected{% endif %}>
+                                    {{ type.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="per_page" class="form-label">На странице</label>
+                            <select class="form-select" id="per_page" name="per_page">
+                                <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                                <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+                                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-search"></i> Применить
+                            </button>
+                            <a href="{{ url_for('admin_notifications_templates') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> Сбросить
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Список шаблонов -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        Шаблоны 
+                        <span class="badge badge-primary">{{ total_count }}</span>
+                    </h5>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                        <label class="form-check-label" for="selectAll">
+                            Выбрать все
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if templates %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th width="50">
+                                            <input type="checkbox" class="form-check-input" onchange="toggleSelectAll()">
+                                        </th>
+                                        <th>Тип</th>
+                                        <th>Заголовок</th>
+                                        <th>Переменные</th>
+                                        <th>Статус</th>
+                                        <th>Использований</th>
+                                        <th>Обновлен</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for template in templates %}
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input template-checkbox" 
+                                                   value="{{ template.id }}">
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-secondary">
+                                                {{ template.type.replace('_', ' ') }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <strong>{{ template.title }}</strong>
+                                        </td>
+                                        <td>
+                                            {% if template.variables %}
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    {% for variable in template.variables[:3] %}
+                                                    <span class="badge badge-outline-info">{{ variable }}</span>
+                                                    {% endfor %}
+                                                    {% if template.variables|length > 3 %}
+                                                    <span class="badge badge-outline-secondary">+{{ template.variables|length - 3 }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">Нет переменных</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if template.is_active %}
+                                                <span class="badge badge-success">Активен</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Неактивен</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-info">{{ template.usage_count }}</span>
+                                        </td>
+                                        <td>{{ template.updated_at.strftime('%d.%m.%Y %H:%M') if template.updated_at else '-' }}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-info" 
+                                                        onclick="viewTemplate('{{ template.id }}')"
+                                                        title="Просмотр">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn btn-outline-primary" 
+                                                        onclick="editTemplate('{{ template.id }}')"
+                                                        title="Редактировать">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-outline-warning" 
+                                                        onclick="testTemplate('{{ template.id }}')"
+                                                        title="Тестировать">
+                                                    <i class="fas fa-vial"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger" 
+                                                        onclick="deleteTemplate('{{ template.id }}')"
+                                                        title="Удалить">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Пагинация -->
+                        {% if total_pages > 1 %}
+                        <nav aria-label="Пагинация">
+                            <ul class="pagination justify-content-center">
+                                {% if page > 1 %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page - 1 }}{% if type_filter %}&type_filter={{ type_filter }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">
+                                        Предыдущая
+                                    </a>
+                                </li>
+                                {% endif %}
+                                
+                                {% for p in range(1, total_pages + 1) %}
+                                    {% if p == page %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ p }}</span>
+                                    </li>
+                                    {% elif p >= page - 2 and p <= page + 2 %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ p }}{% if type_filter %}&type_filter={{ type_filter }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">
+                                            {{ p }}
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if page < total_pages %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page + 1 }}{% if type_filter %}&type_filter={{ type_filter }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">
+                                        Следующая
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Шаблоны не найдены</h5>
+                            <p class="text-muted">Создайте первый шаблон уведомления</p>
+                            <a href="{{ url_for('admin_notifications_templates_create') }}" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Создать шаблон
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для тестирования шаблона -->
+<div class="modal fade" id="testTemplateModal" tabindex="-1" aria-labelledby="testTemplateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="testTemplateModalLabel">Тестирование шаблона</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="testTemplateForm">
+                    <div class="mb-3">
+                        <label for="testChannel" class="form-label">Канал доставки</label>
+                        <select class="form-select" id="testChannel" name="channel">
+                            <option value="email">Email</option>
+                            <option value="telegram">Telegram</option>
+                            <option value="push">Push</option>
+                            <option value="sms">SMS</option>
+                            <option value="in_app">In-App</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="testVariables" class="form-label">Тестовые переменные (JSON)</label>
+                        <textarea class="form-control" id="testVariables" name="variables" rows="10" 
+                                  placeholder='{"user_name": "Иван Иванов", "object_name": "Кафе Центр", ...}'></textarea>
+                    </div>
+                </form>
+                <div id="testResult" class="mt-3" style="display: none;">
+                    <h6>Результат тестирования:</h6>
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 id="testTitle"></h6>
+                            <div id="testMessage"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" onclick="runTemplateTest()">Тестировать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentTemplateId = null;
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.template-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
+
+function viewTemplate(id) {
+    // Заглушка для просмотра шаблона
+    alert('Просмотр шаблона: ' + id);
+}
+
+function editTemplate(id) {
+    // Переход на страницу редактирования
+    window.location.href = `/admin/notifications/templates/${id}/edit`;
+}
+
+function testTemplate(id) {
+    currentTemplateId = id;
+    const modal = new bootstrap.Modal(document.getElementById('testTemplateModal'));
+    modal.show();
+}
+
+function deleteTemplate(id) {
+    if (confirm('Удалить шаблон ' + id + '?')) {
+        // Заглушка для удаления
+        alert('Удаление шаблона: ' + id);
+    }
+}
+
+function runTemplateTest() {
+    const channel = document.getElementById('testChannel').value;
+    const variablesText = document.getElementById('testVariables').value;
+    
+    try {
+        const variables = JSON.parse(variablesText);
+        
+        // Заглушка для тестирования
+        document.getElementById('testTitle').textContent = 'Тестовый заголовок';
+        document.getElementById('testMessage').innerHTML = '<p>Тестовое сообщение с переменными: ' + JSON.stringify(variables) + '</p>';
+        document.getElementById('testResult').style.display = 'block';
+        
+    } catch (e) {
+        alert('Ошибка в JSON: ' + e.message);
+    }
+}
+</script>
+{% endblock %}
+

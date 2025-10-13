@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">{{ title }}</h1>
+                <div class="btn-group">
+                    <a href="{{ url_for('admin_notifications_dashboard') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-tachometer-alt"></i> Дашборд
+                    </a>
+                    <button class="btn btn-outline-success" onclick="testAllChannels()">
+                        <i class="fas fa-vial"></i> Тестировать все каналы
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Настройки каналов -->
+    <div class="row">
+        <!-- Email -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-envelope text-primary"></i> Email
+                    </h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="emailEnabled" 
+                               {% if channel_settings.email.enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="emailEnabled">
+                            Включен
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form id="emailSettings">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="emailSmtpHost" class="form-label">SMTP хост</label>
+                                <input type="text" class="form-control" id="emailSmtpHost" 
+                                       value="{{ channel_settings.email.smtp_host }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="emailSmtpPort" class="form-label">SMTP порт</label>
+                                <input type="number" class="form-control" id="emailSmtpPort" 
+                                       value="{{ channel_settings.email.smtp_port }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="emailUsername" class="form-label">Имя пользователя</label>
+                                <input type="text" class="form-control" id="emailUsername" 
+                                       value="{{ channel_settings.email.smtp_username }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="emailPassword" class="form-label">Пароль</label>
+                                <input type="password" class="form-control" id="emailPassword" 
+                                       value="{{ channel_settings.email.smtp_password }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="emailFromName" class="form-label">Имя отправителя</label>
+                                <input type="text" class="form-control" id="emailFromName" 
+                                       value="{{ channel_settings.email.from_name }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="emailFromEmail" class="form-label">Email отправителя</label>
+                                <input type="email" class="form-control" id="emailFromEmail" 
+                                       value="{{ channel_settings.email.from_email }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="emailDailyLimit" class="form-label">Дневной лимит</label>
+                                <input type="number" class="form-control" id="emailDailyLimit" 
+                                       value="{{ channel_settings.email.daily_limit }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="emailRateLimit" class="form-label">Лимит в минуту</label>
+                                <input type="number" class="form-control" id="emailRateLimit" 
+                                       value="{{ channel_settings.email.rate_limit_per_minute }}">
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="emailUseTls" 
+                                           {% if channel_settings.email.use_tls %}checked{% endif %}>
+                                    <label class="form-check-label" for="emailUseTls">
+                                        Использовать TLS
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-primary" onclick="saveEmailSettings()">
+                                <i class="fas fa-save"></i> Сохранить
+                            </button>
+                            <button type="button" class="btn btn-outline-warning" onclick="testEmailChannel()">
+                                <i class="fas fa-vial"></i> Тестировать
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Telegram -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fab fa-telegram text-info"></i> Telegram
+                    </h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="telegramEnabled" 
+                               {% if channel_settings.telegram.enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="telegramEnabled">
+                            Включен
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form id="telegramSettings">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="telegramBotToken" class="form-label">Bot Token</label>
+                                <input type="password" class="form-control" id="telegramBotToken" 
+                                       value="{{ channel_settings.telegram.bot_token }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="telegramDailyLimit" class="form-label">Дневной лимит</label>
+                                <input type="number" class="form-control" id="telegramDailyLimit" 
+                                       value="{{ channel_settings.telegram.daily_limit }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="telegramRateLimit" class="form-label">Лимит в минуту</label>
+                                <input type="number" class="form-control" id="telegramRateLimit" 
+                                       value="{{ channel_settings.telegram.rate_limit_per_minute }}">
+                            </div>
+                            <div class="col-12">
+                                <label for="telegramParseMode" class="form-label">Режим парсинга</label>
+                                <select class="form-select" id="telegramParseMode">
+                                    <option value="HTML" {% if channel_settings.telegram.parse_mode == 'HTML' %}selected{% endif %}>HTML</option>
+                                    <option value="Markdown" {% if channel_settings.telegram.parse_mode == 'Markdown' %}selected{% endif %}>Markdown</option>
+                                    <option value="MarkdownV2" {% if channel_settings.telegram.parse_mode == 'MarkdownV2' %}selected{% endif %}>MarkdownV2</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-primary" onclick="saveTelegramSettings()">
+                                <i class="fas fa-save"></i> Сохранить
+                            </button>
+                            <button type="button" class="btn btn-outline-warning" onclick="testTelegramChannel()">
+                                <i class="fas fa-vial"></i> Тестировать
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Push -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-mobile-alt text-success"></i> Push уведомления
+                    </h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="pushEnabled" 
+                               {% if channel_settings.push.enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="pushEnabled">
+                            Включен
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form id="pushSettings">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="pushFirebaseKey" class="form-label">Firebase Server Key</label>
+                                <input type="password" class="form-control" id="pushFirebaseKey" 
+                                       value="{{ channel_settings.push.firebase_server_key }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="pushDailyLimit" class="form-label">Дневной лимит</label>
+                                <input type="number" class="form-control" id="pushDailyLimit" 
+                                       value="{{ channel_settings.push.daily_limit }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="pushRateLimit" class="form-label">Лимит в минуту</label>
+                                <input type="number" class="form-control" id="pushRateLimit" 
+                                       value="{{ channel_settings.push.rate_limit_per_minute }}">
+                            </div>
+                            <div class="col-12">
+                                <label for="pushBatchSize" class="form-label">Размер пакета</label>
+                                <input type="number" class="form-control" id="pushBatchSize" 
+                                       value="{{ channel_settings.push.batch_size }}">
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-primary" onclick="savePushSettings()">
+                                <i class="fas fa-save"></i> Сохранить
+                            </button>
+                            <button type="button" class="btn btn-outline-warning" onclick="testPushChannel()">
+                                <i class="fas fa-vial"></i> Тестировать
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- SMS -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-sms text-warning"></i> SMS
+                    </h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="smsEnabled" 
+                               {% if channel_settings.sms.enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="smsEnabled">
+                            Включен
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form id="smsSettings">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="smsProvider" class="form-label">Провайдер</label>
+                                <select class="form-select" id="smsProvider">
+                                    <option value="smsc" {% if channel_settings.sms.provider == 'smsc' %}selected{% endif %}>SMSC</option>
+                                    <option value="smsru" {% if channel_settings.sms.provider == 'smsru' %}selected{% endif %}>SMS.ru</option>
+                                    <option value="twilio" {% if channel_settings.sms.provider == 'twilio' %}selected{% endif %}>Twilio</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="smsApiKey" class="form-label">API ключ</label>
+                                <input type="password" class="form-control" id="smsApiKey" 
+                                       value="{{ channel_settings.sms.api_key }}">
+                            </div>
+                            <div class="col-12">
+                                <label for="smsSenderName" class="form-label">Имя отправителя</label>
+                                <input type="text" class="form-control" id="smsSenderName" 
+                                       value="{{ channel_settings.sms.sender_name }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="smsDailyLimit" class="form-label">Дневной лимит</label>
+                                <input type="number" class="form-control" id="smsDailyLimit" 
+                                       value="{{ channel_settings.sms.daily_limit }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="smsRateLimit" class="form-label">Лимит в минуту</label>
+                                <input type="number" class="form-control" id="smsRateLimit" 
+                                       value="{{ channel_settings.sms.rate_limit_per_minute }}">
+                            </div>
+                            <div class="col-12">
+                                <label for="smsCost" class="form-label">Стоимость за SMS (руб.)</label>
+                                <input type="number" step="0.01" class="form-control" id="smsCost" 
+                                       value="{{ channel_settings.sms.cost_per_sms }}">
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-primary" onclick="saveSmsSettings()">
+                                <i class="fas fa-save"></i> Сохранить
+                            </button>
+                            <button type="button" class="btn btn-outline-warning" onclick="testSmsChannel()">
+                                <i class="fas fa-vial"></i> Тестировать
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- In-App -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-bell text-secondary"></i> In-App уведомления
+                    </h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="inAppEnabled" 
+                               {% if channel_settings.in_app.enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="inAppEnabled">
+                            Включен
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form id="inAppSettings">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="inAppRetentionDays" class="form-label">Дни хранения</label>
+                                <input type="number" class="form-control" id="inAppRetentionDays" 
+                                       value="{{ channel_settings.in_app.retention_days }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="inAppMaxPerUser" class="form-label">Макс. на пользователя</label>
+                                <input type="number" class="form-control" id="inAppMaxPerUser" 
+                                       value="{{ channel_settings.in_app.max_notifications_per_user }}">
+                            </div>
+                            <div class="col-12">
+                                <label for="inAppAutoMarkRead" class="form-label">Автопомечание прочитанным (дни)</label>
+                                <input type="number" class="form-control" id="inAppAutoMarkRead" 
+                                       value="{{ channel_settings.in_app.auto_mark_read_after_days }}">
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-primary" onclick="saveInAppSettings()">
+                                <i class="fas fa-save"></i> Сохранить
+                            </button>
+                            <button type="button" class="btn btn-outline-warning" onclick="testInAppChannel()">
+                                <i class="fas fa-vial"></i> Тестировать
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function saveEmailSettings() {
+    const settings = {
+        enabled: document.getElementById('emailEnabled').checked,
+        smtp_host: document.getElementById('emailSmtpHost').value,
+        smtp_port: parseInt(document.getElementById('emailSmtpPort').value),
+        smtp_username: document.getElementById('emailUsername').value,
+        smtp_password: document.getElementById('emailPassword').value,
+        from_name: document.getElementById('emailFromName').value,
+        from_email: document.getElementById('emailFromEmail').value,
+        daily_limit: parseInt(document.getElementById('emailDailyLimit').value),
+        rate_limit_per_minute: parseInt(document.getElementById('emailRateLimit').value),
+        use_tls: document.getElementById('emailUseTls').checked
+    };
+    
+    saveChannelSettings('email', settings);
+}
+
+function saveTelegramSettings() {
+    const settings = {
+        enabled: document.getElementById('telegramEnabled').checked,
+        bot_token: document.getElementById('telegramBotToken').value,
+        daily_limit: parseInt(document.getElementById('telegramDailyLimit').value),
+        rate_limit_per_minute: parseInt(document.getElementById('telegramRateLimit').value),
+        parse_mode: document.getElementById('telegramParseMode').value
+    };
+    
+    saveChannelSettings('telegram', settings);
+}
+
+function savePushSettings() {
+    const settings = {
+        enabled: document.getElementById('pushEnabled').checked,
+        firebase_server_key: document.getElementById('pushFirebaseKey').value,
+        daily_limit: parseInt(document.getElementById('pushDailyLimit').value),
+        rate_limit_per_minute: parseInt(document.getElementById('pushRateLimit').value),
+        batch_size: parseInt(document.getElementById('pushBatchSize').value)
+    };
+    
+    saveChannelSettings('push', settings);
+}
+
+function saveSmsSettings() {
+    const settings = {
+        enabled: document.getElementById('smsEnabled').checked,
+        provider: document.getElementById('smsProvider').value,
+        api_key: document.getElementById('smsApiKey').value,
+        sender_name: document.getElementById('smsSenderName').value,
+        daily_limit: parseInt(document.getElementById('smsDailyLimit').value),
+        rate_limit_per_minute: parseInt(document.getElementById('smsRateLimit').value),
+        cost_per_sms: parseFloat(document.getElementById('smsCost').value)
+    };
+    
+    saveChannelSettings('sms', settings);
+}
+
+function saveInAppSettings() {
+    const settings = {
+        enabled: document.getElementById('inAppEnabled').checked,
+        retention_days: parseInt(document.getElementById('inAppRetentionDays').value),
+        max_notifications_per_user: parseInt(document.getElementById('inAppMaxPerUser').value),
+        auto_mark_read_after_days: parseInt(document.getElementById('inAppAutoMarkRead').value)
+    };
+    
+    saveChannelSettings('in_app', settings);
+}
+
+function saveChannelSettings(channel, settings) {
+    // Заглушка для сохранения настроек
+    alert(`Сохранение настроек канала ${channel}: ` + JSON.stringify(settings));
+}
+
+function testEmailChannel() {
+    alert('Тестирование Email канала');
+}
+
+function testTelegramChannel() {
+    alert('Тестирование Telegram канала');
+}
+
+function testPushChannel() {
+    alert('Тестирование Push канала');
+}
+
+function testSmsChannel() {
+    alert('Тестирование SMS канала');
+}
+
+function testInAppChannel() {
+    alert('Тестирование In-App канала');
+}
+
+function testAllChannels() {
+    if (confirm('Тестировать все включенные каналы?')) {
+        alert('Тестирование всех каналов');
+    }
+}
+</script>
+{% endblock %}
+

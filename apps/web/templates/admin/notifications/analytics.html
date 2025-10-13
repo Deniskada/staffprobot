@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">{{ title }}</h1>
+                <div class="btn-group">
+                    <a href="{{ url_for('admin_notifications_dashboard') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-tachometer-alt"></i> Дашборд
+                    </a>
+                    <a href="{{ url_for('admin_notifications_list') }}" class="btn btn-outline-info">
+                        <i class="fas fa-list"></i> Список
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Период анализа -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Период анализа</h5>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group" role="group">
+                        <a href="?period=1d" class="btn {% if period == '1d' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            1 день
+                        </a>
+                        <a href="?period=7d" class="btn {% if period == '7d' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            7 дней
+                        </a>
+                        <a href="?period=30d" class="btn {% if period == '30d' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            30 дней
+                        </a>
+                        <a href="?period=90d" class="btn {% if period == '90d' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            90 дней
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Основные метрики -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ analytics.total }}</h4>
+                            <p class="card-text">Всего за период</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-chart-line fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ analytics.delivered }}</h4>
+                            <p class="card-text">Доставлено</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-check-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ analytics.read }}</h4>
+                            <p class="card-text">Прочитано</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-eye fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ analytics.failed }}</h4>
+                            <p class="card-text">Ошибки</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Процентные показатели -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Процент доставки</h5>
+                    <div class="progress mb-2" style="height: 20px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ analytics.delivery_rate }}%" 
+                             aria-valuenow="{{ analytics.delivery_rate }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ analytics.delivery_rate }}%
+                        </div>
+                    </div>
+                    <small class="text-muted">{{ analytics.delivered }} из {{ analytics.total }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Процент прочтения</h5>
+                    <div class="progress mb-2" style="height: 20px;">
+                        <div class="progress-bar bg-info" role="progressbar" 
+                             style="width: {{ analytics.read_rate }}%" 
+                             aria-valuenow="{{ analytics.read_rate }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ analytics.read_rate }}%
+                        </div>
+                    </div>
+                    <small class="text-muted">{{ analytics.read }} из {{ analytics.total }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Процент ошибок</h5>
+                    <div class="progress mb-2" style="height: 20px;">
+                        <div class="progress-bar bg-danger" role="progressbar" 
+                             style="width: {{ analytics.error_rate }}%" 
+                             aria-valuenow="{{ analytics.error_rate }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ analytics.error_rate }}%
+                        </div>
+                    </div>
+                    <small class="text-muted">{{ analytics.failed }} из {{ analytics.total }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Тренды по дням -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Тренды по дням</h5>
+                </div>
+                <div class="card-body">
+                    {% if trends.daily %}
+                        <canvas id="trendsChart" width="400" height="200"></canvas>
+                    {% else %}
+                        <p class="text-muted">Нет данных для отображения трендов</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Топ пользователей -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Топ пользователей</h5>
+                </div>
+                <div class="card-body">
+                    {% if top_users %}
+                        {% for user in top_users %}
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h6 class="mb-0">{{ user.user_name }}</h6>
+                                <small class="text-muted">{{ user.notification_count }} уведомлений</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge badge-primary">{{ user.read_rate }}%</span>
+                                <br>
+                                <small class="text-muted">прочитано</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">Нет данных о пользователях</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Детальная статистика -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Детальная статистика</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Статистика по каналам</h6>
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Канал</th>
+                                        <th>Отправлено</th>
+                                        <th>Доставлено</th>
+                                        <th>Процент</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Email</td>
+                                        <td>1,250</td>
+                                        <td>1,200</td>
+                                        <td>96.0%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Telegram</td>
+                                        <td>800</td>
+                                        <td>780</td>
+                                        <td>97.5%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Push</td>
+                                        <td>3,200</td>
+                                        <td>3,100</td>
+                                        <td>96.9%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>SMS</td>
+                                        <td>150</td>
+                                        <td>145</td>
+                                        <td>96.7%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Статистика по типам</h6>
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Тип</th>
+                                        <th>Отправлено</th>
+                                        <th>Прочитано</th>
+                                        <th>Процент</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Shift Reminder</td>
+                                        <td>500</td>
+                                        <td>450</td>
+                                        <td>90.0%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Contract Signed</td>
+                                        <td>200</td>
+                                        <td>190</td>
+                                        <td>95.0%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Payment Success</td>
+                                        <td>300</td>
+                                        <td>280</td>
+                                        <td>93.3%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>System</td>
+                                        <td>150</td>
+                                        <td>140</td>
+                                        <td>93.3%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if trends.daily %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// График трендов
+const ctx = document.getElementById('trendsChart').getContext('2d');
+const trendsData = {{ trends.daily | tojson }};
+
+const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: trendsData.map(item => item.date),
+        datasets: [{
+            label: 'Всего уведомлений',
+            data: trendsData.map(item => item.total),
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1
+        }, {
+            label: 'Доставлено',
+            data: trendsData.map(item => item.delivered),
+            borderColor: 'rgb(54, 162, 235)',
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            tension: 0.1
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            title: {
+                display: true,
+                text: 'Динамика уведомлений за период'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+</script>
+{% endif %}
+{% endblock %}
+

@@ -1,0 +1,578 @@
+"""Роуты для управления уведомлениями в админ-панели (только для суперадмина)."""
+
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from core.database.session import get_async_session
+from apps.web.middleware.auth_middleware import require_superadmin
+from apps.web.services.admin_notification_service import AdminNotificationService
+from apps.web.services.notification_template_service import NotificationTemplateService
+from apps.web.services.notification_channel_service import NotificationChannelService
+from apps.web.services.notification_bulk_service import NotificationBulkService
+from core.logging.logger import logger
+from apps.web.jinja import templates
+
+router = APIRouter()
+
+
+@router.get("/", response_class=HTMLResponse)
+async def admin_notifications_dashboard(
+    request: Request,
+    current_user: dict = Depends(require_superadmin)
+):
+    """Главный дашборд уведомлений"""
+    try:
+        async with get_async_session() as session:
+            service = AdminNotificationService(session)
+            
+            # Получаем общую статистику
+            stats = await service.get_notifications_stats()
+            
+            # Получаем статистику по каналам
+            channel_stats = await service.get_channel_stats()
+            
+            # Получаем статистику по типам
+            type_stats = await service.get_type_stats()
+            
+            # Получаем последние уведомления
+            recent_notifications = await service.get_recent_notifications(limit=10)
+            
+            return templates.TemplateResponse("admin/notifications/dashboard.html", {
+                "request": request,
+                "current_user": current_user,
+                "title": "Управление уведомлениями",
+                "stats": stats,
+                "channel_stats": channel_stats,
+                "type_stats": type_stats,
+                "recent_notifications": recent_notifications
+            })
+            
+    except Exception as e:
+        logger.error(f"Error loading notifications dashboard: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки дашборда: {str(e)}")
+
+
+@router.get("/list", response_class=HTMLResponse)
+async def admin_notifications_list(
+    request: Request,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    status_filter: Optional[str] = Query(None),
+    channel_filter: Optional[str] = Query(None),
+    type_filter: Optional[str] = Query(None),
+    user_id: Optional[int] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Список уведомлений с фильтрами"""
+    try:
+        async with get_async_session() as session:
+            service = AdminNotificationService(session)
+            
+            # Парсим даты
+            date_from_parsed = None
+            date_to_parsed = None
+            if date_from:
+                try:
+                    date_from_parsed = datetime.fromisoformat(date_from)
+                except ValueError:
+                    pass
+            if date_to:
+                try:
+                    date_to_parsed = datetime.fromisoformat(date_to)
+                except ValueError:
+                    pass
+            
+            # Получаем уведомления с фильтрами
+            notifications, total_count = await service.get_notifications_paginated(
+                page=page,
+                per_page=per_page,
+                status_filter=status_filter,
+                channel_filter=channel_filter,
+                type_filter=type_filter,
+                user_id=user_id,
+                date_from=date_from_parsed,
+                date_to=date_to_parsed
+            )
+            
+            # Получаем доступные фильтры
+            filter_options = await service.get_filter_options()
+            
+            return templates.TemplateResponse("admin/notifications/list.html", {
+                "request": request,
+                "current_user": current_user,
+                "title": "Список уведомлений",
+                "notifications": notifications,
+                "total_count": total_count,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": (total_count + per_page - 1) // per_page,
+                "filters": {
+                    "status": status_filter,
+                    "channel": channel_filter,
+                    "type": type_filter,
+                    "user_id": user_id,
+                    "date_from": date_from,
+                    "date_to": date_to
+                },
+                "filter_options": filter_options
+            })
+            
+    except Exception as e:
+        logger.error(f"Error loading notifications list: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки списка: {str(e)}")
+
+
+@router.get("/analytics", response_class=HTMLResponse)
+async def admin_notifications_analytics(
+    request: Request,
+    period: str = Query("7d", description="Период аналитики: 1d, 7d, 30d, 90d"),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Детальная аналитика уведомлений"""
+    try:
+        async with get_async_session() as session:
+            service = AdminNotificationService(session)
+            
+            # Парсим период
+            period_map = {
+                "1d": timedelta(days=1),
+                "7d": timedelta(days=7),
+                "30d": timedelta(days=30),
+                "90d": timedelta(days=90)
+            }
+            period_delta = period_map.get(period, timedelta(days=7))
+            
+            # Получаем аналитику
+            analytics = await service.get_detailed_analytics(period_delta)
+            
+            # Получаем тренды
+            trends = await service.get_trends(period_delta)
+            
+            # Получаем топ пользователей
+            top_users = await service.get_top_users_by_notifications(period_delta, limit=10)
+            
+            return templates.TemplateResponse("admin/notifications/analytics.html", {
+                "request": request,
+                "current_user": current_user,
+                "title": "Аналитика уведомлений",
+                "period": period,
+                "analytics": analytics,
+                "trends": trends,
+                "top_users": top_users
+            })
+            
+    except Exception as e:
+        logger.error(f"Error loading notifications analytics: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки аналитики: {str(e)}")
+
+
+@router.get("/templates", response_class=HTMLResponse)
+async def admin_notifications_templates(
+    request: Request,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    type_filter: Optional[str] = Query(None),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Управление шаблонами уведомлений"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationTemplateService(session)
+            
+            # Получаем шаблоны
+            templates_list, total_count = await service.get_templates_paginated(
+                page=page,
+                per_page=per_page,
+                type_filter=type_filter
+            )
+            
+            # Получаем доступные типы
+            available_types = await service.get_available_types()
+            
+            return templates.TemplateResponse("admin/notifications/templates/list.html", {
+                "request": request,
+                "current_user": current_user,
+                "title": "Управление шаблонами",
+                "templates": templates_list,
+                "total_count": total_count,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": (total_count + per_page - 1) // per_page,
+                "type_filter": type_filter,
+                "available_types": available_types
+            })
+            
+    except Exception as e:
+        logger.error(f"Error loading notification templates: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки шаблонов: {str(e)}")
+
+
+@router.get("/templates/create", response_class=HTMLResponse)
+async def admin_notifications_templates_create(
+    request: Request,
+    current_user: dict = Depends(require_superadmin)
+):
+    """Создание нового шаблона"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationTemplateService(session)
+            
+            # Получаем доступные типы и каналы
+            available_types = await service.get_available_types()
+            available_channels = await service.get_available_channels()
+            
+            return templates.TemplateResponse("admin/notifications/templates/create.html", {
+                "request": request,
+                "current_user": current_user,
+                "title": "Создание шаблона",
+                "available_types": available_types,
+                "available_channels": available_channels
+            })
+            
+    except Exception as e:
+        logger.error(f"Error loading template creation form: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки формы: {str(e)}")
+
+
+@router.get("/templates/{template_id}/edit", response_class=HTMLResponse)
+async def admin_notifications_templates_edit(
+    request: Request,
+    template_id: int,
+    current_user: dict = Depends(require_superadmin)
+):
+    """Редактирование шаблона"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationTemplateService(session)
+            
+            # Получаем шаблон
+            template = await service.get_template(template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="Шаблон не найден")
+            
+            # Получаем доступные типы и каналы
+            available_types = await service.get_available_types()
+            available_channels = await service.get_available_channels()
+            
+            return templates.TemplateResponse("admin/notifications/templates/edit.html", {
+                "request": request,
+                "current_user": current_user,
+                "title": "Редактирование шаблона",
+                "template": template,
+                "available_types": available_types,
+                "available_channels": available_channels
+            })
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading template edit form: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки формы: {str(e)}")
+
+
+@router.post("/templates/{template_id}/delete")
+async def admin_notifications_templates_delete(
+    template_id: int,
+    current_user: dict = Depends(require_superadmin)
+):
+    """Удаление шаблона"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationTemplateService(session)
+            
+            # Проверяем существование шаблона
+            template = await service.get_template(template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="Шаблон не найден")
+            
+            # Удаляем шаблон
+            await service.delete_template(template_id)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": "Шаблон успешно удален"
+            })
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления шаблона: {str(e)}")
+
+
+@router.post("/templates/{template_id}/test")
+async def admin_notifications_templates_test(
+    template_id: int,
+    test_data: Dict[str, Any] = Form(...),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Тестирование шаблона"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationTemplateService(session)
+            
+            # Получаем шаблон
+            template = await service.get_template(template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="Шаблон не найден")
+            
+            # Тестируем шаблон
+            result = await service.test_template(template_id, test_data)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": "Тест выполнен успешно",
+                "result": result
+            })
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing template: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка тестирования шаблона: {str(e)}")
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def admin_notifications_settings(
+    request: Request,
+    current_user: dict = Depends(require_superadmin)
+):
+    """Настройки каналов доставки"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationChannelService(session)
+            
+            # Получаем настройки каналов
+            channel_settings = await service.get_all_channel_settings()
+            
+            return templates.TemplateResponse("admin/notifications/settings.html", {
+                "request": request,
+                "current_user": current_user,
+                "title": "Настройки каналов доставки",
+                "channel_settings": channel_settings
+            })
+            
+    except Exception as e:
+        logger.error(f"Error loading notification settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки настроек: {str(e)}")
+
+
+@router.post("/settings/email")
+async def admin_notifications_settings_email(
+    settings: Dict[str, Any] = Form(...),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Настройки Email канала"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationChannelService(session)
+            
+            # Обновляем настройки Email
+            await service.update_email_settings(settings)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": "Настройки Email обновлены"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error updating email settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления настроек: {str(e)}")
+
+
+@router.post("/settings/sms")
+async def admin_notifications_settings_sms(
+    settings: Dict[str, Any] = Form(...),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Настройки SMS канала"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationChannelService(session)
+            
+            # Обновляем настройки SMS
+            await service.update_sms_settings(settings)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": "Настройки SMS обновлены"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error updating SMS settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления настроек: {str(e)}")
+
+
+@router.post("/settings/push")
+async def admin_notifications_settings_push(
+    settings: Dict[str, Any] = Form(...),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Настройки Push канала"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationChannelService(session)
+            
+            # Обновляем настройки Push
+            await service.update_push_settings(settings)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": "Настройки Push обновлены"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error updating push settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления настроек: {str(e)}")
+
+
+@router.post("/settings/telegram")
+async def admin_notifications_settings_telegram(
+    settings: Dict[str, Any] = Form(...),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Настройки Telegram канала"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationChannelService(session)
+            
+            # Обновляем настройки Telegram
+            await service.update_telegram_settings(settings)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": "Настройки Telegram обновлены"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error updating telegram settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления настроек: {str(e)}")
+
+
+# API endpoints для AJAX операций
+
+@router.post("/api/bulk/cancel")
+async def admin_notifications_bulk_cancel(
+    notification_ids: List[int] = Form(...),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Массовая отмена уведомлений"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationBulkService(session)
+            
+            # Отменяем уведомления
+            cancelled_count = await service.cancel_notifications(notification_ids)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": f"Отменено {cancelled_count} уведомлений",
+                "cancelled_count": cancelled_count
+            })
+            
+    except Exception as e:
+        logger.error(f"Error cancelling notifications: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка отмены уведомлений: {str(e)}")
+
+
+@router.post("/api/bulk/retry")
+async def admin_notifications_bulk_retry(
+    notification_ids: List[int] = Form(...),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Массовая повторная отправка уведомлений"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationBulkService(session)
+            
+            # Повторно отправляем уведомления
+            retried_count = await service.retry_notifications(notification_ids)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": f"Повторно отправлено {retried_count} уведомлений",
+                "retried_count": retried_count
+            })
+            
+    except Exception as e:
+        logger.error(f"Error retrying notifications: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка повторной отправки: {str(e)}")
+
+
+@router.post("/api/bulk/delete")
+async def admin_notifications_bulk_delete(
+    notification_ids: List[int] = Form(...),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Массовое удаление уведомлений"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationBulkService(session)
+            
+            # Удаляем уведомления
+            deleted_count = await service.delete_notifications(notification_ids)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": f"Удалено {deleted_count} уведомлений",
+                "deleted_count": deleted_count
+            })
+            
+    except Exception as e:
+        logger.error(f"Error deleting notifications: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления уведомлений: {str(e)}")
+
+
+@router.post("/api/bulk/export")
+async def admin_notifications_bulk_export(
+    notification_ids: List[int] = Form(...),
+    format: str = Form("csv"),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Экспорт уведомлений"""
+    try:
+        async with get_async_session() as session:
+            service = NotificationBulkService(session)
+            
+            # Экспортируем уведомления
+            export_data = await service.export_notifications(notification_ids, format)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": "Экспорт выполнен успешно",
+                "data": export_data
+            })
+            
+    except Exception as e:
+        logger.error(f"Error exporting notifications: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка экспорта: {str(e)}")
+
+
+@router.post("/api/test")
+async def admin_notifications_test(
+    test_data: Dict[str, Any] = Form(...),
+    current_user: dict = Depends(require_superadmin)
+):
+    """Тестовая отправка уведомления"""
+    try:
+        async with get_async_session() as session:
+            service = AdminNotificationService(session)
+            
+            # Отправляем тестовое уведомление
+            result = await service.send_test_notification(test_data)
+            
+            return JSONResponse({
+                "status": "success",
+                "message": "Тестовое уведомление отправлено",
+                "result": result
+            })
+            
+    except Exception as e:
+        logger.error(f"Error sending test notification: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка отправки тестового уведомления: {str(e)}")
+

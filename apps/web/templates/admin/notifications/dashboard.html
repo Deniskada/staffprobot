@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">{{ title }}</h1>
+                <div class="btn-group">
+                    <a href="{{ url_for('admin_notifications_list') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-list"></i> Список уведомлений
+                    </a>
+                    <a href="{{ url_for('admin_notifications_analytics') }}" class="btn btn-outline-info">
+                        <i class="fas fa-chart-bar"></i> Аналитика
+                    </a>
+                    <a href="{{ url_for('admin_notifications_templates') }}" class="btn btn-outline-success">
+                        <i class="fas fa-file-alt"></i> Шаблоны
+                    </a>
+                    <a href="{{ url_for('admin_notifications_settings') }}" class="btn btn-outline-warning">
+                        <i class="fas fa-cog"></i> Настройки
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Общая статистика -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ stats.total_notifications }}</h4>
+                            <p class="card-text">Всего уведомлений</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-bell fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ stats.status_stats.get('delivered', 0) }}</h4>
+                            <p class="card-text">Доставлено</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-check-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ stats.status_stats.get('pending', 0) }}</h4>
+                            <p class="card-text">В ожидании</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-clock fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ stats.status_stats.get('failed', 0) }}</h4>
+                            <p class="card-text">Ошибки</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Статистика по каналам -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Статистика по каналам</h5>
+                </div>
+                <div class="card-body">
+                    {% if channel_stats %}
+                        {% for channel, data in channel_stats.items() %}
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="text-capitalize">{{ channel }}</span>
+                                <span class="badge badge-primary">{{ data.total }}</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: {{ data.delivery_rate }}%" 
+                                     aria-valuenow="{{ data.delivery_rate }}" 
+                                     aria-valuemin="0" aria-valuemax="100">
+                                    {{ data.delivery_rate }}%
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                Доставлено: {{ data.delivered }} | Ошибки: {{ data.failed }}
+                            </small>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">Нет данных по каналам</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Статистика по типам -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Статистика по типам</h5>
+                </div>
+                <div class="card-body">
+                    {% if type_stats %}
+                        {% for type, data in type_stats.items() %}
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="text-capitalize">{{ type.replace('_', ' ') }}</span>
+                                <span class="badge badge-info">{{ data.total }}</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar bg-info" role="progressbar" 
+                                     style="width: {{ data.read_rate }}%" 
+                                     aria-valuenow="{{ data.read_rate }}" 
+                                     aria-valuemin="0" aria-valuemax="100">
+                                    {{ data.read_rate }}%
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                Прочитано: {{ data.read }} | Доставлено: {{ data.delivered }}
+                            </small>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">Нет данных по типам</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Последние уведомления -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Последние уведомления</h5>
+                    <a href="{{ url_for('admin_notifications_list') }}" class="btn btn-sm btn-outline-primary">
+                        Показать все
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if recent_notifications %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Тип</th>
+                                        <th>Статус</th>
+                                        <th>Канал</th>
+                                        <th>Пользователь</th>
+                                        <th>Создано</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for notification in recent_notifications %}
+                                    <tr>
+                                        <td>{{ notification.id }}</td>
+                                        <td>
+                                            <span class="badge badge-secondary">
+                                                {{ notification.type.replace('_', ' ') }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if notification.status == 'delivered' %}
+                                                <span class="badge badge-success">{{ notification.status }}</span>
+                                            {% elif notification.status == 'pending' %}
+                                                <span class="badge badge-warning">{{ notification.status }}</span>
+                                            {% elif notification.status == 'failed' %}
+                                                <span class="badge badge-danger">{{ notification.status }}</span>
+                                            {% else %}
+                                                <span class="badge badge-info">{{ notification.status }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-outline-primary">
+                                                {{ notification.channel }}
+                                            </span>
+                                        </td>
+                                        <td>{{ notification.user_name }}</td>
+                                        <td>{{ notification.created_at.strftime('%d.%m.%Y %H:%M') if notification.created_at else '-' }}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-info" 
+                                                        onclick="viewNotification({{ notification.id }})"
+                                                        title="Просмотр">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                {% if notification.status == 'failed' %}
+                                                <button class="btn btn-outline-warning" 
+                                                        onclick="retryNotification({{ notification.id }})"
+                                                        title="Повторить">
+                                                    <i class="fas fa-redo"></i>
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">Нет уведомлений</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function viewNotification(id) {
+    // Заглушка для просмотра уведомления
+    alert('Просмотр уведомления #' + id);
+}
+
+function retryNotification(id) {
+    if (confirm('Повторить отправку уведомления #' + id + '?')) {
+        // Заглушка для повторной отправки
+        alert('Повторная отправка уведомления #' + id);
+    }
+}
+</script>
+{% endblock %}
+
