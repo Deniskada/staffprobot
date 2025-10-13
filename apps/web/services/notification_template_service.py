@@ -1,193 +1,323 @@
-"""Сервис для управления шаблонами уведомлений через веб-интерфейс."""
+"""Сервис для управления шаблонами уведомлений через веб-интерфейс.
+Iteration 25, Phase 3: CRUD для кастомных шаблонов
+"""
 
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
-from sqlalchemy import select, func, and_, desc
+import json
+from sqlalchemy import select, func, and_, desc, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from domain.entities.notification import NotificationType, NotificationChannel
+from domain.entities.notification_template import NotificationTemplate
 from shared.templates.notifications.base_templates import NotificationTemplateManager
 from core.logging.logger import logger
 
 
 class NotificationTemplateService:
-    """Сервис для управления шаблонами уведомлений через веб-интерфейс"""
+    """Сервис для управления шаблонами уведомлений через веб-интерфейс
+    
+    Логика работы:
+    1. Статические шаблоны из shared/templates/notifications/ - базовые
+    2. Кастомные шаблоны из БД (NotificationTemplate) - переопределяют статические
+    3. При рендеринге: сначала ищем кастомные, затем статические
+    """
 
     def __init__(self, session: AsyncSession):
         self.session = session
         self.template_manager = NotificationTemplateManager()
 
+    # ========================================================================
+    # МЕТОДЫ CRUD ДЛЯ КАСТОМНЫХ ШАБЛОНОВ
+    # ========================================================================
+
+    async def create_template(
+        self,
+        template_key: str,
+        notification_type: NotificationType,
+        channel: Optional[NotificationChannel],
+        name: str,
+        plain_template: str,
+        subject_template: Optional[str] = None,
+        html_template: Optional[str] = None,
+        description: Optional[str] = None,
+        variables: Optional[List[str]] = None,
+        created_by_user_id: Optional[int] = None
+    ) -> NotificationTemplate:
+        """Создание нового кастомного шаблона"""
+        try:
+            # Проверяем, нет ли уже такого ключа
+            existing = await self.get_template_by_key(template_key)
+            if existing:
+                raise ValueError(f"Шаблон с ключом '{template_key}' уже существует")
+
+            # Создаём новый шаблон
+            template = NotificationTemplate(
+                template_key=template_key,
+                type=notification_type,
+                channel=channel,
+                name=name,
+                description=description,
+                subject_template=subject_template,
+                plain_template=plain_template,
+                html_template=html_template,
+                variables=json.dumps(variables) if variables else None,
+                is_active=True,
+                is_default=False,
+                created_by=created_by_user_id,
+                version=1
+            )
+
+            self.session.add(template)
+            await self.session.commit()
+            await self.session.refresh(template)
+
+            logger.info(f"Created custom template: {template_key} (ID: {template.id})")
+            return template
+
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error creating template: {e}")
+            raise
+
+    async def update_template(
+        self,
+        template_id: int,
+        name: Optional[str] = None,
+        plain_template: Optional[str] = None,
+        subject_template: Optional[str] = None,
+        html_template: Optional[str] = None,
+        description: Optional[str] = None,
+        variables: Optional[List[str]] = None,
+        is_active: Optional[bool] = None,
+        updated_by_user_id: Optional[int] = None
+    ) -> NotificationTemplate:
+        """Обновление существующего шаблона"""
+        try:
+            # Получаем шаблон
+            template = await self.get_template_by_id(template_id)
+            if not template:
+                raise ValueError(f"Шаблон с ID {template_id} не найден")
+
+            # Обновляем поля
+            if name is not None:
+                template.name = name
+            if plain_template is not None:
+                template.plain_template = plain_template
+            if subject_template is not None:
+                template.subject_template = subject_template
+            if html_template is not None:
+                template.html_template = html_template
+            if description is not None:
+                template.description = description
+            if variables is not None:
+                template.variables = json.dumps(variables)
+            if is_active is not None:
+                template.is_active = is_active
+            if updated_by_user_id is not None:
+                template.updated_by = updated_by_user_id
+
+            # Увеличиваем версию
+            template.version += 1
+
+            await self.session.commit()
+            await self.session.refresh(template)
+
+            logger.info(f"Updated template ID {template_id} to version {template.version}")
+            return template
+
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error updating template: {e}")
+            raise
+
+    async def delete_template(self, template_id: int) -> None:
+        """Удаление шаблона (мягкое удаление - деактивация)"""
+        try:
+            template = await self.get_template_by_id(template_id)
+            if not template:
+                raise ValueError(f"Шаблон с ID {template_id} не найден")
+
+            # Не удаляем дефолтные шаблоны
+            if template.is_default:
+                raise ValueError("Нельзя удалить дефолтный шаблон")
+
+            # Деактивируем вместо удаления
+            template.is_active = False
+            await self.session.commit()
+
+            logger.info(f"Deactivated template ID {template_id}")
+
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error deleting template: {e}")
+            raise
+
+    async def hard_delete_template(self, template_id: int) -> None:
+        """Жёсткое удаление шаблона из БД"""
+        try:
+            template = await self.get_template_by_id(template_id)
+            if not template:
+                raise ValueError(f"Шаблон с ID {template_id} не найден")
+
+            # Не удаляем дефолтные шаблоны
+            if template.is_default:
+                raise ValueError("Нельзя удалить дефолтный шаблон")
+
+            await self.session.delete(template)
+            await self.session.commit()
+
+            logger.info(f"Hard deleted template ID {template_id}")
+
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error hard deleting template: {e}")
+            raise
+
+    # ========================================================================
+    # МЕТОДЫ ПОЛУЧЕНИЯ ШАБЛОНОВ
+    # ========================================================================
+
+    async def get_template_by_id(self, template_id: int) -> Optional[NotificationTemplate]:
+        """Получение шаблона по ID"""
+        try:
+            query = select(NotificationTemplate).where(NotificationTemplate.id == template_id)
+            result = await self.session.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting template by ID: {e}")
+            return None
+
+    async def get_template_by_key(self, template_key: str) -> Optional[NotificationTemplate]:
+        """Получение шаблона по ключу"""
+        try:
+            query = select(NotificationTemplate).where(NotificationTemplate.template_key == template_key)
+            result = await self.session.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting template by key: {e}")
+            return None
+
     async def get_templates_paginated(
         self,
         page: int = 1,
         per_page: int = 20,
-        type_filter: Optional[str] = None
-    ) -> Tuple[List[Dict[str, Any]], int]:
-        """Получение шаблонов с пагинацией и фильтрами"""
+        type_filter: Optional[str] = None,
+        channel_filter: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        search_query: Optional[str] = None
+    ) -> Tuple[List[NotificationTemplate], int]:
+        """Получение кастомных шаблонов с пагинацией и фильтрами"""
         try:
-            # Получаем все доступные шаблоны
-            all_templates = self.template_manager.ALL_TEMPLATES
-            
-            # Применяем фильтр по типу
+            # Базовый запрос
+            query = select(NotificationTemplate)
+
+            # Применяем фильтры
+            filters = []
+
             if type_filter:
                 try:
                     notification_type = NotificationType(type_filter)
-                    filtered_templates = {notification_type: all_templates.get(notification_type)}
-                    filtered_templates = {k: v for k, v in filtered_templates.items() if v is not None}
+                    filters.append(NotificationTemplate.type == notification_type)
                 except ValueError:
-                    filtered_templates = {}
-            else:
-                filtered_templates = all_templates
-            
-            # Преобразуем в список для пагинации
-            templates_list = []
-            for notification_type, template_data in filtered_templates.items():
-                templates_list.append({
-                    "id": notification_type.value,
-                    "type": notification_type.value,
-                    "title": template_data.get("title", ""),
-                    "plain_content": template_data.get("plain", ""),
-                    "html_content": template_data.get("html", ""),
-                    "variables": self.template_manager.get_template_variables(notification_type),
-                    "created_at": datetime.now(),  # Заглушка, так как шаблоны статические
-                    "updated_at": datetime.now(),
-                    "is_active": True,
-                    "usage_count": 0  # Заглушка
-                })
-            
-            # Сортируем по типу
-            templates_list.sort(key=lambda x: x["type"])
-            
-            # Применяем пагинацию
-            total_count = len(templates_list)
-            start_index = (page - 1) * per_page
-            end_index = start_index + per_page
-            paginated_templates = templates_list[start_index:end_index]
-            
-            return paginated_templates, total_count
-            
+                    pass
+
+            if channel_filter:
+                try:
+                    channel = NotificationChannel(channel_filter)
+                    filters.append(NotificationTemplate.channel == channel)
+                except ValueError:
+                    pass
+
+            if is_active is not None:
+                filters.append(NotificationTemplate.is_active == is_active)
+
+            if search_query:
+                filters.append(
+                    NotificationTemplate.name.ilike(f"%{search_query}%") |
+                    NotificationTemplate.description.ilike(f"%{search_query}%") |
+                    NotificationTemplate.template_key.ilike(f"%{search_query}%")
+                )
+
+            if filters:
+                query = query.where(and_(*filters))
+
+            # Подсчитываем общее количество
+            count_query = select(func.count()).select_from(query.subquery())
+            total_count = await self.session.scalar(count_query)
+
+            # Применяем сортировку и пагинацию
+            query = query.order_by(desc(NotificationTemplate.created_at))
+            query = query.offset((page - 1) * per_page).limit(per_page)
+
+            # Выполняем запрос
+            result = await self.session.execute(query)
+            templates = result.scalars().all()
+
+            return list(templates), total_count or 0
+
         except Exception as e:
             logger.error(f"Error getting paginated templates: {e}")
             return [], 0
 
-    async def get_template(self, template_id: str) -> Optional[Dict[str, Any]]:
-        """Получение шаблона по ID"""
+    async def get_all_templates_merged(
+        self,
+        notification_type: Optional[NotificationType] = None
+    ) -> Dict[str, Any]:
+        """Получение всех шаблонов (кастомные + статические), кастомные имеют приоритет"""
         try:
-            # Пытаемся найти шаблон по типу
-            try:
-                notification_type = NotificationType(template_id)
-                template_data = self.template_manager.ALL_TEMPLATES.get(notification_type)
-                
-                if template_data:
-                    return {
-                        "id": notification_type.value,
-                        "type": notification_type.value,
+            # Получаем статические шаблоны
+            static_templates = {}
+            for ntype, template_data in self.template_manager.ALL_TEMPLATES.items():
+                if notification_type is None or ntype == notification_type:
+                    static_templates[ntype.value] = {
+                        "source": "static",
+                        "type": ntype.value,
                         "title": template_data.get("title", ""),
-                        "plain_content": template_data.get("plain", ""),
-                        "html_content": template_data.get("html", ""),
-                        "variables": self.template_manager.get_template_variables(notification_type),
-                        "created_at": datetime.now(),
-                        "updated_at": datetime.now(),
-                        "is_active": True,
-                        "usage_count": 0
+                        "plain": template_data.get("plain", ""),
+                        "html": template_data.get("html", ""),
+                        "variables": self.template_manager.get_template_variables(ntype)
                     }
-            except ValueError:
-                pass
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error getting template: {e}")
-            return None
 
-    async def create_template(self, template_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Создание нового шаблона (заглушка для статических шаблонов)"""
-        try:
-            # Поскольку шаблоны статические, возвращаем ошибку
-            return {
-                "status": "error",
-                "message": "Создание новых шаблонов пока не поддерживается. Шаблоны являются статическими."
-            }
-        except Exception as e:
-            logger.error(f"Error creating template: {e}")
-            return {
-                "status": "error",
-                "message": f"Ошибка создания шаблона: {str(e)}"
-            }
+            # Получаем кастомные шаблоны
+            query = select(NotificationTemplate).where(NotificationTemplate.is_active == True)
+            if notification_type:
+                query = query.where(NotificationTemplate.type == notification_type)
 
-    async def update_template(self, template_id: str, template_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Обновление шаблона (заглушка для статических шаблонов)"""
-        try:
-            # Поскольку шаблоны статические, возвращаем ошибку
-            return {
-                "status": "error",
-                "message": "Редактирование шаблонов пока не поддерживается. Шаблоны являются статическими."
-            }
-        except Exception as e:
-            logger.error(f"Error updating template: {e}")
-            return {
-                "status": "error",
-                "message": f"Ошибка обновления шаблона: {str(e)}"
-            }
+            result = await self.session.execute(query)
+            custom_templates = result.scalars().all()
 
-    async def delete_template(self, template_id: str) -> Dict[str, Any]:
-        """Удаление шаблона (заглушка для статических шаблонов)"""
-        try:
-            # Поскольку шаблоны статические, возвращаем ошибку
-            return {
-                "status": "error",
-                "message": "Удаление шаблонов пока не поддерживается. Шаблоны являются статическими."
-            }
-        except Exception as e:
-            logger.error(f"Error deleting template: {e}")
-            return {
-                "status": "error",
-                "message": f"Ошибка удаления шаблона: {str(e)}"
-            }
-
-    async def test_template(self, template_id: str, test_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Тестирование шаблона с тестовыми данными"""
-        try:
-            # Получаем шаблон
-            template = await self.get_template(template_id)
-            if not template:
-                return {
-                    "status": "error",
-                    "message": "Шаблон не найден"
+            # Переопределяем статические кастомными
+            for template in custom_templates:
+                key = template.type.value
+                static_templates[key] = {
+                    "source": "custom",
+                    "id": template.id,
+                    "template_key": template.template_key,
+                    "type": template.type.value,
+                    "channel": template.channel.value if template.channel else None,
+                    "name": template.name,
+                    "description": template.description,
+                    "subject": template.subject_template,
+                    "plain": template.plain_template,
+                    "html": template.html_template,
+                    "variables": json.loads(template.variables) if template.variables else [],
+                    "is_active": template.is_active,
+                    "version": template.version,
+                    "created_at": template.created_at.isoformat() if template.created_at else None,
+                    "updated_at": template.updated_at.isoformat() if template.updated_at else None
                 }
-            
-            # Пытаемся найти тип уведомления
-            try:
-                notification_type = NotificationType(template_id)
-                channel = NotificationChannel.EMAIL  # По умолчанию используем EMAIL для тестирования
-                
-                # Рендерим шаблон с тестовыми данными
-                rendered = self.template_manager.render(notification_type, channel, test_data)
-                
-                return {
-                    "status": "success",
-                    "message": "Шаблон успешно протестирован",
-                    "result": {
-                        "title": rendered.get("title", ""),
-                        "message": rendered.get("message", ""),
-                        "variables_used": list(test_data.keys()),
-                        "variables_missing": self._get_missing_variables(notification_type, test_data)
-                    }
-                }
-                
-            except ValueError:
-                return {
-                    "status": "error",
-                    "message": "Неверный тип уведомления"
-                }
-                
+
+            return static_templates
+
         except Exception as e:
-            logger.error(f"Error testing template: {e}")
-            return {
-                "status": "error",
-                "message": f"Ошибка тестирования шаблона: {str(e)}"
-            }
+            logger.error(f"Error getting merged templates: {e}")
+            return {}
+
+    # ========================================================================
+    # ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+    # ========================================================================
 
     async def get_available_types(self) -> List[Dict[str, str]]:
         """Получение доступных типов уведомлений"""
@@ -217,7 +347,43 @@ class NotificationTemplateService:
             logger.error(f"Error getting available channels: {e}")
             return []
 
-    def _get_missing_variables(self, notification_type: NotificationType, provided_variables: Dict[str, Any]) -> List[str]:
+    async def get_template_statistics(self) -> Dict[str, Any]:
+        """Получение статистики по шаблонам"""
+        try:
+            # Статические шаблоны
+            static_count = len(self.template_manager.ALL_TEMPLATES)
+
+            # Кастомные шаблоны
+            custom_count_query = select(func.count()).select_from(NotificationTemplate)
+            custom_count = await self.session.scalar(custom_count_query) or 0
+
+            # Активные кастомные
+            active_custom_query = select(func.count()).select_from(NotificationTemplate).where(
+                NotificationTemplate.is_active == True
+            )
+            active_custom_count = await self.session.scalar(active_custom_query) or 0
+
+            return {
+                "total_static": static_count,
+                "total_custom": custom_count,
+                "active_custom": active_custom_count,
+                "last_updated": datetime.now()
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting template statistics: {e}")
+            return {
+                "total_static": 0,
+                "total_custom": 0,
+                "active_custom": 0,
+                "last_updated": datetime.now()
+            }
+
+    def _get_missing_variables(
+        self,
+        notification_type: NotificationType,
+        provided_variables: Dict[str, Any]
+    ) -> List[str]:
         """Получение списка недостающих переменных"""
         try:
             required_variables = self.template_manager.get_template_variables(notification_type)
@@ -227,89 +393,3 @@ class NotificationTemplateService:
         except Exception as e:
             logger.error(f"Error getting missing variables: {e}")
             return []
-
-    async def get_template_statistics(self) -> Dict[str, Any]:
-        """Получение статистики по шаблонам"""
-        try:
-            all_templates = self.template_manager.ALL_TEMPLATES
-            
-            # Подсчитываем статистику
-            total_templates = len(all_templates)
-            
-            # Группируем по категориям
-            categories = {
-                "shift": 0,
-                "contract": 0,
-                "review": 0,
-                "payment": 0,
-                "system": 0
-            }
-            
-            for notification_type in all_templates.keys():
-                type_name = notification_type.value.lower()
-                if "shift" in type_name:
-                    categories["shift"] += 1
-                elif "contract" in type_name:
-                    categories["contract"] += 1
-                elif "review" in type_name or "appeal" in type_name:
-                    categories["review"] += 1
-                elif "payment" in type_name or "subscription" in type_name or "usage" in type_name:
-                    categories["payment"] += 1
-                else:
-                    categories["system"] += 1
-            
-            return {
-                "total_templates": total_templates,
-                "categories": categories,
-                "last_updated": datetime.now()
-            }
-            
-        except Exception as e:
-            logger.error(f"Error getting template statistics: {e}")
-            return {
-                "total_templates": 0,
-                "categories": {},
-                "last_updated": datetime.now()
-            }
-
-    async def validate_template_content(self, template_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Валидация содержимого шаблона"""
-        try:
-            errors = []
-            warnings = []
-            
-            # Проверяем обязательные поля
-            if not template_data.get("title"):
-                errors.append("Заголовок шаблона обязателен")
-            
-            if not template_data.get("plain_content") and not template_data.get("html_content"):
-                errors.append("Необходимо указать содержимое шаблона (plain или html)")
-            
-            # Проверяем длину заголовка
-            title = template_data.get("title", "")
-            if len(title) > 200:
-                warnings.append("Заголовок слишком длинный (более 200 символов)")
-            
-            # Проверяем длину содержимого
-            plain_content = template_data.get("plain_content", "")
-            if len(plain_content) > 2000:
-                warnings.append("Текстовое содержимое слишком длинное (более 2000 символов)")
-            
-            html_content = template_data.get("html_content", "")
-            if len(html_content) > 5000:
-                warnings.append("HTML содержимое слишком длинное (более 5000 символов)")
-            
-            return {
-                "valid": len(errors) == 0,
-                "errors": errors,
-                "warnings": warnings
-            }
-            
-        except Exception as e:
-            logger.error(f"Error validating template content: {e}")
-            return {
-                "valid": False,
-                "errors": [f"Ошибка валидации: {str(e)}"],
-                "warnings": []
-            }
-

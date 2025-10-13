@@ -34,6 +34,15 @@
         cursor: pointer;
     }
     
+    .template-preview {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        min-height: 100px;
+    }
+    
     .helper-text {
         font-size: 0.875rem;
         color: #6c757d;
@@ -51,7 +60,7 @@
                     <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard') }}">Админ-панель</a></li>
                     <li class="breadcrumb-item"><a href="{{ url_for('admin_notifications_dashboard') }}">Уведомления</a></li>
                     <li class="breadcrumb-item"><a href="{{ url_for('admin_notifications_templates_list') }}">Шаблоны</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Редактирование</li>
+                    <li class="breadcrumb-item active" aria-current="page">Создание</li>
                 </ol>
             </nav>
         </div>
@@ -59,34 +68,11 @@
 
     <div class="row mb-3">
         <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <h2><i class="fas fa-file-alt"></i> {{ title }}</h2>
-                <div class="btn-group">
-                    {% if template.is_active %}
-                    <button type="button" class="btn btn-outline-warning" onclick="toggleTemplate(false)">
-                        <i class="fas fa-pause"></i> Деактивировать
-                    </button>
-                    {% else %}
-                    <button type="button" class="btn btn-outline-success" onclick="toggleTemplate(true)">
-                        <i class="fas fa-play"></i> Активировать
-                    </button>
-                    {% endif %}
-                    
-                    <button type="button" class="btn btn-outline-danger" onclick="deleteTemplate()">
-                        <i class="fas fa-trash"></i> Удалить
-                    </button>
-                </div>
-            </div>
+            <h2><i class="fas fa-file-alt"></i> {{ title }}</h2>
         </div>
     </div>
 
-    {% if is_readonly %}
-    <div class="alert alert-warning">
-        <i class="fas fa-exclamation-triangle"></i> Это дефолтный шаблон, доступен только для просмотра.
-    </div>
-    {% endif %}
-
-    <form id="editTemplateForm" method="POST">
+    <form id="createTemplateForm" method="POST">
         <div class="row">
             <!-- Основная информация -->
             <div class="col-md-8">
@@ -94,40 +80,46 @@
                     <h5><i class="fas fa-info-circle"></i> Основная информация</h5>
                     
                     <div class="mb-3">
-                        <label class="form-label">Ключ шаблона</label>
-                        <input type="text" class="form-control" value="{{ template.template_key }}" readonly>
-                        <div class="helper-text">Ключ нельзя изменить после создания</div>
+                        <label for="template_key" class="form-label">Ключ шаблона *</label>
+                        <input type="text" class="form-control" id="template_key" name="template_key" required
+                               pattern="[a-z_]+" placeholder="shift_reminder_custom">
+                        <div class="helper-text">Уникальный ключ на английском (строчные буквы и подчёркивание)</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="name" class="form-label">Название *</label>
-                        <input type="text" class="form-control" id="name" name="name" 
-                               value="{{ template.name }}" required
-                               {% if is_readonly %}readonly{% endif %}>
+                        <input type="text" class="form-control" id="name" name="name" required
+                               placeholder="Кастомное напоминание о смене">
+                        <div class="helper-text">Понятное название для отображения в интерфейсе</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="description" class="form-label">Описание</label>
                         <textarea class="form-control" id="description" name="description" rows="2"
-                                  {% if is_readonly %}readonly{% endif %}>{{ template.description or '' }}</textarea>
+                                  placeholder="Описание назначения шаблона"></textarea>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Тип уведомления</label>
-                            <input type="text" class="form-control" value="{{ template.type.value }}" readonly>
+                            <label for="type" class="form-label">Тип уведомления *</label>
+                            <select class="form-select" id="type" name="type" required>
+                                <option value="">-- Выберите тип --</option>
+                                {% for type in available_types %}
+                                <option value="{{ type.value }}">{{ type.label }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
 
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Канал доставки</label>
-                            <input type="text" class="form-control" 
-                                   value="{{ template.channel.value if template.channel else 'Все каналы' }}" readonly>
+                            <label for="channel" class="form-label">Канал доставки</label>
+                            <select class="form-select" id="channel" name="channel">
+                                <option value="">-- Все каналы --</option>
+                                {% for channel in available_channels %}
+                                <option value="{{ channel.value }}">{{ channel.label }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="helper-text">Если не указан - шаблон для всех каналов</div>
                         </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Версия</label>
-                        <input type="text" class="form-control" value="{{ template.version }}" readonly>
                     </div>
                 </div>
 
@@ -137,24 +129,21 @@
                     <div class="mb-3">
                         <label for="subject_template" class="form-label">Заголовок (Subject)</label>
                         <input type="text" class="form-control" id="subject_template" name="subject_template"
-                               value="{{ template.subject_template or '' }}"
-                               {% if is_readonly %}readonly{% endif %}>
+                               placeholder="Напоминание о смене: $shift_date">
                         <div class="helper-text">Используйте $variable для подстановки переменных</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="plain_template" class="form-label">Текстовый шаблон (Plain Text) *</label>
-                        <textarea class="form-control font-monospace" id="plain_template" name="plain_template" 
-                                  rows="8" required
-                                  {% if is_readonly %}readonly{% endif %}>{{ template.plain_template }}</textarea>
+                        <textarea class="form-control font-monospace" id="plain_template" name="plain_template" rows="8" required
+                                  placeholder="Здравствуйте, $user_name!&#10;&#10;Напоминаем о вашей смене:&#10;Дата: $shift_date&#10;Время: $shift_time&#10;Объект: $object_name"></textarea>
                         <div class="helper-text">Обязательное поле. Используйте $variable для подстановки</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="html_template" class="form-label">HTML шаблон</label>
-                        <textarea class="form-control font-monospace" id="html_template" name="html_template" 
-                                  rows="10"
-                                  {% if is_readonly %}readonly{% endif %}>{{ template.html_template or '' }}</textarea>
+                        <textarea class="form-control font-monospace" id="html_template" name="html_template" rows="10"
+                                  placeholder="<h2>Напоминание о смене</h2>&#10;<p>Здравствуйте, <strong>$user_name</strong>!</p>"></textarea>
                         <div class="helper-text">Опционально. Для Email уведомлений с форматированием</div>
                     </div>
                 </div>
@@ -162,7 +151,6 @@
                 <div class="form-section">
                     <h5><i class="fas fa-tags"></i> Переменные шаблона</h5>
                     
-                    {% if not is_readonly %}
                     <div class="mb-3">
                         <div class="input-group">
                             <input type="text" class="form-control" id="new_variable" 
@@ -171,14 +159,14 @@
                                 <i class="fas fa-plus"></i> Добавить переменную
                             </button>
                         </div>
+                        <div class="helper-text">Список доступных переменных для подстановки</div>
                     </div>
-                    {% endif %}
 
                     <div id="variables-container" class="mb-3">
                         <!-- Переменные будут добавлены сюда -->
                     </div>
 
-                    <input type="hidden" id="variables" name="variables" value='{{ variables | tojson }}'>
+                    <input type="hidden" id="variables" name="variables" value="[]">
                 </div>
             </div>
 
@@ -186,37 +174,27 @@
             <div class="col-md-4">
                 <div class="card mb-3">
                     <div class="card-header bg-primary text-white">
-                        <h6 class="mb-0"><i class="fas fa-info-circle"></i> Информация</h6>
+                        <h6 class="mb-0"><i class="fas fa-lightbulb"></i> Подсказка</h6>
                     </div>
                     <div class="card-body">
-                        <dl class="row mb-0">
-                            <dt class="col-sm-5">ID:</dt>
-                            <dd class="col-sm-7">{{ template.id }}</dd>
-
-                            <dt class="col-sm-5">Статус:</dt>
-                            <dd class="col-sm-7">
-                                {% if template.is_active %}
-                                <span class="badge bg-success">Активен</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Неактивен</span>
-                                {% endif %}
-                            </dd>
-
-                            <dt class="col-sm-5">Дефолтный:</dt>
-                            <dd class="col-sm-7">
-                                {% if template.is_default %}
-                                <span class="badge bg-info">Да</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Нет</span>
-                                {% endif %}
-                            </dd>
-
-                            <dt class="col-sm-5">Создан:</dt>
-                            <dd class="col-sm-7">{{ template.created_at.strftime('%d.%m.%Y %H:%M') if template.created_at else '-' }}</dd>
-
-                            <dt class="col-sm-5">Обновлён:</dt>
-                            <dd class="col-sm-7">{{ template.updated_at.strftime('%d.%m.%Y %H:%M') if template.updated_at else '-' }}</dd>
-                        </dl>
+                        <p class="mb-2"><strong>Использование переменных:</strong></p>
+                        <ul class="mb-0">
+                            <li>Формат: <code>$variable_name</code></li>
+                            <li>Пример: <code>$user_name</code></li>
+                            <li>Регистр: только строчные</li>
+                            <li>Символы: буквы и _</li>
+                        </ul>
+                        
+                        <hr>
+                        
+                        <p class="mb-2"><strong>Типичные переменные:</strong></p>
+                        <ul class="mb-0 small">
+                            <li><code>$user_name</code> - имя пользователя</li>
+                            <li><code>$shift_date</code> - дата смены</li>
+                            <li><code>$shift_time</code> - время смены</li>
+                            <li><code>$object_name</code> - название объекта</li>
+                            <li><code>$amount</code> - сумма платежа</li>
+                        </ul>
                     </div>
                 </div>
 
@@ -225,12 +203,13 @@
                         <h6 class="mb-0"><i class="fas fa-question-circle"></i> Справка</h6>
                     </div>
                     <div class="card-body">
-                        <p class="small mb-2"><strong>Использование переменных:</strong></p>
-                        <ul class="mb-0 small">
-                            <li>Формат: <code>$variable_name</code></li>
-                            <li>В тексте: <code>Привет, $user_name!</code></li>
-                            <li>Только строчные буквы и _</li>
-                        </ul>
+                        <p class="small mb-2"><strong>Кастомные vs статические:</strong></p>
+                        <p class="small">Кастомные шаблоны переопределяют статические шаблоны из кода.</p>
+                        
+                        <hr>
+                        
+                        <p class="small mb-2"><strong>Версионирование:</strong></p>
+                        <p class="small">При каждом изменении создаётся новая версия шаблона.</p>
                     </div>
                 </div>
             </div>
@@ -240,13 +219,11 @@
             <div class="col-12">
                 <div class="d-flex justify-content-between align-items-center">
                     <a href="{{ url_for('admin_notifications_templates_list') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-arrow-left"></i> Назад к списку
+                        <i class="fas fa-arrow-left"></i> Отмена
                     </a>
-                    {% if not is_readonly %}
                     <button type="submit" class="btn btn-primary btn-lg">
-                        <i class="fas fa-save"></i> Сохранить изменения
+                        <i class="fas fa-save"></i> Создать шаблон
                     </button>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -259,8 +236,7 @@
 
 {% block extra_js %}
 <script>
-const templateId = {{ template.id }};
-let variables = {{ variables | tojson }};
+let variables = [];
 
 function addVariable() {
     const input = document.getElementById('new_variable');
@@ -294,72 +270,25 @@ function removeVariable(variable) {
 function updateVariablesDisplay() {
     const container = document.getElementById('variables-container');
     const hiddenInput = document.getElementById('variables');
-    const isReadonly = {{ 'true' if is_readonly else 'false' }};
     
     if (variables.length === 0) {
         container.innerHTML = '<div class="text-muted">Переменные не добавлены</div>';
     } else {
         container.innerHTML = variables.map(v => 
-            `<span class="variable-tag">$${v}${isReadonly ? '' : `<span class="remove-var" onclick="removeVariable('${v}')">&times;</span>`}</span>`
+            `<span class="variable-tag">$${v}<span class="remove-var" onclick="removeVariable('${v}')">&times;</span></span>`
         ).join('');
     }
     
     hiddenInput.value = JSON.stringify(variables);
 }
 
-async function toggleTemplate(activate) {
-    try {
-        const response = await fetch(`/admin/notifications/api/templates/toggle/${templateId}`, {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showToast(data.message, 'success');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast(data.detail || 'Ошибка изменения статуса', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Ошибка отправки запроса', 'error');
-    }
-}
-
-async function deleteTemplate() {
-    if (!confirm('Вы уверены, что хотите удалить этот шаблон? Он будет деактивирован, но останется в базе данных.')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/admin/notifications/api/templates/delete/${templateId}`, {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showToast(data.message, 'success');
-            setTimeout(() => {
-                window.location.href = '/admin/notifications/templates';
-            }, 1500);
-        } else {
-            showToast(data.detail || 'Ошибка удаления', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Ошибка отправки запроса', 'error');
-    }
-}
-
-document.getElementById('editTemplateForm').addEventListener('submit', async function(e) {
+document.getElementById('createTemplateForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
     const formData = new FormData(this);
     
     try {
-        const response = await fetch(`/admin/notifications/api/templates/edit/${templateId}`, {
+        const response = await fetch('/admin/notifications/api/templates/create', {
             method: 'POST',
             body: formData
         });
@@ -367,10 +296,12 @@ document.getElementById('editTemplateForm').addEventListener('submit', async fun
         const data = await response.json();
         
         if (response.ok) {
-            showToast(data.message || 'Шаблон успешно обновлён', 'success');
-            setTimeout(() => location.reload(), 1500);
+            showToast(data.message || 'Шаблон успешно создан', 'success');
+            setTimeout(() => {
+                window.location.href = '/admin/notifications/templates';
+            }, 1500);
         } else {
-            showToast(data.detail || 'Ошибка обновления шаблона', 'error');
+            showToast(data.detail || 'Ошибка создания шаблона', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -410,14 +341,12 @@ function showToast(message, type = 'info') {
 updateVariablesDisplay();
 
 // Добавление переменной по Enter
-const newVarInput = document.getElementById('new_variable');
-if (newVarInput) {
-    newVarInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            addVariable();
-        }
-    });
-}
+document.getElementById('new_variable').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addVariable();
+    }
+});
 </script>
 {% endblock %}
+
