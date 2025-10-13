@@ -5,6 +5,7 @@ from decimal import Decimal
 from datetime import datetime, timezone
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload, joinedload
 
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.shift_cancellation import ShiftCancellation
@@ -77,8 +78,10 @@ class ShiftCancellationService:
             time_delta = shift.planned_start - now_utc
             hours_before_shift = Decimal(str(round(time_delta.total_seconds() / 3600, 2)))
             
-            # Получаем объект для настроек штрафов
-            object_query = select(Object).where(Object.id == shift.object_id)
+            # Получаем объект для настроек штрафов (с eager loading org_unit и цепочки parent'ов)
+            object_query = select(Object).where(Object.id == shift.object_id).options(
+                joinedload(Object.org_unit).joinedload('parent').joinedload('parent').joinedload('parent').joinedload('parent')
+            )
             object_result = await self.session.execute(object_query)
             obj = object_result.scalar_one_or_none()
             
