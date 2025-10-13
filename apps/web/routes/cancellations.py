@@ -1,0 +1,298 @@
+"""Роуты для работы с отменой смен (владелец/управляющий)."""
+
+from fastapi import APIRouter, Request, Depends, HTTPException, Form
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_
+from typing import Optional
+
+from apps.web.dependencies import get_current_user_dependency, require_owner_or_superadmin, require_manager_or_owner, get_db_session
+from apps.web.jinja import templates
+from domain.entities.shift_schedule import ShiftSchedule
+from domain.entities.shift_cancellation import ShiftCancellation
+from domain.entities.user import User
+from domain.entities.object import Object
+from shared.services.shift_cancellation_service import ShiftCancellationService
+from core.logging.logger import logger
+
+router = APIRouter()
+
+
+@router.post("/owner/shifts/schedule/{schedule_id}/cancel")
+async def owner_cancel_shift(
+    request: Request,
+    schedule_id: int,
+    reason: str = Form(...),
+    notes: Optional[str] = Form(None),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Отмена запланированной смены владельцем."""
+    try:
+        # Получаем пользователя
+        user_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            return JSONResponse(
+                {"success": False, "message": "Пользователь не найден"},
+                status_code=404
+            )
+        
+        # Проверяем, что смена существует и принадлежит владельцу
+        shift_query = select(ShiftSchedule).where(ShiftSchedule.id == schedule_id)
+        shift_result = await db.execute(shift_query)
+        shift = shift_result.scalar_one_or_none()
+        
+        if not shift:
+            return JSONResponse(
+                {"success": False, "message": "Смена не найдена"},
+                status_code=404
+            )
+        
+        # Проверяем владение объектом
+        object_query = select(Object).where(
+            and_(
+                Object.id == shift.object_id,
+                Object.owner_id == user.id
+            )
+        )
+        object_result = await db.execute(object_query)
+        obj = object_result.scalar_one_or_none()
+        
+        if not obj:
+            return JSONResponse(
+                {"success": False, "message": "Доступ запрещен"},
+                status_code=403
+            )
+        
+        # Используем сервис для отмены
+        cancellation_service = ShiftCancellationService(db)
+        result = await cancellation_service.cancel_shift(
+            shift_schedule_id=schedule_id,
+            cancelled_by_user_id=user.id,
+            cancelled_by_type='owner',
+            cancellation_reason=reason,
+            reason_notes=notes
+        )
+        
+        if result['success']:
+            # TODO: Отправить уведомление сотруднику
+            return JSONResponse({
+                "success": True,
+                "message": "Смена успешно отменена"
+            })
+        else:
+            return JSONResponse(
+                {"success": False, "message": result['message']},
+                status_code=400
+            )
+    
+    except Exception as e:
+        logger.error(f"Error cancelling shift {schedule_id}: {e}")
+        return JSONResponse(
+            {"success": False, "message": "Ошибка отмены смены"},
+            status_code=500
+        )
+
+
+@router.post("/manager/shifts/schedule/{schedule_id}/cancel")
+async def manager_cancel_shift(
+    request: Request,
+    schedule_id: int,
+    reason: str = Form(...),
+    notes: Optional[str] = Form(None),
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Отмена запланированной смены управляющим."""
+    try:
+        # Получаем пользователя
+        user_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            return JSONResponse(
+                {"success": False, "message": "Пользователь не найден"},
+                status_code=404
+            )
+        
+        # Проверяем, что смена существует
+        shift_query = select(ShiftSchedule).where(ShiftSchedule.id == schedule_id)
+        shift_result = await db.execute(shift_query)
+        shift = shift_result.scalar_one_or_none()
+        
+        if not shift:
+            return JSONResponse(
+                {"success": False, "message": "Смена не найдена"},
+                status_code=404
+            )
+        
+        # Проверяем доступ управляющего к объекту
+        from shared.services.manager_permission_service import ManagerPermissionService
+        permission_service = ManagerPermissionService(db)
+        
+        has_access = await permission_service.has_access_to_object(user.id, shift.object_id)
+        
+        if not has_access:
+            return JSONResponse(
+                {"success": False, "message": "Доступ запрещен"},
+                status_code=403
+            )
+        
+        # Используем сервис для отмены
+        cancellation_service = ShiftCancellationService(db)
+        result = await cancellation_service.cancel_shift(
+            shift_schedule_id=schedule_id,
+            cancelled_by_user_id=user.id,
+            cancelled_by_type='manager',
+            cancellation_reason=reason,
+            reason_notes=notes
+        )
+        
+        if result['success']:
+            # TODO: Отправить уведомление сотруднику
+            return JSONResponse({
+                "success": True,
+                "message": "Смена успешно отменена"
+            })
+        else:
+            return JSONResponse(
+                {"success": False, "message": result['message']},
+                status_code=400
+            )
+    
+    except Exception as e:
+        logger.error(f"Error cancelling shift {schedule_id}: {e}")
+        return JSONResponse(
+            {"success": False, "message": "Ошибка отмены смены"},
+            status_code=500
+        )
+
+
+@router.get("/owner/cancellations", response_class=HTMLResponse)
+async def owner_cancellations_list(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница модерации отмен смен (только с уважительными причинами)."""
+    try:
+        # Получаем пользователя
+        user_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        # Получаем отмены с уважительными причинами (требующие верификации)
+        from sqlalchemy.orm import selectinload
+        
+        cancellations_query = (
+            select(ShiftCancellation)
+            .options(
+                selectinload(ShiftCancellation.shift_schedule),
+                selectinload(ShiftCancellation.employee),
+                selectinload(ShiftCancellation.object),
+                selectinload(ShiftCancellation.verified_by)
+            )
+            .join(ShiftSchedule, ShiftCancellation.shift_schedule_id == ShiftSchedule.id)
+            .join(Object, ShiftCancellation.object_id == Object.id)
+            .where(
+                and_(
+                    Object.owner_id == user.id,
+                    ShiftCancellation.cancellation_reason.in_(['medical_cert', 'emergency_cert', 'police_cert'])
+                )
+            )
+            .order_by(ShiftCancellation.created_at.desc())
+        )
+        
+        cancellations_result = await db.execute(cancellations_query)
+        cancellations = cancellations_result.scalars().all()
+        
+        return templates.TemplateResponse("owner/cancellations/list.html", {
+            "request": request,
+            "current_user": current_user,
+            "cancellations": cancellations
+        })
+    
+    except Exception as e:
+        logger.error(f"Error loading cancellations list: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки списка отмен")
+
+
+@router.post("/owner/cancellations/{cancellation_id}/verify")
+async def owner_verify_cancellation(
+    request: Request,
+    cancellation_id: int,
+    is_approved: bool = Form(...),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Верификация документа для уважительной причины отмены."""
+    try:
+        # Получаем пользователя
+        user_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            return JSONResponse(
+                {"success": False, "message": "Пользователь не найден"},
+                status_code=404
+            )
+        
+        # Проверяем владение объектом отмены
+        cancellation_query = (
+            select(ShiftCancellation)
+            .join(Object, ShiftCancellation.object_id == Object.id)
+            .where(
+                and_(
+                    ShiftCancellation.id == cancellation_id,
+                    Object.owner_id == user.id
+                )
+            )
+        )
+        cancellation_result = await db.execute(cancellation_query)
+        cancellation = cancellation_result.scalar_one_or_none()
+        
+        if not cancellation:
+            return JSONResponse(
+                {"success": False, "message": "Отмена не найдена или доступ запрещен"},
+                status_code=404
+            )
+        
+        # Используем сервис для верификации
+        cancellation_service = ShiftCancellationService(db)
+        result = await cancellation_service.verify_cancellation_document(
+            cancellation_id=cancellation_id,
+            verified_by_user_id=user.id,
+            is_approved=is_approved
+        )
+        
+        if result['success']:
+            # TODO: Отправить уведомление сотруднику о результате верификации
+            return JSONResponse({
+                "success": True,
+                "message": f"Справка {'подтверждена' if is_approved else 'отклонена'}"
+            })
+        else:
+            return JSONResponse(
+                {"success": False, "message": result['message']},
+                status_code=400
+            )
+    
+    except Exception as e:
+        logger.error(f"Error verifying cancellation {cancellation_id}: {e}")
+        return JSONResponse(
+            {"success": False, "message": "Ошибка верификации"},
+            status_code=500
+        )
+

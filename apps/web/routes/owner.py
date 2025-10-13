@@ -390,6 +390,16 @@ async def owner_objects_create_post(
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
         
+        # Обработка настроек штрафов за отмену смены
+        inherit_cancellation_settings_value = form_data.get("inherit_cancellation_settings", "false")
+        inherit_cancellation_settings = inherit_cancellation_settings_value not in ["false", ""]
+        cancellation_short_notice_hours_str = form_data.get("cancellation_short_notice_hours", "").strip()
+        cancellation_short_notice_hours = int(cancellation_short_notice_hours_str) if cancellation_short_notice_hours_str else None
+        cancellation_short_notice_fine_str = form_data.get("cancellation_short_notice_fine", "").strip()
+        cancellation_short_notice_fine = float(cancellation_short_notice_fine_str.replace(",", ".")) if cancellation_short_notice_fine_str else None
+        cancellation_invalid_reason_fine_str = form_data.get("cancellation_invalid_reason_fine", "").strip()
+        cancellation_invalid_reason_fine = float(cancellation_invalid_reason_fine_str.replace(",", ".")) if cancellation_invalid_reason_fine_str else None
+        
         # Обработка Telegram группы для отчетов
         # JavaScript создает скрытое поле со значением 'false' при снятии галочки
         inherit_telegram_chat_value = form_data.get("inherit_telegram_chat", "false")
@@ -455,7 +465,11 @@ async def owner_objects_create_post(
             "shift_tasks": shift_tasks if shift_tasks else None,
             "inherit_late_settings": inherit_late_settings,
             "late_threshold_minutes": late_threshold_minutes,
-            "late_penalty_per_minute": late_penalty_per_minute
+            "late_penalty_per_minute": late_penalty_per_minute,
+            "inherit_cancellation_settings": inherit_cancellation_settings,
+            "cancellation_short_notice_hours": cancellation_short_notice_hours,
+            "cancellation_short_notice_fine": cancellation_short_notice_fine,
+            "cancellation_invalid_reason_fine": cancellation_invalid_reason_fine
         }
         
         # Передаем telegram_id в create_object (метод ожидает telegram_id)
@@ -618,6 +632,10 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "inherit_late_settings": obj.inherit_late_settings if hasattr(obj, 'inherit_late_settings') else True,
                 "late_threshold_minutes": obj.late_threshold_minutes if hasattr(obj, 'late_threshold_minutes') else None,
                 "late_penalty_per_minute": obj.late_penalty_per_minute if hasattr(obj, 'late_penalty_per_minute') else None,
+                "inherit_cancellation_settings": obj.inherit_cancellation_settings if hasattr(obj, 'inherit_cancellation_settings') else True,
+                "cancellation_short_notice_hours": obj.cancellation_short_notice_hours if hasattr(obj, 'cancellation_short_notice_hours') else None,
+                "cancellation_short_notice_fine": obj.cancellation_short_notice_fine if hasattr(obj, 'cancellation_short_notice_fine') else None,
+                "cancellation_invalid_reason_fine": obj.cancellation_invalid_reason_fine if hasattr(obj, 'cancellation_invalid_reason_fine') else None,
                 "inherit_telegram_chat": obj.inherit_telegram_chat if hasattr(obj, 'inherit_telegram_chat') else True,
                 "telegram_report_chat_id": obj.telegram_report_chat_id if hasattr(obj, 'telegram_report_chat_id') else None
             }
@@ -746,6 +764,16 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         late_penalty_per_minute_str = form_data.get("late_penalty_per_minute", "").strip()
         late_penalty_per_minute = float(late_penalty_per_minute_str.replace(",", ".")) if late_penalty_per_minute_str else None
         
+        # Обработка настроек штрафов за отмену смены
+        inherit_cancellation_settings_value = form_data.get("inherit_cancellation_settings", "false")
+        inherit_cancellation_settings = inherit_cancellation_settings_value not in ["false", ""]
+        cancellation_short_notice_hours_str = form_data.get("cancellation_short_notice_hours", "").strip()
+        cancellation_short_notice_hours = int(cancellation_short_notice_hours_str) if cancellation_short_notice_hours_str else None
+        cancellation_short_notice_fine_str = form_data.get("cancellation_short_notice_fine", "").strip()
+        cancellation_short_notice_fine = float(cancellation_short_notice_fine_str.replace(",", ".")) if cancellation_short_notice_fine_str else None
+        cancellation_invalid_reason_fine_str = form_data.get("cancellation_invalid_reason_fine", "").strip()
+        cancellation_invalid_reason_fine = float(cancellation_invalid_reason_fine_str.replace(",", ".")) if cancellation_invalid_reason_fine_str else None
+        
         # Обработка Telegram группы для отчетов
         # JavaScript создает скрытое поле со значением 'false' при снятии галочки
         inherit_telegram_chat_value = form_data.get("inherit_telegram_chat", "false")
@@ -820,6 +848,10 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "inherit_late_settings": inherit_late_settings,
                 "late_threshold_minutes": late_threshold_minutes,
                 "late_penalty_per_minute": late_penalty_per_minute,
+                "inherit_cancellation_settings": inherit_cancellation_settings,
+                "cancellation_short_notice_hours": cancellation_short_notice_hours,
+                "cancellation_short_notice_fine": cancellation_short_notice_fine,
+                "cancellation_invalid_reason_fine": cancellation_invalid_reason_fine,
                 "inherit_telegram_chat": inherit_telegram_chat,
                 "telegram_report_chat_id": telegram_report_chat_id,
                 "org_unit_id": org_unit_id

@@ -353,6 +353,82 @@
                                         </div>
                                     </div>
                                 </div>
+                                
+                                <!-- Штрафы за отмену смены -->
+                                <h6 class="mt-4 mb-3"><i class="fas fa-ban"></i> Штрафы за отмену смены</h6>
+                                
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" 
+                                               type="checkbox" 
+                                               id="inherit_cancellation_settings" 
+                                               name="inherit_cancellation_settings" 
+                                               checked
+                                               onchange="toggleCancellationSettings()">
+                                        <label class="form-check-label" for="inherit_cancellation_settings">
+                                            Наследовать настройки от подразделения
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="cancellation_short_notice_hours" class="form-label">
+                                                Минимальный срок отмены (часов)
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="За сколько часов до смены сотрудник должен отменить смену"></i>
+                                            </label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="cancellation_short_notice_hours" 
+                                                   name="cancellation_short_notice_hours" 
+                                                   min="1"
+                                                   max="168"
+                                                   placeholder="24">
+                                            <div class="form-text">За сколько часов должна быть отмена без штрафа</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="cancellation_short_notice_fine" class="form-label">
+                                                Штраф за отмену в короткий срок (₽)
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Размер штрафа за отмену менее чем за X часов"></i>
+                                            </label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="cancellation_short_notice_fine" 
+                                                   name="cancellation_short_notice_fine" 
+                                                   step="0.01"
+                                                   min="0"
+                                                   placeholder="500.00">
+                                            <div class="form-text">Фиксированная сумма штрафа</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="cancellation_invalid_reason_fine" class="form-label">
+                                                Штраф за неуважительную причину (₽)
+                                                <i class="fas fa-info-circle text-muted" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="Размер штрафа за отмену без уважительной причины"></i>
+                                            </label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="cancellation_invalid_reason_fine" 
+                                                   name="cancellation_invalid_reason_fine" 
+                                                   step="0.01"
+                                                   min="0"
+                                                   placeholder="1000.00">
+                                            <div class="form-text">Уважительные причины: медицинская справка, МЧС, полиция</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <!-- Конец вкладки 2: Финансы -->
                             
@@ -544,7 +620,7 @@ function removeTask(button) {
     }
 }
 
-// Управление активностью полей настроек штрафов
+// Управление активностью полей настроек штрафов за опоздание
 function toggleLateSettings() {
     const inheritCheckbox = document.getElementById('inherit_late_settings');
     const lateThresholdInput = document.getElementById('late_threshold_minutes');
@@ -567,6 +643,31 @@ function toggleLateSettings() {
         lateThresholdInput.style.cursor = '';
         latePenaltyInput.style.cursor = '';
     }
+}
+
+// Управление активностью полей настроек штрафов за отмену
+function toggleCancellationSettings() {
+    const inheritCheckbox = document.getElementById('inherit_cancellation_settings');
+    const hoursInput = document.getElementById('cancellation_short_notice_hours');
+    const shortNoticeFineInput = document.getElementById('cancellation_short_notice_fine');
+    const invalidReasonFineInput = document.getElementById('cancellation_invalid_reason_fine');
+    
+    // Если чекбокс включен (наследуем), делаем поля readonly
+    const readonly = inheritCheckbox.checked;
+    hoursInput.readOnly = readonly;
+    shortNoticeFineInput.readOnly = readonly;
+    invalidReasonFineInput.readOnly = readonly;
+    
+    // Визуально обозначаем неактивность
+    const bgColor = readonly ? '#e9ecef' : '';
+    const cursor = readonly ? 'not-allowed' : '';
+    
+    hoursInput.style.backgroundColor = bgColor;
+    shortNoticeFineInput.style.backgroundColor = bgColor;
+    invalidReasonFineInput.style.backgroundColor = bgColor;
+    hoursInput.style.cursor = cursor;
+    shortNoticeFineInput.style.cursor = cursor;
+    invalidReasonFineInput.style.cursor = cursor;
 }
 
 // Управление действиями с графиком выплат
@@ -610,6 +711,7 @@ function updateScheduleActions() {
 document.addEventListener('DOMContentLoaded', function() {
     updateScheduleActions();
     toggleLateSettings();
+    toggleCancellationSettings();
 });
 
 // Инициализация редактора графиков выплат
