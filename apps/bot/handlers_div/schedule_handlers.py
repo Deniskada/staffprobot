@@ -12,7 +12,7 @@ from domain.entities.shift import Shift
 from domain.entities.user import User
 from sqlalchemy import select
 from datetime import datetime, timedelta, date, time
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # Создаем экземпляры сервисов
 schedule_service = ScheduleServiceAdapter()
