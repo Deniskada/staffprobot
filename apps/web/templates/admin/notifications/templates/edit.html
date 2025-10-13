@@ -255,12 +255,24 @@
 
 <!-- Toast Container -->
 <div id="toastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index: 11000;"></div>
+
+<!-- Template data -->
+<script id="template-data" type="application/json">
+{
+    "templateId": {{ template.id }},
+    "variables": {{ variables | tojson | safe }},
+    "isReadonly": {% if is_readonly %}true{% else %}false{% endif %}
+}
+</script>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-const templateId = {{ template.id }};
-let variables = {{ variables | tojson }};
+// Загрузка данных из шаблона
+const templateData = JSON.parse(document.getElementById('template-data').textContent);
+const templateId = templateData.templateId;
+let variables = Array.isArray(templateData.variables) ? [...templateData.variables] : [];
+const isReadonly = templateData.isReadonly;
 
 function addVariable() {
     const input = document.getElementById('new_variable');
@@ -294,7 +306,6 @@ function removeVariable(variable) {
 function updateVariablesDisplay() {
     const container = document.getElementById('variables-container');
     const hiddenInput = document.getElementById('variables');
-    const isReadonly = {{ 'true' if is_readonly else 'false' }};
     
     if (variables.length === 0) {
         container.innerHTML = '<div class="text-muted">Переменные не добавлены</div>';
