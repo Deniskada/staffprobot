@@ -184,9 +184,45 @@ def auto_close_shifts(self):
                 await session.commit()
                 
                 logger.info(f"Auto-closed {closed_count} shifts")
+                
+                # 3. Закрываем объекты без активных смен
+                closed_objects_count = 0
+                try:
+                    # Находим объекты со статусом open
+                    from domain.entities.object_status import ObjectStatus
+                    open_objects_query = select(Object).where(Object.status == 'open')
+                    open_objects_result = await session.execute(open_objects_query)
+                    open_objects = open_objects_result.scalars().all()
+                    
+                    for obj in open_objects:
+                        # Проверяем наличие активных смен для объекта
+                        active_shifts_query = select(Shift).where(
+                            and_(
+                                Shift.object_id == obj.id,
+                                Shift.status == 'active'
+                            )
+                        )
+                        active_shifts_result = await session.execute(active_shifts_query)
+                        active_shifts_for_obj = active_shifts_result.scalars().all()
+                        
+                        # Если нет активных смен - закрываем объект
+                        if not active_shifts_for_obj:
+                            obj.status = 'closed'
+                            closed_objects_count += 1
+                            logger.info(f"Auto-closed object {obj.id} ({obj.name}) - no active shifts")
+                    
+                    if closed_objects_count > 0:
+                        await session.commit()
+                        logger.info(f"Auto-closed {closed_objects_count} objects without active shifts")
+                        
+                except Exception as e:
+                    logger.error(f"Error auto-closing objects: {e}")
+                    # Не прерываем выполнение задачи из-за ошибки закрытия объектов
+                
                 return {
                     "success": True,
                     "closed_count": closed_count,
+                    "closed_objects_count": closed_objects_count,
                     "errors": errors
                 }
                 
