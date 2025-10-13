@@ -99,11 +99,47 @@ async def close_active_shifts():
             await session.commit()
             logger.info(f"✅ Closed {closed_count} shifts")
         
-        return closed_count
+        # Закрываем ObjectOpening для объектов без активных смен
+        closed_openings_count = 0
+        try:
+            from shared.services.object_opening_service import ObjectOpeningService
+            from domain.entities.object_opening import ObjectOpening
+            
+            opening_service = ObjectOpeningService(session)
+            
+            # Собираем уникальные object_id из закрытых смен
+            closed_object_ids = set(shift.object_id for shift in active_shifts if shift.status == 'completed')
+            
+            logger.info(f"Checking {len(closed_object_ids)} objects for closing ObjectOpening")
+            
+            # Для каждого объекта проверяем активные смены
+            for object_id in closed_object_ids:
+                active_count = await opening_service.get_active_shifts_count(object_id)
+                
+                if active_count == 0:
+                    # Закрываем ObjectOpening
+                    opening = await opening_service.get_active_opening(object_id)
+                    if opening:
+                        opening.closed_at = now_utc.replace(tzinfo=None)
+                        opening.closed_by = None  # Автоматическое закрытие
+                        closed_openings_count += 1
+                        logger.info(f"Closed ObjectOpening {opening.id} for object {object_id}")
+            
+            if closed_openings_count > 0:
+                await session.commit()
+                logger.info(f"✅ Closed {closed_openings_count} ObjectOpenings")
+                
+        except Exception as e:
+            logger.error(f"Error closing ObjectOpenings: {e}")
+        
+        return {
+            "closed_shifts": closed_count,
+            "closed_openings": closed_openings_count
+        }
 
 
 if __name__ == "__main__":
-    print("🔄 Принудительное закрытие активных смен...")
-    closed = asyncio.run(close_active_shifts())
-    print(f"✅ Завершено: закрыто смен={closed}")
+    print("🔄 Принудительное закрытие активных смен и открытых объектов...")
+    result = asyncio.run(close_active_shifts())
+    print(f"✅ Завершено: закрыто смен={result['closed_shifts']}, закрыто объектов={result['closed_openings']}")
 

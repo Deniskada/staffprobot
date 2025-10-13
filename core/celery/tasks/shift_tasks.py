@@ -180,49 +180,56 @@ def auto_close_shifts(self):
                         logger.error(error_msg)
                         errors.append(error_msg)
                 
-                # Сохраняем изменения (async)
+                # Сохраняем изменения смен (async)
                 await session.commit()
                 
                 logger.info(f"Auto-closed {closed_count} shifts")
                 
-                # 3. Закрываем объекты без активных смен
-                closed_objects_count = 0
+                # 3. Закрываем ObjectOpening для объектов без активных смен
+                closed_openings_count = 0
                 try:
-                    # Находим объекты со статусом open
-                    from domain.entities.object_status import ObjectStatus
-                    open_objects_query = select(Object).where(Object.status == 'open')
-                    open_objects_result = await session.execute(open_objects_query)
-                    open_objects = open_objects_result.scalars().all()
+                    from shared.services.object_opening_service import ObjectOpeningService
+                    from domain.entities.object_opening import ObjectOpening
                     
-                    for obj in open_objects:
-                        # Проверяем наличие активных смен для объекта
-                        active_shifts_query = select(Shift).where(
-                            and_(
-                                Shift.object_id == obj.id,
-                                Shift.status == 'active'
-                            )
-                        )
-                        active_shifts_result = await session.execute(active_shifts_query)
-                        active_shifts_for_obj = active_shifts_result.scalars().all()
+                    opening_service = ObjectOpeningService(session)
+                    
+                    # Собираем уникальные object_id из закрытых смен
+                    closed_object_ids = set()
+                    for shift in active_shifts:
+                        if shift.status == 'completed':  # Только если смена была закрыта
+                            closed_object_ids.add(shift.object_id)
+                    
+                    for schedule in confirmed_schedules:
+                        if schedule.status == 'completed':  # Только если смена была закрыта
+                            closed_object_ids.add(schedule.object_id)
+                    
+                    logger.info(f"Checking {len(closed_object_ids)} objects for auto-closing ObjectOpening")
+                    
+                    # Для каждого объекта проверяем активные смены
+                    for object_id in closed_object_ids:
+                        active_count = await opening_service.get_active_shifts_count(object_id)
                         
-                        # Если нет активных смен - закрываем объект
-                        if not active_shifts_for_obj:
-                            obj.status = 'closed'
-                            closed_objects_count += 1
-                            logger.info(f"Auto-closed object {obj.id} ({obj.name}) - no active shifts")
+                        if active_count == 0:
+                            # Закрываем ObjectOpening
+                            opening = await opening_service.get_active_opening(object_id)
+                            if opening:
+                                opening.closed_at = now_utc.replace(tzinfo=None)
+                                opening.closed_by = None  # Автоматическое закрытие
+                                closed_openings_count += 1
+                                logger.info(f"Auto-closed ObjectOpening {opening.id} for object {object_id} - no active shifts")
                     
-                    if closed_objects_count > 0:
+                    if closed_openings_count > 0:
                         await session.commit()
-                        logger.info(f"Auto-closed {closed_objects_count} objects without active shifts")
+                        logger.info(f"Auto-closed {closed_openings_count} ObjectOpenings")
                         
                 except Exception as e:
-                    logger.error(f"Error auto-closing objects: {e}")
-                    # Не прерываем выполнение задачи из-за ошибки закрытия объектов
+                    logger.error(f"Error auto-closing ObjectOpenings: {e}")
+                    # Не прерываем выполнение задачи
                 
                 return {
                     "success": True,
                     "closed_count": closed_count,
-                    "closed_objects_count": closed_objects_count,
+                    "closed_openings_count": closed_openings_count,
                     "errors": errors
                 }
                 
