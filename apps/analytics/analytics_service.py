@@ -511,3 +511,116 @@ class AnalyticsService:
             }
             for row in result
         ]
+    
+    def get_cancellation_statistics(
+        self,
+        owner_id: int,
+        start_date: date,
+        end_date: date,
+        object_id: Optional[int] = None,
+        employee_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Формирует статистику по отменам смен за период.
+        
+        Args:
+            owner_id: ID владельца
+            start_date: Начальная дата
+            end_date: Конечная дата
+            object_id: ID объекта (опционально)
+            employee_id: ID сотрудника (опционально)
+            
+        Returns:
+            Словарь со статистикой отмен
+        """
+        from domain.entities.shift_cancellation import ShiftCancellation
+        from domain.entities.shift_schedule import ShiftSchedule
+        
+        try:
+            with get_sync_session() as db:
+                # Базовый запрос: только отмены объектов владельца
+                query = (
+                    db.query(ShiftCancellation)
+                    .join(Object, ShiftCancellation.object_id == Object.id)
+                    .join(ShiftSchedule, ShiftCancellation.shift_schedule_id == ShiftSchedule.id)
+                    .filter(
+                        Object.owner_id == owner_id,
+                        func.date(ShiftCancellation.created_at) >= start_date,
+                        func.date(ShiftCancellation.created_at) <= end_date
+                    )
+                )
+                
+                # Фильтры
+                if object_id:
+                    query = query.filter(ShiftCancellation.object_id == object_id)
+                if employee_id:
+                    query = query.filter(ShiftCancellation.employee_id == employee_id)
+                
+                cancellations = query.all()
+                
+                # Подсчет статистики
+                total_cancellations = len(cancellations)
+                
+                # По типам отменивших
+                by_type = {}
+                for c in cancellations:
+                    by_type[c.cancelled_by_type] = by_type.get(c.cancelled_by_type, 0) + 1
+                
+                # По причинам
+                by_reason = {}
+                for c in cancellations:
+                    by_reason[c.cancellation_reason] = by_reason.get(c.cancellation_reason, 0) + 1
+                
+                # По сотрудникам (топ 10)
+                by_employee = {}
+                for c in cancellations:
+                    if c.employee_id not in by_employee:
+                        by_employee[c.employee_id] = {
+                            'count': 0,
+                            'total_fine': Decimal('0'),
+                            'name': ''
+                        }
+                    by_employee[c.employee_id]['count'] += 1
+                    if c.fine_amount:
+                        by_employee[c.employee_id]['total_fine'] += c.fine_amount
+                
+                # Получаем имена сотрудников
+                for emp_id in by_employee.keys():
+                    user = db.query(User).filter(User.id == emp_id).first()
+                    if user:
+                        by_employee[emp_id]['name'] = f"{user.first_name} {user.last_name or ''}".strip()
+                
+                # Топ отменяющих
+                top_employees = sorted(
+                    [{'id': k, **v} for k, v in by_employee.items()],
+                    key=lambda x: x['count'],
+                    reverse=True
+                )[:10]
+                
+                # Суммы штрафов
+                total_fines = sum(float(c.fine_amount or 0) for c in cancellations)
+                applied_fines = sum(float(c.fine_amount or 0) for c in cancellations if c.fine_applied)
+                
+                # Уважительные причины
+                valid_reasons_count = sum(1 for c in cancellations if c.is_valid_reason)
+                valid_reasons_verified = sum(1 for c in cancellations if c.is_valid_reason and c.document_verified)
+                
+                return {
+                    'success': True,
+                    'total_cancellations': total_cancellations,
+                    'by_type': by_type,
+                    'by_reason': by_reason,
+                    'top_employees': top_employees,
+                    'total_fines': round(total_fines, 2),
+                    'applied_fines': round(applied_fines, 2),
+                    'valid_reasons_count': valid_reasons_count,
+                    'valid_reasons_verified': valid_reasons_verified,
+                    'valid_reasons_percent': round(valid_reasons_count / total_cancellations * 100, 1) if total_cancellations > 0 else 0
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting cancellation statistics: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
