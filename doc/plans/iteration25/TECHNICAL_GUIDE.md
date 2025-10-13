@@ -1405,4 +1405,91 @@ docker compose -f docker-compose.prod.yml logs web | grep "admin_notifications"
 
 ---
 
+## 🔧 Критические исправления (14 октября 2025)
+
+### Исправление путаницы с активными/неактивными шаблонами
+
+#### Проблема
+В списке шаблонов отображались неактивные шаблоны, а кнопка "Удалить" их деактивировала, создавая путаницу в пользовательском интерфейсе.
+
+#### Решение
+
+**1. Фильтрация по умолчанию**
+```python
+# apps/web/services/notification_template_service.py
+async def get_templates_paginated(self, ..., is_active: Optional[bool] = None):
+    # По умолчанию показываем только активные шаблоны
+    if is_active is None:
+        filters.append(NotificationTemplate.is_active == True)
+    elif is_active is not None:
+        filters.append(NotificationTemplate.is_active == is_active)
+```
+
+**2. Фильтр по статусу в UI**
+```html
+<!-- apps/web/templates/admin/notifications/templates/list.html -->
+<div class="col-md-3">
+    <label for="status_filter" class="form-label">Статус</label>
+    <select class="form-select" id="status_filter" name="status_filter">
+        <option value="">Все статусы</option>
+        <option value="active">Активные</option>
+        <option value="inactive">Неактивные</option>
+    </select>
+</div>
+```
+
+**3. Умные кнопки действий**
+```html
+{% if template.is_active %}
+    <button class="btn btn-sm btn-danger" 
+            onclick="deleteTemplate('{{ template.id }}')"
+            title="Удалить">
+        <i class="fas fa-trash"></i> Удалить
+    </button>
+{% else %}
+    <button class="btn btn-sm btn-success" 
+            onclick="restoreTemplate('{{ template.id }}')"
+            title="Восстановить">
+        <i class="fas fa-undo"></i> Восстановить
+    </button>
+{% endif %}
+```
+
+**4. API для восстановления**
+```python
+# apps/web/routes/admin_notifications.py
+@router.post("/api/templates/restore/{template_id}")
+async def admin_notifications_api_template_restore(
+    template_id: int,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Восстановление кастомного шаблона (активация)"""
+    service = NotificationTemplateService(db)
+    await service.restore_template(template_id)
+    return JSONResponse({"status": "success", "message": "Шаблон восстановлён"})
+```
+
+**5. Метод восстановления в сервисе**
+```python
+# apps/web/services/notification_template_service.py
+async def restore_template(self, template_id: int) -> None:
+    """Восстановление шаблона (активация)"""
+    template = await self.get_template_by_id(template_id)
+    if not template:
+        raise ValueError(f"Шаблон с ID {template_id} не найден")
+    
+    template.is_active = True
+    await self.session.commit()
+```
+
+#### Результат
+- ✅ По умолчанию показываются только активные шаблоны
+- ✅ Удаление = деактивация (шаблон исчезает из списка)
+- ✅ Фильтр "Неактивные" показывает удаленные шаблоны
+- ✅ Кнопка "Восстановить" активирует шаблон обратно
+- ✅ Логичная и понятная работа с шаблонами
+
+---
+
 **Техническое руководство по итерации 25 завершено! 🚀**
