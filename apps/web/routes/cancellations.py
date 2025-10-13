@@ -7,7 +7,7 @@ from sqlalchemy import select, and_
 from typing import Optional
 
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
-from apps.web.middleware.role_middleware import require_manager_or_owner
+from apps.web.dependencies import get_current_user_dependency
 from core.database.session import get_db_session
 from apps.web.jinja import templates
 from domain.entities.shift_schedule import ShiftSchedule
@@ -106,11 +106,18 @@ async def manager_cancel_shift(
     schedule_id: int,
     reason: str = Form(...),
     notes: Optional[str] = Form(None),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(get_current_user_dependency()),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Отмена запланированной смены управляющим."""
     try:
+        # Проверка роли
+        if current_user.get("role") not in ["manager", "owner", "superadmin"]:
+            return JSONResponse(
+                {"success": False, "message": "Недостаточно прав"},
+                status_code=403
+            )
+        
         # Получаем пользователя
         user_id = current_user.get("id")
         user_query = select(User).where(User.telegram_id == user_id)
@@ -134,11 +141,22 @@ async def manager_cancel_shift(
                 status_code=404
             )
         
-        # Проверяем доступ управляющего к объекту
-        from shared.services.manager_permission_service import ManagerPermissionService
-        permission_service = ManagerPermissionService(db)
-        
-        has_access = await permission_service.has_access_to_object(user.id, shift.object_id)
+        # Проверяем доступ управляющего к объекту (только для роли manager)
+        if current_user.get("role") == "manager":
+            from shared.services.manager_permission_service import ManagerPermissionService
+            permission_service = ManagerPermissionService(db)
+            
+            has_access = await permission_service.has_access_to_object(user.id, shift.object_id)
+        else:
+            # Для owner проверяем владение
+            object_query = select(Object).where(
+                and_(
+                    Object.id == shift.object_id,
+                    Object.owner_id == user.id
+                )
+            )
+            object_result = await db.execute(object_query)
+            has_access = object_result.scalar_one_or_none() is not None
         
         if not has_access:
             return JSONResponse(
