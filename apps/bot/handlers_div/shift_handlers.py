@@ -1164,10 +1164,15 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
     user_state = user_state_manager.get_state(user_id)
     logger.info(f"User state: {user_state}, step: {user_state.step if user_state else None}")
     
-    # Проверяем, это фото для отмены смены?
+    # Проверяем, это фото для отмены смены? (ВЫСОКИЙ ПРИОРИТЕТ)
     if user_state and user_state.action == UserAction.CANCEL_SHIFT and user_state.step == UserStep.INPUT_PHOTO:
         from .schedule_handlers import handle_cancellation_photo_upload
         await handle_cancellation_photo_upload(update, context)
+        return
+    
+    # Игнорируем медиа, если пользователь уже завершил загрузку
+    if user_state and user_state.step == UserStep.TASK_COMPLETION:
+        logger.info(f"Ignoring media - user already completed task upload: user_id={user_id}")
         return
     
     if not user_state or user_state.step != UserStep.MEDIA_UPLOAD:
