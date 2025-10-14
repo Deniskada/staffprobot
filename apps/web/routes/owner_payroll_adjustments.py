@@ -109,12 +109,26 @@ async def payroll_adjustments_list(
         result = await session.execute(query)
         adjustments = result.scalars().all()
         
-        # Получить список сотрудников для фильтра
-        employees_query = select(User).where(User.id.in_(
-            select(PayrollAdjustment.employee_id).distinct()
-        )).order_by(User.last_name, User.first_name)
-        employees_result = await session.execute(employees_query)
-        employees = employees_result.scalars().all()
+        # Получить список сотрудников владельца с активными договорами
+        from domain.entities.contract import Contract
+        
+        # Получаем внутренний ID владельца
+        owner_query = select(User).where(User.telegram_id == current_user.id)
+        owner_result = await session.execute(owner_query)
+        owner = owner_result.scalar_one_or_none()
+        
+        if owner:
+            employees_query = select(User).join(
+                Contract, Contract.employee_id == User.id
+            ).where(
+                Contract.owner_id == owner.id,
+                Contract.is_active == True,
+                Contract.status == 'active'
+            ).distinct().order_by(User.last_name, User.first_name)
+            employees_result = await session.execute(employees_query)
+            employees = employees_result.scalars().all()
+        else:
+            employees = []
         
         # Получить список объектов для фильтра
         objects_query = select(Object).where(Object.id.in_(
