@@ -86,10 +86,17 @@ async def manager_payroll_list(
         # Получить уникальных сотрудников из начислений за период
         from domain.entities.payroll_entry import PayrollEntry
         
+        # Фильтр по объекту (если указан)
+        if object_id and object_id in accessible_object_ids:
+            object_filter = PayrollEntry.object_id == object_id
+        else:
+            object_filter = PayrollEntry.object_id.in_(accessible_object_ids)
+        
         payroll_query = select(PayrollEntry).where(
             and_(
                 PayrollEntry.period_start >= start_date,
-                PayrollEntry.period_end <= end_date
+                PayrollEntry.period_end <= end_date,
+                object_filter  # Фильтр по доступным объектам
             )
         ).options(selectinload(PayrollEntry.employee))
         
