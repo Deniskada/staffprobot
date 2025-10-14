@@ -6,7 +6,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, Request, Query, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, desc
+from sqlalchemy import select, and_, func, desc, or_
 from sqlalchemy.orm import selectinload
 
 from apps.web.dependencies import require_manager_payroll_permission
@@ -98,10 +98,14 @@ async def manager_payroll_adjustments_list(
             end_date = date.today()
         
         # Базовый запрос с фильтром по доступным объектам
+        # Показываем корректировки либо с доступными объектами, либо без объекта (NULL)
         query = select(PayrollAdjustment).where(
             func.date(PayrollAdjustment.created_at) >= start_date,
             func.date(PayrollAdjustment.created_at) <= end_date,
-            PayrollAdjustment.object_id.in_(accessible_object_ids)  # Фильтр по объектам
+            or_(
+                PayrollAdjustment.object_id.in_(accessible_object_ids),
+                PayrollAdjustment.object_id.is_(None)  # Разрешаем корректировки без объекта
+            )
         ).options(
             selectinload(PayrollAdjustment.employee),
             selectinload(PayrollAdjustment.object),
@@ -158,7 +162,6 @@ async def manager_payroll_adjustments_list(
             )
         
         if employee_conditions:
-            from sqlalchemy import or_
             query_condition = or_(*employee_conditions)
             employees_query = employees_query.where(query_condition)
         
@@ -182,6 +185,10 @@ async def manager_payroll_adjustments_list(
         # Расчет пагинации
         total_pages = (total_count + per_page - 1) // per_page
         
+        # Получаем контекст управляющего
+        from apps.web.routes.manager import get_manager_context
+        manager_context = await get_manager_context(user_id, session)
+        
         return templates.TemplateResponse(
             "manager/payroll_adjustments/list.html",
             {
@@ -202,7 +209,8 @@ async def manager_payroll_adjustments_list(
                 "page": page,
                 "per_page": per_page,
                 "total_count": total_count,
-                "total_pages": total_pages
+                "total_pages": total_pages,
+                **manager_context
             }
         )
         
