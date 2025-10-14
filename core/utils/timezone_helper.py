@@ -150,3 +150,32 @@ class TimezoneHelper:
 # Глобальный экземпляр
 timezone_helper = TimezoneHelper()
 
+
+# Функции-обертки для удобства использования
+def get_user_timezone(user) -> str:
+    """
+    Получить timezone пользователя.
+    
+    Args:
+        user: Объект пользователя (User model)
+        
+    Returns:
+        str: Строка timezone (например, 'Europe/Moscow')
+    """
+    # TODO: В будущем получать из user.timezone
+    return timezone_helper.default_timezone_str
+
+
+def convert_utc_to_local(utc_datetime: datetime, timezone_str: Optional[str] = None) -> datetime:
+    """
+    Конвертировать UTC время в локальное.
+    
+    Args:
+        utc_datetime: Время в UTC
+        timezone_str: Временная зона (опционально)
+        
+    Returns:
+        datetime: Локальное время
+    """
+    return timezone_helper.utc_to_local(utc_datetime, timezone_str)
+
