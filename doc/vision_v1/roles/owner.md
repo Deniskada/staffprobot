@@ -142,18 +142,29 @@
 
 ## Начисления и выплаты (Payroll) — Итерация 23
 - [GET] `/owner/payroll` — (apps/web/routes/payroll.py) — список начислений всех сотрудников
-- [GET] `/owner/payroll/{entry_id}` — детализация начисления
-- [POST] `/owner/payroll/calculate` — рассчитать начисление за период
-- [POST] `/owner/payroll/{entry_id}/add-deduction` — добавить удержание
-- [POST] `/owner/payroll/{entry_id}/add-bonus` — добавить доплату
-- [POST] `/owner/payroll/{entry_id}/approve` — одобрить начисление
-- [POST] `/owner/payroll/{entry_id}/payment` — записать выплату
+- [GET] `/owner/payroll/{entry_id}` — (apps/web/routes/payroll.py) — детализация начисления с adjustments и payments
+- [POST] `/owner/payroll/{entry_id}/add-deduction` — (apps/web/routes/payroll.py) — добавить удержание (через PayrollAdjustmentService)
+- [POST] `/owner/payroll/{entry_id}/add-bonus` — (apps/web/routes/payroll.py) — добавить доплату (через PayrollAdjustmentService)
+- [POST] `/owner/payroll/{entry_id}/create-payment` — (apps/web/routes/payroll.py) — записать выплату (создаёт EmployeePayment со статусом pending)
+- [POST] `/owner/payroll/{entry_id}/payments/{payment_id}/complete` — (apps/web/routes/payroll.py) — подтвердить выплату (pending → completed)
 
 ## Графики выплат (Payment Schedules) — Итерация 23
 - [GET] `/owner/payment-schedules/{schedule_id}/data` — (apps/web/routes/payment_schedule.py) — данные графика (JSON)
 - [GET] `/owner/payment-schedules/{schedule_id}/view` — просмотр графика (HTML)
 - [POST] `/owner/payment-schedules/create` — создать кастомный график
 - [GET] `/owner/payment-schedules/available` — список доступных графиков
+
+## Корректировки начислений (Payroll Adjustments) — Итерация 23
+- [GET] `/owner/payroll-adjustments` — (apps/web/routes/owner_payroll_adjustments.py) — список всех корректировок с фильтрами
+  - Query: `adjustment_type` — тип корректировки (shift_base, late_start, task_bonus, task_penalty, manual_bonus, manual_deduction)
+  - Query: `employee_id` — ID сотрудника (строка, конвертируется в int)
+  - Query: `object_id` — ID объекта (строка, конвертируется в int)
+  - Query: `is_applied` — статус применения (all/applied/unapplied)
+  - Query: `date_from`, `date_to` — период (YYYY-MM-DD)
+  - Query: `page`, `per_page` — пагинация
+- [POST] `/owner/payroll-adjustments/create` — (apps/web/routes/owner_payroll_adjustments.py) — создать ручную корректировку
+- [POST] `/owner/payroll-adjustments/{adjustment_id}/edit` — (apps/web/routes/owner_payroll_adjustments.py) — редактировать корректировку
+- [GET] `/owner/payroll-adjustments/{adjustment_id}/history` — (apps/web/routes/owner_payroll_adjustments.py) — история изменений (JSON)
 
 ## Организационная структура (Org Structure) — Итерация 23
 - [GET] `/owner/org-structure` — (apps/web/routes/org_structure.py) — список подразделений (дерево)
