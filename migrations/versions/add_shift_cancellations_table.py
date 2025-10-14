@@ -44,7 +44,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['contract_id'], ['contracts.id'], name='fk_shift_cancellations_contract'),
         sa.ForeignKeyConstraint(['employee_id'], ['users.id'], name='fk_shift_cancellations_employee'),
         sa.ForeignKeyConstraint(['object_id'], ['objects.id'], name='fk_shift_cancellations_object'),
-        sa.ForeignKeyConstraint(['payroll_adjustment_id'], ['payroll_adjustments.id'], name='fk_shift_cancellations_payroll_adj'),
+        # sa.ForeignKeyConstraint(['payroll_adjustment_id'], ['payroll_adjustments.id'], name='fk_shift_cancellations_payroll_adj'),  # Таблица payroll_adjustments пока не создана
         sa.ForeignKeyConstraint(['shift_schedule_id'], ['shift_schedules.id'], name='fk_shift_cancellations_shift_schedule', ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['verified_by_id'], ['users.id'], name='fk_shift_cancellations_verified_by'),
         sa.PrimaryKeyConstraint('id')
@@ -57,12 +57,12 @@ def upgrade() -> None:
     op.create_index('ix_shift_cancellations_cancellation_reason', 'shift_cancellations', ['cancellation_reason'])
     op.create_index('ix_shift_cancellations_fine_applied', 'shift_cancellations', ['fine_applied'])
     op.create_index('ix_shift_cancellations_created_at', 'shift_cancellations', ['created_at'])
-    op.create_index('ix_shift_cancellations_payroll_adjustment_id', 'shift_cancellations', ['payroll_adjustment_id'])
+    # op.create_index('ix_shift_cancellations_payroll_adjustment_id', 'shift_cancellations', ['payroll_adjustment_id'])  # Пока не создана таблица
 
 
 def downgrade() -> None:
     # Удаление индексов
-    op.drop_index('ix_shift_cancellations_payroll_adjustment_id', table_name='shift_cancellations')
+    # op.drop_index('ix_shift_cancellations_payroll_adjustment_id', table_name='shift_cancellations')  # Пока не создана
     op.drop_index('ix_shift_cancellations_created_at', table_name='shift_cancellations')
     op.drop_index('ix_shift_cancellations_fine_applied', table_name='shift_cancellations')
     op.drop_index('ix_shift_cancellations_cancellation_reason', table_name='shift_cancellations')
