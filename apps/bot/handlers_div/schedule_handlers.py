@@ -450,7 +450,7 @@ async def handle_cancel_reason_selection(update: Update, context: ContextTypes.D
     # Сохраняем причину в контекст
     context.user_data['cancel_reason'] = reason
     
-    # Для справок просим ввести описание
+    # Для справок и "Другая причина" просим ввести описание/объяснение
     if reason in ['medical_cert', 'emergency_cert', 'police_cert']:
         reason_names = {
             'medical_cert': 'медицинской справки',
@@ -473,16 +473,20 @@ async def handle_cancel_reason_selection(update: Update, context: ContextTypes.D
             f"Справка будет проверена владельцем.",
             parse_mode='Markdown'
         )
-    else:
-        # Для других причин сразу отменяем
-        await _execute_shift_cancellation(
-            shift_id=shift_id,
-            telegram_id=telegram_id,
-            reason=reason,
-            reason_notes=None,
-            document_description=None,
-            context=context,
-            query=query
+    elif reason == 'other':
+        # Для "Другая причина" просим объяснение
+        from core.state.user_state_manager import user_state_manager, UserAction, UserStep
+        user_state_manager.set_state(
+            telegram_id,
+            action=UserAction.CANCEL_SHIFT,
+            step=UserStep.INPUT_DOCUMENT
+        )
+        
+        await query.edit_message_text(
+            "✍️ **Объяснение причины отмены**\n\n"
+            "Опишите причину отмены смены.\n\n"
+            "Ваше объяснение будет рассмотрено владельцем.",
+            parse_mode='Markdown'
         )
 
 
