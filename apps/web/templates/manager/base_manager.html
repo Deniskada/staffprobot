@@ -64,11 +64,18 @@
                                     <i class="bi bi-clock-history"></i> Смены
                                 </a>
                             </li>
+                            {% if can_manage_payroll|default(false) %}
                             <li class="nav-item">
-                                <a class="nav-link {% if request.url.path.startswith('/manager/payroll') %}active{% endif %}" href="/manager/payroll">
-                                    <i class="fas fa-money-bill-wave"></i> Начисления
+                                <a class="nav-link {% if request.url.path == '/manager/payroll' %}active{% endif %}" href="/manager/payroll">
+                                    <i class="fas fa-money-bill-wave"></i> Выплаты
                                 </a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.url.path.startswith('/manager/payroll-adjustments') %}active{% endif %}" href="/manager/payroll-adjustments">
+                                    <i class="fas fa-calculator"></i> Начисления
+                                </a>
+                            </li>
+                            {% endif %}
                             <li class="nav-item">
                                 <a class="nav-link {% if request.url.path.startswith('/manager/reviews') %}active{% endif %}" href="/manager/reviews">
                                     <i class="bi bi-star"></i> Отзывы

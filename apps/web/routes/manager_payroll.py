@@ -138,7 +138,7 @@ async def manager_payroll_list(
             {
                 "request": request,
                 "current_user": current_user,
-                "title": "Начисления и выплаты",
+                "title": "Выплаты",
                 "employees": employees_data,
                 "accessible_objects": accessible_objects,
                 "period_start": period_start or start_date.strftime("%Y-%m-%d"),

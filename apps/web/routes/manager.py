@@ -3963,9 +3963,35 @@ async def get_manager_context(user_id: int, session: AsyncSession):
     # Получаем количество новых заявок
     new_applications_count = await get_new_applications_count(user_id, session, "manager")
     
+    # Получаем права управляющего
+    # Проверяем наличие права can_manage_payroll в manager_permissions (JSON поле договора)
+    manager_contracts_query = select(Contract).where(
+        Contract.employee_id == user_id,
+        Contract.is_manager == True,
+        Contract.is_active == True,
+        Contract.status == 'active'
+    )
+    manager_contracts_result = await session.execute(manager_contracts_query)
+    manager_contracts = manager_contracts_result.scalars().all()
+    
+    can_manage_payroll = False
+    for contract in manager_contracts:
+        permissions = contract.manager_permissions or {}
+        if permissions.get("can_manage_payroll", False):
+            can_manage_payroll = True
+            break
+    
+    logger.info(
+        f"Manager context for user {user_id}",
+        user_id=user_id,
+        can_manage_payroll=can_manage_payroll,
+        contracts_count=len(manager_contracts)
+    )
+    
     return {
         "available_interfaces": available_interfaces,
-        "new_applications_count": new_applications_count
+        "new_applications_count": new_applications_count,
+        "can_manage_payroll": can_manage_payroll
     }
 
 @router.get("/applications", response_class=HTMLResponse)

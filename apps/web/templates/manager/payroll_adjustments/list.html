@@ -1,0 +1,302 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}Начисления{% endblock %}
+
+{% block manager_content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="bi bi-cash-coin"></i> Начисления</h2>
+            <p class="text-muted">Просмотр и управление начислениями (смены, штрафы, премии)</p>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-funnel"></i> Фильтры</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" action="/manager/payroll-adjustments">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="date_from" class="form-label">Дата начала</label>
+                        <input type="date" class="form-control" id="date_from" name="date_from" value="{{ filter_date_from }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="date_to" class="form-label">Дата окончания</label>
+                        <input type="date" class="form-control" id="date_to" name="date_to" value="{{ filter_date_to }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="adjustment_type" class="form-label">Тип начисления</label>
+                        <select class="form-select" id="adjustment_type" name="adjustment_type">
+                            <option value="">Все типы</option>
+                            {% for type_value, type_label in adjustment_types %}
+                            <option value="{{ type_value }}" {% if filter_adjustment_type == type_value %}selected{% endif %}>
+                                {{ type_label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="employee_id" class="form-label">Сотрудник</label>
+                        <select class="form-select" id="employee_id" name="employee_id">
+                            <option value="">Все сотрудники</option>
+                            {% for employee in employees %}
+                            <option value="{{ employee.id }}" {% if filter_employee_id|string == employee.id|string %}selected{% endif %}>
+                                {{ employee.last_name }} {{ employee.first_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="object_id" class="form-label">Объект</label>
+                        <select class="form-select" id="object_id" name="object_id">
+                            <option value="">Все объекты</option>
+                            {% for object in objects %}
+                            <option value="{{ object.id }}" {% if filter_object_id|string == object.id|string %}selected{% endif %}>
+                                {{ object.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="is_applied" class="form-label">Применено в выплате</label>
+                        <select class="form-select" id="is_applied" name="is_applied">
+                            <option value="all" {% if filter_is_applied == 'all' or not filter_is_applied %}selected{% endif %}>Все</option>
+                            <option value="applied" {% if filter_is_applied == 'applied' %}selected{% endif %}>Применено</option>
+                            <option value="unapplied" {% if filter_is_applied == 'unapplied' %}selected{% endif %}>Не применено</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="bi bi-search"></i> Применить фильтры
+                        </button>
+                        <a href="/manager/payroll-adjustments" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Сбросить
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Действия -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createAdjustmentModal">
+                <i class="bi bi-plus-circle"></i> Добавить начисление
+            </button>
+        </div>
+    </div>
+
+    <!-- Таблица корректировок -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Список начислений</h5>
+            <span class="badge bg-secondary">Всего: {{ total_count }}</span>
+        </div>
+        <div class="card-body">
+            {% if error %}
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                {{ error }}
+            </div>
+            {% elif adjustments %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Сотрудник</th>
+                            <th>Объект</th>
+                            <th>Тип</th>
+                            <th>Описание</th>
+                            <th class="text-end">Сумма</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for adj in adjustments %}
+                        <tr>
+                            <td>{{ adj.created_at.strftime('%d.%m.%Y %H:%M') if adj.created_at else '—' }}</td>
+                            <td>
+                                {% if adj.employee %}
+                                    {{ adj.employee.last_name }} {{ adj.employee.first_name }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if adj.object %}
+                                    {{ adj.object.name }}
+                                {% elif adj.shift %}
+                                    <span class="text-muted">Смена #{{ adj.shift_id }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge 
+                                    {% if adj.adjustment_type == 'shift_base' %}bg-info
+                                    {% elif adj.adjustment_type == 'late_start' %}bg-danger
+                                    {% elif adj.adjustment_type == 'task_bonus' %}bg-success
+                                    {% elif adj.adjustment_type == 'task_penalty' %}bg-warning
+                                    {% elif adj.adjustment_type == 'manual_bonus' %}bg-primary
+                                    {% elif adj.adjustment_type == 'manual_deduction' %}bg-dark
+                                    {% elif adj.adjustment_type.startswith('cancellation_fine') %}bg-warning text-dark
+                                    {% endif %}">
+                                    {{ adj.get_type_label() }}
+                                </span>
+                            </td>
+                            <td>
+                                <small>{{ adj.description or '—' }}</small>
+                                {% if adj.details %}
+                                    {% if adj.details.get('source') %}
+                                    <br><span class="badge bg-secondary">{{ 'Объект' if adj.details.source == 'object' else 'Тайм-слот' }}</span>
+                                    {% endif %}
+                                    {% if adj.details.get('media_url') %}
+                                    <br>
+                                    <a href="{{ adj.details.media_url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                                        <i class="bi bi-{% if adj.details.media_type == 'photo' %}image{% else %}play-circle{% endif %}"></i>
+                                        Просмотр отчета
+                                    </a>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <strong class="{% if adj.amount > 0 %}text-success{% elif adj.amount < 0 %}text-danger{% endif %}">
+                                    {% if adj.amount > 0 %}+{% endif %}{{ "%.2f"|format(adj.amount) }} ₽
+                                </strong>
+                            </td>
+                            <td>
+                                {% if adj.is_applied %}
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Применено</span>
+                                {% else %}
+                                    <span class="badge bg-warning"><i class="bi bi-clock"></i> Не применено</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Пагинация -->
+            {% if total_pages > 1 %}
+            <nav aria-label="Page navigation" class="mt-3">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                        <a class="page-link" href="?page=1&date_from={{ filter_date_from }}&date_to={{ filter_date_to }}&adjustment_type={{ filter_adjustment_type or '' }}&employee_id={{ filter_employee_id or '' }}&object_id={{ filter_object_id or '' }}&is_applied={{ filter_is_applied or '' }}">Первая</a>
+                    </li>
+                    <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                        <a class="page-link" href="?page={{ page - 1 }}&date_from={{ filter_date_from }}&date_to={{ filter_date_to }}&adjustment_type={{ filter_adjustment_type or '' }}&employee_id={{ filter_employee_id or '' }}&object_id={{ filter_object_id or '' }}&is_applied={{ filter_is_applied or '' }}">Назад</a>
+                    </li>
+                    <li class="page-item active">
+                        <span class="page-link">{{ page }} / {{ total_pages }}</span>
+                    </li>
+                    <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                        <a class="page-link" href="?page={{ page + 1 }}&date_from={{ filter_date_from }}&date_to={{ filter_date_to }}&adjustment_type={{ filter_adjustment_type or '' }}&employee_id={{ filter_employee_id or '' }}&object_id={{ filter_object_id or '' }}&is_applied={{ filter_is_applied or '' }}">Вперед</a>
+                    </li>
+                    <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                        <a class="page-link" href="?page={{ total_pages }}&date_from={{ filter_date_from }}&date_to={{ filter_date_to }}&adjustment_type={{ filter_adjustment_type or '' }}&employee_id={{ filter_employee_id or '' }}&object_id={{ filter_object_id or '' }}&is_applied={{ filter_is_applied or '' }}">Последняя</a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> Начисления не найдены. Попробуйте изменить фильтры.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для создания корректировки -->
+<div class="modal fade" id="createAdjustmentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Добавить начисление вручную</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createAdjustmentForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="create_employee_id" class="form-label">Сотрудник *</label>
+                        <select class="form-select" id="create_employee_id" name="employee_id" required>
+                            <option value="">Выберите сотрудника</option>
+                            {% for employee in employees %}
+                            <option value="{{ employee.id }}">
+                                {{ employee.last_name }} {{ employee.first_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_adjustment_type" class="form-label">Тип *</label>
+                        <select class="form-select" id="create_adjustment_type" name="adjustment_type" required>
+                            <option value="manual_bonus">Премия</option>
+                            <option value="manual_deduction">Штраф</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_amount" class="form-label">Сумма (₽) *</label>
+                        <input type="number" class="form-control" id="create_amount" name="amount" 
+                               step="0.01" min="0" required>
+                        <small class="form-text text-muted">Введите положительное число</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_description" class="form-label">Описание *</label>
+                        <textarea class="form-control" id="create_description" name="description" 
+                                  rows="3" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_object_id" class="form-label">Объект (опционально)</label>
+                        <select class="form-select" id="create_object_id" name="object_id">
+                            <option value="">Не привязан к объекту</option>
+                            {% for object in objects %}
+                            <option value="{{ object.id }}">{{ object.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-success">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Создание корректировки
+document.getElementById('createAdjustmentForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    
+    try {
+        const response = await fetch('/manager/payroll-adjustments/create', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Начисление успешно создано');
+            location.reload();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        alert('Ошибка создания начисления: ' + error);
+    }
+});
+</script>
+{% endblock %}
+
