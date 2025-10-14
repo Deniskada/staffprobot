@@ -186,7 +186,10 @@ async def owner_payroll_add_deduction(
 ):
     """Добавить удержание к начислению."""
     try:
+        from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+        
         payroll_service = PayrollService(db)
+        adjustment_service = PayrollAdjustmentService(db)
         
         # Получить внутренний ID владельца
         owner_id = await get_user_id_from_current_user(current_user, db)
@@ -208,15 +211,25 @@ async def owner_payroll_add_deduction(
         if not owner_contracts:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
-        # Добавить удержание
-        await payroll_service.add_deduction(
-            payroll_entry_id=entry_id,
-            deduction_type=deduction_type,
-            amount=Decimal(str(amount)),
+        # Добавить удержание через PayrollAdjustmentService
+        adjustment = await adjustment_service.create_manual_adjustment(
+            employee_id=entry.employee_id,
+            amount=-abs(Decimal(str(amount))),  # Отрицательное для удержания
+            adjustment_type='manual_deduction',
             description=description,
-            is_automatic=False,
-            created_by_id=owner_id
+            created_by=owner_id,
+            object_id=entry.object_id
         )
+        
+        # Привязать к payroll_entry
+        adjustment.payroll_entry_id = entry_id
+        adjustment.is_applied = True
+        
+        # Пересчитать суммы в entry
+        entry.total_deductions = float(entry.total_deductions) + abs(float(amount))
+        entry.net_amount = entry.gross_amount + entry.total_bonuses - entry.total_deductions
+        
+        await db.commit()
         
         logger.info(
             f"Deduction added by owner",
@@ -249,7 +262,10 @@ async def owner_payroll_add_bonus(
 ):
     """Добавить доплату к начислению."""
     try:
+        from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+        
         payroll_service = PayrollService(db)
+        adjustment_service = PayrollAdjustmentService(db)
         
         # Получить внутренний ID владельца
         owner_id = await get_user_id_from_current_user(current_user, db)
@@ -271,14 +287,25 @@ async def owner_payroll_add_bonus(
         if not owner_contracts:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
-        # Добавить доплату
-        await payroll_service.add_bonus(
-            payroll_entry_id=entry_id,
-            bonus_type=bonus_type,
-            amount=Decimal(str(amount)),
+        # Добавить доплату через PayrollAdjustmentService
+        adjustment = await adjustment_service.create_manual_adjustment(
+            employee_id=entry.employee_id,
+            amount=abs(Decimal(str(amount))),  # Положительное для бонуса
+            adjustment_type='manual_bonus',
             description=description,
-            created_by_id=owner_id
+            created_by=owner_id,
+            object_id=entry.object_id
         )
+        
+        # Привязать к payroll_entry
+        adjustment.payroll_entry_id = entry_id
+        adjustment.is_applied = True
+        
+        # Пересчитать суммы в entry
+        entry.total_bonuses = float(entry.total_bonuses) + abs(float(amount))
+        entry.net_amount = entry.gross_amount + entry.total_bonuses - entry.total_deductions
+        
+        await db.commit()
         
         logger.info(
             f"Bonus added by owner",
