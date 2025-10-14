@@ -294,6 +294,14 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
             from core.utils.timezone_helper import get_user_timezone, convert_utc_to_local
             user_tz = get_user_timezone(user)
             
+            # Вспомогательная функция для экранирования Markdown
+            def escape_markdown(text: str) -> str:
+                """Экранировать спецсимволы Markdown."""
+                special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+                for char in special_chars:
+                    text = text.replace(char, f'\\{char}')
+                return text
+            
             shifts_with_local_time = []
             for shift in shifts:
                 # Получаем информацию об объекте
@@ -302,6 +310,7 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
                 obj = object_result.scalar_one_or_none()
                 
                 object_name = obj.name if obj else "Неизвестный объект"
+                object_name_escaped = escape_markdown(object_name)
                 
                 # Конвертируем время в timezone пользователя
                 local_start = convert_utc_to_local(shift.planned_start, user_tz)
@@ -309,12 +318,12 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
                 
                 shifts_with_local_time.append((shift, local_start, local_end))
                 
-                schedule_text += f"🏢 **{object_name}**\n"
+                schedule_text += f"🏢 **{object_name_escaped}**\n"
                 schedule_text += f"📅 {local_start.strftime('%d.%m.%Y %H:%M')}\n"
                 schedule_text += f"🕐 До {local_end.strftime('%H:%M')}\n"
                 if shift.hourly_rate:
                     schedule_text += f"💰 {shift.hourly_rate} ₽/час\n"
-                schedule_text += f"📊 Статус: {shift.status}\n\n"
+                schedule_text += f"📊 Статус: {escape_markdown(shift.status)}\n\n"
             
             # Добавляем кнопки управления
             keyboard = []
@@ -411,6 +420,16 @@ async def handle_cancel_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
             obj = object_result.scalar_one_or_none()
             object_name = obj.name if obj else "Неизвестный объект"
             
+            # Экранируем спецсимволы Markdown
+            def escape_markdown(text: str) -> str:
+                """Экранировать спецсимволы Markdown."""
+                special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+                for char in special_chars:
+                    text = text.replace(char, f'\\{char}')
+                return text
+            
+            object_name_escaped = escape_markdown(object_name)
+            
             # Конвертируем время в timezone пользователя
             from core.utils.timezone_helper import get_user_timezone, convert_utc_to_local
             user_tz = get_user_timezone(user)
@@ -419,7 +438,7 @@ async def handle_cancel_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
             
             await query.edit_message_text(
                 f"❌ **Отмена смены**\n\n"
-                f"🏢 **{object_name}**\n"
+                f"🏢 **{object_name_escaped}**\n"
                 f"📅 {local_start.strftime('%d.%m.%Y %H:%M')}\n"
                 f"🕐 До {local_end.strftime('%H:%M')}\n\n"
                 f"Выберите причину отмены:",
