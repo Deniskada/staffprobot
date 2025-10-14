@@ -111,17 +111,16 @@ async def payroll_adjustments_list(
         
         # Получить список сотрудников владельца с активными договорами
         from domain.entities.contract import Contract
+        from apps.web.routes.reports import get_user_id_from_current_user
         
         # Получаем внутренний ID владельца
-        owner_query = select(User).where(User.telegram_id == current_user.id)
-        owner_result = await session.execute(owner_query)
-        owner = owner_result.scalar_one_or_none()
+        owner_id = await get_user_id_from_current_user(current_user, session)
         
-        if owner:
+        if owner_id:
             employees_query = select(User).join(
                 Contract, Contract.employee_id == User.id
             ).where(
-                Contract.owner_id == owner.id,
+                Contract.owner_id == owner_id,
                 Contract.is_active == True,
                 Contract.status == 'active'
             ).distinct().order_by(User.last_name, User.first_name)
