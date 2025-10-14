@@ -14,53 +14,48 @@
 |------|-----|----------|
 | `id` | Integer | Первичный ключ |
 | `employee_id` | Integer | FK → users.id |
+| `contract_id` | Integer | FK → contracts.id |
+| `object_id` | Integer | FK → objects.id (основной объект) |
 | `period_start` | Date | Начало периода |
 | `period_end` | Date | Конец периода |
-| `base_amount` | Numeric(10,2) | Базовая сумма (за смены) |
-| `bonus_amount` | Numeric(10,2) | Сумма доплат |
-| `deduction_amount` | Numeric(10,2) | Сумма удержаний |
-| `total_amount` | Numeric(10,2) | Итоговая сумма |
-| `status` | String(20) | draft / approved / paid |
-| `approved_at` | DateTime | Дата одобрения |
-| `approved_by_id` | Integer | FK → users.id (кто одобрил) |
+| `hours_worked` | Numeric(8,2) | Количество отработанных часов |
+| `hourly_rate` | Numeric(10,2) | Часовая ставка |
+| `gross_amount` | Numeric(10,2) | Базовая сумма (hours_worked × hourly_rate) |
+| `total_bonuses` | Numeric(10,2) | Сумма доплат |
+| `total_deductions` | Numeric(10,2) | Сумма удержаний |
+| `net_amount` | Numeric(10,2) | Итоговая сумма к выплате |
 | `created_at` | DateTime | Дата создания |
-| `created_by_id` | Integer | FK → users.id (кто создал) |
+| `created_by_id` | Integer | FK → users.id (кто создал, NULL если автоматически) |
 
-### 2. PayrollDeduction (Удержание)
+**Примечание:** Поле `status` удалено. Статус начисления определяется по связанным выплатам (EmployeePayment).
 
-**Таблица:** `payroll_deductions`
+### 2. PayrollAdjustment (Корректировки: удержания и доплаты)
+
+**Таблица:** `payroll_adjustments`
 
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `id` | Integer | Первичный ключ |
 | `payroll_entry_id` | Integer | FK → payroll_entries.id |
-| `amount` | Numeric(10,2) | Сумма удержания |
+| `amount` | Numeric(10,2) | Сумма (положительная для доплат, отрицательная для удержаний) |
 | `description` | Text | Описание |
-| `is_automatic` | Boolean | Автоматическое (Celery) или ручное |
-| `deduction_type` | String(50) | late_start / task_penalty / manual |
+| `adjustment_type` | String(50) | shift_base / late_start / task_bonus / task_penalty / manual_bonus / manual_deduction |
 | `related_shift_id` | Integer | FK → shifts.id (если связано со сменой) |
-| `metadata` | JSON | Дополнительная информация |
+| `related_task_id` | Integer | FK → shift_tasks.id (если связано с задачей) |
+| `is_applied` | Boolean | Применено ли к начислению |
+| `metadata` | JSONB | Дополнительная информация |
 | `created_at` | DateTime | Дата создания |
-| `created_by_id` | Integer | FK → users.id |
+| `created_by_id` | Integer | FK → users.id (NULL если автоматически) |
 
-### 3. PayrollBonus (Доплата/Премия)
+**Типы корректировок:**
+- `shift_base` - базовая оплата за смену (автоматически)
+- `late_start` - удержание за опоздание (автоматически)
+- `task_bonus` - премия за выполнение задачи (автоматически)
+- `task_penalty` - штраф за невыполнение задачи (автоматически)
+- `manual_bonus` - ручная доплата (владелец/управляющий)
+- `manual_deduction` - ручное удержание (владелец/управляющий)
 
-**Таблица:** `payroll_bonuses`
-
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | Integer | Первичный ключ |
-| `payroll_entry_id` | Integer | FK → payroll_entries.id |
-| `amount` | Numeric(10,2) | Сумма доплаты |
-| `description` | Text | Описание |
-| `is_automatic` | Boolean | Автоматическая или ручная |
-| `bonus_type` | String(50) | task_bonus / manual |
-| `related_shift_id` | Integer | FK → shifts.id |
-| `metadata` | JSON | Дополнительная информация |
-| `created_at` | DateTime | Дата создания |
-| `created_by_id` | Integer | FK → users.id |
-
-### 4. EmployeePayment (Выплата)
+### 3. EmployeePayment (Выплата)
 
 **Таблица:** `employee_payments`
 
@@ -71,71 +66,103 @@
 | `amount` | Numeric(10,2) | Сумма выплаты |
 | `payment_date` | Date | Дата выплаты |
 | `payment_method` | String(50) | cash / card / bank_transfer |
+| `status` | String(20) | pending / completed / cancelled |
+| `confirmation_code` | String(100) | Код подтверждения (номер транзакции, чек и т.д.) |
 | `notes` | Text | Примечания |
-| `created_at` | DateTime | Дата записи |
+| `created_at` | DateTime | Дата создания записи |
 | `created_by_id` | Integer | FK → users.id |
+| `completed_at` | DateTime | Дата подтверждения выплаты |
+| `completed_by_id` | Integer | FK → users.id (кто подтвердил) |
+
+**Статусы выплаты:**
+- `pending` - выплата запланирована, ожидает подтверждения
+- `completed` - выплата произведена и подтверждена
+- `cancelled` - выплата отменена
 
 ## Рабочий процесс
 
-### 1. Создание начисления
-```python
-from apps.web.services.payroll_service import PayrollService
+### 1. Автоматическое создание начислений (Celery)
+**Задача:** `create_payroll_entries_by_schedule` (ежедневно в 01:00 UTC)
 
-payroll_service = PayrollService(db)
-entry = await payroll_service.create_payroll_entry(
-    employee_id=100,
-    period_start=date(2025, 10, 1),
-    period_end=date(2025, 10, 31),
-    created_by_id=owner_id
-)
-```
+**Файл:** `core/celery/tasks/payroll_tasks.py`
 
-### 2. Автоматические удержания (Celery)
-**Задача:** `process_automatic_deductions()` (ежедневно в 01:00)
+**Логика:**
+1. Найти все активные Payment Schedules
+2. Для каждого графика проверить, совпадает ли сегодня с днём выплаты (payment_day)
+3. Определить период начисления на основе:
+   - `frequency` (daily, weekly, biweekly, monthly)
+   - `payment_period.start_offset` и `payment_period.end_offset`
+4. Найти все объекты с этим графиком (прямая привязка + наследование от подразделений)
+5. Для каждого объекта найти активные договоры (Contract.allowed_objects содержит object_id)
+6. Для каждого договора:
+   - Получить смены за период (с учётом object_id)
+   - Рассчитать `hours_worked` и `gross_amount`
+   - Создать PayrollEntry с начальными значениями
+   - Создать PayrollAdjustment с типом `shift_base` для каждой смены
+
+**Примеры периодов:**
+- Weekly (payment_day=2, вторник): start_offset=-22, end_offset=-16 (с прошлого ВТ до понедельника)
+- Biweekly: start_offset=-28, end_offset=-14 (две недели)
+- Monthly: start_offset=-60, end_offset=-30 (30 дней)
+
+### 2. Автоматические корректировки (Celery)
+**Задача:** `process_shift_adjustments()` (ежедневно после завершения смен)
 
 **Логика:**
 1. Найти все завершенные смены за вчера
-2. Проверить опоздание → создать удержание (если превышен порог)
-3. Проверить невыполненные задачи → создать штрафы/премии (только для "Повременно-премиальная")
-4. Записать в `payroll_deductions` / `payroll_bonuses` с `is_automatic=True`
+2. Для каждой смены:
+   - Проверить опоздание → создать PayrollAdjustment (type=late_start, amount<0)
+   - Проверить выполнение обязательных задач → штрафы (type=task_penalty, amount<0)
+   - Проверить выполнение необязательных задач → премии (type=task_bonus, amount>0)
+3. Привязать корректировки к PayrollEntry (если существует за соответствующий период)
 
 ### 3. Ручные корректировки
 ```python
+from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+
+adjustment_service = PayrollAdjustmentService(db)
+
 # Добавить удержание
-await payroll_service.add_deduction(
+await adjustment_service.create_manual_adjustment(
     payroll_entry_id=1,
-    amount=100.00,
+    adjustment_type="manual_deduction",
+    amount=-100.00,
     description="Штраф за нарушение",
     created_by_id=owner_id
 )
 
 # Добавить доплату
-await payroll_service.add_bonus(
+await adjustment_service.create_manual_adjustment(
     payroll_entry_id=1,
+    adjustment_type="manual_bonus",
     amount=500.00,
     description="Премия за переработку",
     created_by_id=owner_id
 )
 ```
 
-### 4. Одобрение
+### 4. Запись выплаты
 ```python
-await payroll_service.approve_payroll_entry(
-    entry_id=1,
-    approved_by_id=owner_id
-)
-# status: draft → approved
-```
+from apps.web.services.payroll_service import PayrollService
 
-### 5. Запись выплаты
-```python
-await payroll_service.create_payment(
+payroll_service = PayrollService(db)
+
+# Создать выплату (status=pending)
+payment = await payroll_service.create_employee_payment(
     payroll_entry_id=1,
     amount=5000.00,
+    payment_date=date.today(),
     payment_method="bank_transfer",
+    notes="Перевод на карту",
     created_by_id=owner_id
 )
-# status: approved → paid
+
+# Подтвердить выплату (pending → completed)
+await payroll_service.mark_payment_completed(
+    payment_id=payment.id,
+    confirmation_code="TXN123456",
+    completed_by_id=owner_id
+)
 ```
 
 ## Роли и права
@@ -195,34 +222,34 @@ await payroll_service.create_payment(
 
 - `idx_payroll_entries_employee_id` - для быстрого поиска по сотруднику
 - `idx_payroll_entries_period` - для фильтрации по датам
-- `idx_payroll_entries_status` - для фильтрации по статусу
-- `idx_payroll_deductions_entry_id` - связь с начислением
-- `idx_payroll_bonuses_entry_id` - связь с начислением
+- `idx_payroll_entries_contract_id` - для фильтрации по договору
+- `idx_payroll_entries_object_id` - для фильтрации по объекту
+- `idx_payroll_adjustments_entry_id` - связь с начислением
+- `idx_payroll_adjustments_type` - для фильтрации по типу корректировки
+- `idx_employee_payments_entry_id` - связь с начислением
+- `idx_employee_payments_status` - для фильтрации по статусу выплаты
 
 ## Связи
 
 ```
 PayrollEntry
 ├── employee → User
-├── approved_by → User
+├── contract → Contract
+├── object_ → Object
 ├── created_by → User
-├── deductions → List[PayrollDeduction]
-├── bonuses → List[PayrollBonus]
+├── adjustments → List[PayrollAdjustment]
 └── payments → List[EmployeePayment]
 
-PayrollDeduction
+PayrollAdjustment
 ├── payroll_entry → PayrollEntry
 ├── related_shift → Shift
-└── created_by → User
-
-PayrollBonus
-├── payroll_entry → PayrollEntry
-├── related_shift → Shift
+├── related_task → ShiftTask
 └── created_by → User
 
 EmployeePayment
 ├── payroll_entry → PayrollEntry
-└── created_by → User
+├── created_by → User
+└── completed_by → User
 ```
 
 ## См. также

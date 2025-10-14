@@ -24,13 +24,15 @@
 - [GET] `/employees`  — (apps/web/routes/manager.py)
 - [GET] `/employees/add`  — (apps/web/routes/manager.py)
 - [POST] `/employees/add`  — (apps/web/routes/manager.py)
-- [GET] `/employees/{employee_id}`  — (apps/web/routes/manager.py)
-- [GET] `/employees/contract/{contract_id}/edit`  — (apps/web/routes/manager.py) — форма редактирования договора управляющим
-- [POST] `/employees/{employee_id}/contract/{contract_id}/edit`  — (apps/web/routes/manager.py) — обновление договора через сервис
+- [GET] `/employees/{employee_id}`  — (apps/web/routes/manager.py) — детали сотрудника с проверкой прав can_manage_employees для каждого договора
+- [GET] `/contracts/{contract_id}/view`  — (apps/web/routes/manager.py) — просмотр договора (доступен если у управляющего есть доступ к хотя бы одному объекту из allowed_objects)
+- [GET] `/contracts/{contract_id}/edit`  — (apps/web/routes/manager.py) — редактирование договора (требует can_manage_employees на одном из объектов договора)
+- [POST] `/contracts/{contract_id}/edit`  — (apps/web/routes/manager.py) — сохранение изменений договора (требует can_manage_employees)
+- [POST] `/contracts/{contract_id}/terminate`  — (apps/web/routes/manager.py) — расторжение договора (требует can_manage_employees)
 - [GET] `/employees/{employee_id}/edit`  — (apps/web/routes/manager.py) — форма редактирования сотрудника (только профиль)
 - [POST] `/employees/{employee_id}/edit`  — (apps/web/routes/manager.py)
 - [GET] `/employees/{employee_id}/shifts`  — (apps/web/routes/manager.py)
-- [POST] `/employees/{employee_id}/terminate`  — (apps/web/routes/manager.py)
+- [POST] `/employees/{employee_id}/terminate`  — (apps/web/routes/manager.py) — устаревший метод (DEPRECATED, используйте /contracts/{contract_id}/terminate)
 - [GET] `/manager/reviews-simple`  — (apps/web/routes/manager_reviews_simple.py)
 - [GET] `/manager/timeslots`  — (apps/web/routes/manager_timeslots.py)
 - [POST] `/manager/timeslots/bulk-delete`  — (apps/web/routes/manager_timeslots.py)
@@ -62,10 +64,11 @@
 - `manager/dashboard.html`
 - `manager/employees.html`
 - `manager/employees/add.html`
-- `manager/contracts/edit.html` — форма редактирования договора управляющим
-- `manager/employees/detail.html` — детальная информация о сотруднике с таблицей договоров
+- `manager/employees/detail.html` — детальная информация о сотруднике с таблицей договоров (кнопки Просмотр/Редактировать/Расторгнуть с проверкой прав)
 - `manager/employees/edit.html` — редактирование профиля сотрудника
 - `manager/employees/shifts.html`
+- `manager/contracts/view.html` — просмотр договора (read-only, доступен всем управляющим с доступом к объектам)
+- `manager/contracts/edit.html` — редактирование договора (только с can_manage_employees)
 - `manager/objects.html`
 - `manager/objects/detail.html`
 - `manager/objects/edit.html`
