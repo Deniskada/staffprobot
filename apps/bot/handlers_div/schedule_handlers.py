@@ -269,9 +269,12 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
                 return
             
             # Получаем запланированные смены пользователя из таблицы ShiftSchedule
+            # Фильтруем только будущие смены (от текущей даты)
+            now_utc = datetime.now(timezone.utc)
             shifts_query = select(ShiftSchedule).where(
                 ShiftSchedule.user_id == user.id,
-                ShiftSchedule.status == "planned"
+                ShiftSchedule.status == "planned",
+                ShiftSchedule.planned_start >= now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
             ).order_by(ShiftSchedule.planned_start)
             
             shifts_result = await session.execute(shifts_query)
@@ -287,6 +290,11 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
             # Формируем список смен
             schedule_text = "📅 **Ваши запланированные смены:**\n\n"
             
+            # Получаем timezone пользователя
+            from core.utils.timezone_helper import get_user_timezone, convert_utc_to_local
+            user_tz = get_user_timezone(user)
+            
+            shifts_with_local_time = []
             for shift in shifts:
                 # Получаем информацию об объекте
                 object_query = select(Object).where(Object.id == shift.object_id)
@@ -295,9 +303,15 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
                 
                 object_name = obj.name if obj else "Неизвестный объект"
                 
+                # Конвертируем время в timezone пользователя
+                local_start = convert_utc_to_local(shift.planned_start, user_tz)
+                local_end = convert_utc_to_local(shift.planned_end, user_tz)
+                
+                shifts_with_local_time.append((shift, local_start, local_end))
+                
                 schedule_text += f"🏢 **{object_name}**\n"
-                schedule_text += f"📅 {shift.planned_start.strftime('%d.%m.%Y %H:%M')}\n"
-                schedule_text += f"🕐 До {shift.planned_end.strftime('%H:%M')}\n"
+                schedule_text += f"📅 {local_start.strftime('%d.%m.%Y %H:%M')}\n"
+                schedule_text += f"🕐 До {local_end.strftime('%H:%M')}\n"
                 if shift.hourly_rate:
                     schedule_text += f"💰 {shift.hourly_rate} ₽/час\n"
                 schedule_text += f"📊 Статус: {shift.status}\n\n"
@@ -306,9 +320,9 @@ async def handle_view_schedule(update: Update, context: ContextTypes.DEFAULT_TYP
             keyboard = []
             
             # Кнопки отмены для каждой смены (максимум 5)
-            for shift in shifts[:5]:
-                # Формируем текст кнопки с датой и временем
-                button_text = f"❌ Отменить {shift.planned_start.strftime('%d.%m %H:%M')}"
+            for shift, local_start, local_end in shifts_with_local_time[:5]:
+                # Формируем текст кнопки с датой и временем в local timezone
+                button_text = f"❌ Отменить {local_start.strftime('%d.%m %H:%M')}"
                 keyboard.append([InlineKeyboardButton(
                     button_text,
                     callback_data=f"cancel_shift_{shift.id}"
@@ -397,11 +411,17 @@ async def handle_cancel_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
             obj = object_result.scalar_one_or_none()
             object_name = obj.name if obj else "Неизвестный объект"
             
+            # Конвертируем время в timezone пользователя
+            from core.utils.timezone_helper import get_user_timezone, convert_utc_to_local
+            user_tz = get_user_timezone(user)
+            local_start = convert_utc_to_local(shift.planned_start, user_tz)
+            local_end = convert_utc_to_local(shift.planned_end, user_tz)
+            
             await query.edit_message_text(
                 f"❌ **Отмена смены**\n\n"
                 f"🏢 **{object_name}**\n"
-                f"📅 {shift.planned_start.strftime('%d.%m.%Y %H:%M')}\n"
-                f"🕐 До {shift.planned_end.strftime('%H:%M')}\n\n"
+                f"📅 {local_start.strftime('%d.%m.%Y %H:%M')}\n"
+                f"🕐 До {local_end.strftime('%H:%M')}\n\n"
                 f"Выберите причину отмены:",
                 parse_mode='Markdown',
                 reply_markup=reply_markup
@@ -546,11 +566,17 @@ async def _execute_shift_cancellation(
                 obj = object_result.scalar_one_or_none()
                 object_name = obj.name if obj else "Неизвестный объект"
                 
+                # Конвертируем время в timezone пользователя
+                from core.utils.timezone_helper import get_user_timezone, convert_utc_to_local
+                user_tz = get_user_timezone(user)
+                local_start = convert_utc_to_local(shift.planned_start, user_tz)
+                local_end = convert_utc_to_local(shift.planned_end, user_tz)
+                
                 text = (
                     f"✅ **Смена отменена**\n\n"
                     f"🏢 **{object_name}**\n"
-                    f"📅 {shift.planned_start.strftime('%d.%m.%Y %H:%M')}\n"
-                    f"🕐 До {shift.planned_end.strftime('%H:%M')}\n"
+                    f"📅 {local_start.strftime('%d.%m.%Y %H:%M')}\n"
+                    f"🕐 До {local_end.strftime('%H:%M')}\n"
                 )
                 
                 # Добавляем информацию о штрафе
