@@ -300,6 +300,15 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(active_shifts) == 1:
             shift = active_shifts[0]  # Это словарь, а не объект
             
+            # Проверяем наличие object_id
+            if not shift.get('object_id'):
+                logger.error(f"Shift {shift.get('id')} has no object_id")
+                await query.edit_message_text(
+                    text="❌ Смена не привязана к объекту. Обратитесь к администратору.",
+                    parse_mode='HTML'
+                )
+                return
+            
             # Получаем информацию об объекте и его задачах
             async with get_async_session() as session:
                 from sqlalchemy.orm import selectinload
