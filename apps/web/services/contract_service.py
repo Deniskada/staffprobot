@@ -393,51 +393,6 @@ class ContractService:
             
             return contract
     
-    async def terminate_contract(self, contract_id: int, reason: str = None) -> bool:
-        """Расторжение договора."""
-        async with get_async_session() as session:
-            query = select(Contract).where(Contract.id == contract_id)
-            result = await session.execute(query)
-            contract = result.scalar_one_or_none()
-            
-            if not contract:
-                return False
-            
-            contract.status = "terminated"
-            contract.is_active = False
-            contract.terminated_at = datetime.now()
-            
-            # Создаем версию с причиной расторжения
-            await self._create_contract_version(
-                contract_id,
-                contract.content,
-                f"Договор расторгнут. Причина: {reason or 'Не указана'}",
-                contract.owner_id
-            )
-            
-            # Обновляем роли сотрудника
-            role_service = RoleService(session)
-            await role_service.update_roles_from_contracts(contract.employee_id)
-            
-            # Если это был договор управляющего, удаляем права на объекты
-            if contract.is_manager:
-                permission_service = ManagerPermissionService(session)
-                permissions = await permission_service.get_contract_permissions(contract.id)
-                for permission in permissions:
-                    await permission_service.delete_permission(permission.id)
-            
-            await session.commit()
-            
-            # Проверяем, есть ли у сотрудника другие активные договоры
-            await self._check_and_update_employee_role(session, contract.employee_id)
-            
-            logger.info(f"Terminated contract: {contract.id}")
-            
-            # Инвалидация кэша сотрудника и владельца
-            await CacheService.invalidate_user_cache(contract.employee_id)
-            await CacheService.invalidate_user_cache(contract.owner_id)
-            
-            return True
     
     async def get_contract_employees(self, owner_id: int) -> List[Dict[str, Any]]:
         """Получение списка сотрудников владельца с информацией о договорах."""
@@ -1636,20 +1591,30 @@ class ContractService:
                     logger.error(f"Step 3 FAILED: Error creating contract version: {version_error}")
                     raise version_error
                 
-                logger.info(f"Step 4: Committing contract changes to database")
+                logger.info(f"Step 4: Cancelling planned shifts on lost objects")
+                try:
+                    cancelled_shifts_count = await self._cancel_shifts_on_contract_termination(
+                        session, contract, reason
+                    )
+                    logger.info(f"Step 4 SUCCESS: Cancelled {cancelled_shifts_count} shifts")
+                except Exception as cancel_error:
+                    logger.error(f"Step 4 FAILED: Error cancelling shifts: {cancel_error}")
+                    # Не прерываем, договор уже расторгнут
+                
+                logger.info(f"Step 5: Committing all changes to database")
                 try:
                     await session.commit()
-                    logger.info(f"Step 4 SUCCESS: Contract changes committed")
+                    logger.info(f"Step 5 SUCCESS: All changes committed")
                 except Exception as commit_error:
-                    logger.error(f"Step 4 FAILED: Error committing changes: {commit_error}")
+                    logger.error(f"Step 5 FAILED: Error committing changes: {commit_error}")
                     raise commit_error
                 
-                logger.info(f"Step 5: Checking and updating employee role for user {contract.employee_id}")
+                logger.info(f"Step 6: Checking and updating employee role for user {contract.employee_id}")
                 try:
                     await self._check_and_update_employee_role(session, contract.employee_id)
-                    logger.info(f"Step 5 SUCCESS: Employee role updated")
+                    logger.info(f"Step 6 SUCCESS: Employee role updated")
                 except Exception as role_error:
-                    logger.error(f"Step 5 FAILED: Error updating employee role: {role_error}")
+                    logger.error(f"Step 6 FAILED: Error updating employee role: {role_error}")
                     # Не прерываем выполнение, так как договор уже расторгнут
                 
                 logger.info(f"=== CONTRACT TERMINATION COMPLETED SUCCESSFULLY ===")
