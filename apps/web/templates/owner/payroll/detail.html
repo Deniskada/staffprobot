@@ -82,7 +82,7 @@
                     </button>
                 </div>
                 <div class="card-body">
-                    {% if entry.deductions %}
+                    {% if deductions %}
                     <div class="table-responsive">
                         <table class="table table-sm">
                             <thead>
@@ -90,25 +90,17 @@
                                     <th>Тип</th>
                                     <th>Описание</th>
                                     <th>Сумма</th>
-                                    <th>Авто</th>
                                     <th>Дата</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for deduction in entry.deductions %}
+                                {% for deduction in deductions %}
                                 <tr>
                                     <td>
-                                        <span class="badge bg-secondary">{{ deduction.deduction_type }}</span>
+                                        <span class="badge bg-secondary">{{ deduction.adjustment_type }}</span>
                                     </td>
                                     <td>{{ deduction.description }}</td>
-                                    <td class="text-danger"><strong>{{ "%.2f"|format(deduction.amount) }}₽</strong></td>
-                                    <td>
-                                        {% if deduction.is_automatic %}
-                                        <span class="badge bg-info">Авто</span>
-                                        {% else %}
-                                        <span class="badge bg-secondary">Ручное</span>
-                                        {% endif %}
-                                    </td>
+                                    <td class="text-danger"><strong>{{ "%.2f"|format(deduction.amount|abs) }}₽</strong></td>
                                     <td>{{ deduction.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                                 </tr>
                                 {% endfor %}
@@ -130,7 +122,7 @@
                     </button>
                 </div>
                 <div class="card-body">
-                    {% if entry.bonuses %}
+                    {% if bonuses %}
                     <div class="table-responsive">
                         <table class="table table-sm">
                             <thead>
@@ -142,10 +134,10 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for bonus in entry.bonuses %}
+                                {% for bonus in bonuses %}
                                 <tr>
                                     <td>
-                                        <span class="badge bg-secondary">{{ bonus.bonus_type }}</span>
+                                        <span class="badge bg-secondary">{{ bonus.adjustment_type }}</span>
                                     </td>
                                     <td>{{ bonus.description }}</td>
                                     <td class="text-success"><strong>{{ "%.2f"|format(bonus.amount) }}₽</strong></td>
@@ -170,7 +162,7 @@
                     </button>
                 </div>
                 <div class="card-body">
-                    {% if entry.payments %}
+                    {% if payments %}
                     <div class="table-responsive">
                         <table class="table table-sm">
                             <thead>
@@ -183,7 +175,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for payment in entry.payments %}
+                                {% for payment in payments %}
                                 <tr>
                                     <td>{{ payment.payment_date.strftime('%d.%m.%Y') }}</td>
                                     <td><strong>{{ "%.2f"|format(payment.amount) }}₽</strong></td>
