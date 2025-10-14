@@ -27,18 +27,20 @@ def upgrade() -> None:
     op.create_index('ix_objects_inherit_cancellation_settings', 'objects', ['inherit_cancellation_settings'])
     
     # Добавление полей настроек отмены в таблицу org_structure_units
-    op.add_column('org_structure_units', sa.Column('inherit_cancellation_settings', sa.Boolean(), nullable=False, server_default='true'))
-    op.add_column('org_structure_units', sa.Column('cancellation_short_notice_hours', sa.Integer(), nullable=True))
-    op.add_column('org_structure_units', sa.Column('cancellation_short_notice_fine', sa.Numeric(precision=10, scale=2), nullable=True))
-    op.add_column('org_structure_units', sa.Column('cancellation_invalid_reason_fine', sa.Numeric(precision=10, scale=2), nullable=True))
+    # Закомментировано: таблица org_structure_units пока не создана
+    # op.add_column('org_structure_units', sa.Column('inherit_cancellation_settings', sa.Boolean(), nullable=False, server_default='true'))
+    # op.add_column('org_structure_units', sa.Column('cancellation_short_notice_hours', sa.Integer(), nullable=True))
+    # op.add_column('org_structure_units', sa.Column('cancellation_short_notice_fine', sa.Numeric(precision=10, scale=2), nullable=True))
+    # op.add_column('org_structure_units', sa.Column('cancellation_invalid_reason_fine', sa.Numeric(precision=10, scale=2), nullable=True))
 
 
 def downgrade() -> None:
     # Удаление полей из org_structure_units
-    op.drop_column('org_structure_units', 'cancellation_invalid_reason_fine')
-    op.drop_column('org_structure_units', 'cancellation_short_notice_fine')
-    op.drop_column('org_structure_units', 'cancellation_short_notice_hours')
-    op.drop_column('org_structure_units', 'inherit_cancellation_settings')
+    # Закомментировано: таблица org_structure_units пока не создана
+    # op.drop_column('org_structure_units', 'cancellation_invalid_reason_fine')
+    # op.drop_column('org_structure_units', 'cancellation_short_notice_fine')
+    # op.drop_column('org_structure_units', 'cancellation_short_notice_hours')
+    # op.drop_column('org_structure_units', 'inherit_cancellation_settings')
     
     # Удаление индекса и полей из objects
     op.drop_index('ix_objects_inherit_cancellation_settings', table_name='objects')

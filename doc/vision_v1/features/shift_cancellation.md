@@ -283,8 +283,12 @@ async def verify_cancellation_document(
 ### 1. `add_shift_cancellations_table.py`
 Создает таблицу `shift_cancellations` со всеми индексами.
 
+**Примечание:** FK на `payroll_adjustments` временно закомментирован, так как таблица создается в более поздних миграциях. Индекс `ix_shift_cancellations_payroll_adjustment_id` также закомментирован. После создания таблицы `payroll_adjustments` необходимо раскомментировать эти строки.
+
 ### 2. `add_cancellation_settings_fields.py`
 Добавляет поля настроек штрафов за отмену в `objects` и `org_structure_units`.
+
+**Примечание:** Операции с таблицей `org_structure_units` временно закомментированы, так как таблица создается в более поздних миграциях. После создания таблицы необходимо раскомментировать эти строки в `upgrade()` и `downgrade()`.
 
 ## Использование
 
