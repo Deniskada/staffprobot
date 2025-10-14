@@ -278,16 +278,6 @@
                                     <i class="bi bi-arrow-left"></i> Назад к списку
                                 </a>
                                 
-                                {% if shift_type == 'schedule' and shift.status == 'planned' %}
-                                <button class="btn btn-outline-danger" onclick="cancelShift()">
-                                    <i class="bi bi-x-circle"></i> Отменить смену
-                                </button>
-                                {% elif shift.status == 'active' %}
-                                <button class="btn btn-outline-warning" onclick="cancelShift()">
-                                    <i class="bi bi-stop-circle"></i> Завершить смену
-                                </button>
-                                {% endif %}
-                                
                                 <a href="/manager/reports" class="btn btn-outline-info">
                                     <i class="bi bi-graph-up"></i> Отчеты
                                 </a>
@@ -337,16 +327,29 @@
     </div>
 </div>
 
-<!-- Модальное окно подтверждения отмены -->
+<!-- Модальное окно отмены смены -->
 <div class="modal fade" id="cancelModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Подтверждение отмены</h5>
+                <h5 class="modal-title">Отмена смены</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Вы уверены, что хотите отменить эту смену?</p>
+                <div class="mb-3">
+                    <label for="cancelReason" class="form-label">Причина отмены *</label>
+                    <select class="form-select" id="cancelReason" required>
+                        <option value="">Выберите причину...</option>
+                        <option value="owner_decision">Решение владельца</option>
+                        <option value="schedule_change">Изменение расписания</option>
+                        <option value="employee_request">Просьба сотрудника</option>
+                        <option value="other">Другая причина</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="cancelNotes" class="form-label">Примечание (опционально)</label>
+                    <textarea class="form-control" id="cancelNotes" rows="3" placeholder="Дополнительная информация..."></textarea>
+                </div>
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle"></i>
                     Это действие нельзя отменить.
@@ -354,7 +357,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <button type="button" class="btn btn-danger" id="confirmCancel">Да, отменить</button>
+                <button type="button" class="btn btn-danger" id="confirmCancel">Отменить смену</button>
             </div>
         </div>
     </div>
@@ -367,26 +370,37 @@ function cancelShift() {
 }
 
 document.getElementById('confirmCancel').addEventListener('click', async function() {
+    const reason = document.getElementById('cancelReason').value;
+    const notes = document.getElementById('cancelNotes').value;
+    
+    if (!reason) {
+        showNotification('Пожалуйста, выберите причину отмены', 'error');
+        return;
+    }
+    
     try {
-        const response = await fetch(`/manager/shifts/{{ shift.id }}/cancel?shift_type={{ shift_type }}`, {
+        // Используем новый роут с причиной
+        const formData = new FormData();
+        formData.append('reason', reason);
+        if (notes) {
+            formData.append('notes', notes);
+        }
+        
+        const response = await fetch(`/manager/shifts/schedule/{{ shift.id }}/cancel`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            body: formData,
             credentials: 'include'
         });
         
         const result = await response.json();
         
         if (result.success) {
-            // Показываем уведомление об успехе
-            showNotification(result.message, 'success');
-            // Принудительно перезагружаем страницу без кэша
+            showNotification('Смена успешно отменена', 'success');
             setTimeout(() => {
-                window.location.href = window.location.href + '&t=' + Date.now();
+                window.location.href = '/manager/shifts';
             }, 1000);
         } else {
-            showNotification(result.error || 'Ошибка отмены смены', 'error');
+            showNotification(result.message || 'Ошибка отмены смены', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -396,6 +410,10 @@ document.getElementById('confirmCancel').addEventListener('click', async functio
     // Закрываем модальное окно
     const modal = bootstrap.Modal.getInstance(document.getElementById('cancelModal'));
     modal.hide();
+    
+    // Очищаем поля
+    document.getElementById('cancelReason').value = '';
+    document.getElementById('cancelNotes').value = '';
 });
 
 function showNotification(message, type) {
