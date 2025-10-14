@@ -877,6 +877,14 @@ function showNotification(message, type) {
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     initializeFilters();
+    
+    // Автоматическое открытие модального окна планирования при action=plan
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('action') === 'plan') {
+        showPlanShiftModal();
+        // Убираем параметр из URL без перезагрузки
+        window.history.replaceState({}, '', '/owner/shifts');
+    }
 });
 
 // ===== ФУНКЦИОНАЛ ПЛАНИРОВАНИЯ СМЕН ДЛЯ ВЛАДЕЛЬЦА =====
