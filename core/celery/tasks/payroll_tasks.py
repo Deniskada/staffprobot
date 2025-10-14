@@ -8,7 +8,7 @@ import asyncio
 from core.celery.celery_app import celery_app
 from core.database.session import get_async_session
 from core.logging.logger import logger
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
 
 from domain.entities.payment_schedule import PaymentSchedule
@@ -16,6 +16,7 @@ from domain.entities.object import Object
 from domain.entities.contract import Contract
 from domain.entities.payroll_entry import PayrollEntry
 from domain.entities.payroll_adjustment import PayrollAdjustment
+from domain.entities.org_structure import OrgStructureUnit
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 
 
@@ -75,9 +76,25 @@ def create_payroll_entries_by_schedule():
                         )
                         
                         # 2. Найти все объекты с этим payment_schedule_id
+                        # Учитываем как прямую привязку, так и наследование от подразделения
+                        
+                        # Сначала найдем ID подразделений с этим графиком
+                        units_query = select(OrgStructureUnit.id).where(
+                            OrgStructureUnit.payment_schedule_id == schedule.id,
+                            OrgStructureUnit.is_active == True
+                        )
+                        units_result = await session.execute(units_query)
+                        unit_ids = [row[0] for row in units_result.all()]
+                        
+                        # Теперь найдем объекты:
+                        # - с прямой привязкой к графику ИЛИ
+                        # - принадлежащие подразделению с этим графиком
                         objects_query = select(Object).where(
-                            Object.payment_schedule_id == schedule.id,
-                            Object.is_active == True
+                            Object.is_active == True,
+                            or_(
+                                Object.payment_schedule_id == schedule.id,
+                                Object.org_unit_id.in_(unit_ids) if unit_ids else False
+                            )
                         )
                         objects_result = await session.execute(objects_query)
                         objects = objects_result.scalars().all()
@@ -87,11 +104,16 @@ def create_payroll_entries_by_schedule():
                         for obj in objects:
                             try:
                                 # 3. Найти активных сотрудников (contracts) для этого объекта
+                                # Contract.allowed_objects - это JSON массив с ID объектов
+                                from sqlalchemy import cast, text
+                                from sqlalchemy.dialects.postgresql import JSONB
+                                
                                 contracts_query = select(Contract).where(
                                     and_(
-                                        Contract.object_id == obj.id,
                                         Contract.status == 'active',
-                                        Contract.is_active == True
+                                        Contract.is_active == True,
+                                        Contract.allowed_objects.isnot(None),
+                                        cast(Contract.allowed_objects, JSONB).op('@>')(cast([obj.id], JSONB))
                                     )
                                 )
                                 contracts_result = await session.execute(contracts_query)
@@ -236,42 +258,84 @@ async def _get_payment_period_for_date(
     Returns:
         dict: {'period_start': date, 'period_end': date} или None если сегодня не день выплаты
     """
-    if not schedule.periods:
+    if not schedule.payment_period:
         return None
     
-    # Проверяем каждый период в графике
-    for period in schedule.periods:
-        # Формат периода: {'start_day': int, 'end_day': int, 'offset_days': int, ...}
-        payment_day = period.get('payment_day')  # День месяца для выплаты
+    # Обработка еженедельных графиков
+    if schedule.frequency == 'weekly':
+        # payment_day: 1 = понедельник, 2 = вторник, ... 7 = воскресенье
+        # weekday(): 0 = понедельник, 1 = вторник, ... 6 = воскресенье
+        target_weekday = target_date.weekday() + 1  # Конвертируем в 1-7
         
-        if not payment_day:
-            continue
+        if target_weekday != schedule.payment_day:
+            # Сегодня не день выплаты
+            return None
         
-        # Проверяем, совпадает ли сегодняшний день с днем выплаты
-        if target_date.day == payment_day:
-            # Определяем период
-            start_day = period.get('start_day', 1)
-            end_day = period.get('end_day', 31)
-            
-            # Месяц периода - предыдущий месяц от даты выплаты
-            # (т.к. выплата за прошедший период)
-            if target_date.month == 1:
-                period_month = 12
-                period_year = target_date.year - 1
-            else:
-                period_month = target_date.month - 1
-                period_year = target_date.year
-            
-            # Формируем даты начала и конца периода
-            from calendar import monthrange
-            last_day_of_period = monthrange(period_year, period_month)[1]
-            
-            period_start = date(period_year, period_month, min(start_day, last_day_of_period))
-            period_end = date(period_year, period_month, min(end_day, last_day_of_period))
-            
-            return {
-                'period_start': period_start,
-                'period_end': period_end
-            }
+        # Получаем настройки периода из payment_period
+        period_config = schedule.payment_period
+        start_offset = period_config.get('start_offset', -22)  # По умолчанию -22 дня
+        end_offset = period_config.get('end_offset', -16)  # По умолчанию -16 дней
+        
+        # Рассчитываем период относительно даты выплаты
+        period_start = target_date + timedelta(days=start_offset)
+        period_end = target_date + timedelta(days=end_offset)
+        
+        return {
+            'period_start': period_start,
+            'period_end': period_end
+        }
+    
+    # Обработка двухнедельных графиков (аналогично weekly)
+    elif schedule.frequency == 'biweekly':
+        target_weekday = target_date.weekday() + 1
+        
+        if target_weekday != schedule.payment_day:
+            return None
+        
+        period_config = schedule.payment_period
+        start_offset = period_config.get('start_offset', -28)  # По умолчанию -28 дней
+        end_offset = period_config.get('end_offset', -14)  # По умолчанию -14 дней
+        
+        period_start = target_date + timedelta(days=start_offset)
+        period_end = target_date + timedelta(days=end_offset)
+        
+        return {
+            'period_start': period_start,
+            'period_end': period_end
+        }
+    
+    # Обработка месячных графиков
+    elif schedule.frequency == 'monthly':
+        # Проверяем, совпадает ли сегодняшний день месяца с днем выплаты
+        if target_date.day != schedule.payment_day:
+            return None
+        
+        # Получаем настройки периода из payment_period
+        period_config = schedule.payment_period
+        start_offset = period_config.get('start_offset', -60)  # По умолчанию -60 дней назад
+        end_offset = period_config.get('end_offset', -30)  # По умолчанию -30 дней назад
+        
+        # Рассчитываем период относительно даты выплаты
+        period_start = target_date + timedelta(days=start_offset)
+        period_end = target_date + timedelta(days=end_offset)
+        
+        return {
+            'period_start': period_start,
+            'period_end': period_end
+        }
+    
+    # Обработка ежедневных графиков (выплата каждый день)
+    elif schedule.frequency == 'daily':
+        period_config = schedule.payment_period
+        start_offset = period_config.get('start_offset', -1)  # По умолчанию -1 день
+        end_offset = period_config.get('end_offset', -1)  # По умолчанию -1 день
+        
+        period_start = target_date + timedelta(days=start_offset)
+        period_end = target_date + timedelta(days=end_offset)
+        
+        return {
+            'period_start': period_start,
+            'period_end': period_end
+        }
     
     return None
