@@ -326,6 +326,64 @@ async def owner_payroll_add_bonus(
         raise HTTPException(status_code=500, detail=f"Ошибка добавления доплаты: {str(e)}")
 
 
+@router.post("/payroll/{entry_id}/payments/{payment_id}/complete", name="owner_payment_complete")
+async def complete_payment(
+    request: Request,
+    entry_id: int,
+    payment_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session),
+    confirmation_code: Optional[str] = Form(None)
+):
+    """Подтвердить выплату."""
+    try:
+        payroll_service = PayrollService(db)
+        
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        # Проверить доступ к entry
+        entry = await payroll_service.get_payroll_entry_by_id(entry_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="Начисление не найдено")
+        
+        query = select(Contract).where(
+            Contract.employee_id == entry.employee_id,
+            Contract.owner_id == owner_id
+        )
+        result = await db.execute(query)
+        owner_contracts = result.scalars().all()
+        
+        if not owner_contracts:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+        
+        # Подтвердить выплату
+        await payroll_service.mark_payment_completed(
+            payment_id=payment_id,
+            confirmation_code=confirmation_code
+        )
+        
+        logger.info(
+            f"Payment completed by owner",
+            payment_id=payment_id,
+            entry_id=entry_id,
+            confirmation_code=confirmation_code
+        )
+        
+        return RedirectResponse(
+            url=f"/owner/payroll/{entry_id}",
+            status_code=status.HTTP_302_FOUND
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error completing payment: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка подтверждения выплаты: {str(e)}")
+
+
 @router.post("/payroll/{entry_id}/create-payment", name="owner_payroll_create_payment")
 async def owner_payroll_create_payment(
     request: Request,

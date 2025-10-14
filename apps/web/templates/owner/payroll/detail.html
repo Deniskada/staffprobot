@@ -172,6 +172,7 @@
                                     <th>Способ</th>
                                     <th>Статус</th>
                                     <th>Подтверждение</th>
+                                    <th>Действия</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -190,6 +191,16 @@
                                         {% endif %}
                                     </td>
                                     <td>{{ payment.confirmation_code or '-' }}</td>
+                                    <td>
+                                        {% if payment.status == 'pending' %}
+                                        <button class="btn btn-sm btn-success" 
+                                                onclick="openConfirmPaymentModal({{ payment.id }})">
+                                            <i class="fas fa-check"></i> Подтвердить
+                                        </button>
+                                        {% elif payment.status == 'completed' %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -324,5 +335,44 @@
         </div>
     </div>
 </div>
+
+<!-- Модальное окно подтверждения выплаты -->
+<div class="modal fade" id="confirmPaymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" id="confirmPaymentForm">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Подтвердить выплату</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Подтвердите, что выплата была произведена.</p>
+                    <div class="mb-3">
+                        <label for="confirmation_code" class="form-label">Код подтверждения</label>
+                        <input type="text" class="form-control" id="confirmation_code" name="confirmation_code" 
+                               placeholder="Номер транзакции (необязательно)">
+                        <small class="form-text text-muted">Например: номер банковской транзакции</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i> Подтвердить выплату
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function openConfirmPaymentModal(paymentId) {
+    const form = document.getElementById('confirmPaymentForm');
+    form.action = `/owner/payroll/{{ entry.id }}/payments/${paymentId}/complete`;
+    const modal = new bootstrap.Modal(document.getElementById('confirmPaymentModal'));
+    modal.show();
+}
+</script>
+
 {% endblock %}
 
