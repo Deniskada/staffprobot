@@ -134,12 +134,36 @@ async def owner_payroll_detail(
         if not owner_contracts:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
+        # Получить связанные adjustments (для старого шаблона - как deductions, bonuses)
+        from domain.entities.payroll_adjustment import PayrollAdjustment
+        adjustments_query = select(PayrollAdjustment).where(
+            PayrollAdjustment.payroll_entry_id == entry_id
+        ).order_by(PayrollAdjustment.created_at)
+        adjustments_result = await db.execute(adjustments_query)
+        adjustments = adjustments_result.scalars().all()
+        
+        # Разделить на deductions и bonuses для совместимости со старым шаблоном
+        deductions = [adj for adj in adjustments if float(adj.amount) < 0]
+        bonuses = [adj for adj in adjustments if float(adj.amount) > 0 and adj.adjustment_type != 'shift_base']
+        
+        # Получить выплаты (payments)
+        from domain.entities.employee_payment import EmployeePayment
+        payments_query = select(EmployeePayment).where(
+            EmployeePayment.payroll_entry_id == entry_id
+        ).order_by(EmployeePayment.payment_date)
+        payments_result = await db.execute(payments_query)
+        payments = payments_result.scalars().all()
+        
         return templates.TemplateResponse(
             "owner/payroll/detail.html",
             {
                 "request": request,
                 "current_user": current_user,
-                "entry": entry
+                "entry": entry,
+                "deductions": deductions,
+                "bonuses": bonuses,
+                "payments": payments,
+                "today": date.today()
             }
         )
         
