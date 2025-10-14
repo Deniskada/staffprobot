@@ -2814,6 +2814,12 @@ async def api_calendar_plan_shift(
             )
             session.add(new_schedule)
             await session.commit()
+            
+            # Очищаем кэш календаря для немедленного отображения
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
+            logger.info(f"Calendar cache cleared after planning shift {new_schedule.id}")
 
             return {
                 "success": True,

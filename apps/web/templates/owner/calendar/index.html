@@ -365,11 +365,10 @@ if (window.universalCalendar) {
             throw new Error(detail || `Не удалось запланировать смену (HTTP ${planResp.status})`);
         }
         calendarPanels.showNotification(`Сотрудник ${employee.name} назначен на тайм-слот ${timeStr}`, 'success');
-        setTimeout(() => {
-            if (window.universalCalendar) {
-                window.universalCalendar.refresh();
-            }
-        }, 300);
+        // Календарь обновится автоматически благодаря очистке кэша на сервере
+        if (window.universalCalendar) {
+            window.universalCalendar.refresh();
+        }
     } catch (error) {
         console.error('Error assigning employee:', error);
         calendarPanels.showNotification(`Ошибка назначения сотрудника: ${error.message}`, 'error');
