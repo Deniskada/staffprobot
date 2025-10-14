@@ -133,17 +133,22 @@ async def manager_payroll_list(
         
         logger.info(f"Manager payroll: found {len(employees_data)} employees, {len(accessible_objects)} accessible objects")
         
+        # Получаем контекст управляющего
+        from apps.web.routes.manager import get_manager_context
+        manager_context = await get_manager_context(user_id, db)
+        
         return templates.TemplateResponse(
             "manager/payroll/list.html",
             {
                 "request": request,
                 "current_user": current_user,
-                "title": "Начисления и выплаты",
+                "title": "Выплаты",
                 "employees": employees_data,
                 "accessible_objects": accessible_objects,
                 "period_start": period_start or start_date.strftime("%Y-%m-%d"),
                 "period_end": period_end or end_date.strftime("%Y-%m-%d"),
-                "selected_object_id": object_id_int
+                "selected_object_id": object_id_int,
+                **manager_context
             }
         )
         
@@ -187,6 +192,10 @@ async def manager_payroll_detail(
         # Смены, удержания и премии загружаются через relationships в entry
         # Просто передаем entry в шаблон
         
+        # Получаем контекст управляющего
+        from apps.web.routes.manager import get_manager_context
+        manager_context = await get_manager_context(user_id, db)
+        
         return templates.TemplateResponse(
             "manager/payroll/detail.html",
             {
@@ -194,7 +203,8 @@ async def manager_payroll_detail(
                 "current_user": current_user,
                 "title": f"Начисление #{entry_id}",
                 "entry": entry,
-                "is_manager": "manager" in user_roles and "owner" not in user_roles
+                "is_manager": "manager" in user_roles and "owner" not in user_roles,
+                **manager_context
             }
         )
         
