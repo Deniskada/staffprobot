@@ -627,10 +627,12 @@ async def manager_employees(
                 from sqlalchemy import func, or_, text, cast, String, JSON, any_, exists
                 
                 # Используем простой SQL с text() для проверки пересечения массивов
+                # Исключаем самого управляющего из списка сотрудников
                 employees_query = select(User).join(
                     Contract, User.id == Contract.employee_id
                 ).where(
                     Contract.is_active == True,
+                    User.id != user_id,  # Исключаем самого управляющего
                     text("EXISTS (SELECT 1 FROM json_array_elements(contracts.allowed_objects) AS elem WHERE elem::text::int = ANY(ARRAY[{}]))".format(','.join(map(str, object_ids))))
                 ).distinct()
                 
@@ -984,6 +986,10 @@ async def manager_employee_detail(
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
         
+        # Запрещаем управляющему просматривать свою страницу как сотрудника
+        if employee_id == user_id:
+            raise HTTPException(status_code=403, detail="Вы не можете управлять своими договорами через этот интерфейс")
+        
         # Получаем информацию о сотруднике через сервис
         from apps.web.services.contract_service import ContractService
         contract_service = ContractService()
@@ -1258,6 +1264,10 @@ async def manager_employee_terminate(
             if not reason:
                 raise HTTPException(status_code=400, detail="Причина расторжения обязательна")
             
+            # Запрещаем управляющему расторгать свой собственный договор
+            if employee_id == user_id:
+                raise HTTPException(status_code=403, detail="Вы не можете расторгать свой собственный договор через этот интерфейс")
+            
             # Получаем активный договор
             from sqlalchemy import select
             from domain.entities.contract import Contract
@@ -1338,6 +1348,10 @@ async def manager_contract_edit_form(
         if not contract_info:
             raise HTTPException(status_code=404, detail="Договор не найден или у вас нет прав на его редактирование")
         
+        # Запрещаем управляющему редактировать свой собственный договор
+        if contract_info['employee']['id'] == user_id:
+            raise HTTPException(status_code=403, detail="Вы не можете редактировать свой собственный договор через этот интерфейс")
+        
         # Получаем доступные объекты для управляющего
         from shared.services.manager_permission_service import ManagerPermissionService
         permission_service = ManagerPermissionService(db)
@@ -1389,6 +1403,10 @@ async def manager_contract_edit(
             user_id = await get_user_id_from_current_user(current_user, db)
             if not user_id:
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            # Запрещаем управляющему редактировать свой собственный договор
+            if employee_id == user_id:
+                raise HTTPException(status_code=403, detail="Вы не можете редактировать свой собственный договор через этот интерфейс")
         
         form_data = await request.form()
         
@@ -4655,6 +4673,10 @@ async def manager_contract_edit(
         if not contract:
             raise HTTPException(status_code=404, detail="Договор не найден")
         
+        # Запрещаем управляющему редактировать свой собственный договор
+        if contract.employee_id == user_id:
+            raise HTTPException(status_code=403, detail="Вы не можете редактировать свой собственный договор через этот интерфейс")
+        
         # Проверяем право can_manage_employees
         # Получаем договоры управляющего
         manager_contracts_query = select(Contract).where(
@@ -4729,6 +4751,10 @@ async def manager_contract_terminate(
         
         if not contract:
             raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        # Запрещаем управляющему расторгать свой собственный договор
+        if contract.employee_id == user_id:
+            raise HTTPException(status_code=403, detail="Вы не можете расторгать свой собственный договор через этот интерфейс")
         
         # Проверяем право can_manage_employees
         # Получаем договоры управляющего
