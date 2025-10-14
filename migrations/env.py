@@ -30,6 +30,7 @@ from domain.entities.object import Object
 from domain.entities.shift import Shift
 from domain.entities.time_slot import TimeSlot
 from domain.entities.planning_template import PlanningTemplate, TemplateTimeSlot
+from domain.entities.notification_template import NotificationTemplate
 
 target_metadata = Base.metadata
 

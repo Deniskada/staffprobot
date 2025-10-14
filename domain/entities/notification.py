@@ -52,11 +52,13 @@ class NotificationType(enum.Enum):
 class NotificationStatus(enum.Enum):
     """Статус уведомления."""
     PENDING = "pending"           # Ожидает отправки
+    SCHEDULED = "scheduled"       # Запланировано
     SENT = "sent"                 # Отправлено
     DELIVERED = "delivered"       # Доставлено
     FAILED = "failed"             # Не удалось отправить
     READ = "read"                 # Прочитано
     CANCELLED = "cancelled"       # Отменено
+    DELETED = "deleted"           # Удалено (мягкое удаление)
 
 
 class NotificationChannel(enum.Enum):
