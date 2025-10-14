@@ -86,7 +86,9 @@ class ShiftCancellationService:
             obj = object_result.scalar_one_or_none()
             
             # Вычисляем штрафы (только для отмены сотрудником)
-            fine_amount = None
+            short_notice_fine_amount = None
+            invalid_reason_fine_amount = None
+            total_fine_amount = None
             fine_reason = None
             
             if cancelled_by_type == 'employee' and obj:
@@ -101,16 +103,22 @@ class ShiftCancellationService:
                 
                 # Штраф за короткий срок
                 if short_notice_hours and short_notice_fine and float(hours_before_shift) < short_notice_hours:
-                    fine_amount = short_notice_fine
-                    fine_reason = 'short_notice'
+                    short_notice_fine_amount = short_notice_fine
                 
                 # Штраф за неуважительную причину (если нет документа)
                 if not is_valid_reason and invalid_reason_fine and cancellation_reason not in ['owner_decision', 'contract_termination']:
-                    if fine_amount:
-                        fine_amount += invalid_reason_fine
-                    else:
-                        fine_amount = invalid_reason_fine
-                        fine_reason = 'invalid_reason'
+                    invalid_reason_fine_amount = invalid_reason_fine
+                
+                # Рассчитываем общую сумму и определяем основную причину
+                if short_notice_fine_amount and invalid_reason_fine_amount:
+                    total_fine_amount = short_notice_fine_amount + invalid_reason_fine_amount
+                    fine_reason = 'both'
+                elif short_notice_fine_amount:
+                    total_fine_amount = short_notice_fine_amount
+                    fine_reason = 'short_notice'
+                elif invalid_reason_fine_amount:
+                    total_fine_amount = invalid_reason_fine_amount
+                    fine_reason = 'invalid_reason'
             
             # Отменяем смену
             shift.status = 'cancelled'
@@ -127,7 +135,7 @@ class ShiftCancellationService:
                 hours_before_shift=hours_before_shift,
                 document_description=document_description,
                 document_verified=False,  # Требует модерации для уважительных причин
-                fine_amount=fine_amount,
+                fine_amount=total_fine_amount,
                 fine_reason=fine_reason,
                 fine_applied=False,
                 contract_id=contract_id
@@ -136,12 +144,25 @@ class ShiftCancellationService:
             self.session.add(cancellation)
             await self.session.flush()  # Получаем ID
             
-            # Создаем корректировку начислений, если есть штраф
-            if fine_amount and float(fine_amount) > 0:
-                payroll_adjustment = await self._create_payroll_adjustment(
-                    cancellation, shift, fine_amount, cancelled_by_user_id
+            # Создаем корректировки начислений (отдельно для каждого штрафа)
+            adjustment_ids = []
+            if short_notice_fine_amount and float(short_notice_fine_amount) > 0:
+                adjustment = await self._create_specific_payroll_adjustment(
+                    cancellation, shift, short_notice_fine_amount, 
+                    'short_notice', hours_before_shift, cancelled_by_user_id
                 )
-                cancellation.payroll_adjustment_id = payroll_adjustment.id
+                adjustment_ids.append(adjustment.id)
+            
+            if invalid_reason_fine_amount and float(invalid_reason_fine_amount) > 0:
+                adjustment = await self._create_specific_payroll_adjustment(
+                    cancellation, shift, invalid_reason_fine_amount, 
+                    'invalid_reason', hours_before_shift, cancelled_by_user_id
+                )
+                adjustment_ids.append(adjustment.id)
+            
+            # Сохраняем ID первой корректировки для обратной совместимости
+            if adjustment_ids:
+                cancellation.payroll_adjustment_id = adjustment_ids[0]
                 cancellation.fine_applied = True
             
             await self.session.commit()
@@ -200,6 +221,52 @@ class ShiftCancellationService:
                 'shift_schedule_id': cancellation.shift_schedule_id,
                 'cancellation_reason': cancellation.cancellation_reason,
                 'hours_before_shift': float(cancellation.hours_before_shift) if cancellation.hours_before_shift else None,
+                'planned_start': shift.planned_start.isoformat() if shift.planned_start else None
+            },
+            created_by=created_by_id,
+            is_applied=False  # Будет применено при расчете зарплаты
+        )
+        
+        self.session.add(adjustment)
+        await self.session.flush()
+        
+        return adjustment
+    
+    async def _create_specific_payroll_adjustment(
+        self,
+        cancellation: ShiftCancellation,
+        shift: ShiftSchedule,
+        fine_amount: Decimal,
+        fine_type: str,  # 'short_notice' or 'invalid_reason'
+        hours_before_shift: Decimal,
+        created_by_id: int
+    ) -> PayrollAdjustment:
+        """Создать конкретную корректировку начислений для определенного типа штрафа."""
+        
+        # Определяем тип корректировки и описание
+        if fine_type == 'short_notice':
+            adjustment_type = 'cancellation_fine_short_notice'
+            description = f"Штраф за отмену смены менее чем за {abs(float(hours_before_shift)):.1f}ч"
+        elif fine_type == 'invalid_reason':
+            adjustment_type = 'cancellation_fine_invalid_reason'
+            description = "Штраф за отмену смены без уважительной причины"
+        else:
+            adjustment_type = 'cancellation_fine'
+            description = "Штраф за отмену смены"
+        
+        adjustment = PayrollAdjustment(
+            shift_id=None,  # Смена не была открыта
+            employee_id=cancellation.employee_id,
+            object_id=cancellation.object_id,
+            adjustment_type=adjustment_type,
+            amount=-abs(float(fine_amount)),  # Отрицательная сумма (вычет)
+            description=description,
+            details={
+                'cancellation_id': cancellation.id,
+                'shift_schedule_id': cancellation.shift_schedule_id,
+                'cancellation_reason': cancellation.cancellation_reason,
+                'fine_type': fine_type,
+                'hours_before_shift': float(hours_before_shift) if hours_before_shift else None,
                 'planned_start': shift.planned_start.isoformat() if shift.planned_start else None
             },
             created_by=created_by_id,
