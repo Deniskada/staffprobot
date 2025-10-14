@@ -11,7 +11,7 @@ from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.shift import Shift
 from domain.entities.user import User
 from sqlalchemy import select
-from datetime import datetime, timedelta, date, time
+from datetime import datetime, timedelta, date, time, timezone
 from typing import List, Dict, Any, Optional
 
 # Создаем экземпляры сервисов
