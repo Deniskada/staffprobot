@@ -211,7 +211,7 @@ async def owner_cancellations_list(
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
-        # Получаем отмены с уважительными причинами (требующие верификации)
+        # Получаем все отмены сотрудниками (требующие модерации)
         from sqlalchemy.orm import selectinload
         
         cancellations_query = (
@@ -227,7 +227,7 @@ async def owner_cancellations_list(
             .where(
                 and_(
                     Object.owner_id == user.id,
-                    ShiftCancellation.cancellation_reason.in_(['medical_cert', 'emergency_cert', 'police_cert'])
+                    ShiftCancellation.cancelled_by_type == 'employee'  # Только отмены сотрудниками
                 )
             )
             .order_by(ShiftCancellation.created_at.desc())

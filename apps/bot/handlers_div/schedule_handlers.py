@@ -491,9 +491,9 @@ async def handle_cancel_reason_selection(update: Update, context: ContextTypes.D
 
 
 async def handle_cancellation_document_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработка ввода описания документа для отмены."""
+    """Обработка ввода описания документа/объяснения для отмены."""
     telegram_id = update.effective_user.id
-    document_description = update.message.text
+    description_text = update.message.text
     
     shift_id = context.user_data.get('cancelling_shift_id')
     reason = context.user_data.get('cancel_reason')
@@ -501,6 +501,152 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
     if not shift_id or not reason:
         await update.message.reply_text("❌ Ошибка: данные отмены не найдены.")
         return
+    
+    # Сохраняем описание в контекст
+    if reason == 'other':
+        context.user_data['cancel_reason_notes'] = description_text  # Объяснение
+    else:
+        context.user_data['cancel_document_description'] = description_text  # Описание документа
+    
+    # Проверяем, нужно ли запрашивать фото
+    from core.database.session import get_async_session
+    async with get_async_session() as session:
+        # Получаем смену
+        shift_query = select(ShiftSchedule).where(ShiftSchedule.id == shift_id)
+        shift_result = await session.execute(shift_query)
+        shift = shift_result.scalar_one_or_none()
+        
+        if not shift:
+            await update.message.reply_text("❌ Смена не найдена.")
+            return
+        
+        # Получаем объект
+        object_query = select(Object).where(Object.id == shift.object_id)
+        object_result = await session.execute(object_query)
+        obj = object_result.scalar_one_or_none()
+        
+        # Проверяем наличие telegram_report_chat_id (с учетом наследования от подразделения)
+        report_chat_id = obj.telegram_report_chat_id if obj else None
+        if not report_chat_id and obj and obj.org_unit:
+            # Проверяем подразделение
+            org_unit = obj.org_unit
+            while org_unit and not report_chat_id:
+                report_chat_id = org_unit.telegram_report_chat_id
+                org_unit = org_unit.parent if hasattr(org_unit, 'parent') else None
+        
+        # Если есть группа для отчетов - запрашиваем фото
+        if report_chat_id:
+            context.user_data['report_chat_id'] = report_chat_id
+            
+            # Устанавливаем состояние ожидания фото
+            from core.state.user_state_manager import user_state_manager, UserAction, UserStep
+            user_state_manager.set_state(
+                telegram_id,
+                action=UserAction.CANCEL_SHIFT,
+                step=UserStep.INPUT_PHOTO
+            )
+            
+            # Создаем кнопку "Пропустить"
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [[InlineKeyboardButton("⏩ Пропустить", callback_data="cancel_skip_photo")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "📸 **Фото подтверждения** (опционально)\n\n"
+                "Отправьте фото документа или подтверждения.\n"
+                "Или нажмите '⏩ Пропустить', если фото нет.",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        else:
+            # Нет группы для отчетов - сразу выполняем отмену
+            from core.state.user_state_manager import user_state_manager
+            user_state_manager.clear_state(telegram_id)
+            
+            await _execute_shift_cancellation(
+                shift_id=shift_id,
+                telegram_id=telegram_id,
+                reason=reason,
+                reason_notes=context.user_data.get('cancel_reason_notes'),
+                document_description=context.user_data.get('cancel_document_description'),
+                context=context,
+                message=update.message
+            )
+
+
+async def handle_cancellation_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработка загрузки фото для подтверждения отмены."""
+    telegram_id = update.effective_user.id
+    
+    shift_id = context.user_data.get('cancelling_shift_id')
+    reason = context.user_data.get('cancel_reason')
+    report_chat_id = context.user_data.get('report_chat_id')
+    
+    if not shift_id or not reason:
+        await update.message.reply_text("❌ Ошибка: данные отмены не найдены.")
+        return
+    
+    # Получаем фото
+    photo = update.message.photo[-1] if update.message.photo else None
+    
+    # Если есть фото и группа - отправляем в группу
+    if photo and report_chat_id:
+        try:
+            from core.database.session import get_async_session
+            async with get_async_session() as session:
+                # Получаем данные для сообщения
+                user_query = select(User).where(User.telegram_id == telegram_id)
+                user_result = await session.execute(user_query)
+                user = user_result.scalar_one_or_none()
+                
+                shift_query = select(ShiftSchedule).where(ShiftSchedule.id == shift_id)
+                shift_result = await session.execute(shift_query)
+                shift = shift_result.scalar_one_or_none()
+                
+                object_query = select(Object).where(Object.id == shift.object_id)
+                object_result = await session.execute(object_query)
+                obj = object_result.scalar_one_or_none()
+                
+                # Формируем сообщение для группы
+                from core.utils.timezone_helper import get_user_timezone, convert_utc_to_local
+                user_tz = get_user_timezone(user)
+                local_start = convert_utc_to_local(shift.planned_start, user_tz)
+                
+                reason_labels = {
+                    'medical_cert': '🏥 Медицинская справка',
+                    'emergency_cert': '🚨 Справка от МЧС',
+                    'police_cert': '👮 Справка от полиции',
+                    'other': '❓ Другая причина'
+                }
+                
+                caption = (
+                    f"❌ **Отмена смены**\n\n"
+                    f"👤 Сотрудник: {user.full_name if user else 'Неизвестно'}\n"
+                    f"🏢 Объект: {obj.name if obj else 'Неизвестно'}\n"
+                    f"📅 Дата: {local_start.strftime('%d.%m.%Y %H:%M')}\n"
+                    f"📋 Причина: {reason_labels.get(reason, reason)}\n"
+                )
+                
+                # Добавляем описание/объяснение
+                doc_desc = context.user_data.get('cancel_document_description')
+                reason_notes = context.user_data.get('cancel_reason_notes')
+                if doc_desc:
+                    caption += f"📄 Документ: {doc_desc}\n"
+                if reason_notes:
+                    caption += f"✍️ Объяснение: {reason_notes}\n"
+                
+                # Отправляем фото в группу
+                await context.bot.send_photo(
+                    chat_id=report_chat_id,
+                    photo=photo.file_id,
+                    caption=caption,
+                    parse_mode='Markdown'
+                )
+                
+                logger.info(f"Cancellation photo sent to chat {report_chat_id}")
+                
+        except Exception as e:
+            logger.error(f"Error sending cancellation photo: {e}")
     
     # Очищаем состояние
     from core.state.user_state_manager import user_state_manager
@@ -511,10 +657,39 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
         shift_id=shift_id,
         telegram_id=telegram_id,
         reason=reason,
-        reason_notes=None,
-        document_description=document_description,
+        reason_notes=context.user_data.get('cancel_reason_notes'),
+        document_description=context.user_data.get('cancel_document_description'),
         context=context,
         message=update.message
+    )
+
+
+async def handle_cancellation_skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработка нажатия кнопки 'Пропустить фото'."""
+    query = update.callback_query
+    await query.answer()
+    
+    telegram_id = update.effective_user.id
+    shift_id = context.user_data.get('cancelling_shift_id')
+    reason = context.user_data.get('cancel_reason')
+    
+    if not shift_id or not reason:
+        await query.edit_message_text("❌ Ошибка: данные отмены не найдены.")
+        return
+    
+    # Очищаем состояние
+    from core.state.user_state_manager import user_state_manager
+    user_state_manager.clear_state(telegram_id)
+    
+    # Выполняем отмену без фото
+    await _execute_shift_cancellation(
+        shift_id=shift_id,
+        telegram_id=telegram_id,
+        reason=reason,
+        reason_notes=context.user_data.get('cancel_reason_notes'),
+        document_description=context.user_data.get('cancel_document_description'),
+        context=context,
+        query=query
     )
 
 
@@ -580,14 +755,10 @@ async def _execute_shift_cancellation(
                     f"✅ **Смена отменена**\n\n"
                     f"🏢 **{object_name}**\n"
                     f"📅 {local_start.strftime('%d.%m.%Y %H:%M')}\n"
-                    f"🕐 До {local_end.strftime('%H:%M')}\n"
+                    f"🕐 До {local_end.strftime('%H:%M')}\n\n"
+                    f"⏳ Ваша заявка на модерации.\n"
+                    f"Владелец рассмотрит её и примет решение."
                 )
-                
-                # Добавляем информацию о штрафе
-                if result['fine_amount']:
-                    text += f"\n💰 Штраф: {result['fine_amount']}₽"
-                    if reason in ['medical_cert', 'emergency_cert', 'police_cert']:
-                        text += "\n📄 Справка будет проверена владельцем."
                 
                 # Очищаем контекст
                 context.user_data.pop('cancelling_shift_id', None)
