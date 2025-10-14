@@ -225,9 +225,9 @@ async def owner_payroll_add_deduction(
         adjustment.payroll_entry_id = entry_id
         adjustment.is_applied = True
         
-        # Пересчитать суммы в entry
-        entry.total_deductions = float(entry.total_deductions) + abs(float(amount))
-        entry.net_amount = entry.gross_amount + entry.total_bonuses - entry.total_deductions
+        # Пересчитать суммы в entry (все в Decimal)
+        entry.total_deductions = Decimal(str(entry.total_deductions)) + abs(Decimal(str(amount)))
+        entry.net_amount = Decimal(str(entry.gross_amount)) + Decimal(str(entry.total_bonuses)) - Decimal(str(entry.total_deductions))
         
         await db.commit()
         
@@ -301,9 +301,9 @@ async def owner_payroll_add_bonus(
         adjustment.payroll_entry_id = entry_id
         adjustment.is_applied = True
         
-        # Пересчитать суммы в entry
-        entry.total_bonuses = float(entry.total_bonuses) + abs(float(amount))
-        entry.net_amount = entry.gross_amount + entry.total_bonuses - entry.total_deductions
+        # Пересчитать суммы в entry (все в Decimal)
+        entry.total_bonuses = Decimal(str(entry.total_bonuses)) + abs(Decimal(str(amount)))
+        entry.net_amount = Decimal(str(entry.gross_amount)) + Decimal(str(entry.total_bonuses)) - Decimal(str(entry.total_deductions))
         
         await db.commit()
         
