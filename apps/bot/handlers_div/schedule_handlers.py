@@ -520,8 +520,11 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
             await update.message.reply_text("❌ Смена не найдена.")
             return
         
-        # Получаем объект
-        object_query = select(Object).where(Object.id == shift.object_id)
+        # Получаем объект с eager loading org_unit и цепочки parent
+        from sqlalchemy.orm import joinedload
+        object_query = select(Object).where(Object.id == shift.object_id).options(
+            joinedload(Object.org_unit).joinedload('parent').joinedload('parent').joinedload('parent')
+        )
         object_result = await session.execute(object_query)
         obj = object_result.scalar_one_or_none()
         
@@ -763,6 +766,9 @@ async def _execute_shift_cancellation(
                 # Очищаем контекст
                 context.user_data.pop('cancelling_shift_id', None)
                 context.user_data.pop('cancel_reason', None)
+                context.user_data.pop('cancel_reason_notes', None)
+                context.user_data.pop('cancel_document_description', None)
+                context.user_data.pop('report_chat_id', None)
                 
                 if query:
                     await query.edit_message_text(text, parse_mode='Markdown')
