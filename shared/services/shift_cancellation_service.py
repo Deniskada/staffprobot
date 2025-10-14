@@ -169,13 +169,13 @@ class ShiftCancellationService:
             
             logger.info(
                 f"Shift {shift_schedule_id} cancelled by {cancelled_by_type} "
-                f"(user_id={cancelled_by_user_id}), fine={fine_amount}"
+                f"(user_id={cancelled_by_user_id}), fine={total_fine_amount}"
             )
             
             return {
                 'success': True,
                 'cancellation_id': cancellation.id,
-                'fine_amount': fine_amount,
+                'fine_amount': total_fine_amount,
                 'message': 'Смена отменена'
             }
             
