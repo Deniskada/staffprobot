@@ -983,22 +983,35 @@ async def manager_employee_detail(
         from domain.entities.manager_object_permission import ManagerObjectPermission
         permission_service = ManagerPermissionService(db)
         
-        # Для каждого договора проверяем права
+        # Получаем договоры управляющего (где is_manager=True)
+        manager_contracts_query = select(Contract).where(
+            Contract.employee_id == user_id,
+            Contract.is_manager == True,
+            Contract.is_active == True
+        )
+        manager_contracts_result = await db.execute(manager_contracts_query)
+        manager_contracts = manager_contracts_result.scalars().all()
+        
+        # Получаем все права управляющего на объекты
+        manager_contract_ids = [mc.id for mc in manager_contracts]
+        
+        # Для каждого договора сотрудника проверяем права управляющего
         for contract in employee_info["contracts"]:
-            # Получаем права управляющего для этого договора
-            permissions_query = select(ManagerObjectPermission).where(
-                ManagerObjectPermission.contract_id == contract["id"]
-            )
-            permissions_result = await db.execute(permissions_query)
-            permissions = permissions_result.scalars().all()
+            contract_objects = contract["allowed_objects"]  # Объекты из договора сотрудника
             
-            # Проверяем наличие права can_manage_employees хотя бы на одном объекте
-            can_manage_employees = any(
-                perm.permissions.get("can_manage_employees", False) 
-                for perm in permissions
-            )
-            
-            contract["can_manage_employees"] = can_manage_employees
+            # Проверяем, есть ли у управляющего право can_manage_employees на эти объекты
+            if manager_contract_ids and contract_objects:
+                permissions_query = select(ManagerObjectPermission).where(
+                    ManagerObjectPermission.contract_id.in_(manager_contract_ids),
+                    ManagerObjectPermission.object_id.in_(contract_objects),
+                    ManagerObjectPermission.can_manage_employees == True
+                )
+                permissions_result = await db.execute(permissions_query)
+                permissions = permissions_result.scalars().all()
+                
+                contract["can_manage_employees"] = len(permissions) > 0
+            else:
+                contract["can_manage_employees"] = False
         
         # Получаем данные для переключения интерфейсов
         from shared.services.role_based_login_service import RoleBasedLoginService
@@ -4608,20 +4621,33 @@ async def manager_contract_edit(
             raise HTTPException(status_code=404, detail="Договор не найден")
         
         # Проверяем право can_manage_employees
+        # Получаем договоры управляющего
+        manager_contracts_query = select(Contract).where(
+            Contract.employee_id == user_id,
+            Contract.is_manager == True,
+            Contract.is_active == True
+        )
+        manager_contracts_result = await db.execute(manager_contracts_query)
+        manager_contracts = manager_contracts_result.scalars().all()
+        manager_contract_ids = [mc.id for mc in manager_contracts]
+        
+        if not manager_contract_ids:
+            raise HTTPException(status_code=403, detail="Вы не являетесь управляющим")
+        
+        # Проверяем права на объекты договора сотрудника
+        contract_objects = contract.allowed_objects or []
+        
         from domain.entities.manager_object_permission import ManagerObjectPermission
         permissions_query = select(ManagerObjectPermission).where(
-            ManagerObjectPermission.contract_id == contract_id
+            ManagerObjectPermission.contract_id.in_(manager_contract_ids),
+            ManagerObjectPermission.object_id.in_(contract_objects),
+            ManagerObjectPermission.can_manage_employees == True
         )
         permissions_result = await db.execute(permissions_query)
         permissions = permissions_result.scalars().all()
         
-        can_manage = any(
-            perm.permissions.get("can_manage_employees", False) 
-            for perm in permissions
-        )
-        
-        if not can_manage:
-            raise HTTPException(status_code=403, detail="У вас нет прав на редактирование договоров")
+        if not permissions:
+            raise HTTPException(status_code=403, detail="У вас нет прав на редактирование этого договора")
         
         # Получаем объекты для отображения
         objects_info = []
@@ -4670,20 +4696,33 @@ async def manager_contract_terminate(
             raise HTTPException(status_code=404, detail="Договор не найден")
         
         # Проверяем право can_manage_employees
+        # Получаем договоры управляющего
+        manager_contracts_query = select(Contract).where(
+            Contract.employee_id == user_id,
+            Contract.is_manager == True,
+            Contract.is_active == True
+        )
+        manager_contracts_result = await db.execute(manager_contracts_query)
+        manager_contracts = manager_contracts_result.scalars().all()
+        manager_contract_ids = [mc.id for mc in manager_contracts]
+        
+        if not manager_contract_ids:
+            raise HTTPException(status_code=403, detail="Вы не являетесь управляющим")
+        
+        # Проверяем права на объекты договора сотрудника
+        contract_objects = contract.allowed_objects or []
+        
         from domain.entities.manager_object_permission import ManagerObjectPermission
         permissions_query = select(ManagerObjectPermission).where(
-            ManagerObjectPermission.contract_id == contract_id
+            ManagerObjectPermission.contract_id.in_(manager_contract_ids),
+            ManagerObjectPermission.object_id.in_(contract_objects),
+            ManagerObjectPermission.can_manage_employees == True
         )
         permissions_result = await db.execute(permissions_query)
         permissions = permissions_result.scalars().all()
         
-        can_manage = any(
-            perm.permissions.get("can_manage_employees", False) 
-            for perm in permissions
-        )
-        
-        if not can_manage:
-            raise HTTPException(status_code=403, detail="У вас нет прав на расторжение договоров")
+        if not permissions:
+            raise HTTPException(status_code=403, detail="У вас нет прав на расторжение этого договора")
         
         # Расторгаем договор
         contract.status = 'terminated'
