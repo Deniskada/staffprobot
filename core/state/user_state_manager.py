@@ -44,6 +44,7 @@ class UserStep(str, Enum):
     INPUT_END_TIME = "input_end_time"
     INPUT_DATE = "input_date"
     INPUT_DOCUMENT = "input_document"  # Ввод описания документа (справки) для отмены смены
+    INPUT_PHOTO = "input_photo"  # Загрузка фото для подтверждения отмены смены
     CONFIRM_SCHEDULE = "confirm_schedule"
     SCHEDULE_SELECTION = "schedule_selection"
     WAITING_INPUT = "waiting_input"
