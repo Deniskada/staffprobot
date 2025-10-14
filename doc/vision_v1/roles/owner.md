@@ -19,7 +19,10 @@
 - [GET] `/owner/api/check/object`  — (apps/web/routes/limits.py)
 - [GET] `/owner/api/contracts/my-contracts`  — (apps/web/routes/owner.py)
 - [GET] `/owner/api/employees`  — (apps/web/routes/owner.py)
-- [GET] `/owner/api/employees/for-object/{object_id}`  — (apps/web/routes/owner.py)
+- [GET] `/owner/api/employees/for-object/{object_id}`  — (apps/web/routes/owner.py) — список сотрудников с доступом к объекту
+  - Фильтрация: Contract.owner_id == user_id AND allowed_objects @> [object_id]
+  - Используется в модальном окне планирования смен на /owner/shifts
+  - **Важно:** Возвращает только сотрудников владельца с активными договорами, имеющими доступ к указанному объекту
 - [GET] `/owner/api/summary`  — (apps/web/routes/limits.py)
 - [GET] `/owner/applications`  — (apps/web/routes/owner.py)
 - [POST] `/owner/bulk-delete`  — (apps/web/routes/owner_timeslots.py)
@@ -33,7 +36,11 @@
 - [GET] `/owner/calendar/api/timeslot/{timeslot_id}`  — (apps/web/routes/owner.py)
 - [GET] `/owner/calendar/api/timeslots-status`  — (apps/web/routes/owner.py)
 - [GET] `/owner/calendar/week`  — (apps/web/routes/owner.py)
-- [GET] `/owner/dashboard`  — (apps/web/routes/owner.py)
+- [GET] `/owner/dashboard`  — (apps/web/routes/owner.py) — главная страница владельца
+  - Быстрые действия:
+    - "Добавить сотрудника" → `/owner/employees/create`
+    - "Запланировать смену" → `/owner/shifts?action=plan` (автоматически открывает модальное окно)
+    - "Календарь" → `/owner/calendar`
 - [GET] `/owner/employees`  — (apps/web/routes/owner.py) — список сотрудников
   - Query: `view_mode=cards|list` (default: list)
   - Query: `sort_by=employee|telegram_id|status` (default: employee)
@@ -124,7 +131,13 @@
 - `owner/settings.html`
 - `owner/shifts/access_denied.html`
 - `owner/shifts/detail.html`
-- `owner/shifts/list.html`
+- `owner/shifts/list.html` — список смен с модальным окном планирования
+  - Модальное окно: 90% ширины и высоты экрана
+  - Автоматически открывается при переходе с параметром `?action=plan`
+  - Календарь: 5 недель (35 дней), адаптивная высота
+  - Увеличенный шрифт в тайм-слотах (14px время, 12px места)
+  - Фильтрация сотрудников по выбранному объекту через API
+  - Информация в футере: объект + счётчик слотов (слева), кнопки (справа)
 - `owner/shifts/not_found.html`
 - `owner/templates/contracts/detail.html`
 - `owner/templates/contracts/edit.html`
