@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">{{ title }}</h1>
+                <div class="btn-group">
+                    <a href="{{ url_for('admin_notifications_templates_list') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Назад к списку
+                    </a>
+                    <a href="{{ url_for('admin_notifications_template_create_page') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-plus"></i> Создать с нуля
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Поиск -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" class="form-control" id="searchInput" 
+                               placeholder="Поиск по названию шаблона...">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Фильтр по категориям -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="btn-group btn-group-lg w-100" role="group">
+                <button type="button" class="btn btn-outline-primary active" onclick="filterCategory('all')">
+                    Все ({% set total = namespace(count=0) %}{% for templates in templates_by_category.values() %}{% set total.count = total.count + templates|length %}{% endfor %}{{ total.count }})
+                </button>
+                {% for category in categories %}
+                <button type="button" class="btn btn-outline-primary" onclick="filterCategory('{{ category }}')">
+                    {{ category }} ({{ templates_by_category.get(category, [])|length }})
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Список шаблонов по категориям -->
+    {% for category in categories %}
+    {% set category_templates = templates_by_category.get(category, []) %}
+    {% if category_templates %}
+    <div class="row mb-4 category-section" data-category="{{ category }}">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-folder"></i> {{ category }} 
+                        <span class="badge bg-light text-dark">{{ category_templates|length }}</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for template in category_templates %}
+                        <div class="col-md-6 col-lg-4 mb-3 template-item" data-template-name="{{ template.title|lower }}">
+                            <div class="card h-100 border-2">
+                                <div class="card-header">
+                                    <h6 class="mb-0">{{ template.title }}</h6>
+                                    <small class="text-muted">{{ template.type_label }}</small>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-2">
+                                        <strong>Переменные:</strong>
+                                        <div class="d-flex flex-wrap gap-1 mt-1">
+                                            {% for variable in template.variables[:4] %}
+                                            <span class="badge bg-info">${{ variable }}</span>
+                                            {% endfor %}
+                                            {% if template.variables|length > 4 %}
+                                            <span class="badge bg-secondary">+{{ template.variables|length - 4 }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-align-left"></i> 
+                                            {{ template.plain_template|length }} символов
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-white">
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-primary" 
+                                                onclick="selectTemplate('{{ template.type_value }}')">
+                                            <i class="fas fa-edit"></i> Переопределить
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-info" 
+                                                onclick="previewTemplate('{{ template.type_value }}')">
+                                            <i class="fas fa-eye"></i> Предпросмотр
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+
+<!-- Модальное окно предпросмотра -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Предпросмотр шаблона</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="previewContent">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" id="selectFromPreview">
+                    <i class="fas fa-edit"></i> Переопределить этот шаблон
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentTemplateType = null;
+
+// Фильтр по категориям
+function filterCategory(category) {
+    const sections = document.querySelectorAll('.category-section');
+    const buttons = document.querySelectorAll('.btn-group button');
+    
+    // Обновляем активную кнопку
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    if (category === 'all') {
+        sections.forEach(section => section.style.display = 'block');
+    } else {
+        sections.forEach(section => {
+            if (section.dataset.category === category) {
+                section.style.display = 'block';
+            } else {
+                section.style.display = 'none';
+            }
+        });
+    }
+}
+
+// Поиск
+document.getElementById('searchInput').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const items = document.querySelectorAll('.template-item');
+    
+    items.forEach(item => {
+        const name = item.dataset.templateName;
+        if (name.includes(searchTerm)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+});
+
+// Выбор шаблона
+function selectTemplate(templateType) {
+    // Переход к форме создания с параметром типа
+    window.location.href = `/admin/notifications/templates/create?from_static=${templateType}`;
+}
+
+// Предпросмотр шаблона
+function previewTemplate(templateType) {
+    currentTemplateType = templateType;
+    const modal = new bootstrap.Modal(document.getElementById('previewModal'));
+    const previewContent = document.getElementById('previewContent');
+    
+    previewContent.innerHTML = '<div class="spinner-border" role="status"><span class="visually-hidden">Загрузка...</span></div>';
+    modal.show();
+    
+    // Получаем данные шаблона
+    fetch(`/admin/notifications/api/templates/static/${templateType}`)
+        .then(response => response.json())
+        .then(data => {
+            previewContent.innerHTML = `
+                <h6>${data.title}</h6>
+                <hr>
+                <h6>Текстовая версия:</h6>
+                <pre class="bg-light p-3 rounded">${data.plain_template}</pre>
+                ${data.html_template ? `
+                    <h6>HTML версия:</h6>
+                    <div class="border p-3 rounded">${data.html_template}</div>
+                ` : ''}
+                <h6 class="mt-3">Доступные переменные:</h6>
+                <div class="d-flex flex-wrap gap-1">
+                    ${data.variables.map(v => `<span class="badge bg-info">$${v}</span>`).join('')}
+                </div>
+            `;
+        })
+        .catch(error => {
+            previewContent.innerHTML = `<div class="alert alert-danger">Ошибка загрузки: ${error.message}</div>`;
+        });
+}
+
+// Выбор из предпросмотра
+document.getElementById('selectFromPreview').addEventListener('click', function() {
+    if (currentTemplateType) {
+        selectTemplate(currentTemplateType);
+    }
+});
+</script>
+{% endblock %}
+

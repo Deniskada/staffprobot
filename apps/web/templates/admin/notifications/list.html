@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .badge {
+        font-size: 0.875rem;
+    }
+    .notification-checkbox {
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">{{ title }}</h1>
+                <div class="btn-group">
+                    <a href="{{ url_for('admin_notifications_dashboard') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-tachometer-alt"></i> Дашборд
+                    </a>
+                    <button class="btn btn-outline-warning" onclick="bulkRetry()">
+                        <i class="fas fa-redo"></i> Повторить отправку
+                    </button>
+                    <button class="btn btn-outline-success" onclick="exportNotifications('csv')">
+                        <i class="fas fa-download"></i> Экспорт
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="bulkDelete()">
+                        <i class="fas fa-trash"></i> Удалить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Фильтры</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" id="filtersForm" class="row g-3">
+                        <div class="col-md-2">
+                            <label for="status_filter" class="form-label">Статус</label>
+                            <select class="form-select" id="status_filter" name="status_filter">
+                                <option value="">Все</option>
+                                {% for status in filter_options.statuses %}
+                                <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>
+                                    {{ status.replace('_', ' ').title() }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="channel_filter" class="form-label">Канал</label>
+                            <select class="form-select" id="channel_filter" name="channel_filter">
+                                <option value="">Все</option>
+                                {% for channel in filter_options.channels %}
+                                <option value="{{ channel }}" {% if filters.channel == channel %}selected{% endif %}>
+                                    {{ channel.replace('_', ' ').title() }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="type_filter" class="form-label">Тип</label>
+                            <select class="form-select" id="type_filter" name="type_filter">
+                                <option value="">Все</option>
+                                {% for type in filter_options.types %}
+                                <option value="{{ type }}" {% if filters.type == type %}selected{% endif %}>
+                                    {{ type.replace('_', ' ').title() }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="user_id" class="form-label">ID пользователя</label>
+                            <input type="number" class="form-control" id="user_id" name="user_id" 
+                                   value="{{ filters.user_id or '' }}" placeholder="ID пользователя">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="date_from" class="form-label">Дата от</label>
+                            <input type="date" class="form-control" id="date_from" name="date_from" 
+                                   value="{{ filters.date_from or '' }}">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="date_to" class="form-label">Дата до</label>
+                            <input type="date" class="form-control" id="date_to" name="date_to" 
+                                   value="{{ filters.date_to or '' }}">
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" id="applyFiltersBtn" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Применить фильтры
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="resetFilters()">
+                                <i class="fas fa-times"></i> Сбросить
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Список уведомлений -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        Уведомления 
+                        <span class="badge badge-primary">{{ total_count }}</span>
+                        <span id="selectedCount" class="badge badge-warning d-none ms-2"></span>
+                    </h5>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                        <label class="form-check-label" for="selectAll">
+                            Выбрать все
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body" id="notificationsTableContainer">
+                    {% if notifications %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th width="50">
+                                            <input type="checkbox" class="form-check-input" onchange="toggleSelectAll()">
+                                        </th>
+                                        <th>ID</th>
+                                        <th>Тип</th>
+                                        <th>Статус</th>
+                                        <th>Канал</th>
+                                        <th>Приоритет</th>
+                                        <th>Пользователь</th>
+                                        <th>Заголовок</th>
+                                        <th>Создано</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for notification in notifications %}
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input notification-checkbox" 
+                                                   value="{{ notification.id }}">
+                                        </td>
+                                        <td>{{ notification.id }}</td>
+                                        <td>
+                                            <span class="badge badge-secondary">
+                                                {{ notification.type.replace('_', ' ') }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if notification.status == 'delivered' %}
+                                                <span class="badge badge-success">{{ notification.status }}</span>
+                                            {% elif notification.status == 'pending' %}
+                                                <span class="badge badge-warning">{{ notification.status }}</span>
+                                            {% elif notification.status == 'failed' %}
+                                                <span class="badge badge-danger">{{ notification.status }}</span>
+                                            {% elif notification.status == 'cancelled' %}
+                                                <span class="badge badge-secondary">{{ notification.status }}</span>
+                                            {% else %}
+                                                <span class="badge badge-info">{{ notification.status }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-outline-primary">
+                                                {{ notification.channel }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if notification.priority %}
+                                                {% if notification.priority == 'high' %}
+                                                    <span class="badge badge-danger">{{ notification.priority }}</span>
+                                                {% elif notification.priority == 'medium' %}
+                                                    <span class="badge badge-warning">{{ notification.priority }}</span>
+                                                {% else %}
+                                                    <span class="badge badge-info">{{ notification.priority }}</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="#" onclick="viewUser({{ notification.user_id }})">
+                                                {{ notification.user_name }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <span title="{{ notification.subject }}">
+                                                {{ notification.subject[:50] }}{% if notification.subject|length > 50 %}...{% endif %}
+                                            </span>
+                                        </td>
+                                        <td>{{ notification.created_at.strftime('%d.%m.%Y %H:%M') if notification.created_at else '-' }}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-info" 
+                                                        onclick="viewNotification({{ notification.id }})"
+                                                        title="Просмотр">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                {% if notification.status == 'failed' %}
+                                                <button class="btn btn-outline-warning" 
+                                                        onclick="retryNotification({{ notification.id }})"
+                                                        title="Повторить">
+                                                    <i class="fas fa-redo"></i>
+                                                </button>
+                                                {% endif %}
+                                                {% if notification.status in ['pending', 'scheduled'] %}
+                                                <button class="btn btn-outline-danger" 
+                                                        onclick="cancelNotification({{ notification.id }})"
+                                                        title="Отменить">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Пагинация -->
+                        {% if total_pages > 1 %}
+                        <nav aria-label="Пагинация">
+                            <ul class="pagination justify-content-center">
+                                {% if page > 1 %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page - 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                        Предыдущая
+                                    </a>
+                                </li>
+                                {% endif %}
+                                
+                                {% for p in range(1, total_pages + 1) %}
+                                    {% if p == page %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ p }}</span>
+                                    </li>
+                                    {% elif p >= page - 2 and p <= page + 2 %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ p }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                            {{ p }}
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if page < total_pages %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page + 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                        Следующая
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Уведомления не найдены</h5>
+                            <p class="text-muted">Попробуйте изменить фильтры поиска</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index: 11000;"></div>
+
+<!-- Modal для просмотра уведомления -->
+<div class="modal fade" id="notificationModal" tabindex="-1" aria-labelledby="notificationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="notificationModalLabel">
+                    Уведомление #<span id="modalNotificationId"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Тип:</strong> <span id="modalNotificationType"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Статус:</strong> <span id="modalNotificationStatus"></span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Канал:</strong> <span id="modalNotificationChannel"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Создано:</strong> <span id="modalNotificationCreatedAt"></span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <strong>Заголовок:</strong><br>
+                    <span id="modalNotificationSubject"></span>
+                </div>
+                <div class="mb-3">
+                    <strong>Сообщение:</strong><br>
+                    <div id="modalNotificationMessage" style="white-space: pre-wrap;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/admin/notifications.js') }}"></script>
+{% endblock %}
+

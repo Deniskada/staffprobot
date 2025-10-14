@@ -23,7 +23,7 @@
 - [GET] `/admin/api/financial`  — (apps/web/routes/admin_reports.py)
 - [GET] `/admin/api/list`  — (apps/web/routes/user_subscriptions.py)
 - [GET] `/admin/api/list`  — (apps/web/routes/tariffs.py)
-- [GET] `/admin/api/notifications`  — (apps/web/routes/billing.py)
+- [GET] `/admin/api/notifications`  — (apps/web/routes/billing.py) платежные уведомления
 - [GET] `/admin/api/statistics`  — (apps/web/routes/tariffs.py)
 - [GET] `/admin/api/transactions`  — (apps/web/routes/billing.py)
 - [GET] `/admin/api/usage/{user_id}`  — (apps/web/routes/billing.py)
@@ -67,6 +67,26 @@
 - [GET] `/admin/{tariff_id}/edit`  — (apps/web/routes/tariffs.py)
 - [POST] `/admin/{tariff_id}/edit`  — (apps/web/routes/tariffs.py)
 
+## Управление уведомлениями (Итерация 25)
+- [GET] `/admin/notifications/`  — (apps/web/routes/admin_notifications.py) дашборд уведомлений
+- [GET] `/admin/notifications/list`  — (apps/web/routes/admin_notifications.py) список уведомлений с фильтрами
+- [GET] `/admin/notifications/analytics`  — (apps/web/routes/admin_notifications.py) детальная аналитика
+- [GET] `/admin/notifications/templates`  — (apps/web/routes/admin_notifications.py) управление шаблонами
+- [GET] `/admin/notifications/templates/create`  — (apps/web/routes/admin_notifications.py) создание шаблона
+- [GET] `/admin/notifications/templates/{id}/edit`  — (apps/web/routes/admin_notifications.py) редактирование шаблона
+- [POST] `/admin/notifications/templates/{id}/delete`  — (apps/web/routes/admin_notifications.py) удаление шаблона
+- [POST] `/admin/notifications/templates/{id}/test`  — (apps/web/routes/admin_notifications.py) тестирование шаблона
+- [GET] `/admin/notifications/settings`  — (apps/web/routes/admin_notifications.py) настройки каналов доставки
+- [POST] `/admin/notifications/settings/email`  — (apps/web/routes/admin_notifications.py) настройки Email
+- [POST] `/admin/notifications/settings/sms`  — (apps/web/routes/admin_notifications.py) настройки SMS
+- [POST] `/admin/notifications/settings/push`  — (apps/web/routes/admin_notifications.py) настройки Push
+- [POST] `/admin/notifications/settings/telegram`  — (apps/web/routes/admin_notifications.py) настройки Telegram
+- [POST] `/admin/api/notifications/bulk/cancel`  — (apps/web/routes/admin_notifications.py) отмена уведомлений
+- [POST] `/admin/api/notifications/bulk/retry`  — (apps/web/routes/admin_notifications.py) повторная отправка
+- [POST] `/admin/api/notifications/bulk/delete`  — (apps/web/routes/admin_notifications.py) удаление уведомлений
+- [POST] `/admin/api/notifications/bulk/export`  — (apps/web/routes/admin_notifications.py) экспорт уведомлений
+- [POST] `/admin/api/notifications/test`  — (apps/web/routes/admin_notifications.py) тестовая отправка
+
 ## Шаблоны (Jinja2)
 - `admin/assign_subscription.html`
 - `admin/billing_dashboard.html`
@@ -87,3 +107,12 @@
 - `admin/user_subscriptions.html`
 - `admin/users.html`
 - `admin/users_report.html`
+
+## Шаблоны уведомлений (Итерация 25)
+- `admin/notifications/dashboard.html` — дашборд уведомлений
+- `admin/notifications/list.html` — список уведомлений с фильтрами
+- `admin/notifications/analytics.html` — детальная аналитика
+- `admin/notifications/templates/list.html` — список шаблонов
+- `admin/notifications/templates/edit.html` — редактор шаблонов
+- `admin/notifications/templates/create.html` — создание шаблона
+- `admin/notifications/settings.html` — настройки каналов доставки

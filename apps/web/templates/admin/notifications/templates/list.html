@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">{{ title }}</h1>
+                <div class="btn-group">
+                    <a href="{{ url_for('admin_notifications_dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-tachometer-alt"></i> Дашборд
+                    </a>
+                    <a href="{{ url_for('admin_notifications_templates_select_static') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-edit"></i> Переопределить
+                    </a>
+                    <a href="{{ url_for('admin_notifications_template_create_page') }}" class="btn btn-outline-success">
+                        <i class="fas fa-plus"></i> Создать с нуля
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Фильтры</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="type_filter" class="form-label">Тип уведомления</label>
+                            <select class="form-select" id="type_filter" name="type_filter">
+                                <option value="">Все типы</option>
+                                {% for type in available_types %}
+                                <option value="{{ type.value }}" {% if type_filter == type.value %}selected{% endif %}>
+                                    {{ type.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="status_filter" class="form-label">Статус</label>
+                            <select class="form-select" id="status_filter" name="status_filter">
+                                <option value="">Все статусы</option>
+                                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активные</option>
+                                <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Неактивные</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="per_page" class="form-label">На странице</label>
+                            <select class="form-select" id="per_page" name="per_page">
+                                <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                                <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+                                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-search"></i> Применить
+                            </button>
+                            <a href="{{ url_for('admin_notifications_templates_list') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> Сбросить
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Список шаблонов -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        Шаблоны 
+                        <span class="badge badge-primary">{{ total_count }}</span>
+                    </h5>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                        <label class="form-check-label" for="selectAll">
+                            Выбрать все
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if templates %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th width="50">
+                                            <input type="checkbox" class="form-check-input" onchange="toggleSelectAll()">
+                                        </th>
+                                        <th>Тип</th>
+                                        <th>Заголовок</th>
+                                        <th>Переменные</th>
+                                        <th>Статус</th>
+                                        <th>Использований</th>
+                                        <th>Обновлен</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for template in templates %}
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input template-checkbox" 
+                                                   value="{{ template.id }}">
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-secondary">
+                                                {{ template.type.value.replace('_', ' ').title() if template.type else 'N/A' }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <strong>{{ template.name }}</strong>
+                                        </td>
+                                        <td>
+                                            {% if template.variables %}
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    {% for variable in template.variables[:3] %}
+                                                    <span class="badge badge-outline-info">{{ variable }}</span>
+                                                    {% endfor %}
+                                                    {% if template.variables|length > 3 %}
+                                                    <span class="badge badge-outline-secondary">+{{ template.variables|length - 3 }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">Нет переменных</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if template.is_active %}
+                                                <span class="badge badge-success">Активен</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Неактивен</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-info">{{ template.usage_count }}</span>
+                                        </td>
+                                        <td>{{ template.updated_at.strftime('%d.%m.%Y %H:%M') if template.updated_at else '-' }}</td>
+                                        <td class="text-nowrap">
+                                            <a href="/admin/notifications/templates/{{ template.id }}" 
+                                               class="btn btn-sm btn-info me-1" 
+                                               title="Просмотр">
+                                                <i class="fas fa-eye"></i> Просмотр
+                                            </a>
+                                            <a href="/admin/notifications/templates/edit/{{ template.id }}" 
+                                               class="btn btn-sm btn-primary me-1" 
+                                               title="Редактировать">
+                                                <i class="fas fa-edit"></i> Изменить
+                                            </a>
+                                            {% if template.is_active %}
+                                                <button class="btn btn-sm btn-danger" 
+                                                        onclick="deleteTemplate('{{ template.id }}')"
+                                                        title="Удалить">
+                                                    <i class="fas fa-trash"></i> Удалить
+                                                </button>
+                                            {% else %}
+                                                <button class="btn btn-sm btn-success" 
+                                                        onclick="restoreTemplate('{{ template.id }}')"
+                                                        title="Восстановить">
+                                                    <i class="fas fa-undo"></i> Восстановить
+                                                </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Пагинация -->
+                        {% if total_pages > 1 %}
+                        <nav aria-label="Пагинация">
+                            <ul class="pagination justify-content-center">
+                                {% if page > 1 %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page - 1 }}{% if type_filter %}&type_filter={{ type_filter }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">
+                                        Предыдущая
+                                    </a>
+                                </li>
+                                {% endif %}
+                                
+                                {% for p in range(1, total_pages + 1) %}
+                                    {% if p == page %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ p }}</span>
+                                    </li>
+                                    {% elif p >= page - 2 and p <= page + 2 %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ p }}{% if type_filter %}&type_filter={{ type_filter }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">
+                                            {{ p }}
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if page < total_pages %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page + 1 }}{% if type_filter %}&type_filter={{ type_filter }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">
+                                        Следующая
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Шаблоны не найдены</h5>
+                            <p class="text-muted">Начните с переопределения существующего шаблона или создайте новый с нуля</p>
+                            <div class="mt-3">
+                                <a href="{{ url_for('admin_notifications_templates_select_static') }}" class="btn btn-outline-primary me-2">
+                                    <i class="fas fa-edit"></i> Переопределить
+                                </a>
+                                <a href="{{ url_for('admin_notifications_template_create_page') }}" class="btn btn-outline-success">
+                                    <i class="fas fa-plus"></i> Создать с нуля
+                                </a>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index: 11000;"></div>
+
+<!-- Модальное окно для тестирования шаблона -->
+<div class="modal fade" id="testTemplateModal" tabindex="-1" aria-labelledby="testTemplateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="testTemplateModalLabel">Тестирование шаблона</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="testTemplateForm">
+                    <div class="mb-3">
+                        <label for="testChannel" class="form-label">Канал доставки</label>
+                        <select class="form-select" id="testChannel" name="channel">
+                            <option value="email">Email</option>
+                            <option value="telegram">Telegram</option>
+                            <option value="push">Push</option>
+                            <option value="sms">SMS</option>
+                            <option value="in_app">In-App</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="testVariables" class="form-label">Тестовые переменные (JSON)</label>
+                        <textarea class="form-control" id="testVariables" name="variables" rows="10" 
+                                  placeholder='{"user_name": "Иван Иванов", "object_name": "Кафе Центр", ...}'></textarea>
+                    </div>
+                </form>
+                <div id="testResult" class="mt-3" style="display: none;">
+                    <h6>Результат тестирования:</h6>
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 id="testTitle"></h6>
+                            <div id="testMessage"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" onclick="runTemplateTest()">Тестировать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentTemplateId = null;
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.template-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
+
+function viewTemplate(id) {
+    // Заглушка для просмотра шаблона
+    alert('Просмотр шаблона: ' + id);
+}
+
+function editTemplate(id) {
+    // Переход на страницу редактирования
+    window.location.href = `/admin/notifications/templates/${id}/edit`;
+}
+
+function testTemplate(id) {
+    currentTemplateId = id;
+    const modal = new bootstrap.Modal(document.getElementById('testTemplateModal'));
+    modal.show();
+}
+
+async function deleteTemplate(id) {
+    console.log('deleteTemplate called with id:', id);
+    
+    if (confirm('Удалить шаблон ' + id + '?')) {
+        console.log('User confirmed deletion');
+        
+        try {
+            const url = `/admin/notifications/api/templates/delete/${id}`;
+            console.log('Making request to:', url);
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            console.log('Response status:', response.status);
+            const data = await response.json();
+            console.log('Response data:', data);
+            
+            if (response.ok) {
+                showToast(data.message || 'Шаблон успешно удалён', 'success');
+                // Перезагружаем страницу через 1.5 секунды
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showToast(data.detail || 'Ошибка удаления шаблона', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Ошибка отправки запроса: ' + error.message, 'error');
+        }
+    }
+}
+
+async function restoreTemplate(id) {
+    console.log('restoreTemplate called with id:', id);
+    
+    if (confirm('Восстановить шаблон ' + id + '?')) {
+        console.log('User confirmed restoration');
+        
+        try {
+            const url = `/admin/notifications/api/templates/restore/${id}`;
+            console.log('Making request to:', url);
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            console.log('Response status:', response.status);
+            const data = await response.json();
+            console.log('Response data:', data);
+            
+            if (response.ok) {
+                showToast(data.message || 'Шаблон успешно восстановлён', 'success');
+                // Перезагружаем страницу через 1.5 секунды
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showToast(data.detail || 'Ошибка восстановления шаблона', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Ошибка отправки запроса: ' + error.message, 'error');
+        }
+    }
+}
+
+function runTemplateTest() {
+    const channel = document.getElementById('testChannel').value;
+    const variablesText = document.getElementById('testVariables').value;
+    
+    try {
+        const variables = JSON.parse(variablesText);
+        
+        // Заглушка для тестирования
+        document.getElementById('testTitle').textContent = 'Тестовый заголовок';
+        document.getElementById('testMessage').innerHTML = '<p>Тестовое сообщение с переменными: ' + JSON.stringify(variables) + '</p>';
+        document.getElementById('testResult').style.display = 'block';
+        
+    } catch (e) {
+        alert('Ошибка в JSON: ' + e.message);
+    }
+}
+
+function showToast(message, type = 'info') {
+    const toastContainer = document.getElementById('toastContainer');
+    const toastId = 'toast-' + Date.now();
+    
+    const bgClass = type === 'success' ? 'bg-success' : 
+                    type === 'error' ? 'bg-danger' : 
+                    type === 'warning' ? 'bg-warning' : 'bg-info';
+    
+    const toast = document.createElement('div');
+    toast.id = toastId;
+    toast.className = `toast align-items-center text-white ${bgClass} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
+}
+</script>
+{% endblock %}
+
