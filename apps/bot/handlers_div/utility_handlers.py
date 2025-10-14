@@ -177,6 +177,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             from .schedule_handlers import handle_cancellation_document_input
             await handle_cancellation_document_input(update, context)
             return
+        elif user_state.step == UserStep.INPUT_PHOTO:
+            # Обработка загрузки фото для отмены
+            from .schedule_handlers import handle_cancellation_photo_upload
+            await handle_cancellation_photo_upload(update, context)
+            return
     
     # Проверяем состояние пользователя для ввода дат отчета
     if user_state and user_state.action == UserAction.REPORT_DATES:
