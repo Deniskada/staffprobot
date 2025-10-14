@@ -40,17 +40,17 @@ def process_closed_shifts_adjustments():
             cutoff_time = datetime.now() - timedelta(minutes=15)
             
             async with get_async_session() as session:
-                # Найти смены, закрытые за последние 15 минут
+                # Найти смены, закрытые за последние 15 минут (по updated_at)
                 shifts_query = select(Shift).options(
                     selectinload(Shift.object),
                     selectinload(Shift.time_slot)
                 ).where(
                     and_(
                         Shift.status == 'completed',
-                        Shift.end_time >= cutoff_time,
+                        Shift.updated_at >= cutoff_time,  # Используем updated_at вместо end_time
                         Shift.end_time.isnot(None)
                     )
-                ).order_by(Shift.end_time.desc())
+                ).order_by(Shift.updated_at.desc())
                 
                 shifts_result = await session.execute(shifts_query)
                 shifts = shifts_result.scalars().all()
