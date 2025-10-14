@@ -880,9 +880,23 @@ async def manager_employee_add(
                 if not accessible_objects:
                     raise HTTPException(status_code=403, detail="Нет доступных объектов")
                 
-                # Получаем владельца первого объекта
-                first_object = accessible_objects[0]
-                owner_id = first_object.owner_id
+                # Преобразуем contract_objects в список целых чисел
+                selected_object_ids = [int(obj_id) for obj_id in contract_objects]
+                
+                # Находим выбранные объекты среди доступных
+                accessible_obj_dict = {obj.id: obj for obj in accessible_objects}
+                selected_objects = [accessible_obj_dict[obj_id] for obj_id in selected_object_ids if obj_id in accessible_obj_dict]
+                
+                if not selected_objects:
+                    raise HTTPException(status_code=403, detail="Выбранные объекты недоступны")
+                
+                # Проверяем, что все выбранные объекты принадлежат одному владельцу
+                owner_ids = set(obj.owner_id for obj in selected_objects)
+                if len(owner_ids) > 1:
+                    raise HTTPException(status_code=400, detail="Все объекты должны принадлежать одному владельцу")
+                
+                # Получаем owner_id из выбранных объектов
+                owner_id = selected_objects[0].owner_id
                 
                 # Парсим даты
                 start_date = None
