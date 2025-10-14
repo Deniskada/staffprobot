@@ -868,83 +868,83 @@ async def manager_employee_add(
                 role_service = RoleService(db)
                 from domain.entities.user import UserRole
                 await role_service.add_role(user.id, UserRole(role))
+                
+                logger.info(f"Created new user {user.id}")
             
-                # Создаем договор (обязательно для сотрудников)
-                if contract_objects:
-                    # Получаем доступные объекты для проверки владельца
+            # Создаем договор (общий блок для существующих и новых пользователей)
+            if contract_objects:
+                # Получаем доступные объекты для проверки владельца
+                permission_service = ManagerPermissionService(db)
+                accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+                
+                if not accessible_objects:
+                    raise HTTPException(status_code=403, detail="Нет доступных объектов")
+                
+                # Получаем владельца первого объекта
+                first_object = accessible_objects[0]
+                owner_id = first_object.owner_id
+                
+                # Парсим даты
+                start_date = None
+                end_date = None
+                if start_date_str:
+                    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                if end_date_str:
+                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+            
+                # Создаем договор напрямую
+                from domain.entities.contract import Contract
+                
+                # Генерируем номер договора
+                contract_service = ContractService()
+                contract_number = await contract_service._generate_contract_number(owner_id)
+                
+                # Генерируем заголовок договора
+                title = f"Трудовой Договор с {first_name} {last_name}".strip()
+                
+                contract = Contract(
+                    contract_number=contract_number,
+                    employee_id=user.id,
+                    owner_id=owner_id,  # Используем владельца объекта, а не управляющего
+                    template_id=int(contract_template_id) if contract_template_id and contract_template_id.strip() else None,
+                    title=title,
+                    hourly_rate=hourly_rate,
+                    start_date=start_date,
+                    end_date=end_date,
+                    allowed_objects=[int(obj_id) for obj_id in contract_objects if obj_id and obj_id.strip()],
+                    is_active=True,
+                    status="active"
+                )
+                
+                db.add(contract)
+                await db.commit()
+                await db.refresh(contract)
+                
+                # Обновляем роль пользователя на employee
+                contract_service = ContractService()
+                await contract_service._update_employee_role(db, user.id)
+                
+                # Создаем права управляющего на объекты если роль manager
+                if role == "manager":
                     permission_service = ManagerPermissionService(db)
-                    accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-                    
-                    if not accessible_objects:
-                        raise HTTPException(status_code=403, detail="Нет доступных объектов")
-                    
-                    # Получаем владельца первого объекта
-                    first_object = accessible_objects[0]
-                    owner_id = first_object.owner_id
-                    
-                    # Парсим даты
-                    start_date = None
-                    end_date = None
-                    if start_date_str:
-                        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-                    if end_date_str:
-                        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                    for obj_id in contract_objects:
+                        await permission_service.create_permission(
+                            contract_id=contract.id,
+                            object_id=int(obj_id),
+                            permissions={
+                                "can_view": True,
+                                "can_edit": True,
+                                "can_delete": False,
+                                "can_manage_employees": True,
+                                "can_view_finances": True,
+                                "can_edit_rates": True,
+                                "can_edit_schedule": True
+                            }
+                        )
                 
-                    # Создаем договор напрямую
-                    from domain.entities.contract import Contract
-                    
-                    # Генерируем номер договора
-                    contract_service = ContractService()
-                    contract_number = await contract_service._generate_contract_number(owner_id)
-                    
-                    # Генерируем заголовок договора
-                    title = f"Трудовой Договор с {first_name} {last_name}".strip()
-                    
-                    contract = Contract(
-                        contract_number=contract_number,
-                        employee_id=user.id,
-                        owner_id=owner_id,  # Используем владельца объекта, а не управляющего
-                        template_id=int(contract_template_id) if contract_template_id and contract_template_id.strip() else None,
-                        title=title,
-                        hourly_rate=hourly_rate,
-                        start_date=start_date,
-                        end_date=end_date,
-                        allowed_objects=[int(obj_id) for obj_id in contract_objects if obj_id and obj_id.strip()],
-                        is_active=True,
-                        status="active"
-                    )
-                    
-                    db.add(contract)
-                    await db.commit()
-                    await db.refresh(contract)
-                    
-                    # Обновляем роль пользователя на employee
-                    contract_service = ContractService()
-                    await contract_service._update_employee_role(db, user.id)
-                    
-                    # Создаем права управляющего на объекты если роль manager
-                    if role == "manager":
-                        permission_service = ManagerPermissionService(db)
-                        for obj_id in contract_objects:
-                            await permission_service.create_permission(
-                                contract_id=contract.id,
-                                object_id=int(obj_id),
-                                permissions={
-                                    "can_view": True,
-                                    "can_edit": True,
-                                    "can_delete": False,
-                                    "can_manage_employees": True,
-                                    "can_view_finances": True,
-                                    "can_edit_rates": True,
-                                    "can_edit_schedule": True
-                                }
-                            )
-                    
-                    logger.info(f"Created contract {contract.id} for employee {user.id}")
-                
-                logger.info(f"Created new employee {user.id} by manager {user_id}")
-                
-                return RedirectResponse(url=f"/manager/employees/{user.id}", status_code=302)
+                logger.info(f"Created contract {contract.id} for user {user.id} by manager {user_id}")
+            
+            return RedirectResponse(url=f"/manager/employees/{user.id}", status_code=302)
         
     except HTTPException:
         raise
