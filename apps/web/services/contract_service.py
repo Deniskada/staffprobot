@@ -1914,7 +1914,7 @@ class ContractService:
                 logger.error(f"User with id {employee_id} not found")
                 return
             
-            # Если нет активных договоров, убираем роль employee
+            # Если нет активных договоров, убираем роль employee и делаем пользователя неактивным
             if not active_contracts:
                 if user.role == "employee":
                     user.role = "applicant"
@@ -1925,8 +1925,11 @@ class ContractService:
                     if not user.roles:  # Если массив стал пустым
                         user.roles = ["applicant"]
                 
+                # Делаем пользователя неактивным
+                user.is_active = False
+                
                 await session.commit()
-                logger.info(f"Removed employee role from user {employee_id} - no active contracts")
+                logger.info(f"Removed employee role from user {employee_id} and marked as inactive - no active contracts")
             else:
                 logger.info(f"User {employee_id} still has {len(active_contracts)} active contracts")
             

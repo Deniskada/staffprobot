@@ -1275,11 +1275,32 @@ async def manager_employee_terminate(
             
             # Расторгаем договор
             contract.status = "terminated"
+            contract.is_active = False
             contract.terminated_at = datetime.now()
             contract.termination_reason = reason
             
             await db.commit()
             await db.refresh(contract)
+            
+            # Проверяем, есть ли у сотрудника другие активные договоры
+            from domain.entities.user import User
+            remaining_contracts_query = select(Contract).where(
+                Contract.employee_id == employee_id,
+                Contract.is_active == True,
+                Contract.status == 'active'
+            )
+            remaining_result = await db.execute(remaining_contracts_query)
+            remaining_contracts = remaining_result.scalars().all()
+            
+            # Если это был последний активный договор - делаем сотрудника неактивным
+            if not remaining_contracts:
+                user_query = select(User).where(User.id == employee_id)
+                user_result = await db.execute(user_query)
+                user = user_result.scalar_one_or_none()
+                if user:
+                    user.is_active = False
+                    await db.commit()
+                    logger.info(f"User {employee_id} marked as inactive (no active contracts)")
             
             logger.info(f"Terminated contract {contract.id} for employee {employee_id} by manager {user_id}")
             
@@ -4740,6 +4761,7 @@ async def manager_contract_terminate(
         
         # Расторгаем договор
         contract.status = 'terminated'
+        contract.is_active = False
         contract.terminated_at = datetime.now()
         
         # Добавляем причину в values или notes
@@ -4749,6 +4771,27 @@ async def manager_contract_terminate(
         contract.values['terminated_by'] = user_id
         
         await db.commit()
+        
+        # Проверяем, есть ли у сотрудника другие активные договоры
+        from domain.entities.user import User
+        employee_id = contract.employee_id
+        remaining_contracts_query = select(Contract).where(
+            Contract.employee_id == employee_id,
+            Contract.is_active == True,
+            Contract.status == 'active'
+        )
+        remaining_result = await db.execute(remaining_contracts_query)
+        remaining_contracts = remaining_result.scalars().all()
+        
+        # Если это был последний активный договор - делаем сотрудника неактивным
+        if not remaining_contracts:
+            user_query = select(User).where(User.id == employee_id)
+            user_result = await db.execute(user_query)
+            user = user_result.scalar_one_or_none()
+            if user:
+                user.is_active = False
+                await db.commit()
+                logger.info(f"User {employee_id} marked as inactive (no active contracts)")
         
         logger.info(
             f"Contract terminated by manager",
