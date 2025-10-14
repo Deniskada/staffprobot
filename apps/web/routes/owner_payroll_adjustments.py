@@ -26,8 +26,8 @@ router = APIRouter(prefix="/payroll-adjustments", tags=["owner-payroll-adjustmen
 async def payroll_adjustments_list(
     request: Request,
     adjustment_type: Optional[str] = Query(None, description="Тип корректировки"),
-    employee_id: Optional[int] = Query(None, description="ID сотрудника"),
-    object_id: Optional[int] = Query(None, description="ID объекта"),
+    employee_id: Optional[str] = Query(None, description="ID сотрудника"),
+    object_id: Optional[str] = Query(None, description="ID объекта"),
     is_applied: Optional[str] = Query(None, description="Статус применения: all/applied/unapplied"),
     date_from: Optional[str] = Query(None, description="Дата начала (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
@@ -39,6 +39,20 @@ async def payroll_adjustments_list(
 ):
     """Список корректировок начислений с фильтрами."""
     try:
+        # Конвертация строковых ID в int, игнорируя пустые строки
+        employee_id_int = None
+        if employee_id and employee_id.strip():
+            try:
+                employee_id_int = int(employee_id)
+            except ValueError:
+                pass
+        
+        object_id_int = None
+        if object_id and object_id.strip():
+            try:
+                object_id_int = int(object_id)
+            except ValueError:
+                pass
         # Парсинг дат
         if date_from:
             try:
@@ -72,11 +86,11 @@ async def payroll_adjustments_list(
         if adjustment_type:
             query = query.where(PayrollAdjustment.adjustment_type == adjustment_type)
         
-        if employee_id:
-            query = query.where(PayrollAdjustment.employee_id == employee_id)
+        if employee_id_int:
+            query = query.where(PayrollAdjustment.employee_id == employee_id_int)
         
-        if object_id:
-            query = query.where(PayrollAdjustment.object_id == object_id)
+        if object_id_int:
+            query = query.where(PayrollAdjustment.object_id == object_id_int)
         
         if is_applied == "applied":
             query = query.where(PayrollAdjustment.is_applied == True)
@@ -133,8 +147,8 @@ async def payroll_adjustments_list(
                 "adjustment_types": adjustment_types,
                 # Фильтры
                 "filter_adjustment_type": adjustment_type,
-                "filter_employee_id": employee_id,
-                "filter_object_id": object_id,
+                "filter_employee_id": employee_id_int,
+                "filter_object_id": object_id_int,
                 "filter_is_applied": is_applied,
                 "filter_date_from": date_from or start_date.isoformat(),
                 "filter_date_to": date_to or end_date.isoformat(),
