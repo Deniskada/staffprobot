@@ -142,20 +142,47 @@ def create_payroll_entries_by_schedule():
                                             )
                                             continue
                                         
-                                        # Рассчитать итоговые суммы
+                                        # Рассчитать итоговые суммы и часы
                                         gross_amount = Decimal('0.00')
                                         total_bonuses = Decimal('0.00')
                                         total_deductions = Decimal('0.00')
+                                        total_hours = Decimal('0.00')
+                                        avg_hourly_rate = Decimal('0.00')
                                         
+                                        shift_adjustments = []
                                         for adj in adjustments:
                                             amount_decimal = Decimal(str(adj.amount))
                                             
                                             if adj.adjustment_type == 'shift_base':
                                                 gross_amount += amount_decimal
+                                                shift_adjustments.append(adj)
                                             elif amount_decimal > 0:
                                                 total_bonuses += amount_decimal
                                             else:
                                                 total_deductions += abs(amount_decimal)
+                                        
+                                        # Получить часы и ставку из смен
+                                        if shift_adjustments:
+                                            from domain.entities.shift import Shift
+                                            shift_ids = [adj.shift_id for adj in shift_adjustments if adj.shift_id]
+                                            if shift_ids:
+                                                shifts_result = await session.execute(
+                                                    select(Shift).where(Shift.id.in_(shift_ids))
+                                                )
+                                                shifts = shifts_result.scalars().all()
+                                                for shift in shifts:
+                                                    if shift.total_hours:
+                                                        total_hours += Decimal(str(shift.total_hours))
+                                                    if shift.hourly_rate:
+                                                        avg_hourly_rate = Decimal(str(shift.hourly_rate))
+                                        
+                                        # Если нет часов, попытаться рассчитать
+                                        if total_hours == 0 and gross_amount > 0 and avg_hourly_rate > 0:
+                                            total_hours = gross_amount / avg_hourly_rate
+                                        
+                                        # Если всё ещё нет ставки, взять из объекта
+                                        if avg_hourly_rate == 0:
+                                            avg_hourly_rate = Decimal(str(obj.hourly_rate)) if obj.hourly_rate else Decimal('200.00')
                                         
                                         net_amount = gross_amount + total_bonuses - total_deductions
                                         
@@ -166,12 +193,12 @@ def create_payroll_entries_by_schedule():
                                             object_id=obj.id,
                                             period_start=period_start,
                                             period_end=period_end,
+                                            hours_worked=float(total_hours),
+                                            hourly_rate=float(avg_hourly_rate),
                                             gross_amount=float(gross_amount),
                                             total_bonuses=float(total_bonuses),
                                             total_deductions=float(total_deductions),
-                                            net_amount=float(net_amount),
-                                            status='pending',
-                                            payment_schedule_id=schedule.id
+                                            net_amount=float(net_amount)
                                         )
                                         
                                         session.add(payroll_entry)
