@@ -140,6 +140,7 @@
                                     {% elif adj.adjustment_type == 'task_penalty' %}bg-warning
                                     {% elif adj.adjustment_type == 'manual_bonus' %}bg-primary
                                     {% elif adj.adjustment_type == 'manual_deduction' %}bg-dark
+                                    {% elif adj.adjustment_type.startswith('cancellation_fine') %}bg-warning text-dark
                                     {% endif %}">
                                     {{ adj.get_type_label() }}
                                 </span>
