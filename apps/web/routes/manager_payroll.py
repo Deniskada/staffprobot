@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from typing import Optional
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from apps.web.jinja import templates
@@ -31,10 +31,18 @@ async def manager_payroll_list(
     db: AsyncSession = Depends(get_db_session),
     period_start: Optional[str] = Query(None),
     period_end: Optional[str] = Query(None),
-    object_id: Optional[int] = Query(None)
+    object_id: Optional[str] = Query(None)  # Изменено на str для обработки пустых значений
 ):
     """Список начислений (только по доступным объектам)."""
     try:
+        # Конвертация object_id в int, игнорируя пустые строки
+        object_id_int = None
+        if object_id and object_id.strip():
+            try:
+                object_id_int = int(object_id)
+            except ValueError:
+                pass
+        
         # current_user - это объект User с множественными ролями
         user_id = current_user.id
         user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
@@ -72,13 +80,10 @@ async def manager_payroll_list(
             start_date = datetime.strptime(period_start, "%Y-%m-%d").date()
             end_date = datetime.strptime(period_end, "%Y-%m-%d").date()
         else:
-            # По умолчанию - текущий месяц
+            # По умолчанию - последние 60 дней (чтобы показать хоть какие-то начисления)
             today = date.today()
-            start_date = date(today.year, today.month, 1)
-            if today.month == 12:
-                end_date = date(today.year + 1, 1, 1)
-            else:
-                end_date = date(today.year, today.month + 1, 1)
+            start_date = today - timedelta(days=60)
+            end_date = today
         
         # Получить сотрудников с начислениями
         employees_data = []
@@ -87,8 +92,8 @@ async def manager_payroll_list(
         from domain.entities.payroll_entry import PayrollEntry
         
         # Фильтр по объекту (если указан)
-        if object_id and object_id in accessible_object_ids:
-            object_filter = PayrollEntry.object_id == object_id
+        if object_id_int and object_id_int in accessible_object_ids:
+            object_filter = PayrollEntry.object_id == object_id_int
         else:
             object_filter = PayrollEntry.object_id.in_(accessible_object_ids)
         
@@ -138,7 +143,7 @@ async def manager_payroll_list(
                 "accessible_objects": accessible_objects,
                 "period_start": period_start or start_date.strftime("%Y-%m-%d"),
                 "period_end": period_end or end_date.strftime("%Y-%m-%d"),
-                "selected_object_id": object_id
+                "selected_object_id": object_id_int
             }
         )
         
