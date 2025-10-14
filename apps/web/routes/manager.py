@@ -978,6 +978,28 @@ async def manager_employee_detail(
         if not employee_info:
             raise HTTPException(status_code=404, detail="У вас нет договоров с этим сотрудником")
         
+        # Получаем права управляющего для каждого договора
+        from shared.services.manager_permission_service import ManagerPermissionService
+        from domain.entities.manager_object_permission import ManagerObjectPermission
+        permission_service = ManagerPermissionService(db)
+        
+        # Для каждого договора проверяем права
+        for contract in employee_info["contracts"]:
+            # Получаем права управляющего для этого договора
+            permissions_query = select(ManagerObjectPermission).where(
+                ManagerObjectPermission.contract_id == contract["id"]
+            )
+            permissions_result = await db.execute(permissions_query)
+            permissions = permissions_result.scalars().all()
+            
+            # Проверяем наличие права can_manage_employees хотя бы на одном объекте
+            can_manage_employees = any(
+                perm.permissions.get("can_manage_employees", False) 
+                for perm in permissions
+            )
+            
+            contract["can_manage_employees"] = can_manage_employees
+        
         # Получаем данные для переключения интерфейсов
         from shared.services.role_based_login_service import RoleBasedLoginService
         login_service = RoleBasedLoginService(db)
@@ -4493,3 +4515,204 @@ async def manager_payroll_adjustments_list(
     except Exception as e:
         logger.error(f"Ошибка загрузки корректировок начислений для управляющего: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки данных")
+
+
+# ==================== CONTRACT MANAGEMENT ====================
+
+
+@router.get("/contracts/{contract_id}/view", response_class=HTMLResponse)
+async def manager_contract_view(
+    contract_id: int,
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Просмотр договора (доступен всегда)."""
+    try:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем договор
+        query = select(Contract).where(Contract.id == contract_id).options(
+            selectinload(Contract.employee),
+            selectinload(Contract.owner),
+            selectinload(Contract.template)
+        )
+        result = await db.execute(query)
+        contract = result.scalar_one_or_none()
+        
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        # Проверяем доступ: управляющий должен иметь права на объекты из allowed_objects
+        from shared.services.manager_permission_service import ManagerPermissionService
+        permission_service = ManagerPermissionService(db)
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        accessible_object_ids = [obj.id for obj in accessible_objects]
+        
+        # Проверяем, что хотя бы один объект из договора доступен управляющему
+        contract_objects = contract.allowed_objects or []
+        has_access = any(obj_id in accessible_object_ids for obj_id in contract_objects)
+        
+        if not has_access:
+            raise HTTPException(status_code=403, detail="Доступ запрещён")
+        
+        # Получаем объекты для отображения
+        objects_info = []
+        if contract_objects:
+            objects_query = select(Object).where(Object.id.in_(contract_objects))
+            objects_result = await db.execute(objects_query)
+            objects_info = objects_result.scalars().all()
+        
+        return templates.TemplateResponse(
+            "manager/contracts/view.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "contract": contract,
+                "objects": objects_info
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error viewing contract: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка просмотра договора")
+
+
+@router.get("/contracts/{contract_id}/edit", response_class=HTMLResponse)
+async def manager_contract_edit(
+    contract_id: int,
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Редактирование договора (только с правом can_manage_employees)."""
+    try:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем договор
+        query = select(Contract).where(Contract.id == contract_id).options(
+            selectinload(Contract.employee),
+            selectinload(Contract.owner),
+            selectinload(Contract.template)
+        )
+        result = await db.execute(query)
+        contract = result.scalar_one_or_none()
+        
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        # Проверяем право can_manage_employees
+        from domain.entities.manager_object_permission import ManagerObjectPermission
+        permissions_query = select(ManagerObjectPermission).where(
+            ManagerObjectPermission.contract_id == contract_id
+        )
+        permissions_result = await db.execute(permissions_query)
+        permissions = permissions_result.scalars().all()
+        
+        can_manage = any(
+            perm.permissions.get("can_manage_employees", False) 
+            for perm in permissions
+        )
+        
+        if not can_manage:
+            raise HTTPException(status_code=403, detail="У вас нет прав на редактирование договоров")
+        
+        # Получаем объекты для отображения
+        objects_info = []
+        if contract.allowed_objects:
+            objects_query = select(Object).where(Object.id.in_(contract.allowed_objects))
+            objects_result = await db.execute(objects_query)
+            objects_info = objects_result.scalars().all()
+        
+        return templates.TemplateResponse(
+            "manager/contracts/edit.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "contract": contract,
+                "objects": objects_info
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error editing contract: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка редактирования договора")
+
+
+@router.post("/contracts/{contract_id}/terminate")
+async def manager_contract_terminate(
+    contract_id: int,
+    request: Request,
+    reason: str = Form(...),
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Расторжение договора (только с правом can_manage_employees)."""
+    try:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем договор
+        query = select(Contract).where(Contract.id == contract_id)
+        result = await db.execute(query)
+        contract = result.scalar_one_or_none()
+        
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        # Проверяем право can_manage_employees
+        from domain.entities.manager_object_permission import ManagerObjectPermission
+        permissions_query = select(ManagerObjectPermission).where(
+            ManagerObjectPermission.contract_id == contract_id
+        )
+        permissions_result = await db.execute(permissions_query)
+        permissions = permissions_result.scalars().all()
+        
+        can_manage = any(
+            perm.permissions.get("can_manage_employees", False) 
+            for perm in permissions
+        )
+        
+        if not can_manage:
+            raise HTTPException(status_code=403, detail="У вас нет прав на расторжение договоров")
+        
+        # Расторгаем договор
+        contract.status = 'terminated'
+        contract.terminated_at = datetime.now()
+        
+        # Добавляем причину в values или notes
+        if not contract.values:
+            contract.values = {}
+        contract.values['termination_reason'] = reason
+        contract.values['terminated_by'] = user_id
+        
+        await db.commit()
+        
+        logger.info(
+            f"Contract terminated by manager",
+            contract_id=contract_id,
+            employee_id=contract.employee_id,
+            manager_id=user_id,
+            reason=reason
+        )
+        
+        return RedirectResponse(
+            url=f"/manager/employees/{contract.employee_id}",
+            status_code=status.HTTP_302_FOUND
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error terminating contract: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Ошибка расторжения договора")

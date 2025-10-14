@@ -199,13 +199,30 @@
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                <div class="btn-group" role="group">                                                    
-                                                    {% if contract.status != 'terminated' %}
-                                                    <a href="/manager/employees/contract/{{ contract.id }}/edit" 
-                                                    class="btn btn-outline-secondary btn-sm"
-                                                    title="Редактировать договор">
+                                                <div class="btn-group" role="group">
+                                                    <!-- Просмотр договора - всегда доступен -->
+                                                    <a href="/manager/contracts/{{ contract.id }}/view" 
+                                                       class="btn btn-outline-primary btn-sm"
+                                                       title="Просмотреть договор">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                    
+                                                    <!-- Редактирование - только с правом can_manage_employees -->
+                                                    {% if contract.can_manage_employees and contract.status != 'terminated' %}
+                                                    <a href="/manager/contracts/{{ contract.id }}/edit" 
+                                                       class="btn btn-outline-secondary btn-sm"
+                                                       title="Редактировать договор">
                                                         <i class="fas fa-edit"></i>
                                                     </a>
+                                                    {% endif %}
+                                                    
+                                                    <!-- Расторжение - только с правом can_manage_employees -->
+                                                    {% if contract.can_manage_employees and contract.status not in ['terminated', 'draft'] %}
+                                                    <button class="btn btn-outline-danger btn-sm"
+                                                            onclick="terminateContract({{ contract.id }})"
+                                                            title="Расторгнуть договор">
+                                                        <i class="fas fa-times-circle"></i>
+                                                    </button>
                                                     {% endif %}
                                                 </div>
                                             </td>
@@ -284,24 +301,21 @@
 
 
 <!-- Modal для расторжения договора -->
-{% if contracts %}
-{% for contract in contracts %}
-{% if contract.status != 'terminated' %}
 <div class="modal fade" id="terminateModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header bg-danger text-white">
                 <h5 class="modal-title">Расторжение договора</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="/manager/employees/{{ employee.id }}/terminate">
+            <form method="post" id="terminateContractForm">
                 <div class="modal-body">
                     <div class="alert alert-warning">
                         <i class="bi bi-exclamation-triangle me-2"></i>
                         Вы уверены, что хотите расторгнуть договор с {{ employee.first_name }} {{ employee.last_name or '' }}? Это действие нельзя отменить.
                     </div>
                     <div class="mb-3">
-                        <label for="reason" class="form-label">Причина расторжения</label>
+                        <label for="reason" class="form-label">Причина расторжения *</label>
                         <textarea class="form-control" 
                                   id="reason" 
                                   name="reason" 
@@ -322,9 +336,6 @@
         </div>
     </div>
 </div>
-{% endif %}
-{% endfor %}
-{% endif %}
 
 <script>
 function editEmployee(employeeId) {
@@ -336,6 +347,8 @@ function viewShifts(employeeId) {
 }
 
 function terminateContract(contractId) {
+    const form = document.getElementById('terminateContractForm');
+    form.action = '/manager/contracts/' + contractId + '/terminate';
     const modal = new bootstrap.Modal(document.getElementById('terminateModal'));
     modal.show();
 }
