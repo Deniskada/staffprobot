@@ -7,7 +7,7 @@ import asyncio
 from core.celery.celery_app import celery_app
 from core.database.session import get_async_session
 from core.logging.logger import logger
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.orm import selectinload
 
 from domain.entities.shift import Shift
@@ -39,6 +39,8 @@ def process_closed_shifts_adjustments():
             # Время последней обработки - 15 минут назад
             cutoff_time = datetime.now() - timedelta(minutes=15)
             
+            logger.info(f"[ADJUSTMENT_DEBUG] Starting adjustment processing", cutoff_time=cutoff_time, looking_for_status="completed")
+            
             async with get_async_session() as session:
                 # Найти смены, закрытые за последние 15 минут (по updated_at)
                 shifts_query = select(Shift).options(
@@ -54,6 +56,18 @@ def process_closed_shifts_adjustments():
                 
                 shifts_result = await session.execute(shifts_query)
                 shifts = shifts_result.scalars().all()
+                
+                logger.info(f"[ADJUSTMENT_DEBUG] Found {len(shifts)} shifts with status='completed'", 
+                           statuses_searched_for=['completed'], 
+                           cutoff_minutes=15)
+                
+                # ДОПОЛНИТЕЛЬНАЯ ДИАГНОСТИКА: проверить все статусы в БД
+                all_shifts_query = select(Shift.status, func.count(Shift.id).label('count')).group_by(Shift.status)
+                all_shifts_result = await session.execute(all_shifts_query)
+                status_counts = all_shifts_result.all()
+                
+                for status, count in status_counts:
+                    logger.info(f"[ADJUSTMENT_DEBUG] Shifts with status='{status}': {count}")
                 
                 logger.info(f"Found {len(shifts)} closed shifts for processing")
                 
