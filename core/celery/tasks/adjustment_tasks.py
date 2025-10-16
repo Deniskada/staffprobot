@@ -48,7 +48,7 @@ def process_closed_shifts_adjustments():
                     selectinload(Shift.time_slot)
                 ).where(
                     and_(
-                        Shift.status == 'completed',
+                        Shift.status.in_(['closed', 'completed']),  # Искать оба статуса
                         Shift.updated_at >= cutoff_time,  # Используем updated_at вместо end_time
                         Shift.end_time.isnot(None)
                     )
