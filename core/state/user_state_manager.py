@@ -179,6 +179,9 @@ class UserStateManager:
             for key, value in kwargs['data'].items():
                 state.add_data(key, value)
         
+        # Продлеваем время жизни состояния при каждом обновлении
+        state.expires_at = datetime.now() + timedelta(minutes=5)
+        
         return state
     
     def clear_state(self, user_id: int) -> bool:
