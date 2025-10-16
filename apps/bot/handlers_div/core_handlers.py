@@ -195,16 +195,24 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     if user_state.step not in [UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION]:
         logger.warning(
-            f"[BUG3_DEBUG] Location not expected at this step - FIRST ATTEMPT REJECTED",
+            f"[BUG3_DEBUG] Location not expected at this step - AUTO-CORRECTING",
             user_id=user_id,
             current_step=user_state.step,
-            expected_steps=[UserStep.LOCATION_REQUEST, UserStep.OPENING_OBJECT_LOCATION, UserStep.CLOSING_OBJECT_LOCATION],
             action=user_state.action
         )
-        await update.message.reply_text(
-            "❌ Геопозиция не ожидается на данном этапе"
-        )
-        return
+        
+        # AUTO-FIX: если action правильный, установим правильный step
+        if user_state.action in [UserAction.OPEN_SHIFT, UserAction.OPEN_OBJECT]:
+            user_state_manager.update_state(user_id, step=UserStep.LOCATION_REQUEST)
+            logger.info(f"[BUG3_AUTOFIX] Auto-corrected step to LOCATION_REQUEST for action={user_state.action}")
+        elif user_state.action in [UserAction.CLOSE_SHIFT, UserAction.CLOSE_OBJECT]:
+            user_state_manager.update_state(user_id, step=UserStep.LOCATION_REQUEST)
+            logger.info(f"[BUG3_AUTOFIX] Auto-corrected step to LOCATION_REQUEST for action={user_state.action}")
+        else:
+            await update.message.reply_text(
+                "❌ Геопозиция не ожидается на данном этапе. Отправьте /start и повторите."
+            )
+            return
     
     # Обновляем состояние на обработку
     user_state_manager.update_state(user_id, step=UserStep.PROCESSING)
