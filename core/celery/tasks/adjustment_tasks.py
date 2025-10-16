@@ -338,7 +338,24 @@ def process_closed_shifts_adjustments():
                                         total_adjustments += 1
                                 else:
                                     # Отрицательная сумма - штраф за невыполнение
-                                    if not is_completed:
+                                    if is_completed:
+                                        # ✅ Задача выполнена со штрафом - создаём запись о выполнении (штраф избежан)
+                                        adjustment_type = 'task_completed'
+                                        task_adj = PayrollAdjustment(
+                                            shift_id=shift.id,
+                                            employee_id=shift.user_id,
+                                            object_id=shift.object_id,
+                                            adjustment_type=adjustment_type,
+                                            amount=Decimal('0.00'),
+                                            description=f"Выполнено: {task_text} (штраф {abs(amount)}₽ избежан)",
+                                            details=details,
+                                            created_by=shift.user_id,
+                                            is_applied=False
+                                        )
+                                        session.add(task_adj)
+                                        total_adjustments += 1
+                                    else:
+                                        # Задача не выполнена - штраф за невыполнение
                                         adjustment_type = 'task_penalty'
                                         task_adj = PayrollAdjustment(
                                             shift_id=shift.id,
