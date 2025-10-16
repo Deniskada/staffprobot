@@ -178,7 +178,7 @@ def process_closed_shifts_adjustments():
                             template_query = sql_select(TimeslotTaskTemplate).where(
                                 TimeslotTaskTemplate.timeslot_id == shift.time_slot_id
                             ).order_by(TimeslotTaskTemplate.display_order)
-                            template_result = session.execute(template_query)
+                            template_result = await session.execute(template_query)
                             templates = template_result.scalars().all()
                             
                             for template in templates:

@@ -219,7 +219,7 @@
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div class="flex-grow-1">
                                             <h6 class="mb-1">
-                                                {{ task.description or 'Без названия' }}
+                                                {{ task.text or task.task_text or task.description or 'Без названия' }}
                                                 {% if task.is_mandatory %}
                                                 <span class="badge bg-danger">Обязательная</span>
                                                 {% endif %}
@@ -230,14 +230,14 @@
                                                 {% endif %}
                                             </h6>
                                             <div class="text-muted small">
-                                                {% if task.amount %}
+                                                {% if task.deduction_amount and task.deduction_amount != 0 %}
+                                                    <span class="text-success">+{{ "%.0f"|format(task.deduction_amount) }} ₽ премия</span>
+                                                {% elif task.amount %}
                                                     {% if task.amount > 0 %}
                                                     <span class="text-success">+{{ "%.0f"|format(task.amount) }} ₽ премия</span>
                                                     {% elif task.amount < 0 %}
                                                     <span class="text-danger">{{ "%.0f"|format(task.amount) }} ₽ штраф</span>
                                                     {% endif %}
-                                                {% elif task.deduction_amount %}
-                                                    <span class="text-danger">-{{ "%.0f"|format(task.deduction_amount) }} ₽ штраф</span>
                                                 {% elif task.bonus_amount %}
                                                     <span class="text-success">+{{ "%.0f"|format(task.bonus_amount) }} ₽ премия</span>
                                                 {% endif %}
