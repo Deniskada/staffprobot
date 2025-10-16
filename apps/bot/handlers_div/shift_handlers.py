@@ -1551,51 +1551,26 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             shift_obj = active_shifts[0]
             shift_id = shift_obj.id
             
-            # Получаем задачи (новая логика комбинирования, как при закрытии)
-            shift_tasks = []
+            # Получаем задачи через _collect_shift_tasks() - единая функция для всех мест
+            timeslot = None
+            obj = None
             
             if shift_obj.time_slot_id:
-                # Запланированная смена - получаем тайм-слот
                 timeslot_query = select(TimeSlot).where(TimeSlot.id == shift_obj.time_slot_id)
                 timeslot_result = await session.execute(timeslot_query)
                 timeslot = timeslot_result.scalar_one_or_none()
-                
-                if timeslot:
-                    # 1. Собственные задачи тайм-слота (из JSONB + таблицы timeslot_task_templates)
-                    timeslot_tasks = await _load_timeslot_tasks(session, timeslot)
-                    shift_tasks.extend(timeslot_tasks)
-                    
-                    # 2. Задачи объекта (если НЕ игнорируются)
-                    if not timeslot.ignore_object_tasks and shift_obj.object_id:
-                        object_query = select(Object).where(Object.id == shift_obj.object_id)
-                        object_result = await session.execute(object_query)
-                        obj = object_result.scalar_one_or_none()
-                        
-                        if obj and obj.shift_tasks:
-                            for task in obj.shift_tasks:
-                                task_copy = dict(task)
-                                task_copy['source'] = 'object'
-                                shift_tasks.append(task_copy)
-                    
-                logger.info(
-                    f"[MY_TASKS] Combined tasks from timeslot and object",
-                    shift_id=shift_obj.id,
-                    timeslot_tasks=len(timeslot_tasks),
-                    object_tasks=len(obj.shift_tasks or []) if (not timeslot.ignore_object_tasks and obj) else 0,
-                    ignore_object_tasks=timeslot.ignore_object_tasks
-                )
-            else:
-                # Спонтанная смена - всегда задачи объекта
-                if shift_obj.object_id:
-                    object_query = select(Object).where(Object.id == shift_obj.object_id)
-                    object_result = await session.execute(object_query)
-                    obj = object_result.scalar_one_or_none()
-                    
-                    if obj and obj.shift_tasks:
-                        for task in obj.shift_tasks:
-                            task_copy = dict(task)
-                            task_copy['source'] = 'object'
-                            shift_tasks.append(task_copy)
+            
+            if shift_obj.object_id:
+                object_query = select(Object).where(Object.id == shift_obj.object_id)
+                object_result = await session.execute(object_query)
+                obj = object_result.scalar_one_or_none()
+            
+            shift_tasks = await _collect_shift_tasks(
+                session=session,
+                shift=shift_obj,
+                timeslot=timeslot,
+                object_=obj
+            )
             
             if not shift_tasks:
                 await query.edit_message_text(
