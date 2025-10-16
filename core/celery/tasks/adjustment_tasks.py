@@ -171,12 +171,24 @@ def process_closed_shifts_adjustments():
                         shift_tasks = []
                         
                         if shift.time_slot_id and shift.time_slot:
-                            # 1. Собственные задачи тайм-слота (из JSONB shift_tasks)
-                            if shift.time_slot.shift_tasks:
-                                for task in shift.time_slot.shift_tasks:
-                                    task_copy = dict(task)
-                                    task_copy['source'] = 'timeslot'
-                                    shift_tasks.append(task_copy)
+                            # 1. Собственные задачи тайм-слота (из таблицы timeslot_task_templates)
+                            from domain.entities.timeslot_task_template import TimeslotTaskTemplate
+                            from sqlalchemy import select as sql_select
+                            
+                            template_query = sql_select(TimeslotTaskTemplate).where(
+                                TimeslotTaskTemplate.timeslot_id == shift.time_slot_id
+                            ).order_by(TimeslotTaskTemplate.display_order)
+                            template_result = session.execute(template_query)
+                            templates = template_result.scalars().all()
+                            
+                            for template in templates:
+                                shift_tasks.append({
+                                    'text': template.task_text,
+                                    'is_mandatory': template.is_mandatory if template.is_mandatory is not None else False,
+                                    'deduction_amount': float(template.deduction_amount) if template.deduction_amount else 0,
+                                    'requires_media': template.requires_media if template.requires_media is not None else False,
+                                    'source': 'timeslot'
+                                })
                             
                             # 2. Задачи объекта (если НЕ игнорируются)
                             if not shift.time_slot.ignore_object_tasks and shift.object and shift.object.shift_tasks:

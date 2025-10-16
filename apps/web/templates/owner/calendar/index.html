@@ -469,9 +469,9 @@ function initializeTimeslotOccupancy() {
                 const timeslotId = timeslot.id;
                 const maxEmployees = timeslot.maxEmployees;
 
-                // Считаем смены ПРИВЯЗАННЫЕ к этому конкретному тайм-слоту (кроме cancelled)
+                // Считаем смены ПРИВЯЗАННЫЕ к этому конкретному тайм-слоту (исключая cancelled и completed)
                 const shiftsForThisTimeslot = shifts.filter(shift =>
-                    Number(shift.time_slot_id) === Number(timeslotId) && shift.status !== 'cancelled'
+                    Number(shift.time_slot_id) === Number(timeslotId) && shift.status !== 'cancelled' && shift.status !== 'completed'
                 );
 
                 const currentShifts = shiftsForThisTimeslot.length;

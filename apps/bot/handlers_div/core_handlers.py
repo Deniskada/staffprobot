@@ -520,6 +520,26 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             from shared.services.object_opening_service import ObjectOpeningService
             from domain.entities.user import User
             
+            # Если step=TASK_COMPLETION, значит были задачи - сохраняем их в shift.notes
+            if user_state.step == UserStep.TASK_COMPLETION:
+                completed_tasks = user_state.completed_tasks or []
+                task_media = user_state.task_media or {}
+                
+                # Обновляем shift.notes с информацией о выполненных задачах
+                async with get_async_session() as session:
+                    from domain.entities.shift import Shift
+                    shift_query = select(Shift).where(Shift.id == user_state.selected_shift_id)
+                    shift_result = await session.execute(shift_query)
+                    shift = shift_result.scalar_one_or_none()
+                    
+                    if shift:
+                        import json
+                        shift.notes = json.dumps({
+                            'completed_tasks': completed_tasks,
+                            'task_media': task_media
+                        }, ensure_ascii=False)
+                        await session.commit()
+            
             # 1. Закрыть смену
             result = await shift_service.close_shift(
                 user_id=user_id,
