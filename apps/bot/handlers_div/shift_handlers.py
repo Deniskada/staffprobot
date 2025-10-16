@@ -1146,8 +1146,8 @@ async def _handle_close_shift_with_tasks(update: Update, context: ContextTypes.D
             await query.answer("❌ Состояние утеряно. Начните заново", show_alert=True)
             return
         
-        # Обновляем шаг на запрос геопозиции
-        user_state_manager.update_state(user_id, step=UserStep.LOCATION_REQUEST)
+        # Обновляем шаг на запрос геопозиции и действие на CLOSE_SHIFT, чтобы handle_location обработал закрытие
+        user_state_manager.update_state(user_id, action=UserAction.CLOSE_SHIFT, step=UserStep.LOCATION_REQUEST)
         
         # Получаем информацию об объекте смены
         async with get_async_session() as session:
@@ -1662,6 +1662,8 @@ async def _handle_complete_my_task(update: Update, context: ContextTypes.DEFAULT
     logger.info(f"[MY_TASKS] _handle_complete_my_task called: shift_id={shift_id}, task_idx={task_idx}, user_id={user_id}")
     
     try:
+        await query.answer()  # Подтверждаем получение callback
+        
         # Получаем состояние
         user_state = user_state_manager.get_state(user_id)
         if not user_state or user_state.action != UserAction.MY_TASKS:

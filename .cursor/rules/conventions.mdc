@@ -1,7 +1,6 @@
 ---
-alwaysApply: true
+alwaysApply: false
 ---
-
 # Правила разработки кода StaffProBot
 
 ## Общие принципы

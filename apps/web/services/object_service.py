@@ -811,14 +811,23 @@ class TimeSlotService:
             if shift_tasks:
                 from domain.entities.timeslot_task_template import TimeslotTaskTemplate
                 for idx, task in enumerate(shift_tasks):
-                    # Определяем deduction_amount: приоритет deduction_amount, затем bonus_amount
+                    # Определяем deduction_amount: приоритет deduction_amount, затем bonus_amount, затем amount
                     deduction = task.get('deduction_amount', 0)
                     if deduction == 0:
                         deduction = task.get('bonus_amount', 0)
+                    if deduction == 0:
+                        deduction = task.get('amount', 0)
+                    
+                    # Текст задачи: поддерживаем оба ключа (text и description)
+                    task_text = task.get('text') or task.get('description') or ''
+                    
+                    # Пропускаем задачи с пустым текстом
+                    if not task_text.strip():
+                        continue
                     
                     task_template = TimeslotTaskTemplate(
                         timeslot_id=new_timeslot.id,
-                        task_text=task.get('text', ''),
+                        task_text=task_text.strip(),
                         deduction_amount=abs(deduction) if deduction else None,
                         is_mandatory=task.get('is_mandatory', False),
                         requires_media=task.get('requires_media', False),
@@ -1065,14 +1074,23 @@ class TimeSlotService:
             if shift_tasks:
                 from domain.entities.timeslot_task_template import TimeslotTaskTemplate
                 for idx, task in enumerate(shift_tasks):
-                    # Определяем deduction_amount: приоритет deduction_amount, затем bonus_amount
+                    # Определяем deduction_amount: приоритет deduction_amount, затем bonus_amount, затем amount
                     deduction = task.get('deduction_amount', 0)
                     if deduction == 0:
                         deduction = task.get('bonus_amount', 0)
+                    if deduction == 0:
+                        deduction = task.get('amount', 0)
+                    
+                    # Текст задачи: поддерживаем оба ключа (text и description)
+                    task_text = task.get('text') or task.get('description') or ''
+                    
+                    # Пропускаем задачи с пустым текстом
+                    if not task_text.strip():
+                        continue
                     
                     task_template = TimeslotTaskTemplate(
                         timeslot_id=new_timeslot.id,
-                        task_text=task.get('text', ''),
+                        task_text=task_text.strip(),
                         deduction_amount=abs(deduction) if deduction else None,
                         is_mandatory=task.get('is_mandatory', False),
                         requires_media=task.get('requires_media', False),
