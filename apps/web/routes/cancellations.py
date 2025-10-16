@@ -7,7 +7,7 @@ from sqlalchemy import select, and_
 from typing import Optional
 
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
-from apps.web.dependencies import get_current_user_dependency
+from apps.web.middleware.role_middleware import require_manager_or_owner, get_user_id_from_current_user
 from core.database.session import get_db_session
 from apps.web.jinja import templates
 from domain.entities.shift_schedule import ShiftSchedule
@@ -106,25 +106,14 @@ async def manager_cancel_shift(
     schedule_id: int,
     reason: str = Form(...),
     notes: Optional[str] = Form(None),
-    current_user: dict = Depends(get_current_user_dependency()),
+    current_user: dict = Depends(require_manager_or_owner),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Отмена запланированной смены управляющим."""
     try:
-        # Проверка роли
-        if current_user.get("role") not in ["manager", "owner", "superadmin"]:
-            return JSONResponse(
-                {"success": False, "message": "Недостаточно прав"},
-                status_code=403
-            )
-        
-        # Получаем пользователя
-        user_id = current_user.get("id")
-        user_query = select(User).where(User.telegram_id == user_id)
-        user_result = await db.execute(user_query)
-        user = user_result.scalar_one_or_none()
-        
-        if not user:
+        # Получаем внутренний ID пользователя согласно правилам user_id vs telegram_id
+        internal_user_id = await get_user_id_from_current_user(current_user, db)
+        if not internal_user_id:
             return JSONResponse(
                 {"success": False, "message": "Пользователь не найден"},
                 status_code=404
@@ -141,22 +130,33 @@ async def manager_cancel_shift(
                 status_code=404
             )
         
-        # Проверяем доступ управляющего к объекту (только для роли manager)
-        if current_user.get("role") == "manager":
+        # Нормализуем роли пользователя
+        raw_roles = current_user.get("roles", []) or []
+        roles = [getattr(r, "value", r) for r in raw_roles]
+        is_superadmin = "superadmin" in roles
+        is_owner = "owner" in roles
+        is_manager = "manager" in roles
+
+        # Проверяем доступ управляющего к объекту (для роли manager)
+        if is_manager and not is_owner and not is_superadmin:
             from shared.services.manager_permission_service import ManagerPermissionService
             permission_service = ManagerPermissionService(db)
-            
-            has_access = await permission_service.has_access_to_object(user.id, shift.object_id)
-        else:
+            # Получаем доступные объекты для пользователя-управляющего и проверяем доступ
+            accessible_objects = await permission_service.get_user_accessible_objects(internal_user_id)
+            has_access = any(obj.id == shift.object_id for obj in accessible_objects)
+        elif is_owner and not is_superadmin:
             # Для owner проверяем владение
             object_query = select(Object).where(
                 and_(
                     Object.id == shift.object_id,
-                    Object.owner_id == user.id
+                    Object.owner_id == internal_user_id
                 )
             )
             object_result = await db.execute(object_query)
             has_access = object_result.scalar_one_or_none() is not None
+        else:
+            # superadmin — доступ разрешен
+            has_access = True
         
         if not has_access:
             return JSONResponse(
@@ -168,7 +168,7 @@ async def manager_cancel_shift(
         cancellation_service = ShiftCancellationService(db)
         result = await cancellation_service.cancel_shift(
             shift_schedule_id=schedule_id,
-            cancelled_by_user_id=user.id,
+            cancelled_by_user_id=internal_user_id,
             cancelled_by_type='manager',
             cancellation_reason=reason,
             reason_notes=notes
