@@ -116,10 +116,12 @@
 - [GET] `/timeslots/{timeslot_id}` — (apps/web/routes/owner.py)
 - [POST] `/timeslots/{timeslot_id}/delete` — (apps/web/routes/owner.py)
 - [POST] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/manager.py)
-- [GET] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner.py)
-- [POST] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner.py)
+- ~~[GET] `/timeslots/{timeslot_id}/edit`~~ — **УСТАРЕЛО** (закомментировано в owner.py, см. owner_timeslots.py)
+- ~~[POST] `/timeslots/{timeslot_id}/edit`~~ — **УСТАРЕЛО** (закомментировано в owner.py, см. owner_timeslots.py)
 - [GET] `/{shift_id}` — (apps/web/routes/owner_shifts.py)
 - [POST] `/{shift_id}/cancel` — (apps/web/routes/owner_shifts.py)
+- [GET] `/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py) — префикс `/owner/timeslots` — **ОСНОВНОЙ РОУТ**
+- [POST] `/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py) — префикс `/owner/timeslots` — **ОСНОВНОЙ РОУТ**
 
 ## Шаблоны/JS/CSS
 - `manager/applications.html`

@@ -104,13 +104,13 @@
 - [POST] `/owner/timeslots/bulk-edit`  — (apps/web/routes/owner.py)
 - [GET] `/owner/timeslots/{timeslot_id}`  — (apps/web/routes/owner.py)
 - [POST] `/owner/timeslots/{timeslot_id}/delete`  — (apps/web/routes/owner.py)
-- [GET] `/owner/timeslots/{timeslot_id}/edit`  — (apps/web/routes/owner.py)
-- [POST] `/owner/timeslots/{timeslot_id}/edit`  — (apps/web/routes/owner.py)
+- ~~[GET] `/owner/timeslots/{timeslot_id}/edit`~~  — **УСТАРЕЛО** (закомментировано в apps/web/routes/owner.py, используй owner_timeslots.py)
+- ~~[POST] `/owner/timeslots/{timeslot_id}/edit`~~  — **УСТАРЕЛО** (закомментировано в apps/web/routes/owner.py, используй owner_timeslots.py)
 - [GET] `/owner/{shift_id}`  — (apps/web/routes/owner_shifts.py)
 - [POST] `/owner/{shift_id}/cancel`  — (apps/web/routes/owner_shifts.py)
-- [POST] `/owner/{timeslot_id}/delete`  — (apps/web/routes/owner_timeslots.py)
-- [GET] `/owner/{timeslot_id}/edit`  — (apps/web/routes/owner_timeslots.py)
-- [POST] `/owner/{timeslot_id}/edit`  — (apps/web/routes/owner_timeslots.py)
+- [POST] `/owner/{timeslot_id}/delete`  — (apps/web/routes/owner_timeslots.py) — удаление тайм-слота
+- [GET] `/owner/{timeslot_id}/edit`  — (apps/web/routes/owner_timeslots.py) — **ОСНОВНОЙ РОУТ** для редактирования тайм-слота
+- [POST] `/owner/{timeslot_id}/edit`  — (apps/web/routes/owner_timeslots.py) — **ОСНОВНОЙ РОУТ** для обновления тайм-слота
 
 ## Шаблоны (Jinja2)
 - `admin/limits_overview.html`

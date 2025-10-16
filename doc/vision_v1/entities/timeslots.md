@@ -142,15 +142,16 @@
 - [GET] `/timeslots/{timeslot_id}` — (apps/web/routes/owner.py)
 - [GET] `/timeslots/{timeslot_id}` — (apps/web/routes/manager.py)
 - [POST] `/timeslots/{timeslot_id}/delete` — (apps/web/routes/owner.py)
-- [GET] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner.py)
-- [POST] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner.py)
 - [POST] `/timeslots/{timeslot_id}/edit` — (apps/web/routes/manager.py) — роль: manager (роутер подключен с префиксом `/manager`) — форма: form-data — ответ: 303 Redirect на `/manager/timeslots/object/{object_id}` — дубликат эндпоинта (исторический), см. аналогичный роут в `apps/web/routes/manager_timeslots.py`
 
-Примечание по дублям:
-- Эндпоинт обновления тайм-слота доступен из двух модулей: `apps/web/routes/manager_timeslots.py` и `apps/web/routes/manager.py` (подключается под префиксом `/manager`). Оба принимают данные формы (form-data) и делают редирект 303 на страницу списка слотов объекта. Причина дубля: историческая миграция эндпоинтов; поведение унифицировано. При дальнейшем рефакторинге требуется оставить один источник и обновить документацию.
-- [POST] `/{timeslot_id}/delete` — (apps/web/routes/owner_timeslots.py)
-- [GET] `/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py)
-- [POST] `/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py)
+Примечание по дублям и рефакторингу (2025-10-16):
+- **УСТАРЕЛО**: роуты GET/POST `/timeslots/{timeslot_id}/edit` из `apps/web/routes/owner.py` были **закомментированы** и перенесены в специализированный роутер `apps/web/routes/owner_timeslots.py` (с префиксом `/owner/timeslots`).
+- Эндпоинт обновления тайм-слота для manager всё ещё доступен из двух модулей: `apps/web/routes/manager_timeslots.py` и `apps/web/routes/manager.py`. Причина дубля: историческая миграция; при дальнейшем рефакторинге требуется оставить один источник.
+
+### Специализированный роутер owner_timeslots (префикс `/owner/timeslots`)
+- [POST] `/{timeslot_id}/delete` — (apps/web/routes/owner_timeslots.py) — удаление тайм-слота
+- [GET] `/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py) — форма редактирования тайм-слота (основной роут)
+- [POST] `/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py) — обновление тайм-слота (основной роут)
 
 ## Шаблоны/JS/CSS
 - `manager/applications.html`
