@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from core.logging.logger import logger
 from domain.entities.shift import Shift
-from domain.entities.shift_task import ShiftTask
+# ShiftTask больше не существует - задачи хранятся в JSONB
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.time_slot import TimeSlot
 
