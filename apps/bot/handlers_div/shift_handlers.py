@@ -10,13 +10,53 @@ from core.database.session import get_async_session
 from core.utils.timezone_helper import timezone_helper
 from domain.entities.object import Object
 from domain.entities.shift import Shift
+from domain.entities.time_slot import TimeSlot
+from domain.entities.timeslot_task_template import TimeslotTaskTemplate
 from sqlalchemy import select, and_
+from sqlalchemy.ext.asyncio import AsyncSession
 from core.state import user_state_manager, UserAction, UserStep
 # from .utils import get_location_keyboard  # Удалено, создаем клавиатуру прямо в коде
 
 # Создаем экземпляры сервисов
 shift_service = ShiftService()
 object_service = ObjectService()
+
+
+async def _load_timeslot_tasks(session: AsyncSession, timeslot: TimeSlot) -> list:
+    """
+    Загружает задачи тайм-слота из таблицы timeslot_task_templates.
+    
+    Args:
+        session: Асинхронная сессия БД
+        timeslot: Объект тайм-слота
+    
+    Returns:
+        Список задач в формате [{'text': str, 'is_mandatory': bool, 'deduction_amount': int, 'source': 'timeslot'}]
+    """
+    tasks = []
+    
+    # Загружаем задачи из таблицы timeslot_task_templates
+    template_query = select(TimeslotTaskTemplate).where(
+        TimeslotTaskTemplate.timeslot_id == timeslot.id
+    ).order_by(TimeslotTaskTemplate.display_order)
+    template_result = await session.execute(template_query)
+    templates = template_result.scalars().all()
+    
+    for template in templates:
+        tasks.append({
+            'text': template.task_text,
+            'is_mandatory': template.is_mandatory if template.is_mandatory is not None else False,
+            'deduction_amount': float(template.deduction_amount) if template.deduction_amount else 0,
+            'requires_media': template.requires_media if template.requires_media is not None else False,
+            'source': 'timeslot'
+        })
+    
+    logger.info(
+        f"Loaded {len(tasks)} timeslot tasks from table",
+        timeslot_id=timeslot.id
+    )
+    
+    return tasks
 
 
 async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -341,19 +381,14 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                 
                 if shift.get('time_slot_id'):
                     # Запланированная смена - получаем тайм-слот
-                    from domain.entities.time_slot import TimeSlot
-                    
                     timeslot_query = select(TimeSlot).where(TimeSlot.id == shift['time_slot_id'])
                     timeslot_result = await session.execute(timeslot_query)
                     timeslot = timeslot_result.scalar_one_or_none()
                     
                     if timeslot:
-                        # 1. Собственные задачи тайм-слота (из JSONB shift_tasks)
-                        if timeslot.shift_tasks:
-                            for task in timeslot.shift_tasks:
-                                task_copy = dict(task)
-                                task_copy['source'] = 'timeslot'
-                                shift_tasks.append(task_copy)
+                        # 1. Собственные задачи тайм-слота (из JSONB + таблицы timeslot_task_templates)
+                        timeslot_tasks = await _load_timeslot_tasks(session, timeslot)
+                        shift_tasks.extend(timeslot_tasks)
                         
                         # 2. Задачи объекта (если НЕ игнорируются)
                         if not timeslot.ignore_object_tasks and obj.shift_tasks:
@@ -365,7 +400,7 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                         logger.info(
                             f"Combined tasks from timeslot and object",
                             shift_id=shift['id'],
-                            timeslot_tasks=len(timeslot.shift_tasks or []),
+                            timeslot_tasks=len(timeslot_tasks),
                             object_tasks=len(obj.shift_tasks or []) if not timeslot.ignore_object_tasks else 0,
                             ignore_object_tasks=timeslot.ignore_object_tasks
                         )
@@ -422,16 +457,26 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                     action = existing_state.action if existing_state else UserAction.CLOSE_SHIFT
                     selected_object_id = existing_state.selected_object_id if existing_state else None
                     
-                    user_state_manager.create_state(
-                        user_id=user_id,
-                        action=action,  # Сохраняем исходный action
-                        step=UserStep.TASK_COMPLETION,
-                        selected_shift_id=shift['id'],
-                        selected_object_id=selected_object_id,  # Сохраняем object_id если был
-                        shift_tasks=shift_tasks,
-                        completed_tasks=[],
-                        data={'telegram_chat_id': telegram_chat_id, 'object_name': obj.name}
-                    )
+                    # Если уже есть state для этой смены с задачами - НЕ перезаписываем
+                    if existing_state and existing_state.selected_shift_id == shift['id'] and existing_state.shift_tasks:
+                        # Только обновляем action и step, сохраняя completed_tasks
+                        user_state_manager.update_state(
+                            user_id=user_id,
+                            action=action,
+                            step=UserStep.TASK_COMPLETION
+                        )
+                    else:
+                        # Создаем новый state
+                        user_state_manager.create_state(
+                            user_id=user_id,
+                            action=action,  # Сохраняем исходный action
+                            step=UserStep.TASK_COMPLETION,
+                            selected_shift_id=shift['id'],
+                            selected_object_id=selected_object_id,  # Сохраняем object_id если был
+                            shift_tasks=shift_tasks,
+                            completed_tasks=[],
+                            data={'telegram_chat_id': telegram_chat_id, 'object_name': obj.name}
+                        )
                     
                     # Формируем кнопки для задач
                     keyboard = []
@@ -1455,12 +1500,9 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 timeslot = timeslot_result.scalar_one_or_none()
                 
                 if timeslot:
-                    # 1. Собственные задачи тайм-слота (из JSONB shift_tasks)
-                    if timeslot.shift_tasks:
-                        for task in timeslot.shift_tasks:
-                            task_copy = dict(task)
-                            task_copy['source'] = 'timeslot'
-                            shift_tasks.append(task_copy)
+                    # 1. Собственные задачи тайм-слота (из JSONB + таблицы timeslot_task_templates)
+                    timeslot_tasks = await _load_timeslot_tasks(session, timeslot)
+                    shift_tasks.extend(timeslot_tasks)
                     
                     # 2. Задачи объекта (если НЕ игнорируются)
                     if not timeslot.ignore_object_tasks and shift_obj.object_id:
@@ -1474,13 +1516,13 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 task_copy['source'] = 'object'
                                 shift_tasks.append(task_copy)
                     
-                    logger.info(
-                        f"[MY_TASKS] Combined tasks from timeslot and object",
-                        shift_id=shift_obj.id,
-                        timeslot_tasks=len(timeslot.shift_tasks or []),
-                        object_tasks=len(obj.shift_tasks or []) if (not timeslot.ignore_object_tasks and obj) else 0,
-                        ignore_object_tasks=timeslot.ignore_object_tasks
-                    )
+                logger.info(
+                    f"[MY_TASKS] Combined tasks from timeslot and object",
+                    shift_id=shift_obj.id,
+                    timeslot_tasks=len(timeslot_tasks),
+                    object_tasks=len(obj.shift_tasks or []) if (not timeslot.ignore_object_tasks and obj) else 0,
+                    ignore_object_tasks=timeslot.ignore_object_tasks
+                )
             else:
                 # Спонтанная смена - всегда задачи объекта
                 if shift_obj.object_id:
@@ -1506,25 +1548,41 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
             
-            # Создаем состояние для отслеживания выполнения задач
-            logger.info(f"[MY_TASKS] Creating state for user {user_id}, shift {shift_id}, {len(shift_tasks)} tasks")
+            # Получаем или создаём состояние для отслеживания выполнения задач
+            logger.info(f"[MY_TASKS] Loading/creating state for user {user_id}, shift {shift_id}, {len(shift_tasks)} tasks")
             
-            user_state_manager.create_state(
-                user_id=user_id,
-                action=UserAction.MY_TASKS,
-                step=UserStep.TASK_COMPLETION,
-                selected_shift_id=shift_id,
-                shift_tasks=shift_tasks,
-                completed_tasks=[],
-                task_media={}
-            )
+            existing_state = user_state_manager.get_state(user_id)
             
-            # Проверяем что состояние создалось
-            check_state = user_state_manager.get_state(user_id)
-            logger.info(f"[MY_TASKS] State created and verified: {check_state is not None}, action={check_state.action if check_state else None}")
+            # Если состояние существует и для той же смены - сохраняем completed_tasks
+            if existing_state and existing_state.selected_shift_id == shift_id:
+                completed_tasks = existing_state.completed_tasks or []
+                task_media = existing_state.task_media or {}
+                logger.info(f"[MY_TASKS] Reusing existing state with {len(completed_tasks)} completed tasks")
+                
+                # Обновляем задачи (могли добавиться новые)
+                user_state_manager.update_state(
+                    user_id=user_id,
+                    shift_tasks=shift_tasks,
+                    completed_tasks=completed_tasks,
+                    task_media=task_media
+                )
+            else:
+                # Создаём новое состояние
+                completed_tasks = []
+                task_media = {}
+                user_state_manager.create_state(
+                    user_id=user_id,
+                    action=UserAction.MY_TASKS,
+                    step=UserStep.TASK_COMPLETION,
+                    selected_shift_id=shift_id,
+                    shift_tasks=shift_tasks,
+                    completed_tasks=completed_tasks,
+                    task_media=task_media
+                )
+                logger.info(f"[MY_TASKS] Created new state")
             
             # Показываем список задач
-            await _show_my_tasks_list(context, user_id, shift_id, shift_tasks, [], {})
+            await _show_my_tasks_list(context, user_id, shift_id, shift_tasks, completed_tasks, task_media)
             
             logger.info(f"[MY_TASKS] Task list shown successfully")
             

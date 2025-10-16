@@ -611,10 +611,11 @@ async def update_timeslot(
         start_time = form_data.get("start_time", "")
         end_time = form_data.get("end_time", "")
         hourly_rate_str = form_data.get("hourly_rate", "0")
+        max_employees_str = form_data.get("max_employees", "1")
         is_active = "is_active" in form_data
         
         # Логирование для отладки
-        logger.info(f"Form data: start_time={start_time}, end_time={end_time}, hourly_rate_str='{hourly_rate_str}', is_active={is_active}")
+        logger.info(f"Form data: start_time={start_time}, end_time={end_time}, hourly_rate_str='{hourly_rate_str}', max_employees_str='{max_employees_str}', is_active={is_active}")
         
         # Валидация и преобразование данных
         try:
@@ -631,6 +632,13 @@ async def update_timeslot(
         if hourly_rate <= 0:
             raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
         
+        try:
+            max_employees = int(max_employees_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат лимита сотрудников")
+        if max_employees < 1:
+            raise HTTPException(status_code=400, detail="Лимит сотрудников должен быть >= 1")
+        
         # Валидация времени
         try:
             start = time.fromisoformat(start_time)
@@ -646,6 +654,7 @@ async def update_timeslot(
             "start_time": start_time,
             "end_time": end_time,
             "hourly_rate": hourly_rate,
+            "max_employees": max_employees,
             "is_active": is_active
         }
         
@@ -656,6 +665,9 @@ async def update_timeslot(
         # Обработка задач тайм-слота
         task_ids = form_data.getlist("task_ids[]")
         task_texts = form_data.getlist("task_texts[]")
+        task_amounts = form_data.getlist("task_amounts[]")
+        task_mandatory_indices = [int(i) for i in form_data.getlist("task_mandatory[]")]
+        task_media_indices = [int(i) for i in form_data.getlist("task_requires_media[]")]
         
         if task_texts:
             from domain.entities.timeslot_task_template import TimeslotTaskTemplate
@@ -680,9 +692,13 @@ async def update_timeslot(
             # Создать новые задачи
             for idx, task_text in enumerate(task_texts):
                 if task_text.strip():  # Пропускаем пустые
+                    amount = float(task_amounts[idx]) if idx < len(task_amounts) and task_amounts[idx] else 0
                     new_task = TimeslotTaskTemplate(
                         timeslot_id=timeslot_id,
                         task_text=task_text.strip(),
+                        deduction_amount=abs(amount) if amount else None,
+                        is_mandatory=idx in task_mandatory_indices,
+                        requires_media=idx in task_media_indices,
                         display_order=idx,
                         created_by_id=user_id
                     )
@@ -691,6 +707,16 @@ async def update_timeslot(
             await db.commit()
             
             logger.info(f"Timeslot {timeslot_id} tasks updated: {len([t for t in task_texts if t.strip()])} tasks")
+        
+        # Инвалидация кэша календаря и связанных API после обновления тайм-слота
+        try:
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_timeslots:*")
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
+        except Exception as _:
+            # Не блокируем ответ при ошибке очистки кэша
+            pass
         
         logger.info(f"Timeslot {timeslot_id} updated successfully")
         

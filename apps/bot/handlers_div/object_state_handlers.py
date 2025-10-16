@@ -318,14 +318,26 @@ async def _handle_close_object(update: Update, context: ContextTypes.DEFAULT_TYP
             return
         
         # Последняя смена - переходим к закрытию
-        # Сохраняем в состояние, что это закрытие объекта
-        user_state_manager.create_state(
-            user_id=user_id,
-            action=UserAction.CLOSE_OBJECT,
-            step=UserStep.SHIFT_SELECTION,
-            selected_shift_id=shift['id'],
-            selected_object_id=object_id
-        )
+        # Проверяем, есть ли уже состояние для этой смены
+        existing_state = user_state_manager.get_state(user_id)
+        
+        if existing_state and existing_state.selected_shift_id == shift['id']:
+            # Обновляем существующий state, сохраняя completed_tasks и task_media
+            user_state_manager.update_state(
+                user_id=user_id,
+                action=UserAction.CLOSE_OBJECT,
+                step=existing_state.step,
+                selected_object_id=object_id
+            )
+        else:
+            # Создаем новый state
+            user_state_manager.create_state(
+                user_id=user_id,
+                action=UserAction.CLOSE_OBJECT,
+                step=UserStep.SHIFT_SELECTION,
+                selected_shift_id=shift['id'],
+                selected_object_id=object_id
+            )
         
         # Перенаправляем на обычный флоу закрытия смены
         # Он обработает задачи, геолокацию, и в конце мы закроем объект

@@ -799,13 +799,34 @@ class TimeSlotService:
                 is_active=timeslot_data.get('is_active', True),
                 notes=timeslot_data.get('notes', ''),
                 penalize_late_start=timeslot_data.get('penalize_late_start', True),
-                ignore_object_tasks=timeslot_data.get('ignore_object_tasks', False),
-                shift_tasks=timeslot_data.get('shift_tasks')
+                ignore_object_tasks=timeslot_data.get('ignore_object_tasks', False)
             )
             
             self.db.add(new_timeslot)
             await self.db.commit()
             await self.db.refresh(new_timeslot)
+            
+            # Сохраняем задачи в TimeslotTaskTemplate (если есть)
+            shift_tasks = timeslot_data.get('shift_tasks')
+            if shift_tasks:
+                from domain.entities.timeslot_task_template import TimeslotTaskTemplate
+                for idx, task in enumerate(shift_tasks):
+                    # Определяем deduction_amount: приоритет deduction_amount, затем bonus_amount
+                    deduction = task.get('deduction_amount', 0)
+                    if deduction == 0:
+                        deduction = task.get('bonus_amount', 0)
+                    
+                    task_template = TimeslotTaskTemplate(
+                        timeslot_id=new_timeslot.id,
+                        task_text=task.get('text', ''),
+                        deduction_amount=abs(deduction) if deduction else None,
+                        is_mandatory=task.get('is_mandatory', False),
+                        requires_media=task.get('requires_media', False),
+                        display_order=idx,
+                        created_by_id=internal_id
+                    )
+                    self.db.add(task_template)
+                await self.db.commit()
             
             logger.info(f"Created timeslot {new_timeslot.id} for object {object_id}")
             
@@ -1032,13 +1053,34 @@ class TimeSlotService:
                 is_active=timeslot_data.get('is_active', True),
                 notes=timeslot_data.get('notes', ''),
                 penalize_late_start=timeslot_data.get('penalize_late_start', True),
-                ignore_object_tasks=timeslot_data.get('ignore_object_tasks', False),
-                shift_tasks=timeslot_data.get('shift_tasks')
+                ignore_object_tasks=timeslot_data.get('ignore_object_tasks', False)
             )
             
             self.db.add(new_timeslot)
             await self.db.commit()
             await self.db.refresh(new_timeslot)
+            
+            # Сохраняем задачи в TimeslotTaskTemplate (если есть)
+            shift_tasks = timeslot_data.get('shift_tasks')
+            if shift_tasks:
+                from domain.entities.timeslot_task_template import TimeslotTaskTemplate
+                for idx, task in enumerate(shift_tasks):
+                    # Определяем deduction_amount: приоритет deduction_amount, затем bonus_amount
+                    deduction = task.get('deduction_amount', 0)
+                    if deduction == 0:
+                        deduction = task.get('bonus_amount', 0)
+                    
+                    task_template = TimeslotTaskTemplate(
+                        timeslot_id=new_timeslot.id,
+                        task_text=task.get('text', ''),
+                        deduction_amount=abs(deduction) if deduction else None,
+                        is_mandatory=task.get('is_mandatory', False),
+                        requires_media=task.get('requires_media', False),
+                        display_order=idx,
+                        created_by_id=internal_id
+                    )
+                    self.db.add(task_template)
+                await self.db.commit()
             
             logger.info(f"Created timeslot {new_timeslot.id} for object {object_id} by manager {telegram_id}")
             
