@@ -1559,6 +1559,15 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 timeslot_query = select(TimeSlot).where(TimeSlot.id == shift_obj.time_slot_id)
                 timeslot_result = await session.execute(timeslot_query)
                 timeslot = timeslot_result.scalar_one_or_none()
+                
+                # DEBUG логирование для БАГ #2
+                if timeslot:
+                    logger.info(
+                        f"[DEBUG_IGNORE] Loaded timeslot for MY_TASKS",
+                        timeslot_id=timeslot.id,
+                        ignore_object_tasks=timeslot.ignore_object_tasks,
+                        has_object_tasks=bool(obj and obj.shift_tasks) if obj else False
+                    )
             
             if shift_obj.object_id:
                 object_query = select(Object).where(Object.id == shift_obj.object_id)
