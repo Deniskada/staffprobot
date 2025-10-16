@@ -15,6 +15,7 @@ from domain.entities.timeslot_task_template import TimeslotTaskTemplate
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.state import user_state_manager, UserAction, UserStep
+from typing import List, Dict, Optional
 # from .utils import get_location_keyboard  # Удалено, создаем клавиатуру прямо в коде
 
 # Создаем экземпляры сервисов
@@ -57,6 +58,66 @@ async def _load_timeslot_tasks(session: AsyncSession, timeslot: TimeSlot) -> lis
     )
     
     return tasks
+
+
+async def _collect_shift_tasks(
+    session: AsyncSession,
+    shift: Shift,
+    timeslot: Optional[TimeSlot] = None,
+    object_: Optional[Object] = None
+) -> List[Dict]:
+    """
+    Собрать ВСЕ задачи смены из обоих источников (timeslot + object).
+    
+    Единая функция для загрузки задач везде вместо дублирования кода.
+    
+    Args:
+        session: Асинхронная сессия БД
+        shift: Смена для которой собираем задачи
+        timeslot: TimeSlot (если запланированная смена)
+        object_: Object с потенциальными shift_tasks
+    
+    Returns:
+        Список задач с метаданными: [{'text', 'is_mandatory', 'deduction_amount', 'requires_media', 'source'}, ...]
+    
+    Logic:
+        1. Если есть timeslot → загружаем из TimeslotTaskTemplate
+        2. Если есть object и не ignore_object_tasks → добавляем из object.shift_tasks
+        3. Если спонтанная смена (нет timeslot) → берём из object.shift_tasks
+    """
+    all_tasks = []
+    
+    # Вариант 1: Запланированная смена (с timeslot)
+    if timeslot:
+        # Загружаем задачи из TimeslotTaskTemplate
+        timeslot_tasks = await _load_timeslot_tasks(session, timeslot)
+        all_tasks.extend(timeslot_tasks)
+        
+        # Добавляем задачи объекта (если не игнорируются)
+        if not timeslot.ignore_object_tasks and object_ and object_.shift_tasks:
+            for task in object_.shift_tasks:
+                task_copy = dict(task)
+                task_copy['source'] = 'object'
+                all_tasks.append(task_copy)
+    else:
+        # Вариант 2: Спонтанная смена (без timeslot) - только задачи объекта
+        if object_ and object_.shift_tasks:
+            for task in object_.shift_tasks:
+                task_copy = dict(task)
+                task_copy['source'] = 'object'
+                all_tasks.append(task_copy)
+    
+    logger.debug(
+        f"Collected all shift tasks",
+        shift_id=shift.id,
+        timeslot_id=timeslot.id if timeslot else None,
+        object_id=object_.id if object_ else None,
+        total_tasks=len(all_tasks),
+        timeslot_tasks=len([t for t in all_tasks if t.get('source') == 'timeslot']),
+        object_tasks=len([t for t in all_tasks if t.get('source') == 'object'])
+    )
+    
+    return all_tasks
 
 
 async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE):
