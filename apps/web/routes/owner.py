@@ -3558,6 +3558,9 @@ async def owner_timeslot_detail(
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
 
 
+# ДУБЛИКАТ: этот роут перенесён в owner_timeslots.py (специализированный роутер)
+# Оставлен закомментированным для истории. См. apps/web/routes/owner_timeslots.py
+"""
 @router.get("/timeslots/{timeslot_id}/edit", response_class=HTMLResponse)
 async def owner_timeslot_edit_form(
     request: Request,
@@ -3565,7 +3568,7 @@ async def owner_timeslot_edit_form(
     current_user: dict = Depends(get_current_user_dependency()),
     _: None = Depends(require_role(["owner", "superadmin"]))
 ):
-    """Форма редактирования тайм-слота владельца."""
+    # Форма редактирования тайм-слота владельца.
     try:
         # Получаем telegram_id из current_user
         if isinstance(current_user, dict):
@@ -3628,7 +3631,7 @@ async def owner_timeslot_edit_form(
     except Exception as e:
         logger.error(f"Error loading edit form for timeslot {timeslot_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки формы редактирования: {str(e)}")
-
+"""
 
 @router.post("/timeslots/{timeslot_id}/edit")
 async def owner_timeslot_update(

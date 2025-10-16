@@ -7,10 +7,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from apps.web.services.object_service import ObjectService, TimeSlotService
+from apps.web.routes.owner import get_available_interfaces_for_user, get_user_id_from_current_user
 from core.database.session import get_db_session
 from core.logging.logger import logger
 from typing import Optional
 from datetime import time, date, timedelta
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
@@ -545,16 +547,22 @@ async def edit_timeslot_form(
         timeslot_data = {
             "id": timeslot.id,
             "object_id": timeslot.object_id,
+            "slot_date": timeslot.slot_date.strftime("%Y-%m-%d"),
             "start_time": timeslot.start_time.strftime("%H:%M"),
             "end_time": timeslot.end_time.strftime("%H:%M"),
             "hourly_rate": float(timeslot.hourly_rate) if timeslot.hourly_rate else float(obj.hourly_rate),
+            "max_employees": timeslot.max_employees or 1,
             "is_active": timeslot.is_active
         }
         
         object_data = {
             "id": obj.id,
             "name": obj.name,
-            "address": obj.address or ""
+            "address": obj.address or "",
+            "hourly_rate": float(obj.hourly_rate) if obj.hourly_rate else 0,
+            "opening_time": obj.opening_time.strftime("%H:%M") if obj.opening_time else "00:00",
+            "closing_time": obj.closing_time.strftime("%H:%M") if obj.closing_time else "23:59",
+            "max_distance": obj.max_distance_meters or 0
         }
         
         # Получаем задачи тайм-слота
@@ -565,6 +573,10 @@ async def edit_timeslot_form(
         tasks_result = await db.execute(tasks_query)
         timeslot_tasks = tasks_result.scalars().all()
         
+        # Получаем данные для переключения интерфейсов
+        user_id = await get_user_id_from_current_user(current_user, db)
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
         return templates.TemplateResponse("owner/timeslots/edit.html", {
             "request": request,
             "title": f"Редактирование тайм-слота: {object_data['name']}",
@@ -572,7 +584,8 @@ async def edit_timeslot_form(
             "object_id": timeslot.object_id,
             "object": object_data,
             "timeslot_tasks": timeslot_tasks,
-            "current_user": current_user
+            "current_user": current_user,
+            "available_interfaces": available_interfaces
         })
         
     except HTTPException:
@@ -609,7 +622,8 @@ async def update_timeslot(
             hourly_rate_str = hourly_rate_str.strip()
             if not hourly_rate_str:
                 raise ValueError("Пустое значение ставки")
-            hourly_rate = int(hourly_rate_str)
+            # Преобразуем через float, чтобы поддержать формат "500.0"
+            hourly_rate = int(float(hourly_rate_str))
         except ValueError as e:
             logger.error(f"Error parsing hourly_rate '{hourly_rate_str}': {e}")
             raise HTTPException(status_code=400, detail=f"Неверный формат ставки: '{hourly_rate_str}'")
@@ -645,7 +659,6 @@ async def update_timeslot(
         
         if task_texts:
             from domain.entities.timeslot_task_template import TimeslotTaskTemplate
-            from apps.web.services.shift_task_service import ShiftTaskService
             from domain.entities.user import User
             
             # Получить внутренний ID пользователя
