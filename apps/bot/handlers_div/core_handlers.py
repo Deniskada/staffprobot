@@ -163,6 +163,15 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         longitude=location.longitude
     )
     
+    # DEBUG логирование для БАГ #3 
+    logger.info(
+        f"[DEBUG_LOCATION] Received location message",
+        user_id=update.message.from_user.id,
+        has_location=bool(update.message.location),
+        latitude=update.message.location.latitude if update.message.location else None,
+        longitude=update.message.location.longitude if update.message.location else None
+    )
+    
     # Получаем состояние пользователя
     user_state = user_state_manager.get_state(user_id)
     if not user_state:
