@@ -3626,8 +3626,8 @@ async def owner_timeslot_edit_form(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error loading edit form: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки формы редактирования")
+        logger.error(f"Error loading edit form for timeslot {timeslot_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки формы редактирования: {str(e)}")
 
 
 @router.post("/timeslots/{timeslot_id}/edit")
