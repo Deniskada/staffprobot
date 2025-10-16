@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from core.logging.logger import logger
-from domain.entities.shift_task import ShiftTask, TimeslotTaskTemplate
+from domain.entities.timeslot_task_template import TimeslotTaskTemplate
 from domain.entities.object import Object
 from domain.entities.time_slot import TimeSlot
 

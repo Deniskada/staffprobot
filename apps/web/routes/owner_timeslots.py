@@ -523,17 +523,22 @@ async def edit_timeslot_form(
 ):
     """Форма редактирования тайм-слота"""
     try:
+        # Проверяем, что current_user - это словарь, а не RedirectResponse
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
         # Получение тайм-слота из базы данных
         timeslot_service = TimeSlotService(db)
         object_service = ObjectService(db)
         
         # Получаем тайм-слот с проверкой владельца
-        timeslot = await timeslot_service.get_timeslot_by_id(timeslot_id, current_user["telegram_id"])
+        telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        timeslot = await timeslot_service.get_timeslot_by_id(timeslot_id, telegram_id)
         if not timeslot:
             raise HTTPException(status_code=404, detail="Тайм-слот не найден")
         
         # Получаем объект
-        obj = await object_service.get_object_by_id(timeslot.object_id, current_user["telegram_id"])
+        obj = await object_service.get_object_by_id(timeslot.object_id, telegram_id)
         if not obj:
             raise HTTPException(status_code=404, detail="Объект не найден")
         
@@ -553,7 +558,7 @@ async def edit_timeslot_form(
         }
         
         # Получаем задачи тайм-слота
-        from domain.entities.shift_task import TimeslotTaskTemplate
+        from domain.entities.timeslot_task_template import TimeslotTaskTemplate
         tasks_query = select(TimeslotTaskTemplate).where(
             TimeslotTaskTemplate.timeslot_id == timeslot_id
         ).order_by(TimeslotTaskTemplate.display_order)
@@ -639,7 +644,7 @@ async def update_timeslot(
         task_texts = form_data.getlist("task_texts[]")
         
         if task_texts:
-            from domain.entities.shift_task import TimeslotTaskTemplate
+            from domain.entities.timeslot_task_template import TimeslotTaskTemplate
             from apps.web.services.shift_task_service import ShiftTaskService
             from domain.entities.user import User
             
