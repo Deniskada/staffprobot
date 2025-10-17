@@ -694,7 +694,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f"Button callback received: user_id={user.id}, username={user.username}, callback_data={query.data}"
     )
     
-    # Обработчики уже импортированы в начале файла
+    # Локальные импорты для избежания циклических зависимостей
+    from .shift_handlers import (
+        _handle_open_shift, 
+        _handle_close_shift,
+        _handle_open_shift_object_selection,
+        _handle_open_planned_shift,
+        _handle_close_shift_selection
+    )
     
     # Обрабатываем разные типы кнопок
     # open_object, close_object, select_object_to_open обрабатываются в bot.py
