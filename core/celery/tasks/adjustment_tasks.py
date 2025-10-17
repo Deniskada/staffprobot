@@ -210,6 +210,7 @@ def process_closed_shifts_adjustments():
                             
                             # 2. Задачи объекта (если НЕ игнорируются)
                             if not shift.time_slot.ignore_object_tasks and shift.object and shift.object.shift_tasks:
+                                logger.info(f"[ADJUSTMENT_DEBUG] Adding {len(shift.object.shift_tasks)} object tasks, ignore_object_tasks={shift.time_slot.ignore_object_tasks}")
                                 for task in shift.object.shift_tasks:
                                     task_copy = dict(task)
                                     task_copy['source'] = 'object'
