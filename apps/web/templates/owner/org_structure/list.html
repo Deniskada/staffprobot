@@ -63,6 +63,16 @@
 {% endif %}
 {% endmacro %}
 
+<!-- Макрос для рендеринга options в select -->
+{% macro render_unit_options(unit, indent) %}
+<option value="{{ unit.id }}">{{ '├─ ' * indent }}{{ unit.name }}</option>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_unit_options(child, indent + 1) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
+
 {% block extra_css %}
 <style>
     /* ===== ИЕРАРХИЯ ПОДРАЗДЕЛЕНИЙ ===== */
