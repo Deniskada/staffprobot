@@ -62,16 +62,20 @@ async def owner_org_structure_list(
         objects_result = await db.execute(objects_query)
         objects_list = objects_result.scalars().all()
         available_interfaces = await get_available_interfaces_for_user(owner_id)
+        
+        # Получить системы оплаты для нового дизайна
+        systems = await payment_system_service.get_all_systems()
 
         return templates.TemplateResponse(
-            "owner/org_structure/list.html",
+            "owner/org_structure/list_new.html",
             {
                 "request": request,
-                "title": "Организационная структура",
+                "title": "Организация и финансы",
                 "org_tree": org_tree,
                 "units_count": units_count,
                 "payment_systems": payment_systems,
                 "payment_schedules": payment_schedules,
+                "systems": systems,
                 "objects": objects_list,
                 "current_user": current_user,
                 "available_interfaces": available_interfaces
@@ -347,6 +351,7 @@ async def owner_org_structure_get_data(
             "cancellation_short_notice_hours": getattr(unit, 'cancellation_short_notice_hours', None),
             "cancellation_short_notice_fine": float(unit.cancellation_short_notice_fine) if getattr(unit, 'cancellation_short_notice_fine', None) else None,
             "cancellation_invalid_reason_fine": float(unit.cancellation_invalid_reason_fine) if getattr(unit, 'cancellation_invalid_reason_fine', None) else None,
+            "telegram_report_chat_id": unit.telegram_report_chat_id,
             "level": unit.level,
             "is_active": unit.is_active
         })
@@ -356,4 +361,166 @@ async def owner_org_structure_get_data(
     except Exception as e:
         logger.error(f"Error getting org unit data: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки данных: {str(e)}")
+
+
+@router.get("/org-structure/schedules-usage")
+async def get_schedules_usage(
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получить статистику использования графиков выплат по подразделениям."""
+    try:
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        from domain.entities.org_unit import OrgUnit
+        from sqlalchemy import select, func
+        
+        # Подсчитать количество подразделений для каждого графика
+        query = select(
+            OrgUnit.payment_schedule_id,
+            func.count(OrgUnit.id).label('units_count')
+        ).where(
+            OrgUnit.owner_id == owner_id,
+            OrgUnit.is_active == True,
+            OrgUnit.payment_schedule_id.isnot(None)
+        ).group_by(OrgUnit.payment_schedule_id)
+        
+        result = await db.execute(query)
+        rows = result.all()
+        
+        data = [
+            {
+                "schedule_id": row.payment_schedule_id,
+                "units_count": row.units_count
+            }
+            for row in rows
+        ]
+        
+        return JSONResponse(content=data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting schedules usage: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки статистики: {str(e)}")
+
+
+@router.get("/org-structure/systems-usage")
+async def get_systems_usage(
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получить статистику использования систем оплаты по подразделениям."""
+    try:
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        from domain.entities.org_unit import OrgUnit
+        from sqlalchemy import select, func
+        
+        # Подсчитать количество подразделений для каждой системы
+        query = select(
+            OrgUnit.payment_system_id,
+            func.count(OrgUnit.id).label('count')
+        ).where(
+            OrgUnit.owner_id == owner_id,
+            OrgUnit.is_active == True,
+            OrgUnit.payment_system_id.isnot(None)
+        ).group_by(OrgUnit.payment_system_id)
+        
+        result = await db.execute(query)
+        rows = result.all()
+        
+        data = [
+            {
+                "system_id": row.payment_system_id,
+                "count": row.count
+            }
+            for row in rows
+        ]
+        
+        return JSONResponse(content=data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting systems usage: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки статистики: {str(e)}")
+
+
+@router.get("/org-structure/schedule-stats/{schedule_id}")
+async def get_schedule_stats(
+    schedule_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получить детальную статистику использования конкретного графика."""
+    try:
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        from domain.entities.org_unit import OrgUnit
+        from domain.entities.object import Object
+        from domain.entities.contract import Contract
+        from sqlalchemy import select, func
+        
+        # Найти подразделения с этим графиком
+        units_query = select(OrgUnit).where(
+            OrgUnit.owner_id == owner_id,
+            OrgUnit.payment_schedule_id == schedule_id,
+            OrgUnit.is_active == True
+        )
+        units_result = await db.execute(units_query)
+        units = units_result.scalars().all()
+        
+        # Подсчитать объекты
+        objects_count = 0
+        for unit in units:
+            objects_query = select(func.count(Object.id)).where(
+                Object.owner_id == owner_id,
+                Object.org_unit_id == unit.id,
+                Object.is_active == True
+            )
+            count_result = await db.execute(objects_query)
+            objects_count += count_result.scalar() or 0
+        
+        # Подсчитать сотрудников (примерно - через contracts с графиком)
+        employees_query = select(func.count(Contract.id.distinct())).where(
+            Contract.owner_id == owner_id,
+            Contract.payment_schedule_id == schedule_id,
+            Contract.is_active == True
+        )
+        employees_result = await db.execute(employees_query)
+        employees_count = employees_result.scalar() or 0
+        
+        units_data = []
+        for unit in units:
+            obj_query = select(func.count(Object.id)).where(
+                Object.org_unit_id == unit.id,
+                Object.is_active == True
+            )
+            obj_result = await db.execute(obj_query)
+            obj_count = obj_result.scalar() or 0
+            
+            units_data.append({
+                "id": unit.id,
+                "name": unit.name,
+                "objects_count": obj_count
+            })
+        
+        return JSONResponse(content={
+            "units": units_data,
+            "objects": objects_count,
+            "employees": employees_count
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting schedule stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки статистики: {str(e)}")
 

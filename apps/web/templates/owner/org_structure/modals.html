@@ -1,0 +1,690 @@
+<!-- Модальное окно создания подразделения -->
+<div class="modal fade" id="createUnitModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus-circle"></i> Создать подразделение
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="/owner/org-structure/create">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="create_name" class="form-label">Название *</label>
+                        <input type="text" class="form-control" id="create_name" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="create_description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="create_description" name="description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="create_parent_id" class="form-label">Родительское подразделение</label>
+                        <select class="form-select" id="create_parent_id" name="parent_id">
+                            {% for root in org_tree %}
+                                {{ render_unit_options(root, 0) }}
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Новое подразделение будет создано внутри выбранного</small>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-coins"></i> Финансовые настройки</h6>
+                    
+                    <div class="mb-3">
+                        <label for="create_payment_system_id" class="form-label">Система оплаты труда</label>
+                        <select class="form-select" id="create_payment_system_id" name="payment_system_id">
+                            <option value="">Наследовать от родителя</option>
+                            {% for ps in payment_systems %}
+                            <option value="{{ ps.id }}">{{ ps.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="create_payment_schedule_id" class="form-label">
+                            График выплат
+                            <i class="bi bi-info-circle" 
+                               data-bs-toggle="tooltip" 
+                               title="Определяет периодичность выплат сотрудникам подразделения"></i>
+                        </label>
+                        <div class="input-group">
+                            <select class="form-select" id="create_payment_schedule_id" name="payment_schedule_id" onchange="updateCreateScheduleActions()">
+                                <option value="">Наследовать от родителя</option>
+                                {% for schedule in payment_schedules %}
+                                <option value="{{ schedule.id }}" 
+                                        data-description="{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}"
+                                        data-is-custom="{{ 'true' if schedule.is_custom else 'false' }}">
+                                    {{ schedule.name }}{% if schedule.is_custom %} (кастомный){% endif %}
+                                </option>
+                                {% endfor %}
+                                <option value="create_new" style="font-weight: bold; color: #0d6efd;">
+                                    ➕ Создать новый график
+                                </option>
+                            </select>
+                            <button type="button" id="view_create_schedule_btn" class="btn btn-outline-info" onclick="viewCreateSchedule()" style="display: none;">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button type="button" id="edit_create_schedule_btn" class="btn btn-outline-primary" onclick="editCreateSchedule()" style="display: none;">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted" id="create_schedule_description_text"></small>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-clock"></i> Настройки штрафов</h6>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="create_inherit_late_settings" 
+                                   name="inherit_late_settings" checked onchange="toggleCreateLateFields()">
+                            <label class="form-check-label" for="create_inherit_late_settings">
+                                Наследовать от родителя
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="create_late_fields">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="create_late_threshold" class="form-label">Допустимое опоздание (мин)</label>
+                                <input type="number" class="form-control" id="create_late_threshold" 
+                                       name="late_threshold_minutes" placeholder="0">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="create_late_penalty" class="form-label">Стоимость минуты (₽)</label>
+                                <input type="number" class="form-control" id="create_late_penalty" 
+                                       name="late_penalty_per_minute" step="0.01" placeholder="10.00">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-ban"></i> Штрафы за отмену смены</h6>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="create_inherit_cancellation_settings" 
+                                   name="inherit_cancellation_settings" checked onchange="toggleCreateCancellationFields()">
+                            <label class="form-check-label" for="create_inherit_cancellation_settings">
+                                Наследовать от родителя
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="create_cancellation_fields">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="create_cancel_hours" class="form-label">Минимальный срок (ч)</label>
+                                <input type="number" class="form-control" id="create_cancel_hours" 
+                                       name="cancellation_short_notice_hours" min="1" max="168" placeholder="24">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="create_cancel_short_fine" class="form-label">Штраф короткий срок (₽)</label>
+                                <input type="number" class="form-control" id="create_cancel_short_fine" 
+                                       name="cancellation_short_notice_fine" step="0.01" placeholder="500.00">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="create_cancel_invalid_fine" class="form-label">Штраф без причины (₽)</label>
+                                <input type="number" class="form-control" id="create_cancel_invalid_fine" 
+                                       name="cancellation_invalid_reason_fine" step="0.01" placeholder="1000.00">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h6 class="mt-4"><i class="fas fa-paper-plane"></i> Telegram группа для отчетов</h6>
+                    <div class="mb-3">
+                        <label for="create_telegram_chat" class="form-label">ID Telegram группы</label>
+                        <input type="text" class="form-control" id="create_telegram_chat" 
+                               name="telegram_report_chat_id" placeholder="-1001234567890">
+                        <small class="form-text text-muted">
+                            ID группы для отправки фото/видео отчетов. Добавьте бота в группу и напишите <code>/get_chat_id</code>
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check"></i> Создать
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования подразделения -->
+<div class="modal fade" id="editUnitModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Редактировать подразделение
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editUnitForm">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_unit_id" name="unit_id">
+                    
+                    <div class="mb-3">
+                        <label for="edit_name" class="form-label">Название *</label>
+                        <input type="text" class="form-control" id="edit_name" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="edit_description" name="description" rows="2"></textarea>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-coins"></i> Финансовые настройки</h6>
+                    
+                    <div class="mb-3">
+                        <label for="edit_payment_system_id" class="form-label">Система оплаты труда</label>
+                        <select class="form-select" id="edit_payment_system_id" name="payment_system_id">
+                            <option value="">Наследовать от родителя</option>
+                            {% for ps in payment_systems %}
+                            <option value="{{ ps.id }}">{{ ps.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_payment_schedule_id" class="form-label">
+                            График выплат
+                            <i class="bi bi-info-circle" 
+                               data-bs-toggle="tooltip" 
+                               title="Определяет периодичность выплат сотрудникам подразделения"></i>
+                        </label>
+                        <div class="input-group">
+                            <select class="form-select" id="edit_payment_schedule_id" name="payment_schedule_id" onchange="updateEditScheduleActions()">
+                                <option value="">Наследовать от родителя</option>
+                                {% for schedule in payment_schedules %}
+                                <option value="{{ schedule.id }}" 
+                                        data-description="{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}"
+                                        data-is-custom="{{ 'true' if schedule.is_custom else 'false' }}">
+                                    {{ schedule.name }}{% if schedule.is_custom %} (кастомный){% endif %}
+                                </option>
+                                {% endfor %}
+                                <option value="create_new" style="font-weight: bold; color: #0d6efd;">
+                                    ➕ Создать новый график
+                                </option>
+                            </select>
+                            <button type="button" id="view_edit_schedule_btn" class="btn btn-outline-info" onclick="viewEditSchedule()" style="display: none;">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button type="button" id="edit_edit_schedule_btn" class="btn btn-outline-primary" onclick="editEditSchedule()" style="display: none;">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted" id="edit_schedule_description_text"></small>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-clock"></i> Настройки штрафов</h6>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="edit_inherit_late_settings" 
+                                   name="inherit_late_settings" onchange="toggleEditLateFields()">
+                            <label class="form-check-label" for="edit_inherit_late_settings">
+                                Наследовать от родителя
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="edit_late_fields">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_late_threshold" class="form-label">Допустимое опоздание (мин)</label>
+                                <input type="number" class="form-control" id="edit_late_threshold" 
+                                       name="late_threshold_minutes">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_late_penalty" class="form-label">Стоимость минуты (₽)</label>
+                                <input type="number" class="form-control" id="edit_late_penalty" 
+                                       name="late_penalty_per_minute" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-ban"></i> Штрафы за отмену смены</h6>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="edit_inherit_cancellation_settings" 
+                                   name="inherit_cancellation_settings" onchange="toggleEditCancellationFields()">
+                            <label class="form-check-label" for="edit_inherit_cancellation_settings">
+                                Наследовать от родителя
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="edit_cancellation_fields">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="edit_cancel_hours" class="form-label">Минимальный срок (ч)</label>
+                                <input type="number" class="form-control" id="edit_cancel_hours" 
+                                       name="cancellation_short_notice_hours" min="1" max="168">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="edit_cancel_short_fine" class="form-label">Штраф короткий срок (₽)</label>
+                                <input type="number" class="form-control" id="edit_cancel_short_fine" 
+                                       name="cancellation_short_notice_fine" step="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="edit_cancel_invalid_fine" class="form-label">Штраф без причины (₽)</label>
+                                <input type="number" class="form-control" id="edit_cancel_invalid_fine" 
+                                       name="cancellation_invalid_reason_fine" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h6 class="mt-4"><i class="fas fa-paper-plane"></i> Telegram группа для отчетов</h6>
+                    <div class="mb-3">
+                        <label for="edit_telegram_chat" class="form-label">ID Telegram группы</label>
+                        <input type="text" class="form-control" id="edit_telegram_chat" 
+                               name="telegram_report_chat_id" placeholder="-1001234567890">
+                        <small class="form-text text-muted">
+                            ID группы для отправки фото/видео отчетов. Добавьте бота в группу и напишите <code>/get_chat_id</code>
+                        </small>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="edit_is_active" 
+                                   name="is_active" value="true">
+                            <label class="form-check-label" for="edit_is_active">
+                                Активно
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Сохранить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Показать модальное окно создания
+function showCreateModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createUnitModal'));
+    modal.show();
+    toggleCreateLateFields();
+    // Инициализация кнопок графика выплат
+    updateCreateScheduleActions();
+}
+
+// Показать модальное окно редактирования
+async function showEditModal(unitId) {
+    try {
+        const response = await fetch(`/owner/org-structure/${unitId}/data`);
+        if (!response.ok) throw new Error('Не удалось загрузить данные');
+        
+        const unit = await response.json();
+        
+        // Заполнить форму
+        document.getElementById('edit_unit_id').value = unit.id;
+        document.getElementById('edit_name').value = unit.name;
+        document.getElementById('edit_description').value = unit.description || '';
+        document.getElementById('edit_payment_system_id').value = unit.payment_system_id || '';
+        document.getElementById('edit_payment_schedule_id').value = unit.payment_schedule_id || '';
+        document.getElementById('edit_inherit_late_settings').checked = unit.inherit_late_settings;
+        document.getElementById('edit_late_threshold').value = unit.late_threshold_minutes || '';
+        document.getElementById('edit_late_penalty').value = unit.late_penalty_per_minute || '';
+        document.getElementById('edit_inherit_cancellation_settings').checked = unit.inherit_cancellation_settings !== false;
+        document.getElementById('edit_cancel_hours').value = unit.cancellation_short_notice_hours || '';
+        document.getElementById('edit_cancel_short_fine').value = unit.cancellation_short_notice_fine || '';
+        document.getElementById('edit_cancel_invalid_fine').value = unit.cancellation_invalid_reason_fine || '';
+        document.getElementById('edit_telegram_chat').value = unit.telegram_report_chat_id || '';
+        document.getElementById('edit_is_active').checked = unit.is_active;
+        
+        // Обновить action формы
+        document.getElementById('editUnitForm').action = `/owner/org-structure/${unitId}/edit`;
+        
+        // Показать модалку
+        const modal = new bootstrap.Modal(document.getElementById('editUnitModal'));
+        modal.show();
+        
+        toggleEditLateFields();
+        toggleEditCancellationFields();
+        // Инициализация кнопок графика выплат
+        updateEditScheduleActions();
+        
+    } catch (e) {
+        alert(`Ошибка загрузки: ${e.message}`);
+    }
+}
+
+// Удалить подразделение
+async function deleteUnit(unitId, unitName) {
+    if (!confirm(`Удалить подразделение "${unitName}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/owner/org-structure/${unitId}/delete`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            window.location.reload();
+        } else {
+            alert(`Ошибка: ${result.message}`);
+        }
+        
+    } catch (e) {
+        alert(`Ошибка удаления: ${e.message}`);
+    }
+}
+
+// Переключение видимости полей штрафов (создание)
+function toggleCreateLateFields() {
+    const checkbox = document.getElementById('create_inherit_late_settings');
+    const thresholdInput = document.getElementById('create_late_threshold');
+    const penaltyInput = document.getElementById('create_late_penalty');
+    
+    const readonly = checkbox.checked;
+    thresholdInput.readOnly = readonly;
+    penaltyInput.readOnly = readonly;
+    
+    if (readonly) {
+        thresholdInput.style.backgroundColor = '#e9ecef';
+        penaltyInput.style.backgroundColor = '#e9ecef';
+    } else {
+        thresholdInput.style.backgroundColor = '';
+        penaltyInput.style.backgroundColor = '';
+    }
+}
+
+// Переключение видимости полей штрафов (редактирование)
+function toggleEditLateFields() {
+    const checkbox = document.getElementById('edit_inherit_late_settings');
+    const thresholdInput = document.getElementById('edit_late_threshold');
+    const penaltyInput = document.getElementById('edit_late_penalty');
+    
+    const readonly = checkbox.checked;
+    thresholdInput.readOnly = readonly;
+    penaltyInput.readOnly = readonly;
+    
+    if (readonly) {
+        thresholdInput.style.backgroundColor = '#e9ecef';
+        penaltyInput.style.backgroundColor = '#e9ecef';
+    } else {
+        thresholdInput.style.backgroundColor = '';
+        penaltyInput.style.backgroundColor = '';
+    }
+}
+
+// Инициализация редактора графиков выплат (для модального окна оргструктуры)
+let createPaymentScheduleEditor;
+let editPaymentScheduleEditor;
+
+// Функции для работы с графиками выплат (создание подразделения)
+function updateCreateScheduleActions() {
+    const scheduleSelect = document.getElementById('create_payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const descEl = document.getElementById('create_schedule_description_text');
+    const viewBtn = document.getElementById('view_create_schedule_btn');
+    const editBtn = document.getElementById('edit_create_schedule_btn');
+    
+    // Обновить описание
+    const description = selectedOption.getAttribute('data-description') || '';
+    descEl.textContent = description;
+    
+    const selectedValue = scheduleSelect.value;
+    
+    // Если выбрано "Создать новый"
+    if (selectedValue === 'create_new') {
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        createNewScheduleForCreate();
+        return;
+    }
+    
+    if (selectedValue) {
+        // Показать кнопку просмотра
+        viewBtn.style.display = 'inline-block';
+        
+        // Показать кнопку редактирования только для кастомных
+        const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+        editBtn.style.display = isCustom ? 'inline-block' : 'none';
+    } else {
+        // Нет выбора
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+    }
+}
+
+function createNewScheduleForCreate() {
+    const scheduleSelect = document.getElementById('create_payment_schedule_id');
+    
+    if (!createPaymentScheduleEditor) {
+        createPaymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', null);
+        createPaymentScheduleEditor.init();
+    }
+    
+    // Установить глобально для работы onchange в HTML
+    window.paymentScheduleEditor = createPaymentScheduleEditor;
+    
+    // Сбросить режим редактирования (создаем новый график)
+    createPaymentScheduleEditor.scheduleId = null;
+    
+    // Очистить форму перед показом
+    document.getElementById('schedule_name').value = '';
+    document.getElementById('schedule_frequency').value = 'daily';
+    createPaymentScheduleEditor.scheduleData = [];
+    createPaymentScheduleEditor.onFrequencyChange();
+    
+    // Генерировать график после того как DOM обновится
+    setTimeout(() => {
+        createPaymentScheduleEditor.generateSchedule();
+    }, 100);
+    
+    createPaymentScheduleEditor.show();
+    
+    // Сбросить выбор
+    scheduleSelect.value = '';
+    document.getElementById('create_schedule_description_text').textContent = '';
+}
+
+function viewCreateSchedule() {
+    const scheduleSelect = document.getElementById('create_payment_schedule_id');
+    const scheduleId = scheduleSelect.value;
+    
+    if (scheduleId) {
+        window.open(`/owner/payment-schedules/${scheduleId}/view`, '_blank', 'width=800,height=600');
+    }
+}
+
+function editCreateSchedule() {
+    const scheduleSelect = document.getElementById('create_payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const scheduleId = scheduleSelect.value;
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    if (!isCustom) {
+        alert('Можно редактировать только кастомные графики');
+        return;
+    }
+    
+    if (!createPaymentScheduleEditor) {
+        createPaymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', null);
+        createPaymentScheduleEditor.init();
+    }
+    
+    // Установить глобально для работы onchange в HTML
+    window.paymentScheduleEditor = createPaymentScheduleEditor;
+    
+    createPaymentScheduleEditor.loadSchedule(scheduleId);
+    createPaymentScheduleEditor.show();
+}
+
+// Функции для работы с графиками выплат (редактирование подразделения)
+function updateEditScheduleActions() {
+    const scheduleSelect = document.getElementById('edit_payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const descEl = document.getElementById('edit_schedule_description_text');
+    const viewBtn = document.getElementById('view_edit_schedule_btn');
+    const editBtn = document.getElementById('edit_edit_schedule_btn');
+    
+    // Обновить описание
+    const description = selectedOption.getAttribute('data-description') || '';
+    descEl.textContent = description;
+    
+    const selectedValue = scheduleSelect.value;
+    
+    // Если выбрано "Создать новый"
+    if (selectedValue === 'create_new') {
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        createNewScheduleForEdit();
+        return;
+    }
+    
+    if (selectedValue) {
+        // Показать кнопку просмотра
+        viewBtn.style.display = 'inline-block';
+        
+        // Показать кнопку редактирования только для кастомных
+        const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+        editBtn.style.display = isCustom ? 'inline-block' : 'none';
+    } else {
+        // Нет выбора
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+    }
+}
+
+function createNewScheduleForEdit() {
+    const scheduleSelect = document.getElementById('edit_payment_schedule_id');
+    
+    if (!editPaymentScheduleEditor) {
+        editPaymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', null);
+        editPaymentScheduleEditor.init();
+    }
+    
+    // Установить глобально для работы onchange в HTML
+    window.paymentScheduleEditor = editPaymentScheduleEditor;
+    
+    // Сбросить режим редактирования (создаем новый график)
+    editPaymentScheduleEditor.scheduleId = null;
+    
+    // Очистить форму перед показом
+    document.getElementById('schedule_name').value = '';
+    document.getElementById('schedule_frequency').value = 'daily';
+    editPaymentScheduleEditor.scheduleData = [];
+    editPaymentScheduleEditor.onFrequencyChange();
+    
+    // Генерировать график после того как DOM обновится
+    setTimeout(() => {
+        editPaymentScheduleEditor.generateSchedule();
+    }, 100);
+    
+    editPaymentScheduleEditor.show();
+    
+    // Сбросить выбор
+    scheduleSelect.value = '';
+    document.getElementById('edit_schedule_description_text').textContent = '';
+}
+
+function viewEditSchedule() {
+    const scheduleSelect = document.getElementById('edit_payment_schedule_id');
+    const scheduleId = scheduleSelect.value;
+    
+    if (scheduleId) {
+        window.open(`/owner/payment-schedules/${scheduleId}/view`, '_blank', 'width=800,height=600');
+    }
+}
+
+function editEditSchedule() {
+    const scheduleSelect = document.getElementById('edit_payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const scheduleId = scheduleSelect.value;
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    if (!isCustom) {
+        alert('Можно редактировать только кастомные графики');
+        return;
+    }
+    
+    if (!editPaymentScheduleEditor) {
+        editPaymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', null);
+        editPaymentScheduleEditor.init();
+    }
+    
+    // Установить глобально для работы onchange в HTML
+    window.paymentScheduleEditor = editPaymentScheduleEditor;
+    
+    editPaymentScheduleEditor.loadSchedule(scheduleId);
+    editPaymentScheduleEditor.show();
+}
+
+// Переключение полей штрафов за отмену (создание)
+function toggleCreateCancellationFields() {
+    const checkbox = document.getElementById('create_inherit_cancellation_settings');
+    const hoursInput = document.getElementById('create_cancel_hours');
+    const shortFineInput = document.getElementById('create_cancel_short_fine');
+    const invalidFineInput = document.getElementById('create_cancel_invalid_fine');
+    
+    const readonly = checkbox.checked;
+    hoursInput.readOnly = readonly;
+    shortFineInput.readOnly = readonly;
+    invalidFineInput.readOnly = readonly;
+    
+    const bgColor = readonly ? '#e9ecef' : '';
+    hoursInput.style.backgroundColor = bgColor;
+    shortFineInput.style.backgroundColor = bgColor;
+    invalidFineInput.style.backgroundColor = bgColor;
+}
+
+// Переключение полей штрафов за отмену (редактирование)
+function toggleEditCancellationFields() {
+    const checkbox = document.getElementById('edit_inherit_cancellation_settings');
+    const hoursInput = document.getElementById('edit_cancel_hours');
+    const shortFineInput = document.getElementById('edit_cancel_short_fine');
+    const invalidFineInput = document.getElementById('edit_cancel_invalid_fine');
+    
+    const readonly = checkbox.checked;
+    hoursInput.readOnly = readonly;
+    shortFineInput.readOnly = readonly;
+    invalidFineInput.readOnly = readonly;
+    
+    const bgColor = readonly ? '#e9ecef' : '';
+    hoursInput.style.backgroundColor = bgColor;
+    shortFineInput.style.backgroundColor = bgColor;
+    invalidFineInput.style.backgroundColor = bgColor;
+}
+</script>
+
+<script src="{{ 'js/shared/payment_schedule_editor.js' | static_version }}"></script>
+
+{% include 'shared/payment_schedule_editor_modal.html' %}
+
