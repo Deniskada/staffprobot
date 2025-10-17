@@ -697,18 +697,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Обработчики уже импортированы в начале файла
     
     # Обрабатываем разные типы кнопок
-    if query.data == "open_object":
-        from .object_state_handlers import _handle_open_object
-        await _handle_open_object(update, context)
-        return
-    elif query.data == "close_object":
-        from .object_state_handlers import _handle_close_object
-        await _handle_close_object(update, context)
-        return
-    elif query.data.startswith("select_object_to_open:"):
-        from .object_state_handlers import _handle_select_object_to_open
-        await _handle_select_object_to_open(update, context)
-        return
+    # open_object, close_object, select_object_to_open обрабатываются в bot.py
     elif query.data == "open_shift":
         await _handle_open_shift(update, context)
         return
