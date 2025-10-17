@@ -99,6 +99,77 @@ async def create_custom_payment_schedule(
         raise HTTPException(status_code=500, detail=f"Ошибка создания графика: {str(e)}")
 
 
+@router.put("/payment-schedules/{schedule_id}/edit")
+async def edit_custom_payment_schedule(
+    schedule_id: int,
+    data: CustomScheduleCreate,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Редактировать кастомный график выплат."""
+    try:
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        # Получить график
+        query = select(PaymentSchedule).where(PaymentSchedule.id == schedule_id)
+        result = await db.execute(query)
+        schedule = result.scalar_one_or_none()
+        
+        if not schedule:
+            raise HTTPException(status_code=404, detail="График не найден")
+        
+        # Проверить доступ (только кастомные графики владельца можно редактировать)
+        if not schedule.is_custom:
+            raise HTTPException(status_code=403, detail="Нельзя редактировать системные графики")
+        
+        if schedule.owner_id != owner_id:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+        
+        # Проверить доступ к объекту (если указан)
+        if data.object_id:
+            from domain.entities.object import Object
+            object_query = select(Object).where(
+                Object.id == data.object_id,
+                Object.owner_id == owner_id
+            )
+            object_result = await db.execute(object_query)
+            obj = object_result.scalar_one_or_none()
+            
+            if not obj:
+                raise HTTPException(status_code=403, detail="Объект не найден или нет доступа")
+        
+        # Обновить график
+        schedule.name = data.name
+        schedule.frequency = data.frequency
+        schedule.payment_day = data.payment_day
+        schedule.payment_period = data.payment_period
+        schedule.object_id = data.object_id
+        
+        await db.commit()
+        await db.refresh(schedule)
+        
+        logger.info(
+            "Custom payment schedule updated",
+            schedule_id=schedule.id,
+            owner_id=owner_id
+        )
+        
+        return JSONResponse(content={
+            "success": True,
+            "id": schedule.id,
+            "name": schedule.name
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating custom payment schedule: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления графика: {str(e)}")
+
+
 @router.get("/payment-schedules/{schedule_id}/data")
 async def get_payment_schedule_data(
     schedule_id: int,

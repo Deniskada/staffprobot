@@ -9,6 +9,7 @@ class PaymentScheduleEditor {
         this.objectId = objectId;
         this.modal = null;
         this.scheduleData = [];
+        this.scheduleId = null;  // ID графика при редактировании
     }
     
     init() {
@@ -384,8 +385,15 @@ class PaymentScheduleEditor {
         };
         
         try {
-            const response = await fetch('/owner/payment-schedules/create-custom', {
-                method: 'POST',
+            // Определяем режим: создание или редактирование
+            const isEditing = this.scheduleId !== null;
+            const url = isEditing 
+                ? `/owner/payment-schedules/${this.scheduleId}/edit`
+                : '/owner/payment-schedules/create-custom';
+            const method = isEditing ? 'PUT' : 'POST';
+            
+            const response = await fetch(url, {
+                method: method,
                 headers: {
                     'Content-Type': 'application/json'
                 },
@@ -394,10 +402,21 @@ class PaymentScheduleEditor {
             
             if (response.ok) {
                 const result = await response.json();
-                alert('График выплат создан успешно!');
+                const message = isEditing 
+                    ? 'График выплат обновлен успешно!' 
+                    : 'График выплат создан успешно!';
+                alert(message);
                 this.modal.hide();
-                // Обновить dropdown
-                this.updateScheduleDropdown(result.id, result.name);
+                
+                if (isEditing) {
+                    // Обновить текст в dropdown
+                    this.updateScheduleDropdownText(this.scheduleId, result.name);
+                    // Сбросить scheduleId после редактирования
+                    this.scheduleId = null;
+                } else {
+                    // Добавить новый в dropdown
+                    this.updateScheduleDropdown(result.id, result.name);
+                }
             } else {
                 const error = await response.json();
                 alert(`Ошибка: ${error.detail}`);
@@ -503,6 +522,24 @@ class PaymentScheduleEditor {
         }
     }
     
+    updateScheduleDropdownText(scheduleId, scheduleName) {
+        // Обновить текст существующего option во всех dropdown'ах
+        const selects = [
+            document.getElementById('create_payment_schedule_id'),
+            document.getElementById('edit_payment_schedule_id'),
+            document.getElementById('payment_schedule_id')
+        ];
+        
+        selects.forEach(select => {
+            if (select) {
+                const option = select.querySelector(`option[value="${scheduleId}"]`);
+                if (option) {
+                    option.text = scheduleName + ' (кастомный)';
+                }
+            }
+        });
+    }
+    
     show() {
         if (this.modal) {
             this.modal.show();
@@ -510,6 +547,9 @@ class PaymentScheduleEditor {
     }
     
     async loadSchedule(scheduleId) {
+        // Сохраняем ID графика для редактирования
+        this.scheduleId = scheduleId;
+        
         try {
             const response = await fetch(`/owner/payment-schedules/${scheduleId}/data`);
             if (!response.ok) {
