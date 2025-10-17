@@ -5,11 +5,6 @@
 from typing import Dict, Optional, Any
 from datetime import datetime, timedelta
 from enum import Enum
-import json
-
-from core.config.settings import settings
-from core.logging.logger import logger
-from core.cache.redis_cache import cache
 
 
 class UserAction(str, Enum):
@@ -23,7 +18,8 @@ class UserAction(str, Enum):
     EDIT_OBJECT = "edit_object"
     SCHEDULE_SHIFT = "schedule_shift"
     VIEW_SCHEDULE = "view_schedule"
-    CANCEL_SCHEDULE = "cancel_schedule"  # Отмена запланированной смены
+    CANCEL_SCHEDULE = "cancel_schedule"
+    CANCEL_SHIFT = "cancel_shift"  # Отмена запланированной смены
     CREATE_TIMESLOT = "create_timeslot"
     EDIT_TIMESLOT_TIME = "edit_timeslot_time"
     EDIT_TIMESLOT_RATE = "edit_timeslot_rate"
@@ -114,54 +110,9 @@ class UserState:
         """Получает дополнительные данные."""
         return self.data.get(key, default)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "user_id": self.user_id,
-            "action": str(self.action),
-            "step": str(self.step),
-            "selected_object_id": self.selected_object_id,
-            "selected_shift_id": self.selected_shift_id,
-            "selected_timeslot_id": self.selected_timeslot_id,
-            "selected_schedule_id": self.selected_schedule_id,
-            "shift_type": self.shift_type,
-            "shift_tasks": self.shift_tasks,
-            "completed_tasks": self.completed_tasks,
-            "pending_media_task_idx": self.pending_media_task_idx,
-            "task_media": self.task_media,
-            "data": self.data,
-            "expires_at": self.expires_at.isoformat(),
-        }
-
-    @staticmethod
-    def from_dict(d: Dict[str, Any]) -> "UserState":
-        state = UserState(
-            user_id=d["user_id"],
-            action=UserAction(d["action"]),
-            step=UserStep(d["step"]),
-            selected_object_id=d.get("selected_object_id"),
-            selected_shift_id=d.get("selected_shift_id"),
-            selected_timeslot_id=d.get("selected_timeslot_id"),
-            selected_schedule_id=d.get("selected_schedule_id"),
-            shift_type=d.get("shift_type"),
-            shift_tasks=d.get("shift_tasks") or [],
-            completed_tasks=d.get("completed_tasks") or [],
-            pending_media_task_idx=d.get("pending_media_task_idx"),
-            task_media=d.get("task_media") or {},
-            data=d.get("data") or {},
-            timeout_minutes=settings.state_ttl_minutes,
-        )
-        # Обновим expires_at, если есть в данных
-        try:
-            expires_str = d.get("expires_at")
-            if expires_str:
-                state.expires_at = datetime.fromisoformat(expires_str)
-        except Exception:
-            pass
-        return state
-
 
 class UserStateManager:
-    """Менеджер состояний пользователей (in-memory)."""
+    """Менеджер состояний пользователей."""
     
     def __init__(self):
         self._states: Dict[int, UserState] = {}
@@ -257,161 +208,5 @@ class UserStateManager:
         return len(self._states)
 
 
-class RedisUserStateManager:
-    """Менеджер состояний на Redis."""
-
-    def __init__(self):
-        self.ttl_seconds = settings.state_ttl_minutes * 60
-
-    def _key(self, user_id: int) -> str:
-        return f"user_state:{user_id}"
-
-    async def _ensure_connection(self) -> None:
-        if not cache.is_connected:
-            try:
-                await cache.connect()
-            except Exception as e:
-                logger.error(f"Redis connection failed: {e}")
-                raise
-
-    async def create_state(
-        self,
-        user_id: int,
-        action: UserAction,
-        step: UserStep = UserStep.OBJECT_SELECTION,
-        **kwargs
-    ) -> UserState:
-        await self._ensure_connection()
-        state = UserState(user_id, action, step, **kwargs)
-        await cache.set(self._key(user_id), state.to_dict(), ttl=self.ttl_seconds, serialize="json")
-        return state
-
-    # Совместимость
-    async def set_state(self, user_id: int, action: UserAction, step: UserStep, **kwargs) -> UserState:
-        return await self.create_state(user_id=user_id, action=action, step=step, **kwargs)
-
-    async def get_state(self, user_id: int) -> Optional[UserState]:
-        await self._ensure_connection()
-        data = await cache.get(self._key(user_id), serialize="json")
-        if not data:
-            return None
-        try:
-            state = UserState.from_dict(data)
-            if state.is_expired():
-                await cache.delete(self._key(user_id))
-                return None
-            return state
-        except Exception as e:
-            logger.error(f"Failed to deserialize UserState: {e}")
-            await cache.delete(self._key(user_id))
-            return None
-
-    async def update_state(self, user_id: int, **kwargs) -> Optional[UserState]:
-        state = await self.get_state(user_id)
-        if not state:
-            return None
-        
-        if 'step' in kwargs:
-            state.update_step(kwargs['step'])
-        if 'selected_object_id' in kwargs:
-            state.set_selected_object(kwargs['selected_object_id'])
-        if 'selected_shift_id' in kwargs:
-            state.set_selected_shift(kwargs['selected_shift_id'])
-        if 'selected_timeslot_id' in kwargs:
-            state.selected_timeslot_id = kwargs['selected_timeslot_id']
-        if 'selected_schedule_id' in kwargs:
-            state.selected_schedule_id = kwargs['selected_schedule_id']
-        if 'shift_type' in kwargs:
-            state.shift_type = kwargs['shift_type']
-        if 'shift_tasks' in kwargs:
-            state.shift_tasks = kwargs['shift_tasks']
-        if 'completed_tasks' in kwargs:
-            state.completed_tasks = kwargs['completed_tasks']
-        if 'pending_media_task_idx' in kwargs:
-            state.pending_media_task_idx = kwargs['pending_media_task_idx']
-        if 'task_media' in kwargs:
-            state.task_media = kwargs['task_media']
-        if 'data' in kwargs:
-            for key, value in (kwargs['data'] or {}).items():
-                state.add_data(key, value)
-        
-        # Продлеваем TTL
-        state.expires_at = datetime.now() + timedelta(minutes=settings.state_ttl_minutes)
-        await cache.set(self._key(user_id), state.to_dict(), ttl=self.ttl_seconds, serialize="json")
-        return state
-
-    async def clear_state(self, user_id: int) -> bool:
-        await self._ensure_connection()
-        return await cache.delete(self._key(user_id))
-
-    async def cleanup_expired_states(self) -> int:
-        # Redis сам очищает по TTL; метод-"заглушка" для совместимости
-        return 0
-
-    async def get_active_states_count(self) -> int:
-        # Для Redis не считаем (дорого); можно реализовать через SCAN по префиксу
-        return 0
-
-
 # Глобальный экземпляр менеджера состояний
-# Для совместимости с существующим sync-кодом храним адаптер, который вызывает async-методы
-
-class _UserStateFacade:
-    def __init__(self):
-        self.backend_type = settings.state_backend
-        if self.backend_type == "redis":
-            self.backend = RedisUserStateManager()
-            self.is_async = True
-        else:
-            self.backend = UserStateManager()
-            self.is_async = False
-
-    def _run_async(self, coro):
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = None
-        if loop and loop.is_running():
-            # Внутри уже запущенного loop - планируем задачу и ждём результата
-            return asyncio.run_coroutine_threadsafe(coro, loop).result()
-        else:
-            return asyncio.run(coro)
-
-    def create_state(self, *args, **kwargs):
-        if self.is_async:
-            return self._run_async(self.backend.create_state(*args, **kwargs))
-        return self.backend.create_state(*args, **kwargs)
-
-    def set_state(self, *args, **kwargs):
-        if self.is_async:
-            return self._run_async(self.backend.set_state(*args, **kwargs))
-        return self.backend.set_state(*args, **kwargs)
-
-    def get_state(self, *args, **kwargs):
-        if self.is_async:
-            return self._run_async(self.backend.get_state(*args, **kwargs))
-        return self.backend.get_state(*args, **kwargs)
-
-    def update_state(self, *args, **kwargs):
-        if self.is_async:
-            return self._run_async(self.backend.update_state(*args, **kwargs))
-        return self.backend.update_state(*args, **kwargs)
-
-    def clear_state(self, *args, **kwargs):
-        if self.is_async:
-            return self._run_async(self.backend.clear_state(*args, **kwargs))
-        return self.backend.clear_state(*args, **kwargs)
-
-    def cleanup_expired_states(self, *args, **kwargs):
-        if self.is_async:
-            return self._run_async(self.backend.cleanup_expired_states(*args, **kwargs))
-        return self.backend.cleanup_expired_states(*args, **kwargs)
-
-    def get_active_states_count(self, *args, **kwargs):
-        if self.is_async:
-            return self._run_async(self.backend.get_active_states_count(*args, **kwargs))
-        return self.backend.get_active_states_count(*args, **kwargs)
-
-
-user_state_manager = _UserStateFacade()
+user_state_manager = UserStateManager()
