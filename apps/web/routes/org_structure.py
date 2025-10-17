@@ -67,7 +67,7 @@ async def owner_org_structure_list(
         systems = await payment_system_service.get_all_systems()
 
         return templates.TemplateResponse(
-            "owner/org_structure/list_new.html",
+            "owner/org_structure/list.html",
             {
                 "request": request,
                 "title": "Организация и финансы",
