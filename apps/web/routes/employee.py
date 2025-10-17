@@ -2234,12 +2234,14 @@ async def employee_plan_shift(
         )).scalars().all()
         
         has_access = False
+        employee_contract = None  # Договор сотрудника с доступом к объекту
         import json as _json
         for contract in contracts:
             if contract.allowed_objects:
                 allowed = contract.allowed_objects if isinstance(contract.allowed_objects, list) else _json.loads(contract.allowed_objects)
                 if timeslot.object_id in allowed:
                     has_access = True
+                    employee_contract = contract  # Сохраняем договор для определения ставки
                     break
         
         if not has_access:
@@ -2269,6 +2271,20 @@ async def employee_plan_shift(
         slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
         end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
         
+        # Определяем ставку с учетом флага use_contract_rate
+        effective_rate = None
+        if employee_contract:
+            # Используем метод модели Contract для определения эффективной ставки
+            timeslot_rate = float(timeslot.hourly_rate) if timeslot.hourly_rate else None
+            object_rate = float(timeslot.object.hourly_rate) if timeslot.object and timeslot.object.hourly_rate else None
+            effective_rate = employee_contract.get_effective_hourly_rate(
+                timeslot_rate=timeslot_rate,
+                object_rate=object_rate
+            )
+        else:
+            # Фолбэк для случаев без договора: тайм-слот > объект
+            effective_rate = float(timeslot.hourly_rate) if timeslot.hourly_rate else float(timeslot.object.hourly_rate) if timeslot.object else 0
+        
         shift_schedule = ShiftSchedule(
             user_id=user_id,
             object_id=timeslot.object_id,
@@ -2276,7 +2292,7 @@ async def employee_plan_shift(
             planned_start=slot_datetime,
             planned_end=end_datetime,
             status='planned',
-            hourly_rate=float(timeslot.hourly_rate) if timeslot.hourly_rate else float(timeslot.object.hourly_rate) if timeslot.object else 0,
+            hourly_rate=effective_rate,
             notes=''
         )
         
