@@ -479,7 +479,7 @@ async def get_schedule_stats(
         for unit in effective_units:
             objects_query = select(func.count(Object.id)).where(
                 Object.owner_id == owner_id,
-                Object.org_unit_id == unit.id,
+                Object.org_unit_id == unit['id'],
                 Object.is_active == True
             )
             count_result = await db.execute(objects_query)
@@ -490,7 +490,7 @@ async def get_schedule_stats(
         object_ids = []
         for unit in effective_units:
             obj_ids_query = select(Object.id).where(
-                Object.org_unit_id == unit.id,
+                Object.org_unit_id == unit['id'],
                 Object.is_active == True
             )
             obj_ids_result = await db.execute(obj_ids_query)
@@ -507,17 +507,17 @@ async def get_schedule_stats(
             employees_count = 0
         
         units_data = []
-        for unit in units:
+        for unit in effective_units:
             obj_query = select(func.count(Object.id)).where(
-                Object.org_unit_id == unit.id,
+                Object.org_unit_id == unit['id'],
                 Object.is_active == True
             )
             obj_result = await db.execute(obj_query)
             obj_count = obj_result.scalar() or 0
-            
+
             units_data.append({
-                "id": unit.id,
-                "name": unit.name,
+                "id": unit['id'],
+                "name": unit.get('name'),
                 "objects_count": obj_count
             })
         
@@ -525,7 +525,7 @@ async def get_schedule_stats(
             "Schedule stats calculated",
             schedule_id=schedule_id,
             owner_id=owner_id,
-            units_count=len(units),
+            units_count=len(effective_units),
             objects_count=objects_count,
             employees_count=employees_count
         )
