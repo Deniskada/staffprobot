@@ -420,12 +420,14 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                                     object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
                                     close_time = timezone_helper.format_local_time(opening.closed_at, object_timezone, '%H:%M')
                                     
+                                    keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
                                     await update.message.reply_text(
                                         f"✅ <b>Объект автоматически закрыт!</b>\n\n"
                                         f"(Это была последняя активная смена)\n\n"
                                         f"⏰ Время закрытия: {close_time}\n"
                                         f"⏱️ Время работы объекта: {opening.duration_hours:.1f}ч",
-                                        parse_mode='HTML'
+                                        parse_mode='HTML',
+                                        reply_markup=InlineKeyboardMarkup(keyboard)
                                     )
                                     
                                     logger.info(
