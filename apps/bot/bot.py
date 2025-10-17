@@ -67,6 +67,18 @@ class StaffProBot:
             # Инициализация планировщика напоминаний
             self.reminder_scheduler = ReminderScheduler(self.bot_token)
             
+            # Инициализация Redis для UserState (если включен)
+            if settings.state_backend == 'redis':
+                logger.info("Initializing Redis for UserState...")
+                from core.cache.redis_cache import cache
+                try:
+                    if not cache.is_connected:
+                        await cache.connect()
+                    logger.info("Redis for UserState initialized successfully")
+                except Exception as e:
+                    logger.error(f"Failed to initialize Redis for UserState: {e}")
+                    logger.warning("Falling back to in-memory UserState")
+            
             # Инициализация URLHelper для динамических URL
             logger.info("Starting URLHelper initialization...")
             from apps.web.services.system_settings_service import SystemSettingsService
