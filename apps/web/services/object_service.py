@@ -828,7 +828,7 @@ class TimeSlotService:
                     task_template = TimeslotTaskTemplate(
                         timeslot_id=new_timeslot.id,
                         task_text=task_text.strip(),
-                        deduction_amount=abs(deduction) if deduction else None,
+                        deduction_amount=deduction if deduction else None,  # Сохраняем отрицательное!
                         is_mandatory=task.get('is_mandatory', False),
                         requires_media=task.get('requires_media', False),
                         display_order=idx,
@@ -1091,7 +1091,7 @@ class TimeSlotService:
                     task_template = TimeslotTaskTemplate(
                         timeslot_id=new_timeslot.id,
                         task_text=task_text.strip(),
-                        deduction_amount=abs(deduction) if deduction else None,
+                        deduction_amount=deduction if deduction else None,  # Сохраняем отрицательное!
                         is_mandatory=task.get('is_mandatory', False),
                         requires_media=task.get('requires_media', False),
                         display_order=idx,
