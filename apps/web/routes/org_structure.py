@@ -512,6 +512,15 @@ async def get_schedule_stats(
                 "objects_count": obj_count
             })
         
+        logger.info(
+            "Schedule stats calculated",
+            schedule_id=schedule_id,
+            owner_id=owner_id,
+            units_count=len(units),
+            objects_count=objects_count,
+            employees_count=employees_count
+        )
+        
         return JSONResponse(content={
             "units": units_data,
             "objects": objects_count,
