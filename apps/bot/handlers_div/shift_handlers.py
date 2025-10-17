@@ -164,11 +164,13 @@ async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         if planned_shifts:
             # Есть запланированные смены - показываем их для выбора
+            logger.info(f"Creating user state for open_shift: user_id={user_id}")
             user_state_manager.create_state(
                 user_id=user_id,
                 action=UserAction.OPEN_SHIFT,
                 step=UserStep.SHIFT_SELECTION
             )
+            logger.info(f"User state created successfully")
             
             # Создаем кнопки для выбора запланированной смены
             keyboard = []
@@ -196,11 +198,13 @@ async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             
+            logger.info(f"Sending planned shifts menu to user {user_id}")
             await query.edit_message_text(
                 text="📅 <b>Запланированные смены на сегодня</b>\n\nВыберите смену для открытия:",
                 parse_mode='HTML',
                 reply_markup=reply_markup
             )
+            logger.info(f"Menu sent successfully")
         else:
             # Нет запланированных смен - проверяем открытые объекты для спонтанной смены
             from apps.bot.services.employee_objects_service import EmployeeObjectsService
