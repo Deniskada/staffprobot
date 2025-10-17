@@ -698,7 +698,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     # Обрабатываем разные типы кнопок
     # open_object, close_object, select_object_to_open обрабатываются в bot.py
-    elif query.data == "open_shift":
+    if query.data == "open_shift":
         await _handle_open_shift(update, context)
         return
     elif query.data == "close_shift":
