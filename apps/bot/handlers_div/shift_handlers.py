@@ -522,13 +522,15 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                     action = existing_state.action if existing_state else UserAction.CLOSE_SHIFT
                     selected_object_id = existing_state.selected_object_id if existing_state else None
                     
-                    # Если уже есть state для этой смены с задачами - НЕ перезаписываем
+                    # Если уже есть state для этой смены - сохраняем completed_tasks, НО обновляем shift_tasks
                     if existing_state and existing_state.selected_shift_id == shift['id'] and existing_state.shift_tasks:
-                        # Только обновляем action и step, сохраняя completed_tasks
+                        # Обновляем задачи (могли измениться), сохраняя completed_tasks
                         await user_state_manager.update_state(
                             user_id=user_id,
                             action=action,
-                            step=UserStep.TASK_COMPLETION
+                            step=UserStep.TASK_COMPLETION,
+                            shift_tasks=shift_tasks,  # КРИТИЧНО: обновляем задачи свежими из БД!
+                            data={'telegram_chat_id': telegram_chat_id, 'object_name': obj.name}  # Обновляем данные для медиа
                         )
                     else:
                         # Создаем новый state
