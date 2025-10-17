@@ -370,7 +370,11 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     f"💰 Заработано: {total_payment}₽"
                 )
                 
-                await update.message.reply_text(shift_close_message, reply_markup=ReplyKeyboardRemove())
+                main_menu_keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
+                await update.message.reply_text(
+                    shift_close_message, 
+                    reply_markup=InlineKeyboardMarkup(main_menu_keyboard)
+                )
                 
                 # Проверяем: была ли это последняя смена на объекте?
                 # Если да - автоматически закрываем объект
