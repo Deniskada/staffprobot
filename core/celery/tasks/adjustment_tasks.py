@@ -184,6 +184,8 @@ def process_closed_shifts_adjustments():
                         # 3. Обработать задачи смены (новая логика комбинирования)
                         shift_tasks = []
                         
+                        logger.info(f"[ADJUSTMENT_DEBUG] Processing shift {shift.id}, time_slot_id={shift.time_slot_id}")
+                        
                         if shift.time_slot_id and shift.time_slot:
                             # 1. Собственные задачи тайм-слота (из таблицы timeslot_task_templates)
                             from domain.entities.timeslot_task_template import TimeslotTaskTemplate
@@ -195,6 +197,7 @@ def process_closed_shifts_adjustments():
                             template_result = await session.execute(template_query)
                             templates = template_result.scalars().all()
                             
+                            logger.info(f"[ADJUSTMENT_DEBUG] Found {len(templates)} timeslot tasks")
                             for template in templates:
                                 shift_tasks.append({
                                     'text': template.task_text,
@@ -203,6 +206,7 @@ def process_closed_shifts_adjustments():
                                     'requires_media': template.requires_media if template.requires_media is not None else False,
                                     'source': 'timeslot'
                                 })
+                                logger.info(f"[ADJUSTMENT_DEBUG] Timeslot task: {template.task_text}, amount={template.deduction_amount}")
                             
                             # 2. Задачи объекта (если НЕ игнорируются)
                             if not shift.time_slot.ignore_object_tasks and shift.object and shift.object.shift_tasks:
