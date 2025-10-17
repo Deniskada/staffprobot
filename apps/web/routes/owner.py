@@ -2791,18 +2791,23 @@ async def api_calendar_plan_shift(
             if existing_schedules:
                 raise HTTPException(status_code=400, detail="Сотрудник уже запланирован на это время")
 
-            # Определяем ставку: приоритет тайм-слот > объект > договор сотрудника
+            # Определяем ставку с учетом флага use_contract_rate
             effective_rate = None
             
-            # Приоритет 1: ставка тайм-слота
-            if timeslot.hourly_rate and float(timeslot.hourly_rate) > 0:
-                effective_rate = timeslot.hourly_rate
-            # Приоритет 2: ставка объекта
-            elif timeslot.object and timeslot.object.hourly_rate:
-                effective_rate = timeslot.object.hourly_rate
-            # Приоритет 3: ставка из активного договора сотрудника с доступом к объекту
-            elif not is_owner_assignee and contract and contract.hourly_rate:
-                effective_rate = contract.hourly_rate
+            if not is_owner_assignee and contract:
+                # Используем метод модели Contract для определения эффективной ставки
+                timeslot_rate = float(timeslot.hourly_rate) if timeslot.hourly_rate and float(timeslot.hourly_rate) > 0 else None
+                object_rate = float(timeslot.object.hourly_rate) if timeslot.object and timeslot.object.hourly_rate else None
+                effective_rate = contract.get_effective_hourly_rate(
+                    timeslot_rate=timeslot_rate,
+                    object_rate=object_rate
+                )
+            else:
+                # Для владельца или без договора: тайм-слот > объект
+                if timeslot.hourly_rate and float(timeslot.hourly_rate) > 0:
+                    effective_rate = timeslot.hourly_rate
+                elif timeslot.object and timeslot.object.hourly_rate:
+                    effective_rate = timeslot.object.hourly_rate
             
             # Создаем запланированную смену
             new_schedule = ShiftSchedule(

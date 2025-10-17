@@ -3007,9 +3007,11 @@ async def plan_shift_manager(
             
             # Проверяем, что у сотрудника есть доступ к объекту тайм-слота
             has_object_access = False
+            employee_contract = None  # Договор сотрудника с доступом к объекту
             for contract in contracts:
                 if contract.allowed_objects and object_id in contract.allowed_objects:
                     has_object_access = True
+                    employee_contract = contract  # Сохраняем договор для определения ставки
                     break
             
             if not has_object_access:
@@ -3093,8 +3095,10 @@ async def plan_shift_manager(
             slot_datetime = slot_datetime_utc
             end_datetime = end_datetime_utc
             
-            # Вычисляем ставку без дефолта 500: приоритет входного значения > ставка тайм-слота > ставка объекта
+            # Вычисляем ставку: приоритет входного значения > contract.use_contract_rate > тайм-слот > объект
             effective_rate = None
+            
+            # Приоритет 1: входное значение hourly_rate
             try:
                 raw_rate = data.get('hourly_rate')
                 if isinstance(raw_rate, str):
@@ -3108,23 +3112,45 @@ async def plan_shift_manager(
                 # Если введено некорректно — игнорируем и перейдем к источникам ниже
                 effective_rate = None
 
-            if effective_rate is None:
-                # Берем ставку из тайм-слота, если она есть и > 0
+            # Если ставка не задана вручную, используем логику с учетом use_contract_rate
+            if effective_rate is None and employee_contract:
+                # Используем метод модели Contract для определения эффективной ставки
+                timeslot_rate = None
+                if getattr(timeslot, 'hourly_rate', None):
+                    try:
+                        ts_rate = float(timeslot.hourly_rate)
+                        if ts_rate > 0:
+                            timeslot_rate = ts_rate
+                    except Exception:
+                        pass
+                
+                object_rate = None
+                try:
+                    if timeslot.object and timeslot.object.hourly_rate:
+                        object_rate = float(timeslot.object.hourly_rate)
+                except Exception:
+                    pass
+                
+                effective_rate = employee_contract.get_effective_hourly_rate(
+                    timeslot_rate=timeslot_rate,
+                    object_rate=object_rate
+                )
+            elif effective_rate is None:
+                # Фолбэк для случаев без договора: тайм-слот > объект
                 if getattr(timeslot, 'hourly_rate', None):
                     try:
                         ts_rate = float(timeslot.hourly_rate)
                         if ts_rate > 0:
                             effective_rate = ts_rate
                     except Exception:
-                        effective_rate = None
-
-            if effective_rate is None:
-                # Фолбэк: ставка объекта
-                try:
-                    obj_rate = float(timeslot.object.hourly_rate) if timeslot.object and timeslot.object.hourly_rate else 0.0
-                except Exception:
-                    obj_rate = 0.0
-                effective_rate = obj_rate
+                        pass
+                
+                if effective_rate is None:
+                    try:
+                        obj_rate = float(timeslot.object.hourly_rate) if timeslot.object and timeslot.object.hourly_rate else 0.0
+                    except Exception:
+                        obj_rate = 0.0
+                    effective_rate = obj_rate
 
             shift_schedule = ShiftSchedule(
                 user_id=int(employee_id),
