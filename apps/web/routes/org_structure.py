@@ -465,7 +465,7 @@ async def get_schedule_stats(
         
         from domain.entities.org_structure import OrgStructureUnit
         from domain.entities.object import Object
-        from domain.entities.contract import Contract
+        from domain.entities.shift import Shift
         from sqlalchemy import select, func
         
         # Найти подразделения с этим графиком
@@ -488,7 +488,7 @@ async def get_schedule_stats(
             count_result = await db.execute(objects_query)
             objects_count += count_result.scalar() or 0
         
-        # Подсчитать сотрудников (через contracts в объектах подразделений)
+        # Подсчитать сотрудников (через смены в объектах подразделений)
         # Собираем все ID объектов из найденных подразделений
         object_ids = []
         for unit in units:
@@ -499,12 +499,10 @@ async def get_schedule_stats(
             obj_ids_result = await db.execute(obj_ids_query)
             object_ids.extend([row[0] for row in obj_ids_result.all()])
         
-        # Считаем уникальных сотрудников в этих объектах
+        # Считаем уникальных сотрудников (user_id) через смены в этих объектах
         if object_ids:
-            employees_query = select(func.count(func.distinct(Contract.employee_id))).where(
-                Contract.owner_id == owner_id,
-                Contract.object_id.in_(object_ids),
-                Contract.is_active == True
+            employees_query = select(func.count(func.distinct(Shift.user_id))).where(
+                Shift.object_id.in_(object_ids)
             )
             employees_result = await db.execute(employees_query)
             employees_count = employees_result.scalar() or 0
