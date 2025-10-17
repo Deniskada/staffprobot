@@ -606,6 +606,9 @@ function createNewScheduleForCreate() {
     // Установить глобально для работы onchange в HTML
     window.paymentScheduleEditor = createPaymentScheduleEditor;
     
+    // Сбросить режим редактирования (создаем новый график)
+    createPaymentScheduleEditor.scheduleId = null;
+    
     // Очистить форму перед показом
     document.getElementById('schedule_name').value = '';
     document.getElementById('schedule_frequency').value = 'daily';
@@ -702,6 +705,9 @@ function createNewScheduleForEdit() {
     
     // Установить глобально для работы onchange в HTML
     window.paymentScheduleEditor = editPaymentScheduleEditor;
+    
+    // Сбросить режим редактирования (создаем новый график)
+    editPaymentScheduleEditor.scheduleId = null;
     
     // Очистить форму перед показом
     document.getElementById('schedule_name').value = '';
