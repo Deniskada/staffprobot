@@ -184,6 +184,34 @@ class OrgStructureService:
             'children': []
         } for unit in units}
         
+        # Рассчитать эффективные (унаследованные) значения payment_system_id / payment_schedule_id
+        for unit_id, data in units_dict.items():
+            data['effective_payment_system_id'] = data['payment_system_id']
+            data['effective_payment_schedule_id'] = data['payment_schedule_id']
+
+        def resolve_effective(current_id: int) -> None:
+            data = units_dict[current_id]
+            # если оба значения заданы, ничего не делаем
+            if data['effective_payment_system_id'] is not None and data['effective_payment_schedule_id'] is not None:
+                return
+            visited: set[int] = set()
+            parent_id = data['parent_id']
+            while parent_id is not None and parent_id in units_dict and parent_id not in visited:
+                visited.add(parent_id)
+                parent = units_dict[parent_id]
+                if data['effective_payment_system_id'] is None:
+                    data['effective_payment_system_id'] = parent.get('effective_payment_system_id')
+                    if data['effective_payment_system_id'] is None:
+                        data['effective_payment_system_id'] = parent.get('payment_system_id')
+                if data['effective_payment_schedule_id'] is None:
+                    data['effective_payment_schedule_id'] = parent.get('effective_payment_schedule_id')
+                    if data['effective_payment_schedule_id'] is None:
+                        data['effective_payment_schedule_id'] = parent.get('payment_schedule_id')
+                parent_id = parent.get('parent_id')
+
+        for uid in list(units_dict.keys()):
+            resolve_effective(uid)
+
         # Построить иерархию
         tree = []
         for unit_id, unit_data in units_dict.items():

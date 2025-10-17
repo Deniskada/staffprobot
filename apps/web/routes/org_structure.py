@@ -374,30 +374,27 @@ async def get_schedules_usage(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        from domain.entities.org_structure import OrgStructureUnit
-        from sqlalchemy import select, func
-        
-        # Подсчитать количество подразделений для каждого графика
-        query = select(
-            OrgStructureUnit.payment_schedule_id,
-            func.count(OrgStructureUnit.id).label('units_count')
-        ).where(
-            OrgStructureUnit.owner_id == owner_id,
-            OrgStructureUnit.is_active == True,
-            OrgStructureUnit.payment_schedule_id.isnot(None)
-        ).group_by(OrgStructureUnit.payment_schedule_id)
-        
-        result = await db.execute(query)
-        rows = result.all()
-        
-        data = [
-            {
-                "schedule_id": row.payment_schedule_id,
-                "units_count": row.units_count
-            }
-            for row in rows
-        ]
-        
+        # Группировка по ЭФФЕКТИВНОМУ графику (учитывая наследование)
+        service = OrgStructureService(db)
+        tree = await service.get_org_tree(owner_id)
+
+        # расплющим дерево в список
+        flat = []
+        def walk(node):
+            flat.append(node)
+            for ch in node.get('children', []):
+                walk(ch)
+        for root in tree:
+            walk(root)
+
+        from collections import defaultdict
+        acc = defaultdict(int)
+        for u in flat:
+            eff = u.get('effective_payment_schedule_id')
+            if eff:
+                acc[eff] += 1
+
+        data = [{"schedule_id": k, "units_count": v} for k, v in acc.items()]
         return JSONResponse(content=data)
         
     except HTTPException:
@@ -418,30 +415,26 @@ async def get_systems_usage(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        from domain.entities.org_structure import OrgStructureUnit
-        from sqlalchemy import select, func
-        
-        # Подсчитать количество подразделений для каждой системы
-        query = select(
-            OrgStructureUnit.payment_system_id,
-            func.count(OrgStructureUnit.id).label('count')
-        ).where(
-            OrgStructureUnit.owner_id == owner_id,
-            OrgStructureUnit.is_active == True,
-            OrgStructureUnit.payment_system_id.isnot(None)
-        ).group_by(OrgStructureUnit.payment_system_id)
-        
-        result = await db.execute(query)
-        rows = result.all()
-        
-        data = [
-            {
-                "system_id": row.payment_system_id,
-                "count": row.count
-            }
-            for row in rows
-        ]
-        
+        # Группировка по ЭФФЕКТИВНОЙ системе оплаты (учитывая наследование)
+        service = OrgStructureService(db)
+        tree = await service.get_org_tree(owner_id)
+
+        flat = []
+        def walk(node):
+            flat.append(node)
+            for ch in node.get('children', []):
+                walk(ch)
+        for root in tree:
+            walk(root)
+
+        from collections import defaultdict
+        acc = defaultdict(int)
+        for u in flat:
+            eff = u.get('effective_payment_system_id')
+            if eff:
+                acc[eff] += 1
+
+        data = [{"system_id": k, "count": v} for k, v in acc.items()]
         return JSONResponse(content=data)
         
     except HTTPException:
@@ -463,23 +456,27 @@ async def get_schedule_stats(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        from domain.entities.org_structure import OrgStructureUnit
         from domain.entities.object import Object
         from domain.entities.shift import Shift
         from sqlalchemy import select, func
-        
-        # Найти подразделения с этим графиком
-        units_query = select(OrgStructureUnit).where(
-            OrgStructureUnit.owner_id == owner_id,
-            OrgStructureUnit.payment_schedule_id == schedule_id,
-            OrgStructureUnit.is_active == True
-        )
-        units_result = await db.execute(units_query)
-        units = units_result.scalars().all()
+
+        # Фильтрация по ЭФФЕКТИВНОМУ графику
+        service = OrgStructureService(db)
+        tree = await service.get_org_tree(owner_id)
+
+        flat = []
+        def walk(node):
+            flat.append(node)
+            for ch in node.get('children', []):
+                walk(ch)
+        for root in tree:
+            walk(root)
+
+        effective_units = [u for u in flat if u.get('effective_payment_schedule_id') == schedule_id]
         
         # Подсчитать объекты
         objects_count = 0
-        for unit in units:
+        for unit in effective_units:
             objects_query = select(func.count(Object.id)).where(
                 Object.owner_id == owner_id,
                 Object.org_unit_id == unit.id,
@@ -491,7 +488,7 @@ async def get_schedule_stats(
         # Подсчитать сотрудников (через смены в объектах подразделений)
         # Собираем все ID объектов из найденных подразделений
         object_ids = []
-        for unit in units:
+        for unit in effective_units:
             obj_ids_query = select(Object.id).where(
                 Object.org_unit_id == unit.id,
                 Object.is_active == True
