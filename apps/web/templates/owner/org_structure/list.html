@@ -2,6 +2,67 @@
 
 {% block title %}Организация и финансы{% endblock %}
 
+<!-- Макрос для рендеринга подразделения -->
+{% macro render_unit_new(unit, payment_systems, payment_schedules) %}
+<div class="org-tree-item" 
+     data-level="{{ unit.level }}" 
+     data-unit-id="{{ unit.id }}"
+     data-schedule-id="{{ unit.payment_schedule_id or '' }}"
+     data-system-id="{{ unit.payment_system_id or '' }}"
+     onclick="selectOrgUnit({{ unit.id }}, {{ unit.payment_schedule_id or 'null' }}, {{ unit.payment_system_id or 'null' }})">
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="flex-grow-1">
+            <div class="mb-1">
+                <span class="org-unit-icon">
+                    {% if unit.level == 0 %}🏢
+                    {% elif unit.level == 1 %}🏬
+                    {% elif unit.level == 2 %}🏪
+                    {% else %}📍
+                    {% endif %}
+                </span>
+                <strong>{{ unit.name }}</strong>
+            </div>
+            <small class="text-muted d-block">
+                {% if unit.payment_system_id %}
+                    {% for ps in payment_systems %}
+                        {% if ps.id == unit.payment_system_id %}
+                            <span class="badge-star">⭐</span> {{ ps.name }}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <span class="text-muted-light">💰 Наследуется</span>
+                {% endif %}
+                •
+                {% if unit.payment_schedule_id %}
+                    {% for schedule in payment_schedules %}
+                        {% if schedule.id == unit.payment_schedule_id %}
+                            📅 {{ schedule.name }}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <span class="text-muted-light">📅 Наследуется</span>
+                {% endif %}
+            </small>
+        </div>
+        <div class="btn-group" onclick="event.stopPropagation()">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="showEditModal({{ unit.id }})" title="Редактировать">
+                <i class="fas fa-edit"></i>
+            </button>
+            {% if unit.level > 0 %}
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUnit({{ unit.id }}, '{{ unit.name }}')" title="Удалить">
+                <i class="fas fa-trash"></i>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_unit_new(child, payment_systems, payment_schedules) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
+
 {% block extra_css %}
 <style>
     /* ===== ИЕРАРХИЯ ПОДРАЗДЕЛЕНИЙ ===== */
@@ -427,67 +488,6 @@
         </div>
     </div>
 </div>
-
-<!-- Макрос для рендеринга подразделения -->
-{% macro render_unit_new(unit, payment_systems, payment_schedules) %}
-<div class="org-tree-item" 
-     data-level="{{ unit.level }}" 
-     data-unit-id="{{ unit.id }}"
-     data-schedule-id="{{ unit.payment_schedule_id or '' }}"
-     data-system-id="{{ unit.payment_system_id or '' }}"
-     onclick="selectOrgUnit({{ unit.id }}, {{ unit.payment_schedule_id or 'null' }}, {{ unit.payment_system_id or 'null' }})">
-    <div class="d-flex justify-content-between align-items-center">
-        <div class="flex-grow-1">
-            <div class="mb-1">
-                <span class="org-unit-icon">
-                    {% if unit.level == 0 %}🏢
-                    {% elif unit.level == 1 %}🏬
-                    {% elif unit.level == 2 %}🏪
-                    {% else %}📍
-                    {% endif %}
-                </span>
-                <strong>{{ unit.name }}</strong>
-            </div>
-            <small class="text-muted d-block">
-                    {% if unit.payment_system_id %}
-                        {% for ps in payment_systems %}
-                            {% if ps.id == unit.payment_system_id %}
-                            <span class="badge-star">⭐</span> {{ ps.name }}
-                            {% endif %}
-                        {% endfor %}
-                    {% else %}
-                    <span class="text-muted-light">💰 Наследуется</span>
-                    {% endif %}
-                    •
-                    {% if unit.payment_schedule_id %}
-                        {% for schedule in payment_schedules %}
-                            {% if schedule.id == unit.payment_schedule_id %}
-                                📅 {{ schedule.name }}
-                            {% endif %}
-                        {% endfor %}
-                    {% else %}
-                    <span class="text-muted-light">📅 Наследуется</span>
-                    {% endif %}
-                </small>
-            </div>
-        <div class="btn-group" onclick="event.stopPropagation()">
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="showEditModal({{ unit.id }})" title="Редактировать">
-                    <i class="fas fa-edit"></i>
-                </button>
-                {% if unit.level > 0 %}
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUnit({{ unit.id }}, '{{ unit.name }}')" title="Удалить">
-                    <i class="fas fa-trash"></i>
-                </button>
-                {% endif %}
-        </div>
-    </div>
-</div>
-{% if unit.children %}
-    {% for child in unit.children %}
-        {{ render_unit_new(child, payment_systems, payment_schedules) }}
-    {% endfor %}
-{% endif %}
-{% endmacro %}
 
 <!-- Модальные окна (из старого файла) -->
 {% include 'owner/org_structure/modals.html' %}
