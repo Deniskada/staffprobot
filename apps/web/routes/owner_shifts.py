@@ -12,6 +12,7 @@ from core.auth.user_manager import UserManager
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
+from domain.entities.time_slot import TimeSlot
 from domain.entities.object import Object
 from domain.entities.user import User
 from apps.web.utils.timezone_utils import web_timezone_helper
