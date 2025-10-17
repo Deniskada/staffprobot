@@ -2,77 +2,6 @@
 
 {% block title %}Организация и финансы{% endblock %}
 
-<!-- Макрос для рендеринга подразделения -->
-{% macro render_unit_new(unit, payment_systems, payment_schedules) %}
-<div class="org-tree-item" 
-     data-level="{{ unit.level }}" 
-     data-unit-id="{{ unit.id }}"
-     data-schedule-id="{{ unit.payment_schedule_id or '' }}"
-     data-system-id="{{ unit.payment_system_id or '' }}"
-     onclick="selectOrgUnit({{ unit.id }}, {{ unit.payment_schedule_id or 'null' }}, {{ unit.payment_system_id or 'null' }})">
-    <div class="d-flex justify-content-between align-items-center">
-        <div class="flex-grow-1">
-            <div class="mb-1">
-                <span class="org-unit-icon">
-                    {% if unit.level == 0 %}🏢
-                    {% elif unit.level == 1 %}🏬
-                    {% elif unit.level == 2 %}🏪
-                    {% else %}📍
-                    {% endif %}
-                </span>
-                <strong>{{ unit.name }}</strong>
-            </div>
-            <small class="text-muted d-block">
-                {% if unit.payment_system_id %}
-                    {% for ps in payment_systems %}
-                        {% if ps.id == unit.payment_system_id %}
-                            <span class="badge-star">⭐</span> {{ ps.name }}
-                        {% endif %}
-                    {% endfor %}
-                {% else %}
-                    <span class="text-muted-light">💰 Наследуется</span>
-                {% endif %}
-                •
-                {% if unit.payment_schedule_id %}
-                    {% for schedule in payment_schedules %}
-                        {% if schedule.id == unit.payment_schedule_id %}
-                            📅 {{ schedule.name }}
-                        {% endif %}
-                    {% endfor %}
-                {% else %}
-                    <span class="text-muted-light">📅 Наследуется</span>
-                {% endif %}
-            </small>
-        </div>
-        <div class="btn-group" onclick="event.stopPropagation()">
-            <button type="button" class="btn btn-sm btn-outline-primary" onclick="showEditModal({{ unit.id }})" title="Редактировать">
-                <i class="fas fa-edit"></i>
-            </button>
-            {% if unit.level > 0 %}
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUnit({{ unit.id }}, '{{ unit.name }}')" title="Удалить">
-                <i class="fas fa-trash"></i>
-            </button>
-            {% endif %}
-        </div>
-    </div>
-</div>
-{% if unit.children %}
-    {% for child in unit.children %}
-        {{ render_unit_new(child, payment_systems, payment_schedules) }}
-    {% endfor %}
-{% endif %}
-{% endmacro %}
-
-<!-- Макрос для рендеринга options в select -->
-{% macro render_unit_options(unit, indent) %}
-<option value="{{ unit.id }}">{{ '├─ ' * indent }}{{ unit.name }}</option>
-{% if unit.children %}
-    {% for child in unit.children %}
-        {{ render_unit_options(child, indent + 1) }}
-    {% endfor %}
-{% endif %}
-{% endmacro %}
-
 {% block extra_css %}
 <style>
     /* ===== ИЕРАРХИЯ ПОДРАЗДЕЛЕНИЙ ===== */
@@ -412,11 +341,11 @@
                              data-schedule-id="{{ schedule.id }}"
                              onclick="selectSchedule({{ schedule.id }})">
                             <div class="d-flex justify-content-between align-items-start">
-            <div class="flex-grow-1">
+                                <div class="flex-grow-1">
                                     <strong>{{ schedule.name }}</strong>
                                     {% if schedule.is_custom %}
                                     <span class="badge bg-purple text-white ms-2">Кастомный</span>
-                    {% endif %}
+                                    {% endif %}
                                 </div>
                                 <button class="btn btn-sm btn-outline-secondary" 
                                         onclick="event.stopPropagation(); viewScheduleFullScreen({{ schedule.id }})">
@@ -499,6 +428,67 @@
     </div>
 </div>
 
+<!-- Макрос для рендеринга подразделения -->
+{% macro render_unit_new(unit, payment_systems, payment_schedules) %}
+<div class="org-tree-item" 
+     data-level="{{ unit.level }}" 
+     data-unit-id="{{ unit.id }}"
+     data-schedule-id="{{ unit.payment_schedule_id or '' }}"
+     data-system-id="{{ unit.payment_system_id or '' }}"
+     onclick="selectOrgUnit({{ unit.id }}, {{ unit.payment_schedule_id or 'null' }}, {{ unit.payment_system_id or 'null' }})">
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="flex-grow-1">
+            <div class="mb-1">
+                <span class="org-unit-icon">
+                    {% if unit.level == 0 %}🏢
+                    {% elif unit.level == 1 %}🏬
+                    {% elif unit.level == 2 %}🏪
+                    {% else %}📍
+                    {% endif %}
+                </span>
+                <strong>{{ unit.name }}</strong>
+            </div>
+            <small class="text-muted d-block">
+                {% if unit.payment_system_id %}
+                    {% for ps in payment_systems %}
+                        {% if ps.id == unit.payment_system_id %}
+                            <span class="badge-star">⭐</span> {{ ps.name }}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <span class="text-muted-light">💰 Наследуется</span>
+                {% endif %}
+                •
+                {% if unit.payment_schedule_id %}
+                    {% for schedule in payment_schedules %}
+                        {% if schedule.id == unit.payment_schedule_id %}
+                            📅 {{ schedule.name }}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <span class="text-muted-light">📅 Наследуется</span>
+                {% endif %}
+            </small>
+        </div>
+        <div class="btn-group" onclick="event.stopPropagation()">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="showEditModal({{ unit.id }})" title="Редактировать">
+                <i class="fas fa-edit"></i>
+            </button>
+            {% if unit.level > 0 %}
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUnit({{ unit.id }}, '{{ unit.name }}')" title="Удалить">
+                <i class="fas fa-trash"></i>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% if unit.children %}
+    {% for child in unit.children %}
+        {{ render_unit_new(child, payment_systems, payment_schedules) }}
+    {% endfor %}
+{% endif %}
+{% endmacro %}
+
 <!-- Модальные окна (из старого файла) -->
 {% include 'owner/org_structure/modals.html' %}
 {% endblock %}
@@ -510,19 +500,11 @@
 let selectedUnitId = null;
 let selectedScheduleId = null;
 let selectedSystemId = null;
-let createPaymentScheduleEditor;
-let editPaymentScheduleEditor;
 
 // При загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     loadScheduleStats();
     loadSystemStats();
-    
-    // Автоматически выбрать головное подразделение
-    const firstUnit = document.querySelector('.org-tree-item[data-level="0"]');
-    if (firstUnit) {
-        firstUnit.click();
-    }
 });
 
 // Выбор подразделения
@@ -599,7 +581,7 @@ async function loadScheduleDetails(scheduleId) {
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-triangle"></i>
                 Ошибка загрузки данных графика
-                            </div>
+            </div>
         `;
     }
 }
@@ -624,22 +606,22 @@ function renderScheduleDetails(schedule, stats) {
                 <i class="fas fa-clock"></i> ${frequency}
                 ${schedule.payment_day ? ` • День выплаты: ${schedule.payment_day}` : ''}
             </p>
-                    </div>
-                    
+        </div>
+        
         <div class="schedule-stats">
             <div class="stat-card">
                 <div class="stat-value">${stats.units.length}</div>
                 <div class="stat-label">Подразделений</div>
-                            </div>
+            </div>
             <div class="stat-card">
                 <div class="stat-value">${stats.objects || 0}</div>
                 <div class="stat-label">Объектов</div>
-                        </div>
+            </div>
             <div class="stat-card">
                 <div class="stat-value">${stats.employees || 0}</div>
                 <div class="stat-label">Сотрудников</div>
-                            </div>
-                        </div>
+            </div>
+        </div>
     `;
     
     // Список подразделений
@@ -649,7 +631,7 @@ function renderScheduleDetails(schedule, stats) {
                 <div class="expandable-header" onclick="toggleExpandable(this)">
                     <span><i class="fas fa-building"></i> Подразделения с этим графиком</span>
                     <i class="fas fa-chevron-down"></i>
-                            </div>
+                </div>
                 <div class="expandable-content">
                     <ul class="list-unstyled mb-0">
         `;
@@ -666,8 +648,8 @@ function renderScheduleDetails(schedule, stats) {
         
         html += `
                     </ul>
-                        </div>
-                    </div>
+                </div>
+            </div>
         `;
     }
     
@@ -688,12 +670,12 @@ function renderScheduleDetails(schedule, stats) {
                         <tr><td colspan="3" class="text-center"><i class="fas fa-spinner fa-spin"></i> Генерация...</td></tr>
                     </tbody>
                 </table>
-                    </div>
+            </div>
             <div class="text-center mt-3">
                 <button class="btn btn-outline-primary" onclick="viewScheduleFullScreen(${schedule.id})">
                     <i class="fas fa-external-link-alt"></i> Посмотреть полный график
-                    </button>
-                </div>
+                </button>
+            </div>
         </div>
     `;
     
@@ -787,9 +769,8 @@ async function loadSystemStats() {
     }
 }
 
-// ===== ФУНКЦИИ МОДАЛЬНЫХ ОКОН определены в modals.html =====
+// Функции из старого файла (модальные окна и т.д.)
+// ... (будут скопированы из оригинала)
 </script>
-
-{% include 'shared/payment_schedule_editor_modal.html' %}
 {% endblock %}
 

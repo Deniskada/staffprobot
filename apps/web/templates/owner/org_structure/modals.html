@@ -443,11 +443,8 @@ function toggleEditLateFields() {
     }
 }
 
-// Инициализация редактора графиков выплат (для модального окна оргструктуры)
-let createPaymentScheduleEditor;
-let editPaymentScheduleEditor;
-
-// Функции для работы с графиками выплат (создание подразделения)
+// Функции для работы с графиками выплат
+// (переменные createPaymentScheduleEditor и editPaymentScheduleEditor объявлены в основном шаблоне)
 function updateCreateScheduleActions() {
     const scheduleSelect = document.getElementById('create_payment_schedule_id');
     const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
@@ -684,7 +681,6 @@ function toggleEditCancellationFields() {
 }
 </script>
 
-<script src="{{ 'js/shared/payment_schedule_editor.js' | static_version }}"></script>
-
+<!-- payment_schedule_editor.js подключается в основном шаблоне -->
 {% include 'shared/payment_schedule_editor_modal.html' %}
 
