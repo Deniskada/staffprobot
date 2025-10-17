@@ -158,7 +158,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
     
     # Проверяем состояние пользователя для редактирования объектов
-    user_state = user_state_manager.get_state(user_id)
+    user_state = await user_state_manager.get_state(user_id)
     if user_state and user_state.action == UserAction.EDIT_OBJECT:
         from .object_handlers import _handle_edit_object_input
         await _handle_edit_object_input(update, context, user_state)
@@ -215,7 +215,7 @@ async def handle_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user_id = update.effective_user.id
     
     # Очищаем состояние пользователя
-    user_state_manager.clear_state(user_id)
+    await user_state_manager.clear_state(user_id)
     
     # Убираем клавиатуру
     await update.message.reply_text(
@@ -243,7 +243,7 @@ async def _handle_timeslot_date_input(update: Update, context: ContextTypes.DEFA
         return
     
     # Очищаем состояние пользователя
-    user_state_manager.clear_state(user_id)
+    await user_state_manager.clear_state(user_id)
     
     # Создаем тайм-слот
     from apps.bot.services.time_slot_service import TimeSlotService
@@ -365,7 +365,7 @@ async def _handle_timeslot_edit_input(update: Update, context: ContextTypes.DEFA
             message = f"❌ <b>Ошибка обновления заметок:</b>\n{result['error']}"
     
     # Очищаем состояние пользователя
-    user_state_manager.clear_state(user_id)
+    await user_state_manager.clear_state(user_id)
     
     # Получаем информацию о тайм-слоте для кнопки "Назад"
     timeslot = time_slot_service.get_timeslot_by_id(timeslot_id)

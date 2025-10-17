@@ -466,7 +466,7 @@ async def _handle_create_slot_custom_date(update: Update, context: ContextTypes.
     await query.answer()
     
     # Создаем состояние пользователя для ввода даты
-    user_state_manager.create_state(
+    await user_state_manager.create_state(
         user_id=query.from_user.id,
         action=UserAction.CREATE_TIMESLOT,
         step=UserStep.INPUT_DATE,

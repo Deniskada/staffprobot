@@ -129,7 +129,7 @@ class EarningsReportHandlers:
         elif query.data == "cancel_report":
             # Очищаем состояние пользователя
             from core.state import user_state_manager
-            user_state_manager.clear_state(query.from_user.id)
+            await user_state_manager.clear_state(query.from_user.id)
             
             await query.edit_message_text("❌ Создание отчета отменено.")
             return ConversationHandler.END
@@ -333,7 +333,7 @@ class EarningsReportHandlers:
                 
                 # Очищаем состояние пользователя
                 from core.state import user_state_manager
-                user_state_manager.clear_state(update.effective_user.id)
+                await user_state_manager.clear_state(update.effective_user.id)
                 
                 return ConversationHandler.END
                 
