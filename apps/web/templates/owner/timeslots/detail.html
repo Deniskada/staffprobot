@@ -55,6 +55,107 @@
                 </div>
             </div>
 
+            <!-- Задачи тайм-слота -->
+            {% if timeslot.task_templates %}
+            <div class="card mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tasks"></i> Задачи тайм-слота
+                        {% if timeslot.ignore_object_tasks %}
+                        <span class="badge bg-warning ms-2">Игнорирует задачи объекта</span>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group">
+                        {% for task in timeslot.task_templates %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <strong>{{ task.task_text }}</strong>
+                                    {% if task.is_mandatory %}
+                                    <span class="badge bg-danger ms-2">Обязательная</span>
+                                    {% endif %}
+                                    {% if task.requires_media %}
+                                    <span class="badge bg-secondary ms-2">📸 Требует фото</span>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {% if task.deduction_amount and task.deduction_amount != 0 %}
+                                        {% if task.deduction_amount > 0 %}
+                                        <span class="badge bg-success">+{{ task.deduction_amount }} ₽</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">{{ task.deduction_amount }} ₽</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    
+                    {% if not timeslot.ignore_object_tasks and timeslot.object.shift_tasks %}
+                    <div class="alert alert-info mt-3 mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        Также будут добавлены <strong>{{ timeslot.object.shift_tasks|length }}</strong> задач(и) из объекта при открытии смены
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% elif timeslot.object.shift_tasks %}
+            <div class="card mt-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-building"></i> Задачи объекта (будут использованы)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group">
+                        {% for task in timeslot.object.shift_tasks %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    {% if task is mapping %}
+                                    <strong>{{ task.text }}</strong>
+                                    {% if task.is_mandatory %}
+                                    <span class="badge bg-danger ms-2">Обязательная</span>
+                                    {% endif %}
+                                    {% else %}
+                                    <strong>{{ task }}</strong>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {% if task is mapping and task.deduction_amount %}
+                                        {% if task.deduction_amount > 0 %}
+                                        <span class="badge bg-success">+{{ task.deduction_amount }} ₽</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">{{ task.deduction_amount }} ₽</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <div class="alert alert-secondary mt-3 mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        У тайм-слота нет своих задач — будут использованы задачи объекта
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card mt-4">
+                <div class="card-body text-center">
+                    <i class="bi bi-info-circle text-muted" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3 text-muted">Задачи не настроены</h5>
+                    <p class="text-muted">Для настройки задач перейдите в режим редактирования</p>
+                    <a href="/owner/{{ timeslot.id }}/edit" class="btn btn-primary">
+                        <i class="fas fa-edit"></i> Редактировать тайм-слот
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Связанные смены -->
             {% if shifts or schedules %}
             <div class="card mt-4">
