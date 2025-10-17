@@ -374,18 +374,18 @@ async def get_schedules_usage(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        from domain.entities.org_structure import OrgUnit
+        from domain.entities.org_structure import OrgStructureUnit
         from sqlalchemy import select, func
         
         # Подсчитать количество подразделений для каждого графика
         query = select(
-            OrgUnit.payment_schedule_id,
-            func.count(OrgUnit.id).label('units_count')
+            OrgStructureUnit.payment_schedule_id,
+            func.count(OrgStructureUnit.id).label('units_count')
         ).where(
-            OrgUnit.owner_id == owner_id,
-            OrgUnit.is_active == True,
-            OrgUnit.payment_schedule_id.isnot(None)
-        ).group_by(OrgUnit.payment_schedule_id)
+            OrgStructureUnit.owner_id == owner_id,
+            OrgStructureUnit.is_active == True,
+            OrgStructureUnit.payment_schedule_id.isnot(None)
+        ).group_by(OrgStructureUnit.payment_schedule_id)
         
         result = await db.execute(query)
         rows = result.all()
@@ -418,18 +418,18 @@ async def get_systems_usage(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        from domain.entities.org_structure import OrgUnit
+        from domain.entities.org_structure import OrgStructureUnit
         from sqlalchemy import select, func
         
         # Подсчитать количество подразделений для каждой системы
         query = select(
-            OrgUnit.payment_system_id,
-            func.count(OrgUnit.id).label('count')
+            OrgStructureUnit.payment_system_id,
+            func.count(OrgStructureUnit.id).label('count')
         ).where(
-            OrgUnit.owner_id == owner_id,
-            OrgUnit.is_active == True,
-            OrgUnit.payment_system_id.isnot(None)
-        ).group_by(OrgUnit.payment_system_id)
+            OrgStructureUnit.owner_id == owner_id,
+            OrgStructureUnit.is_active == True,
+            OrgStructureUnit.payment_system_id.isnot(None)
+        ).group_by(OrgStructureUnit.payment_system_id)
         
         result = await db.execute(query)
         rows = result.all()
@@ -463,16 +463,16 @@ async def get_schedule_stats(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        from domain.entities.org_structure import OrgUnit
+        from domain.entities.org_structure import OrgStructureUnit
         from domain.entities.object import Object
         from domain.entities.contract import Contract
         from sqlalchemy import select, func
         
         # Найти подразделения с этим графиком
-        units_query = select(OrgUnit).where(
-            OrgUnit.owner_id == owner_id,
-            OrgUnit.payment_schedule_id == schedule_id,
-            OrgUnit.is_active == True
+        units_query = select(OrgStructureUnit).where(
+            OrgStructureUnit.owner_id == owner_id,
+            OrgStructureUnit.payment_schedule_id == schedule_id,
+            OrgStructureUnit.is_active == True
         )
         units_result = await db.execute(units_query)
         units = units_result.scalars().all()
