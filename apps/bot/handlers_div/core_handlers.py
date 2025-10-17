@@ -705,7 +705,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         _handle_close_shift,
         _handle_open_shift_object_selection,
         _handle_open_planned_shift,
-        _handle_close_shift_selection
+        _handle_close_shift_selection,
+        _handle_complete_my_task,
+        _handle_my_tasks
     )
     
     # Обрабатываем разные типы кнопок
@@ -794,11 +796,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     # Мои задачи (во время смены)
     elif query.data == "my_tasks":
-        from .shift_handlers import _handle_my_tasks
         await _handle_my_tasks(update, context)
         return
     elif query.data.startswith("complete_my_task:"):
-        from .shift_handlers import _handle_complete_my_task
         parts = query.data.split(":", 2)
         shift_id = int(parts[1])
         task_idx = int(parts[2])
