@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     redis_db: int = 0
     redis_password: Optional[str] = None
     
+    # User State Backend
+    state_backend: str = "redis"  # memory | redis
+    state_ttl_minutes: int = 15
+    
     # RabbitMQ
     rabbitmq_url: str = "amqp://admin:password@localhost:5672"
     
