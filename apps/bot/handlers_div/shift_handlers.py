@@ -14,6 +14,7 @@ from domain.entities.time_slot import TimeSlot
 from domain.entities.timeslot_task_template import TimeslotTaskTemplate
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from core.state import user_state_manager, UserAction, UserStep
 from typing import List, Dict, Optional
 # from .utils import get_location_keyboard  # Удалено, создаем клавиатуру прямо в коде
@@ -441,41 +442,29 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                     )
                     return
                 
-                # Формируем список задач (новая логика комбинирования)
-                shift_tasks = []
+                # Загружаем объект Shift из БД для использования _collect_shift_tasks
+                logger.info(f"[CLOSE_SHIFT] Loading Shift object from DB: shift_id={shift.get('id')}")
+                shift_query = select(Shift).options(
+                    selectinload(Shift.time_slot),
+                    selectinload(Shift.object)
+                ).where(Shift.id == shift['id'])
+                shift_result = await session.execute(shift_query)
+                shift_obj = shift_result.scalar_one_or_none()
                 
-                if shift.get('time_slot_id'):
-                    # Запланированная смена - получаем тайм-слот
-                    timeslot_query = select(TimeSlot).where(TimeSlot.id == shift['time_slot_id'])
-                    timeslot_result = await session.execute(timeslot_query)
-                    timeslot = timeslot_result.scalar_one_or_none()
-                    
-                    if timeslot:
-                        # 1. Собственные задачи тайм-слота (из JSONB + таблицы timeslot_task_templates)
-                        timeslot_tasks = await _load_timeslot_tasks(session, timeslot)
-                        shift_tasks.extend(timeslot_tasks)
-                        
-                        # 2. Задачи объекта (если НЕ игнорируются)
-                        if not timeslot.ignore_object_tasks and obj.shift_tasks:
-                            for task in obj.shift_tasks:
-                                task_copy = dict(task)
-                                task_copy['source'] = 'object'
-                                shift_tasks.append(task_copy)
-                        
-                        logger.info(
-                            f"Combined tasks from timeslot and object",
-                            shift_id=shift['id'],
-                            timeslot_tasks=len(timeslot_tasks),
-                            object_tasks=len(obj.shift_tasks or []) if not timeslot.ignore_object_tasks else 0,
-                            ignore_object_tasks=timeslot.ignore_object_tasks
-                        )
-                else:
-                    # Спонтанная смена - всегда задачи объекта
-                    if obj.shift_tasks:
-                        for task in obj.shift_tasks:
-                            task_copy = dict(task)
-                            task_copy['source'] = 'object'
-                            shift_tasks.append(task_copy)
+                if not shift_obj:
+                    logger.error(f"[CLOSE_SHIFT] Shift object not found: {shift['id']}")
+                    await query.edit_message_text("❌ Смена не найдена в БД", parse_mode='HTML')
+                    return
+                
+                # Используем _collect_shift_tasks для унифицированной загрузки
+                logger.info(f"[CLOSE_SHIFT] Calling _collect_shift_tasks for shift {shift_obj.id}")
+                shift_tasks = await _collect_shift_tasks(
+                    session=session,
+                    shift=shift_obj,
+                    timeslot=shift_obj.time_slot,
+                    object_=shift_obj.object
+                )
+                logger.info(f"[CLOSE_SHIFT] Loaded {len(shift_tasks)} total tasks via _collect_shift_tasks")
                 
                 # Если есть задачи - показываем их для подтверждения выполнения
                 if shift_tasks:
