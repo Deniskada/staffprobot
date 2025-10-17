@@ -244,7 +244,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 # Убираем клавиатуру
                 from telegram import ReplyKeyboardRemove
-                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
                 # Подгружаем список задач и показываем пользователю
                 tasks_lines = []
                 try:
