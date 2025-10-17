@@ -167,7 +167,9 @@
 ## Графики выплат (Payment Schedules) — Итерация 23
 - [GET] `/owner/payment-schedules/{schedule_id}/data` — (apps/web/routes/payment_schedule.py) — данные графика (JSON)
 - [GET] `/owner/payment-schedules/{schedule_id}/view` — просмотр графика (HTML)
-- [POST] `/owner/payment-schedules/create` — создать кастомный график
+- [POST] `/owner/payment-schedules/create-custom` — (apps/web/routes/payment_schedule.py) — создать кастомный график
+- [PUT] `/owner/payment-schedules/{schedule_id}/edit` — (apps/web/routes/payment_schedule.py) — редактировать кастомный график
+- [DELETE] `/owner/payment-schedules/{schedule_id}/delete` — (apps/web/routes/payment_schedule.py) — удалить кастомный график (мягкое удаление, проверка использования)
 - [GET] `/owner/payment-schedules/available` — список доступных графиков
 
 ## Корректировки начислений (Payroll Adjustments) — Итерация 23
@@ -183,12 +185,26 @@
 - [GET] `/owner/payroll-adjustments/{adjustment_id}/history` — (apps/web/routes/owner_payroll_adjustments.py) — история изменений (JSON)
 
 ## Организационная структура (Org Structure) — Итерация 23
-- [GET] `/owner/org-structure` — (apps/web/routes/org_structure.py) — список подразделений (дерево)
-- [POST] `/owner/org-structure/create` — создать подразделение
-- [POST] `/owner/org-structure/{unit_id}/edit` — редактировать подразделение
-- [POST] `/owner/org-structure/{unit_id}/delete` — удалить подразделение (soft delete)
-- [POST] `/owner/org-structure/{unit_id}/move` — переместить подразделение
-- [GET] `/owner/org-structure/{unit_id}/data` — получить данные (JSON)
+- [GET] `/owner/org-structure` — (apps/web/routes/org_structure.py) — страница "Организация и финансы"
+  - **Комплексная страница:** иерархия подразделений + графики выплат + системы оплаты
+  - **Split-view дизайн:** левая панель (графики и системы), правая панель (детали графика)
+  - **Наследование настроек:** effective_payment_schedule_id / effective_payment_system_id рассчитываются в OrgStructureService.get_org_tree
+  - **UI:** отображает унаследованные значения для подразделений без прямых привязок
+  - **Шаблон:** `owner/org_structure/list.html` (включает `modals.html`)
+  - **Удалено:** `/owner/payment-systems` (функционал интегрирован сюда)
+- [POST] `/owner/org-structure/create` — (apps/web/routes/org_structure.py) — создать подразделение
+- [POST] `/owner/org-structure/{unit_id}/edit` — (apps/web/routes/org_structure.py) — редактировать подразделение
+- [POST] `/owner/org-structure/{unit_id}/delete` — (apps/web/routes/org_structure.py) — удалить подразделение (soft delete)
+- [POST] `/owner/org-structure/{unit_id}/move` — (apps/web/routes/org_structure.py) — переместить подразделение
+- [GET] `/owner/org-structure/{unit_id}/data` — (apps/web/routes/org_structure.py) — получить данные (JSON)
+- [GET] `/owner/org-structure/schedules-usage` — (apps/web/routes/org_structure.py) — статистика использования графиков выплат (с учетом наследования)
+  - **Возвращает:** `[{schedule_id, units_count}]` — считает по effective_payment_schedule_id
+- [GET] `/owner/org-structure/systems-usage` — (apps/web/routes/org_structure.py) — статистика использования систем оплаты (с учетом наследования)
+  - **Возвращает:** `[{system_id, count}]` — считает по effective_payment_system_id
+- [GET] `/owner/org-structure/schedule-stats/{schedule_id}` — (apps/web/routes/org_structure.py) — детальная статистика графика
+  - **Возвращает:** `{units: [{id, name, objects_count}], objects: int, employees: int}`
+  - **Логика:** фильтрация по effective_payment_schedule_id, подсчет сотрудников через Shift
+- **JS:** `PaymentScheduleEditor` используется для генерации превью графика с учетом смещения (периоды, дни)
 
 ## Задачи на смену (Shift Tasks) — Итерация 23
 - [GET] `/owner/shift-tasks` — (apps/web/routes/owner.py) — список всех задач по сменам
