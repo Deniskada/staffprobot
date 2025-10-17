@@ -6403,35 +6403,4 @@ async def owner_change_tariff_post(
         raise HTTPException(status_code=500, detail=f"Ошибка смены тарифа: {str(e)}")
 
 
-@router.get("/payment-systems", response_class=HTMLResponse)
-async def owner_payment_systems_list(
-    request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """Страница справочника систем оплаты труда."""
-    try:
-        from apps.web.services.payment_system_service import PaymentSystemService
-        
-        payment_system_service = PaymentSystemService(db)
-        
-        # Получить все активные системы оплаты
-        systems = await payment_system_service.get_all_systems()
-        
-        # Получить внутренний ID пользователя
-        user_id = await get_user_id_from_current_user(current_user, db)
-        owner_context = await get_owner_context(user_id, db)
-        
-        return templates.TemplateResponse(
-            "owner/payment_systems/list.html",
-            {
-                "request": request,
-                "systems": systems,
-                "title": "Системы оплаты труда",
-                "current_user": current_user,
-                **owner_context
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error loading payment systems: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки систем оплаты: {str(e)}")
+# Роут /payment-systems удален - функционал перенесен в /org-structure
