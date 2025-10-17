@@ -231,7 +231,7 @@ async def handle_schedule_confirmation(update: Update, context: ContextTypes.DEF
         
         if result['success']:
             # Очищаем состояние
-            user_state_manager.clear_state(user_id)
+            await user_state_manager.clear_state(user_id)
             context.user_data.clear()
             
             await query.edit_message_text(
@@ -583,7 +583,7 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
         else:
             # Нет группы для отчетов - сразу выполняем отмену
             from core.state.user_state_manager import user_state_manager
-            user_state_manager.clear_state(telegram_id)
+            await user_state_manager.clear_state(telegram_id)
             
             await _execute_shift_cancellation(
                 shift_id=shift_id,
@@ -672,7 +672,7 @@ async def handle_cancellation_photo_upload(update: Update, context: ContextTypes
     
     # Очищаем состояние
     from core.state.user_state_manager import user_state_manager
-    user_state_manager.clear_state(telegram_id)
+    await user_state_manager.clear_state(telegram_id)
     
     # Выполняем отмену
     await _execute_shift_cancellation(
@@ -701,7 +701,7 @@ async def handle_cancellation_skip_photo(update: Update, context: ContextTypes.D
     
     # Очищаем состояние
     from core.state.user_state_manager import user_state_manager
-    user_state_manager.clear_state(telegram_id)
+    await user_state_manager.clear_state(telegram_id)
     
     # Выполняем отмену без фото
     await _execute_shift_cancellation(
@@ -835,7 +835,7 @@ async def handle_cancel_schedule(update: Update, context: ContextTypes.DEFAULT_T
     user_id = update.effective_user.id
     
     # Очищаем состояние
-    user_state_manager.clear_state(user_id)
+    await user_state_manager.clear_state(user_id)
     context.user_data.clear()
     
     await update.callback_query.edit_message_text(

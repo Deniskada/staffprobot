@@ -142,7 +142,7 @@ async def _handle_edit_field(update: Update, context: ContextTypes.DEFAULT_TYPE,
     field_display = field_names.get(field_name, field_name)
     
     # Создаем состояние пользователя для редактирования
-    user_state_manager.create_state(
+    await user_state_manager.create_state(
         user_id=user_id,
         action=UserAction.EDIT_OBJECT,
         step=UserStep.INPUT_FIELD_VALUE,
@@ -169,14 +169,14 @@ async def _handle_edit_object_input(update: Update, context: ContextTypes.DEFAUL
     
     if not field_name:
         await update.message.reply_text("❌ Ошибка: не удалось определить редактируемое поле.")
-        user_state_manager.clear_state(user_id)
+        await user_state_manager.clear_state(user_id)
         return
     
     # Обновляем поле объекта
     result = object_service.update_object_field(object_id, field_name, text, user_id)
     
     # Очищаем состояние пользователя
-    user_state_manager.clear_state(user_id)
+    await user_state_manager.clear_state(user_id)
     
     if result['success']:
         # Отображаем успешное обновление и возвращаемся к редактированию объекта

@@ -154,7 +154,7 @@ async def _handle_open_object(update: Update, context: ContextTypes.DEFAULT_TYPE
             selected_object = closed_objects[0]
             
             # Создать состояние
-            user_state_manager.create_state(
+            await user_state_manager.create_state(
                 user_id=user_id,
                 action=UserAction.OPEN_OBJECT,
                 step=UserStep.OPENING_OBJECT_LOCATION,
@@ -192,7 +192,7 @@ async def _handle_open_object(update: Update, context: ContextTypes.DEFAULT_TYPE
                 )])
             keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="main_menu")])
             
-            user_state_manager.create_state(
+            await user_state_manager.create_state(
                 user_id=user_id,
                 action=UserAction.OPEN_OBJECT,
                 step=UserStep.OBJECT_SELECTION
@@ -227,7 +227,7 @@ async def _handle_select_object_to_open(update: Update, context: ContextTypes.DE
             return
         
         # Создать состояние для геолокации
-        user_state_manager.create_state(
+        await user_state_manager.create_state(
             user_id=user_id,
             action=UserAction.OPEN_OBJECT,
             step=UserStep.OPENING_OBJECT_LOCATION,
@@ -319,11 +319,11 @@ async def _handle_close_object(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Последняя смена - переходим к закрытию
         # Проверяем, есть ли уже состояние для этой смены
-        existing_state = user_state_manager.get_state(user_id)
+        existing_state = await user_state_manager.get_state(user_id)
         
         if existing_state and existing_state.selected_shift_id == shift['id']:
             # Обновляем существующий state, сохраняя completed_tasks и task_media
-            user_state_manager.update_state(
+            await user_state_manager.update_state(
                 user_id=user_id,
                 action=UserAction.CLOSE_OBJECT,
                 step=existing_state.step,
@@ -331,7 +331,7 @@ async def _handle_close_object(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         else:
             # Создаем новый state
-            user_state_manager.create_state(
+            await user_state_manager.create_state(
                 user_id=user_id,
                 action=UserAction.CLOSE_OBJECT,
                 step=UserStep.SHIFT_SELECTION,

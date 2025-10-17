@@ -165,7 +165,7 @@ async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if planned_shifts:
             # Есть запланированные смены - показываем их для выбора
             logger.info(f"Creating user state for open_shift: user_id={user_id}")
-            user_state_manager.create_state(
+            await user_state_manager.create_state(
                 user_id=user_id,
                 action=UserAction.OPEN_SHIFT,
                 step=UserStep.SHIFT_SELECTION
@@ -247,7 +247,7 @@ async def _handle_open_shift(update: Update, context: ContextTypes.DEFAULT_TYPE)
             objects = open_objects
                 
             # Создаем состояние пользователя
-            user_state_manager.create_state(
+            await user_state_manager.create_state(
                 user_id=user_id,
                 action=UserAction.OPEN_SHIFT,
                 step=UserStep.OBJECT_SELECTION,
@@ -329,7 +329,7 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
         
         # Объект открыт - продолжаем открытие смены
         # Создаем состояние для запроса геолокации
-        user_state_manager.create_state(
+        await user_state_manager.create_state(
             user_id=user_id,
             action=UserAction.OPEN_SHIFT,
             step=UserStep.LOCATION_REQUEST,
@@ -518,21 +518,21 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                     
                     # Создаем или обновляем состояние со списком задач
                     # Проверяем существующий state (может быть CLOSE_OBJECT)
-                    existing_state = user_state_manager.get_state(user_id)
+                    existing_state = await user_state_manager.get_state(user_id)
                     action = existing_state.action if existing_state else UserAction.CLOSE_SHIFT
                     selected_object_id = existing_state.selected_object_id if existing_state else None
                     
                     # Если уже есть state для этой смены с задачами - НЕ перезаписываем
                     if existing_state and existing_state.selected_shift_id == shift['id'] and existing_state.shift_tasks:
                         # Только обновляем action и step, сохраняя completed_tasks
-                        user_state_manager.update_state(
+                        await user_state_manager.update_state(
                             user_id=user_id,
                             action=action,
                             step=UserStep.TASK_COMPLETION
                         )
                     else:
                         # Создаем новый state
-                        user_state_manager.create_state(
+                        await user_state_manager.create_state(
                             user_id=user_id,
                             action=action,  # Сохраняем исходный action
                             step=UserStep.TASK_COMPLETION,
@@ -577,11 +577,11 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
             
             # Нет задач - переходим сразу к геопозиции
             # Проверяем существующий state (может быть CLOSE_OBJECT)
-            existing_state = user_state_manager.get_state(user_id)
+            existing_state = await user_state_manager.get_state(user_id)
             action = existing_state.action if existing_state else UserAction.CLOSE_SHIFT
             selected_object_id = existing_state.selected_object_id if existing_state else None
             
-            user_state_manager.create_state(
+            await user_state_manager.create_state(
                 user_id=user_id,
                 action=action,  # Сохраняем исходный action
                 step=UserStep.LOCATION_REQUEST,
@@ -601,7 +601,7 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                         text="❌ Объект смены не найден.",
                         parse_mode='HTML'
                     )
-                    user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(user_id)
                     return
                 
                 # Конвертируем время начала смены в часовой пояс объекта
@@ -681,7 +681,7 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
     user_id = query.from_user.id
     
     # Получаем состояние пользователя
-    user_state = user_state_manager.get_state(user_id)
+    user_state = await user_state_manager.get_state(user_id)
     if not user_state or user_state.action != UserAction.OPEN_SHIFT:
         await query.edit_message_text(
             text="❌ Состояние сессии истекло. Попробуйте еще раз.",
@@ -702,7 +702,7 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
                 text="❌ <b>Доступ запрещен</b>\n\nУ вас нет активного договора с этим объектом.",
                 parse_mode='HTML'
             )
-            user_state_manager.clear_state(user_id)
+            await user_state_manager.clear_state(user_id)
             return
         
         # Получаем информацию об объекте
@@ -715,7 +715,7 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
                 text="❌ Объект не найден или недоступен.",
                 parse_mode='HTML'
             )
-            user_state_manager.clear_state(user_id)
+            await user_state_manager.clear_state(user_id)
             return
         
         # Проверяем, есть ли свободные тайм-слоты на сегодня для этого объекта
@@ -743,7 +743,7 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
             logger.info(f"Found {timeslot_count} free timeslots for object {obj_data['id']} on {today}, using hourly_rate: {hourly_rate}")
         
         # Обновляем состояние - сохраняем выбранный объект и переходим к запросу геолокации
-        user_state_manager.update_state(
+        await user_state_manager.update_state(
             user_id=user_id,
             selected_object_id=object_id,
             step=UserStep.LOCATION_REQUEST,
@@ -778,7 +778,7 @@ async def _handle_open_shift_object_selection(update: Update, context: ContextTy
             text="❌ Ошибка при обработке выбора объекта. Попробуйте позже.",
             parse_mode='HTML'
         )
-        user_state_manager.clear_state(user_id)
+        await user_state_manager.clear_state(user_id)
 
 
 async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAULT_TYPE, schedule_id: int):
@@ -787,7 +787,7 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
     user_id = query.from_user.id
     
     # Получаем состояние пользователя
-    user_state = user_state_manager.get_state(user_id)
+    user_state = await user_state_manager.get_state(user_id)
     if not user_state or user_state.action != UserAction.OPEN_SHIFT:
         await query.edit_message_text(
             text="❌ Состояние сессии истекло. Попробуйте еще раз.",
@@ -812,7 +812,7 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
             return
         
         # Обновляем состояние
-        user_state_manager.update_state(
+        await user_state_manager.update_state(
             user_id=user_id,
             selected_object_id=shift_data['object_id'],
             step=UserStep.LOCATION_REQUEST,
@@ -861,7 +861,7 @@ async def _handle_close_shift_selection(update: Update, context: ContextTypes.DE
     user_id = query.from_user.id
     
     # Создаем состояние пользователя
-    user_state_manager.create_state(
+    await user_state_manager.create_state(
         user_id=user_id,
         action=UserAction.CLOSE_SHIFT,
         step=UserStep.LOCATION_REQUEST,
@@ -876,7 +876,7 @@ async def _handle_close_shift_selection(update: Update, context: ContextTypes.DE
                 text="❌ Смена не найдена.",
                 parse_mode='HTML'
             )
-            user_state_manager.clear_state(user_id)
+            await user_state_manager.clear_state(user_id)
             return
         
         async with get_async_session() as session:
@@ -889,7 +889,7 @@ async def _handle_close_shift_selection(update: Update, context: ContextTypes.DE
                     text="❌ Объект смены не найден.",
                     parse_mode='HTML'
                 )
-                user_state_manager.clear_state(user_id)
+                await user_state_manager.clear_state(user_id)
                 return
             
             # Конвертируем время начала смены в часовой пояс объекта
@@ -923,7 +923,7 @@ async def _handle_close_shift_selection(update: Update, context: ContextTypes.DE
             text="❌ Ошибка при обработке выбора смены. Попробуйте позже.",
             parse_mode='HTML'
         )
-        user_state_manager.clear_state(user_id)
+        await user_state_manager.clear_state(user_id)
 
 
 async def _handle_retry_location_open(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: int):
@@ -932,7 +932,7 @@ async def _handle_retry_location_open(update: Update, context: ContextTypes.DEFA
     user_id = query.from_user.id
     
     # Создаем состояние для открытия смены
-    user_state_manager.create_state(
+    await user_state_manager.create_state(
         user_id=user_id,
         action=UserAction.OPEN_SHIFT,
         step=UserStep.LOCATION_REQUEST,
@@ -974,7 +974,7 @@ async def _handle_retry_location_close(update: Update, context: ContextTypes.DEF
     user_id = query.from_user.id
     
     # Создаем состояние для закрытия смены
-    user_state_manager.create_state(
+    await user_state_manager.create_state(
         user_id=user_id,
         action=UserAction.CLOSE_SHIFT,
         step=UserStep.LOCATION_REQUEST,
@@ -1034,7 +1034,7 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
     
     try:
         # Получаем состояние
-        user_state = user_state_manager.get_state(user_id)
+        user_state = await user_state_manager.get_state(user_id)
         if not user_state or user_state.step != UserStep.TASK_COMPLETION:
             await query.answer("❌ Состояние утеряно. Начните заново", show_alert=True)
             return
@@ -1063,7 +1063,7 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
             if task_idx in task_media:
                 del task_media[task_idx]
             status_msg = "Задача снята с отметки"
-            user_state_manager.update_state(user_id, completed_tasks=completed_tasks, task_media=task_media)
+            await user_state_manager.update_state(user_id, completed_tasks=completed_tasks, task_media=task_media)
         else:
             # Проверяем, требуется ли медиа
             if requires_media:
@@ -1075,7 +1075,7 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
                 # Простая отметка без медиа
                 completed_tasks.append(task_idx)
                 status_msg = "✅ Задача отмечена"
-                user_state_manager.update_state(user_id, completed_tasks=completed_tasks)
+                await user_state_manager.update_state(user_id, completed_tasks=completed_tasks)
         
         # Формируем обновленный текст
         tasks_text = "📋 <b>Задачи на смену:</b>\n\n"
@@ -1150,7 +1150,7 @@ async def _handle_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = query.from_user.id
     
     try:
-        user_state = user_state_manager.get_state(user_id)
+        user_state = await user_state_manager.get_state(user_id)
         if not user_state:
             await query.answer("❌ Состояние утеряно", show_alert=True)
             return
@@ -1167,7 +1167,7 @@ async def _handle_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
             return
         
         # Обновляем состояние
-        user_state_manager.update_state(
+        await user_state_manager.update_state(
             user_id,
             step=UserStep.MEDIA_UPLOAD,
             pending_media_task_idx=task_idx
@@ -1206,13 +1206,13 @@ async def _handle_close_shift_with_tasks(update: Update, context: ContextTypes.D
     
     try:
         # Получаем состояние
-        user_state = user_state_manager.get_state(user_id)
+        user_state = await user_state_manager.get_state(user_id)
         if not user_state:
             await query.answer("❌ Состояние утеряно. Начните заново", show_alert=True)
             return
         
         # Обновляем шаг на запрос геопозиции и действие на CLOSE_SHIFT, чтобы handle_location обработал закрытие
-        user_state_manager.update_state(user_id, action=UserAction.CLOSE_SHIFT, step=UserStep.LOCATION_REQUEST)
+        await user_state_manager.update_state(user_id, action=UserAction.CLOSE_SHIFT, step=UserStep.LOCATION_REQUEST)
         
         # Получаем информацию об объекте смены
         async with get_async_session() as session:
@@ -1235,7 +1235,7 @@ async def _handle_close_shift_with_tasks(update: Update, context: ContextTypes.D
                     text="❌ Объект смены не найден.",
                     parse_mode='HTML'
                 )
-                user_state_manager.clear_state(user_id)
+                await user_state_manager.clear_state(user_id)
                 return
             
             # Конвертируем время начала смены в часовой пояс объекта
@@ -1280,7 +1280,7 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
     user_id = update.message.from_user.id
     logger.info(f"Media received from user: {user_id}")
     
-    user_state = user_state_manager.get_state(user_id)
+    user_state = await user_state_manager.get_state(user_id)
     logger.info(f"User state: {user_state}, step: {user_state.step if user_state else None}")
     
     # Проверяем, это фото для отмены смены? (ВЫСОКИЙ ПРИОРИТЕТ)
@@ -1400,7 +1400,7 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
                 completed_tasks.append(task_idx)
             
             # Обновляем состояние
-            user_state_manager.update_state(
+            await user_state_manager.update_state(
                 user_id,
                 step=UserStep.TASK_COMPLETION,
                 completed_tasks=completed_tasks,
@@ -1600,7 +1600,7 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Получаем или создаём состояние для отслеживания выполнения задач
             logger.info(f"[MY_TASKS] Loading/creating state for user {user_id}, shift {shift_id}, {len(shift_tasks)} tasks")
             
-            existing_state = user_state_manager.get_state(user_id)
+            existing_state = await user_state_manager.get_state(user_id)
             
             # Если состояние существует и для той же смены - сохраняем completed_tasks
             if existing_state and existing_state.selected_shift_id == shift_id:
@@ -1609,7 +1609,7 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info(f"[MY_TASKS] Reusing existing state with {len(completed_tasks)} completed tasks")
                 
                 # Обновляем задачи (могли добавиться новые)
-                user_state_manager.update_state(
+                await user_state_manager.update_state(
                     user_id=user_id,
                     shift_tasks=shift_tasks,
                     completed_tasks=completed_tasks,
@@ -1619,7 +1619,7 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Создаём новое состояние
                 completed_tasks = []
                 task_media = {}
-                user_state_manager.create_state(
+                await user_state_manager.create_state(
                     user_id=user_id,
                     action=UserAction.MY_TASKS,
                     step=UserStep.TASK_COMPLETION,
@@ -1714,7 +1714,7 @@ async def _handle_complete_my_task(update: Update, context: ContextTypes.DEFAULT
         await query.answer()  # Подтверждаем получение callback
         
         # Получаем состояние
-        user_state = user_state_manager.get_state(user_id)
+        user_state = await user_state_manager.get_state(user_id)
         if not user_state or user_state.action != UserAction.MY_TASKS:
             logger.error(f"[MY_TASKS] Invalid state: user_state={user_state}, action={user_state.action if user_state else None}")
             await query.answer("❌ Состояние утеряно. Начните заново", show_alert=True)
@@ -1746,7 +1746,7 @@ async def _handle_complete_my_task(update: Update, context: ContextTypes.DEFAULT
             if task_idx in task_media:
                 del task_media[task_idx]
             status_msg = "Задача снята с отметки"
-            user_state_manager.update_state(user_id, completed_tasks=completed_tasks, task_media=task_media)
+            await user_state_manager.update_state(user_id, completed_tasks=completed_tasks, task_media=task_media)
             logger.info(f"[MY_TASKS] Task unmarked")
         else:
             # Проверяем, требуется ли медиа
@@ -1759,7 +1759,7 @@ async def _handle_complete_my_task(update: Update, context: ContextTypes.DEFAULT
                 # Простая отметка без медиа
                 completed_tasks.append(task_idx)
                 status_msg = "✅ Задача отмечена"
-                user_state_manager.update_state(user_id, completed_tasks=completed_tasks)
+                await user_state_manager.update_state(user_id, completed_tasks=completed_tasks)
         
         # Обновляем список задач
         await _show_my_tasks_list_update(query, shift_id, shift_tasks, completed_tasks, task_media)
@@ -1833,7 +1833,7 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
     logger.info(f"[MY_TASKS] _handle_my_task_media_upload called: shift_id={shift_id}, task_idx={task_idx}, user_id={user_id}")
     
     try:
-        user_state = user_state_manager.get_state(user_id)
+        user_state = await user_state_manager.get_state(user_id)
         if not user_state:
             logger.error(f"[MY_TASKS] User state is None for user {user_id}")
             await query.answer("❌ Состояние утеряно", show_alert=True)
@@ -1901,7 +1901,7 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
         logger.info(f"[MY_TASKS] Updating user state with telegram_chat_id={telegram_chat_id}")
         
         # Обновляем состояние
-        user_state_manager.update_state(
+        await user_state_manager.update_state(
             user_id,
             step=UserStep.MEDIA_UPLOAD,
             pending_media_task_idx=task_idx,
