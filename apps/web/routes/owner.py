@@ -3515,7 +3515,8 @@ async def owner_timeslot_detail(
         from domain.entities.object import Object
         
         timeslot_query = select(TimeSlot).options(
-            selectinload(TimeSlot.object)
+            selectinload(TimeSlot.object),
+            selectinload(TimeSlot.task_templates)
         ).where(TimeSlot.id == timeslot_id)
         
         timeslot_result = await db.execute(timeslot_query)
