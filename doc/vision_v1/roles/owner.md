@@ -12,7 +12,10 @@
 - [POST] `/owner/api/applications/reject`  — (apps/web/routes/owner.py)
 - [GET] `/owner/api/applications/{application_id}`  — (apps/web/routes/owner.py)
 - [POST] `/owner/api/calendar/check-availability`  — (apps/web/routes/owner.py)
-- [POST] `/owner/api/calendar/plan-shift`  — (apps/web/routes/owner.py)
+- [POST] `/owner/api/calendar/plan-shift`  — (apps/web/routes/owner.py) — планирование смены через drag&drop
+  - Использует `Contract.get_effective_hourly_rate()` для определения ставки
+  - Если `contract.use_contract_rate = True`: приоритет ставки договора
+  - Если `contract.use_contract_rate = False`: тайм-слот > объект
 - [GET] `/owner/api/check/employee`  — (apps/web/routes/limits.py)
 - [GET] `/owner/api/check/feature/{feature}`  — (apps/web/routes/limits.py)
 - [GET] `/owner/api/check/manager`  — (apps/web/routes/limits.py)

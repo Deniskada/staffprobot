@@ -178,6 +178,16 @@ def get_effective_hourly_rate(
     return object_rate if object_rate else 0.0
 ```
 
+### Применение в роутах планирования смен
+Метод `Contract.get_effective_hourly_rate()` используется в следующих эндпоинтах:
+- `POST /owner/api/calendar/plan-shift` — (apps/web/routes/owner.py)
+- `POST /manager/api/calendar/plan-shift` — (apps/web/routes/manager.py, с дополнительным приоритетом входного значения)
+- `POST /employee/api/calendar/plan-shift` — (apps/web/routes/employee.py)
+
+**Логика:**
+- Если чекбокс "Использовать ставку из договора" включен (`use_contract_rate = True`): используется ставка договора, игнорируя тайм-слот и объект
+- Если чекбокс выключен (`use_contract_rate = False`): приоритет тайм-слота над объектом
+
 ## UI
 
 ### Форма создания договора

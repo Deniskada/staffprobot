@@ -6,7 +6,10 @@
 - [GET] `/employee/api/applications/{application_id}`  — (apps/web/routes/employee.py)
 - [GET] `/employee/api/applications/{application_id}/interview`  — (apps/web/routes/employee.py)
 - [GET] `/employee/api/calendar/data`  — (apps/web/routes/employee.py)
-- [POST] `/employee/api/calendar/plan-shift`  — (apps/web/routes/employee.py)
+- [POST] `/employee/api/calendar/plan-shift`  — (apps/web/routes/employee.py) — планирование смены для себя
+  - Использует `Contract.get_effective_hourly_rate()` для определения ставки
+  - Если `contract.use_contract_rate = True`: приоритет ставки договора
+  - Если `contract.use_contract_rate = False`: тайм-слот > объект
 - [GET] `/employee/api/employees`  — (apps/web/routes/employee.py)
 - [GET] `/employee/api/objects`  — (apps/web/routes/employee.py)
 - [POST] `/employee/api/shifts/cancel`  — (apps/web/routes/employee.py)
