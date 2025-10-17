@@ -199,7 +199,7 @@ async def delete_custom_payment_schedule(
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
         # Проверить, используется ли график
-        from domain.entities.org_unit import OrgUnit
+        from domain.entities.org_structure import OrgUnit
         from domain.entities.contract import Contract
         
         units_query = select(OrgUnit).where(

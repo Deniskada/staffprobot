@@ -374,7 +374,7 @@ async def get_schedules_usage(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        from domain.entities.org_unit import OrgUnit
+        from domain.entities.org_structure import OrgUnit
         from sqlalchemy import select, func
         
         # Подсчитать количество подразделений для каждого графика
@@ -418,7 +418,7 @@ async def get_systems_usage(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        from domain.entities.org_unit import OrgUnit
+        from domain.entities.org_structure import OrgUnit
         from sqlalchemy import select, func
         
         # Подсчитать количество подразделений для каждой системы
@@ -463,7 +463,7 @@ async def get_schedule_stats(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        from domain.entities.org_unit import OrgUnit
+        from domain.entities.org_structure import OrgUnit
         from domain.entities.object import Object
         from domain.entities.contract import Contract
         from sqlalchemy import select, func
