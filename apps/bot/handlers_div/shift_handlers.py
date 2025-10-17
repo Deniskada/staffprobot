@@ -536,6 +536,9 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                     
                     # Формируем кнопки для задач
                     keyboard = []
+                    # Получаем completed_tasks из existing_state
+                    completed_tasks = existing_state.completed_tasks if (existing_state and existing_state.selected_shift_id == shift['id']) else []
+                    
                     for idx, task in enumerate(shift_tasks):
                         task_text = task.get('text') or task.get('task_text', 'Задача')
                         is_mandatory = task.get('is_mandatory', True)
@@ -543,9 +546,10 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                         
                         icon = "⚠️" if is_mandatory else "⭐"
                         media_icon = "📸 " if requires_media else ""
+                        check = "✓ " if idx in completed_tasks else "☐ "
                         keyboard.append([
                             InlineKeyboardButton(
-                                f"✓ {media_icon}{icon} {task_text[:30]}...",
+                                f"{check}{media_icon}{icon} {task_text[:30]}...",
                                 callback_data=f"complete_shift_task:{shift['id']}:{idx}"
                             )
                         ])
