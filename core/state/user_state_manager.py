@@ -5,6 +5,10 @@
 from typing import Dict, Optional, Any
 from datetime import datetime, timedelta
 from enum import Enum
+import json
+
+from core.config.settings import settings
+from core.logging.logger import logger
 
 
 class UserAction(str, Enum):
@@ -18,8 +22,7 @@ class UserAction(str, Enum):
     EDIT_OBJECT = "edit_object"
     SCHEDULE_SHIFT = "schedule_shift"
     VIEW_SCHEDULE = "view_schedule"
-    CANCEL_SCHEDULE = "cancel_schedule"
-    CANCEL_SHIFT = "cancel_shift"  # Отмена запланированной смены
+    CANCEL_SCHEDULE = "cancel_schedule"  # Отмена запланированной смены
     CREATE_TIMESLOT = "create_timeslot"
     EDIT_TIMESLOT_TIME = "edit_timeslot_time"
     EDIT_TIMESLOT_RATE = "edit_timeslot_rate"
@@ -68,7 +71,7 @@ class UserState:
         pending_media_task_idx: Optional[int] = None,  # Индекс задачи, ожидающей медиа
         task_media: Optional[dict] = None,  # {task_idx: {media_url, media_type}}
         data: Optional[Dict[str, Any]] = None,
-        timeout_minutes: int = 5
+        timeout_minutes: int = 15
     ):
         self.user_id = user_id
         self.action = action
@@ -94,30 +97,82 @@ class UserState:
         """Обновляет шаг диалога."""
         self.step = step
     
-    def set_selected_object(self, object_id: int):
-        """Устанавливает выбранный объект."""
-        self.selected_object_id = object_id
+    def to_dict(self) -> dict:
+        """Сериализация в словарь для Redis."""
+        return {
+            'user_id': self.user_id,
+            'action': self.action.value if isinstance(self.action, UserAction) else self.action,
+            'step': self.step.value if isinstance(self.step, UserStep) else self.step,
+            'selected_object_id': self.selected_object_id,
+            'selected_shift_id': self.selected_shift_id,
+            'selected_timeslot_id': self.selected_timeslot_id,
+            'selected_schedule_id': self.selected_schedule_id,
+            'shift_type': self.shift_type,
+            'shift_tasks': self.shift_tasks,
+            'completed_tasks': self.completed_tasks,
+            'pending_media_task_idx': self.pending_media_task_idx,
+            'task_media': self.task_media,
+            'data': self.data,
+            'created_at': self.created_at.isoformat(),
+            'expires_at': self.expires_at.isoformat()
+        }
     
-    def set_selected_shift(self, shift_id: int):
-        """Устанавливает выбранную смену."""
-        self.selected_shift_id = shift_id
-    
-    def add_data(self, key: str, value: Any):
-        """Добавляет дополнительные данные."""
-        self.data[key] = value
-    
-    def get_data(self, key: str, default: Any = None) -> Any:
-        """Получает дополнительные данные."""
-        return self.data.get(key, default)
+    @classmethod
+    def from_dict(cls, data: dict) -> 'UserState':
+        """Десериализация из словаря."""
+        state = cls(
+            user_id=data['user_id'],
+            action=UserAction(data['action']),
+            step=UserStep(data['step']),
+            selected_object_id=data.get('selected_object_id'),
+            selected_shift_id=data.get('selected_shift_id'),
+            selected_timeslot_id=data.get('selected_timeslot_id'),
+            selected_schedule_id=data.get('selected_schedule_id'),
+            shift_type=data.get('shift_type'),
+            shift_tasks=data.get('shift_tasks', []),
+            completed_tasks=data.get('completed_tasks', []),
+            pending_media_task_idx=data.get('pending_media_task_idx'),
+            task_media=data.get('task_media', {}),
+            data=data.get('data', {})
+        )
+        state.created_at = datetime.fromisoformat(data['created_at'])
+        state.expires_at = datetime.fromisoformat(data['expires_at'])
+        return state
 
 
 class UserStateManager:
-    """Менеджер состояний пользователей."""
+    """Менеджер состояний пользователей (in-memory или Redis)."""
     
     def __init__(self):
         self._states: Dict[int, UserState] = {}
+        self._backend = getattr(settings, 'state_backend', 'memory')
+        self._redis_cache = None
+        self._state_ttl = timedelta(minutes=15)
+        
+        if self._backend == 'redis':
+            logger.info("UserStateManager: using Redis backend")
+        else:
+            logger.info("UserStateManager: using in-memory backend")
     
-    def create_state(
+    def _get_redis_key(self, user_id: int) -> str:
+        """Генерация ключа для Redis."""
+        return f"user_state:{user_id}"
+    
+    async def _init_redis(self):
+        """Lazy initialization of Redis cache."""
+        if self._redis_cache is None and self._backend == 'redis':
+            from core.cache.redis_cache import cache
+            self._redis_cache = cache
+            if not self._redis_cache.is_connected:
+                try:
+                    await self._redis_cache.connect()
+                except Exception as e:
+                    logger.error(f"Failed to connect to Redis for UserState: {e}")
+                    # Fallback to memory
+                    self._backend = 'memory'
+                    logger.warning("Falling back to in-memory UserState")
+    
+    async def create_state(
         self,
         user_id: int,
         action: UserAction,
@@ -126,86 +181,93 @@ class UserStateManager:
     ) -> UserState:
         """Создает новое состояние пользователя."""
         state = UserState(user_id, action, step, **kwargs)
+        
+        if self._backend == 'redis':
+            await self._init_redis()
+            if self._redis_cache:
+                key = self._get_redis_key(user_id)
+                await self._redis_cache.set(key, state.to_dict(), ttl=self._state_ttl, serialize='json')
+                logger.debug(f"UserState created in Redis: user_id={user_id}, action={action}, step={step}")
+        
+        # Всегда храним в памяти для быстрого доступа
         self._states[user_id] = state
         return state
+    
+    async def get_state(self, user_id: int) -> Optional[UserState]:
+        """Получает состояние пользователя."""
+        # Сначала проверяем память
+        if user_id in self._states:
+            state = self._states[user_id]
+            if not state.is_expired():
+                return state
+            else:
+                # Состояние истекло
+                del self._states[user_id]
+        
+        # Если Redis включен, пробуем оттуда
+        if self._backend == 'redis':
+            await self._init_redis()
+            if self._redis_cache:
+                key = self._get_redis_key(user_id)
+                data = await self._redis_cache.get(key, serialize='json')
+                if data:
+                    state = UserState.from_dict(data)
+                    if not state.is_expired():
+                        self._states[user_id] = state
+                        return state
+                    else:
+                        await self._redis_cache.delete(key)
+        
+        return None
+    
+    async def update_state(self, user_id: int, **updates) -> Optional[UserState]:
+        """Обновляет состояние пользователя и продлевает TTL."""
+        state = await self.get_state(user_id)
+        if not state:
+            return None
+        
+        # Обновляем поля
+        for key, value in updates.items():
+            if hasattr(state, key):
+                setattr(state, key, value)
+        
+        # Продлеваем TTL
+        state.expires_at = datetime.now() + self._state_ttl
+        
+        # Сохраняем в Redis
+        if self._backend == 'redis':
+            await self._init_redis()
+            if self._redis_cache:
+                key = self._get_redis_key(user_id)
+                await self._redis_cache.set(key, state.to_dict(), ttl=self._state_ttl, serialize='json')
+        
+        self._states[user_id] = state
+        return state
+    
+    async def clear_state(self, user_id: int) -> None:
+        """Удаляет состояние пользователя."""
+        if user_id in self._states:
+            del self._states[user_id]
+        
+        if self._backend == 'redis':
+            await self._init_redis()
+            if self._redis_cache:
+                key = self._get_redis_key(user_id)
+                await self._redis_cache.delete(key)
     
     # Совместимость со старым API
     def set_state(
         self,
         user_id: int,
         action: UserAction,
-        step: UserStep,
+        step: UserStep = UserStep.OBJECT_SELECTION,
         **kwargs
     ) -> UserState:
-        """Alias для create_state для совместимости."""
-        return self.create_state(user_id=user_id, action=action, step=step, **kwargs)
-    
-    def get_state(self, user_id: int) -> Optional[UserState]:
-        """Получает состояние пользователя."""
-        state = self._states.get(user_id)
-        if state and state.is_expired():
-            # Удаляем истекшее состояние
-            del self._states[user_id]
-            return None
+        """Устаревший синхронный метод - для совместимости."""
+        logger.warning("Using deprecated sync set_state, use async create_state instead")
+        state = UserState(user_id, action, step, **kwargs)
+        self._states[user_id] = state
         return state
-    
-    def update_state(self, user_id: int, **kwargs) -> Optional[UserState]:
-        """Обновляет состояние пользователя."""
-        state = self.get_state(user_id)
-        if not state:
-            return None
-        
-        if 'step' in kwargs:
-            state.update_step(kwargs['step'])
-        if 'selected_object_id' in kwargs:
-            state.set_selected_object(kwargs['selected_object_id'])
-        if 'selected_shift_id' in kwargs:
-            state.set_selected_shift(kwargs['selected_shift_id'])
-        if 'selected_timeslot_id' in kwargs:
-            state.selected_timeslot_id = kwargs['selected_timeslot_id']
-        if 'selected_schedule_id' in kwargs:
-            state.selected_schedule_id = kwargs['selected_schedule_id']
-        if 'shift_type' in kwargs:
-            state.shift_type = kwargs['shift_type']
-        if 'shift_tasks' in kwargs:
-            state.shift_tasks = kwargs['shift_tasks']
-        if 'completed_tasks' in kwargs:
-            state.completed_tasks = kwargs['completed_tasks']
-        if 'pending_media_task_idx' in kwargs:
-            state.pending_media_task_idx = kwargs['pending_media_task_idx']
-        if 'task_media' in kwargs:
-            state.task_media = kwargs['task_media']
-        if 'data' in kwargs:
-            for key, value in kwargs['data'].items():
-                state.add_data(key, value)
-        
-        # Продлеваем время жизни состояния при каждом обновлении
-        state.expires_at = datetime.now() + timedelta(minutes=5)
-        
-        return state
-    
-    def clear_state(self, user_id: int) -> bool:
-        """Очищает состояние пользователя."""
-        if user_id in self._states:
-            del self._states[user_id]
-            return True
-        return False
-    
-    def cleanup_expired_states(self) -> int:
-        """Очищает истекшие состояния."""
-        expired_users = [
-            user_id for user_id, state in self._states.items()
-            if state.is_expired()
-        ]
-        
-        for user_id in expired_users:
-            del self._states[user_id]
-        
-        return len(expired_users)
-    
-    def get_active_states_count(self) -> int:
-        """Возвращает количество активных состояний."""
-        return len(self._states)
 
 
 # Глобальный экземпляр менеджера состояний
