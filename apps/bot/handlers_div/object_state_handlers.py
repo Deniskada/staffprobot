@@ -323,10 +323,11 @@ async def _handle_close_object(update: Update, context: ContextTypes.DEFAULT_TYP
         
         if existing_state and existing_state.selected_shift_id == shift['id']:
             # Обновляем существующий state, сохраняя completed_tasks и task_media
+            # НО сбрасываем step, чтобы _handle_close_shift заново показал задачи
             await user_state_manager.update_state(
                 user_id=user_id,
                 action=UserAction.CLOSE_OBJECT,
-                step=existing_state.step,
+                step=UserStep.SHIFT_SELECTION,  # КРИТИЧНО: сброс step!
                 selected_object_id=object_id
             )
         else:
