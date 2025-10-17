@@ -9,7 +9,10 @@
 - [POST] `/api/applications/reject`  — (apps/web/routes/manager.py)
 - [GET] `/api/applications/{application_id}`  — (apps/web/routes/manager.py)
 - [POST] `/api/calendar/check-availability`  — (apps/web/routes/manager.py)
-- [POST] `/api/calendar/plan-shift`  — (apps/web/routes/manager.py)
+- [POST] `/api/calendar/plan-shift`  — (apps/web/routes/manager.py) — планирование смены
+  - Приоритет ставки: входное значение > `Contract.get_effective_hourly_rate()`
+  - Если `contract.use_contract_rate = True`: приоритет ставки договора
+  - Если `contract.use_contract_rate = False`: тайм-слот > объект
 - [GET] `/api/employees`  — (apps/web/routes/manager.py)
 - [GET] `/api/employees/for-object/{object_id}`  — (apps/web/routes/manager.py)
 - [GET] `/applications`  — (apps/web/routes/manager.py)
