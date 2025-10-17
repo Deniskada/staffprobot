@@ -314,12 +314,97 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
                     "current_user": current_user
                 })
         
+        # Загрузить задачи смены
+        shift_tasks = []
+        from shared.services.shift_task_journal import ShiftTaskJournal
+        from domain.entities.timeslot_task_template import TimeslotTaskTemplate
+        
+        if shift_type == "shift":
+            # Реальная смена: синхронизировать журнал и читать из него
+            journal = ShiftTaskJournal(session)
+            tasks_entities = await journal.get_by_shift(shift_id)
+            
+            # Если журнал пуст - синхронизировать из конфигурации
+            if not tasks_entities:
+                tasks_entities = await journal.sync_from_config(
+                    shift_id=shift_id,
+                    time_slot_id=shift.time_slot_id,
+                    object_id=shift.object_id,
+                    created_by_id=user_id
+                )
+            
+            # Преобразовать в dict для шаблона
+            shift_tasks = [{
+                'id': t.id,
+                'task_text': t.task_text,
+                'source': t.source,
+                'source_id': t.source_id,
+                'is_mandatory': t.is_mandatory,
+                'requires_media': t.requires_media,
+                'deduction_amount': float(t.deduction_amount) if t.deduction_amount else 0,
+                'is_completed': t.is_completed,
+                'completed_at': t.completed_at,
+                'media_refs': t.media_refs,
+                'cost': float(t.cost) if t.cost else None
+            } for t in tasks_entities]
+            
+        elif shift_type == "schedule":
+            # Запланированная смена: превью из конфигурации (без статусов)
+            # Задачи из объекта
+            if shift.object and shift.object.shift_tasks:
+                for task_data in shift.object.shift_tasks:
+                    if isinstance(task_data, str):
+                        shift_tasks.append({
+                            'task_text': task_data,
+                            'source': 'object',
+                            'is_mandatory': True,
+                            'requires_media': False,
+                            'deduction_amount': 0
+                        })
+                    elif isinstance(task_data, dict):
+                        shift_tasks.append({
+                            'task_text': task_data.get('text', ''),
+                            'source': 'object',
+                            'is_mandatory': task_data.get('is_mandatory', True),
+                            'requires_media': task_data.get('requires_media', False),
+                            'deduction_amount': task_data.get('deduction_amount', 0)
+                        })
+            
+            # Задачи из тайм-слота (если есть)
+            if shift.time_slot_id:
+                timeslot_query = select(TimeSlot).where(TimeSlot.id == shift.time_slot_id)
+                timeslot_result = await session.execute(timeslot_query)
+                timeslot = timeslot_result.scalar_one_or_none()
+                
+                ignore_object_tasks = timeslot.ignore_object_tasks if timeslot else False
+                
+                # Если ignore_object_tasks=True - очистить задачи объекта
+                if ignore_object_tasks:
+                    shift_tasks = [t for t in shift_tasks if t['source'] != 'object']
+                
+                # Добавить задачи тайм-слота
+                timeslot_tasks_query = select(TimeslotTaskTemplate).where(
+                    TimeslotTaskTemplate.timeslot_id == shift.time_slot_id
+                ).order_by(TimeslotTaskTemplate.display_order)
+                timeslot_tasks_result = await session.execute(timeslot_tasks_query)
+                timeslot_tasks = timeslot_tasks_result.scalars().all()
+                
+                for template in timeslot_tasks:
+                    shift_tasks.append({
+                        'task_text': template.task_text,
+                        'source': 'timeslot',
+                        'is_mandatory': template.is_mandatory,
+                        'requires_media': template.requires_media,
+                        'deduction_amount': float(template.deduction_amount) if template.deduction_amount else 0
+                    })
+        
         return templates.TemplateResponse("owner/shifts/detail.html", {
             "request": request,
             "current_user": current_user,
             "shift": shift,
             "shift_type": shift_type,
             "object": shift.object,
+            "shift_tasks": shift_tasks,
             "web_timezone_helper": web_timezone_helper
         })
 
@@ -382,6 +467,67 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
                 return JSONResponse({"success": True, "message": "Смена завершена"})
             else:
                 return JSONResponse({"success": False, "error": "Смена не найдена или уже завершена"})
+
+
+@router.post("/{shift_id}/tasks/{task_id}/toggle")
+async def toggle_task(request: Request, shift_id: int, task_id: int):
+    """Переключить статус выполнения задачи."""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        
+        from shared.services.shift_task_journal import ShiftTaskJournal
+        journal = ShiftTaskJournal(session)
+        
+        task = await journal.toggle_completed(task_id, user_id)
+        
+        if task:
+            # Редирект обратно к карточке смены
+            return RedirectResponse(
+                url=f"/owner/shifts/{shift_id}?shift_type=shift",
+                status_code=status.HTTP_302_FOUND
+            )
+        else:
+            return RedirectResponse(
+                url=f"/owner/shifts/{shift_id}?shift_type=shift",
+                status_code=status.HTTP_302_FOUND
+            )
+
+
+@router.post("/{shift_id}/add-task")
+async def add_manual_task(request: Request, shift_id: int):
+    """Добавить ручную задачу к смене."""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    
+    async with get_async_session() as session:
+        user_id = await get_user_id_from_current_user(current_user, session)
+        form_data = await request.form()
+        task_text = form_data.get("task_text", "").strip()
+        
+        if not task_text:
+            return RedirectResponse(
+                url=f"/owner/shifts/{shift_id}?shift_type=shift",
+                status_code=status.HTTP_302_FOUND
+            )
+        
+        from shared.services.shift_task_journal import ShiftTaskJournal
+        journal = ShiftTaskJournal(session)
+        
+        await journal.add_manual_task(
+            shift_id=shift_id,
+            task_text=task_text,
+            created_by_id=user_id
+        )
+        
+        return RedirectResponse(
+            url=f"/owner/shifts/{shift_id}?shift_type=shift",
+            status_code=status.HTTP_302_FOUND
+        )
 
 
 @router.get("/stats/summary")

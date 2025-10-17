@@ -3729,48 +3729,37 @@ async def manager_shift_detail(
                     if contract:
                         hourly_rate = contract.hourly_rate
                 
-                # Получаем задачи из timeslot или object
+                # Получаем задачи смены из журнала
                 shift_tasks = []
-                time_slot_id = getattr(shift, 'time_slot_id', None)
-                if time_slot_id:
-                    from domain.entities.timeslot_task_template import TimeslotTaskTemplate
-                    
-                    timeslot_query = select(TimeSlot).where(TimeSlot.id == time_slot_id)
-                    timeslot_result = await db.execute(timeslot_query)
-                    timeslot = timeslot_result.scalar_one_or_none()
-                    
-                    if timeslot:
-                        # Загружаем задачи из таблицы TimeslotTaskTemplate
-                        task_query = select(TimeslotTaskTemplate).where(
-                            TimeslotTaskTemplate.timeslot_id == time_slot_id
-                        ).order_by(TimeslotTaskTemplate.display_order)
-                        task_result = await db.execute(task_query)
-                        task_templates = task_result.scalars().all()
-                        
-                        for template in task_templates:
-                            shift_tasks.append({
-                                'text': template.task_text,
-                                'task_text': template.task_text,
-                                'is_mandatory': template.is_mandatory,
-                                'deduction_amount': float(template.deduction_amount) if template.deduction_amount else 0,
-                                'requires_media': template.requires_media,
-                                'source': 'timeslot'
-                            })
-                        
-                        # Добавляем задачи объекта (если не игнорируются)
-                        if not timeslot.ignore_object_tasks and shift.object:
-                            object_tasks = getattr(shift.object, 'shift_tasks', None)
-                            if object_tasks and isinstance(object_tasks, list):
-                                for task in object_tasks:
-                                    task_copy = dict(task)
-                                    task_copy['source'] = 'object'
-                                    shift_tasks.append(task_copy)
-                else:
-                    # Спонтанная смена - берем задачи из объекта
-                    if shift.object:
-                        object_tasks = getattr(shift.object, 'shift_tasks', None)
-                        if object_tasks and isinstance(object_tasks, list):
-                            shift_tasks = object_tasks
+                from shared.services.shift_task_journal import ShiftTaskJournal
+                from domain.entities.timeslot_task_template import TimeslotTaskTemplate
+                
+                journal = ShiftTaskJournal(db)
+                tasks_entities = await journal.get_by_shift(shift.id)
+                
+                # Если журнал пуст - синхронизировать из конфигурации
+                if not tasks_entities:
+                    tasks_entities = await journal.sync_from_config(
+                        shift_id=shift.id,
+                        time_slot_id=shift.time_slot_id,
+                        object_id=shift.object_id,
+                        created_by_id=user_id
+                    )
+                
+                # Преобразовать в dict для шаблона
+                shift_tasks = [{
+                    'id': t.id,
+                    'task_text': t.task_text,
+                    'source': t.source,
+                    'source_id': t.source_id,
+                    'is_mandatory': t.is_mandatory,
+                    'requires_media': t.requires_media,
+                    'deduction_amount': float(t.deduction_amount) if t.deduction_amount else 0,
+                    'is_completed': t.is_completed,
+                    'completed_at': t.completed_at,
+                    'media_refs': t.media_refs,
+                    'cost': float(t.cost) if t.cost else None
+                } for t in tasks_entities]
                 
                 shift_data = {
                     'id': shift.id,

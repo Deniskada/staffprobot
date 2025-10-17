@@ -213,22 +213,45 @@
                     {% endif %}
                     
                     <!-- Задачи на смену -->
-                    {% if shift_type == 'shift' and shift_tasks is defined %}
+                    {% if shift_tasks is defined and shift_tasks %}
                     <div class="card mb-4">
                         <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">
                                 <i class="fas fa-tasks"></i> Задачи на смену
+                                {% if shift_type == 'schedule' %}
+                                <span class="badge bg-warning ms-2">Превью</span>
+                                {% endif %}
                             </h5>
+                            {% if shift_type == 'shift' %}
                             <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addTaskModal">
                                 <i class="fas fa-plus"></i> Добавить задачу
                             </button>
+                            {% endif %}
                         </div>
                         <div class="card-body">
-                            {% if shift_tasks %}
-                            <ul class="list-group">
-                                {% for task in shift_tasks %}
+                            <!-- Группировка задач по источнику -->
+                            {% set tasks_by_source = {'object': [], 'timeslot': [], 'manual': []} %}
+                            {% for task in shift_tasks %}
+                                {% if task.source == 'object' %}
+                                    {% set _ = tasks_by_source['object'].append(task) %}
+                                {% elif task.source == 'timeslot' %}
+                                    {% set _ = tasks_by_source['timeslot'].append(task) %}
+                                {% else %}
+                                    {% set _ = tasks_by_source['manual'].append(task) %}
+                                {% endif %}
+                            {% endfor %}
+                            
+                            <!-- Задачи объекта -->
+                            {% if tasks_by_source['object'] %}
+                            <h6 class="text-primary mb-2">
+                                <i class="fas fa-building"></i> Задачи объекта
+                                <span class="badge bg-primary">{{ tasks_by_source['object']|length }}</span>
+                            </h6>
+                            <ul class="list-group mb-3">
+                                {% for task in tasks_by_source['object'] %}
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div class="d-flex align-items-center">
+                                    <div class="d-flex align-items-center flex-grow-1">
+                                        {% if shift_type == 'shift' and task.id %}
                                         <form method="post" action="/owner/shifts/{{ shift.id }}/tasks/{{ task.id }}/toggle" class="me-3">
                                             <input type="checkbox" 
                                                    class="form-check-input" 
@@ -236,44 +259,115 @@
                                                    onchange="this.form.submit()"
                                                    style="cursor: pointer;">
                                         </form>
-                                        <div>
-                                            <span class="{% if task.is_completed %}text-decoration-line-through text-muted{% endif %}">
+                                        {% endif %}
+                                        <div class="flex-grow-1">
+                                            <span class="{% if task.get('is_completed') %}text-decoration-line-through text-muted{% endif %}">
                                                 {{ task.task_text }}
                                             </span>
-                                            {% if task.is_completed %}
+                                            {% if task.get('is_completed') and task.get('completed_at') %}
                                             <br>
                                             <small class="text-success">
                                                 <i class="fas fa-check-circle"></i> 
-                                                Выполнено: {{ task.completed_at.strftime('%d.%m.%Y %H:%M') if task.completed_at else 'Да' }}
+                                                Выполнено: {{ task.completed_at.strftime('%d.%m.%Y %H:%M') }}
                                             </small>
+                                            {% endif %}
+                                            {% if task.get('requires_media') %}
+                                            <span class="badge bg-secondary ms-2">📸 Требует фото</span>
+                                            {% endif %}
+                                            {% if task.get('media_refs') and task.media_refs %}
+                                            <span class="badge bg-success ms-2">📎 {{ task.media_refs|length }} файл(ов)</span>
                                             {% endif %}
                                         </div>
                                     </div>
                                     <div>
-                                        {% if task.source == 'object' %}
-                                        <span class="badge bg-primary">Объект</span>
-                                        {% elif task.source == 'timeslot' %}
-                                        <span class="badge bg-info">Тайм-слот</span>
-                                        {% elif task.source == 'manual' %}
-                                        <span class="badge bg-secondary">Ручная</span>
+                                        {% if task.is_mandatory %}
+                                        <span class="badge bg-danger me-1">Обязательная</span>
+                                        {% endif %}
+                                        {% if task.deduction_amount %}
+                                            {% if task.deduction_amount > 0 %}
+                                            <span class="badge bg-success">+{{ task.deduction_amount }} ₽</span>
+                                            {% else %}
+                                            <span class="badge bg-warning">{{ task.deduction_amount }} ₽</span>
+                                            {% endif %}
                                         {% endif %}
                                     </div>
                                 </li>
                                 {% endfor %}
                             </ul>
-                            <div class="mt-3">
+                            {% endif %}
+                            
+                            <!-- Задачи тайм-слота -->
+                            {% if tasks_by_source['timeslot'] %}
+                            <h6 class="text-info mb-2">
+                                <i class="fas fa-clock"></i> Задачи тайм-слота
+                                <span class="badge bg-info">{{ tasks_by_source['timeslot']|length }}</span>
+                            </h6>
+                            <ul class="list-group mb-3">
+                                {% for task in tasks_by_source['timeslot'] %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center flex-grow-1">
+                                        {% if shift_type == 'shift' and task.id %}
+                                        <form method="post" action="/owner/shifts/{{ shift.id }}/tasks/{{ task.id }}/toggle" class="me-3">
+                                            <input type="checkbox" 
+                                                   class="form-check-input" 
+                                                   {% if task.is_completed %}checked{% endif %}
+                                                   onchange="this.form.submit()"
+                                                   style="cursor: pointer;">
+                                        </form>
+                                        {% endif %}
+                                        <div class="flex-grow-1">
+                                            <span class="{% if task.get('is_completed') %}text-decoration-line-through text-muted{% endif %}">
+                                                {{ task.task_text }}
+                                            </span>
+                                            {% if task.get('is_completed') and task.get('completed_at') %}
+                                            <br>
+                                            <small class="text-success">
+                                                <i class="fas fa-check-circle"></i> 
+                                                Выполнено: {{ task.completed_at.strftime('%d.%m.%Y %H:%M') }}
+                                            </small>
+                                            {% endif %}
+                                            {% if task.get('requires_media') %}
+                                            <span class="badge bg-secondary ms-2">📸 Требует фото</span>
+                                            {% endif %}
+                                            {% if task.get('media_refs') and task.media_refs %}
+                                            <span class="badge bg-success ms-2">📎 {{ task.media_refs|length }} файл(ов)</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        {% if task.is_mandatory %}
+                                        <span class="badge bg-danger me-1">Обязательная</span>
+                                        {% endif %}
+                                        {% if task.deduction_amount %}
+                                            {% if task.deduction_amount > 0 %}
+                                            <span class="badge bg-success">+{{ task.deduction_amount }} ₽</span>
+                                            {% else %}
+                                            <span class="badge bg-warning">{{ task.deduction_amount }} ₽</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+                            
+                            <!-- Общая статистика -->
+                            <div class="mt-3 p-3 bg-light rounded">
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted">
-                                        Всего задач: {{ shift_tasks|length }}
+                                        <i class="fas fa-list"></i> Всего задач: <strong>{{ shift_tasks|length }}</strong>
                                     </span>
+                                    {% if shift_type == 'shift' %}
                                     <span class="text-success">
-                                        Выполнено: {{ shift_tasks|selectattr('is_completed')|list|length }} / {{ shift_tasks|length }}
+                                        <i class="fas fa-check-circle"></i> Выполнено: <strong>{{ shift_tasks|selectattr('is_completed')|list|length }} / {{ shift_tasks|length }}</strong>
                                     </span>
+                                    {% else %}
+                                    <span class="text-warning">
+                                        <i class="fas fa-calendar-check"></i> Плановые задачи
+                                    </span>
+                                    {% endif %}
                                 </div>
                             </div>
-                            {% else %}
-                            <p class="text-muted mb-0">Задач на смену нет</p>
-                            {% endif %}
                         </div>
                     </div>
                     {% elif shift_type == 'schedule' and shift.hourly_rate %}
