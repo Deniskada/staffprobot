@@ -1059,6 +1059,16 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
                 del task_media[task_idx]
             status_msg = "Задача снята с отметки"
             await user_state_manager.update_state(user_id, completed_tasks=completed_tasks, task_media=task_media)
+            
+            # Записать в журнал (снятие отметки)
+            try:
+                from core.database.session import get_async_session
+                from shared.services.shift_task_journal import ShiftTaskJournal
+                async with get_async_session() as db:
+                    journal = ShiftTaskJournal(db)
+                    await journal.mark_by_index(shift_id, task_idx, False, user_id)
+            except Exception as e:
+                logger.error(f"Error updating task journal (uncomplete): {e}")
         else:
             # Проверяем, требуется ли медиа
             if requires_media:
@@ -1071,6 +1081,16 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
                 completed_tasks.append(task_idx)
                 status_msg = "✅ Задача отмечена"
                 await user_state_manager.update_state(user_id, completed_tasks=completed_tasks)
+                
+                # Записать в журнал
+                try:
+                    from core.database.session import get_async_session
+                    from shared.services.shift_task_journal import ShiftTaskJournal
+                    async with get_async_session() as db:
+                        journal = ShiftTaskJournal(db)
+                        await journal.mark_by_index(shift_id, task_idx, True, user_id)
+                except Exception as e:
+                    logger.error(f"Error updating task journal (complete): {e}")
         
         # Формируем обновленный текст
         tasks_text = "📋 <b>Задачи на смену:</b>\n\n"
@@ -1402,6 +1422,26 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
                 task_media=task_media,
                 pending_media_task_idx=None
             )
+            
+            # Записать в журнал задач
+            try:
+                from core.database.session import get_async_session
+                from shared.services.shift_task_journal import ShiftTaskJournal
+                async with get_async_session() as db:
+                    journal = ShiftTaskJournal(db)
+                    await journal.mark_by_index(
+                        shift_id=shift_id,
+                        task_idx=task_idx,
+                        is_completed=True,
+                        user_id=user_id,
+                        media_meta={
+                            'media_url': media_url,
+                            'media_type': media_type,
+                            'file_id': media_file_id
+                        }
+                    )
+            except Exception as e:
+                logger.error(f"Error updating task journal (media): {e}")
             
             logger.info(
                 f"Media uploaded for task",

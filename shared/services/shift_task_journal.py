@@ -356,4 +356,65 @@ class ShiftTaskJournal:
         )
         
         return task
+    
+    async def mark_by_index(
+        self,
+        shift_id: int,
+        task_idx: int,
+        is_completed: bool,
+        user_id: Optional[int] = None,
+        media_meta: Optional[Dict[str, Any]] = None
+    ) -> Optional[ShiftTask]:
+        """
+        Отметить задачу по индексу в списке (для бота).
+        
+        Args:
+            shift_id: ID смены
+            task_idx: Индекс задачи в списке (порядок из sync_from_config)
+            is_completed: Выполнена или нет
+            user_id: ID пользователя
+            media_meta: Метаданные медиа (опционально)
+            
+        Returns:
+            Optional[ShiftTask]: Обновленная задача или None
+        """
+        # Получить все задачи смены в порядке (source, id)
+        tasks = await self.get_by_shift(shift_id)
+        
+        if task_idx >= len(tasks):
+            logger.warning(
+                "Task index out of range",
+                shift_id=shift_id,
+                task_idx=task_idx,
+                total_tasks=len(tasks)
+            )
+            return None
+        
+        task = tasks[task_idx]
+        
+        # Обновить статус
+        if is_completed:
+            task.mark_completed(user_id)
+            if media_meta:
+                current_refs = task.media_refs or []
+                if not isinstance(current_refs, list):
+                    current_refs = []
+                current_refs.append(media_meta)
+                task.media_refs = current_refs
+        else:
+            task.mark_incomplete()
+        
+        await self.db.commit()
+        await self.db.refresh(task)
+        
+        logger.info(
+            "Task marked by index",
+            task_id=task.id,
+            shift_id=shift_id,
+            task_idx=task_idx,
+            is_completed=is_completed,
+            has_media=bool(media_meta)
+        )
+        
+        return task
 
