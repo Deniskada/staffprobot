@@ -774,46 +774,67 @@ function renderScheduleDetails(schedule, stats) {
     
     container.innerHTML = html;
     
-    // Загрузить превью графика (асинхронно)
-    loadSchedulePreview(schedule.id);
+    // Сгенерировать превью графика с учетом смещения через общий редактор
+    generatePreviewWithEditor(schedule);
 }
 
-// Загрузить превью графика
-async function loadSchedulePreview(scheduleId) {
-    const tbody = document.getElementById(`schedule-preview-tbody-${scheduleId}`);
-    if (!tbody) return;
-    
-    // Генерируем превью на основе данных графика (первые 10 записей)
-    // Пока используем заглушку, но можно добавить реальный расчет
-    setTimeout(() => {
-        const today = new Date();
-        let previewHtml = '';
-        
-        for (let i = 1; i <= 10; i++) {
-            const paymentDate = new Date(today);
-            paymentDate.setDate(today.getDate() + (i * 7)); // Пример для еженедельного
-            
-            const periodStart = new Date(paymentDate);
-            periodStart.setDate(paymentDate.getDate() - 6);
-            
-            const periodEnd = new Date(paymentDate);
-            periodEnd.setDate(paymentDate.getDate() - 1);
-            
-            const days = 7; // Можно рассчитать реально
-            
-            previewHtml += `
-                <tr>
-                    <td>${i}</td>
-                    <td><strong>${formatDate(paymentDate)}</strong></td>
-                    <td>${formatDate(periodStart)}</td>
-                    <td>${formatDate(periodEnd)}</td>
-                    <td><span class="badge bg-secondary">${days}</span></td>
-                </tr>
-            `;
+// Сгенерировать превью графика через PaymentScheduleEditor
+async function generatePreviewWithEditor(schedule) {
+    try {
+        const tbody = document.getElementById(`schedule-preview-tbody-${schedule.id}`);
+        if (!tbody) return;
+
+        // Временный скрытый контейнер для минимально необходимых элементов
+        const phantom = document.createElement('div');
+        phantom.style.display = 'none';
+        phantom.innerHTML = `
+            <select id="schedule_frequency"></select>
+            <div id="schedule_params"></div>
+            <div id="monthly_payments_container"></div>
+            <input id="schedule_name">
+            <div id="schedule_preview"></div>
+        `;
+        document.body.appendChild(phantom);
+
+        const tempEditor = new PaymentScheduleEditor('paymentScheduleModal', null);
+        // Нужен для функций updateNextPaymentDate/updateMonthlyPayments, которые обращаются к window.paymentScheduleEditor
+        window.paymentScheduleEditor = tempEditor;
+
+        // Установить частоту, инициировать поля и заполнить payment_period
+        document.getElementById('schedule_frequency').value = schedule.frequency || 'weekly';
+        tempEditor.onFrequencyChange();
+        tempEditor.fillPaymentPeriodData(schedule);
+
+        // Подождать генерацию
+        await new Promise(r => setTimeout(r, 350));
+
+        const data = Array.isArray(tempEditor.scheduleData) ? tempEditor.scheduleData.slice(0, 10) : [];
+        if (data.length) {
+            const msDay = 1000 * 60 * 60 * 24;
+            const rows = data.map((row, idx) => {
+                const start = tempEditor.parseDate(row.period_start);
+                const end = tempEditor.parseDate(row.period_end);
+                const days = Math.max(1, Math.floor((end - start) / msDay) + 1);
+                return `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td><strong>${row.payment_date}</strong></td>
+                        <td>${row.period_start}</td>
+                        <td>${row.period_end}</td>
+                        <td><span class="badge bg-secondary">${days}</span></td>
+                    </tr>
+                `;
+            }).join('');
+            tbody.innerHTML = rows;
+        } else {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Нет данных превью</td></tr>`;
         }
-        
-        tbody.innerHTML = previewHtml;
-    }, 300);
+
+        // Удалить временный контейнер
+        document.body.removeChild(phantom);
+    } catch (e) {
+        console.warn('Preview generation failed:', e);
+    }
 }
 
 // Форматировать дату
