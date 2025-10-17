@@ -391,10 +391,10 @@
             <button class="btn btn-primary" onclick="showCreateModal()">
                 Создать первое подразделение
             </button>
-        </div>
-        {% endif %}
                     </div>
-                    
+                    {% endif %}
+</div>
+
     <!-- УРОВЕНЬ 2: Split View -->
     <div class="split-view-container">
         <!-- Левая панель -->
@@ -407,7 +407,7 @@
                 
                 <div id="schedules-list">
                     {% if payment_schedules %}
-                        {% for schedule in payment_schedules %}
+                                {% for schedule in payment_schedules %}
                         <div class="schedule-item" 
                              data-schedule-id="{{ schedule.id }}"
                              data-is-custom="{{ schedule.is_custom }}"
@@ -428,14 +428,14 @@
                                     <button class="btn btn-sm btn-outline-primary" 
                                             onclick="editScheduleFromList({{ schedule.id }})" title="Редактировать">
                                         <i class="fas fa-edit"></i>
-                                    </button>
+                            </button>
                                     <button class="btn btn-sm btn-outline-danger" 
                                             onclick="deleteSchedule({{ schedule.id }}, '{{ schedule.name }}')" title="Удалить">
                                         <i class="fas fa-trash"></i>
                             </button>
                                     {% endif %}
+                        </div>
                     </div>
-                            </div>
                             <div class="schedule-meta">
                                 <small class="badge bg-light text-dark">
                                     {% if schedule.frequency == 'daily' %}Ежедневно
@@ -446,22 +446,22 @@
                                 <small class="badge bg-info text-white" id="schedule-usage-{{ schedule.id }}">
                                     0 подразд.
                                 </small>
-                            </div>
                         </div>
+                    </div>
                         {% endfor %}
                     {% else %}
                         <div class="empty-state">
                             <i class="fas fa-calendar-alt"></i>
                             <p>Графики выплат не найдены</p>
-                        </div>
+                            </div>
                     {% endif %}
-                </div>
+                        </div>
                 
                 <button class="btn-create-custom" onclick="createCustomSchedule()">
                     <i class="fas fa-plus"></i> Создать кастомный график
                     </button>
-            </div>
-
+                    </div>
+                    
             <!-- Системы оплаты -->
             <div class="payment-systems-section">
                 <h6 class="mb-3">
@@ -482,19 +482,19 @@
                                     {% elif system.calculation_type == 'hourly_bonus' %}
                                         <span class="badge bg-warning">С премией</span>
                                     {% endif %}
+                        </div>
                     </div>
-                            </div>
                             <small class="badge bg-secondary" id="system-count-{{ system.id }}">
                                 0 подразд.
                             </small>
+                            </div>
                         </div>
-                    </div>
                     {% endfor %}
                 {% else %}
                     <div class="empty-state">
                         <i class="fas fa-money-check-alt"></i>
                         <p>Системы оплаты не найдены</p>
-                    </div>
+                            </div>
                 {% endif %}
                         </div>
                     </div>
@@ -506,7 +506,7 @@
                     <i class="fas fa-hand-pointer"></i>
                     <h5>Выберите подразделение или график</h5>
                     <p>Кликните на подразделение или график выплат<br>для просмотра детальной информации</p>
-                </div>
+                    </div>
                 </div>
         </div>
     </div>
@@ -540,6 +540,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Выбор подразделения
 function selectOrgUnit(unitId, scheduleId, systemId) {
+    console.log('[selectOrgUnit] unitId:', unitId, 'scheduleId:', scheduleId, 'systemId:', systemId);
+    
     // Убрать предыдущее выделение
     document.querySelectorAll('.org-tree-item').forEach(el => el.classList.remove('selected'));
     
@@ -554,6 +556,14 @@ function selectOrgUnit(unitId, scheduleId, systemId) {
     // Если есть график - выбрать его
     if (scheduleId) {
         selectSchedule(scheduleId);
+    } else {
+        // Очистить детали если нет графика
+        document.getElementById('schedule-details-content').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-calendar-alt"></i>
+                <p>У этого подразделения нет графика выплат</p>
+            </div>
+        `;
     }
     
     // Если есть система - выделить ее
@@ -564,6 +574,17 @@ function selectOrgUnit(unitId, scheduleId, systemId) {
 
 // Выбор графика
 function selectSchedule(scheduleId) {
+    if (!scheduleId) {
+        // Очистить детали если нет графика
+        document.getElementById('schedule-details-content').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-calendar-alt"></i>
+                <p>У этого подразделения нет графика выплат</p>
+                        </div>
+        `;
+        return;
+    }
+    
     // Убрать предыдущее выделение
     document.querySelectorAll('.schedule-item').forEach(el => el.classList.remove('selected'));
     
@@ -571,11 +592,12 @@ function selectSchedule(scheduleId) {
     const scheduleEl = document.querySelector(`[data-schedule-id="${scheduleId}"]`);
     if (scheduleEl) {
         scheduleEl.classList.add('selected');
-        selectedScheduleId = scheduleId;
-        
-        // Загрузить детали графика
-        loadScheduleDetails(scheduleId);
     }
+    
+    selectedScheduleId = scheduleId;
+    
+    // ВСЕГДА загружать детали графика (даже если scheduleId не изменился)
+    loadScheduleDetails(scheduleId);
 }
 
 // Подсветка системы оплаты
