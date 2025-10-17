@@ -1284,7 +1284,7 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
     logger.info(f"User state: {user_state}, step: {user_state.step if user_state else None}")
     
     # Проверяем, это фото для отмены смены? (ВЫСОКИЙ ПРИОРИТЕТ)
-    if user_state and user_state.action == UserAction.CANCEL_SHIFT and user_state.step == UserStep.INPUT_PHOTO:
+    if user_state and user_state.action == UserAction.CANCEL_SCHEDULE and user_state.step == UserStep.INPUT_PHOTO:
         from .schedule_handlers import handle_cancellation_photo_upload
         await handle_cancellation_photo_upload(update, context)
         return
