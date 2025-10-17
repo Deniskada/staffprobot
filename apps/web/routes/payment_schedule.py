@@ -170,6 +170,83 @@ async def edit_custom_payment_schedule(
         raise HTTPException(status_code=500, detail=f"Ошибка обновления графика: {str(e)}")
 
 
+@router.delete("/payment-schedules/{schedule_id}/delete")
+async def delete_custom_payment_schedule(
+    schedule_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Удалить кастомный график выплат."""
+    try:
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        # Получить график
+        query = select(PaymentSchedule).where(PaymentSchedule.id == schedule_id)
+        result = await db.execute(query)
+        schedule = result.scalar_one_or_none()
+        
+        if not schedule:
+            raise HTTPException(status_code=404, detail="График не найден")
+        
+        # Проверить доступ (только кастомные графики владельца можно удалять)
+        if not schedule.is_custom:
+            raise HTTPException(status_code=403, detail="Нельзя удалить системные графики")
+        
+        if schedule.owner_id != owner_id:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+        
+        # Проверить, используется ли график
+        from domain.entities.org_unit import OrgUnit
+        from domain.entities.contract import Contract
+        
+        units_query = select(OrgUnit).where(
+            OrgUnit.payment_schedule_id == schedule_id,
+            OrgUnit.is_active == True
+        )
+        units_result = await db.execute(units_query)
+        units_using = units_result.scalars().all()
+        
+        contracts_query = select(Contract).where(
+            Contract.payment_schedule_id == schedule_id,
+            Contract.is_active == True
+        )
+        contracts_result = await db.execute(contracts_query)
+        contracts_using = contracts_result.scalars().all()
+        
+        if units_using or contracts_using:
+            return JSONResponse(
+                content={
+                    "success": False,
+                    "message": f"График используется в {len(units_using)} подразделениях и {len(contracts_using)} договорах. Сначала отвяжите график от них."
+                },
+                status_code=400
+            )
+        
+        # Мягкое удаление
+        schedule.is_active = False
+        await db.commit()
+        
+        logger.info(
+            "Custom payment schedule deleted",
+            schedule_id=schedule.id,
+            owner_id=owner_id
+        )
+        
+        return JSONResponse(content={
+            "success": True,
+            "message": "График успешно удален"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting custom payment schedule: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления графика: {str(e)}")
+
+
 @router.get("/payment-schedules/{schedule_id}/data")
 async def get_payment_schedule_data(
     schedule_id: int,
