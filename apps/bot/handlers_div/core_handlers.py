@@ -244,12 +244,53 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 # Убираем клавиатуру
                 from telegram import ReplyKeyboardRemove
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                # Подгружаем список задач и показываем пользователю
+                tasks_lines = []
+                try:
+                    async with get_async_session() as session:
+                        from domain.entities.shift import Shift as ShiftModel
+                        from domain.entities.time_slot import TimeSlot
+                        from domain.entities.object import Object as ObjectModel
+                        shift_q = select(ShiftModel).where(ShiftModel.id == result.get('shift_id'))
+                        shift_res = await session.execute(shift_q)
+                        shift_obj = shift_res.scalar_one_or_none()
+                        timeslot = None
+                        obj = None
+                        if shift_obj and shift_obj.time_slot_id:
+                            ts_q = select(TimeSlot).where(TimeSlot.id == shift_obj.time_slot_id)
+                            ts_res = await session.execute(ts_q)
+                            timeslot = ts_res.scalar_one_or_none()
+                        if shift_obj and shift_obj.object_id:
+                            obj_q = select(ObjectModel).where(ObjectModel.id == shift_obj.object_id)
+                            obj_res = await session.execute(obj_q)
+                            obj = obj_res.scalar_one_or_none()
+                        # собрать задачи
+                        from .shift_handlers import _collect_shift_tasks
+                        tasks = await _collect_shift_tasks(session, shift_obj, timeslot=timeslot, object_=obj)
+                        for t in tasks:
+                            name = t.get('text') or t.get('task_text') or t.get('description') or 'Без названия'
+                            amt = t.get('deduction_amount') or t.get('amount') or t.get('bonus_amount') or 0
+                            badges = []
+                            if t.get('is_mandatory'):
+                                badges.append('Обязательная')
+                            if t.get('requires_media'):
+                                badges.append('Медиа')
+                            amt_str = f"+{int(amt)} ₽" if amt and float(amt) > 0 else (f"{int(amt)} ₽" if amt else "")
+                            badge_str = f" [{' ,'.join(badges)}]" if badges else ""
+                            line = f"• {name}{' — ' + amt_str if amt_str else ''}{badge_str}"
+                            tasks_lines.append(line)
+                except Exception:
+                    tasks_lines = []
+                tasks_text = ("\n".join(tasks_lines)) if tasks_lines else "—"
+                keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
                 await update.message.reply_text(
                     f"✅ Смена успешно открыта!\n"
                     f"📍 Объект: {object_name}\n"
                     f"🕐 Время начала: {start_time}\n"
-                    f"💰 Часовая ставка: {hourly_rate}₽",
-                    reply_markup=ReplyKeyboardRemove()
+                    f"💰 Часовая ставка: {hourly_rate}₽\n\n"
+                    f"📝 Задачи на смену:\n{tasks_text}",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
                 )
                 
                 # Очищаем состояние ТОЛЬКО при успехе
@@ -602,13 +643,15 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     from core.utils.timezone_helper import timezone_helper
                     close_time = timezone_helper.format_local_time(opening.closed_at, 'Europe/Moscow', '%H:%M')
                     
+                    keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
                     await update.message.reply_text(
                         f"✅ <b>Смена и объект закрыты!</b>\n\n"
-                        f"⏱️ Время смены: {result.get('total_hours', 0):.1f}ч\n"
-                        f"💰 Оплата: {result.get('total_payment', 0):.0f}₽\n"
+                        f"⏱️ Отработано: <b>{result.get('total_hours', 0):.1f}</b> ч.\n"
+                        f"💳 Начислено: <b>{result.get('total_payment', 0):.0f} ₽</b>\n"
                         f"⏰ Объект закрыт в: {close_time}\n"
                         f"⏱️ Время работы объекта: {opening.duration_hours:.1f}ч",
-                        parse_mode='HTML'
+                        parse_mode='HTML',
+                        reply_markup=InlineKeyboardMarkup(keyboard)
                     )
                     user_state_manager.clear_state(user_id)
                     
