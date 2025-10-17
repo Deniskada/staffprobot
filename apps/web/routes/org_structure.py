@@ -488,14 +488,28 @@ async def get_schedule_stats(
             count_result = await db.execute(objects_query)
             objects_count += count_result.scalar() or 0
         
-        # Подсчитать сотрудников (примерно - через contracts с графиком)
-        employees_query = select(func.count(Contract.id.distinct())).where(
-            Contract.owner_id == owner_id,
-            Contract.payment_schedule_id == schedule_id,
-            Contract.is_active == True
-        )
-        employees_result = await db.execute(employees_query)
-        employees_count = employees_result.scalar() or 0
+        # Подсчитать сотрудников (через contracts в объектах подразделений)
+        # Собираем все ID объектов из найденных подразделений
+        object_ids = []
+        for unit in units:
+            obj_ids_query = select(Object.id).where(
+                Object.org_unit_id == unit.id,
+                Object.is_active == True
+            )
+            obj_ids_result = await db.execute(obj_ids_query)
+            object_ids.extend([row[0] for row in obj_ids_result.all()])
+        
+        # Считаем уникальных сотрудников в этих объектах
+        if object_ids:
+            employees_query = select(func.count(func.distinct(Contract.employee_id))).where(
+                Contract.owner_id == owner_id,
+                Contract.object_id.in_(object_ids),
+                Contract.is_active == True
+            )
+            employees_result = await db.execute(employees_query)
+            employees_count = employees_result.scalar() or 0
+        else:
+            employees_count = 0
         
         units_data = []
         for unit in units:
