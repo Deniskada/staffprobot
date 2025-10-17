@@ -404,7 +404,7 @@ async def create_timeslot(
                     "is_mandatory": idx in task_mandatory_indices,
                     "requires_media": idx in task_media_indices,
                     "bonus_amount": amount if amount >= 0 else 0,
-                    "deduction_amount": abs(amount) if amount < 0 else 0
+                    "deduction_amount": amount if amount < 0 else 0  # Сохраняем отрицательное!
                 }
                 shift_tasks.append(task)
         
@@ -696,7 +696,7 @@ async def update_timeslot(
                     new_task = TimeslotTaskTemplate(
                         timeslot_id=timeslot_id,
                         task_text=task_text.strip(),
-                        deduction_amount=abs(amount) if amount else None,
+                        deduction_amount=amount if amount else None,  # Сохраняем отрицательное!
                         is_mandatory=idx in task_mandatory_indices,
                         requires_media=idx in task_media_indices,
                         display_order=idx,

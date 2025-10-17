@@ -3700,7 +3700,7 @@ async def owner_timeslot_update(
                     "is_mandatory": idx in task_mandatory_indices,
                     "requires_media": idx in task_media_indices,
                     "bonus_amount": amount if amount >= 0 else 0,
-                    "deduction_amount": abs(amount) if amount < 0 else 0
+                    "deduction_amount": amount if amount < 0 else 0  # Сохраняем отрицательное!
                 }
                 shift_tasks.append(task)
         
