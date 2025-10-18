@@ -6,7 +6,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, Request, Query, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, desc
+from sqlalchemy import select, and_, func, desc, or_
 from sqlalchemy.orm import selectinload
 
 from apps.web.dependencies import get_current_user_dependency, require_role
@@ -70,10 +70,62 @@ async def payroll_adjustments_list(
         else:
             end_date = date.today()
         
-        # Базовый запрос
+        # Получаем внутренний ID владельца и список его сотрудников
+        from domain.entities.contract import Contract
+        from apps.web.routes.reports import get_user_id_from_current_user
+        
+        owner_id = await get_user_id_from_current_user(current_user, session)
+        
+        if not owner_id:
+            raise HTTPException(status_code=400, detail="Не удалось определить владельца")
+        
+        # Получаем список employee_id с активными договорами у этого владельца
+        employee_ids_query = select(Contract.employee_id).where(
+            Contract.owner_id == owner_id,
+            Contract.is_active == True,
+            Contract.status == 'active'
+        ).distinct()
+        employee_ids_result = await session.execute(employee_ids_query)
+        employee_ids = [row[0] for row in employee_ids_result.all()]
+        
+        # Получаем список объектов владельца
+        owner_objects_query = select(Object.id).where(Object.owner_id == owner_id)
+        owner_objects_result = await session.execute(owner_objects_query)
+        owner_object_ids = [row[0] for row in owner_objects_result.all()]
+        
+        if not employee_ids or not owner_object_ids:
+            # Нет сотрудников или объектов - возвращаем пустой список
+            return templates.TemplateResponse(
+                "owner/payroll_adjustments/list.html",
+                {
+                    "request": request,
+                    "current_user": current_user,
+                    "adjustments": [],
+                    "employees": [],
+                    "objects": [],
+                    "adjustment_types": [],
+                    "filter_adjustment_type": adjustment_type,
+                    "filter_employee_id": employee_id_int,
+                    "filter_object_id": object_id_int,
+                    "filter_is_applied": is_applied,
+                    "filter_date_from": date_from or start_date.isoformat(),
+                    "filter_date_to": date_to or end_date.isoformat(),
+                    "page": page,
+                    "per_page": per_page,
+                    "total_count": 0,
+                    "total_pages": 0
+                }
+            )
+        
+        # Базовый запрос с фильтром по сотрудникам владельца И его объектам
         query = select(PayrollAdjustment).where(
             func.date(PayrollAdjustment.created_at) >= start_date,
-            func.date(PayrollAdjustment.created_at) <= end_date
+            func.date(PayrollAdjustment.created_at) <= end_date,
+            PayrollAdjustment.employee_id.in_(employee_ids),
+            or_(
+                PayrollAdjustment.object_id.in_(owner_object_ids),
+                PayrollAdjustment.object_id.is_(None)
+            )
         ).options(
             selectinload(PayrollAdjustment.employee),
             selectinload(PayrollAdjustment.object),
@@ -109,30 +161,21 @@ async def payroll_adjustments_list(
         result = await session.execute(query)
         adjustments = result.scalars().all()
         
-        # Получить список сотрудников владельца с активными договорами
-        from domain.entities.contract import Contract
-        from apps.web.routes.reports import get_user_id_from_current_user
+        # Получить список сотрудников владельца для фильтра
+        employees_query = select(User).join(
+            Contract, Contract.employee_id == User.id
+        ).where(
+            Contract.owner_id == owner_id,
+            Contract.is_active == True,
+            Contract.status == 'active'
+        ).distinct().order_by(User.last_name, User.first_name)
+        employees_result = await session.execute(employees_query)
+        employees = employees_result.scalars().all()
         
-        # Получаем внутренний ID владельца
-        owner_id = await get_user_id_from_current_user(current_user, session)
-        
-        if owner_id:
-            employees_query = select(User).join(
-                Contract, Contract.employee_id == User.id
-            ).where(
-                Contract.owner_id == owner_id,
-                Contract.is_active == True,
-                Contract.status == 'active'
-            ).distinct().order_by(User.last_name, User.first_name)
-            employees_result = await session.execute(employees_query)
-            employees = employees_result.scalars().all()
-        else:
-            employees = []
-        
-        # Получить список объектов для фильтра
-        objects_query = select(Object).where(Object.id.in_(
-            select(PayrollAdjustment.object_id).where(PayrollAdjustment.object_id.isnot(None)).distinct()
-        )).order_by(Object.name)
+        # Получить список объектов владельца для фильтра
+        objects_query = select(Object).where(
+            Object.owner_id == owner_id
+        ).order_by(Object.name)
         objects_result = await session.execute(objects_query)
         objects = objects_result.scalars().all()
         
