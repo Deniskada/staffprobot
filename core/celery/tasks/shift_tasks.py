@@ -48,9 +48,12 @@ def auto_close_shifts(self):
                 errors = []
                 
                 # 1. Спонтанные смены: eager-load object
+                from domain.entities.org_structure import OrgStructureUnit
                 active_shifts_query = (
                     select(Shift)
-                    .options(selectinload(Shift.object))
+                    .options(
+                        selectinload(Shift.object).selectinload(Object.org_unit)
+                    )
                     .join(Object)
                     .filter(
                         and_(
@@ -107,6 +110,107 @@ def auto_close_shifts(self):
                             shift_type = "planned" if shift.is_planned else "spontaneous"
                             time_source = "timeslot" if (shift.is_planned and shift.time_slot_id) else "object closing_time"
                             logger.info(f"Auto-closed {shift_type} shift {shift.id} at {end_time_utc} ({time_source})")
+                            
+                            # Этап 4: Автооткрытие следующей запланированной смены (для фактических Shift)
+                            if shift.is_planned and shift.schedule_id and shift.time_slot_id:
+                                try:
+                                    from domain.entities.user import User
+                                    from sqlalchemy import func
+                                    
+                                    # Обновляем статус текущего schedule
+                                    schedule_query = select(ShiftSchedule).filter(ShiftSchedule.id == shift.schedule_id)
+                                    schedule_result = await session.execute(schedule_query)
+                                    current_schedule = schedule_result.scalar_one_or_none()
+                                    
+                                    if current_schedule:
+                                        current_schedule.status = 'completed'
+                                        session.add(current_schedule)
+                                        
+                                        # Проверка 1: Есть ли следующая запланированная смена в этот же день?
+                                        next_schedule_query = (
+                                            select(ShiftSchedule)
+                                            .options(selectinload(ShiftSchedule.time_slot))
+                                            .filter(
+                                                and_(
+                                                    ShiftSchedule.user_id == shift.user_id,
+                                                    ShiftSchedule.status == 'planned',
+                                                    func.date(ShiftSchedule.planned_start) == end_time_utc.date(),
+                                                    ShiftSchedule.id != shift.schedule_id
+                                                )
+                                            )
+                                            .order_by(ShiftSchedule.planned_start)
+                                        )
+                                        
+                                        next_schedule_result = await session.execute(next_schedule_query)
+                                        next_schedule = next_schedule_result.scalar_one_or_none()
+                                        
+                                        if next_schedule and next_schedule.time_slot:
+                                            # Проверка 2: Время начала следующей = времени окончания текущей?
+                                            prev_timeslot_query = select(TimeSlot).filter(TimeSlot.id == shift.time_slot_id)
+                                            prev_timeslot_result = await session.execute(prev_timeslot_query)
+                                            prev_timeslot = prev_timeslot_result.scalar_one_or_none()
+                                            
+                                            next_timeslot = next_schedule.time_slot
+                                            
+                                            if prev_timeslot and prev_timeslot.end_time == next_timeslot.start_time:
+                                                # Время совпадает! Открываем следующую смену
+                                                
+                                                # Получаем пользователя
+                                                user_query = select(User).filter(User.id == shift.user_id)
+                                                user_result = await session.execute(user_query)
+                                                user = user_result.scalar_one_or_none()
+                                                
+                                                if user and shift.start_coordinates:
+                                                    # Вычисляем planned_start для новой смены
+                                                    # Используем late_threshold_minutes из объекта, без обхода иерархии
+                                                    late_threshold_minutes = 0
+                                                    if not obj.inherit_late_settings and obj.late_threshold_minutes is not None:
+                                                        late_threshold_minutes = obj.late_threshold_minutes
+                                                    
+                                                    base_time = datetime.combine(next_timeslot.slot_date, next_timeslot.start_time)
+                                                    base_time = obj_tz.localize(base_time)
+                                                    start_time_utc = base_time.astimezone(pytz.UTC)
+                                                    planned_start = base_time + timedelta(minutes=late_threshold_minutes)
+                                                    
+                                                    new_shift = Shift(
+                                                        user_id=shift.user_id,
+                                                        object_id=next_schedule.object_id,
+                                                        start_time=start_time_utc,
+                                                        actual_start=now_utc,
+                                                        planned_start=planned_start,
+                                                        status='active',
+                                                        start_coordinates=shift.start_coordinates,
+                                                        hourly_rate=next_schedule.hourly_rate,
+                                                        time_slot_id=next_schedule.time_slot_id,
+                                                        schedule_id=next_schedule.id,
+                                                        is_planned=True
+                                                    )
+                                                    
+                                                    session.add(new_shift)
+                                                    
+                                                    # Обновляем статус следующего расписания
+                                                    next_schedule.status = 'in_progress'
+                                                    session.add(next_schedule)
+                                                    
+                                                    logger.info(
+                                                        f"Auto-opened consecutive shift (from Shift): user_id={shift.user_id}, "
+                                                        f"user_telegram_id={user.telegram_id}, "
+                                                        f"prev_shift_id={shift.id}, next_schedule_id={next_schedule.id}, "
+                                                        f"prev_time={prev_timeslot.start_time}-{prev_timeslot.end_time}, "
+                                                        f"next_time={next_timeslot.start_time}-{next_timeslot.end_time}, "
+                                                        f"object_id={next_schedule.object_id}"
+                                                    )
+                                                    
+                                                else:
+                                                    logger.debug(f"User or coordinates not found for auto-opening: shift_id={shift.id}")
+                                            else:
+                                                logger.debug(f"Time mismatch for consecutive shifts: prev_end={prev_timeslot.end_time if prev_timeslot else None}, next_start={next_timeslot.start_time}")
+                                        else:
+                                            logger.debug(f"No next planned shift found for user_id={shift.user_id} on date={end_time_utc.date()}")
+                                    
+                                except Exception as e:
+                                    logger.error(f"Error auto-opening consecutive shift for Shift {shift.id}: {e}")
+                                    # Не прерываем основной процесс
                     except Exception as e:
                         error_msg = f"Error auto-closing spontaneous shift {shift.id}: {e}"
                         logger.error(error_msg)
@@ -115,7 +219,9 @@ def auto_close_shifts(self):
                 # 2. Запланированные: eager-load object
                 confirmed_schedules_query = (
                     select(ShiftSchedule)
-                    .options(selectinload(ShiftSchedule.object))
+                    .options(
+                        selectinload(ShiftSchedule.object).selectinload(Object.org_unit)
+                    )
                     .join(Object)
                     .filter(
                         and_(
@@ -175,6 +281,110 @@ def auto_close_shifts(self):
                             
                             closed_count += 1
                             logger.info(f"Auto-closed planned shift {schedule.id} at {end_time_utc} (timeslot/object closing time)")
+                            
+                            # Этап 4: Автооткрытие следующей запланированной смены
+                            try:
+                                from domain.entities.user import User
+                                from sqlalchemy import func
+                                
+                                # Проверка 1: Есть ли следующая запланированная смена в этот же день?
+                                next_schedule_query = (
+                                    select(ShiftSchedule)
+                                    .options(selectinload(ShiftSchedule.time_slot))
+                                    .filter(
+                                        and_(
+                                            ShiftSchedule.user_id == schedule.user_id,
+                                            ShiftSchedule.status == 'planned',
+                                            func.date(ShiftSchedule.planned_start) == end_time_utc.date(),
+                                            ShiftSchedule.id != schedule.id
+                                        )
+                                    )
+                                    .order_by(ShiftSchedule.planned_start)
+                                )
+                                
+                                next_schedule_result = await session.execute(next_schedule_query)
+                                next_schedule = next_schedule_result.scalar_one_or_none()
+                                
+                                if next_schedule and next_schedule.time_slot and schedule.time_slot_id:
+                                    # Проверка 2: Время начала следующей = времени окончания текущей?
+                                    prev_timeslot_query = select(TimeSlot).filter(TimeSlot.id == schedule.time_slot_id)
+                                    prev_timeslot_result = await session.execute(prev_timeslot_query)
+                                    prev_timeslot = prev_timeslot_result.scalar_one_or_none()
+                                    
+                                    next_timeslot = next_schedule.time_slot
+                                    
+                                    if prev_timeslot and prev_timeslot.end_time == next_timeslot.start_time:
+                                        # Время совпадает! Открываем следующую смену
+                                        
+                                        # Получаем координаты из ТОЛЬКО ЧТО закрытой смены
+                                        prev_shift_query = select(Shift).filter(
+                                            and_(
+                                                Shift.schedule_id == schedule.id,
+                                                Shift.status == 'completed'
+                                            )
+                                        )
+                                        prev_shift_result = await session.execute(prev_shift_query)
+                                        prev_shift = prev_shift_result.scalar_one_or_none()
+                                        
+                                        if prev_shift and prev_shift.start_coordinates:
+                                            # Получаем пользователя
+                                            user_query = select(User).filter(User.id == schedule.user_id)
+                                            user_result = await session.execute(user_query)
+                                            user = user_result.scalar_one_or_none()
+                                            
+                                            if user:
+                                                # Вычисляем planned_start для новой смены
+                                                # Используем late_threshold_minutes из объекта, без обхода иерархии
+                                                late_threshold_minutes = 0
+                                                if not obj.inherit_late_settings and obj.late_threshold_minutes is not None:
+                                                    late_threshold_minutes = obj.late_threshold_minutes
+                                                
+                                                base_time = datetime.combine(next_timeslot.slot_date, next_timeslot.start_time)
+                                                base_time = obj_tz.localize(base_time)
+                                                start_time_utc = base_time.astimezone(pytz.UTC)
+                                                planned_start = base_time + timedelta(minutes=late_threshold_minutes)
+                                                
+                                                new_shift = Shift(
+                                                    user_id=schedule.user_id,
+                                                    object_id=next_schedule.object_id,
+                                                    start_time=start_time_utc,
+                                                    actual_start=now_utc,
+                                                    planned_start=planned_start,
+                                                    status='active',
+                                                    start_coordinates=prev_shift.start_coordinates,
+                                                    hourly_rate=next_schedule.hourly_rate,
+                                                    time_slot_id=next_schedule.time_slot_id,
+                                                    schedule_id=next_schedule.id,
+                                                    is_planned=True
+                                                )
+                                                
+                                                session.add(new_shift)
+                                                
+                                                # Обновляем статус следующего расписания
+                                                next_schedule.status = 'in_progress'
+                                                session.add(next_schedule)
+                                                
+                                                logger.info(
+                                                    f"Auto-opened consecutive shift: user_id={schedule.user_id}, "
+                                                    f"user_telegram_id={user.telegram_id}, "
+                                                    f"prev_schedule_id={schedule.id}, next_schedule_id={next_schedule.id}, "
+                                                    f"prev_time={prev_timeslot.start_time}-{prev_timeslot.end_time}, "
+                                                    f"next_time={next_timeslot.start_time}-{next_timeslot.end_time}, "
+                                                    f"object_id={next_schedule.object_id}"
+                                                )
+                                                
+                                            else:
+                                                logger.warning(f"User not found for auto-opening consecutive shift: user_id={schedule.user_id}")
+                                        else:
+                                            logger.debug(f"No previous shift or coordinates for auto-opening consecutive shift: schedule_id={schedule.id}")
+                                    else:
+                                        logger.debug(f"Time mismatch for consecutive shifts: prev_end={prev_timeslot.end_time if prev_timeslot else None}, next_start={next_timeslot.start_time}")
+                                else:
+                                    logger.debug(f"No next planned shift found for user_id={schedule.user_id} on date={end_time_utc.date()}")
+                                    
+                            except Exception as e:
+                                logger.error(f"Error auto-opening consecutive shift for schedule {schedule.id}: {e}")
+                                # Не прерываем основной процесс
                     except Exception as e:
                         error_msg = f"Error auto-closing planned shift {schedule.id}: {e}"
                         logger.error(error_msg)
