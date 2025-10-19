@@ -183,52 +183,7 @@
                     </div>
                 </div>
 
-                <!-- Основные настройки -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-cog me-2"></i>
-                            Основные настройки
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="profile_name" class="form-label">Название профиля</label>
-                            <input type="text" class="form-control" id="profile_name" name="profile_name" 
-                                   value="{{ profile.profile_name if profile else 'Мой профиль' }}" required>
-                        </div>
-
-                        <!-- Тип собственника -->
-                        <div class="legal-type-selector">
-                            <label class="form-label">Тип собственника</label>
-                            {% for legal_type in legal_types %}
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="legal_type" 
-                                       id="legal_type_{{ legal_type.value }}" value="{{ legal_type.value }}"
-                                       {% if (profile and profile.legal_type == legal_type.value) or (not profile and legal_type.value == 'individual') %}checked{% endif %}
-                                       onchange="updateAvailableTags()">
-                                <label class="form-check-label" for="legal_type_{{ legal_type.value }}">
-                                    {% if legal_type.value == 'individual' %}
-                                        <i class="fas fa-user category-icon"></i>
-                                    {% else %}
-                                        <i class="fas fa-building category-icon"></i>
-                                    {% endif %}
-                                    {{ legal_type.label }}
-                                </label>
-                            </div>
-                            {% endfor %}
-                        </div>
-
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="is_public" name="is_public"
-                                   {% if profile and profile.is_public %}checked{% endif %}>
-                            <label class="form-check-label" for="is_public">
-                                <i class="fas fa-globe me-1"></i>
-                                Разрешить использование другими пользователями
-                            </label>
-                        </div>
-                    </div>
-                </div>
+                <!-- Блок "Основные настройки" удален - логика перенесена в профили организаций -->
 
                 <!-- Управление профилями организаций -->
                 <div class="card mb-3">
@@ -328,7 +283,7 @@
                             <i class="fas fa-heart me-2"></i>
                             Ценности компании
                         </h6>
-                    </div>
+                                </div>
                     <div class="card-body">
                         <p class="small text-muted mb-2">
                             Можете рассказать про деловую структуру и принципы компании. 
@@ -337,9 +292,9 @@
                         <textarea class="form-control" name="values" rows="4" maxlength="2000"
                                   placeholder="Опишите ценности и принципы вашей компании...">{{ profile.values if profile else '' }}</textarea>
                         <div class="form-text">Осталось символов: <span id="valuesCharsLeft">2000</span></div>
-                    </div>
-                </div>
-
+                                            </div>
+                                        </div>
+                                        
                 <!-- Фотографии -->
                 <div class="card mb-3">
                     <div class="card-header">
@@ -400,9 +355,11 @@
                             <label for="contact_phone" class="form-label">Телефон</label>
                             <input type="tel" class="form-control" id="contact_phone" name="contact_phone"
                                    placeholder="+7 (___) ___-__-__"
+                                   data-inputmask="'mask': '+7 (999) 999-99-99'"
                                    value="{{ profile.contact_phone if profile else '' }}">
+                            <small class="form-text text-muted">Формат: +7 (XXX) XXX-XX-XX</small>
                         </div>
-                        <label class="form-label">Доступен в мессенджерах (MAX 1):</label>
+                        <label class="form-label">Доступен в мессенджерах:</label>
                         <div class="form-check">
                             <input class="form-check-input messenger-check" type="checkbox" 
                                    id="messenger_whatsapp" value="whatsapp"
@@ -439,7 +396,7 @@
                             <i class="fas fa-toggle-on me-2"></i>
                             Дополнительные функции
                         </h6>
-                    </div>
+                            </div>
                     <div class="card-body">
                         <p class="small text-muted mb-3">
                             Управляйте доступностью функций системы. Отключенные функции не будут отображаться в меню.
@@ -510,7 +467,7 @@
                         </label>
                     </div>
                 </form>
-            </div>
+                </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
                 <button type="button" class="btn btn-primary" onclick="saveOrgProfile()">
@@ -573,17 +530,12 @@ function initCharCounters() {
     }
 }
 
-// Управление мессенджерами (MAX 1)
+// Управление мессенджерами (разрешено несколько)
 function initMessengersCheckboxes() {
     const checkboxes = document.querySelectorAll('.messenger-check');
     checkboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
-            if (this.checked) {
-                // Снять отметку с других
-                checkboxes.forEach(other => {
-                    if (other !== this) other.checked = false;
-                });
-            }
+            // Разрешаем выбрать любое количество мессенджеров
             updateMessengersData();
         });
     });
@@ -788,11 +740,69 @@ async function deleteOrgProfile(profileId) {
 }
 
 function updateOrgProfileFields() {
-    // TODO: динамическое обновление полей реквизитов
     const container = document.getElementById('orgProfileFieldsContainer');
-    const legalType = document.querySelector('input[name="legal_type"]:checked').value;
+    if (!container) return;
     
-    container.innerHTML = '<p class="text-muted">Поля реквизитов будут добавлены...</p>';
+    const legalTypeRadio = document.querySelector('#orgProfileModal input[name="org_legal_type"]:checked');
+    if (!legalTypeRadio) return;
+    
+    const legalType = legalTypeRadio.value;
+    
+    let fieldsHtml = '';
+    
+    if (legalType === 'individual') {
+        // Поля для ИП/ФЛ
+        fieldsHtml = `
+            <div class="mb-3">
+                <label class="form-label">ИНН</label>
+                <input type="text" class="form-control" name="req_inn" id="req_inn" placeholder="12 цифр">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ОГРНИП</label>
+                <input type="text" class="form-control" name="req_ogrnip" id="req_ogrnip" placeholder="15 цифр">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ФИО</label>
+                <input type="text" class="form-control" name="req_fio" id="req_fio">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Адрес регистрации</label>
+                <textarea class="form-control" name="req_address" id="req_address" rows="2"></textarea>
+            </div>
+        `;
+    } else {
+        // Поля для Юр.лица
+        fieldsHtml = `
+            <div class="mb-3">
+                <label class="form-label">Полное наименование</label>
+                <input type="text" class="form-control" name="req_full_name" id="req_full_name">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ИНН</label>
+                <input type="text" class="form-control" name="req_inn" id="req_inn" placeholder="10 цифр">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">КПП</label>
+                <input type="text" class="form-control" name="req_kpp" id="req_kpp" placeholder="9 цифр">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ОГРН</label>
+                <input type="text" class="form-control" name="req_ogrn" id="req_ogrn" placeholder="13 цифр">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Юридический адрес</label>
+                <textarea class="form-control" name="req_legal_address" id="req_legal_address" rows="2"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Банковские реквизиты</label>
+                <input type="text" class="form-control" name="req_bank_name" id="req_bank_name" placeholder="Название банка">
+                <input type="text" class="form-control mt-2" name="req_bank_account" id="req_bank_account" placeholder="Расчётный счёт">
+                <input type="text" class="form-control mt-2" name="req_bank_bik" id="req_bank_bik" placeholder="БИК">
+            </div>
+        `;
+    }
+    
+    container.innerHTML = fieldsHtml;
 }
 
 async function saveOrgProfile() {
@@ -1096,6 +1106,52 @@ document.addEventListener('DOMContentLoaded', function() {
     loadOrgProfiles();
     loadFeatures();
     updateMessengersData();
+    initPhoneMask();
+    initOrgProfileTypeListeners();
 });
+
+// Инициализация маски телефона
+function initPhoneMask() {
+    const phoneInput = document.getElementById('contact_phone');
+    if (phoneInput) {
+        // Простая маска без библиотеки
+        phoneInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 0) {
+                if (!value.startsWith('7')) {
+                    value = '7' + value;
+                }
+                let formatted = '+7';
+                if (value.length > 1) {
+                    formatted += ' (' + value.substring(1, 4);
+                }
+                if (value.length >= 5) {
+                    formatted += ') ' + value.substring(4, 7);
+                }
+                if (value.length >= 8) {
+                    formatted += '-' + value.substring(7, 9);
+                }
+                if (value.length >= 10) {
+                    formatted += '-' + value.substring(9, 11);
+                }
+                e.target.value = formatted;
+            }
+        });
+    }
+}
+
+// Инициализация обработчиков переключателя типа организации в модальном окне
+function initOrgProfileTypeListeners() {
+    const modal = document.getElementById('orgProfileModal');
+    if (modal) {
+        const typeRadios = modal.querySelectorAll('input[name="org_legal_type"]');
+        typeRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                console.log('Legal type changed to:', this.value);
+                updateOrgProfileFields();
+            });
+        });
+    }
+}
 </script>
 {% endblock %}
