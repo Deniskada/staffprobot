@@ -652,10 +652,10 @@ function displayOrgProfiles(profiles) {
                     <small class="text-muted">${profile.legal_type === 'individual' ? 'ИП' : 'ЮЛ'}</small>
                 </div>
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary" onclick="editOrgProfile(${profile.id})">
+                    <button type="button" class="btn btn-outline-secondary" onclick="editOrgProfile(${profile.id}); return false;">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-outline-danger" onclick="deleteOrgProfile(${profile.id})">
+                    <button type="button" class="btn btn-outline-danger" onclick="deleteOrgProfile(${profile.id}); return false;">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -667,9 +667,18 @@ function displayOrgProfiles(profiles) {
 
 // Открыть модальное окно профиля организации
 async function openOrgProfileModal(profileId = null) {
-    const modal = new bootstrap.Modal(document.getElementById('orgProfileModal'));
+    console.log('Opening modal for profile:', profileId);
+    
+    const modalElement = document.getElementById('orgProfileModal');
+    if (!modalElement) {
+        console.error('Modal element not found!');
+        return;
+    }
+    
+    const modal = new bootstrap.Modal(modalElement);
     
     if (profileId) {
+        console.log('Loading profile data...');
         document.getElementById('orgProfileModalTitle').textContent = 'Редактировать профиль';
         document.getElementById('orgProfileId').value = profileId;
         
@@ -677,50 +686,76 @@ async function openOrgProfileModal(profileId = null) {
         try {
             const response = await fetch(`/owner/profile/organization/api/${profileId}`);
             const data = await response.json();
+            console.log('Profile data loaded:', data);
             
             if (data.success) {
                 const profile = data.profile;
-                document.getElementById('orgProfileName').value = profile.profile_name;
-                document.getElementById('orgProfileDefault').checked = profile.is_default;
+                document.getElementById('orgProfileName').value = profile.profile_name || '';
+                document.getElementById('orgProfileDefault').checked = profile.is_default || false;
                 
                 // Устанавливаем тип
-                if (profile.legal_type === 'legal') {
-                    document.getElementById('legalTypeLegal').checked = true;
-                } else {
-                    document.getElementById('legalTypeIndividual').checked = true;
+                const legalRadio = profile.legal_type === 'legal' 
+                    ? document.getElementById('legalTypeLegal')
+                    : document.getElementById('legalTypeIndividual');
+                    
+                if (legalRadio) {
+                    legalRadio.checked = true;
                 }
                 
+                // Важно: обновляем поля ПОСЛЕ установки типа
+                await new Promise(resolve => setTimeout(resolve, 100)); // Небольшая задержка
                 updateOrgProfileFields();
+                
+                // Еще одна задержка для обновления DOM
+                await new Promise(resolve => setTimeout(resolve, 100));
                 
                 // Заполняем реквизиты
                 if (profile.requisites) {
                     Object.keys(profile.requisites).forEach(key => {
                         const input = document.querySelector(`#req_${key}`);
                         if (input) {
-                            input.value = profile.requisites[key];
+                            input.value = profile.requisites[key] || '';
+                            console.log(`Set ${key} = ${profile.requisites[key]}`);
+                        } else {
+                            console.warn(`Input #req_${key} not found`);
                         }
                     });
                 }
+                
+                console.log('Profile data filled, showing modal');
+                modal.show();
+            } else {
+                alert('Ошибка загрузки профиля: ' + (data.error || 'Unknown error'));
             }
         } catch (error) {
             console.error('Error loading profile:', error);
+            alert('Ошибка загрузки профиля');
         }
     } else {
+        console.log('Creating new profile');
         document.getElementById('orgProfileModalTitle').textContent = 'Новый профиль';
         document.getElementById('orgProfileForm').reset();
         document.getElementById('orgProfileId').value = '';
+        
+        // Устанавливаем тип по умолчанию
+        const defaultRadio = document.getElementById('legalTypeIndividual');
+        if (defaultRadio) {
+            defaultRadio.checked = true;
+        }
+        
         updateOrgProfileFields();
+        modal.show();
     }
-    
-    modal.show();
 }
 
 function editOrgProfile(profileId) {
+    console.log('Editing profile:', profileId);
     openOrgProfileModal(profileId);
+    return false; // Предотвращаем default действие
 }
 
 async function deleteOrgProfile(profileId) {
-    if (!confirm('Удалить профиль организации?')) return;
+    if (!confirm('Удалить профиль организации?')) return false;
     
     try {
         const response = await fetch(`/owner/profile/organization/api/${profileId}`, {
@@ -737,6 +772,7 @@ async function deleteOrgProfile(profileId) {
         console.error('Error deleting profile:', error);
         alert('Ошибка удаления профиля');
     }
+    return false; // Предотвращаем default действие
 }
 
 function updateOrgProfileFields() {
@@ -1149,8 +1185,8 @@ function initOrgProfileTypeListeners() {
             radio.addEventListener('change', function() {
                 console.log('Legal type changed to:', this.value);
                 updateOrgProfileFields();
-            });
-        });
+    });
+});
     }
 }
 </script>
