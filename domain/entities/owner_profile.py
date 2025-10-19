@@ -133,17 +133,40 @@ class OwnerProfile(Base):
         """
         Рассчитать процент заполненности профиля.
         
+        Учитывает как теги, так и новые поля профиля.
+        
         Args:
             required_tags: Список обязательных тегов. Если None, используются все активные теги.
         
         Returns:
             Процент заполненности от 0.0 до 100.0
         """
+        total_fields = 0
+        filled_fields = 0
+        
+        # Учитываем теги
         if not required_tags:
             required_tags = self.active_tags or []
         
-        if not required_tags:
-            return 100.0
+        if required_tags:
+            total_fields += len(required_tags)
+            filled_fields += sum(1 for tag in required_tags if self.is_tag_filled(tag))
         
-        filled_count = sum(1 for tag in required_tags if self.is_tag_filled(tag))
-        return (filled_count / len(required_tags)) * 100.0
+        # Учитываем новые поля профиля
+        profile_fields = {
+            'about_company': self.about_company,
+            'values': self.values,
+            'contact_phone': self.contact_phone,
+            'photos': self.photos,
+            'contact_messengers': self.contact_messengers
+        }
+        
+        total_fields += len(profile_fields)
+        filled_fields += sum(1 for key, value in profile_fields.items() 
+                            if value and (isinstance(value, list) and len(value) > 0 or 
+                                        isinstance(value, str) and value.strip()))
+        
+        if total_fields == 0:
+            return 0.0
+        
+        return (filled_fields / total_fields) * 100.0
