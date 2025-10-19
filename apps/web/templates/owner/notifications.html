@@ -1,0 +1,153 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Уведомления - StaffProBot{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Заголовок -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="bi bi-bell text-primary"></i>
+                    Управление уведомлениями
+                </h1>
+            </div>
+
+            <!-- Заглушка "В разработке" -->
+            <div class="card shadow-sm">
+                <div class="card-body text-center py-5">
+                    <div class="mb-4">
+                        <i class="bi bi-tools" style="font-size: 4rem; color: var(--primary-color);"></i>
+                    </div>
+                    
+                    <h3 class="mb-3">Раздел в разработке</h3>
+                    
+                    <p class="text-muted mb-4" style="max-width: 600px; margin: 0 auto;">
+                        Мы работаем над функцией управления уведомлениями. 
+                        Здесь вы сможете настроить, какие события будут отправляться вам 
+                        и вашим сотрудникам в Telegram, а также управлять частотой и форматом уведомлений.
+                    </p>
+
+                    <div class="alert alert-info d-inline-block" role="alert">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Пока система уведомлений работает с настройками по умолчанию
+                    </div>
+
+                    <div class="mt-4">
+                        <h5 class="mb-3">Планируемые возможности:</h5>
+                        <div class="row justify-content-center">
+                            <div class="col-md-4">
+                                <div class="card mb-3 border-primary">
+                                    <div class="card-body">
+                                        <i class="bi bi-calendar-check text-primary" style="font-size: 2rem;"></i>
+                                        <h6 class="mt-2">События смен</h6>
+                                        <small class="text-muted">
+                                            Уведомления о начале, окончании и отмене смен
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card mb-3 border-primary">
+                                    <div class="card-body">
+                                        <i class="bi bi-people text-primary" style="font-size: 2rem;"></i>
+                                        <h6 class="mt-2">Управление персоналом</h6>
+                                        <small class="text-muted">
+                                            Новые отклики, приглашения, назначения
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card mb-3 border-primary">
+                                    <div class="card-body">
+                                        <i class="bi bi-cash-coin text-primary" style="font-size: 2rem;"></i>
+                                        <h6 class="mt-2">Финансы</h6>
+                                        <small class="text-muted">
+                                            Начисления, выплаты, премии и штрафы
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <a href="/owner" class="btn btn-primary">
+                            <i class="bi bi-arrow-left me-2"></i>
+                            Вернуться на главную
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Текущие каналы уведомлений -->
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-broadcast text-primary"></i>
+                        Текущие каналы уведомлений
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="flex-shrink-0">
+                                    <i class="bi bi-telegram text-info" style="font-size: 2rem;"></i>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h6 class="mb-1">Telegram Bot</h6>
+                                    <p class="mb-0 text-muted small">
+                                        Активен и работает с настройками по умолчанию
+                                    </p>
+                                </div>
+                                <div class="flex-shrink-0">
+                                    <span class="badge bg-success">Активен</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="flex-shrink-0">
+                                    <i class="bi bi-envelope text-secondary" style="font-size: 2rem;"></i>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h6 class="mb-1">Email уведомления</h6>
+                                    <p class="mb-0 text-muted small">
+                                        Будет доступно в следующей версии
+                                    </p>
+                                </div>
+                                <div class="flex-shrink-0">
+                                    <span class="badge bg-secondary">Планируется</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border-radius: 12px;
+}
+
+.card-header {
+    border-radius: 12px 12px 0 0 !important;
+}
+
+.border-primary {
+    border-width: 2px !important;
+}
+
+.card-body i.bi {
+    display: block;
+    margin: 0 auto;
+}
+</style>
+{% endblock %}
+

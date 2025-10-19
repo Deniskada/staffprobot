@@ -306,6 +306,14 @@
                                 <span class="sidebar-text">Тарифы</span>
                             </a>
                         </li>
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('notifications_settings') %}
+                        <li>
+                            <a href="/owner/notifications" class="sidebar-link">
+                                <i class="bi bi-bell"></i>
+                                <span class="sidebar-text">Уведомления</span>
+                            </a>
+                        </li>
+                        {% endif %}
                         <li>
                             <a href="/owner/limits/" class="sidebar-link">
                                 <i class="bi bi-shield-check"></i>
