@@ -123,11 +123,18 @@ async def edit_tariff_form(
         if not tariff_plan:
             raise HTTPException(status_code=404, detail="Тарифный план не найден")
         
+        # Получаем все системные функции
+        async with get_async_session() as session:
+            from shared.services.system_features_service import SystemFeaturesService
+            features_service = SystemFeaturesService()
+            all_features = await features_service.get_all_features(session)
+        
         return templates.TemplateResponse("admin/tariff_form.html", {
             "request": request,
             "current_user": current_user,
             "title": f"Редактирование тарифа: {tariff_plan.name}",
             "tariff_plan": tariff_plan,
+            "system_features": all_features,
             "is_create": False
         })
         
