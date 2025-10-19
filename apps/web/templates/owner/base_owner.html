@@ -104,8 +104,8 @@
     <aside class="sidebar">
         <nav>
             <ul class="sidebar-nav">
-                <!-- Получаем enabled_features из request.state -->
-                {% set enabled_features = request.state.enabled_features if request and hasattr(request.state, 'enabled_features') else [] %}
+                <!-- Получаем enabled_features из request.state (middleware всегда устанавливает) -->
+                {% set enabled_features = request.state.enabled_features | default([]) %}
                 
                 <!-- Главная (всегда видна) -->
                 <li class="sidebar-item">
