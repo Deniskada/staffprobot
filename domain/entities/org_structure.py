@@ -46,6 +46,11 @@ class OrgStructureUnit(Base):
     # Telegram группа для фото/видео отчетов по задачам
     telegram_report_chat_id = Column(String(100), nullable=True)  # ID Telegram группы для отчетов
     
+    # Профиль организации для подстановки в договоры
+    organization_profile_id = Column(Integer, ForeignKey("organization_profiles.id", ondelete="SET NULL"), 
+                                     nullable=True, index=True,
+                                     comment="Профиль организации для договоров в этом подразделении")
+    
     # Уровень в иерархии (для оптимизации запросов)
     level = Column(Integer, default=0, nullable=False, index=True)
     
