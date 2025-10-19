@@ -39,9 +39,7 @@ async def list_organization_profiles(
 
 @router.post("/api/create")
 async def create_organization_profile(
-    profile_name: str = Form(...),
-    legal_type: str = Form(...),
-    is_default: bool = Form(False),
+    request: Request,
     current_user: dict = Depends(require_owner_or_superadmin),
     session: AsyncSession = Depends(get_db_session)
 ):
@@ -49,9 +47,13 @@ async def create_organization_profile(
     try:
         user_id = await get_user_id_from_current_user(current_user, session)
         
-        # Получаем реквизиты из формы
-        # TODO: parse requisites from form data
-        requisites = {}
+        # Получаем JSON данные
+        data = await request.json()
+        
+        profile_name = data.get('profile_name')
+        legal_type = data.get('legal_type')
+        is_default = data.get('is_default', False)
+        requisites = data.get('requisites', {})
         
         service = OrganizationProfileService()
         profile = await service.create_profile(
@@ -72,16 +74,40 @@ async def create_organization_profile(
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
+@router.get("/api/{profile_id}")
+async def get_organization_profile(
+    profile_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Получить профиль организации по ID."""
+    try:
+        service = OrganizationProfileService()
+        profile = await service.get_profile(session, profile_id)
+        
+        if not profile:
+            return JSONResponse({"success": False, "error": "Profile not found"}, status_code=404)
+        
+        return JSONResponse({
+            "success": True,
+            "profile": profile.to_dict()
+        })
+    except Exception as e:
+        logger.error(f"Error getting organization profile: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
 @router.post("/api/{profile_id}/update")
 async def update_organization_profile(
     profile_id: int,
+    request: Request,
     current_user: dict = Depends(require_owner_or_superadmin),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Обновить профиль организации."""
     try:
-        # TODO: parse form data
-        data = {}
+        # Получаем JSON данные
+        data = await request.json()
         
         service = OrganizationProfileService()
         profile = await service.update_profile(session, profile_id, data)

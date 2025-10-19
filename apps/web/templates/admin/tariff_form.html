@@ -165,9 +165,31 @@
                     <h4>✨ Возможности тарифа</h4>
                     
                     <div class="mb-3">
-                        <label class="form-label">Доступные возможности</label>
+                        <label class="form-label">Доступные возможности (системные функции)</label>
+                        <p class="small text-muted">Выберите функции, которые будут доступны в этом тарифном плане</p>
+                        
+                        <div class="feature-checkboxes mb-3">
+                            {% if system_features %}
+                                {% for feature in system_features %}
+                                <div class="form-check">
+                                    <input class="form-check-input feature-checkbox" type="checkbox" 
+                                           value="{{ feature.key }}" id="feature_{{ feature.key }}"
+                                           {% if tariff_plan and tariff_plan.features and feature.key in tariff_plan.features %}checked{% endif %}
+                                           onchange="updateFeaturesField()">
+                                    <label class="form-check-label" for="feature_{{ feature.key }}">
+                                        <strong>{{ feature.name }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ feature.description }}</small>
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted">Системные функции не найдены. Запустите seed скрипт.</p>
+                            {% endif %}
+                        </div>
+                        
                         <div class="feature-input">
-                            <div id="features-list">
+                            <div id="features-list" style="display: none;">
                                 {% if tariff_plan and tariff_plan.features %}
                                     {% for feature in tariff_plan.features %}
                                     <span class="feature-tag">
@@ -176,25 +198,6 @@
                                     </span>
                                     {% endfor %}
                                 {% endif %}
-                            </div>
-                            <div class="mt-3">
-                                <div class="mb-2">
-                                    <small class="text-muted">Предустановленные возможности:</small>
-                                    <div class="btn-group btn-group-sm" role="group">
-                                        <button type="button" class="btn btn-outline-secondary" onclick="addPresetFeature('basic_reports')">Базовые отчеты</button>
-                                        <button type="button" class="btn btn-outline-secondary" onclick="addPresetFeature('telegram_bot')">Telegram бот</button>
-                                        <button type="button" class="btn btn-outline-secondary" onclick="addPresetFeature('shared_calendar')">Общий календарь</button>
-                                        <button type="button" class="btn btn-outline-secondary" onclick="addPresetFeature('notifications')">Уведомления</button>
-                                        <button type="button" class="btn btn-outline-secondary" onclick="addPresetFeature('advanced_reports')">Расширенные отчеты</button>
-                                        <button type="button" class="btn btn-outline-secondary" onclick="addPresetFeature('api_access')">API доступ</button>
-                                        <button type="button" class="btn btn-outline-secondary" onclick="addPresetFeature('advanced_calendar')">Расширенный календарь</button>
-                                        <button type="button" class="btn btn-outline-secondary" onclick="addPresetFeature('custom_notifications')">Кастомные уведомления</button>
-                                    </div>
-                                </div>
-                                <input type="text" id="new-feature" class="form-control" placeholder="Добавить пользовательскую возможность">
-                                <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addFeature()">
-                                    Добавить
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -349,6 +352,16 @@ function removeFeature(button) {
     updatePreview();
 }
 
+function updateFeaturesField() {
+    const features = [];
+    document.querySelectorAll('.feature-checkbox:checked').forEach(checkbox => {
+        features.push(checkbox.value);
+    });
+    
+    document.getElementById('features').value = JSON.stringify(features);
+    updateFeaturesPreview();
+}
+
 function updateFeaturesInput() {
     const features = [];
     document.querySelectorAll('#features-list .feature-tag').forEach(tag => {
@@ -363,15 +376,18 @@ function updateFeaturesInput() {
 
 function updateFeaturesPreview() {
     const featuresList = document.getElementById('preview-features-list');
+    if (!featuresList) return;
+    
     featuresList.innerHTML = '';
     
-    document.querySelectorAll('#features-list .feature-tag').forEach(tag => {
-        const text = tag.textContent.trim();
-        if (text) {
-            const li = document.createElement('li');
-            li.innerHTML = '<i class="bi bi-check-circle text-success"></i> ' + text;
-            featuresList.appendChild(li);
-        }
+    // Получаем отмеченные функции
+    document.querySelectorAll('.feature-checkbox:checked').forEach(checkbox => {
+        const label = document.querySelector(`label[for="${checkbox.id}"]`);
+        const featureName = label ? label.querySelector('strong').textContent : checkbox.value;
+        
+        const li = document.createElement('li');
+        li.innerHTML = '<i class="bi bi-check-circle text-success"></i> ' + featureName;
+        featuresList.appendChild(li);
     });
 }
 
