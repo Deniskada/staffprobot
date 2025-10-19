@@ -6454,7 +6454,50 @@ async def owner_change_tariff_post(
             session.add(new_subscription)
             await session.commit()
             
-            logger.info(f"Tariff changed for user {user_id} to tariff {tariff_plan_id}")
+            # КРИТИЧНО: Обновляем enabled_features в профиле владельца
+            # Отключаем функции, которых нет в новом тарифе
+            from domain.entities.tariff_plan import TariffPlan
+            from domain.entities.owner_profile import OwnerProfile
+            from sqlalchemy.orm.attributes import flag_modified
+            
+            # Получаем новый тарифный план
+            tariff_result = await session.execute(
+                select(TariffPlan).where(TariffPlan.id == tariff_plan_id)
+            )
+            new_tariff = tariff_result.scalar_one_or_none()
+            
+            if new_tariff:
+                # Получаем профиль владельца
+                profile_result = await session.execute(
+                    select(OwnerProfile).where(OwnerProfile.user_id == user_id)
+                )
+                owner_profile = profile_result.scalar_one_or_none()
+                
+                if owner_profile:
+                    # Получаем функции нового тарифа
+                    new_tariff_features = new_tariff.features or []
+                    
+                    # Фильтруем enabled_features - оставляем только те, что есть в тарифе
+                    current_enabled = list(owner_profile.enabled_features) if owner_profile.enabled_features else []
+                    filtered_enabled = [f for f in current_enabled if f in new_tariff_features]
+                    
+                    # Обновляем профиль
+                    owner_profile.enabled_features = filtered_enabled
+                    flag_modified(owner_profile, 'enabled_features')
+                    
+                    await session.commit()
+                    
+                    # Инвалидируем кэш Redis
+                    from core.cache.redis_cache import cache
+                    cache_key = f"enabled_features:{telegram_id}"
+                    await cache.delete(cache_key)
+                    
+                    logger.info(
+                        f"Tariff changed for user {user_id} to tariff {tariff_plan_id}. "
+                        f"Enabled features updated: {current_enabled} -> {filtered_enabled}"
+                    )
+                else:
+                    logger.info(f"Tariff changed for user {user_id} to tariff {tariff_plan_id}")
             
             return {
                 "success": True,
