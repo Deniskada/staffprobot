@@ -93,6 +93,45 @@
         height: 1.5rem;
         margin-right: 0.5rem;
     }
+    
+    .tag-help-category {
+        border-bottom: 1px solid #e9ecef;
+        padding-bottom: 0.5rem;
+    }
+    
+    .tag-help-header {
+        cursor: pointer;
+        padding: 0.25rem 0;
+    }
+    
+    .tag-help-header:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .tag-help-body {
+        margin-top: 0.5rem;
+    }
+    
+    .photo-item img {
+        height: 150px;
+        object-fit: cover;
+    }
+    
+    .feature-item {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .feature-item.disabled {
+        background-color: #f8f9fa;
+        opacity: 0.7;
+    }
+    
+    .feature-toggle {
+        transform: scale(1.2);
+    }
 </style>
 {% endblock %}
 
@@ -191,7 +230,28 @@
                     </div>
                 </div>
 
-                <!-- Справка по тегам -->
+                <!-- Управление профилями организаций -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-building me-2"></i>
+                            Профили организаций
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-2">
+                            Реквизиты ИП/ЮЛ для договоров
+                        </p>
+                        <div id="orgProfilesList" class="mb-2">
+                            <!-- Динамически загружается через JS -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-primary w-100" onclick="openOrgProfileModal()">
+                            <i class="fas fa-plus me-1"></i> Добавить профиль
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Справка по тегам (компактная) -->
                 <div class="card">
                     <div class="card-header">
                         <h6 class="mb-0">
@@ -201,34 +261,545 @@
                     </div>
                     <div class="card-body">
                         <p class="small text-muted mb-2">
-                            Теги используются для автоматической подстановки данных в шаблоны договоров.
+                            Теги для подстановки в договоры
                         </p>
-                        <div class="small">
-                            <strong>Системные теги:</strong>
-                            <ul class="mb-2">
-                                <li><code>{{ "{{ current_date }}" }}</code> - текущая дата</li>
-                                <li><code>{{ "{{ current_time }}" }}</code> - текущее время</li>
-                                <li><code>{{ "{{ current_year }}" }}</code> - текущий год</li>
-                            </ul>
-                            <strong>Пример использования:</strong><br>
-                            <code>{{ "{{ owner_name }}" }}</code> → <span class="text-primary">Иван Иванов</span>
+                        
+                        {% for category, tags in tags_by_category.items() %}
+                        <div class="tag-help-category mb-2">
+                            <div class="tag-help-header" onclick="toggleTagHelp('{{ category }}')">
+                                <strong class="small">
+                                    {% if category == 'system' %}
+                                        <i class="fas fa-cog"></i> Системные
+                                    {% elif category == 'owner' %}
+                                        <i class="fas fa-user"></i> Владелец
+                                    {% elif category == 'company' %}
+                                        <i class="fas fa-building"></i> Компания
+                                    {% elif category == 'organization_requisites' %}
+                                        <i class="fas fa-file-invoice"></i> Реквизиты
+                                    {% elif category == 'employee' %}
+                                        <i class="fas fa-users"></i> Сотрудник
+                                    {% else %}
+                                        <i class="fas fa-tag"></i> {{ category }}
+                                    {% endif %}
+                                    <i class="fas fa-chevron-down float-end" id="chevron_{{ category }}"></i>
+                                </strong>
+                            </div>
+                            <div class="tag-help-body small" id="taghelp_{{ category }}" style="display: none; padding-left: 1rem;">
+                                {% for tag in tags[:5] %}
+                                <div class="mb-1">
+                                    <code class="small">{{ "{{ " + tag.key + " }}" }}</code> - {{ tag.label }}
+                                </div>
+                                {% endfor %}
+                                {% if tags|length > 5 %}
+                                <div class="text-muted small">...и еще {{ tags|length - 5 }}</div>
+                                {% endif %}
+                            </div>
                         </div>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
 
-            <!-- Правая колонка - выбор тегов -->
+            <!-- Правая колонка - новые секции -->
             <div class="col-lg-8">
-                <div class="card">
+                <!-- О компании -->
+                <div class="card mb-3">
                     <div class="card-header">
                         <h6 class="mb-0">
-                            <i class="fas fa-tags me-2"></i>
-                            Доступные теги для заполнения
+                            <i class="fas fa-info-circle me-2"></i>
+                            О компании
                         </h6>
                     </div>
                     <div class="card-body">
-                        <div id="tagsContainer">
-                            {% for category, tags in tags_by_category.items() %}
+                        <p class="small text-muted mb-2">
+                            Напишите, чем занимается компания, как долго существует, сколько у вас сотрудников. 
+                            Это повлияет на доверие соискателей.
+                        </p>
+                        <textarea class="form-control" name="about_company" rows="4" maxlength="2000"
+                                  placeholder="Расскажите о вашей компании...">{{ profile.about_company if profile else '' }}</textarea>
+                        <div class="form-text">Осталось символов: <span id="aboutCharsLeft">2000</span></div>
+                    </div>
+                </div>
+
+                <!-- Ценности -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-heart me-2"></i>
+                            Ценности компании
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-2">
+                            Можете рассказать про деловую структуру и принципы компании. 
+                            Это поможет найти сотрудников-единомышленников.
+                        </p>
+                        <textarea class="form-control" name="values" rows="4" maxlength="2000"
+                                  placeholder="Опишите ценности и принципы вашей компании...">{{ profile.values if profile else '' }}</textarea>
+                        <div class="form-text">Осталось символов: <span id="valuesCharsLeft">2000</span></div>
+                    </div>
+                </div>
+
+                <!-- Фотографии -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-images me-2"></i>
+                            Фотографии
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-2">
+                            Загрузите фотографии вашей компании, офиса или команды (до 5 штук)
+                        </p>
+                        <div id="photosGallery" class="row g-2 mb-3">
+                            {% if profile and profile.photos %}
+                                {% for photo in profile.photos %}
+                                <div class="col-md-4 photo-item" data-index="{{ loop.index0 }}">
+                                    <div class="card">
+                                        <img src="{{ photo }}" class="card-img-top" alt="Фото">
+                                        <div class="card-body p-2">
+                                            <button type="button" class="btn btn-sm btn-danger w-100" 
+                                                    onclick="deletePhoto({{ loop.index0 }})">
+                                                <i class="fas fa-trash"></i> Удалить
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        {% if not profile or not profile.photos or profile.photos|length < 5 %}
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="photoUrlInput" 
+                                   placeholder="URL фотографии или загрузите файл">
+                            <button class="btn btn-outline-secondary" type="button" onclick="addPhotoFromUrl()">
+                                <i class="fas fa-plus"></i> Добавить
+                            </button>
+                        </div>
+                        <div class="mt-2">
+                            <input type="file" class="form-control" id="photoFileInput" accept="image/*" 
+                                   onchange="uploadPhoto(this)">
+                        </div>
+                        {% endif %}
+                        <input type="hidden" name="photos" id="photosData" 
+                               value="{{ profile.photos | tojson if profile and profile.photos else '[]' }}">
+                    </div>
+                </div>
+
+                <!-- Для связи -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-phone me-2"></i>
+                            Для связи
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="contact_phone" class="form-label">Телефон</label>
+                            <input type="tel" class="form-control" id="contact_phone" name="contact_phone"
+                                   placeholder="+7 (___) ___-__-__"
+                                   value="{{ profile.contact_phone if profile else '' }}">
+                        </div>
+                        <label class="form-label">Доступен в мессенджерах (MAX 1):</label>
+                        <div class="form-check">
+                            <input class="form-check-input messenger-check" type="checkbox" 
+                                   id="messenger_whatsapp" value="whatsapp"
+                                   {% if profile and profile.contact_messengers and 'whatsapp' in profile.contact_messengers %}checked{% endif %}>
+                            <label class="form-check-label" for="messenger_whatsapp">
+                                <i class="fab fa-whatsapp text-success"></i> WhatsApp
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input messenger-check" type="checkbox" 
+                                   id="messenger_telegram" value="telegram"
+                                   {% if profile and profile.contact_messengers and 'telegram' in profile.contact_messengers %}checked{% endif %}>
+                            <label class="form-check-label" for="messenger_telegram">
+                                <i class="fab fa-telegram text-info"></i> Telegram
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input messenger-check" type="checkbox" 
+                                   id="messenger_max" value="max"
+                                   {% if profile and profile.contact_messengers and 'max' in profile.contact_messengers %}checked{% endif %}>
+                            <label class="form-check-label" for="messenger_max">
+                                <i class="fas fa-comment text-primary"></i> MAX
+                            </label>
+                        </div>
+                        <input type="hidden" name="contact_messengers" id="contactMessengersData"
+                               value="{{ profile.contact_messengers | tojson if profile and profile.contact_messengers else '[]' }}">
+                    </div>
+                </div>
+
+                <!-- Управление функциями -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-toggle-on me-2"></i>
+                            Дополнительные функции
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-3">
+                            Управляйте доступностью функций системы. Отключенные функции не будут отображаться в меню.
+                        </p>
+                        <div id="featuresContainer">
+                            <!-- Динамически загружается через JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Модальное окно для профиля организации -->
+<div class="modal fade" id="orgProfileModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-building me-2"></i>
+                    <span id="orgProfileModalTitle">Профиль организации</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="orgProfileForm">
+                    <input type="hidden" id="orgProfileId" name="profile_id">
+                    
+                    <div class="mb-3">
+                        <label for="orgProfileName" class="form-label">Название профиля *</label>
+                        <input type="text" class="form-control" id="orgProfileName" name="profile_name" 
+                               placeholder="Например: ИП Иванов, ООО Ромашка" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Тип *</label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="legal_type" 
+                                       id="legalTypeIndividual" value="individual" checked
+                                       onchange="updateOrgProfileFields()">
+                                <label class="form-check-label" for="legalTypeIndividual">
+                                    <i class="fas fa-user"></i> ИП / Физ.лицо
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="legal_type" 
+                                       id="legalTypeLegal" value="legal"
+                                       onchange="updateOrgProfileFields()">
+                                <label class="form-check-label" for="legalTypeLegal">
+                                    <i class="fas fa-building"></i> Юридическое лицо
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div id="orgProfileFieldsContainer">
+                        <!-- Динамические поля реквизитов -->
+                    </div>
+                    
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="orgProfileDefault" name="is_default">
+                        <label class="form-check-label" for="orgProfileDefault">
+                            Использовать как профиль по умолчанию
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveOrgProfile()">
+                    <i class="fas fa-save"></i> Сохранить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ========== Старый код для тегов (можно удалить после переделки) ==========
+{% if tags_by_category %}
+// Данные тегов по категориям (оставляем для обратной совместимости)
+const tagsByCategory = {{ tags_by_category_json | tojson }};
+
+// Переключение видимости категории тегов (справка)
+function toggleTagHelp(category) {
+    const categoryBody = document.getElementById('taghelp_' + category);
+    const chevron = document.getElementById('chevron_' + category);
+    
+    if (categoryBody.style.display === 'none') {
+        categoryBody.style.display = 'block';
+        chevron.style.transform = 'rotate(0deg)';
+    } else {
+        categoryBody.style.display = 'none';
+        chevron.style.transform = 'rotate(-90deg)';
+    }
+}
+{% endif %}
+
+// ========== Новый функционал ==========
+
+// Счётчик символов для textarea
+function initCharCounters() {
+    const aboutTextarea = document.querySelector('textarea[name="about_company"]');
+    const valuesTextarea = document.querySelector('textarea[name="values"]');
+    
+    if (aboutTextarea) {
+        aboutTextarea.addEventListener('input', function() {
+            const left = 2000 - this.value.length;
+            document.getElementById('aboutCharsLeft').textContent = left;
+        });
+        // Инициализация
+        const left = 2000 - aboutTextarea.value.length;
+        document.getElementById('aboutCharsLeft').textContent = left;
+    }
+    
+    if (valuesTextarea) {
+        valuesTextarea.addEventListener('input', function() {
+            const left = 2000 - this.value.length;
+            document.getElementById('valuesCharsLeft').textContent = left;
+        });
+        // Инициализация
+        const left = 2000 - valuesTextarea.value.length;
+        document.getElementById('valuesCharsLeft').textContent = left;
+    }
+}
+
+// Управление мессенджерами (MAX 1)
+function initMessengersCheckboxes() {
+    const checkboxes = document.querySelectorAll('.messenger-check');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                // Снять отметку с других
+                checkboxes.forEach(other => {
+                    if (other !== this) other.checked = false;
+                });
+            }
+            updateMessengersData();
+        });
+    });
+}
+
+function updateMessengersData() {
+    const checkboxes = document.querySelectorAll('.messenger-check:checked');
+    const messengers = Array.from(checkboxes).map(cb => cb.value);
+    document.getElementById('contactMessengersData').value = JSON.stringify(messengers);
+}
+
+// Управление фотографиями
+let photosData = [];
+
+function initPhotos() {
+    const photosInput = document.getElementById('photosData');
+    if (photosInput && photosInput.value) {
+        try {
+            photosData = JSON.parse(photosInput.value);
+        } catch (e) {
+            photosData = [];
+        }
+    }
+}
+
+function addPhotoFromUrl() {
+    const input = document.getElementById('photoUrlInput');
+    const url = input.value.trim();
+    
+    if (!url) {
+        alert('Введите URL фотографии');
+        return;
+    }
+    
+    if (photosData.length >= 5) {
+        alert('Максимум 5 фотографий');
+        return;
+    }
+    
+    photosData.push(url);
+    updatePhotosDisplay();
+    input.value = '';
+}
+
+function uploadPhoto(input) {
+    // TODO: реализовать загрузку файла на сервер
+    alert('Функция загрузки файлов будет реализована позже');
+}
+
+function deletePhoto(index) {
+    if (confirm('Удалить фотографию?')) {
+        photosData.splice(index, 1);
+        updatePhotosDisplay();
+    }
+}
+
+function updatePhotosDisplay() {
+    const gallery = document.getElementById('photosGallery');
+    gallery.innerHTML = '';
+    
+    photosData.forEach((photo, index) => {
+        const col = document.createElement('div');
+        col.className = 'col-md-4 photo-item';
+        col.setAttribute('data-index', index);
+        col.innerHTML = `
+            <div class="card">
+                <img src="${photo}" class="card-img-top" alt="Фото">
+                <div class="card-body p-2">
+                    <button type="button" class="btn btn-sm btn-danger w-100" 
+                            onclick="deletePhoto(${index})">
+                        <i class="fas fa-trash"></i> Удалить
+                    </button>
+                </div>
+            </div>
+        `;
+        gallery.appendChild(col);
+    });
+    
+    document.getElementById('photosData').value = JSON.stringify(photosData);
+}
+
+// Загрузка профилей организаций
+async function loadOrgProfiles() {
+    try {
+        const response = await fetch('/owner/profile/organization/api/list');
+        const data = await response.json();
+        
+        if (data.success) {
+            displayOrgProfiles(data.profiles);
+        }
+    } catch (error) {
+        console.error('Error loading org profiles:', error);
+    }
+}
+
+function displayOrgProfiles(profiles) {
+    const container = document.getElementById('orgProfilesList');
+    container.innerHTML = '';
+    
+    if (!profiles || profiles.length === 0) {
+        container.innerHTML = '<p class="text-muted small mb-0">Нет профилей</p>';
+        return;
+    }
+    
+    profiles.forEach(profile => {
+        const item = document.createElement('div');
+        item.className = 'border rounded p-2 mb-2';
+        item.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>${profile.profile_name}</strong>
+                    ${profile.is_default ? '<span class="badge bg-primary ms-1">По умолчанию</span>' : ''}
+                    <br>
+                    <small class="text-muted">${profile.legal_type === 'individual' ? 'ИП' : 'ЮЛ'}</small>
+                </div>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="editOrgProfile(${profile.id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="deleteOrgProfile(${profile.id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        container.appendChild(item);
+    });
+}
+
+// Открыть модальное окно профиля организации
+function openOrgProfileModal(profileId = null) {
+    const modal = new bootstrap.Modal(document.getElementById('orgProfileModal'));
+    
+    if (profileId) {
+        // TODO: загрузить данные профиля
+        document.getElementById('orgProfileModalTitle').textContent = 'Редактировать профиль';
+    } else {
+        document.getElementById('orgProfileModalTitle').textContent = 'Новый профиль';
+        document.getElementById('orgProfileForm').reset();
+        document.getElementById('orgProfileId').value = '';
+    }
+    
+    updateOrgProfileFields();
+    modal.show();
+}
+
+function editOrgProfile(profileId) {
+    openOrgProfileModal(profileId);
+}
+
+async function deleteOrgProfile(profileId) {
+    if (!confirm('Удалить профиль организации?')) return;
+    
+    try {
+        const response = await fetch(`/owner/profile/organization/api/${profileId}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            await loadOrgProfiles();
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error deleting profile:', error);
+        alert('Ошибка удаления профиля');
+    }
+}
+
+function updateOrgProfileFields() {
+    // TODO: динамическое обновление полей реквизитов
+    const container = document.getElementById('orgProfileFieldsContainer');
+    const legalType = document.querySelector('input[name="legal_type"]:checked').value;
+    
+    container.innerHTML = '<p class="text-muted">Поля реквизитов будут добавлены...</p>';
+}
+
+async function saveOrgProfile() {
+    // TODO: реализовать сохранение
+    alert('Сохранение профиля будет реализовано');
+}
+
+// Загрузка статуса функций
+async function loadFeatures() {
+    try {
+        const response = await fetch('/owner/profile/features/api/status');
+        const data = await response.json();
+        
+        if (data.success) {
+            displayFeatures(data.features);
+        }
+    } catch (error) {
+        console.error('Error loading features:', error);
+    }
+}
+
+function displayFeatures(features) {
+    const container = document.getElementById('featuresContainer');
+    container.innerHTML = '';
+    
+    // TODO: отобразить функции с toggle switches
+    container.innerHTML = '<p class="text-muted">Функции будут отображены после реализации API...</p>';
+}
+
+// Инициализация при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+    initCharCounters();
+    initMessengersCheckboxes();
+    initPhotos();
+    loadOrgProfiles();
+    loadFeatures();
+    updateMessengersData();
+});
+</script>
+{% endblock %}
                             <div class="tag-category" data-category="{{ category }}">
                                 <div class="tag-category-header" onclick="toggleCategory('{{ category }}')">
                                     {% if category == 'system' %}
