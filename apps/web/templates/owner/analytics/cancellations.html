@@ -149,6 +149,85 @@
     </div>
     {% endif %}
     
+    <!-- Расторжения договоров -->
+    {% if contract_terminations %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-file-contract"></i> Расторжения договоров ({{ contract_terminations|length }})</h5>
+        </div>
+        <div class="card-body">
+            <!-- Статистика по категориям -->
+            {% if terminations_stats %}
+            <div class="row mb-3">
+                {% for category, count in terminations_stats.items() %}
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center py-2">
+                            <small class="text-muted">
+                                {{ {'owner_decision': 'Решение владельца', 'performance': 'Неуд. работа', 'violation': 'Нарушение', 'employee_request': 'Просьба сотр.', 'reduction': 'Сокращение', 'other': 'Другое'}.get(category, category) }}
+                            </small>
+                            <h4 class="mb-0">{{ count }}</h4>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <!-- Таблица расторжений -->
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th>Дата расторжения</th>
+                            <th>Договор №</th>
+                            <th>Сотрудник</th>
+                            <th>Категория</th>
+                            <th>Причина</th>
+                            <th>Дата увольнения</th>
+                            <th>Расчёт</th>
+                            <th>Кто расторг</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for term in contract_terminations %}
+                        <tr>
+                            <td>{{ term.terminated_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                            <td><a href="/owner/employees/contract/{{ term.contract_id }}">{{ term.contract.contract_number }}</a></td>
+                            <td>{{ term.employee.first_name }} {{ term.employee.last_name|default('', true) }}</td>
+                            <td>
+                                <span class="badge bg-{% if term.reason_category == 'employee_request' %}success{% elif term.reason_category == 'violation' %}danger{% elif term.reason_category == 'performance' %}warning{% else %}secondary{% endif %}">
+                                    {{ {'owner_decision': 'Решение владельца', 'performance': 'Неуд. работа', 'violation': 'Нарушение', 'employee_request': 'Просьба сотрудника', 'reduction': 'Сокращение', 'other': 'Другое'}.get(term.reason_category, term.reason_category) }}
+                                </span>
+                            </td>
+                            <td>
+                                <small>{{ term.reason[:100] }}{% if term.reason|length > 100 %}...{% endif %}</small>
+                            </td>
+                            <td>
+                                {% if term.termination_date %}
+                                    {{ term.termination_date.strftime('%d.%m.%Y') }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if term.settlement_policy == 'termination_date' %}primary{% else %}info{% endif %}">
+                                    {{ {'schedule': 'По графику', 'termination_date': 'В дату увольнения'}.get(term.settlement_policy, term.settlement_policy) }}
+                                </span>
+                            </td>
+                            <td>
+                                {{ term.terminated_by.first_name if term.terminated_by else '—' }}<br>
+                                <small class="text-muted">({{ term.terminated_by_type }})</small>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     <!-- Детальная таблица отмен -->
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">

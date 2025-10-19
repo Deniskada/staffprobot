@@ -46,12 +46,13 @@ def create_payroll_entries_by_schedule():
             async with get_async_session() as session:
                 # 1. Найти все schedules с датой выплаты сегодня
                 schedules_query = select(PaymentSchedule).where(
-                    PaymentSchedule.is_custom == True  # Только пользовательские графики
+                    PaymentSchedule.is_custom == True,  # Только пользовательские графики
+                    PaymentSchedule.is_active == True   # Только активные графики
                 )
                 schedules_result = await session.execute(schedules_query)
                 schedules = schedules_result.scalars().all()
                 
-                logger.info(f"Found {len(schedules)} payment schedules to check")
+                logger.info(f"Found {len(schedules)} active payment schedules to check")
                 
                 total_entries_created = 0
                 total_adjustments_applied = 0
@@ -78,24 +79,32 @@ def create_payroll_entries_by_schedule():
                         # 2. Найти все объекты с этим payment_schedule_id
                         # Учитываем как прямую привязку, так и наследование от подразделения
                         
-                        # Сначала найдем ID подразделений с этим графиком
-                        units_query = select(OrgStructureUnit.id).where(
-                            OrgStructureUnit.payment_schedule_id == schedule.id,
-                            OrgStructureUnit.is_active == True
-                        )
-                        units_result = await session.execute(units_query)
-                        unit_ids = [row[0] for row in units_result.all()]
-                        
-                        # Теперь найдем объекты:
-                        # - с прямой привязкой к графику ИЛИ
-                        # - принадлежащие подразделению с этим графиком
-                        objects_query = select(Object).where(
-                            Object.is_active == True,
-                            or_(
-                                Object.payment_schedule_id == schedule.id,
-                                Object.org_unit_id.in_(unit_ids) if unit_ids else False
+                        # Если у графика указан owner_id, берём ВСЕ активные объекты владельца
+                        if schedule.owner_id:
+                            objects_query = select(Object).where(
+                                Object.is_active == True,
+                                Object.owner_id == schedule.owner_id
                             )
-                        )
+                        else:
+                            # Сначала найдем ID подразделений с этим графиком
+                            units_query = select(OrgStructureUnit.id).where(
+                                OrgStructureUnit.payment_schedule_id == schedule.id,
+                                OrgStructureUnit.is_active == True
+                            )
+                            units_result = await session.execute(units_query)
+                            unit_ids = [row[0] for row in units_result.all()]
+                            
+                            # Теперь найдем объекты:
+                            # - с прямой привязкой к графику ИЛИ
+                            # - принадлежащие подразделению с этим графиком
+                            objects_query = select(Object).where(
+                                Object.is_active == True,
+                                or_(
+                                    Object.payment_schedule_id == schedule.id,
+                                    Object.org_unit_id.in_(unit_ids) if unit_ids else False
+                                )
+                            )
+                        
                         objects_result = await session.execute(objects_query)
                         objects = objects_result.scalars().all()
                         
@@ -103,23 +112,29 @@ def create_payroll_entries_by_schedule():
                         
                         for obj in objects:
                             try:
-                                # 3. Найти активных сотрудников (contracts) для этого объекта
+                                # 3. Найти сотрудников (contracts) для этого объекта
+                                # Берём активные ИЛИ terminated с settlement_policy='schedule'
                                 # Contract.allowed_objects - это JSON массив с ID объектов
                                 from sqlalchemy import cast, text
                                 from sqlalchemy.dialects.postgresql import JSONB
                                 
                                 contracts_query = select(Contract).where(
                                     and_(
-                                        Contract.status == 'active',
-                                        Contract.is_active == True,
                                         Contract.allowed_objects.isnot(None),
-                                        cast(Contract.allowed_objects, JSONB).op('@>')(cast([obj.id], JSONB))
+                                        cast(Contract.allowed_objects, JSONB).op('@>')(cast([obj.id], JSONB)),
+                                        or_(
+                                            and_(Contract.status == 'active', Contract.is_active == True),
+                                            and_(
+                                                Contract.status == 'terminated',
+                                                Contract.settlement_policy == 'schedule'
+                                            )
+                                        )
                                     )
                                 )
                                 contracts_result = await session.execute(contracts_query)
                                 contracts = contracts_result.scalars().all()
                                 
-                                logger.debug(f"Found {len(contracts)} active contracts for object {obj.id}")
+                                logger.debug(f"Found {len(contracts)} contracts (active + terminated/schedule) for object {obj.id}")
                                 
                                 for contract in contracts:
                                     try:
@@ -366,3 +381,181 @@ async def _get_payment_period_for_date(
         }
     
     return None
+
+
+@celery_app.task(name="create_final_settlements_by_termination_date")
+def create_final_settlements_by_termination_date():
+    """
+    Создаёт финальные расчёты для сотрудников в дату увольнения.
+    
+    Запускается ежедневно в 01:05.
+    
+    Логика:
+    1. Находит все договоры с termination_date = сегодня и settlement_policy = 'termination_date'
+    2. Для каждого договора:
+       - Получает все неприменённые adjustments до даты увольнения (включительно)
+       - Создаёт PayrollEntry
+       - Проставляет payroll_entry_id и is_applied=TRUE у adjustments
+    """
+    
+    async def process():
+        try:
+            today = date.today()
+            logger.info(f"Starting final settlements for termination_date={today}")
+            
+            async with get_async_session() as session:
+                # 1. Найти все контракты с termination_date=сегодня и settlement_policy='termination_date'
+                contracts_query = select(Contract).where(
+                    Contract.status == 'terminated',
+                    Contract.settlement_policy == 'termination_date',
+                    Contract.termination_date == today
+                )
+                contracts_result = await session.execute(contracts_query)
+                contracts = contracts_result.scalars().all()
+                
+                logger.info(f"Found {len(contracts)} contracts for final settlement")
+                
+                total_entries_created = 0
+                total_adjustments_applied = 0
+                errors = []
+                
+                for contract in contracts:
+                    try:
+                        # 2. Получить все неприменённые adjustments до даты увольнения
+                        adjustment_service = PayrollAdjustmentService(session)
+                        adjustments = await adjustment_service.get_unapplied_adjustments_until(
+                            employee_id=contract.employee_id,
+                            until_date=today
+                        )
+                        
+                        if not adjustments:
+                            logger.debug(
+                                f"No adjustments for final settlement",
+                                employee_id=contract.employee_id,
+                                termination_date=today
+                            )
+                            continue
+                        
+                        # Рассчитать итоговые суммы и часы
+                        gross_amount = Decimal('0.00')
+                        total_bonuses = Decimal('0.00')
+                        total_deductions = Decimal('0.00')
+                        total_hours = Decimal('0.00')
+                        avg_hourly_rate = Decimal('0.00')
+                        
+                        shift_adjustments = []
+                        for adj in adjustments:
+                            amount_decimal = Decimal(str(adj.amount))
+                            
+                            if adj.adjustment_type == 'shift_base':
+                                gross_amount += amount_decimal
+                                shift_adjustments.append(adj)
+                            elif amount_decimal > 0:
+                                total_bonuses += amount_decimal
+                            else:
+                                total_deductions += abs(amount_decimal)
+                        
+                        # Получить часы и ставку из смен
+                        if shift_adjustments:
+                            from domain.entities.shift import Shift
+                            shift_ids = [adj.shift_id for adj in shift_adjustments if adj.shift_id]
+                            if shift_ids:
+                                shifts_result = await session.execute(
+                                    select(Shift).where(Shift.id.in_(shift_ids))
+                                )
+                                shifts = shifts_result.scalars().all()
+                                for shift in shifts:
+                                    if shift.total_hours:
+                                        total_hours += Decimal(str(shift.total_hours))
+                                    if shift.hourly_rate:
+                                        avg_hourly_rate = Decimal(str(shift.hourly_rate))
+                        
+                        # Если нет часов, попытаться рассчитать
+                        if total_hours == 0 and gross_amount > 0 and avg_hourly_rate > 0:
+                            total_hours = gross_amount / avg_hourly_rate
+                        
+                        # Получить object_id из первого adjustment с object_id
+                        object_id = next((adj.object_id for adj in adjustments if adj.object_id), None)
+                        
+                        # Если всё ещё нет ставки, взять из объекта
+                        if avg_hourly_rate == 0 and object_id:
+                            obj_result = await session.execute(
+                                select(Object).where(Object.id == object_id)
+                            )
+                            obj = obj_result.scalar_one_or_none()
+                            if obj and obj.hourly_rate:
+                                avg_hourly_rate = Decimal(str(obj.hourly_rate))
+                        
+                        net_amount = gross_amount + total_bonuses - total_deductions
+                        
+                        # Создать PayrollEntry
+                        payroll_entry = PayrollEntry(
+                            employee_id=contract.employee_id,
+                            contract_id=contract.id,
+                            object_id=object_id,
+                            period_start=None,  # Для финрасчёта период не указываем
+                            period_end=today,
+                            hours_worked=float(total_hours),
+                            hourly_rate=float(avg_hourly_rate) if avg_hourly_rate else 0.0,
+                            gross_amount=float(gross_amount),
+                            total_bonuses=float(total_bonuses),
+                            total_deductions=float(total_deductions),
+                            net_amount=float(net_amount)
+                        )
+                        
+                        session.add(payroll_entry)
+                        await session.flush()
+                        
+                        # Отметить adjustments как применённые
+                        adjustment_ids = [adj.id for adj in adjustments]
+                        applied_count = await adjustment_service.mark_adjustments_as_applied(
+                            adjustment_ids=adjustment_ids,
+                            payroll_entry_id=payroll_entry.id
+                        )
+                        
+                        total_entries_created += 1
+                        total_adjustments_applied += applied_count
+                        
+                        logger.info(
+                            f"Created final settlement entry",
+                            payroll_entry_id=payroll_entry.id,
+                            employee_id=contract.employee_id,
+                            termination_date=today,
+                            gross_amount=float(gross_amount),
+                            net_amount=float(net_amount),
+                            adjustments_count=applied_count
+                        )
+                        
+                    except Exception as e:
+                        error_msg = f"Error creating final settlement for contract {contract.id}: {e}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
+                        continue
+                
+                # Сохраняем все изменения
+                await session.commit()
+                
+                logger.info(
+                    f"Final settlements completed",
+                    entries_created=total_entries_created,
+                    adjustments_applied=total_adjustments_applied,
+                    errors_count=len(errors)
+                )
+                
+                return {
+                    'success': True,
+                    'date': today.isoformat(),
+                    'entries_created': total_entries_created,
+                    'adjustments_applied': total_adjustments_applied,
+                    'errors': errors
+                }
+                
+        except Exception as e:
+            logger.error(f"Critical error in final settlements task: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    # Запускаем async функцию в event loop
+    return asyncio.run(process())

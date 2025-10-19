@@ -192,10 +192,42 @@
                         <i class="fas fa-exclamation-triangle me-2"></i>
                         Вы уверены, что хотите расторгнуть этот договор? Это действие нельзя отменить.
                     </div>
+                    
                     <div class="mb-3">
-                        <label for="terminateReason" class="form-label">Причина расторжения:</label>
+                        <label for="termination_date" class="form-label">Дата увольнения (необязательно):</label>
+                        <input type="date" name="termination_date" id="termination_date" class="form-control">
+                        <small class="text-muted">Дата последнего рабочего дня. Если не указана, договор будет расторгнут сегодня.</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="payout_mode" class="form-label">Окончательный расчёт:</label>
+                        <select name="payout_mode" id="payout_mode" class="form-control" required>
+                            <option value="schedule" selected>По графику выплат</option>
+                            <option value="termination_date">В дату увольнения</option>
+                        </select>
+                        <small class="text-muted">
+                            <strong>По графику:</strong> выплаты будут производиться по обычному графику, даже после увольнения.<br>
+                            <strong>В дату увольнения:</strong> все накопленные начисления будут выплачены разово в указанную дату увольнения.
+                        </small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="termination_reason_category" class="form-label">Категория причины *</label>
+                        <select class="form-select" id="termination_reason_category" name="reason_category" required>
+                            <option value="">Выберите причину...</option>
+                            <option value="owner_decision">Решение владельца</option>
+                            <option value="performance">Неудовлетворительная работа</option>
+                            <option value="violation">Нарушение договора</option>
+                            <option value="employee_request">Просьба сотрудника</option>
+                            <option value="reduction">Сокращение штата</option>
+                            <option value="other">Другая причина</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="terminateReason" class="form-label">Подробное описание *</label>
                         <textarea class="form-control" id="terminateReason" name="reason" rows="3" 
-                                  placeholder="Укажите причину расторжения договора..." required></textarea>
+                                  placeholder="Укажите подробную причину расторжения договора..." required></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">

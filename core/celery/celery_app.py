@@ -81,6 +81,11 @@ celery_app.conf.update(
             'task': 'create_payroll_entries_by_schedule',
             'schedule': crontab(hour=1, minute=0),  # каждый день в 01:00
         },
+        # Финальный расчёт при увольнении
+        'create-final-settlements-by-termination-date': {
+            'task': 'create_final_settlements_by_termination_date',
+            'schedule': crontab(hour=1, minute=5),  # каждый день в 01:05
+        },
     },
     
     # Маршрутизация задач
@@ -92,6 +97,7 @@ celery_app.conf.update(
         'core.celery.tasks.adjustment_tasks.*': {'queue': 'shifts'},  # Phase 4A: adjustments
         'process_closed_shifts_adjustments': {'queue': 'shifts'},  # Phase 4A: явно для задачи
         'create_payroll_entries_by_schedule': {'queue': 'shifts'},  # Phase 4A: явно для задачи
+        'create_final_settlements_by_termination_date': {'queue': 'shifts'},  # Финальный расчёт при увольнении
     },
 )
 

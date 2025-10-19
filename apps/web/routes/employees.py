@@ -6,7 +6,8 @@ from fastapi.templating import Jinja2Templates
 from typing import List, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import select
-from core.database.session import get_async_session
+from sqlalchemy.ext.asyncio import AsyncSession
+from core.database.session import get_async_session, get_db_session
 from domain.entities.user import User
 from domain.entities.object import Object
 from apps.web.services.contract_service import ContractService
@@ -417,7 +418,11 @@ async def activate_contract(
 async def terminate_contract(
     request: Request,
     contract_id: int,
-    reason: str = Form(...)
+    reason: str = Form(...),
+    reason_category: str = Form(...),
+    termination_date: Optional[str] = Form(None),
+    payout_mode: str = Form("schedule"),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Расторжение договора."""
     # Проверяем авторизацию
@@ -426,14 +431,46 @@ async def terminate_contract(
         return current_user
     
     try:
+        from shared.services.user_service import get_user_id_from_current_user
+        from datetime import datetime
+        
+        # Получаем внутренний user_id владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Парсим дату увольнения
+        term_date = None
+        if termination_date:
+            try:
+                term_date = datetime.strptime(termination_date, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат даты увольнения")
+        
+        # Определяем политику финрасчёта
+        settlement_policy = "termination_date" if payout_mode == "termination_date" else "schedule"
+        
+        # Формируем полную причину с категорией
+        full_reason = f"[{reason_category}] {reason}"
+        
+        # Расторгаем договор
         contract_service = ContractService()
-        success = await contract_service.terminate_contract_by_telegram_id(contract_id, current_user["id"], reason)
+        success = await contract_service.terminate_contract(
+            contract_id=contract_id,
+            owner_id=owner_id,
+            reason=full_reason,
+            termination_date=term_date,
+            settlement_policy=settlement_policy,
+            terminated_by_type="owner"
+        )
         
         if success:
             return RedirectResponse(url="/employees", status_code=303)
         else:
             raise HTTPException(status_code=400, detail="Ошибка расторжения договора")
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error terminating contract: {e}")
         raise HTTPException(status_code=400, detail=f"Ошибка расторжения договора: {str(e)}")

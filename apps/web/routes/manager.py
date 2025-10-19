@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select, and_, desc
+from sqlalchemy import select, and_, desc, func
 from core.database.session import get_async_session, get_db_session
 from shared.services.role_service import RoleService
 from apps.bot.services.user_service import UserService
@@ -4669,6 +4669,9 @@ async def manager_contract_terminate(
     contract_id: int,
     request: Request,
     reason: str = Form(...),
+    reason_category: str = Form(...),
+    termination_date: Optional[str] = Form(None),
+    payout_mode: str = Form("schedule"),
     current_user: dict = Depends(require_manager_or_owner),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -4719,22 +4722,88 @@ async def manager_contract_terminate(
         if not permissions:
             raise HTTPException(status_code=403, detail="У вас нет прав на расторжение этого договора")
         
+        # Парсим дату увольнения
+        term_date = None
+        if termination_date:
+            try:
+                term_date = datetime.strptime(termination_date, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат даты увольнения")
+        
+        # Определяем политику финрасчёта
+        settlement_policy = "termination_date" if payout_mode == "termination_date" else "schedule"
+        
         # Расторгаем договор
+        terminated_at_now = datetime.now()
         contract.status = 'terminated'
         contract.is_active = False
-        contract.terminated_at = datetime.now()
+        contract.terminated_at = terminated_at_now
+        contract.termination_date = term_date
+        contract.settlement_policy = settlement_policy
         
         # Добавляем причину в values или notes
         if not contract.values:
             contract.values = {}
         contract.values['termination_reason'] = reason
+        contract.values['termination_reason_category'] = reason_category
         contract.values['terminated_by'] = user_id
+        
+        # Создаём запись о расторжении для аналитики
+        from domain.entities.contract_termination import ContractTermination
+        termination_record = ContractTermination(
+            contract_id=contract_id,
+            employee_id=contract.employee_id,
+            owner_id=contract.owner_id,
+            terminated_by_id=user_id,
+            terminated_by_type='manager',
+            reason_category=reason_category,
+            reason=reason,
+            termination_date=term_date,
+            settlement_policy=settlement_policy,
+            terminated_at=terminated_at_now
+        )
+        db.add(termination_record)
+        
+        # Отменяем плановые смены после termination_date
+        if term_date:
+            from domain.entities.shift_schedule import ShiftSchedule
+            from domain.entities.shift_cancellation import ShiftCancellation
+            
+            shifts_query = select(ShiftSchedule).where(
+                and_(
+                    ShiftSchedule.user_id == contract.employee_id,
+                    ShiftSchedule.status == 'planned',
+                    func.date(ShiftSchedule.planned_start) > term_date
+                )
+            )
+            shifts_result = await db.execute(shifts_query)
+            shifts_to_cancel = shifts_result.scalars().all()
+            
+            for shift in shifts_to_cancel:
+                shift.status = 'cancelled'
+                cancellation = ShiftCancellation(
+                    shift_schedule_id=shift.id,
+                    employee_id=contract.employee_id,
+                    object_id=shift.object_id,
+                    cancelled_by_id=user_id,
+                    cancelled_by_type='manager',
+                    cancellation_reason='contract_termination',
+                    reason_notes=f"Расторгнут договор (дата увольнения: {term_date}). Причина: {reason}",
+                    contract_id=contract.id,
+                    hours_before_shift=None,
+                    fine_amount=None,
+                    fine_reason=None,
+                    fine_applied=False
+                )
+                db.add(cancellation)
+        
+        # Сохраняем employee_id перед коммитом
+        employee_id = contract.employee_id
         
         await db.commit()
         
         # Проверяем, есть ли у сотрудника другие активные договоры
         from domain.entities.user import User
-        employee_id = contract.employee_id
         remaining_contracts_query = select(Contract).where(
             Contract.employee_id == employee_id,
             Contract.is_active == True,
@@ -4756,19 +4825,20 @@ async def manager_contract_terminate(
         logger.info(
             f"Contract terminated by manager",
             contract_id=contract_id,
-            employee_id=contract.employee_id,
+            employee_id=employee_id,
             manager_id=user_id,
-            reason=reason
+            reason_category=reason_category
         )
         
         return RedirectResponse(
-            url=f"/manager/employees/{contract.employee_id}",
-            status_code=status.HTTP_302_FOUND
+            url=f"/manager/employees/{employee_id}",
+            status_code=302
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error terminating contract: {e}")
+        import traceback
+        logger.error(f"Error terminating contract: {e}\n{traceback.format_exc()}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail="Ошибка расторжения договора")
+        raise HTTPException(status_code=500, detail=f"Ошибка расторжения договора: {str(e)}")
