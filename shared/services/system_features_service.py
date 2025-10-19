@@ -147,8 +147,20 @@ class SystemFeaturesService:
         profile = result.scalar_one_or_none()
         
         if not profile:
-            logger.error(f"Owner profile not found for user {user_id}")
-            return False
+            # Автосоздание профиля владельца, если отсутствует
+            try:
+                profile = OwnerProfile(user_id=user_id)
+                await session.add(profile)  # type: ignore[arg-type]
+                await session.commit()
+                await session.refresh(profile)
+                logger.info(
+                    f"Owner profile auto-created for user {user_id}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to auto-create OwnerProfile for user {user_id}: {e}"
+                )
+                return False
         
         # Обновляем список включенных функций
         enabled_features = list(profile.enabled_features) if profile.enabled_features else []
