@@ -19,6 +19,8 @@ from .shift_schedule import ShiftSchedule
 from .time_slot import TimeSlot
 from .tag_reference import TagReference
 from .owner_profile import OwnerProfile
+from .organization_profile import OrganizationProfile
+from .system_feature import SystemFeature
 from .contract import Contract
 from .manager_object_permission import ManagerObjectPermission
 from .application import Application, ApplicationStatus
@@ -33,4 +35,4 @@ from .notification import Notification
 from .payment_notification import PaymentNotification, NotificationType, NotificationStatus, NotificationChannel
 from .review import Review, ReviewMedia, ReviewAppeal, Rating, SystemRule
 
-__all__ = ["Base", "User", "PaymentSystem", "PaymentSchedule", "OrgStructureUnit", "PayrollEntry", "PayrollAdjustment", "EmployeePayment", "TimeslotTaskTemplate", "ObjectOpening", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate", "TariffPlan", "UserSubscription", "SubscriptionStatus", "BillingPeriod", "BillingTransaction", "TransactionType", "TransactionStatus", "PaymentMethod", "UsageMetrics", "Notification", "PaymentNotification", "NotificationType", "NotificationStatus", "NotificationChannel", "Review", "ReviewMedia", "ReviewAppeal", "Rating", "SystemRule"]
+__all__ = ["Base", "User", "PaymentSystem", "PaymentSchedule", "OrgStructureUnit", "PayrollEntry", "PayrollAdjustment", "EmployeePayment", "TimeslotTaskTemplate", "ObjectOpening", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "OrganizationProfile", "SystemFeature", "Contract", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate", "TariffPlan", "UserSubscription", "SubscriptionStatus", "BillingPeriod", "BillingTransaction", "TransactionType", "TransactionStatus", "PaymentMethod", "UsageMetrics", "Notification", "PaymentNotification", "NotificationType", "NotificationStatus", "NotificationChannel", "Review", "ReviewMedia", "ReviewAppeal", "Rating", "SystemRule"]

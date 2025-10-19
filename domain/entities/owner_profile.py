@@ -42,6 +42,25 @@ class OwnerProfile(Base):
     active_tags = Column(JSON, nullable=False, default=list,
                         comment="Список активных тегов профиля")
     
+    # Новые поля для расширенного профиля
+    about_company = Column(Text, nullable=True,
+                          comment="О компании - описание, история, масштаб")
+    
+    values = Column(Text, nullable=True,
+                   comment="Ценности компании - принципы, структура")
+    
+    photos = Column(JSON, nullable=False, default=list,
+                   comment="Фотографии компании (массив URL/путей, до 5 шт)")
+    
+    contact_phone = Column(String(20), nullable=True,
+                          comment="Телефон для связи")
+    
+    contact_messengers = Column(JSON, nullable=False, default=list,
+                               comment="Активные мессенджеры: whatsapp, telegram, max")
+    
+    enabled_features = Column(JSON, nullable=False, default=list,
+                             comment="Включенные дополнительные функции (массив ключей функций)")
+    
     # Настройки
     is_complete = Column(Boolean, default=False,
                         comment="Заполнен ли профиль полностью")
