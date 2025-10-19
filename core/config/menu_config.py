@@ -16,7 +16,7 @@ class MenuConfig:
         'objects': ['recruitment_and_reviews', 'telegram_bot', 'notifications', 'basic_reports'],
         'employees': ['recruitment_and_reviews', 'telegram_bot', 'notifications', 'basic_reports'],
         'reports': ['recruitment_and_reviews', 'telegram_bot', 'notifications', 'basic_reports'],
-        'analytics': ['recruitment_and_reviews', 'telegram_bot', 'notifications', 'basic_reports', 'analytics'],
+        'analytics': ['analytics'],
         'calendar': ['shared_calendar'],
         'planning': ['payroll'],
         'planning_shifts': ['payroll'],

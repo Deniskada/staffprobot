@@ -970,26 +970,39 @@ function displayFeatures(features) {
     const container = document.getElementById('featuresContainer');
     container.innerHTML = '';
     
+    console.log('Displaying features:', features);
+    
     // Группируем функции
     const activeFeatures = features.filter(f => f.available && f.enabled);
     const availableFeatures = features.filter(f => f.available && !f.enabled);
     const unavailableFeatures = features.filter(f => !f.available);
     
+    console.log('Active:', activeFeatures.length, 'Available:', availableFeatures.length, 'Unavailable:', unavailableFeatures.length);
+    
     // Активные функции
     if (activeFeatures.length > 0) {
-        container.innerHTML += '<h6 class="small text-success mb-2"><i class="fas fa-check-circle"></i> Активные функции</h6>';
+        const header = document.createElement('h6');
+        header.className = 'small text-success mb-2';
+        header.innerHTML = '<i class="fas fa-check-circle"></i> Активные функции';
+        container.appendChild(header);
         activeFeatures.forEach(feature => renderFeatureItem(container, feature, true));
     }
     
     // Доступные но выключенные
     if (availableFeatures.length > 0) {
-        container.innerHTML += '<h6 class="small text-muted mb-2 mt-3"><i class="fas fa-toggle-off"></i> Доступные функции</h6>';
+        const header = document.createElement('h6');
+        header.className = 'small text-muted mb-2 mt-3';
+        header.innerHTML = '<i class="fas fa-toggle-off"></i> Доступные функции';
+        container.appendChild(header);
         availableFeatures.forEach(feature => renderFeatureItem(container, feature, true));
     }
     
     // Недоступные в тарифе
     if (unavailableFeatures.length > 0) {
-        container.innerHTML += '<h6 class="small text-warning mb-2 mt-3"><i class="fas fa-lock"></i> Требуют обновления тарифа</h6>';
+        const header = document.createElement('h6');
+        header.className = 'small text-warning mb-2 mt-3';
+        header.innerHTML = '<i class="fas fa-lock"></i> Требуют обновления тарифа';
+        container.appendChild(header);
         unavailableFeatures.forEach(feature => renderFeatureItem(container, feature, false));
     }
 }
@@ -998,37 +1011,55 @@ function renderFeatureItem(container, feature, available) {
     const item = document.createElement('div');
     item.className = `feature-item ${!available ? 'disabled' : ''}`;
     
-    const html = `
-        <div class="d-flex justify-content-between align-items-center">
-            <div class="flex-grow-1">
-                <strong>${feature.name}</strong>
-                <div class="small text-muted">${feature.description}</div>
-            </div>
-            <div>
-                ${available ? `
-                    <div class="form-check form-switch">
-                        <input class="form-check-input feature-toggle" type="checkbox" 
-                               id="feature_${feature.key}" 
-                               ${feature.enabled ? 'checked' : ''}
-                               onchange="toggleFeature('${feature.key}', this.checked)">
-                    </div>
-                ` : `
-                    <div>
-                        <i class="fas fa-lock text-warning"></i>
-                        <a href="/owner/tariff/change" class="btn btn-sm btn-warning ms-2">
-                            Сменить тариф
-                        </a>
-                    </div>
-                `}
-            </div>
-        </div>
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'd-flex justify-content-between align-items-center';
+    
+    // Левая часть - название и описание
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'flex-grow-1';
+    infoDiv.innerHTML = `
+        <strong>${feature.name}</strong>
+        <div class="small text-muted">${feature.description}</div>
     `;
     
-    item.innerHTML = html;
+    // Правая часть - toggle или lock
+    const controlDiv = document.createElement('div');
+    
+    if (available) {
+        const switchDiv = document.createElement('div');
+        switchDiv.className = 'form-check form-switch';
+        
+        const checkbox = document.createElement('input');
+        checkbox.className = 'form-check-input feature-toggle';
+        checkbox.type = 'checkbox';
+        checkbox.id = `feature_${feature.key}`;
+        checkbox.checked = feature.enabled;
+        checkbox.onchange = function() {
+            toggleFeature(feature.key, this.checked);
+        };
+        
+        switchDiv.appendChild(checkbox);
+        controlDiv.appendChild(switchDiv);
+    } else {
+        controlDiv.innerHTML = `
+            <div>
+                <i class="fas fa-lock text-warning"></i>
+                <a href="/owner/tariff/change" class="btn btn-sm btn-warning ms-2">
+                    Сменить тариф
+                </a>
+            </div>
+        `;
+    }
+    
+    contentDiv.appendChild(infoDiv);
+    contentDiv.appendChild(controlDiv);
+    item.appendChild(contentDiv);
     container.appendChild(item);
 }
 
 async function toggleFeature(featureKey, enabled) {
+    console.log('Toggling feature:', featureKey, 'to', enabled);
+    
     try {
         const response = await fetch('/owner/profile/features/api/toggle', {
             method: 'POST',
@@ -1037,19 +1068,23 @@ async function toggleFeature(featureKey, enabled) {
         });
         
         const data = await response.json();
+        console.log('Toggle response:', data);
         
         if (!data.success) {
             alert('Ошибка: ' + (data.error || 'Функция недоступна'));
             // Откатываем toggle
-            document.getElementById(`feature_${featureKey}`).checked = !enabled;
+            const checkbox = document.getElementById(`feature_${featureKey}`);
+            if (checkbox) checkbox.checked = !enabled;
         } else {
-            // Обновляем меню (перезагрузка страницы для применения изменений)
-            setTimeout(() => location.reload(), 500);
+            // Успешно сохранено - перезагружаем страницу для обновления меню
+            console.log('Feature toggled successfully, reloading...');
+            location.reload();
         }
     } catch (error) {
         console.error('Error toggling feature:', error);
         alert('Ошибка переключения функции');
-        document.getElementById(`feature_${featureKey}`).checked = !enabled;
+        const checkbox = document.getElementById(`feature_${featureKey}`);
+        if (checkbox) checkbox.checked = !enabled;
     }
 }
 
