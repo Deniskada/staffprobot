@@ -4883,6 +4883,16 @@ async def owner_profile_save(
                 if tag_key in selected_tags:  # только для выбранных тегов
                     profile_data[tag_key] = value.strip()
         
+        # Извлекаем новые поля профиля
+        about_company = form_data.get("about_company", "")
+        values = form_data.get("values", "")
+        contact_phone = form_data.get("contact_phone", "")
+        
+        # Парсим JSON поля
+        import json
+        photos = json.loads(form_data.get("photos", "[]"))
+        contact_messengers = json.loads(form_data.get("contact_messengers", "[]"))
+        
         # Сохраняем профиль (как в оригинале)
         from apps.web.services.tag_service import TagService
         tag_service = TagService()
@@ -4893,7 +4903,12 @@ async def owner_profile_save(
                 "profile_name": profile_name,
                 "profile_data": profile_data,
                 "active_tags": selected_tags,
-                "is_public": is_public
+                "is_public": is_public,
+                "about_company": about_company,
+                "values": values,
+                "photos": photos,
+                "contact_phone": contact_phone,
+                "contact_messengers": contact_messengers
             },
             legal_type
         )

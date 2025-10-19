@@ -540,6 +540,25 @@ class TagService:
         if 'is_public' in profile_data:
             profile.is_public = profile_data['is_public']
         
+        # Новые поля профиля
+        if 'about_company' in profile_data:
+            profile.about_company = profile_data['about_company']
+        
+        if 'values' in profile_data:
+            profile.values = profile_data['values']
+        
+        if 'photos' in profile_data:
+            profile.photos = profile_data['photos']
+        
+        if 'contact_phone' in profile_data:
+            profile.contact_phone = profile_data['contact_phone']
+        
+        if 'contact_messengers' in profile_data:
+            profile.contact_messengers = profile_data['contact_messengers']
+        
+        if 'enabled_features' in profile_data:
+            profile.enabled_features = profile_data['enabled_features']
+        
         # Проверяем полноту заполнения
         required_tags = await self._get_required_tags_for_legal_type(session, legal_type)
         completion = profile.get_completion_percentage([tag.key for tag in required_tags])
