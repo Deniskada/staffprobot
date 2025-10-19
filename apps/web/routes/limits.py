@@ -29,12 +29,41 @@ async def limits_dashboard(
         async with get_async_session() as session:
             limits_service = LimitsService(session)
             limits_summary = await limits_service.get_user_limits_summary(user_id)
+            
+            # Загружаем информацию о функциях из таблицы system_features
+            from shared.services.system_features_service import SystemFeaturesService
+            features_service = SystemFeaturesService()
+            
+            # Получаем все функции
+            all_features = await features_service.get_all_features(session)
+            
+            # Создаем маппинг key -> feature для удобства
+            features_map = {f.key: f for f in all_features}
+            
+            # Обогащаем список доступных функций данными из БД
+            available_features_data = []
+            for feature_key in limits_summary.get('features', {}).get('available', []):
+                feature = features_map.get(feature_key)
+                if feature:
+                    available_features_data.append({
+                        'key': feature.key,
+                        'name': feature.name,
+                        'description': feature.description
+                    })
+                else:
+                    # Если функция не найдена в БД, используем ключ как название
+                    available_features_data.append({
+                        'key': feature_key,
+                        'name': feature_key,
+                        'description': None
+                    })
         
         return templates.TemplateResponse("owner/limits_dashboard.html", {
             "request": request,
             "current_user": current_user,
             "title": "Контроль лимитов",
-            "limits_summary": limits_summary
+            "limits_summary": limits_summary,
+            "available_features_data": available_features_data
         })
         
     except Exception as e:
