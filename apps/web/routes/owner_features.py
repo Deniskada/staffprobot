@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.web.dependencies import require_owner_or_superadmin, get_db_session
+from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from apps.web.middleware.role_middleware import get_user_id_from_current_user
+from core.database.session import get_db_session
 from shared.services.system_features_service import SystemFeaturesService
-from shared.services.user_service import get_user_id_from_current_user
 from core.logging.logger import logger
 
 router = APIRouter()
