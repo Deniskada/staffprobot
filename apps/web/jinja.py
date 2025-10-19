@@ -13,4 +13,17 @@ from apps.web.utils.jinja_filters import register_filters
 
 register_filters(templates)
 
+# Добавляем context processor для автоматического добавления enabled_features
+from jinja2 import pass_context
+
+@pass_context
+def add_enabled_features(context):
+    """Добавляет enabled_features из request.state в контекст шаблона."""
+    request = context.get('request')
+    if request and hasattr(request.state, 'enabled_features'):
+        return request.state.enabled_features
+    return []
+
+templates.env.globals['enabled_features_from_state'] = add_enabled_features
+
 

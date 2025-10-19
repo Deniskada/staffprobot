@@ -112,6 +112,10 @@ app.add_middleware(
 from core.middleware.rate_limit import RateLimitMiddleware
 app.add_middleware(RateLimitMiddleware)
 
+# Features Middleware для автоматического добавления enabled_features
+from apps.web.middleware.features_middleware import FeaturesMiddleware
+app.add_middleware(FeaturesMiddleware)
+
 # Middleware для принудительного HTTPS
 @app.middleware("http")
 async def force_https(request: Request, call_next):
