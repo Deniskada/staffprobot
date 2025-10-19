@@ -62,14 +62,16 @@ def upgrade() -> None:
     op.drop_index('idx_shift_tasks_shift_id', table_name='shift_tasks')
     op.drop_index('idx_shift_tasks_source', table_name='shift_tasks')
     op.drop_table('shift_tasks')
-    op.drop_index('ix_shift_cancellations_cancellation_reason', table_name='shift_cancellations')
-    op.drop_index('ix_shift_cancellations_cancelled_by_type', table_name='shift_cancellations')
-    op.drop_index('ix_shift_cancellations_created_at', table_name='shift_cancellations')
-    op.drop_index('ix_shift_cancellations_employee_id', table_name='shift_cancellations')
-    op.drop_index('ix_shift_cancellations_fine_applied', table_name='shift_cancellations')
-    op.drop_index('ix_shift_cancellations_payroll_adjustment_id', table_name='shift_cancellations')
-    op.drop_index('ix_shift_cancellations_shift_schedule_id', table_name='shift_cancellations')
-    op.drop_table('shift_cancellations')
+    # КРИТИЧНО: НЕ УДАЛЯЕМ shift_cancellations на проде - там рабочие данные!
+    # Таблица shift_cancellations уже существует на проде, не трогаем её
+    # op.drop_index('ix_shift_cancellations_cancellation_reason', table_name='shift_cancellations')
+    # op.drop_index('ix_shift_cancellations_cancelled_by_type', table_name='shift_cancellations')
+    # op.drop_index('ix_shift_cancellations_created_at', table_name='shift_cancellations')
+    # op.drop_index('ix_shift_cancellations_employee_id', table_name='shift_cancellations')
+    # op.drop_index('ix_shift_cancellations_fine_applied', table_name='shift_cancellations')
+    # op.drop_index('ix_shift_cancellations_payroll_adjustment_id', table_name='shift_cancellations')
+    # op.drop_index('ix_shift_cancellations_shift_schedule_id', table_name='shift_cancellations')
+    # op.drop_table('shift_cancellations')
     op.drop_index('ix_settings_history_created_at', table_name='settings_history')
     op.drop_index('ix_settings_history_id', table_name='settings_history')
     op.drop_index('ix_settings_history_setting_key', table_name='settings_history')
@@ -709,6 +711,10 @@ def downgrade() -> None:
     op.create_index('ix_settings_history_setting_key', 'settings_history', ['setting_key'], unique=False)
     op.create_index('ix_settings_history_id', 'settings_history', ['id'], unique=False)
     op.create_index('ix_settings_history_created_at', 'settings_history', ['created_at'], unique=False)
+    # КРИТИЧНО: НЕ ПЕРЕСОЗДАЁМ shift_cancellations - таблица уже существует на проде!
+    # Если нужно изменить структуру - используйте ALTER TABLE, не DROP/CREATE
+    pass  # Заглушка, чтобы миграция не сломалась
+    """
     op.create_table('shift_cancellations',
     sa.Column('id', sa.INTEGER(), autoincrement=True, nullable=False),
     sa.Column('shift_schedule_id', sa.INTEGER(), autoincrement=False, nullable=False),
@@ -746,6 +752,7 @@ def downgrade() -> None:
     op.create_index('ix_shift_cancellations_created_at', 'shift_cancellations', ['created_at'], unique=False)
     op.create_index('ix_shift_cancellations_cancelled_by_type', 'shift_cancellations', ['cancelled_by_type'], unique=False)
     op.create_index('ix_shift_cancellations_cancellation_reason', 'shift_cancellations', ['cancellation_reason'], unique=False)
+    """
     op.create_table('shift_tasks',
     sa.Column('id', sa.INTEGER(), autoincrement=True, nullable=False),
     sa.Column('shift_id', sa.INTEGER(), autoincrement=False, nullable=False),
