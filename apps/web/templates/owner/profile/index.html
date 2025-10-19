@@ -283,7 +283,7 @@
                                     {% endif %}
                                     <i class="fas fa-chevron-down float-end" id="chevron_{{ category }}"></i>
                                 </strong>
-                            </div>
+                        </div>
                             <div class="tag-help-body small" id="taghelp_{{ category }}" style="display: none; padding-left: 1rem;">
                                 {% for tag in tags[:5] %}
                                 <div class="mb-1">
@@ -356,7 +356,7 @@
                             {% if profile and profile.photos %}
                                 {% for photo in profile.photos %}
                                 <div class="col-md-4 photo-item" data-index="{{ loop.index0 }}">
-                                    <div class="card">
+                <div class="card">
                                         <img src="{{ photo }}" class="card-img-top" alt="Фото">
                                         <div class="card-body p-2">
                                             <button type="button" class="btn btn-sm btn-danger w-100" 
@@ -714,19 +714,52 @@ function displayOrgProfiles(profiles) {
 }
 
 // Открыть модальное окно профиля организации
-function openOrgProfileModal(profileId = null) {
+async function openOrgProfileModal(profileId = null) {
     const modal = new bootstrap.Modal(document.getElementById('orgProfileModal'));
     
     if (profileId) {
-        // TODO: загрузить данные профиля
         document.getElementById('orgProfileModalTitle').textContent = 'Редактировать профиль';
+        document.getElementById('orgProfileId').value = profileId;
+        
+        // Загружаем данные профиля
+        try {
+            const response = await fetch(`/owner/profile/organization/api/${profileId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                const profile = data.profile;
+                document.getElementById('orgProfileName').value = profile.profile_name;
+                document.getElementById('orgProfileDefault').checked = profile.is_default;
+                
+                // Устанавливаем тип
+                if (profile.legal_type === 'legal') {
+                    document.getElementById('legalTypeLegal').checked = true;
+                } else {
+                    document.getElementById('legalTypeIndividual').checked = true;
+                }
+                
+                updateOrgProfileFields();
+                
+                // Заполняем реквизиты
+                if (profile.requisites) {
+                    Object.keys(profile.requisites).forEach(key => {
+                        const input = document.querySelector(`#req_${key}`);
+                        if (input) {
+                            input.value = profile.requisites[key];
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error loading profile:', error);
+        }
     } else {
         document.getElementById('orgProfileModalTitle').textContent = 'Новый профиль';
         document.getElementById('orgProfileForm').reset();
         document.getElementById('orgProfileId').value = '';
+        updateOrgProfileFields();
     }
     
-    updateOrgProfileFields();
     modal.show();
 }
 
@@ -787,6 +820,237 @@ function displayFeatures(features) {
     
     // TODO: отобразить функции с toggle switches
     container.innerHTML = '<p class="text-muted">Функции будут отображены после реализации API...</p>';
+}
+
+// Определения полей для реквизитов
+const INDIVIDUAL_FIELDS = [
+    {key: 'owner_fullname', label: 'ФИО *', type: 'text', required: true},
+    {key: 'owner_ogrnip', label: 'ОГРНИП *', type: 'text', required: true, pattern: '^\\d{15}$', hint: '15 цифр'},
+    {key: 'owner_inn', label: 'ИНН *', type: 'text', required: true, pattern: '^\\d{12}$', hint: '12 цифр'},
+    {key: 'owner_okved', label: 'ОКВЭД', type: 'text'},
+    {key: 'owner_phone', label: 'Телефон', type: 'tel'},
+    {key: 'owner_email', label: 'E-mail', type: 'email'},
+    {key: 'owner_registration_address', label: 'Адрес регистрации', type: 'textarea'},
+    {key: 'owner_postal_address', label: 'Почтовый адрес', type: 'textarea'},
+    {key: 'owner_account_number', label: 'Расчетный счет', type: 'text', pattern: '^\\d{20}$', hint: '20 цифр'},
+    {key: 'owner_bik', label: 'БИК банка', type: 'text', pattern: '^\\d{9}$', hint: '9 цифр'},
+    {key: 'owner_correspondent_account', label: 'Корреспондентский счет', type: 'text', pattern: '^\\d{20}$', hint: '20 цифр'}
+];
+
+const LEGAL_FIELDS = [
+    {key: 'company_full_name', label: 'Наименование организации *', type: 'text', required: true},
+    {key: 'company_short_name', label: 'Краткое наименование', type: 'text'},
+    {key: 'company_ogrn', label: 'ОГРН *', type: 'text', required: true, pattern: '^\\d{13}$', hint: '13 цифр'},
+    {key: 'company_inn', label: 'ИНН *', type: 'text', required: true, pattern: '^\\d{10}$', hint: '10 цифр'},
+    {key: 'company_kpp', label: 'КПП *', type: 'text', required: true, pattern: '^\\d{9}$', hint: '9 цифр'},
+    {key: 'company_legal_address', label: 'Юридический адрес', type: 'textarea'},
+    {key: 'company_postal_address', label: 'Почтовый адрес', type: 'textarea'},
+    {key: 'company_okpo', label: 'ОКПО', type: 'text'},
+    {key: 'company_okved', label: 'ОКВЭД', type: 'text'},
+    {key: 'company_account_number', label: 'Расчетный счет', type: 'text', pattern: '^\\d{20}$', hint: '20 цифр'},
+    {key: 'company_bik', label: 'БИК банка', type: 'text', pattern: '^\\d{9}$', hint: '9 цифр'},
+    {key: 'company_correspondent_account', label: 'Корреспондентский счет', type: 'text', pattern: '^\\d{20}$', hint: '20 цифр'},
+    {key: 'company_director_position', label: 'Должность руководителя', type: 'text'},
+    {key: 'company_director_fullname', label: 'ФИО руководителя', type: 'text'},
+    {key: 'company_basis', label: 'Действует на основании', type: 'text'}
+];
+
+function updateOrgProfileFields() {
+    const container = document.getElementById('orgProfileFieldsContainer');
+    const legalType = document.querySelector('input[name="legal_type"]:checked').value;
+    const fields = legalType === 'individual' ? INDIVIDUAL_FIELDS : LEGAL_FIELDS;
+    
+    container.innerHTML = '';
+    
+    fields.forEach(field => {
+        const formGroup = document.createElement('div');
+        formGroup.className = 'mb-3';
+        
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.textContent = field.label;
+        label.htmlFor = `req_${field.key}`;
+        
+        let input;
+        if (field.type === 'textarea') {
+            input = document.createElement('textarea');
+            input.rows = 3;
+        } else {
+            input = document.createElement('input');
+            input.type = field.type;
+        }
+        
+        input.className = 'form-control';
+        input.id = `req_${field.key}`;
+        input.name = field.key;
+        input.required = field.required || false;
+        
+        if (field.pattern) {
+            input.pattern = field.pattern;
+        }
+        
+        formGroup.appendChild(label);
+        formGroup.appendChild(input);
+        
+        if (field.hint) {
+            const hint = document.createElement('small');
+            hint.className = 'form-text text-muted';
+            hint.textContent = field.hint;
+            formGroup.appendChild(hint);
+        }
+        
+        container.appendChild(formGroup);
+    });
+}
+
+async function saveOrgProfile() {
+    const form = document.getElementById('orgProfileForm');
+    const formData = new FormData(form);
+    const profileId = document.getElementById('orgProfileId').value;
+    
+    // Собираем реквизиты
+    const requisites = {};
+    const legalType = formData.get('legal_type');
+    const fields = legalType === 'individual' ? INDIVIDUAL_FIELDS : LEGAL_FIELDS;
+    
+    fields.forEach(field => {
+        const value = formData.get(field.key);
+        if (value && value.trim()) {
+            requisites[field.key] = value.trim();
+        }
+    });
+    
+    const data = {
+        profile_name: formData.get('profile_name'),
+        legal_type: legalType,
+        is_default: formData.get('is_default') === 'on',
+        requisites: requisites
+    };
+    
+    try {
+        const url = profileId 
+            ? `/owner/profile/organization/api/${profileId}/update`
+            : '/owner/profile/organization/api/create';
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            bootstrap.Modal.getInstance(document.getElementById('orgProfileModal')).hide();
+            await loadOrgProfiles();
+        } else {
+            alert('Ошибка: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error saving profile:', error);
+        alert('Ошибка сохранения профиля');
+    }
+}
+
+// Загрузка и отображение функций
+async function loadFeatures() {
+    try {
+        const response = await fetch('/owner/profile/features/api/status');
+        const data = await response.json();
+        
+        if (data.success) {
+            displayFeatures(data.features);
+        }
+    } catch (error) {
+        console.error('Error loading features:', error);
+    }
+}
+
+function displayFeatures(features) {
+    const container = document.getElementById('featuresContainer');
+    container.innerHTML = '';
+    
+    // Группируем функции
+    const activeFeatures = features.filter(f => f.available && f.enabled);
+    const availableFeatures = features.filter(f => f.available && !f.enabled);
+    const unavailableFeatures = features.filter(f => !f.available);
+    
+    // Активные функции
+    if (activeFeatures.length > 0) {
+        container.innerHTML += '<h6 class="small text-success mb-2"><i class="fas fa-check-circle"></i> Активные функции</h6>';
+        activeFeatures.forEach(feature => renderFeatureItem(container, feature, true));
+    }
+    
+    // Доступные но выключенные
+    if (availableFeatures.length > 0) {
+        container.innerHTML += '<h6 class="small text-muted mb-2 mt-3"><i class="fas fa-toggle-off"></i> Доступные функции</h6>';
+        availableFeatures.forEach(feature => renderFeatureItem(container, feature, true));
+    }
+    
+    // Недоступные в тарифе
+    if (unavailableFeatures.length > 0) {
+        container.innerHTML += '<h6 class="small text-warning mb-2 mt-3"><i class="fas fa-lock"></i> Требуют обновления тарифа</h6>';
+        unavailableFeatures.forEach(feature => renderFeatureItem(container, feature, false));
+    }
+}
+
+function renderFeatureItem(container, feature, available) {
+    const item = document.createElement('div');
+    item.className = `feature-item ${!available ? 'disabled' : ''}`;
+    
+    const html = `
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="flex-grow-1">
+                <strong>${feature.name}</strong>
+                <div class="small text-muted">${feature.description}</div>
+            </div>
+            <div>
+                ${available ? `
+                    <div class="form-check form-switch">
+                        <input class="form-check-input feature-toggle" type="checkbox" 
+                               id="feature_${feature.key}" 
+                               ${feature.enabled ? 'checked' : ''}
+                               onchange="toggleFeature('${feature.key}', this.checked)">
+                    </div>
+                ` : `
+                    <div>
+                        <i class="fas fa-lock text-warning"></i>
+                        <a href="/owner/tariff/change" class="btn btn-sm btn-warning ms-2">
+                            Сменить тариф
+                        </a>
+                    </div>
+                `}
+            </div>
+        </div>
+    `;
+    
+    item.innerHTML = html;
+    container.appendChild(item);
+}
+
+async function toggleFeature(featureKey, enabled) {
+    try {
+        const response = await fetch('/owner/profile/features/api/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({feature_key: featureKey, enabled: enabled})
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            alert('Ошибка: ' + (data.error || 'Функция недоступна'));
+            // Откатываем toggle
+            document.getElementById(`feature_${featureKey}`).checked = !enabled;
+        } else {
+            // Обновляем меню (перезагрузка страницы для применения изменений)
+            setTimeout(() => location.reload(), 500);
+        }
+    } catch (error) {
+        console.error('Error toggling feature:', error);
+        alert('Ошибка переключения функции');
+        document.getElementById(`feature_${featureKey}`).checked = !enabled;
+    }
 }
 
 // Инициализация при загрузке
