@@ -173,6 +173,11 @@ async def owner_dashboard(request: Request):
             # Получаем данные для переключения интерфейсов
             available_interfaces = await get_available_interfaces_for_user(user_id)
         
+        # Получаем enabled_features для меню
+        from shared.services.system_features_service import SystemFeaturesService
+        features_service = SystemFeaturesService()
+        enabled_features = await features_service.get_enabled_features(session, user_id)
+        
         stats = {
             'total_objects': total_objects,
             'total_shifts': total_shifts,
@@ -187,6 +192,7 @@ async def owner_dashboard(request: Request):
             "recent_objects": recent_objects,
             "open_objects": open_objects,
             "available_interfaces": available_interfaces,
+            "enabled_features": enabled_features,
         })
     except Exception as e:
         logger.error(f"Error loading owner dashboard: {e}")
@@ -4831,10 +4837,16 @@ async def owner_profile(
         # Получаем данные для переключения интерфейсов
         available_interfaces = await get_available_interfaces_for_user(user_id)
         
+        # Получаем enabled_features для меню
+        from shared.services.system_features_service import SystemFeaturesService
+        features_service = SystemFeaturesService()
+        enabled_features = await features_service.get_enabled_features(db, user_id)
+        
         return templates.TemplateResponse("owner/profile/index.html", {
             "request": request,
             "current_user": current_user,
             "available_interfaces": available_interfaces,
+            "enabled_features": enabled_features,
             "profile": profile,
             "tags_by_category": tags_by_category,
             "tags_by_category_json": tags_by_category_json,
