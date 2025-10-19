@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import Optional
+from datetime import datetime
 
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from apps.web.middleware.role_middleware import require_manager_or_owner, get_user_id_from_current_user
@@ -400,11 +401,39 @@ async def owner_cancellations_analytics(
         cancellations_result = await db.execute(cancellations_query)
         cancellations = cancellations_result.scalars().all()
         
+        # Получаем расторжения договоров за период
+        from domain.entities.contract_termination import ContractTermination
+        terminations_query = (
+            select(ContractTermination)
+            .options(
+                selectinload(ContractTermination.employee),
+                selectinload(ContractTermination.owner),
+                selectinload(ContractTermination.terminated_by),
+                selectinload(ContractTermination.contract)
+            )
+            .where(
+                ContractTermination.owner_id == user.id,
+                ContractTermination.terminated_at >= datetime.combine(start_date, datetime.min.time()),
+                ContractTermination.terminated_at <= datetime.combine(end_date, datetime.max.time())
+            )
+            .order_by(ContractTermination.terminated_at.desc())
+        )
+        terminations_result = await db.execute(terminations_query)
+        contract_terminations = terminations_result.scalars().all()
+        
+        # Статистика по расторжениям
+        terminations_stats = {}
+        for term in contract_terminations:
+            cat = term.reason_category
+            terminations_stats[cat] = terminations_stats.get(cat, 0) + 1
+        
         return templates.TemplateResponse("owner/analytics/cancellations.html", {
             "request": request,
             "current_user": current_user,
             "stats": stats,
             "cancellations": cancellations,
+            "contract_terminations": contract_terminations,
+            "terminations_stats": terminations_stats,
             "objects": objects,
             "filters": {
                 'date_from': start_date.isoformat(),

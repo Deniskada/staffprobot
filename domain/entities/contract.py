@@ -1,6 +1,6 @@
 """Модели для системы договоров."""
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, JSON, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, JSON, Numeric, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from domain.entities.base import Base
@@ -71,6 +71,10 @@ class Contract(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     signed_at = Column(DateTime(timezone=True), nullable=True)
     terminated_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Поля для увольнения и финального расчёта
+    termination_date = Column(Date, nullable=True)  # Дата увольнения
+    settlement_policy = Column(String(32), nullable=False, default="schedule")  # 'schedule' | 'termination_date'
     
     # Отношения
     owner = relationship("User", foreign_keys=[owner_id], backref="owned_contracts")

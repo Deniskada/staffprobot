@@ -320,6 +320,34 @@ class PayrollAdjustmentService:
         result = await self.session.execute(query)
         return list(result.scalars().all())
     
+    async def get_unapplied_adjustments_until(
+        self,
+        employee_id: int,
+        until_date: date
+    ) -> List[PayrollAdjustment]:
+        """
+        Получить все неприменённые корректировки до указанной даты включительно.
+        Используется для финального расчёта при увольнении.
+        
+        Args:
+            employee_id: ID сотрудника
+            until_date: Дата увольнения (включительно)
+            
+        Returns:
+            List[PayrollAdjustment]: Список неприменённых корректировок
+        """
+        query = select(PayrollAdjustment).where(
+            PayrollAdjustment.employee_id == employee_id,
+            PayrollAdjustment.is_applied == False,
+            func.date(PayrollAdjustment.created_at) <= until_date
+        ).options(
+            selectinload(PayrollAdjustment.shift),
+            selectinload(PayrollAdjustment.object)
+        ).order_by(PayrollAdjustment.created_at)
+        
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+    
     async def update_adjustment(
         self,
         adjustment_id: int,

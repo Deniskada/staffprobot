@@ -2,7 +2,7 @@
 
 import json
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
@@ -1549,11 +1549,29 @@ class ContractService:
             logger.info(f"Updated contract: {contract.id}")
             return True
     
-    async def terminate_contract(self, contract_id: int, owner_id: int, reason: str) -> bool:
-        """Расторжение договора."""
+    async def terminate_contract(
+        self,
+        contract_id: int,
+        owner_id: int,
+        reason: str,
+        termination_date: Optional[date] = None,
+        settlement_policy: str = "schedule",
+        terminated_by_type: str = "owner"
+    ) -> bool:
+        """
+        Расторжение договора.
+        
+        Args:
+            contract_id: ID договора
+            owner_id: ID владельца
+            reason: Причина расторжения (может содержать [category] prefix)
+            termination_date: Дата увольнения (optional)
+            settlement_policy: Политика финального расчёта ('schedule' | 'termination_date')
+            terminated_by_type: Тип расторгающего ('owner' | 'manager' | 'system')
+        """
         try:
             logger.info(f"=== STARTING CONTRACT TERMINATION ===")
-            logger.info(f"Parameters: contract_id={contract_id}, owner_id={owner_id}, reason='{reason}'")
+            logger.info(f"Parameters: contract_id={contract_id}, owner_id={owner_id}, reason='{reason}', termination_date={termination_date}, settlement_policy={settlement_policy}")
             
             async with get_async_session() as session:
                 logger.info(f"Step 1: Searching for contract {contract_id} for owner {owner_id}")
@@ -1573,10 +1591,44 @@ class ContractService:
                 logger.info(f"Step 1 SUCCESS: Found contract: id={contract.id}, status={contract.status}, is_active={contract.is_active}, employee_id={contract.employee_id}")
                 
                 logger.info(f"Step 2: Updating contract status to terminated")
+                terminated_at_now = datetime.now()
                 contract.status = "terminated"
                 contract.is_active = False
-                contract.terminated_at = datetime.now()
-                logger.info(f"Step 2 SUCCESS: Contract status updated")
+                contract.terminated_at = terminated_at_now
+                contract.termination_date = termination_date
+                contract.settlement_policy = settlement_policy
+                logger.info(f"Step 2 SUCCESS: Contract status updated with termination_date={termination_date}, settlement_policy={settlement_policy}")
+                
+                # Step 2.5: Создать запись о расторжении для аналитики
+                logger.info(f"Step 2.5: Creating termination record for analytics")
+                try:
+                    from domain.entities.contract_termination import ContractTermination
+                    
+                    # Парсим категорию из reason если есть формат [category]
+                    reason_category = "other"
+                    reason_text = reason
+                    if reason.startswith("[") and "]" in reason:
+                        end_bracket = reason.index("]")
+                        reason_category = reason[1:end_bracket]
+                        reason_text = reason[end_bracket + 1:].strip()
+                    
+                    termination_record = ContractTermination(
+                        contract_id=contract_id,
+                        employee_id=contract.employee_id,
+                        owner_id=contract.owner_id,
+                        terminated_by_id=owner_id,
+                        terminated_by_type=terminated_by_type,
+                        reason_category=reason_category,
+                        reason=reason_text,
+                        termination_date=termination_date,
+                        settlement_policy=settlement_policy,
+                        terminated_at=terminated_at_now
+                    )
+                    session.add(termination_record)
+                    logger.info(f"Step 2.5 SUCCESS: Termination record created")
+                except Exception as term_error:
+                    logger.error(f"Step 2.5 WARNING: Error creating termination record: {term_error}")
+                    # Не прерываем расторжение из-за ошибки создания записи
                 
                 logger.info(f"Step 3: Creating contract version with reason: '{reason}'")
                 try:
@@ -1600,6 +1652,18 @@ class ContractService:
                 except Exception as cancel_error:
                     logger.error(f"Step 4 FAILED: Error cancelling shifts: {cancel_error}")
                     # Не прерываем, договор уже расторгнут
+                
+                # Step 4.5: Отменить все плановые смены после termination_date
+                if termination_date:
+                    logger.info(f"Step 4.5: Cancelling all planned shifts after termination_date={termination_date}")
+                    try:
+                        cancelled_after_date_count = await self._cancel_shifts_after_termination_date(
+                            session, contract.employee_id, termination_date, reason, contract.id, owner_id
+                        )
+                        logger.info(f"Step 4.5 SUCCESS: Cancelled {cancelled_after_date_count} shifts after termination date")
+                    except Exception as cancel_date_error:
+                        logger.error(f"Step 4.5 FAILED: Error cancelling shifts after termination date: {cancel_date_error}")
+                        # Не прерываем, договор уже расторгнут
                 
                 logger.info(f"Step 5: Committing all changes to database")
                 try:
@@ -1815,6 +1879,80 @@ class ContractService:
             
         except Exception as e:
             logger.error(f"Error cancelling shifts on contract termination: {e}")
+            # Не прерываем расторжение договора из-за ошибки отмены смен
+            return 0
+    
+    async def _cancel_shifts_after_termination_date(
+        self,
+        session,
+        employee_id: int,
+        termination_date: date,
+        reason: str,
+        contract_id: int,
+        cancelled_by_id: int
+    ) -> int:
+        """
+        Отменить все плановые смены после даты увольнения.
+        
+        Args:
+            session: Сессия БД
+            employee_id: ID сотрудника
+            termination_date: Дата увольнения
+            reason: Причина расторжения
+            contract_id: ID расторгаемого договора
+            cancelled_by_id: ID пользователя, расторгающего договор
+            
+        Returns:
+            int: Количество отмененных смен
+        """
+        from domain.entities.shift_schedule import ShiftSchedule
+        from domain.entities.shift_cancellation import ShiftCancellation
+        from datetime import datetime, timezone as dt_timezone
+        
+        try:
+            # Находим все плановые смены после termination_date
+            # Конвертируем termination_date в datetime для сравнения с planned_start
+            termination_datetime = datetime.combine(termination_date, datetime.min.time())
+            termination_datetime_utc = termination_datetime.replace(tzinfo=dt_timezone.utc)
+            
+            shifts_query = select(ShiftSchedule).where(
+                and_(
+                    ShiftSchedule.user_id == employee_id,
+                    ShiftSchedule.status == 'planned',
+                    func.date(ShiftSchedule.planned_start) > termination_date
+                )
+            )
+            shifts_result = await session.execute(shifts_query)
+            shifts_to_cancel = shifts_result.scalars().all()
+            
+            cancelled_count = 0
+            for shift in shifts_to_cancel:
+                # Отменяем смену
+                shift.status = 'cancelled'
+                
+                # Создаем запись о отмене
+                cancellation = ShiftCancellation(
+                    shift_schedule_id=shift.id,
+                    employee_id=employee_id,
+                    object_id=shift.object_id,
+                    cancelled_by_id=cancelled_by_id,
+                    cancelled_by_type='system',
+                    cancellation_reason='contract_termination',
+                    reason_notes=f"Расторгнут договор (дата увольнения: {termination_date}). Причина: {reason}",
+                    contract_id=contract_id,
+                    hours_before_shift=None,  # Не применяем штрафы при автоотмене
+                    fine_amount=None,
+                    fine_reason=None,
+                    fine_applied=False
+                )
+                session.add(cancellation)
+                cancelled_count += 1
+            
+            logger.info(f"Cancelled {cancelled_count} planned shifts for employee {employee_id} after termination_date={termination_date}")
+            return cancelled_count
+            
+        except Exception as e:
+            logger.error(f"Error cancelling shifts after termination date: {e}")
             # Не прерываем расторжение договора из-за ошибки отмены смен
             return 0
     
