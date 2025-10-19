@@ -149,12 +149,13 @@ class SystemFeaturesService:
         if not profile:
             # Автосоздание профиля владельца, если отсутствует
             try:
-                profile = OwnerProfile(user_id=user_id)
+                # По умолчанию включаем функцию телеграм-бота
+                profile = OwnerProfile(user_id=user_id, enabled_features=["telegram_bot"]) 
                 await session.add(profile)  # type: ignore[arg-type]
                 await session.commit()
                 await session.refresh(profile)
                 logger.info(
-                    f"Owner profile auto-created for user {user_id}"
+                    f"Owner profile auto-created for user {user_id} with default ['telegram_bot']"
                 )
             except Exception as e:
                 logger.error(
