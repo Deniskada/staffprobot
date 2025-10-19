@@ -73,6 +73,10 @@
 - [GET] `/owner/profile`  — (apps/web/routes/owner.py)
 - [GET] `/owner/profile/preview`  — (apps/web/routes/owner.py)
 - [POST] `/owner/profile/save`  — (apps/web/routes/owner.py)
+- [POST] `/owner/profile/api/autosave`  — (apps/web/routes/owner.py) — автосохранение полей профиля (JSON API)
+  - Поддерживает: `about_company`, `values`, `contact_phone`, `contact_messengers`, `photos`
+  - Debounce: 600мс для текстовых полей, моментально для чекбоксов
+  - См. [Owner Profile Autosave](/doc/vision_v1/roles/owner_profile_autosave.md)
 - [GET] `/owner/profile/tags/{category}`  — (apps/web/routes/owner.py)
 - [GET] `/owner/reports`  — (apps/web/routes/owner.py)
 - [POST] `/owner/reports/generate`  — (apps/web/routes/owner.py)
