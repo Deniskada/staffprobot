@@ -5,6 +5,7 @@
 from typing import List, Dict, Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from domain.entities.system_feature import SystemFeature
 from domain.entities.user_subscription import UserSubscription
@@ -150,20 +151,31 @@ class SystemFeaturesService:
             return False
         
         # Обновляем список включенных функций
-        enabled_features = profile.enabled_features if profile.enabled_features else []
+        enabled_features = list(profile.enabled_features) if profile.enabled_features else []
+        
+        logger.info(
+            f"Current enabled features for user {user_id}: {enabled_features}"
+        )
         
         if enabled:
             if feature_key not in enabled_features:
                 enabled_features.append(feature_key)
+                logger.info(f"Added {feature_key}, now: {enabled_features}")
         else:
             if feature_key in enabled_features:
                 enabled_features.remove(feature_key)
+                logger.info(f"Removed {feature_key}, now: {enabled_features}")
         
+        # Создаем новый список для SQLAlchemy
         profile.enabled_features = enabled_features
+        # Помечаем поле как измененное для SQLAlchemy
+        flag_modified(profile, 'enabled_features')
+        
         await session.commit()
+        await session.refresh(profile)
         
         logger.info(
-            f"Toggled feature {feature_key} to {enabled} for user {user_id}"
+            f"Toggled feature {feature_key} to {enabled} for user {user_id}. Final state: {profile.enabled_features}"
         )
         return True
     
