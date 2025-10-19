@@ -7,7 +7,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
-from apps.web.dependencies import get_current_user, require_owner_or_superadmin, get_db_session
+from apps.web.dependencies import require_owner_or_superadmin, get_db_session
+from apps.web.middleware.auth_middleware import get_current_user
 from shared.services.organization_profile_service import OrganizationProfileService
 from shared.services.user_service import get_user_id_from_current_user
 from core.logging.logger import logger

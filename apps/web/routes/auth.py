@@ -222,6 +222,59 @@ async def register(
             )
             session.add(new_user)
             await session.commit()
+            await session.refresh(new_user)
+            
+            # Создаём профиль владельца с включенными всеми функциями
+            from domain.entities.owner_profile import OwnerProfile
+            from core.config.features import get_feature_keys
+            
+            owner_profile = OwnerProfile(
+                user_id=new_user.id,
+                profile_name="Мой профиль",
+                legal_type="individual",
+                enabled_features=get_feature_keys(),  # Все функции включены по умолчанию
+                is_complete=False,
+                is_public=False
+            )
+            session.add(owner_profile)
+            
+            # Создаём пустой профиль организации по умолчанию
+            from domain.entities.organization_profile import OrganizationProfile
+            
+            org_profile = OrganizationProfile(
+                user_id=new_user.id,
+                profile_name=f"{first_name} {last_name}" if last_name else first_name,
+                legal_type="individual",
+                is_default=True,
+                requisites={}
+            )
+            session.add(org_profile)
+            
+            # Назначаем максимальный тарифный план
+            from domain.entities.tariff_plan import TariffPlan
+            from domain.entities.user_subscription import UserSubscription, SubscriptionStatus
+            
+            # Ищем максимальный тариф
+            max_tariff_query = select(TariffPlan).where(
+                TariffPlan.is_active == True
+            ).order_by(
+                TariffPlan.price.desc()
+            ).limit(1)
+            result = await session.execute(max_tariff_query)
+            max_tariff = result.scalar_one_or_none()
+            
+            if max_tariff:
+                subscription = UserSubscription(
+                    user_id=new_user.id,
+                    tariff_plan_id=max_tariff.id,
+                    status=SubscriptionStatus.ACTIVE,
+                    auto_renewal=True
+                )
+                session.add(subscription)
+                logger.info(f"Assigned max tariff {max_tariff.name} to user {new_user.id}")
+            
+            await session.commit()
+            logger.info(f"Created owner profile and organization profile for user {new_user.id}")
         
         # Отправка PIN-кода для подтверждения
         try:
