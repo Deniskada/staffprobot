@@ -4872,12 +4872,27 @@ async def owner_profile(
         features_service = SystemFeaturesService()
         enabled_features = await features_service.get_enabled_features(db, user_id)
         
+        # Получаем информацию о текущем тарифе
+        from apps.web.services.limits_service import LimitsService
+        limits_service = LimitsService(db)
+        limits_summary = await limits_service.get_user_limits_summary(user_id)
+        
+        # Извлекаем данные о тарифе для отображения
+        subscription_info = None
+        if limits_summary.get('has_subscription'):
+            subscription_info = {
+                'tariff_name': limits_summary['subscription']['tariff_name'],
+                'expires_at': limits_summary['subscription'].get('expires_at'),
+                'status': limits_summary['subscription'].get('status', 'active')
+            }
+        
         return templates.TemplateResponse("owner/profile/index.html", {
             "request": request,
             "current_user": current_user,
             "available_interfaces": available_interfaces,
             "enabled_features": enabled_features,
             "profile": profile,
+            "subscription_info": subscription_info,
             "tags_by_category": tags_by_category,
             "tags_by_category_json": tags_by_category_json,
             "legal_types": [
