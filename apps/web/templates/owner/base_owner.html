@@ -104,6 +104,9 @@
     <aside class="sidebar">
         <nav>
             <ul class="sidebar-nav">
+                <!-- Получаем enabled_features из request.state -->
+                {% set enabled_features = request.state.enabled_features if request and hasattr(request.state, 'enabled_features') else [] %}
+                
                 <!-- Главная (всегда видна) -->
                 <li class="sidebar-item">
                     <a href="/owner" class="sidebar-link">
@@ -114,7 +117,6 @@
                 </li>
                 
                 <!-- Объекты (всегда видны) -->
-                {% set enabled_features = request.state.enabled_features if request and hasattr(request.state, 'enabled_features') else [] %}
                 {% if enabled_features | is_menu_visible('objects') %}
                 <li class="sidebar-item">
                     <a href="/owner/objects" class="sidebar-link">
@@ -125,8 +127,8 @@
                 </li>
                 {% endif %}
                 
-                <!-- Сотрудники (функции 1,2,3,4) -->
-                {% if enabled_features is defined and enabled_features | is_menu_visible('employees') %}
+                <!-- Сотрудники (всегда видны) -->
+                {% if enabled_features | is_menu_visible('employees') %}
                 <li class="sidebar-item">
                     <a href="/owner/employees" class="sidebar-link">
                         <i class="bi bi-people"></i>
