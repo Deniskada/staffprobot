@@ -13,9 +13,9 @@ class MenuConfig:
     # Маппинг пунктов меню на функции
     # Пункт меню отображается, если хотя бы одна из указанных функций включена
     MENU_ITEMS_FEATURES_MAP = {
-        'objects': ['recruitment_and_reviews', 'telegram_bot', 'notifications', 'basic_reports'],
-        'employees': ['recruitment_and_reviews', 'telegram_bot', 'notifications', 'basic_reports'],
-        'reports': ['recruitment_and_reviews', 'telegram_bot', 'notifications', 'basic_reports'],
+        'objects': [],  # Всегда видны
+        'employees': [],  # Всегда видны
+        'reports': ['basic_reports'],  # Базовые отчеты
         'analytics': ['analytics'],
         'calendar': ['shared_calendar'],
         'planning': ['payroll'],
@@ -28,8 +28,9 @@ class MenuConfig:
         'payroll_accruals': ['bonuses_and_penalties'],
         'moderation_cancellations': ['shift_tasks'],
         'analytics_cancellations': ['shift_tasks'],
-        'applications': ['recruitment_and_reviews', 'telegram_bot', 'notifications', 'basic_reports'],
-        'reviews': ['recruitment_and_reviews', 'telegram_bot', 'notifications', 'basic_reports'],
+        'applications': ['recruitment_and_reviews'],  # Найм сотрудников
+        'reviews': ['recruitment_and_reviews'],  # Найм сотрудников
+        'notifications_settings': ['notifications'],  # Уведомления
         # Настройки всегда видны
         'settings': [],
         'profile': [],
