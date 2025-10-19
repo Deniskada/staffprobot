@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 340/393 (86.5%)  
+**Общий прогресс:** 348/401 (86.8%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
@@ -9,7 +9,8 @@
 **Итерация 28 (Calendar Filters):** ✅ Завершена (7/7 задач)  
 **Итерация 29 (Shift Cancellation System):** ✅ Завершена (8/8 задач)  
 **Итерация 30 (Bug Fixes & Improvements):** ✅ Завершена (1/1 задача)  
-**Итерация 31 (Owner Profile Enhancement):** ✅ Завершена (3/3 задачи)
+**Итерация 31 (Owner Profile Enhancement):** ✅ Завершена (3/3 задачи)  
+**Итерация 32 (Contract Termination Settlement):** ✅ Завершена (8/8 задач)
 
 ## Итерация 25: Система управления уведомлениями в админке
 
@@ -254,7 +255,102 @@
 - [x] Документация обновлена ✅
 - [x] Задеплоено на production ✅
 
-## Итерация 32: Mobile App Integration
+## Итерация 32: Contract Termination Settlement ✅
+
+**Статус:** ✅ Завершена  
+**Длительность:** 1 день  
+**Приоритет:** Высокий  
+**Описание:** Система финального расчёта при расторжении договора с выбором режима выплаты.
+
+### Задачи
+
+- [x] **1.1. База данных: новые поля в Contract (0.1 дня)**
+  - Type: feature | Files: domain/entities/contract.py, migrations/
+  - Acceptance: добавлены termination_date и settlement_policy
+
+- [x] **1.2. База данных: таблица contract_terminations (0.1 дня)**
+  - Type: feature | Files: domain/entities/contract_termination.py, migrations/
+  - Acceptance: таблица для аналитики расторжений
+
+- [x] **1.3. Расширение форм расторжения (0.2 дня)**
+  - Type: feature | Files: apps/web/templates/owner/employees/contract_detail.html, apps/web/templates/manager/employees/detail.html
+  - Acceptance: добавлены поля: дата увольнения, режим финрасчёта, категория причины
+
+- [x] **1.4. ContractService: логика расторжения (0.2 дня)**
+  - Type: feature | Files: apps/web/services/contract_service.py
+  - Acceptance: сохранение полей, создание termination записи, отмена плановых смен
+
+- [x] **1.5. Учёт terminated contracts в начислениях (0.1 дня)**
+  - Type: feature | Files: core/celery/tasks/payroll_tasks.py
+  - Acceptance: terminated с settlement_policy='schedule' включены в выплаты по графику
+
+- [x] **1.6. Celery task финрасчёта (0.2 дня)**
+  - Type: feature | Files: core/celery/tasks/payroll_tasks.py, core/celery/celery_app.py
+  - Acceptance: create_final_settlements_by_termination_date запускается ежедневно в 01:05
+
+- [x] **1.7. PayrollAdjustmentService расширение (0.05 дня)**
+  - Type: feature | Files: shared/services/payroll_adjustment_service.py
+  - Acceptance: метод get_unapplied_adjustments_until()
+
+- [x] **1.8. Аналитика расторжений (0.15 дня)**
+  - Type: feature | Files: apps/web/routes/cancellations.py, apps/web/templates/owner/analytics/cancellations.html
+  - Acceptance: новая секция на странице /owner/analytics/cancellations
+
+### Реализация
+
+**Модель данных:**
+- Contract: `termination_date`, `settlement_policy`
+- ContractTermination: полная история расторжений
+
+**Режимы финрасчёта:**
+1. **По графику** (`settlement_policy='schedule'`):
+   - Начисления продолжают создаваться по регулярному графику
+   - Договор остаётся в выборке для payroll даже после расторжения
+
+2. **В дату увольнения** (`settlement_policy='termination_date'`):
+   - Разовая выплата всех накопленных adjustments в указанную дату
+   - Автоматическая задача создаёт PayrollEntry с payment_type='final_settlement'
+
+**Автоотмена смен:**
+- При указании termination_date автоматически отменяются все плановые смены после этой даты
+- Создаются ShiftCancellation записи с cancelled_by = владелец/управляющий
+
+**Celery конфигурация:**
+- `create_final_settlements_by_termination_date` - ежедневно 01:05
+- Очередь: 'shifts'
+
+**Категории причин расторжения:**
+- Нарушение дисциплины
+- Недостаточное качество работы
+- Соглашение сторон
+- Инициатива сотрудника
+- Сокращение штата
+- Переезд
+- Проблемы со здоровьем
+- Другое
+
+### Результат
+- ✅ Гибкий выбор режима финрасчёта при увольнении
+- ✅ Автоматическая обработка выплат уволенным сотрудникам
+- ✅ Автоотмена плановых смен после даты увольнения
+- ✅ Полная аналитика расторжений с категориями причин
+- ✅ Интеграция с существующей системой начислений
+- ✅ Backfill исторических adjustments (30.09-18.10)
+- ✅ Задеплоено на production
+
+### DoD
+- [x] Код следует правилам проекта ✅
+- [x] Миграции созданы и применены ✅
+- [x] Функционал протестирован на dev ✅
+- [x] Документация создана (`doc/vision_v1/features/contract_termination_settlement.md`) ✅
+- [x] Задеплоено на production ✅
+
+### Связанная документация
+- [Contract Termination Settlement](../vision_v1/features/contract_termination_settlement.md)
+- [Payroll System](../vision_v1/entities/payroll.md)
+- [Contract](../vision_v1/entities/contract.md)
+
+## Итерация 33: Mobile App Integration
 
 **Статус:** В планировании  
 **Длительность:** 10 дней  
