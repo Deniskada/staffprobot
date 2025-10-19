@@ -24,6 +24,7 @@ class OrgStructureService:
         name: str,
         parent_id: Optional[int] = None,
         description: Optional[str] = None,
+        organization_profile_id: Optional[int] = None,
         payment_system_id: Optional[int] = None,
         payment_schedule_id: Optional[int] = None,
         inherit_late_settings: bool = True,
@@ -77,6 +78,7 @@ class OrgStructureService:
                 parent_id=parent_id,
                 name=name,
                 description=description,
+                organization_profile_id=organization_profile_id,
                 payment_system_id=payment_system_id,
                 payment_schedule_id=payment_schedule_id,
                 inherit_late_settings=inherit_late_settings,
@@ -253,6 +255,8 @@ class OrgStructureService:
                 unit.name = data['name']
             if 'description' in data:
                 unit.description = data['description']
+            if 'organization_profile_id' in data:
+                unit.organization_profile_id = data['organization_profile_id']
             if 'payment_system_id' in data:
                 unit.payment_system_id = data['payment_system_id']
             if 'payment_schedule_id' in data:
@@ -287,6 +291,34 @@ class OrgStructureService:
             await self.db.rollback()
             logger.error(f"Error updating org unit: {e}", unit_id=unit_id)
             raise
+    
+    async def get_effective_organization_profile_id(self, unit_id: int) -> Optional[int]:
+        """
+        Получить эффективный organization_profile_id с учетом наследования.
+        
+        Если у подразделения не указан профиль - ищет в родительском дереве.
+        
+        Args:
+            unit_id: ID подразделения
+            
+        Returns:
+            Optional[int]: ID профиля организации или None
+        """
+        unit = await self.get_unit_by_id(unit_id)
+        if not unit:
+            return None
+        
+        # Если у текущего подразделения указан профиль - возвращаем его
+        if unit.organization_profile_id:
+            return unit.organization_profile_id
+        
+        # Если нет - ищем у родителя
+        if unit.parent_id:
+            return await self.get_effective_organization_profile_id(unit.parent_id)
+        
+        # Если дошли до корня и профиль не найден - возвращаем None
+        # В этом случае нужно будет использовать профиль по умолчанию владельца
+        return None
     
     async def delete_unit(self, unit_id: int, owner_id: int) -> bool:
         """

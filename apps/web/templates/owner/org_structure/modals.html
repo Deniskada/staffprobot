@@ -31,6 +31,25 @@
                     </div>
                     
                     <hr>
+                    <h6><i class="fas fa-building"></i> Профиль организации</h6>
+                    
+                    <div class="mb-3">
+                        <label for="create_organization_profile_id" class="form-label">
+                            Реквизиты для договоров
+                            <i class="bi bi-info-circle" 
+                               data-bs-toggle="tooltip" 
+                               title="Выберите профиль организации (ИП/ЮЛ) для подстановки реквизитов в договоры сотрудников этого подразделения"></i>
+                        </label>
+                        <select class="form-select" id="create_organization_profile_id" name="organization_profile_id">
+                            <option value="">Наследовать от родителя</option>
+                            <!-- Загружается через JS -->
+                        </select>
+                        <small class="form-text text-muted">
+                            Если не указано - будет использован профиль родительского подразделения
+                        </small>
+                    </div>
+                    
+                    <hr>
                     <h6><i class="fas fa-coins"></i> Финансовые настройки</h6>
                     
                     <div class="mb-3">
@@ -184,6 +203,25 @@
                     <div class="mb-3">
                         <label for="edit_description" class="form-label">Описание</label>
                         <textarea class="form-control" id="edit_description" name="description" rows="2"></textarea>
+                    </div>
+                    
+                    <hr>
+                    <h6><i class="fas fa-building"></i> Профиль организации</h6>
+                    
+                    <div class="mb-3">
+                        <label for="edit_organization_profile_id" class="form-label">
+                            Реквизиты для договоров
+                            <i class="bi bi-info-circle" 
+                               data-bs-toggle="tooltip" 
+                               title="Выберите профиль организации (ИП/ЮЛ) для подстановки реквизитов в договоры сотрудников этого подразделения"></i>
+                        </label>
+                        <select class="form-select" id="edit_organization_profile_id" name="organization_profile_id">
+                            <option value="">Наследовать от родителя</option>
+                            <!-- Загружается через JS -->
+                        </select>
+                        <small class="form-text text-muted">
+                            Если не указано - будет использован профиль родительского подразделения
+                        </small>
                     </div>
                     
                     <hr>
@@ -352,6 +390,7 @@ async function showEditModal(unitId) {
         document.getElementById('edit_unit_id').value = unit.id;
         document.getElementById('edit_name').value = unit.name;
         document.getElementById('edit_description').value = unit.description || '';
+        document.getElementById('edit_organization_profile_id').value = unit.organization_profile_id || '';
         document.getElementById('edit_payment_system_id').value = unit.payment_system_id || '';
         document.getElementById('edit_payment_schedule_id').value = unit.payment_schedule_id || '';
         document.getElementById('edit_inherit_late_settings').checked = unit.inherit_late_settings;
