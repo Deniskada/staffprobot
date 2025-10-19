@@ -573,6 +573,37 @@ class TagService:
         query = select(OwnerProfile).where(OwnerProfile.user_id == user_id)
         result = await session.execute(query)
         return result.scalar_one_or_none()
+
+    async def update_owner_profile_fields(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        fields: Dict[str, Any]
+    ) -> OwnerProfile:
+        """Частичное обновление полей профиля владельца (без трогания тегов).
+
+        Обновляет только переданные поля среди:
+        about_company, values, contact_phone, contact_messengers, photos.
+        Если профиля нет — создаёт пустой и применяет поля.
+        """
+        query = select(OwnerProfile).where(OwnerProfile.user_id == user_id)
+        result = await session.execute(query)
+        profile = result.scalar_one_or_none()
+
+        if not profile:
+            profile = OwnerProfile(user_id=user_id)
+            session.add(profile)
+
+        allowed_keys = {
+            'about_company', 'values', 'contact_phone', 'contact_messengers', 'photos'
+        }
+        for key in allowed_keys:
+            if key in fields:
+                setattr(profile, key, fields[key])
+
+        await session.commit()
+        await session.refresh(profile)
+        return profile
     
     async def _get_required_tags_for_legal_type(self, session: AsyncSession, legal_type: str) -> List[TagReference]:
         """Получить обязательные теги для типа собственника."""

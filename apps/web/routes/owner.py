@@ -4979,6 +4979,25 @@ async def owner_profile_save(
         raise HTTPException(status_code=500, detail="Ошибка сохранения профиля")
 
 
+@router.post("/profile/api/autosave")
+async def owner_profile_autosave(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Автосохранение отдельных полей профиля (JSON)."""
+    try:
+        data = await request.json()
+        user_id = await get_user_id_from_current_user(current_user, db)
+        from apps.web.services.tag_service import TagService
+        tag_service = TagService()
+        profile = await tag_service.update_owner_profile_fields(db, user_id, data)
+        return {"success": True, "profile_id": profile.id}
+    except Exception as e:
+        logger.error(f"Error autosaving profile: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/profile/tags/{category}")
 async def owner_profile_tags_category(
     request: Request,

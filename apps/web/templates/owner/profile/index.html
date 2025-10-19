@@ -1150,7 +1150,54 @@ async function toggleFeature(featureKey, enabled) {
     }
 }
 
-// Инициализация при загрузке
+// Автосохранение профиля (debounce)
+let autosaveTimer = null;
+function scheduleAutosave(payload) {
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => doAutosave(payload), 600);
+}
+
+async function doAutosave(extra) {
+    const payload = Object.assign({}, extra);
+    try {
+        const resp = await fetch('/owner/profile/api/autosave', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            console.warn('Автосохранение не удалось:', data.error);
+        }
+    } catch (e) {
+        console.warn('Ошибка автосохранения:', e);
+    }
+}
+
+function initAutosaveBindings() {
+    const aboutTextarea = document.querySelector('textarea[name="about_company"]');
+    if (aboutTextarea) {
+        aboutTextarea.addEventListener('input', () => scheduleAutosave({ about_company: aboutTextarea.value }));
+    }
+    const valuesTextarea = document.querySelector('textarea[name="values"]');
+    if (valuesTextarea) {
+        valuesTextarea.addEventListener('input', () => scheduleAutosave({ values: valuesTextarea.value }));
+    }
+    const phoneInput = document.getElementById('contact_phone');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', () => scheduleAutosave({ contact_phone: phoneInput.value }));
+    }
+    const messengerChecks = document.querySelectorAll('.messenger-check');
+    messengerChecks.forEach(cb => {
+        cb.addEventListener('change', () => {
+            updateMessengersData();
+            const arr = JSON.parse(document.getElementById('contactMessengersData').value || '[]');
+            scheduleAutosave({ contact_messengers: arr });
+        });
+    });
+}
+
+// Встраиваем существующие инициализации
 document.addEventListener('DOMContentLoaded', function() {
     initCharCounters();
     initMessengersCheckboxes();
@@ -1160,6 +1207,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateMessengersData();
     initPhoneMask();
     initOrgProfileTypeListeners();
+    initAutosaveBindings();
 });
 
 // Инициализация маски телефона
