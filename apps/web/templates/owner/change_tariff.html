@@ -261,6 +261,7 @@
                     {% if tariff.features %}
                     <hr>
                     <h6><i class="bi bi-star"></i> Дополнительные функции:</h6>
+                    {% if not feature_names %}
                     {% set feature_names = {
                         'multishift_support': 'Поддержка мультисменности',
                         'priority_support': 'Приоритетная поддержка',
@@ -292,6 +293,7 @@
                         'advanced_calendar': 'Расширенный календарь',
                         'custom_notifications': 'Настраиваемые уведомления'
                     } %}
+                    {% endif %}
                      {% for feature in tariff.features %}
                      <div class="feature-item">
                          <i class="bi bi-check-circle"></i>
