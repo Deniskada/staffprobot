@@ -106,6 +106,7 @@ async def owner_org_structure_create(
         name = form_data.get("name", "").strip()
         description = form_data.get("description", "").strip()
         parent_id_str = form_data.get("parent_id", "").strip()
+        organization_profile_id_str = form_data.get("organization_profile_id", "").strip()
         payment_system_id_str = form_data.get("payment_system_id", "").strip()
         payment_schedule_id_str = form_data.get("payment_schedule_id", "").strip()
         
@@ -127,6 +128,7 @@ async def owner_org_structure_create(
         
         # Парсинг ID
         parent_id = int(parent_id_str) if parent_id_str else None
+        organization_profile_id = int(organization_profile_id_str) if organization_profile_id_str else None
         payment_system_id = int(payment_system_id_str) if payment_system_id_str else None
         payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
         late_threshold_minutes = int(late_threshold_minutes_str) if late_threshold_minutes_str else None
@@ -143,6 +145,7 @@ async def owner_org_structure_create(
             name=name,
             parent_id=parent_id,
             description=description if description else None,
+            organization_profile_id=organization_profile_id,
             payment_system_id=payment_system_id,
             payment_schedule_id=payment_schedule_id,
             inherit_late_settings=inherit_late_settings,
@@ -185,6 +188,7 @@ async def owner_org_structure_edit(
         
         name = form_data.get("name", "").strip()
         description = form_data.get("description", "").strip()
+        organization_profile_id_str = form_data.get("organization_profile_id", "").strip()
         payment_system_id_str = form_data.get("payment_system_id", "").strip()
         payment_schedule_id_str = form_data.get("payment_schedule_id", "").strip()
         
@@ -207,6 +211,7 @@ async def owner_org_structure_edit(
             raise HTTPException(status_code=400, detail="Название обязательно")
         
         # Парсинг
+        organization_profile_id = int(organization_profile_id_str) if organization_profile_id_str else None
         payment_system_id = int(payment_system_id_str) if payment_system_id_str else None
         payment_schedule_id = int(payment_schedule_id_str) if payment_schedule_id_str else None
         late_threshold_minutes = int(late_threshold_minutes_str) if late_threshold_minutes_str else None
@@ -226,6 +231,7 @@ async def owner_org_structure_edit(
             data={
                 "name": name,
                 "description": description if description else None,
+                "organization_profile_id": organization_profile_id,
                 "payment_system_id": payment_system_id,
                 "payment_schedule_id": payment_schedule_id,
                 "inherit_late_settings": inherit_late_settings,

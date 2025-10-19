@@ -532,6 +532,7 @@ let editPaymentScheduleEditor;
 document.addEventListener('DOMContentLoaded', function() {
     loadScheduleStats();
     loadSystemStats();
+    loadOrganizationProfiles(); // Загружаем профили организаций для селектов
     
     // Автоматически выбрать головное подразделение
     const firstUnit = document.querySelector('.org-tree-item[data-level="0"]');
@@ -960,6 +961,53 @@ async function loadSystemStats() {
 }
 
 // ===== ФУНКЦИИ МОДАЛЬНЫХ ОКОН определены в modals.html =====
+
+// Загрузка профилей организаций для селектов
+async function loadOrganizationProfiles() {
+    try {
+        const response = await fetch('/owner/profile/organization/api/list');
+        const data = await response.json();
+        
+        if (data.success && data.profiles) {
+            const profiles = data.profiles;
+            
+            // Заполняем селект в форме создания
+            const createSelect = document.getElementById('create_organization_profile_id');
+            if (createSelect) {
+                // Сохраняем опцию "Наследовать от родителя"
+                createSelect.innerHTML = '<option value="">Наследовать от родителя</option>';
+                profiles.forEach(profile => {
+                    const option = document.createElement('option');
+                    option.value = profile.id;
+                    option.textContent = `${profile.profile_name} (${profile.legal_type === 'individual' ? 'ИП' : 'ЮЛ'})`;
+                    if (profile.is_default) {
+                        option.textContent += ' ⭐';
+                    }
+                    createSelect.appendChild(option);
+                });
+            }
+            
+            // Заполняем селект в форме редактирования
+            const editSelect = document.getElementById('edit_organization_profile_id');
+            if (editSelect) {
+                editSelect.innerHTML = '<option value="">Наследовать от родителя</option>';
+                profiles.forEach(profile => {
+                    const option = document.createElement('option');
+                    option.value = profile.id;
+                    option.textContent = `${profile.profile_name} (${profile.legal_type === 'individual' ? 'ИП' : 'ЮЛ'})`;
+                    if (profile.is_default) {
+                        option.textContent += ' ⭐';
+                    }
+                    editSelect.appendChild(option);
+                });
+            }
+            
+            console.log('Organization profiles loaded:', profiles.length);
+        }
+    } catch (error) {
+        console.error('Error loading organization profiles:', error);
+    }
+}
 </script>
 
 {% include 'shared/payment_schedule_editor_modal.html' %}
