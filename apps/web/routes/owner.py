@@ -205,6 +205,32 @@ async def owner_dashboard_redirect(request: Request):
     return RedirectResponse(url="/owner/", status_code=status.HTTP_302_FOUND)
 
 
+@router.get("/notifications", response_class=HTMLResponse, name="owner_notifications")
+async def owner_notifications(request: Request):
+    """Страница управления уведомлениями"""
+    current_user = await get_current_user(request)
+    if not current_user:
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        async with get_async_session() as session:
+            user_id = await get_user_id_from_current_user(current_user, session)
+            owner_context = await get_owner_context(user_id, session)
+            
+            return templates.TemplateResponse("owner/notifications.html", {
+                "request": request,
+                "current_user": current_user,
+                **owner_context
+            })
+    except Exception as e:
+        logger.error(f"Error loading notifications page: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки страницы уведомлений")
+
+
 @router.get("/objects", response_class=HTMLResponse, name="owner_objects")
 async def owner_objects(
     request: Request,
