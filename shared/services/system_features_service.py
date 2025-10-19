@@ -174,6 +174,18 @@ class SystemFeaturesService:
         await session.commit()
         await session.refresh(profile)
         
+        # Инвалидируем кэш Redis
+        from core.cache.redis_cache import cache
+        # Получаем telegram_id для ключа кэша
+        from sqlalchemy import select as sql_select
+        from domain.entities.user import User
+        user_result = await session.execute(sql_select(User).where(User.id == user_id))
+        user = user_result.scalar_one_or_none()
+        if user:
+            cache_key = f"enabled_features:{user.telegram_id}"
+            await cache.delete(cache_key)
+            logger.info(f"Invalidated cache for user {user.telegram_id}")
+        
         logger.info(
             f"Toggled feature {feature_key} to {enabled} for user {user_id}. Final state: {profile.enabled_features}"
         )
