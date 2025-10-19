@@ -189,9 +189,21 @@ async def root(request: Request, db: AsyncSession = Depends(get_db_session)):
     try:
         tariff_service = TariffService(db)
         tariffs = await tariff_service.get_all_tariff_plans(active_only=True)
+        
+        # Загружаем системные функции для отображения названий
+        from shared.services.system_features_service import SystemFeaturesService
+        features_service = SystemFeaturesService()
+        all_features = await features_service.get_all_features(db)
+        feature_names_map = {f.key: f.name for f in all_features}
     except Exception:
         tariffs = []
-    return templates.TemplateResponse("landing.html", {"request": request, "tariffs": tariffs})
+        feature_names_map = {}
+    
+    return templates.TemplateResponse("landing.html", {
+        "request": request, 
+        "tariffs": tariffs,
+        "feature_names": feature_names_map
+    })
 
 
 @app.get("/login")

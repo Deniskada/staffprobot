@@ -4811,6 +4811,10 @@ async def owner_profile(
 ):
     """Страница профиля владельца (как в оригинале)"""
     try:
+        # Проверка типа current_user
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
         # Получаем внутренний user_id (как в оригинале)
         user_id = await get_user_id_from_current_user(current_user, db)
         
@@ -6339,6 +6343,12 @@ async def owner_change_tariff_page(
             # Получаем текущую подписку
             limits_service = LimitsService(session)
             limits_summary = await limits_service.get_user_limits_summary(user_id)
+            
+            # Загружаем системные функции для отображения названий
+            from shared.services.system_features_service import SystemFeaturesService
+            features_service = SystemFeaturesService()
+            all_features = await features_service.get_all_features(session)
+            feature_names_map = {f.key: f.name for f in all_features}
         
         return templates.TemplateResponse("owner/change_tariff.html", {
             "request": request,
@@ -6346,7 +6356,8 @@ async def owner_change_tariff_page(
             "title": "Смена тарифа",
             "tariff_plans": tariff_plans,
             "limits_summary": limits_summary,
-            "user_id": user_id
+            "user_id": user_id,
+            "feature_names": feature_names_map
         })
         
     except Exception as e:
