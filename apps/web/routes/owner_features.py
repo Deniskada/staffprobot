@@ -2,7 +2,7 @@
 Роуты для управления функциями в профиле владельца.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,13 +49,23 @@ async def get_features_status(
 
 @router.post("/api/toggle")
 async def toggle_feature(
-    feature_key: str,
-    enabled: bool,
+    request: Request,
     current_user: dict = Depends(require_owner_or_superadmin),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Включить/выключить функцию."""
     try:
+        # Получаем JSON данные
+        data = await request.json()
+        feature_key = data.get('feature_key')
+        enabled = data.get('enabled')
+        
+        if not feature_key or enabled is None:
+            return JSONResponse({
+                "success": False,
+                "error": "Не указаны обязательные параметры"
+            }, status_code=400)
+        
         user_id = await get_user_id_from_current_user(current_user, session)
         
         service = SystemFeaturesService()
