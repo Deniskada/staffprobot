@@ -2300,6 +2300,12 @@ async def employee_plan_shift(
         await db.commit()
         await db.refresh(shift_schedule)
         
+        # Очищаем кэш календаря для немедленного отображения
+        from core.cache.redis_cache import cache
+        await cache.clear_pattern("calendar_shifts:*")
+        await cache.clear_pattern("api_response:*")
+        logger.info(f"Calendar cache cleared after planning shift {shift_schedule.id}")
+        
         logger.info(f"Employee {user_id} successfully planned shift {shift_schedule.id} for timeslot {timeslot_id}")
         return {
             "success": True,
