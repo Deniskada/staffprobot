@@ -44,7 +44,7 @@ def process_closed_shifts_adjustments():
             async with get_async_session() as session:
                 # Найти смены, закрытые за последние 15 минут (по updated_at)
                 shifts_query = select(Shift).options(
-                    selectinload(Shift.object),
+                    selectinload(Shift.object).selectinload(Object.org_unit),
                     selectinload(Shift.time_slot)
                 ).where(
                     and_(
@@ -143,16 +143,24 @@ def process_closed_shifts_adjustments():
                                     late_seconds = (shift.actual_start - shift.planned_start).total_seconds()
                                     late_minutes = int(late_seconds / 60)
                                     
-                                    # Получить penalty_per_minute (упрощенная версия без рекурсии)
-                                    # Берем из объекта напрямую, без иерархии org_unit
+                                    # Получить настройки штрафа с учетом наследования от org_unit
                                     obj = shift.object
-                                    penalty_per_minute = obj.late_penalty_per_minute
+                                    late_settings = obj.get_effective_late_settings()
+                                    penalty_per_minute = late_settings.get('penalty_per_minute')
+                                    threshold_minutes = late_settings.get('threshold_minutes', 0)
+                                    
+                                    logger.debug(
+                                        f"Late settings for shift {shift.id}",
+                                        penalty_per_minute=penalty_per_minute,
+                                        threshold_minutes=threshold_minutes,
+                                        source=late_settings.get('source')
+                                    )
                                     
                                     # Если у объекта не задан штраф - пропускаем
-                                    # (полная логика с иерархией требует дополнительных запросов)
-                                    
-                                    if penalty_per_minute and late_minutes > 0:
-                                        penalty_amount = Decimal(str(late_minutes)) * Decimal(str(penalty_per_minute))
+                                    if penalty_per_minute and late_minutes > threshold_minutes:
+                                        # Штрафуем только за минуты сверх порога
+                                        penalized_minutes = late_minutes - threshold_minutes
+                                        penalty_amount = Decimal(str(penalized_minutes)) * Decimal(str(penalty_per_minute))
                                         
                                         late_adjustment = PayrollAdjustment(
                                             shift_id=shift.id,
@@ -160,10 +168,12 @@ def process_closed_shifts_adjustments():
                                             object_id=shift.object_id,
                                             adjustment_type='late_start',
                                             amount=-abs(penalty_amount),
-                                            description=f'Штраф за опоздание на {late_minutes} мин',
+                                            description=f'Штраф за опоздание: {late_minutes} мин (порог {threshold_minutes} мин)',
                                             details={
                                                 'shift_id': shift.id,
                                                 'late_minutes': late_minutes,
+                                                'threshold_minutes': threshold_minutes,
+                                                'penalized_minutes': penalized_minutes,
                                                 'penalty_per_minute': float(penalty_per_minute),
                                                 'planned_start': shift.planned_start.isoformat(),
                                                 'actual_start': shift.actual_start.isoformat()
@@ -178,7 +188,10 @@ def process_closed_shifts_adjustments():
                                             f"Late penalty created",
                                             shift_id=shift.id,
                                             late_minutes=late_minutes,
-                                            penalty=float(penalty_amount)
+                                            threshold_minutes=threshold_minutes,
+                                            penalized_minutes=penalized_minutes,
+                                            penalty=float(penalty_amount),
+                                            source=late_settings.get('source')
                                         )
                         
                         # 3. Обработать задачи смены (новая логика комбинирования)
