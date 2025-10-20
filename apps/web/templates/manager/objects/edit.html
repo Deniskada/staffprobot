@@ -185,37 +185,90 @@
                             </div>
                             
                             <div class="mb-3">
-                                <label for="shift_tasks" class="form-label">Задачи на смене</label>
+                                <label for="shift_tasks" class="form-label">
+                                    Задачи на смене
+                                    <i class="fas fa-info-circle text-muted" 
+                                       data-bs-toggle="tooltip" 
+                                       title="Задачи, которые сотрудник должен выполнить на смене"></i>
+                                </label>
                                 <div id="tasks-container">
                                     {% if object.shift_tasks %}
                                         {% for task in object.shift_tasks %}
-                                        <div class="task-item mb-2">
-                                            <div class="input-group">
-                                                <input type="text" 
-                                                       class="form-control" 
-                                                       name="shift_tasks[]" 
-                                                       value="{{ task }}"
-                                                       placeholder="Например: Уборка торгового зала">
-                                                <button type="button" 
-                                                        class="btn btn-outline-danger" 
-                                                        onclick="removeTask(this)">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
+                                        <div class="task-item mb-3 border rounded p-3">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label class="form-label small">Описание задачи</label>
+                                                    <input type="text" 
+                                                           class="form-control" 
+                                                           name="task_texts[]" 
+                                                           value="{{ task.text if task is mapping else task }}"
+                                                           placeholder="Например: Уборка торгового зала">
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <label class="form-label small">Премия (₽)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           name="task_deductions[]" 
+                                                           value="{{ task.deduction_amount if task is mapping else 100 }}"
+                                                           step="0.01">
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <label class="form-label small">Обязательная</label>
+                                                    <div class="form-check mt-2">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               name="task_mandatory[]" 
+                                                               value="{{ loop.index0 }}"
+                                                               {% if task is mapping and task.is_mandatory %}checked{% elif task is not mapping %}checked{% endif %}>
+                                                        <label class="form-check-label">Да</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-1 d-flex align-items-end">
+                                                    <button type="button" 
+                                                            class="btn btn-outline-danger btn-sm w-100" 
+                                                            onclick="removeTask(this)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                         {% endfor %}
                                     {% else %}
-                                        <div class="task-item mb-2">
-                                            <div class="input-group">
-                                                <input type="text" 
-                                                       class="form-control" 
-                                                       name="shift_tasks[]" 
-                                                       placeholder="Например: Уборка торгового зала">
-                                                <button type="button" 
-                                                        class="btn btn-outline-danger" 
-                                                        onclick="removeTask(this)">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
+                                        <div class="task-item mb-3 border rounded p-3">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label class="form-label small">Описание задачи</label>
+                                                    <input type="text" 
+                                                           class="form-control" 
+                                                           name="task_texts[]" 
+                                                           placeholder="Например: Уборка торгового зала">
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <label class="form-label small">Премия (₽)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           name="task_deductions[]" 
+                                                           value="100"
+                                                           step="0.01">
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <label class="form-label small">Обязательная</label>
+                                                    <div class="form-check mt-2">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               name="task_mandatory[]" 
+                                                               value="0"
+                                                               checked>
+                                                        <label class="form-check-label">Да</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-1 d-flex align-items-end">
+                                                    <button type="button" 
+                                                            class="btn btn-outline-danger btn-sm w-100" 
+                                                            onclick="removeTask(this)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     {% endif %}
@@ -441,24 +494,51 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Функции для управления задачами
+let currentTaskCount = {{ object.shift_tasks|length if object.shift_tasks else 1 }};
+
 function addTask() {
     const container = document.getElementById('tasks-container');
     const taskItem = document.createElement('div');
-    taskItem.className = 'task-item mb-2';
+    taskItem.className = 'task-item mb-3 border rounded p-3';
     taskItem.innerHTML = `
-        <div class="input-group">
-            <input type="text" 
-                   class="form-control" 
-                   name="shift_tasks[]" 
-                   placeholder="Например: Уборка торгового зала">
-            <button type="button" 
-                    class="btn btn-outline-danger" 
-                    onclick="removeTask(this)">
-                <i class="bi bi-trash"></i>
-            </button>
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label small">Описание задачи</label>
+                <input type="text" 
+                       class="form-control" 
+                       name="task_texts[]" 
+                       placeholder="Например: Уборка торгового зала">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Премия (₽)</label>
+                <input type="number" 
+                       class="form-control" 
+                       name="task_deductions[]" 
+                       value="100"
+                       step="0.01">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Обязательная</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="task_mandatory[]" 
+                           value="${currentTaskCount}"
+                           checked>
+                    <label class="form-check-label">Да</label>
+                </div>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="button" 
+                        class="btn btn-outline-danger btn-sm w-100" 
+                        onclick="removeTask(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
         </div>
     `;
     container.appendChild(taskItem);
+    currentTaskCount++;
 }
 
 function removeTask(button) {
