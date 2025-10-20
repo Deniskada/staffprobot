@@ -461,7 +461,24 @@ async def manager_object_edit_post(
             is_active = form_data.get("is_active") == "true"
             work_conditions = form_data.get("work_conditions", "").strip()
             employee_position = form_data.get("employee_position", "").strip()
-            shift_tasks = form_data.getlist("shift_tasks[]")
+            
+            # Парсинг задач с новой структурой
+            task_texts = form_data.getlist("task_texts[]")
+            task_deductions = form_data.getlist("task_deductions[]")
+            task_mandatory = form_data.getlist("task_mandatory[]")
+            
+            logger.info(f"Task parsing (manager edit) - texts: {task_texts}, deductions: {task_deductions}, mandatory: {task_mandatory}")
+            
+            shift_tasks = []
+            for idx, text in enumerate(task_texts):
+                if text.strip():
+                    is_mandatory = str(idx) in task_mandatory
+                    logger.info(f"Task {idx}: text='{text}', is_mandatory={is_mandatory}")
+                    shift_tasks.append({
+                        "text": text.strip(),
+                        "is_mandatory": is_mandatory,
+                        "deduction_amount": float(task_deductions[idx]) if idx < len(task_deductions) else 100.0
+                    })
             
             # Получение дней недели (битовая маска)
             work_days_mask_str = form_data.get("work_days_mask", "0").strip()
