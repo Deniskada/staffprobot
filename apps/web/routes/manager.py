@@ -3873,6 +3873,12 @@ async def quick_create_timeslot_manager(
             await db.commit()
             await db.refresh(timeslot)
             
+            # Очищаем кэш календаря для немедленного отображения
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
+            logger.info(f"Calendar cache cleared after creating timeslot {timeslot.id}")
+            
             logger.info(f"Timeslot created successfully with ID: {timeslot.id}")
             
             # Возвращаем результат до закрытия сессии

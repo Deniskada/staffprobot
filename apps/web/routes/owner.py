@@ -2677,6 +2677,12 @@ async def owner_calendar_quick_create_timeslot(
             if not new_slot:
                 raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
 
+            # Очищаем кэш календаря для немедленного отображения
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
+            logger.info(f"Calendar cache cleared after creating timeslot {new_slot.id}")
+
             # Инфо об объекте для ответа
             obj = await object_service.get_object_by_id(
                 object_id,
