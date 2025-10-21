@@ -319,6 +319,10 @@
                         <input type="number" class="form-control" id="deduction_amount" step="0.01" min="0" required>
                     </div>
                     <div class="mb-3">
+                        <label for="deduction_date" class="form-label">Дата начисления *</label>
+                        <input type="date" class="form-control" id="deduction_date" required>
+                    </div>
+                    <div class="mb-3">
                         <label for="deduction_description" class="form-label">Описание *</label>
                         <textarea class="form-control" id="deduction_description" rows="3" required></textarea>
                     </div>
@@ -354,6 +358,10 @@
                     <div class="mb-3">
                         <label for="bonus_amount" class="form-label">Сумма (₽) *</label>
                         <input type="number" class="form-control" id="bonus_amount" step="0.01" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bonus_date" class="form-label">Дата начисления *</label>
+                        <input type="date" class="form-control" id="bonus_date" required>
                     </div>
                     <div class="mb-3">
                         <label for="bonus_description" class="form-label">Описание *</label>
@@ -408,70 +416,101 @@
 </div>
 
 <script>
+// Установка текущей даты при открытии модальных окон
+document.getElementById('addDeductionModal')?.addEventListener('shown.bs.modal', function () {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('deduction_date').value = today;
+});
+
+document.getElementById('addBonusModal')?.addEventListener('shown.bs.modal', function () {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('bonus_date').value = today;
+});
+
 // Добавление удержания
-document.getElementById('addDeductionForm').addEventListener('submit', async function(e) {
+document.getElementById('addDeductionForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
+    console.log('Форма удержания отправлена');
     
     const amount = document.getElementById('deduction_amount').value;
+    const adjustmentDate = document.getElementById('deduction_date').value;
     const description = document.getElementById('deduction_description').value;
     const objectId = document.getElementById('deduction_object').value;
+    
+    console.log('Данные формы:', { amount, adjustmentDate, description, objectId, employee_id: '{{ entry.employee_id }}' });
     
     const formData = new FormData();
     formData.append('employee_id', '{{ entry.employee_id }}');
     formData.append('adjustment_type', 'manual_deduction');
     formData.append('amount', amount);
     formData.append('description', description);
-    formData.append('adjustment_date', new Date().toISOString().split('T')[0]);
+    formData.append('adjustment_date', adjustmentDate);
+    formData.append('payroll_entry_id', '{{ entry.id }}');
     if (objectId) formData.append('object_id', objectId);
     
     try {
-        const response = await fetch('/manager/payroll-adjustments/create', {
+        console.log('Отправка запроса на /manager/payroll/{{ entry.id }}/add-adjustment');
+        const response = await fetch('/manager/payroll/{{ entry.id }}/add-adjustment', {
             method: 'POST',
             body: formData
         });
         
+        console.log('Ответ получен, статус:', response.status);
         const data = await response.json();
+        console.log('Данные ответа:', data);
         
         if (data.success) {
+            alert('Удержание добавлено успешно!');
             location.reload();
         } else {
             alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
         }
     } catch (error) {
+        console.error('Ошибка:', error);
         alert('Ошибка добавления: ' + error);
     }
 });
 
 // Добавление доплаты
-document.getElementById('addBonusForm').addEventListener('submit', async function(e) {
+document.getElementById('addBonusForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
+    console.log('Форма доплаты отправлена');
     
     const amount = document.getElementById('bonus_amount').value;
+    const adjustmentDate = document.getElementById('bonus_date').value;
     const description = document.getElementById('bonus_description').value;
     const objectId = document.getElementById('bonus_object').value;
+    
+    console.log('Данные формы:', { amount, adjustmentDate, description, objectId, employee_id: '{{ entry.employee_id }}' });
     
     const formData = new FormData();
     formData.append('employee_id', '{{ entry.employee_id }}');
     formData.append('adjustment_type', 'manual_bonus');
     formData.append('amount', amount);
     formData.append('description', description);
-    formData.append('adjustment_date', new Date().toISOString().split('T')[0]);
+    formData.append('adjustment_date', adjustmentDate);
+    formData.append('payroll_entry_id', '{{ entry.id }}');
     if (objectId) formData.append('object_id', objectId);
     
     try {
-        const response = await fetch('/manager/payroll-adjustments/create', {
+        console.log('Отправка запроса на /manager/payroll/{{ entry.id }}/add-adjustment');
+        const response = await fetch('/manager/payroll/{{ entry.id }}/add-adjustment', {
             method: 'POST',
             body: formData
         });
         
+        console.log('Ответ получен, статус:', response.status);
         const data = await response.json();
+        console.log('Данные ответа:', data);
         
         if (data.success) {
+            alert('Доплата добавлена успешно!');
             location.reload();
         } else {
             alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
         }
     } catch (error) {
+        console.error('Ошибка:', error);
         alert('Ошибка добавления: ' + error);
     }
 });

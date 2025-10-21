@@ -533,10 +533,13 @@ function openConfirmPaymentModal(paymentId) {
 
 // Редактирование корректировки
 document.querySelectorAll('.btn-edit-adjustment').forEach(btn => {
+    console.log('Кнопка редактирования найдена:', btn.dataset.adjustmentId);
     btn.addEventListener('click', function() {
         const adjustmentId = this.dataset.adjustmentId;
         const amount = this.dataset.amount;
         const description = this.dataset.description;
+        
+        console.log('Клик на редактирование:', { adjustmentId, amount, description });
         
         document.getElementById('edit_adjustment_id').value = adjustmentId;
         document.getElementById('edit_amount').value = amount;
@@ -547,38 +550,49 @@ document.querySelectorAll('.btn-edit-adjustment').forEach(btn => {
     });
 });
 
-document.getElementById('editAdjustmentForm').addEventListener('submit', async function(e) {
+document.getElementById('editAdjustmentForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
+    console.log('Форма редактирования отправлена');
     
     const adjustmentId = document.getElementById('edit_adjustment_id').value;
     const amount = document.getElementById('edit_amount').value;
     const description = document.getElementById('edit_description').value;
+    
+    console.log('Данные редактирования:', { adjustmentId, amount, description });
     
     const formData = new FormData();
     formData.append('amount', amount);
     formData.append('description', description);
     
     try {
+        console.log(`Отправка запроса на /owner/payroll-adjustments/${adjustmentId}/edit`);
         const response = await fetch(`/owner/payroll-adjustments/${adjustmentId}/edit`, {
             method: 'POST',
             body: formData
         });
         
+        console.log('Ответ получен, статус:', response.status);
         const data = await response.json();
+        console.log('Данные ответа:', data);
         
         if (data.success) {
+            alert('Корректировка обновлена!');
             location.reload();
         } else {
             alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
         }
     } catch (error) {
+        console.error('Ошибка:', error);
         alert('Ошибка редактирования: ' + error);
     }
 });
 
 // Удаление корректировки
 document.querySelectorAll('.btn-delete-adjustment').forEach(btn => {
+    console.log('Кнопка удаления найдена:', btn.dataset.adjustmentId);
     btn.addEventListener('click', async function() {
+        console.log('Клик на удаление:', this.dataset.adjustmentId);
+        
         if (!confirm('Вы уверены, что хотите удалить эту корректировку?')) {
             return;
         }
@@ -586,18 +600,23 @@ document.querySelectorAll('.btn-delete-adjustment').forEach(btn => {
         const adjustmentId = this.dataset.adjustmentId;
         
         try {
+            console.log(`Отправка запроса на /owner/payroll-adjustments/${adjustmentId}/delete`);
             const response = await fetch(`/owner/payroll-adjustments/${adjustmentId}/delete`, {
                 method: 'POST'
             });
             
+            console.log('Ответ получен, статус:', response.status);
             const data = await response.json();
+            console.log('Данные ответа:', data);
             
             if (data.success) {
+                alert('Корректировка удалена!');
                 location.reload();
             } else {
                 alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
             }
         } catch (error) {
+            console.error('Ошибка:', error);
             alert('Ошибка удаления: ' + error);
         }
     });
