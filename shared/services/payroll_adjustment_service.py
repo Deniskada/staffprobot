@@ -409,7 +409,9 @@ class PayrollAdjustmentService:
         
         # Логирование изменений
         edit_history = adjustment.edit_history or []
-        timestamp = datetime.now().isoformat()
+        from datetime import timezone
+        now_utc = datetime.now(timezone.utc)
+        timestamp = now_utc.isoformat()
         
         for field, new_value in updates.items():
             if field in ['amount', 'description', 'adjustment_type']:
@@ -428,7 +430,7 @@ class PayrollAdjustmentService:
         
         adjustment.edit_history = edit_history
         adjustment.updated_by = updated_by
-        adjustment.updated_at = datetime.now()
+        adjustment.updated_at = now_utc
         
         # Не используем flush() - commit будет в вызывающем коде
         
