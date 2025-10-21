@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 352/405 (86.9%)  
+**Общий прогресс:** 357/410 (87.1%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
@@ -11,7 +11,8 @@
 **Итерация 30 (Bug Fixes & Improvements):** ✅ Завершена (1/1 задача)  
 **Итерация 31 (Owner Profile Enhancement):** ✅ Завершена (3/3 задачи)  
 **Итерация 32 (Contract Termination Settlement):** ✅ Завершена (8/8 задач)  
-**Итерация 33 (Payroll System Improvements):** ✅ Завершена (4/4 задачи)
+**Итерация 33 (Payroll System Improvements):** ✅ Завершена (4/4 задачи)  
+**Итерация 34 (Payroll Adjustments Enhancement):** ✅ Завершена (5/5 задач)
 
 ## Итерация 25: Система управления уведомлениями в админке
 
@@ -413,7 +414,83 @@
 - [Owner Routes](../vision_v1/roles/owner.md)
 - [Manager Routes](../vision_v1/roles/manager.md)
 
-## Итерация 34: Mobile App Integration
+## Итерация 34: Payroll Adjustments Enhancement ✅
+
+**Статус:** ✅ Завершена  
+**Длительность:** 0.5 дня  
+**Приоритет:** Высокий  
+**Описание:** Улучшение функционала редактирования и удаления корректировок начислений с автоматическим пересчётом и протоколом изменений.
+
+### Задачи
+
+- [x] **1.1. Редактирование/удаление применённых корректировок (0.2 дня)**
+  - Type: feature | Files: apps/web/routes/owner_payroll_adjustments.py, apps/web/routes/manager_payroll_adjustments.py, apps/web/templates/owner/payroll/detail.html, apps/web/templates/manager/payroll/detail.html
+  - Acceptance: владелец и управляющий могут редактировать/удалять ручные корректировки внутри начислений с автоматическим пересчётом сумм
+
+- [x] **1.2. Исправление timezone для datetime полей (0.1 дня)**
+  - Type: bugfix | Files: shared/services/payroll_adjustment_service.py, apps/web/routes/manager_payroll.py, apps/web/routes/payroll.py
+  - Acceptance: все datetime поля (created_at, updated_at, edit_history.timestamp) создаются timezone-aware (UTC)
+
+- [x] **1.3. Корректный знак для manual_deduction при редактировании (0.1 дня)**
+  - Type: bugfix | Files: apps/web/routes/owner_payroll_adjustments.py, apps/web/routes/manager_payroll_adjustments.py
+  - Acceptance: при редактировании manual_deduction сумма автоматически становится отрицательной
+
+- [x] **1.4. Загрузка user_name для edit_history (0.05 дня)**
+  - Type: feature | Files: apps/web/routes/manager_payroll.py, apps/web/routes/payroll.py, apps/web/templates/manager/payroll/detail.html, apps/web/templates/owner/payroll/detail.html
+  - Acceptance: в протоколе изменений отображается "Фамилия Имя" вместо "ID: XX"
+
+- [x] **1.5. Протокол изменений с историей редактирования (0.05 дня)**
+  - Type: feature | Files: уже реализовано в шаблонах
+  - Acceptance: на страницах начислений отображается протокол всех изменений корректировок
+
+### Реализация
+
+**Ключевые улучшения:**
+
+1. **Редактирование применённых корректировок:**
+   - Снята проверка `is_applied == False`
+   - После изменения автоматически пересчитываются суммы в PayrollEntry
+   - Логика пересчёта: загружаются все корректировки начисления → пересчитываются gross_amount, total_bonuses, total_deductions, net_amount
+
+2. **Автоматический знак для удержаний:**
+   - При редактировании manual_deduction применяется `-abs(amount)`
+   - Исключает ошибки отображения (удержание показывалось как премия)
+
+3. **Timezone-aware datetime:**
+   - created_at: `datetime.now(timezone.utc)`
+   - updated_at: `datetime.now(timezone.utc)`
+   - edit_history.timestamp: конвертируется из ISO строки в timezone-aware datetime при загрузке
+
+4. **Загрузка пользователей для истории:**
+   - Собираются все user_id из edit_history
+   - Загружаются пользователи одним запросом
+   - user_name добавляется к каждому изменению
+
+5. **Протокол изменений:**
+   - Отображает: создание, редактирование, применение корректировок
+   - Сортировка по timestamp (все timezone-aware)
+   - Показывает: кто, когда, что изменил (поле, старое значение, новое значение)
+
+### Результат
+- ✅ Владелец и управляющий могут редактировать применённые корректировки
+- ✅ Автоматический пересчёт сумм при изменениях
+- ✅ Корректное отображение удержаний (отрицательные суммы)
+- ✅ Полная история изменений с именами пользователей
+- ✅ Исправлены все проблемы с timezone
+- ✅ Задеплоено на production
+
+### DoD
+- [x] Код следует правилам проекта ✅
+- [x] Функционал протестирован на dev ✅
+- [x] Документация обновлена ✅
+- [x] Задеплоено на production ✅
+
+### Связанная документация
+- [Payroll System](../vision_v1/entities/payroll.md)
+- [Owner Routes](../vision_v1/roles/owner.md)
+- [Manager Routes](../vision_v1/roles/manager.md)
+
+## Итерация 35: Mobile App Integration
 
 **Статус:** В планировании  
 **Длительность:** 10 дней  
