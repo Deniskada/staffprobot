@@ -112,7 +112,7 @@
                                             <td>{{ deduction.description }}</td>
                                             <td class="text-danger"><strong>-{{ "%.2f"|format(deduction.amount|abs) }} ₽</strong></td>
                                             <td>
-                                                {% if deduction.adjustment_type in ['manual_deduction'] and not deduction.is_applied %}
+                                                {% if deduction.adjustment_type in ['manual_bonus', 'manual_deduction'] and not deduction.is_applied %}
                                                 <button class="btn btn-sm btn-outline-primary btn-edit-adjustment"
                                                         data-adjustment-id="{{ deduction.id }}"
                                                         data-amount="{{ deduction.amount|abs }}"
@@ -168,7 +168,7 @@
                                             <td>{{ bonus.description }}</td>
                                             <td class="text-success"><strong>+{{ "%.2f"|format(bonus.amount) }} ₽</strong></td>
                                             <td>
-                                                {% if bonus.adjustment_type in ['manual_bonus'] and not bonus.is_applied %}
+                                                {% if bonus.adjustment_type in ['manual_bonus', 'manual_deduction'] and not bonus.is_applied %}
                                                 <button class="btn btn-sm btn-outline-primary btn-edit-adjustment"
                                                         data-adjustment-id="{{ bonus.id }}"
                                                         data-amount="{{ bonus.amount }}"
