@@ -314,15 +314,38 @@ class PayrollAdjustmentService:
         Returns:
             List[PayrollAdjustment]: Список неприменённых корректировок
         """
-        query = select(PayrollAdjustment).where(
-            PayrollAdjustment.employee_id == employee_id,
-            PayrollAdjustment.is_applied == False,
-            func.date(PayrollAdjustment.created_at) >= period_start,
-            func.date(PayrollAdjustment.created_at) <= period_end
-        ).options(
-            selectinload(PayrollAdjustment.shift),
-            selectinload(PayrollAdjustment.object)
-        ).order_by(PayrollAdjustment.created_at)
+        # Для корректировок, связанных со сменами (shift_base/late_start/task_*),
+        # используем дату завершения смены. Для прочих (manual_*), используем created_at.
+        from sqlalchemy import or_, and_
+        from domain.entities.shift import Shift
+
+        query = (
+            select(PayrollAdjustment)
+            .outerjoin(Shift, PayrollAdjustment.shift_id == Shift.id)
+            .where(
+                PayrollAdjustment.employee_id == employee_id,
+                PayrollAdjustment.is_applied == False,
+                or_(
+                    # Если есть привязка к смене — фильтруем по дате смены
+                    and_(
+                        PayrollAdjustment.shift_id.isnot(None),
+                        func.date(Shift.end_time) >= period_start,
+                        func.date(Shift.end_time) <= period_end,
+                    ),
+                    # Если нет привязки к смене — фильтруем по дате создания корректировки
+                    and_(
+                        PayrollAdjustment.shift_id.is_(None),
+                        func.date(PayrollAdjustment.created_at) >= period_start,
+                        func.date(PayrollAdjustment.created_at) <= period_end,
+                    ),
+                ),
+            )
+            .options(
+                selectinload(PayrollAdjustment.shift),
+                selectinload(PayrollAdjustment.object),
+            )
+            .order_by(PayrollAdjustment.created_at)
+        )
         
         result = await self.session.execute(query)
         return list(result.scalars().all())
