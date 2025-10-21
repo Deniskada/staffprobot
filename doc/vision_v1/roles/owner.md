@@ -167,6 +167,7 @@
 - [POST] `/owner/payroll/{entry_id}/add-bonus` — (apps/web/routes/payroll.py) — добавить доплату (через PayrollAdjustmentService)
 - [POST] `/owner/payroll/{entry_id}/create-payment` — (apps/web/routes/payroll.py) — записать выплату (создаёт EmployeePayment со статусом pending)
 - [POST] `/owner/payroll/{entry_id}/payments/{payment_id}/complete` — (apps/web/routes/payroll.py) — подтвердить выплату (pending → completed)
+- [POST] `/owner/payroll/manual-recalculate` — (apps/web/routes/payroll.py) — ручной пересчёт выплат на выбранную дату (идемпотентно: обновляет существующие, создаёт недостающие)
 
 ## Графики выплат (Payment Schedules) — Итерация 23
 - [GET] `/owner/payment-schedules/{schedule_id}/data` — (apps/web/routes/payment_schedule.py) — данные графика (JSON)
@@ -185,7 +186,9 @@
   - Query: `date_from`, `date_to` — период (YYYY-MM-DD)
   - Query: `page`, `per_page` — пагинация
 - [POST] `/owner/payroll-adjustments/create` — (apps/web/routes/owner_payroll_adjustments.py) — создать ручную корректировку
-- [POST] `/owner/payroll-adjustments/{adjustment_id}/edit` — (apps/web/routes/owner_payroll_adjustments.py) — редактировать корректировку
+  - Form: `employee_id`, `adjustment_type`, `amount`, `description`, `adjustment_date` (дата начисления), `object_id` (опц), `shift_id` (опц)
+  - **Важно:** `adjustment_date` устанавливает `created_at` корректировки на указанную дату
+- [POST] `/owner/payroll-adjustments/{adjustment_id}/edit` — (apps/web/routes/owner_payroll_adjustments.py) — редактировать корректировку (только ручные неприменённые)
 - [GET] `/owner/payroll-adjustments/{adjustment_id}/history` — (apps/web/routes/owner_payroll_adjustments.py) — история изменений (JSON)
 
 ## Организационная структура (Org Structure) — Итерация 23

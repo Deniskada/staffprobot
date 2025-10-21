@@ -134,9 +134,13 @@
   - Фильтрация: PayrollAdjustment по доступным объектам ИЛИ без объекта (NULL)
   - Показываются сотрудники с allowed_objects, пересекающимися с доступными объектами
 - [POST] `/manager/payroll-adjustments/create` — (apps/web/routes/manager_payroll_adjustments.py) — создать ручную корректировку
-  - Form: `employee_id`, `adjustment_type`, `amount`, `description`, `object_id` (опционально), `shift_id` (опционально)
+  - Form: `employee_id`, `adjustment_type`, `amount`, `description`, `adjustment_date` (дата начисления), `object_id` (опц), `shift_id` (опц)
   - Проверка доступа к объекту (если указан)
   - Только типы: manual_bonus, manual_deduction
+  - **Важно:** `adjustment_date` устанавливает `created_at` корректировки на указанную дату
+- [POST] `/manager/payroll-adjustments/{adjustment_id}/edit` — (apps/web/routes/manager_payroll_adjustments.py) — редактировать ручную корректировку
+  - Form: `amount`, `description`
+  - Только ручные неприменённые корректировки по доступным объектам
 
 ## Защита от самоуправления и безопасность
 
