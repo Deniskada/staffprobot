@@ -249,6 +249,12 @@
                         <small class="form-text text-muted">Введите положительное число</small>
                     </div>
                     <div class="mb-3">
+                        <label for="create_adjustment_date" class="form-label">Дата начисления *</label>
+                        <input type="date" class="form-control" id="create_adjustment_date" name="adjustment_date" 
+                               value="{{ 'now'|format_datetime_local('%Y-%m-%d') }}" required>
+                        <small class="form-text text-muted">Дата, за которую добавляется начисление</small>
+                    </div>
+                    <div class="mb-3">
                         <label for="create_description" class="form-label">Описание *</label>
                         <textarea class="form-control" id="create_description" name="description" 
                                   rows="3" required></textarea>

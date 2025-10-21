@@ -194,7 +194,8 @@ class PayrollAdjustmentService:
         created_by: int,
         object_id: Optional[int] = None,
         shift_id: Optional[int] = None,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        adjustment_date: Optional[date] = None
     ) -> PayrollAdjustment:
         """
         Создать ручную корректировку (премию или штраф).
@@ -208,6 +209,7 @@ class PayrollAdjustmentService:
             object_id: ID объекта (опционально)
             shift_id: ID смены (опционально)
             details: Дополнительные данные (опционально)
+            adjustment_date: Дата начисления (опционально, по умолчанию текущая дата)
             
         Returns:
             PayrollAdjustment: Созданная корректировка
@@ -230,6 +232,11 @@ class PayrollAdjustmentService:
             created_by=created_by,
             is_applied=False
         )
+        
+        # Устанавливаем дату начисления если указана
+        if adjustment_date:
+            from datetime import datetime
+            adjustment.created_at = datetime.combine(adjustment_date, datetime.min.time())
         
         self.session.add(adjustment)
         # Не используем flush() - commit будет в вызывающем коде
