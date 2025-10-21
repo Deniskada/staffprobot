@@ -201,6 +201,16 @@ async def manager_payroll_detail(
         adjustments_result = await db.execute(adjustments_query)
         all_adjustments = adjustments_result.scalars().all()
         
+        # Нормализовать timestamp в edit_history (конвертировать строки в datetime)
+        for adj in all_adjustments:
+            if adj.edit_history:
+                for change in adj.edit_history:
+                    if isinstance(change.get('timestamp'), str):
+                        try:
+                            change['timestamp'] = datetime.fromisoformat(change['timestamp'])
+                        except (ValueError, AttributeError):
+                            pass  # Оставляем как есть если не удалось распарсить
+        
         deductions = [adj for adj in all_adjustments if adj.amount < 0]
         bonuses = [adj for adj in all_adjustments if adj.amount > 0]
         
