@@ -273,7 +273,8 @@
                                     'field': change.field,
                                     'old_value': change.old_value,
                                     'new_value': change.new_value,
-                                    'user_id': change.user_id
+                                    'user_id': change.user_id,
+                                    'user_name': change.user_name if change.user_name else None
                                 }) %}
                             {% endfor %}
                         {% endif %}
