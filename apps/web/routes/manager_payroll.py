@@ -248,7 +248,6 @@ async def manager_payroll_detail(
         
         # Сотрудники с договорами на доступные объекты
         from domain.entities.contract import Contract
-        from domain.entities.user import User
         from sqlalchemy.dialects.postgresql import JSONB
         from sqlalchemy import cast, or_
         
