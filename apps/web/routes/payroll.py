@@ -192,7 +192,8 @@ async def owner_payroll_add_deduction(
     db: AsyncSession = Depends(get_db_session),
     deduction_type: str = Form(...),
     amount: float = Form(...),
-    description: str = Form(...)
+    description: str = Form(...),
+    adjustment_date: Optional[str] = Form(None)
 ):
     """Добавить удержание к начислению."""
     try:
@@ -221,6 +222,14 @@ async def owner_payroll_add_deduction(
         if not owner_contracts:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
+        # Парсинг даты
+        adjustment_date_obj = None
+        if adjustment_date:
+            try:
+                adjustment_date_obj = date.fromisoformat(adjustment_date)
+            except ValueError:
+                pass  # Используем текущую дату
+        
         # Добавить удержание через PayrollAdjustmentService
         adjustment = await adjustment_service.create_manual_adjustment(
             employee_id=entry.employee_id,
@@ -228,7 +237,8 @@ async def owner_payroll_add_deduction(
             adjustment_type='manual_deduction',
             description=description,
             created_by=owner_id,
-            object_id=entry.object_id
+            object_id=entry.object_id,
+            adjustment_date=adjustment_date_obj
         )
         
         # Привязать к payroll_entry
@@ -268,7 +278,8 @@ async def owner_payroll_add_bonus(
     db: AsyncSession = Depends(get_db_session),
     bonus_type: str = Form(...),
     amount: float = Form(...),
-    description: str = Form(...)
+    description: str = Form(...),
+    adjustment_date: Optional[str] = Form(None)
 ):
     """Добавить доплату к начислению."""
     try:
@@ -297,6 +308,14 @@ async def owner_payroll_add_bonus(
         if not owner_contracts:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
         
+        # Парсинг даты
+        adjustment_date_obj = None
+        if adjustment_date:
+            try:
+                adjustment_date_obj = date.fromisoformat(adjustment_date)
+            except ValueError:
+                pass  # Используем текущую дату
+        
         # Добавить доплату через PayrollAdjustmentService
         adjustment = await adjustment_service.create_manual_adjustment(
             employee_id=entry.employee_id,
@@ -304,7 +323,8 @@ async def owner_payroll_add_bonus(
             adjustment_type='manual_bonus',
             description=description,
             created_by=owner_id,
-            object_id=entry.object_id
+            object_id=entry.object_id,
+            adjustment_date=adjustment_date_obj
         )
         
         # Привязать к payroll_entry

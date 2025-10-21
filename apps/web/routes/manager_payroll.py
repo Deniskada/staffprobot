@@ -256,3 +256,96 @@ async def manager_payroll_detail(
         logger.error(f"Error loading payroll detail: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки начисления: {str(e)}")
 
+
+@router.post("/payroll/{entry_id}/add-adjustment", response_class=JSONResponse)
+async def manager_add_adjustment_to_entry(
+    entry_id: int,
+    employee_id: int = Form(...),
+    adjustment_type: str = Form(...),
+    amount: Decimal = Form(...),
+    description: str = Form(...),
+    adjustment_date: Optional[str] = Form(None),
+    object_id: Optional[int] = Form(None),
+    current_user = Depends(require_manager_payroll_permission),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Добавить корректировку к начислению (сразу применённую)."""
+    try:
+        from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+        from datetime import date
+        
+        if adjustment_type not in ['manual_bonus', 'manual_deduction']:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Неверный тип корректировки"}
+            )
+        
+        # Парсинг даты
+        adjustment_date_obj = None
+        if adjustment_date:
+            try:
+                adjustment_date_obj = date.fromisoformat(adjustment_date)
+            except ValueError:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "error": "Неверный формат даты"}
+                )
+        
+        user_id = current_user.id
+        
+        # Проверить доступ к объекту (если указан)
+        if object_id:
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if object_id not in accessible_object_ids:
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "У вас нет доступа к этому объекту"}
+                )
+        
+        adjustment_service = PayrollAdjustmentService(db)
+        
+        # Создать корректировку
+        adjustment = await adjustment_service.create_manual_adjustment(
+            employee_id=employee_id,
+            amount=amount,
+            adjustment_type=adjustment_type,
+            description=description,
+            created_by=user_id,
+            object_id=object_id,
+            shift_id=None,
+            adjustment_date=adjustment_date_obj
+        )
+        
+        # Сразу применить к начислению
+        adjustment.payroll_entry_id = entry_id
+        adjustment.is_applied = True
+        
+        await db.commit()
+        
+        logger.info(
+            f"Adjustment added to entry by manager",
+            adjustment_id=adjustment.id,
+            entry_id=entry_id,
+            employee_id=employee_id,
+            type=adjustment_type,
+            amount=float(amount),
+            manager_id=user_id
+        )
+        
+        return JSONResponse(content={
+            "success": True,
+            "adjustment_id": adjustment.id,
+            "message": "Корректировка успешно добавлена к начислению"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error adding adjustment to entry: {e}")
+        await db.rollback()
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
