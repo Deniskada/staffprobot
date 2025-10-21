@@ -7,7 +7,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 
 from apps.web.jinja import templates
 from apps.web.middleware.auth_middleware import get_current_user, require_owner_or_superadmin
