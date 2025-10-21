@@ -189,8 +189,46 @@ async def manager_payroll_detail(
             if not accessible_object_ids:
                 raise HTTPException(status_code=403, detail="У вас нет доступа к этому начислению")
         
-        # Смены, удержания и премии загружаются через relationships в entry
-        # Просто передаем entry в шаблон
+        # Получить связанные adjustments
+        from domain.entities.payroll_adjustment import PayrollAdjustment
+        from sqlalchemy.orm import selectinload
+        adjustments_query = select(PayrollAdjustment).where(
+            PayrollAdjustment.payroll_entry_id == entry_id
+        ).options(
+            selectinload(PayrollAdjustment.creator),
+            selectinload(PayrollAdjustment.updater)
+        ).order_by(PayrollAdjustment.created_at)
+        adjustments_result = await db.execute(adjustments_query)
+        all_adjustments = adjustments_result.scalars().all()
+        
+        deductions = [adj for adj in all_adjustments if adj.amount < 0]
+        bonuses = [adj for adj in all_adjustments if adj.amount > 0]
+        
+        # Получить список сотрудников с доступом к объектам управляющего
+        permission_service = ManagerPermissionService(db)
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        accessible_object_ids = [obj.id for obj in accessible_objects]
+        
+        # Сотрудники с договорами на доступные объекты
+        from domain.entities.contract import Contract
+        from domain.entities.user import User
+        from sqlalchemy.dialects.postgresql import JSONB
+        from sqlalchemy import cast, or_
+        
+        employees_query = (
+            select(User)
+            .join(Contract, Contract.employee_id == User.id)
+            .where(
+                Contract.allowed_objects.isnot(None),
+                or_(*[
+                    cast(Contract.allowed_objects, JSONB).op('@>')(cast([obj_id], JSONB))
+                    for obj_id in accessible_object_ids
+                ] if accessible_object_ids else [False])
+            )
+            .distinct()
+        )
+        employees_result = await db.execute(employees_query)
+        employees = employees_result.scalars().all()
         
         # Получаем контекст управляющего
         from apps.web.routes.manager import get_manager_context
@@ -203,7 +241,11 @@ async def manager_payroll_detail(
                 "current_user": current_user,
                 "title": f"Начисление #{entry_id}",
                 "entry": entry,
+                "deductions": deductions,
+                "bonuses": bonuses,
                 "is_manager": "manager" in user_roles and "owner" not in user_roles,
+                "accessible_objects": accessible_objects,
+                "employees": employees,
                 **manager_context
             }
         )

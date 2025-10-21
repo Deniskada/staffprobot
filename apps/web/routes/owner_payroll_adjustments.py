@@ -410,3 +410,66 @@ async def get_adjustment_history(
             content={"success": False, "error": str(e)}
         )
 
+
+@router.post("/{adjustment_id}/delete", response_class=JSONResponse)
+async def delete_adjustment(
+    adjustment_id: int,
+    current_user = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Удалить корректировку."""
+    try:
+        adjustment_service = PayrollAdjustmentService(session)
+        
+        # Получить корректировку
+        from sqlalchemy import select
+        from domain.entities.payroll_adjustment import PayrollAdjustment
+        query = select(PayrollAdjustment).where(PayrollAdjustment.id == adjustment_id)
+        result = await session.execute(query)
+        adjustment = result.scalar_one_or_none()
+        
+        if not adjustment:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "error": "Корректировка не найдена"}
+            )
+        
+        # Проверить, что это ручная корректировка и она не применена
+        if adjustment.adjustment_type not in ['manual_bonus', 'manual_deduction']:
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "error": "Можно удалять только ручные корректировки"}
+            )
+        
+        if adjustment.is_applied:
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "error": "Нельзя удалять применённые корректировки"}
+            )
+        
+        # Удалить корректировку
+        await session.delete(adjustment)
+        await session.commit()
+        
+        logger.info(
+            f"Adjustment deleted by owner",
+            adjustment_id=adjustment_id,
+            deleted_by=current_user.id,
+            type=adjustment.adjustment_type,
+            amount=float(adjustment.amount)
+        )
+        
+        return JSONResponse(content={
+            "success": True,
+            "message": "Корректировка успешно удалена"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting adjustment: {e}")
+        await session.rollback()
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+

@@ -85,24 +85,53 @@
             <div class="row">
                 <div class="col-md-6">
                     <div class="card mb-3">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">
                                 <i class="fas fa-minus-circle text-danger"></i> Удержания
                             </h5>
+                            <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addDeductionModal">
+                                <i class="fas fa-plus"></i> Добавить
+                            </button>
                         </div>
                         <div class="card-body">
-                            {% if entry.deductions %}
-                            <ul class="list-group list-group-flush">
-                                {% for deduction in entry.deductions %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>{{ deduction.description }}</strong>
-                                        <br><small class="text-muted"><span class="badge bg-secondary">{{ deduction.deduction_type }}</span></small>
-                                    </div>
-                                    <span class="text-danger">-{{ "%.2f"|format(deduction.amount) }} ₽</span>
-                                </li>
-                                {% endfor %}
-                            </ul>
+                            {% if deductions %}
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Тип</th>
+                                            <th>Описание</th>
+                                            <th>Сумма</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for deduction in deductions %}
+                                        <tr>
+                                            <td><span class="badge bg-secondary">{{ deduction.adjustment_type }}</span></td>
+                                            <td>{{ deduction.description }}</td>
+                                            <td class="text-danger"><strong>-{{ "%.2f"|format(deduction.amount|abs) }} ₽</strong></td>
+                                            <td>
+                                                {% if deduction.adjustment_type in ['manual_deduction'] and not deduction.is_applied %}
+                                                <button class="btn btn-sm btn-outline-primary btn-edit-adjustment"
+                                                        data-adjustment-id="{{ deduction.id }}"
+                                                        data-amount="{{ deduction.amount|abs }}"
+                                                        data-description="{{ deduction.description }}">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger btn-delete-adjustment"
+                                                        data-adjustment-id="{{ deduction.id }}">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                                {% else %}
+                                                <span class="text-muted">—</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                             {% else %}
                             <p class="text-muted">Нет удержаний</p>
                             {% endif %}
@@ -112,24 +141,53 @@
                 
                 <div class="col-md-6">
                     <div class="card mb-3">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">
                                 <i class="fas fa-plus-circle text-success"></i> Доплаты/Премии
                             </h5>
+                            <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addBonusModal">
+                                <i class="fas fa-plus"></i> Добавить
+                            </button>
                         </div>
                         <div class="card-body">
-                            {% if entry.bonuses %}
-                            <ul class="list-group list-group-flush">
-                                {% for bonus in entry.bonuses %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>{{ bonus.description }}</strong>
-                                        <br><small class="text-muted"><span class="badge bg-info">{{ bonus.bonus_type }}</span></small>
-                                    </div>
-                                    <span class="text-success">+{{ "%.2f"|format(bonus.amount) }} ₽</span>
-                                </li>
-                                {% endfor %}
-                            </ul>
+                            {% if bonuses %}
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Тип</th>
+                                            <th>Описание</th>
+                                            <th>Сумма</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for bonus in bonuses %}
+                                        <tr>
+                                            <td><span class="badge bg-info">{{ bonus.adjustment_type }}</span></td>
+                                            <td>{{ bonus.description }}</td>
+                                            <td class="text-success"><strong>+{{ "%.2f"|format(bonus.amount) }} ₽</strong></td>
+                                            <td>
+                                                {% if bonus.adjustment_type in ['manual_bonus'] and not bonus.is_applied %}
+                                                <button class="btn btn-sm btn-outline-primary btn-edit-adjustment"
+                                                        data-adjustment-id="{{ bonus.id }}"
+                                                        data-amount="{{ bonus.amount }}"
+                                                        data-description="{{ bonus.description }}">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger btn-delete-adjustment"
+                                                        data-adjustment-id="{{ bonus.id }}">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                                {% else %}
+                                                <span class="text-muted">—</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                             {% else %}
                             <p class="text-muted">Нет доплат</p>
                             {% endif %}
@@ -142,13 +200,354 @@
             {% if is_manager %}
             <div class="alert alert-info">
                 <i class="fas fa-info-circle"></i>
-                <strong>Информация:</strong> Управляющие могут просматривать начисления по доступным объектам. 
+                <strong>Информация:</strong> Вы можете добавлять и редактировать ручные корректировки. 
                 Только владелец может одобрить начисление и записать выплату.
             </div>
             {% endif %}
             
+            <!-- Протокол изменений корректировок -->
+            <div class="card mt-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Протокол изменений</h5>
+                </div>
+                <div class="card-body">
+                    {% set all_events = [] %}
+                    {% for adj in deductions + bonuses %}
+                        {% set _ = all_events.append({
+                            'timestamp': adj.created_at,
+                            'type': 'created',
+                            'adjustment_id': adj.id,
+                            'adjustment_type': adj.adjustment_type,
+                            'amount': adj.amount,
+                            'description': adj.description,
+                            'user_name': adj.creator.last_name ~ ' ' ~ adj.creator.first_name if adj.creator else 'Система'
+                        }) %}
+                        {% if adj.edit_history %}
+                            {% for change in adj.edit_history %}
+                                {% set _ = all_events.append({
+                                    'timestamp': change.timestamp,
+                                    'type': 'edited',
+                                    'adjustment_id': adj.id,
+                                    'adjustment_type': adj.adjustment_type,
+                                    'field': change.field,
+                                    'old_value': change.old_value,
+                                    'new_value': change.new_value,
+                                    'user_id': change.user_id
+                                }) %}
+                            {% endfor %}
+                        {% endif %}
+                        {% if adj.is_applied and adj.updated_at %}
+                            {% set _ = all_events.append({
+                                'timestamp': adj.updated_at,
+                                'type': 'applied',
+                                'adjustment_id': adj.id,
+                                'adjustment_type': adj.adjustment_type,
+                                'payroll_entry_id': adj.payroll_entry_id
+                            }) %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if all_events %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Дата/Время</th>
+                                    <th>Событие</th>
+                                    <th>Детали</th>
+                                    <th>Пользователь</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for event in all_events|sort(attribute='timestamp', reverse=True) %}
+                                <tr>
+                                    <td>
+                                        {% if event.timestamp is string %}
+                                            {{ event.timestamp }}
+                                        {% else %}
+                                            {{ event.timestamp.strftime('%d.%m.%Y %H:%M') }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if event.type == 'created' %}
+                                            <span class="badge bg-info">Создание</span>
+                                        {% elif event.type == 'edited' %}
+                                            <span class="badge bg-warning">Изменение</span>
+                                        {% elif event.type == 'applied' %}
+                                            <span class="badge bg-success">Применение</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if event.type == 'created' %}
+                                            <small>{{ event.adjustment_type }}: {{ event.description }} ({{ "%.2f"|format(event.amount) }}₽)</small>
+                                        {% elif event.type == 'edited' %}
+                                            <small>{{ event.field }}: {{ event.old_value }} → {{ event.new_value }}</small>
+                                        {% elif event.type == 'applied' %}
+                                            <small>Применено к начислению #{{ event.payroll_entry_id }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small>{{ event.user_name if event.user_name else ('ID: ' ~ event.user_id if event.user_id else 'Система') }}</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">История изменений пуста</p>
+                    {% endif %}
+                </div>
+            </div>
+            
         </div>
     </div>
 </div>
+
+<!-- Модальное окно добавления удержания -->
+<div class="modal fade" id="addDeductionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Добавить удержание</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addDeductionForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="deduction_amount" class="form-label">Сумма (₽) *</label>
+                        <input type="number" class="form-control" id="deduction_amount" step="0.01" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="deduction_description" class="form-label">Описание *</label>
+                        <textarea class="form-control" id="deduction_description" rows="3" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="deduction_object" class="form-label">Объект (опц)</label>
+                        <select class="form-select" id="deduction_object">
+                            <option value="">Не привязан</option>
+                            {% for obj in accessible_objects %}
+                            <option value="{{ obj.id }}">{{ obj.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-danger">Добавить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления доплаты -->
+<div class="modal fade" id="addBonusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Добавить доплату</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addBonusForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="bonus_amount" class="form-label">Сумма (₽) *</label>
+                        <input type="number" class="form-control" id="bonus_amount" step="0.01" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bonus_description" class="form-label">Описание *</label>
+                        <textarea class="form-control" id="bonus_description" rows="3" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bonus_object" class="form-label">Объект (опц)</label>
+                        <select class="form-select" id="bonus_object">
+                            <option value="">Не привязан</option>
+                            {% for obj in accessible_objects %}
+                            <option value="{{ obj.id }}">{{ obj.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-success">Добавить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования корректировки -->
+<div class="modal fade" id="editAdjustmentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать корректировку</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editAdjustmentForm">
+                <input type="hidden" id="edit_adjustment_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_amount" class="form-label">Сумма (₽)</label>
+                        <input type="number" class="form-control" id="edit_amount" step="0.01" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="edit_description" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Добавление удержания
+document.getElementById('addDeductionForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const amount = document.getElementById('deduction_amount').value;
+    const description = document.getElementById('deduction_description').value;
+    const objectId = document.getElementById('deduction_object').value;
+    
+    const formData = new FormData();
+    formData.append('employee_id', '{{ entry.employee_id }}');
+    formData.append('adjustment_type', 'manual_deduction');
+    formData.append('amount', amount);
+    formData.append('description', description);
+    formData.append('adjustment_date', new Date().toISOString().split('T')[0]);
+    if (objectId) formData.append('object_id', objectId);
+    
+    try {
+        const response = await fetch('/manager/payroll-adjustments/create', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        alert('Ошибка добавления: ' + error);
+    }
+});
+
+// Добавление доплаты
+document.getElementById('addBonusForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const amount = document.getElementById('bonus_amount').value;
+    const description = document.getElementById('bonus_description').value;
+    const objectId = document.getElementById('bonus_object').value;
+    
+    const formData = new FormData();
+    formData.append('employee_id', '{{ entry.employee_id }}');
+    formData.append('adjustment_type', 'manual_bonus');
+    formData.append('amount', amount);
+    formData.append('description', description);
+    formData.append('adjustment_date', new Date().toISOString().split('T')[0]);
+    if (objectId) formData.append('object_id', objectId);
+    
+    try {
+        const response = await fetch('/manager/payroll-adjustments/create', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        alert('Ошибка добавления: ' + error);
+    }
+});
+
+// Редактирование корректировки
+document.querySelectorAll('.btn-edit-adjustment').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const adjustmentId = this.dataset.adjustmentId;
+        const amount = this.dataset.amount;
+        const description = this.dataset.description;
+        
+        document.getElementById('edit_adjustment_id').value = adjustmentId;
+        document.getElementById('edit_amount').value = amount;
+        document.getElementById('edit_description').value = description;
+        
+        const modal = new bootstrap.Modal(document.getElementById('editAdjustmentModal'));
+        modal.show();
+    });
+});
+
+document.getElementById('editAdjustmentForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const adjustmentId = document.getElementById('edit_adjustment_id').value;
+    const amount = document.getElementById('edit_amount').value;
+    const description = document.getElementById('edit_description').value;
+    
+    const formData = new FormData();
+    formData.append('amount', amount);
+    formData.append('description', description);
+    
+    try {
+        const response = await fetch(`/manager/payroll-adjustments/${adjustmentId}/edit`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        alert('Ошибка редактирования: ' + error);
+    }
+});
+
+// Удаление корректировки
+document.querySelectorAll('.btn-delete-adjustment').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        if (!confirm('Вы уверены, что хотите удалить эту корректировку?')) {
+            return;
+        }
+        
+        const adjustmentId = this.dataset.adjustmentId;
+        
+        try {
+            const response = await fetch(`/manager/payroll-adjustments/${adjustmentId}/delete`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+            }
+        } catch (error) {
+            alert('Ошибка удаления: ' + error);
+        }
+    });
+});
+</script>
+
 {% endblock %}
 
