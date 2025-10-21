@@ -142,8 +142,12 @@ async def owner_payroll_detail(
         
         # Получить связанные adjustments (для старого шаблона - как deductions, bonuses)
         from domain.entities.payroll_adjustment import PayrollAdjustment
+        from sqlalchemy.orm import selectinload
         adjustments_query = select(PayrollAdjustment).where(
             PayrollAdjustment.payroll_entry_id == entry_id
+        ).options(
+            selectinload(PayrollAdjustment.creator),
+            selectinload(PayrollAdjustment.updater)
         ).order_by(PayrollAdjustment.created_at)
         adjustments_result = await db.execute(adjustments_query)
         adjustments = adjustments_result.scalars().all()
