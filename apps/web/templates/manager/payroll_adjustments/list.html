@@ -114,6 +114,7 @@
                             <th>Описание</th>
                             <th class="text-end">Сумма</th>
                             <th>Статус</th>
+                            <th>Действия</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -174,6 +175,20 @@
                                     <span class="badge bg-success"><i class="bi bi-check-circle"></i> Применено</span>
                                 {% else %}
                                     <span class="badge bg-warning"><i class="bi bi-clock"></i> Не применено</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if adj.adjustment_type in ['manual_bonus', 'manual_deduction'] and not adj.is_applied %}
+                                <button type="button" class="btn btn-sm btn-outline-primary btn-edit-adjustment" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#editAdjustmentModal"
+                                        data-adjustment-id="{{ adj.id }}"
+                                        data-amount="{{ adj.amount }}"
+                                        data-description="{{ adj.description or '' }}">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                {% else %}
+                                <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -277,6 +292,37 @@
     </div>
 </div>
 
+<!-- Модальное окно для редактирования корректировки -->
+<div class="modal fade" id="editAdjustmentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать начисление</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editAdjustmentForm">
+                <input type="hidden" id="edit_adjustment_id" name="adjustment_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_amount" class="form-label">Сумма (₽)</label>
+                        <input type="number" class="form-control" id="edit_amount" name="amount" 
+                               step="0.01">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="edit_description" name="description" 
+                                  rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 // Установка текущей даты при открытии модального окна создания
 document.getElementById('createAdjustmentModal').addEventListener('shown.bs.modal', function () {
@@ -306,6 +352,45 @@ document.getElementById('createAdjustmentForm').addEventListener('submit', async
         }
     } catch (error) {
         alert('Ошибка создания начисления: ' + error);
+    }
+});
+
+// Редактирование корректировки - заполнение формы
+document.querySelectorAll('.btn-edit-adjustment').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const adjustmentId = this.dataset.adjustmentId;
+        const amount = this.dataset.amount;
+        const description = this.dataset.description;
+        
+        document.getElementById('edit_adjustment_id').value = adjustmentId;
+        document.getElementById('edit_amount').value = amount;
+        document.getElementById('edit_description').value = description;
+    });
+});
+
+// Редактирование корректировки - отправка формы
+document.getElementById('editAdjustmentForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const adjustmentId = document.getElementById('edit_adjustment_id').value;
+    const formData = new FormData(this);
+    
+    try {
+        const response = await fetch(`/manager/payroll-adjustments/${adjustmentId}/edit`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Начисление успешно обновлено');
+            location.reload();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        alert('Ошибка обновления начисления: ' + error);
     }
 });
 </script>
