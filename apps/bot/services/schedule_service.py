@@ -234,13 +234,44 @@ class ScheduleService:
                         'error': availability_check['error']
                     }
                 
+                # Получаем объект для timezone
+                object_query = select(Object).where(Object.id == timeslot.object_id)
+                object_result = await session.execute(object_query)
+                obj = object_result.scalar_one_or_none()
+                
+                if not obj:
+                    return {
+                        'success': False,
+                        'error': 'Объект не найден'
+                    }
+                
+                # Конвертируем локальное время объекта в UTC для корректного хранения
+                import pytz
+                object_timezone = obj.timezone if obj.timezone else 'Europe/Moscow'
+                tz = pytz.timezone(object_timezone)
+                
+                # Создаём naive datetime в локальном времени объекта
+                slot_datetime_naive = datetime.combine(timeslot.slot_date, start_time)
+                end_datetime_naive = datetime.combine(timeslot.slot_date, end_time)
+                
+                # Локализуем в timezone объекта, затем конвертируем в UTC для сохранения
+                slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+                end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+                
+                logger.info(
+                    f"Timezone conversion for bot scheduling",
+                    timezone=object_timezone,
+                    local_start=slot_datetime_naive.isoformat(),
+                    utc_start=slot_datetime.isoformat()
+                )
+                
                 # Создаем запланированную смену
                 scheduled_shift = ShiftSchedule(
                     user_id=db_user.id,
                     object_id=timeslot.object_id,
                     time_slot_id=time_slot_id,
-                    planned_start=datetime.combine(timeslot.slot_date, start_time),
-                    planned_end=datetime.combine(timeslot.slot_date, end_time),
+                    planned_start=slot_datetime,
+                    planned_end=end_datetime,
                     hourly_rate=timeslot.hourly_rate,
                     notes=notes
                 )
