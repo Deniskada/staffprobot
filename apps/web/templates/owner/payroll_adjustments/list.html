@@ -264,8 +264,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="create_adjustment_date" class="form-label">Дата начисления *</label>
-                        <input type="date" class="form-control" id="create_adjustment_date" name="adjustment_date" 
-                               value="{{ 'now'|format_datetime_local('%Y-%m-%d') }}" required>
+                        <input type="date" class="form-control" id="create_adjustment_date" name="adjustment_date" required>
                         <small class="form-text text-muted">Дата, за которую добавляется начисление</small>
                     </div>
                     <div class="mb-3">
@@ -342,6 +341,12 @@
 </div>
 
 <script>
+// Установка текущей даты при открытии модального окна создания
+document.getElementById('createAdjustmentModal').addEventListener('shown.bs.modal', function () {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('create_adjustment_date').value = today;
+});
+
 // Создание корректировки
 document.getElementById('createAdjustmentForm').addEventListener('submit', async function(e) {
     e.preventDefault();
