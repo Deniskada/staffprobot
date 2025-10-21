@@ -12,8 +12,55 @@ from sqlalchemy.orm import selectinload
 
 from domain.entities.shift import Shift
 from domain.entities.object import Object
+from domain.entities.org_structure import OrgStructureUnit
+from domain.entities.payroll_adjustment import PayrollAdjustment
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 from shared.services.late_penalty_calculator import LatePenaltyCalculator
+
+
+async def get_effective_late_settings_for_object(session, obj: Object) -> dict:
+    """
+    Получить эффективные настройки штрафов с учетом иерархии org_unit.
+    Использует SQL запросы вместо lazy loading для работы в async контексте.
+    """
+    # Если у объекта свои настройки
+    if not obj.inherit_late_settings and obj.late_threshold_minutes is not None and obj.late_penalty_per_minute is not None:
+        return {
+            'threshold_minutes': obj.late_threshold_minutes,
+            'penalty_per_minute': obj.late_penalty_per_minute,
+            'source': 'object'
+        }
+    
+    # Если есть org_unit - обходим иерархию
+    if obj.org_unit_id:
+        current_unit_id = obj.org_unit_id
+        
+        while current_unit_id:
+            # Загружаем текущее подразделение
+            unit_query = select(OrgStructureUnit).where(OrgStructureUnit.id == current_unit_id)
+            unit_result = await session.execute(unit_query)
+            unit = unit_result.scalar_one_or_none()
+            
+            if not unit:
+                break
+            
+            # Проверяем есть ли у него свои настройки
+            if not unit.inherit_late_settings and unit.late_threshold_minutes is not None and unit.late_penalty_per_minute is not None:
+                return {
+                    'threshold_minutes': unit.late_threshold_minutes,
+                    'penalty_per_minute': unit.late_penalty_per_minute,
+                    'source': f'org_unit:{unit.name}'
+                }
+            
+            # Переходим к родителю
+            current_unit_id = unit.parent_id
+    
+    # Настройки не найдены
+    return {
+        'threshold_minutes': None,
+        'penalty_per_minute': None,
+        'source': 'none'
+    }
 
 
 @celery_app.task(name="process_closed_shifts_adjustments")
@@ -145,7 +192,7 @@ def process_closed_shifts_adjustments():
                                     
                                     # Получить настройки штрафа с учетом наследования от org_unit
                                     obj = shift.object
-                                    late_settings = obj.get_effective_late_settings()
+                                    late_settings = await get_effective_late_settings_for_object(session, obj)
                                     penalty_per_minute = late_settings.get('penalty_per_minute')
                                     threshold_minutes = late_settings.get('threshold_minutes', 0)
                                     
