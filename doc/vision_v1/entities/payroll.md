@@ -124,20 +124,33 @@ adjustment_service = PayrollAdjustmentService(db)
 
 # Добавить удержание
 await adjustment_service.create_manual_adjustment(
-    payroll_entry_id=1,
+    employee_id=14,
     adjustment_type="manual_deduction",
     amount=-100.00,
     description="Штраф за нарушение",
-    created_by_id=owner_id
+    created_by=owner_id,
+    object_id=8,  # опционально
+    adjustment_date=date(2025, 10, 15)  # дата начисления, опционально (по умолчанию текущая дата)
 )
 
 # Добавить доплату
 await adjustment_service.create_manual_adjustment(
-    payroll_entry_id=1,
+    employee_id=14,
     adjustment_type="manual_bonus",
     amount=500.00,
     description="Премия за переработку",
-    created_by_id=owner_id
+    created_by=owner_id,
+    adjustment_date=date(2025, 10, 15)  # дата начисления
+)
+```
+
+**Редактирование корректировок:**
+```python
+# Редактирование доступно только для ручных (manual_*) неприменённых корректировок
+await adjustment_service.update_adjustment(
+    adjustment_id=123,
+    updates={'amount': 150.00, 'description': 'Обновлённое описание'},
+    updated_by=owner_id
 )
 ```
 
@@ -169,14 +182,16 @@ await payroll_service.mark_payment_completed(
 
 ### Владелец (Owner)
 - ✅ Создание начислений
-- ✅ Добавление удержаний/доплат
+- ✅ Добавление удержаний/доплат (с указанием даты начисления)
+- ✅ Редактирование ручных неприменённых корректировок
 - ✅ Одобрение начислений
 - ✅ Запись выплат
 - ✅ Просмотр всех начислений
 
 ### Управляющий (Manager) с правом `can_manage_payroll`
 - ✅ Просмотр начислений (по доступным объектам)
-- ✅ Добавление удержаний/доплат (опционально)
+- ✅ Добавление удержаний/доплат (с указанием даты начисления)
+- ✅ Редактирование ручных неприменённых корректировок (только по доступным объектам)
 - ✅ Одобрение начислений (опционально)
 - ❌ Запись выплат (только владелец)
 
@@ -185,21 +200,41 @@ await payroll_service.mark_payment_completed(
 - ✅ Просмотр истории выплат
 - ❌ Изменение данных
 
-## UI страницы
+## UI страницы и API
 
 ### Для владельца
-- `/owner/payroll` - список начислений всех сотрудников
-- `/owner/payroll/{entry_id}` - детализация с действиями
-- `/owner/payroll/{entry_id}/add-deduction` - добавить удержание
-- `/owner/payroll/{entry_id}/add-bonus` - добавить доплату
+- **GET** `/owner/payroll` - список начислений всех сотрудников
+- **GET** `/owner/payroll/{entry_id}` - детализация с действиями
+- **POST** `/owner/payroll/{entry_id}/add-deduction` - добавить удержание
+- **POST** `/owner/payroll/{entry_id}/add-bonus` - добавить доплату
+- **GET** `/owner/payroll-adjustments` - список всех корректировок (с фильтрами)
+- **POST** `/owner/payroll-adjustments/create` - создать ручную корректировку (с полем `adjustment_date`)
+- **POST** `/owner/payroll-adjustments/{adjustment_id}/edit` - редактировать ручную корректировку
+- **GET** `/owner/payroll-adjustments/{adjustment_id}/history` - история изменений корректировки
 
-### Для управляющего
-- `/manager/payroll` - список начислений (фильтр по доступным объектам)
-- `/manager/payroll/{entry_id}` - детализация (только просмотр)
+**Файлы:**
+- `apps/web/routes/payroll.py`
+- `apps/web/routes/owner_payroll_adjustments.py`
+- `apps/web/templates/owner/payroll_adjustments/list.html`
+
+### Для управляющего (требует `can_manage_payroll`)
+- **GET** `/manager/payroll` - список начислений (фильтр по доступным объектам)
+- **GET** `/manager/payroll/{entry_id}` - детализация (только просмотр)
+- **GET** `/manager/payroll-adjustments` - список корректировок (фильтр по доступным объектам)
+- **POST** `/manager/payroll-adjustments/create` - создать ручную корректировку (с полем `adjustment_date`)
+- **POST** `/manager/payroll-adjustments/{adjustment_id}/edit` - редактировать ручную корректировку
+
+**Файлы:**
+- `apps/web/routes/manager_payroll.py`
+- `apps/web/routes/manager_payroll_adjustments.py`
+- `apps/web/templates/manager/payroll_adjustments/list.html`
 
 ### Для сотрудника
-- `/employee/payroll` - список своих начислений
-- `/employee/payroll/{entry_id}` - детализация с историей выплат
+- **GET** `/employee/payroll` - список своих начислений
+- **GET** `/employee/payroll/{entry_id}` - детализация с историей выплат
+
+**Файлы:**
+- `apps/web/routes/employee_payroll.py`
 
 ## Автоматические процессы
 
