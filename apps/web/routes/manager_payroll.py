@@ -202,7 +202,9 @@ async def manager_payroll_detail(
         all_adjustments = adjustments_result.scalars().all()
         
         # Нормализовать timestamp в edit_history (конвертировать строки в datetime)
+        # И загрузить информацию о пользователях
         from datetime import timezone
+        user_ids_to_load = set()
         for adj in all_adjustments:
             if adj.edit_history:
                 for change in adj.edit_history:
@@ -215,6 +217,26 @@ async def manager_payroll_detail(
                             change['timestamp'] = dt
                         except (ValueError, AttributeError):
                             pass  # Оставляем как есть если не удалось распарсить
+                    
+                    # Собираем ID пользователей для загрузки
+                    if change.get('user_id'):
+                        user_ids_to_load.add(change['user_id'])
+        
+        # Загрузить пользователей
+        users_map = {}
+        if user_ids_to_load:
+            users_query = select(User).where(User.id.in_(list(user_ids_to_load)))
+            users_result = await db.execute(users_query)
+            users_list = users_result.scalars().all()
+            users_map = {u.id: f"{u.last_name} {u.first_name}" for u in users_list}
+        
+        # Добавить user_name в edit_history
+        for adj in all_adjustments:
+            if adj.edit_history:
+                for change in adj.edit_history:
+                    uid = change.get('user_id')
+                    if uid:
+                        change['user_name'] = users_map.get(uid, f"ID: {uid}")
         
         deductions = [adj for adj in all_adjustments if adj.amount < 0]
         bonuses = [adj for adj in all_adjustments if adj.amount > 0]

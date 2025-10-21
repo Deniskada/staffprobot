@@ -305,10 +305,26 @@ async def edit_adjustment(
     try:
         adjustment_service = PayrollAdjustmentService(session)
         
+        # Сначала получаем корректировку, чтобы знать её тип
+        from domain.entities.payroll_adjustment import PayrollAdjustment
+        adj_query = select(PayrollAdjustment).where(PayrollAdjustment.id == adjustment_id)
+        adj_result = await session.execute(adj_query)
+        adjustment_obj = adj_result.scalar_one_or_none()
+        
+        if not adjustment_obj:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "error": "Корректировка не найдена"}
+            )
+        
         # Подготовка обновлений
         updates = {}
         if amount is not None:
-            updates['amount'] = amount
+            # Для manual_deduction делаем сумму отрицательной
+            if adjustment_obj.adjustment_type == 'manual_deduction':
+                updates['amount'] = -abs(amount)
+            else:
+                updates['amount'] = amount
         if description is not None:
             updates['description'] = description
         

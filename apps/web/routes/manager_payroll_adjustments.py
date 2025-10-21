@@ -352,7 +352,11 @@ async def manager_edit_adjustment(
         # Подготовка обновлений
         updates = {}
         if amount is not None:
-            updates['amount'] = amount
+            # Для manual_deduction делаем сумму отрицательной
+            if adjustment.adjustment_type == 'manual_deduction':
+                updates['amount'] = -abs(amount)
+            else:
+                updates['amount'] = amount
         if description is not None:
             updates['description'] = description
         
