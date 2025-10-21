@@ -76,15 +76,15 @@ celery_app.conf.update(
             'task': 'process_closed_shifts_adjustments',
             'schedule': 600,  # каждые 10 минут
         },
-        # Phase 4A: Создание payroll_entries по графикам каждый день в 01:00
+        # Phase 4A: Создание payroll_entries по графикам каждый день в 04:00 (MSK)
         'create-payroll-entries-by-schedule': {
             'task': 'create_payroll_entries_by_schedule',
-            'schedule': crontab(hour=1, minute=0),  # каждый день в 01:00
+            'schedule': crontab(hour=4, minute=0),  # каждый день в 04:00 MSK
         },
-        # Финальный расчёт при увольнении
+        # Финальный расчёт при увольнении — в 04:05 (MSK)
         'create-final-settlements-by-termination-date': {
             'task': 'create_final_settlements_by_termination_date',
-            'schedule': crontab(hour=1, minute=5),  # каждый день в 01:05
+            'schedule': crontab(hour=4, minute=5),  # каждый день в 04:05 MSK
         },
     },
     
