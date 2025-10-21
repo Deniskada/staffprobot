@@ -46,7 +46,6 @@ def create_payroll_entries_by_schedule():
             async with get_async_session() as session:
                 # 1. Найти все schedules с датой выплаты сегодня
                 schedules_query = select(PaymentSchedule).where(
-                    PaymentSchedule.is_custom == True,  # Только пользовательские графики
                     PaymentSchedule.is_active == True   # Только активные графики
                 )
                 schedules_result = await session.execute(schedules_query)
@@ -61,14 +60,36 @@ def create_payroll_entries_by_schedule():
                 for schedule in schedules:
                     try:
                         # Проверяем, есть ли выплата сегодня для этого графика
+                        logger.info(
+                            "Schedule check",
+                            schedule_id=schedule.id,
+                            schedule_name=schedule.name,
+                            frequency=schedule.frequency,
+                            payment_day=schedule.payment_day,
+                            period_cfg=schedule.payment_period,
+                            today=today.isoformat()
+                        )
+
                         payment_period = await _get_payment_period_for_date(schedule, today)
                         
                         if not payment_period:
-                            # Сегодня не день выплаты для этого графика
+                            logger.info(
+                                "Skip schedule: not a payment day",
+                                schedule_id=schedule.id
+                            )
                             continue
                         
                         period_start = payment_period['period_start']
                         period_end = payment_period['period_end']
+
+                        if period_start > period_end:
+                            logger.warning(
+                                "Invalid period (start > end)",
+                                schedule_id=schedule.id,
+                                period_start=period_start.isoformat(),
+                                period_end=period_end.isoformat()
+                            )
+                            continue
                         
                         logger.info(
                             f"Processing schedule {schedule.id}: {schedule.name}",
