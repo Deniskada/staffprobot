@@ -235,8 +235,10 @@ class PayrollAdjustmentService:
         
         # Устанавливаем дату начисления если указана
         if adjustment_date:
-            from datetime import datetime
-            adjustment.created_at = datetime.combine(adjustment_date, datetime.min.time())
+            from datetime import datetime, timezone
+            # Создаём timezone-aware datetime в UTC
+            naive_dt = datetime.combine(adjustment_date, datetime.min.time())
+            adjustment.created_at = naive_dt.replace(tzinfo=timezone.utc)
         
         self.session.add(adjustment)
         # Не используем flush() - commit будет в вызывающем коде
