@@ -152,6 +152,16 @@ async def owner_payroll_detail(
         adjustments_result = await db.execute(adjustments_query)
         adjustments = adjustments_result.scalars().all()
         
+        # Нормализовать timestamp в edit_history (конвертировать строки в datetime)
+        for adj in adjustments:
+            if adj.edit_history:
+                for change in adj.edit_history:
+                    if isinstance(change.get('timestamp'), str):
+                        try:
+                            change['timestamp'] = datetime.fromisoformat(change['timestamp'])
+                        except (ValueError, AttributeError):
+                            pass  # Оставляем как есть если не удалось распарсить
+        
         # Разделить на deductions и bonuses для совместимости со старым шаблоном
         deductions = [adj for adj in adjustments if float(adj.amount) < 0]
         bonuses = [adj for adj in adjustments if float(adj.amount) > 0 and adj.adjustment_type != 'shift_base']
