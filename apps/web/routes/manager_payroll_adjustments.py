@@ -225,6 +225,7 @@ async def manager_create_manual_adjustment(
     adjustment_type: str = Form(...),  # manual_bonus или manual_deduction
     amount: Decimal = Form(...),
     description: str = Form(...),
+    adjustment_date: Optional[str] = Form(None),
     object_id: Optional[int] = Form(None),
     shift_id: Optional[int] = Form(None),
     current_user = Depends(require_manager_payroll_permission),
@@ -237,6 +238,18 @@ async def manager_create_manual_adjustment(
                 status_code=400,
                 content={"success": False, "error": "Неверный тип корректировки"}
             )
+        
+        # Парсим дату
+        adjustment_date_obj = None
+        if adjustment_date:
+            try:
+                from datetime import date
+                adjustment_date_obj = date.fromisoformat(adjustment_date)
+            except ValueError:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "error": "Неверный формат даты"}
+                )
         
         user_id = current_user.id
         
@@ -261,7 +274,8 @@ async def manager_create_manual_adjustment(
             description=description,
             created_by=user_id,
             object_id=object_id,
-            shift_id=shift_id
+            shift_id=shift_id,
+            adjustment_date=adjustment_date_obj
         )
         
         await session.commit()
