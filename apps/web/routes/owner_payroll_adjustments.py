@@ -324,6 +324,40 @@ async def edit_adjustment(
             updated_by=current_user.id
         )
         
+        # Пересчитать суммы в начислении, если корректировка применена
+        if adjustment.payroll_entry_id:
+            from domain.entities.payroll_entry import PayrollEntry
+            entry_query = select(PayrollEntry).where(PayrollEntry.id == adjustment.payroll_entry_id)
+            entry_result = await session.execute(entry_query)
+            entry = entry_result.scalar_one_or_none()
+            
+            if entry:
+                # Получить все корректировки этого начисления
+                all_adjustments_query = select(PayrollAdjustment).where(
+                    PayrollAdjustment.payroll_entry_id == adjustment.payroll_entry_id
+                )
+                all_adjustments_result = await session.execute(all_adjustments_query)
+                all_adjustments = all_adjustments_result.scalars().all()
+                
+                # Пересчитать суммы
+                gross = Decimal('0')
+                bonuses = Decimal('0')
+                deductions = Decimal('0')
+                
+                for adj in all_adjustments:
+                    amount_dec = Decimal(str(adj.amount))
+                    if adj.adjustment_type == 'shift_base':
+                        gross += amount_dec
+                    elif amount_dec > 0:
+                        bonuses += amount_dec
+                    else:
+                        deductions += abs(amount_dec)
+                
+                entry.gross_amount = float(gross)
+                entry.total_bonuses = float(bonuses)
+                entry.total_deductions = float(deductions)
+                entry.net_amount = float(gross + bonuses - deductions)
+        
         await session.commit()
         
         logger.info(
@@ -435,21 +469,55 @@ async def delete_adjustment(
                 content={"success": False, "error": "Корректировка не найдена"}
             )
         
-        # Проверить, что это ручная корректировка и она не применена
+        # Проверить, что это ручная корректировка
         if adjustment.adjustment_type not in ['manual_bonus', 'manual_deduction']:
             return JSONResponse(
                 status_code=403,
                 content={"success": False, "error": "Можно удалять только ручные корректировки"}
             )
         
-        if adjustment.is_applied:
-            return JSONResponse(
-                status_code=403,
-                content={"success": False, "error": "Нельзя удалять применённые корректировки"}
-            )
+        # Если корректировка применена к начислению, нужно пересчитать суммы
+        payroll_entry_id = adjustment.payroll_entry_id
         
         # Удалить корректировку
         await session.delete(adjustment)
+        
+        # Пересчитать суммы в начислении, если было применено
+        if payroll_entry_id:
+            from domain.entities.payroll_entry import PayrollEntry
+            from sqlalchemy import select
+            entry_query = select(PayrollEntry).where(PayrollEntry.id == payroll_entry_id)
+            entry_result = await session.execute(entry_query)
+            entry = entry_result.scalar_one_or_none()
+            
+            if entry:
+                # Получить все оставшиеся корректировки
+                remaining_adjustments_query = select(PayrollAdjustment).where(
+                    PayrollAdjustment.payroll_entry_id == payroll_entry_id,
+                    PayrollAdjustment.id != adjustment_id
+                )
+                remaining_result = await session.execute(remaining_adjustments_query)
+                remaining_adjustments = remaining_result.scalars().all()
+                
+                # Пересчитать суммы
+                gross = Decimal('0')
+                bonuses = Decimal('0')
+                deductions = Decimal('0')
+                
+                for adj in remaining_adjustments:
+                    amount = Decimal(str(adj.amount))
+                    if adj.adjustment_type == 'shift_base':
+                        gross += amount
+                    elif amount > 0:
+                        bonuses += amount
+                    else:
+                        deductions += abs(amount)
+                
+                entry.gross_amount = float(gross)
+                entry.total_bonuses = float(bonuses)
+                entry.total_deductions = float(deductions)
+                entry.net_amount = float(gross + bonuses - deductions)
+        
         await session.commit()
         
         logger.info(
