@@ -202,12 +202,17 @@ async def manager_payroll_detail(
         all_adjustments = adjustments_result.scalars().all()
         
         # Нормализовать timestamp в edit_history (конвертировать строки в datetime)
+        from datetime import timezone
         for adj in all_adjustments:
             if adj.edit_history:
                 for change in adj.edit_history:
                     if isinstance(change.get('timestamp'), str):
                         try:
-                            change['timestamp'] = datetime.fromisoformat(change['timestamp'])
+                            dt = datetime.fromisoformat(change['timestamp'])
+                            # Если datetime naive, делаем его UTC aware
+                            if dt.tzinfo is None:
+                                dt = dt.replace(tzinfo=timezone.utc)
+                            change['timestamp'] = dt
                         except (ValueError, AttributeError):
                             pass  # Оставляем как есть если не удалось распарсить
         
