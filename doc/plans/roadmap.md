@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 348/401 (86.8%)  
+**Общий прогресс:** 352/405 (86.9%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
@@ -10,7 +10,8 @@
 **Итерация 29 (Shift Cancellation System):** ✅ Завершена (8/8 задач)  
 **Итерация 30 (Bug Fixes & Improvements):** ✅ Завершена (1/1 задача)  
 **Итерация 31 (Owner Profile Enhancement):** ✅ Завершена (3/3 задачи)  
-**Итерация 32 (Contract Termination Settlement):** ✅ Завершена (8/8 задач)
+**Итерация 32 (Contract Termination Settlement):** ✅ Завершена (8/8 задач)  
+**Итерация 33 (Payroll System Improvements):** ✅ Завершена (4/4 задачи)
 
 ## Итерация 25: Система управления уведомлениями в админке
 
@@ -350,7 +351,69 @@
 - [Payroll System](../vision_v1/entities/payroll.md)
 - [Contract](../vision_v1/entities/contract.md)
 
-## Итерация 33: Mobile App Integration
+## Итерация 33: Payroll System Improvements ✅
+
+**Статус:** ✅ Завершена  
+**Длительность:** 1 день  
+**Приоритет:** Критический  
+**Описание:** Критические исправления системы автоматических выплат и улучшение UX ручного управления начислениями.
+
+### Задачи
+
+- [x] **1.1. Поле даты в формах ручного добавления начислений (0.2 дня)**
+  - Type: feature | Files: apps/web/templates/owner/payroll_adjustments/list.html, apps/web/templates/manager/payroll_adjustments/list.html, apps/web/routes/owner_payroll_adjustments.py, apps/web/routes/manager_payroll_adjustments.py, shared/services/payroll_adjustment_service.py
+  - Acceptance: добавлено поле `adjustment_date` в формы владельца и управляющего; корректировки создаются с указанной датой
+
+- [x] **1.2. Кнопка редактирования корректировок для управляющего (0.1 дня)**
+  - Type: feature | Files: apps/web/routes/manager_payroll_adjustments.py, apps/web/templates/manager/payroll_adjustments/list.html
+  - Acceptance: управляющий может редактировать ручные неприменённые корректировки по доступным объектам
+
+- [x] **1.3. Исправление автоматических выплат (0.5 дня)**
+  - Type: bugfix | Files: core/celery/celery_app.py, core/celery/tasks/payroll_tasks.py, shared/services/payroll_adjustment_service.py
+  - Acceptance: 
+    - Время запуска задач изменено на 04:00/04:05 МСК
+    - Убран фильтр `is_custom` в выборке графиков
+    - Корректировки за смены фильтруются по `shifts.end_time`, а не `created_at`
+    - Добавлены расширенные логи причин пропуска и расчётов
+
+- [x] **1.4. Кнопка ручного пересчёта выплат (0.2 дня)**
+  - Type: feature | Files: apps/web/routes/payroll.py, apps/web/templates/owner/payroll/list.html
+  - Acceptance: владелец может вручную запустить пересчёт на любую дату; идемпотентная логика (обновление существующих + создание недостающих)
+
+### Критические исправления
+
+**Проблема:** Автоматические начисления не создавались по вторникам несмотря на активный график выплат.
+
+**Причины:**
+1. Задача запускалась в 01:00 МСК вместо ожидаемого 04:00 МСК
+2. Фильтр `is_custom == True` исключал некастомные графики
+3. Корректировки фильтровались по `created_at` вместо даты завершения смены, из-за чего смены с историческими датами, но недавним `created_at` (после backfill) не попадали в период
+
+**Решение:**
+- ✅ Перенос времени запуска на 04:00 МСК (= 01:00 UTC)
+- ✅ Снятие ограничения `is_custom`
+- ✅ Фильтрация по `shifts.end_time` для сменных корректировок
+- ✅ Расширенное логирование для диагностики
+
+### Результат
+- ✅ Автоматические начисления работают корректно
+- ✅ Владелец может исправить сбои через UI
+- ✅ Управляющий получил больше прав над корректировками
+- ✅ Ручные корректировки создаются с указанной датой
+- ✅ Задеплоено на production
+
+### DoD
+- [x] Код следует правилам проекта ✅
+- [x] Функционал протестирован на dev ✅
+- [x] Документация обновлена ✅
+- [x] Задеплоено на production ✅
+
+### Связанная документация
+- [Payroll System](../vision_v1/entities/payroll.md)
+- [Owner Routes](../vision_v1/roles/owner.md)
+- [Manager Routes](../vision_v1/roles/manager.md)
+
+## Итерация 34: Mobile App Integration
 
 **Статус:** В планировании  
 **Длительность:** 10 дней  
