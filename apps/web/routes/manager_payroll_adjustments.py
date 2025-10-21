@@ -303,3 +303,101 @@ async def manager_create_manual_adjustment(
             content={"success": False, "error": str(e)}
         )
 
+
+@router.post("/{adjustment_id}/edit", response_class=JSONResponse)
+async def manager_edit_adjustment(
+    adjustment_id: int,
+    amount: Optional[Decimal] = Form(None),
+    description: Optional[str] = Form(None),
+    current_user = Depends(require_manager_payroll_permission),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Редактировать корректировку (требует can_manage_payroll)."""
+    try:
+        adjustment_service = PayrollAdjustmentService(session)
+        user_id = current_user.id
+        
+        # Получить корректировку
+        from sqlalchemy import select
+        from domain.entities.payroll_adjustment import PayrollAdjustment
+        query = select(PayrollAdjustment).where(PayrollAdjustment.id == adjustment_id)
+        result = await session.execute(query)
+        adjustment = result.scalar_one_or_none()
+        
+        if not adjustment:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "error": "Корректировка не найдена"}
+            )
+        
+        # Проверить, что это ручная корректировка и она не применена
+        if adjustment.adjustment_type not in ['manual_bonus', 'manual_deduction']:
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "error": "Можно редактировать только ручные корректировки"}
+            )
+        
+        if adjustment.is_applied:
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "error": "Нельзя редактировать примененные корректировки"}
+            )
+        
+        # Проверить доступ к объекту (если указан)
+        if adjustment.object_id:
+            permission_service = ManagerPermissionService(session)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            
+            if adjustment.object_id not in accessible_object_ids:
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "У вас нет доступа к этой корректировке"}
+                )
+        
+        # Подготовка обновлений
+        updates = {}
+        if amount is not None:
+            updates['amount'] = amount
+        if description is not None:
+            updates['description'] = description
+        
+        if not updates:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Нет данных для обновления"}
+            )
+        
+        adjustment = await adjustment_service.update_adjustment(
+            adjustment_id=adjustment_id,
+            updates=updates,
+            updated_by=user_id
+        )
+        
+        await session.commit()
+        
+        logger.info(
+            f"Adjustment updated by manager",
+            adjustment_id=adjustment_id,
+            updated_by=user_id,
+            fields=list(updates.keys())
+        )
+        
+        return JSONResponse(content={
+            "success": True,
+            "message": "Корректировка успешно обновлена"
+        })
+        
+    except ValueError as e:
+        return JSONResponse(
+            status_code=404,
+            content={"success": False, "error": str(e)}
+        )
+    except Exception as e:
+        logger.error(f"Error updating adjustment: {e}")
+        await session.rollback()
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
