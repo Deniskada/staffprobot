@@ -18,6 +18,12 @@ from apps.web.services.payroll_service import PayrollService
 from domain.entities.user import User
 from domain.entities.payroll_entry import PayrollEntry
 from domain.entities.contract import Contract
+from domain.entities.shift import Shift
+from domain.entities.payroll_adjustment import PayrollAdjustment
+from domain.entities.payment_schedule import PaymentSchedule
+from domain.entities.object import Object
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import cast
 
 router = APIRouter()
 
@@ -480,14 +486,9 @@ async def owner_payroll_manual_recalculate(
             target_date=target_date_obj.isoformat()
         )
         
-        # Импорт необходимых компонентов из payroll_tasks
+        # Импорт функции для расчёта периода
         from core.celery.tasks.payroll_tasks import _get_payment_period_for_date
-        from domain.entities.payment_schedule import PaymentSchedule
-        from domain.entities.object import Object
-        from domain.entities.org_structure import OrgStructureUnit
         from shared.services.payroll_adjustment_service import PayrollAdjustmentService
-        from sqlalchemy.dialects.postgresql import JSONB
-        from sqlalchemy import cast
         
         # Найти все активные payment_schedules владельца
         schedules_query = select(PaymentSchedule).where(
