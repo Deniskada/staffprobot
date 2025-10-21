@@ -175,10 +175,38 @@ class ScheduleService(BaseService):
                         'error': 'Тайм-слот уже занят'
                     }
                 
-                # Создаем смену
-                start_datetime = datetime.combine(time_slot.slot_date, start_time)
-                end_datetime = datetime.combine(time_slot.slot_date, end_time)
+                # Получаем объект для timezone
+                object_query = select(Object).where(Object.id == time_slot.object_id)
+                object_result = await session.execute(object_query)
+                obj = object_result.scalar_one_or_none()
                 
+                if not obj:
+                    return {
+                        'success': False,
+                        'error': 'Объект не найден'
+                    }
+                
+                # Конвертируем локальное время объекта в UTC для корректного хранения
+                import pytz
+                object_timezone = obj.timezone if obj.timezone else 'Europe/Moscow'
+                tz = pytz.timezone(object_timezone)
+                
+                # Создаём naive datetime в локальном времени объекта
+                start_datetime_naive = datetime.combine(time_slot.slot_date, start_time)
+                end_datetime_naive = datetime.combine(time_slot.slot_date, end_time)
+                
+                # Локализуем в timezone объекта, затем конвертируем в UTC для сохранения
+                start_datetime = tz.localize(start_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+                end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+                
+                logger.info(
+                    f"Timezone conversion for bot scheduling (shared)",
+                    timezone=object_timezone,
+                    local_start=start_datetime_naive.isoformat(),
+                    utc_start=start_datetime.isoformat()
+                )
+                
+                # Создаем смену
                 new_shift = ShiftSchedule(
                     user_id=user.id,
                     object_id=time_slot.object_id,
@@ -201,6 +229,9 @@ class ScheduleService(BaseService):
                 return {
                     'success': True,
                     'shift_id': new_shift.id,
+                    'start_time': time_slot.start_time.strftime("%H:%M"),
+                    'end_time': time_slot.end_time.strftime("%H:%M"),
+                    'hourly_rate': float(time_slot.hourly_rate) if time_slot.hourly_rate else 0,
                     'message': f'Смена запланирована на {time_slot.slot_date.strftime("%d.%m.%Y")} с {time_slot.start_time.strftime("%H:%M")} до {time_slot.end_time.strftime("%H:%M")}'
                 }
                 
