@@ -234,13 +234,18 @@ async def handle_schedule_confirmation(update: Update, context: ContextTypes.DEF
             await user_state_manager.clear_state(user_id)
             context.user_data.clear()
             
+            # Создаем клавиатуру с кнопкой возврата в главное меню
+            keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             await query.edit_message_text(
                 f"✅ **Смена успешно запланирована!**\n\n"
                 f"📅 Дата: {selected_date.strftime('%d.%m.%Y')}\n"
                 f"🕐 Время: {result.get('start_time', 'N/A')} - {result.get('end_time', 'N/A')}\n"
                 f"💰 Ставка: {result.get('hourly_rate', 'N/A')} ₽/час\n\n"
                 f"Вы получите напоминание за 2 часа до начала смены.",
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
         else:
             await query.edit_message_text(f"❌ Ошибка планирования: {result['error']}")
