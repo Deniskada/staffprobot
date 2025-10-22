@@ -2237,12 +2237,29 @@ async def employee_plan_shift(
         employee_contract = None  # Договор сотрудника с доступом к объекту
         import json as _json
         for contract in contracts:
-            if contract.allowed_objects:
-                allowed = contract.allowed_objects if isinstance(contract.allowed_objects, list) else _json.loads(contract.allowed_objects)
-                if timeslot.object_id in allowed:
-                    has_access = True
-                    employee_contract = contract  # Сохраняем договор для определения ставки
-                    break
+            if not contract.allowed_objects:
+                continue
+            # Нормализуем список разрешённых объектов к списку целых чисел
+            raw_allowed = (
+                contract.allowed_objects
+                if isinstance(contract.allowed_objects, list)
+                else _json.loads(contract.allowed_objects)
+            )
+            try:
+                allowed_ids = {int(x) for x in raw_allowed}
+            except Exception:
+                # Фолбэк на случай неожиданных типов в списке
+                allowed_ids = set()
+                for x in raw_allowed:
+                    try:
+                        allowed_ids.add(int(x))
+                    except Exception:
+                        continue
+
+            if int(timeslot.object_id) in allowed_ids:
+                has_access = True
+                employee_contract = contract  # Сохраняем договор для определения ставки
+                break
         
         if not has_access:
             raise HTTPException(status_code=403, detail="Нет доступа к объекту")
