@@ -81,24 +81,26 @@ class ScheduleService:
                             if current_time > end_time_plus_minute:
                                 continue
                     
+                    # Подсчитываем занятые места в этом тайм-слоте
+                    occupied_count = 0
+                    for booked_schedule in booked_schedules:
+                        # Проверяем, что смена связана с этим тайм-слотом
+                        if (booked_schedule.time_slot_id == slot.id):
+                            occupied_count += 1
+                        # Если time_slot_id не установлен, проверяем по времени (для старых записей)
+                        elif (booked_schedule.object_id == slot.object_id and
+                              booked_schedule.planned_start.date() == slot.slot_date and
+                              booked_schedule.time_slot_id is None):
+                            # Проверяем пересечение времени
+                            if (booked_schedule.planned_start.time() < slot.end_time and
+                                booked_schedule.planned_end.time() > slot.start_time):
+                                occupied_count += 1
+                    
                     # Получаем доступные интервалы в слоте
                     available_intervals = slot.get_available_intervals(booked_schedules)
                     
-                    if available_intervals:
-                        # Подсчитываем занятые места в этом тайм-слоте
-                        occupied_count = 0
-                        for booked_schedule in booked_schedules:
-                            # Проверяем, что смена связана с этим тайм-слотом
-                            if (booked_schedule.time_slot_id == slot.id):
-                                occupied_count += 1
-                            # Если time_slot_id не установлен, проверяем по времени (для старых записей)
-                            elif (booked_schedule.object_id == slot.object_id and
-                                  booked_schedule.planned_start.date() == slot.slot_date and
-                                  booked_schedule.time_slot_id is None):
-                                # Проверяем пересечение времени
-                                if (booked_schedule.planned_start.time() < slot.end_time and
-                                    booked_schedule.planned_end.time() > slot.start_time):
-                                    occupied_count += 1
+                    # Проверяем доступность по количеству сотрудников
+                    if available_intervals and occupied_count < slot.max_employees:
                         
                         available_slots.append({
                             "id": slot.id,
@@ -208,6 +210,14 @@ class ScheduleService:
                 
                 # Получаем доступные интервалы в тайм-слоте
                 available_intervals = timeslot.get_available_intervals(booked_schedules)
+                
+                # Проверяем доступность по количеству сотрудников
+                occupied_count = len(booked_schedules)
+                if occupied_count >= timeslot.max_employees:
+                    return {
+                        'success': False,
+                        'error': f'Тайм-слот полностью занят ({occupied_count}/{timeslot.max_employees})'
+                    }
                 
                 # Проверяем, что выбранное время соответствует одному из доступных интервалов
                 time_fits_interval = False

@@ -77,19 +77,28 @@ class ScheduleService(BaseService):
                 # Формируем список доступных тайм-слотов
                 available_slots = []
                 for slot in time_slots:
-                    # Проверяем, не занят ли слот
-                    is_occupied = any(
-                        shift.time_slot_id == slot.id 
-                        for shift in shifts
+                    # Считаем количество запланированных смен в этом тайм-слоте
+                    scheduled_count = sum(
+                        1 for shift in shifts 
+                        if shift.time_slot_id == slot.id
                     )
                     
-                    if not is_occupied:
+                    # Проверяем доступность: текущая занятость < максимального количества
+                    is_available = scheduled_count < slot.max_employees
+                    
+                    if is_available:
+                        # Формируем информацию о занятости
+                        availability = f"{scheduled_count}/{slot.max_employees}"
+                        
                         available_slots.append({
                             'id': slot.id,
                             'start_time': slot.start_time.strftime('%H:%M'),
                             'end_time': slot.end_time.strftime('%H:%M'),
                             'hourly_rate': float(slot.hourly_rate) if slot.hourly_rate else None,
-                            'description': slot.notes or ''
+                            'description': slot.notes or '',
+                            'max_employees': slot.max_employees,
+                            'availability': availability,
+                            'scheduled_count': scheduled_count
                         })
                 
                 return {
@@ -159,20 +168,24 @@ class ScheduleService(BaseService):
                         'error': 'Тайм-слот недоступен'
                     }
                 
-                # Проверяем, не занят ли уже тайм-слот
-                existing_shift_query = select(ShiftSchedule).where(
+                # Проверяем доступность тайм-слота (учитываем max_employees)
+                existing_shifts_query = select(ShiftSchedule).where(
                     and_(
                         ShiftSchedule.time_slot_id == time_slot_id,
                         ShiftSchedule.status.in_(["planned", "confirmed"])
                     )
                 )
-                existing_shift_result = await session.execute(existing_shift_query)
-                existing_shift = existing_shift_result.scalar_one_or_none()
+                existing_shifts_result = await session.execute(existing_shifts_query)
+                existing_shifts = existing_shifts_result.scalars().all()
                 
-                if existing_shift:
+                # Считаем количество запланированных смен
+                scheduled_count = len(existing_shifts)
+                
+                # Проверяем, есть ли свободные места
+                if scheduled_count >= time_slot.max_employees:
                     return {
                         'success': False,
-                        'error': 'Тайм-слот уже занят'
+                        'error': f'Тайм-слот полностью занят ({scheduled_count}/{time_slot.max_employees})'
                     }
                 
                 # Получаем объект для timezone
