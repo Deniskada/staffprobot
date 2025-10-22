@@ -63,11 +63,11 @@ class ScheduleService(BaseService):
                 time_slots = time_slots_result.scalars().all()
                 
                 # Получаем запланированные смены для даты
-                shifts_query = select(Shift).where(
+                shifts_query = select(ShiftSchedule).where(
                     and_(
-                        Shift.object_id == object_id,
-                        func.date(Shift.start_time) == target_date,
-                        Shift.status.in_(["scheduled", "active"])
+                        ShiftSchedule.object_id == object_id,
+                        func.date(ShiftSchedule.planned_start) == target_date,
+                        ShiftSchedule.status.in_(["planned", "confirmed"])
                     )
                 )
                 
