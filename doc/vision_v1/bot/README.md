@@ -59,7 +59,7 @@
 - `format_*`
 - `get_report`
 - `get_telegram_id`
-- `main_menu`
+- `main_menu` - возврат в главное меню (добавлено после планирования смены)
 - `manage_*`
 - `manage_timeslots:*`
 - `my_tasks` - показать задачи активной смены (Phase 4C, заменяет кнопку "Помощь")
