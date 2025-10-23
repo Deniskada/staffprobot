@@ -547,15 +547,7 @@ async def handle_cancel_reason_selection(update: Update, context: ContextTypes.D
             query=query
         )
         
-        if success:
-            await query.edit_message_text(
-                "✅ Смена успешно отменена!\n\n"
-                "🏠 Главное меню",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
-                ]])
-            )
-        else:
+        if not success:
             await query.edit_message_text("❌ Ошибка при отмене смены. Попробуйте позже.")
 
 
@@ -834,19 +826,27 @@ async def _execute_shift_cancellation(
                 obj = object_result.scalar_one_or_none()
                 object_name = obj.name if obj else "Неизвестный объект"
                 
+                # Экранируем спецсимволы Markdown для названия объекта
+                def escape_markdown(text: str) -> str:
+                    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+                    for char in special_chars:
+                        text = text.replace(char, f'\\{char}')
+                    return text
+                object_name_escaped = escape_markdown(object_name)
+                
                 # Конвертируем время в timezone пользователя
                 from core.utils.timezone_helper import get_user_timezone, convert_utc_to_local
                 user_tz = get_user_timezone(user)
                 local_start = convert_utc_to_local(shift.planned_start, user_tz)
                 local_end = convert_utc_to_local(shift.planned_end, user_tz)
                 
+                result_message = result.get('message') or "Смена отменена."
                 text = (
-                    f"✅ **Смена отменена**\n\n"
-                    f"🏢 **{object_name}**\n"
+                    f"✅ Смена отменена\n\n"
+                    f"🏢 {object_name}\n"
                     f"📅 {local_start.strftime('%d.%m.%Y %H:%M')}\n"
                     f"🕐 До {local_end.strftime('%H:%M')}\n\n"
-                    f"⏳ Ваша заявка на модерации.\n"
-                    f"Владелец рассмотрит её и примет решение."
+                    f"{result_message}"
                 )
                 
                 # Очищаем контекст
@@ -856,10 +856,25 @@ async def _execute_shift_cancellation(
                 context.user_data.pop('cancel_document_description', None)
                 context.user_data.pop('report_chat_id', None)
                 
-                if query:
-                    await query.edit_message_text(text, parse_mode='Markdown')
-                elif message:
-                    await message.reply_text(text, parse_mode='Markdown')
+                # Кнопка "Главное меню"
+                menu_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]])
+
+                # Всегда отправляем НОВОЕ сообщение пользователю (не редактируем старое)
+                try:
+                    if message:
+                        await message.reply_text(text, reply_markup=menu_keyboard)
+                    elif query:
+                        await query.message.reply_text(text, reply_markup=menu_keyboard)
+                except Exception as send_err:
+                    logger.error(f"Failed to send final cancellation message: {send_err}")
+                    try:
+                        # Повтор без клавиатуры как крайний случай
+                        if message:
+                            await message.reply_text(text)
+                        elif query:
+                            await query.message.reply_text(text)
+                    except Exception as send_err2:
+                        logger.error(f"Failed to send plain final message: {send_err2}")
                 
                 # TODO: Отправить уведомление владельцу/управляющему
                 return True
@@ -875,11 +890,15 @@ async def _execute_shift_cancellation(
     except Exception as e:
         logger.error(f"Error executing shift cancellation: {e}", exc_info=True)
         logger.error(f"Exception details: type={type(e)}, args={e.args}")
-        text = "❌ Ошибка отмены смены. Попробуйте позже."
-        if query:
+    text = "❌ Ошибка отмены смены. Попробуйте позже."
+    if query:
+        try:
             await query.edit_message_text(text)
-        elif message:
-            await message.reply_text(text)
+        except Exception:
+            # Последняя попытка – отправить новое сообщение
+            await query.message.reply_text(text)
+    elif message:
+        await message.reply_text(text)
         return False
 
 
