@@ -23,6 +23,8 @@ class UserAction(str, Enum):
     SCHEDULE_SHIFT = "schedule_shift"
     VIEW_SCHEDULE = "view_schedule"
     CANCEL_SCHEDULE = "cancel_schedule"  # Отмена запланированной смены
+    # Алиас для совместимости со старым кодом/документацией
+    CANCEL_SHIFT = "cancel_schedule"
     CREATE_TIMESLOT = "create_timeslot"
     EDIT_TIMESLOT_TIME = "edit_timeslot_time"
     EDIT_TIMESLOT_RATE = "edit_timeslot_rate"

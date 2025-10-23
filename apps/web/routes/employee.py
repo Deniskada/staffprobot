@@ -2222,44 +2222,64 @@ async def employee_plan_shift(
         if not timeslot:
             raise HTTPException(status_code=404, detail="Тайм-слот не найден")
         
-        # Проверяем что у сотрудника есть активный договор с доступом к этому объекту
-        contracts = (await db.execute(
-            select(Contract).where(
-                and_(
-                    Contract.employee_id == user_id,
-                    Contract.is_active == True,
-                    Contract.status == 'active'
-                )
-            )
-        )).scalars().all()
+        # Проверяем, является ли пользователь владельцем объекта
+        from domain.entities.user import User
+        user_query = select(User).where(User.id == user_id)
+        user_result = await db.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        
+        is_owner = False
+        if user_obj and user_obj.role == 'owner':
+            # Проверяем, что объект принадлежит владельцу
+            object_query = select(Object).where(Object.id == timeslot.object_id)
+            object_result = await db.execute(object_query)
+            obj = object_result.scalar_one_or_none()
+            if obj and obj.owner_id == user_id:
+                is_owner = True
         
         has_access = False
         employee_contract = None  # Договор сотрудника с доступом к объекту
-        import json as _json
-        for contract in contracts:
-            if not contract.allowed_objects:
-                continue
-            # Нормализуем список разрешённых объектов к списку целых чисел
-            raw_allowed = (
-                contract.allowed_objects
-                if isinstance(contract.allowed_objects, list)
-                else _json.loads(contract.allowed_objects)
-            )
-            try:
-                allowed_ids = {int(x) for x in raw_allowed}
-            except Exception:
-                # Фолбэк на случай неожиданных типов в списке
-                allowed_ids = set()
-                for x in raw_allowed:
-                    try:
-                        allowed_ids.add(int(x))
-                    except Exception:
-                        continue
+        
+        if is_owner:
+            # Владелец может планировать себя на свои объекты
+            has_access = True
+        else:
+            # Проверяем что у сотрудника есть активный договор с доступом к этому объекту
+            contracts = (await db.execute(
+                select(Contract).where(
+                    and_(
+                        Contract.employee_id == user_id,
+                        Contract.is_active == True,
+                        Contract.status == 'active'
+                    )
+                )
+            )).scalars().all()
+            
+            import json as _json
+            for contract in contracts:
+                if not contract.allowed_objects:
+                    continue
+                # Нормализуем список разрешённых объектов к списку целых чисел
+                raw_allowed = (
+                    contract.allowed_objects
+                    if isinstance(contract.allowed_objects, list)
+                    else _json.loads(contract.allowed_objects)
+                )
+                try:
+                    allowed_ids = {int(x) for x in raw_allowed}
+                except Exception:
+                    # Фолбэк на случай неожиданных типов в списке
+                    allowed_ids = set()
+                    for x in raw_allowed:
+                        try:
+                            allowed_ids.add(int(x))
+                        except Exception:
+                            continue
 
-            if int(timeslot.object_id) in allowed_ids:
-                has_access = True
-                employee_contract = contract  # Сохраняем договор для определения ставки
-                break
+                if int(timeslot.object_id) in allowed_ids:
+                    has_access = True
+                    employee_contract = contract  # Сохраняем договор для определения ставки
+                    break
         
         if not has_access:
             raise HTTPException(status_code=403, detail="Нет доступа к объекту")

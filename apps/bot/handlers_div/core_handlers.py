@@ -712,7 +712,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     # Обрабатываем разные типы кнопок
     # open_object, close_object, select_object_to_open обрабатываются в bot.py
-    if query.data == "open_shift":
+    if query.data == "main_menu":
+        # Возврат в главное меню
+        await query.delete_message()
+        await start_command(update, context)
+        return
+    elif query.data == "open_shift":
         await _handle_open_shift(update, context)
         return
     elif query.data == "close_shift":
@@ -730,10 +735,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         shift_id = int(query.data.split(":", 1)[1])
         await _handle_close_shift_selection(update, context, shift_id)
         return
-    elif query.data.startswith("edit_object:"):
-        object_id = int(query.data.split(":", 1)[1])
-        await _handle_edit_object(update, context, object_id)
-        return
+    # обработку отмены делаем через явные хендлеры в bot.py
     elif query.data.startswith("edit_field:"):
         # Формат: edit_field:object_id:field_name
         parts = query.data.split(":", 2)
