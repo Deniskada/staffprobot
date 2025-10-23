@@ -503,7 +503,9 @@ async def create_timeslot(
                         continue
         
         if created_count == 0:
-            raise HTTPException(status_code=400, detail="Не удалось создать ни одного тайм-слота")
+            # Идемпотентность: если все интервалы уже существуют (дубликаты), не считаем это ошибкой
+            logger.info("No timeslots created (possibly all duplicates) → redirecting to list")
+            return RedirectResponse(url=f"/owner/timeslots/object/{object_id}", status_code=status.HTTP_302_FOUND)
         
         logger.info(f"Created {created_count} timeslots for {len(selected_objects)} objects")
         
