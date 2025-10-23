@@ -2669,25 +2669,32 @@ async def owner_calendar_quick_create_timeslot(
                 "is_active": True,
             }
 
+            telegram_id = int(current_user.get("telegram_id") or current_user.get("id"))
+
             new_slot = await timeslot_service.create_timeslot(
                 timeslot_data,
                 object_id,
-                current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id"),
+                telegram_id,
             )
-            if not new_slot:
-                raise HTTPException(status_code=404, detail="Объект не найден или нет доступа")
 
-            # Очищаем кэш календаря для немедленного отображения
-            from core.cache.redis_cache import cache
-            await cache.clear_pattern("calendar_shifts:*")
-            await cache.clear_pattern("api_response:*")
-            logger.info(f"Calendar cache cleared after creating timeslot {new_slot.id}")
+            # Очищаем кэш календаря безопасно (не роняем при ошибке Redis)
+            try:
+                from core.cache.redis_cache import cache
+                await cache.clear_pattern("calendar_shifts:*")
+                await cache.clear_pattern("api_response:*")
+                if new_slot:
+                    logger.info(f"Calendar cache cleared after creating timeslot {new_slot.id}")
+                else:
+                    logger.info("Calendar cache cleared after duplicate timeslot attempt")
+            except Exception:
+                logger.warning("Cache clear skipped (redis not available)")
+
+            # Если дубликат (new_slot is None) — возвращаем идемпотентный успех
+            if not new_slot:
+                return {"success": True, "already_exists": True, "message": "Тайм-слот уже существует"}
 
             # Инфо об объекте для ответа
-            obj = await object_service.get_object_by_id(
-                object_id,
-                current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id"),
-            )
+            obj = await object_service.get_object_by_id(object_id, telegram_id)
 
             return {
                 "success": True,
