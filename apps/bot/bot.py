@@ -134,10 +134,16 @@ class StaffProBot:
         self.application.add_handler(CallbackQueryHandler(_handle_close_object, pattern="^close_object$"))
         self.application.add_handler(CallbackQueryHandler(_handle_select_object_to_open, pattern="^select_object_to_open:.*$"))
         
-        # Обработка отмены смен
-        from .handlers_div.schedule_handlers import handle_cancel_reason_selection, handle_cancellation_skip_photo
+        # Обработка отмены смен (включаем явные хендлеры)
+        from .handlers_div.schedule_handlers import handle_cancel_shift, handle_cancel_reason_selection, handle_cancellation_skip_photo, handle_cancellation_document_input, handle_cancellation_photo_upload
+        self.application.add_handler(CallbackQueryHandler(handle_cancel_shift, pattern="^cancel_shift_.*$"))
         self.application.add_handler(CallbackQueryHandler(handle_cancel_reason_selection, pattern="^cancel_reason_.*$"))
         self.application.add_handler(CallbackQueryHandler(handle_cancellation_skip_photo, pattern="^cancel_skip_photo$"))
+        
+        # Обработка ввода документа для отмены смены
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_cancellation_document_input))
+        # Обработка загрузки фото для отмены смены
+        self.application.add_handler(MessageHandler(filters.PHOTO, handle_cancellation_photo_upload))
         
         # Добавляем ConversationHandler для отчетов
         # Временно отключаем для исправления проблемы с геолокацией
@@ -151,10 +157,8 @@ class StaffProBot:
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
         )
         
-        # Обработка callback-кнопок
-        self.application.add_handler(
-            CallbackQueryHandler(button_callback)
-        )
+        # Обработка callback-кнопок (общий хендлер в самом конце)
+        self.application.add_handler(CallbackQueryHandler(button_callback))
         
         # Обработка ошибок
         self.application.add_error_handler(self._error_handler)
