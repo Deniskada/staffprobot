@@ -1,13 +1,13 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 362/415 (87.2%)  
+**Общий прогресс:** 366/419 (87.4%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
 **Итерация 26 (Owner Sidebar Redesign):** ✅ Завершена (5/5 задач)  
 **Итерация 27 (Доработки):** ✅ Завершена (6/6 задач)  
 **Итерация 28 (Calendar Filters):** ✅ Завершена (7/7 задач)  
-**Итерация 29 (Shift Cancellation System):** ✅ Завершена (8/8 задач)  
+**Итерация 29 (Shift Cancellation System):** ✅ Завершена (12/12 задач)  
 **Итерация 30 (Bug Fixes & Improvements):** ✅ Завершена (1/1 задача)  
 **Итерация 31 (Owner Profile Enhancement):** ✅ Завершена (3/3 задачи)
 **Итерация 32 (Contract Termination Settlement):** ✅ Завершена (8/8 задач)  
@@ -125,6 +125,7 @@
 - [x] **1.4. Отмена сотрудником через бота (0.5 дня)**
   - Type: feature | Files: apps/bot/handlers_div/schedule_handlers.py
   - Acceptance: выбор причины и автоматический расчет штрафа
+  - Обновлено: финальное сообщение отправляется отдельным сообщением; текст из сервиса отмены
   
 - [x] **1.5. Отмена владельцем/управляющим через веб (0.3 дня)**
   - Type: feature | Files: apps/web/routes/cancellations.py
@@ -133,6 +134,23 @@
 - [x] **1.6. Модерация уважительных причин (0.3 дня)**
   - Type: feature | Files: apps/web/routes/cancellations.py
   - Acceptance: проверка справок владельцем
+  - Уточнение: уважительность определяется флагом `treated_as_valid`
+
+- [x] **1.9. Причины отмены: модель + миграция + сиды (0.3 дня)**
+  - Type: feature | Files: domain/entities/cancellation_reason.py, migrations/versions/20251022_001_add_cancellation_reasons.py
+  - Acceptance: глобальные причины засеяны, страница настроек владельца работает
+
+- [x] **1.10. Настройка причин владельцем (0.2 дня)**
+  - Type: feature | Files: apps/web/routes/owner_cancellation_reasons.py, apps/web/templates/owner/cancellations/reasons.html
+  - Acceptance: видимость/активность/уважительность/порядок
+
+- [x] **1.11. Наследование штрафов отмены (0.2 дня)**
+  - Type: feature | Files: domain/entities/object.py, domain/entities/org_structure.py
+  - Acceptance: `get_cancellation_settings()` и `get_inherited_cancellation_settings()`
+
+- [x] **1.12. Улучшение UX авторизации (0.1 дня)**
+  - Type: improvement | Files: apps/web/services/auth_service.py
+  - Acceptance: при `chat not found` показываем явную подсказку открыть бота и нажать Start
   
 - [x] **1.7. UI настроек штрафов (0.4 дня)**
   - Type: feature | Files: apps/web/templates/owner/objects/*.html

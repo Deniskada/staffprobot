@@ -69,8 +69,9 @@ class AuthService:
         success = await self.bot_integration.send_pin_code(telegram_id, pin_code)
         
         if not success:
-            # Если не удалось отправить через бота, логируем для отладки
+            # Если не удалось отправить через бота, сообщаем пользователю явную причину
             logger.warning(f"Failed to send PIN code to user {telegram_id}, code: {pin_code}")
+            raise Exception("Не удалось отправить PIN. Откройте бота @ShiftsPlan_bot и нажмите Start, затем повторите отправку PIN.")
         
         return pin_code
     
