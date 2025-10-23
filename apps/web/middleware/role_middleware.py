@@ -272,10 +272,10 @@ async def require_employee_or_manager(request: Request, current_user = Depends(g
     from core.database.session import get_async_session
     async with get_async_session() as session:
         role_service = RoleService(session)
-        has_role = await role_service.has_any_role(current_user.id, [UserRole.EMPLOYEE, UserRole.MANAGER])
+        has_role = await role_service.has_any_role(current_user.id, [UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.OWNER])
         
         if not has_role:
-            logger.warning(f"User {current_user.id} is not an employee or manager")
+            logger.warning(f"User {current_user.id} is not an employee, manager or owner")
             raise HTTPException(status_code=403, detail="Недостаточно прав доступа")
         
         # Возвращаем словарь с данными пользователя для совместимости

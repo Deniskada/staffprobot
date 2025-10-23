@@ -1,0 +1,71 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Причины отмен смен{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-sliders-h"></i> Причины отмен смен</h2>
+  </div>
+
+  <form method="post" action="/owner/cancellations/reasons/update">
+    <div class="card">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Код</th>
+                <th>Название</th>
+                <th class="text-center">Активна</th>
+                <th class="text-center">Видна сотруднику</th>
+                <th class="text-center">Требует документ</th>
+                <th class="text-center">Уважительная</th>
+                <th style="width:120px;">Порядок</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in reasons %}
+              <tr>
+                <td>
+                  <input type="hidden" name="code[]" value="{{ r.code }}" />
+                  <code>{{ r.code }}</code>
+                  {% if r.owner_id is none %}
+                    <span class="badge bg-secondary">глобальная</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <input class="form-control" type="text" name="title[]" value="{{ r.title }}" />
+                </td>
+                <td class="text-center">
+                  <input class="form-check-input" type="checkbox" name="is_active[{{ r.code }}]" {% if r.is_active %}checked{% endif %} />
+                </td>
+                <td class="text-center">
+                  <input class="form-check-input" type="checkbox" name="is_employee_visible[{{ r.code }}]" {% if r.is_employee_visible %}checked{% endif %} />
+                </td>
+                <td class="text-center">
+                  <input class="form-check-input" type="checkbox" name="requires_document[{{ r.code }}]" {% if r.requires_document %}checked{% endif %} />
+                </td>
+                <td class="text-center">
+                  <input class="form-check-input" type="checkbox" name="treated_as_valid[{{ r.code }}]" {% if r.treated_as_valid %}checked{% endif %} />
+                </td>
+                <td>
+                  <input class="form-control" type="number" step="1" name="order_index[{{ r.code }}]" value="{{ r.order_index or 0 }}" />
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-3">
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> Сохранить
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+
