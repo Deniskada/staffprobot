@@ -78,21 +78,78 @@ class EmployeeObjectsManager {
             return;
         }
 
-        // Инициализируем карту
+        // Инициализируем карту с геолокацией
         ymaps.ready(() => {
-            this.map = new ymaps.Map('map', {
-                center: [47.2000, 39.7000], // Ростов-на-Дону
-                zoom: 12,
-                controls: ['zoomControl', 'typeSelector', 'fullscreenControl']
-            });
-
-            console.log('Яндекс карта инициализирована');
-            
-            // Если объекты уже загружены, добавляем их на карту
-            if (this.objects.length > 0) {
-                this.addObjectsToMap();
+            // Сначала пытаемся получить геолокацию пользователя
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        // Успешно получили геолокацию
+                        const userLat = position.coords.latitude;
+                        const userLon = position.coords.longitude;
+                        console.log(`Геолокация получена: ${userLat}, ${userLon}`);
+                        
+                        this.map = new ymaps.Map('map', {
+                            center: [userLat, userLon],
+                            zoom: 12,
+                            controls: ['zoomControl', 'typeSelector', 'fullscreenControl']
+                        });
+                        
+                        // Добавляем маркер текущего местоположения
+                        const userMarker = new ymaps.Placemark(
+                            [userLat, userLon],
+                            {
+                                balloonContentHeader: 'Ваше местоположение',
+                                balloonContentBody: 'Вы находитесь здесь',
+                                hintContent: 'Ваше местоположение'
+                            },
+                            {
+                                preset: 'islands#blueDotIcon',
+                                iconColor: '#0066cc'
+                            }
+                        );
+                        this.map.geoObjects.add(userMarker);
+                        
+                        this.finishMapInit();
+                    },
+                    (error) => {
+                        // Ошибка или отказ в геолокации - используем Москву по умолчанию
+                        console.warn('Геолокация недоступна, используем Москву:', error.message);
+                        this.initMapWithDefaultLocation();
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 300000 // 5 минут
+                    }
+                );
+            } else {
+                // Браузер не поддерживает геолокацию - используем Москву
+                console.warn('Браузер не поддерживает геолокацию, используем Москву');
+                this.initMapWithDefaultLocation();
             }
         });
+    }
+
+    initMapWithDefaultLocation() {
+        // Инициализируем карту с Москвой по умолчанию
+        this.map = new ymaps.Map('map', {
+            center: [55.7558, 37.6176], // Москва
+            zoom: 10,
+            controls: ['zoomControl', 'typeSelector', 'fullscreenControl']
+        });
+        
+        console.log('Карта инициализирована с Москвой по умолчанию');
+        this.finishMapInit();
+    }
+
+    finishMapInit() {
+        console.log('Яндекс карта инициализирована');
+        
+        // Если объекты уже загружены, добавляем их на карту
+        if (this.objects.length > 0) {
+            this.addObjectsToMap();
+        }
     }
 
     addObjectsToMap() {

@@ -13,6 +13,7 @@ from domain.entities.object import Object
 from domain.entities.payroll_adjustment import PayrollAdjustment
 from domain.entities.user import User
 from core.logging.logger import logger
+from shared.services.cancellation_policy_service import CancellationPolicyService
 
 
 class ShiftCancellationService:
@@ -85,10 +86,22 @@ class ShiftCancellationService:
             object_result = await self.session.execute(object_query)
             obj = object_result.scalar_one_or_none()
             
+            # Определяем политику причины (уважительная/нет)
+            is_respectful = False
+            if obj:
+                try:
+                    reason_map = await CancellationPolicyService.get_reason_map(self.session, obj.owner_id)
+                    policy = reason_map.get(cancellation_reason)
+                    # Уважительная причина определяется флагом treated_as_valid
+                    is_respectful = bool(policy and getattr(policy, 'treated_as_valid', False))
+                except Exception as _:
+                    # Фолбэк по коду причины (б/у для совместимости)
+                    is_respectful = cancellation_reason in {'medical_cert', 'emergency_cert', 'police_cert'}
+
             # Отменяем смену
             shift.status = 'cancelled'
-            
-            # Создаем запись о отмене (без штрафов - они будут начислены при модерации)
+
+            # Создаем запись об отмене
             cancellation = ShiftCancellation(
                 shift_schedule_id=shift_schedule_id,
                 employee_id=shift.user_id,
@@ -99,28 +112,100 @@ class ShiftCancellationService:
                 reason_notes=reason_notes,
                 hours_before_shift=hours_before_shift,
                 document_description=document_description,
-                document_verified=False,  # Требует модерации
-                fine_amount=None,  # Будет рассчитан при модерации
+                document_verified=False,
+                fine_amount=None,
                 fine_reason=None,
                 fine_applied=False,
                 contract_id=contract_id
             )
-            
+
             self.session.add(cancellation)
-            await self.session.flush()  # Получаем ID
-            
+            await self.session.flush()
+
+            # Если причина уважительная — уходим на модерацию без мгновенных штрафов
+            if is_respectful:
+                await self.session.commit()
+                logger.info(
+                    f"Shift {shift_schedule_id} cancelled by {cancelled_by_type} (user_id={cancelled_by_user_id}), pending moderation"
+                )
+                return {
+                    'success': True,
+                    'cancellation_id': cancellation.id,
+                    'fine_amount': None,
+                    'message': 'Ваша заявка на модерации. Владелец проверит документ.'
+                }
+
+            # Неуважительная отмена — рассчитываем штрафы немедленно
+            total_fine = Decimal('0')
+            applied_parts: list[str] = []
+            if obj:
+                settings = obj.get_cancellation_settings()
+                short_notice_hours = settings.get('short_notice_hours')
+                short_notice_fine = settings.get('short_notice_fine')
+                invalid_reason_fine = settings.get('invalid_reason_fine')
+
+                # Штраф за короткий срок
+                if (
+                    short_notice_hours
+                    and short_notice_fine
+                    and hours_before_shift is not None
+                    and float(hours_before_shift) < float(short_notice_hours)
+                ):
+                    await self._create_specific_payroll_adjustment(
+                        cancellation,
+                        shift,
+                        short_notice_fine,
+                        'short_notice',
+                        hours_before_shift,
+                        cancelled_by_user_id,
+                    )
+                    total_fine += Decimal(str(short_notice_fine))
+                    applied_parts.append('короткий срок')
+
+                # Штраф за неуважительную причину
+                if invalid_reason_fine:
+                    await self._create_specific_payroll_adjustment(
+                        cancellation,
+                        shift,
+                        invalid_reason_fine,
+                        'invalid_reason',
+                        hours_before_shift,
+                        cancelled_by_user_id,
+                    )
+                    total_fine += Decimal(str(invalid_reason_fine))
+                    applied_parts.append('неуважительная причина')
+
+            # Обновляем запись отмены
+            cancellation.fine_amount = total_fine if total_fine > 0 else None
+            cancellation.fine_applied = total_fine > 0
+            if len(applied_parts) == 2:
+                cancellation.fine_reason = 'both'
+            elif applied_parts:
+                cancellation.fine_reason = 'short_notice' if applied_parts[0] == 'короткий срок' else 'invalid_reason'
+
             await self.session.commit()
-            
+
+            # Сообщение для пользователя
+            if total_fine > 0:
+                if len(applied_parts) == 2:
+                    user_message = (
+                        f"Смена отменена. Применены штрафы: за короткий срок и за неуважительную причину (итого {abs(float(total_fine)):.2f} ₽)."
+                    )
+                else:
+                    user_message = (
+                        f"Смена отменена. Применен штраф за {applied_parts[0]} ({abs(float(total_fine)):.2f} ₽)."
+                    )
+            else:
+                user_message = "Смена отменена. Штрафы не применены."
+
             logger.info(
-                f"Shift {shift_schedule_id} cancelled by {cancelled_by_type} "
-                f"(user_id={cancelled_by_user_id}), pending moderation"
+                f"Shift {shift_schedule_id} cancelled by {cancelled_by_type} (user_id={cancelled_by_user_id}), immediate processing, fine={total_fine}"
             )
-            
             return {
                 'success': True,
                 'cancellation_id': cancellation.id,
-                'fine_amount': None,  # Будет рассчитан при модерации
-                'message': 'Смена отменена, ожидает модерации'
+                'fine_amount': total_fine if total_fine > 0 else None,
+                'message': user_message
             }
             
         except Exception as e:
