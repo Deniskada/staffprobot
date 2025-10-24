@@ -16,6 +16,20 @@ from shared.services.task_service import TaskService
 router = APIRouter()
 
 
+@router.get("/owner/tasks")
+async def owner_tasks_index(
+    request: Request,
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Главная страница задач."""
+    return templates.TemplateResponse(
+        "owner/tasks/index.html",
+        {"request": request}
+    )
+
+
 @router.get("/owner/tasks/templates")
 async def owner_tasks_templates(
     request: Request,
