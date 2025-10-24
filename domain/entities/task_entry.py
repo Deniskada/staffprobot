@@ -7,12 +7,12 @@ from sqlalchemy.orm import relationship
 from .base import Base
 
 
-class TaskEntry(Base):
-    __tablename__ = "task_entries"
+class TaskEntryV2(Base):
+    __tablename__ = "task_entries_v2"
 
     id = Column(Integer, primary_key=True, index=True)
-    plan_id = Column(Integer, ForeignKey("task_plans.id"), nullable=True, index=True)
-    template_id = Column(Integer, ForeignKey("task_templates.id"), nullable=False, index=True)
+    plan_id = Column(Integer, ForeignKey("task_plans_v2.id"), nullable=True, index=True)
+    template_id = Column(Integer, ForeignKey("task_templates_v2.id"), nullable=False, index=True)
     shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True, index=True)
     employee_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
@@ -23,7 +23,7 @@ class TaskEntry(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    template = relationship("TaskTemplate")
-    plan = relationship("TaskPlan")
+    template = relationship("TaskTemplateV2")
+    plan = relationship("TaskPlanV2")
 
 

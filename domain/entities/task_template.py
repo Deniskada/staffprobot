@@ -8,8 +8,8 @@ from sqlalchemy.orm import relationship
 from .base import Base
 
 
-class TaskTemplate(Base):
-    __tablename__ = "task_templates"
+class TaskTemplateV2(Base):
+    __tablename__ = "task_templates_v2"
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
@@ -32,7 +32,7 @@ class TaskTemplate(Base):
     owner = relationship("User", foreign_keys=[owner_id])
 
     def __repr__(self) -> str:  # pragma: no cover
-        return f"<TaskTemplate id={self.id} code={self.code} title={self.title}>"
+        return f"<TaskTemplateV2 id={self.id} code={self.code} title={self.title}>"
 
 """Модель шаблона задач."""
 
