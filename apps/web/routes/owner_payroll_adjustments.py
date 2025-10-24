@@ -18,6 +18,7 @@ from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+from shared.services.payroll_verification_service import PayrollVerificationService
 
 router = APIRouter(prefix="/payroll-adjustments", tags=["owner-payroll-adjustments"])
 
@@ -555,5 +556,87 @@ async def delete_adjustment(
         return JSONResponse(
             status_code=500,
             content={"success": False, "error": str(e)}
+        )
+
+
+@router.post("/verify", response_class=JSONResponse)
+async def verify_and_fix_adjustments(
+    date_from: Optional[str] = Form(None),
+    date_to: Optional[str] = Form(None),
+    current_user = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Проверить и исправить начисления.
+    
+    Выполняет:
+    1. Создание недостающих начислений за завершенные смены
+    2. Корректировку штрафов за задачи на основе текущих настроек
+    """
+    try:
+        from apps.web.routes.reports import get_user_id_from_current_user
+        
+        owner_id = await get_user_id_from_current_user(current_user, session)
+        
+        if not owner_id:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Не удалось определить владельца"}
+            )
+        
+        # Парсинг дат
+        start_date = None
+        end_date = None
+        
+        if date_from:
+            try:
+                start_date = date.fromisoformat(date_from)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                end_date = date.fromisoformat(date_to)
+            except ValueError:
+                pass
+        
+        # Выполнить проверку
+        verification_service = PayrollVerificationService(session)
+        report = await verification_service.verify_and_fix_adjustments(
+            owner_id=owner_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        logger.info(
+            "Payroll adjustments verified and fixed",
+            owner_id=owner_id,
+            shifts_checked=report["shifts_checked"],
+            missing_created=report["missing_adjustments_created"],
+            penalties_corrected=report["penalties_corrected"],
+            total_added=float(report["total_amount_added"]),
+            total_corrected=float(report["total_amount_corrected"])
+        )
+        
+        return JSONResponse(content={
+            "success": True,
+            "report": {
+                "shifts_checked": report["shifts_checked"],
+                "missing_adjustments_created": report["missing_adjustments_created"],
+                "penalties_corrected": report["penalties_corrected"],
+                "total_amount_added": float(report["total_amount_added"]),
+                "total_amount_corrected": float(report["total_amount_corrected"]),
+                "details": report["details"]
+            },
+            "message": f"Проверка завершена. Создано начислений: {report['missing_adjustments_created']}, исправлено штрафов: {report['penalties_corrected']}"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error verifying adjustments: {e}", exc_info=True)
+        await session.rollback()
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": f"Ошибка проверки начислений: {str(e)}"}
         )
 
