@@ -49,6 +49,41 @@ async def owner_tasks_templates(
     )
 
 
+@router.post("/owner/tasks/templates/create")
+async def owner_tasks_templates_create(
+    request: Request,
+    code: str = Form(...),
+    title: str = Form(...),
+    description: str = Form(None),
+    is_mandatory: int = Form(0),
+    requires_media: int = Form(0),
+    default_amount: str = Form(None),
+    object_id: str = Form(None),
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Создать шаблон задачи."""
+    from decimal import Decimal
+    task_service = TaskService(session)
+    
+    amount = Decimal(default_amount) if default_amount else None
+    obj_id = int(object_id) if object_id else None
+    
+    await task_service.create_template(
+        owner_id=current_user.id,
+        code=code,
+        title=title,
+        description=description,
+        is_mandatory=bool(is_mandatory),
+        requires_media=bool(requires_media),
+        default_amount=amount,
+        object_id=obj_id
+    )
+    
+    return RedirectResponse(url="/owner/tasks/templates", status_code=303)
+
+
 @router.get("/owner/tasks/plan")
 async def owner_tasks_plan(
     request: Request,
