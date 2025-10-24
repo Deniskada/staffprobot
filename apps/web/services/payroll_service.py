@@ -101,7 +101,8 @@ class PayrollService:
         period_start: Optional[date] = None,
         period_end: Optional[date] = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
+        owner_id: Optional[int] = None
     ) -> List[PayrollEntry]:
         """
         Получить начисления сотрудника за период.
@@ -112,6 +113,7 @@ class PayrollService:
             period_end: Конец периода (опционально)
             limit: Лимит результатов
             offset: Смещение
+            owner_id: ID владельца для фильтрации по его договорам (опционально)
             
         Returns:
             Список начислений
@@ -120,6 +122,13 @@ class PayrollService:
             query = select(PayrollEntry).where(
                 PayrollEntry.employee_id == employee_id
             )
+            
+            # Фильтр по владельцу через contract
+            if owner_id:
+                from domain.entities.contract import Contract
+                query = query.join(Contract, PayrollEntry.contract_id == Contract.id).where(
+                    Contract.owner_id == owner_id
+                )
             
             # Логика пересечения периодов:
             # Начисление пересекается с запрошенным периодом, если:
@@ -142,7 +151,7 @@ class PayrollService:
             return result.scalars().all()
             
         except Exception as e:
-            logger.error(f"Error getting payroll entries: {e}", employee_id=employee_id)
+            logger.error(f"Error getting payroll entries: {e}", employee_id=employee_id, owner_id=owner_id)
             return []
     
     async def get_payroll_entry_by_id(self, entry_id: int) -> Optional[PayrollEntry]:

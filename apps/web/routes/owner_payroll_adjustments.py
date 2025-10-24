@@ -119,13 +119,17 @@ async def payroll_adjustments_list(
             )
         
         # Базовый запрос с фильтром по сотрудникам владельца И его объектам
+        # Важно: фильтруем по объектам владельца ИЛИ по корректировкам созданным владельцем
         query = select(PayrollAdjustment).where(
             func.date(PayrollAdjustment.created_at) >= start_date,
             func.date(PayrollAdjustment.created_at) <= end_date,
             PayrollAdjustment.employee_id.in_(employee_ids),
             or_(
                 PayrollAdjustment.object_id.in_(owner_object_ids),
-                PayrollAdjustment.object_id.is_(None)
+                and_(
+                    PayrollAdjustment.object_id.is_(None),
+                    PayrollAdjustment.created_by == owner_id  # Только если создал сам владелец
+                )
             )
         ).options(
             selectinload(PayrollAdjustment.employee),
