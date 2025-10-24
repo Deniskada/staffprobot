@@ -63,15 +63,70 @@ async def owner_rules_seed(
     owner_id = current_user.id
     logger.info(f"SEED rules: owner_id={owner_id}")
     
-    # Late penalties: сканируем объекты и org_units
+    # Создаём дефолтные правила для владельца (общие для всех объектов)
+    # Late penalty: 10 мин порог, 5₽/мин
+    rule_late = Rule(
+        owner_id=owner_id,
+        code="late_default",
+        name="Штраф за опоздание (по умолчанию)",
+        scope="late",
+        priority=100,
+        is_active=True,
+        condition_json=json.dumps({}),  # применяется всегда
+        action_json=json.dumps({
+            "type": "fine",
+            "amount": 50,  # 10 мин * 5₽
+            "label": "Штраф за опоздание >10 мин",
+            "code": "late_default"
+        })
+    )
+    session.add(rule_late)
+    
+    # Cancellation: короткий срок <24ч, 500₽
+    rule_cancel_short = Rule(
+        owner_id=owner_id,
+        code="cancel_short_notice",
+        name="Штраф за отмену в короткий срок",
+        scope="cancellation",
+        priority=100,
+        is_active=True,
+        condition_json=json.dumps({}),
+        action_json=json.dumps({
+            "type": "fine",
+            "amount": 500,
+            "fine_code": "short_notice",
+            "label": "Штраф за отмену <24ч",
+            "code": "cancel_short_notice"
+        })
+    )
+    session.add(rule_cancel_short)
+    
+    # Cancellation: неуважительная причина, 1000₽
+    rule_cancel_invalid = Rule(
+        owner_id=owner_id,
+        code="cancel_invalid_reason",
+        name="Штраф за неуважительную причину отмены",
+        scope="cancellation",
+        priority=200,
+        is_active=True,
+        condition_json=json.dumps({}),
+        action_json=json.dumps({
+            "type": "fine",
+            "amount": 1000,
+            "fine_code": "invalid_reason",
+            "label": "Штраф за неуважительную причину",
+            "code": "cancel_invalid_reason"
+        })
+    )
+    session.add(rule_cancel_invalid)
+    
+    # Если есть объекты с кастомными настройками — добавляем их тоже
     objs_query = select(Object).where(Object.owner_id == owner_id)
     objs_res = await session.execute(objs_query)
     objs = objs_res.scalars().all()
     logger.info(f"SEED: found {len(objs)} objects for owner {owner_id}")
     
-    # Правило по умолчанию для late: если obj имеет late_threshold_minutes и late_penalty_per_minute
     for obj in objs:
-        logger.info(f"Processing obj {obj.id}: late_threshold={obj.late_threshold_minutes}, penalty={obj.late_penalty_per_minute}")
         if obj.late_threshold_minutes and obj.late_penalty_per_minute:
             code = f"late_default_obj{obj.id}"
             rule = Rule(
