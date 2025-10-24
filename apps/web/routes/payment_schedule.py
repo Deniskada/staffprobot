@@ -402,11 +402,19 @@ def generate_schedule_table(schedule: PaymentSchedule) -> list:
             if calc_rules.get('period') == 'previous_month':
                 # За весь предыдущий месяц
                 for month in range(12):
-                    payment_date = datetime(today.year, today.month, schedule.payment_day)
-                    payment_date = payment_date + timedelta(days=30*month)
+                    # Правильно вычисляем дату выплаты с учетом переноса года и месяца
+                    target_month = today.month + month
+                    target_year = today.year + (target_month - 1) // 12
+                    target_month = ((target_month - 1) % 12) + 1
+                    payment_date = datetime(target_year, target_month, schedule.payment_day)
                     
                     # Период - весь предыдущий месяц
-                    period_start = datetime(payment_date.year, payment_date.month - 1 if payment_date.month > 1 else 12, 1)
+                    prev_month = payment_date.month - 1
+                    prev_year = payment_date.year
+                    if prev_month < 1:
+                        prev_month = 12
+                        prev_year -= 1
+                    period_start = datetime(prev_year, prev_month, 1)
                     period_end = datetime(payment_date.year, payment_date.month, 1) - timedelta(days=1)
                     days = (period_end - period_start.date()).days + 1 if hasattr(period_start, 'date') else (period_end - period_start).days + 1
                     
@@ -425,7 +433,11 @@ def generate_schedule_table(schedule: PaymentSchedule) -> list:
                         continue
                     
                     base_date = datetime.strptime(payment_date_str, '%Y-%m-%d').date()
-                    payment_date = datetime(base_date.year, base_date.month + month, base_date.day).date()
+                    # Правильно вычисляем год и месяц с учетом переноса
+                    target_month = base_date.month + month
+                    target_year = base_date.year + (target_month - 1) // 12
+                    target_month = ((target_month - 1) % 12) + 1
+                    payment_date = datetime(target_year, target_month, base_date.day).date()
                     
                     start_offset = payment.get('start_offset', 0)
                     end_offset = payment.get('end_offset', 0)
@@ -435,7 +447,11 @@ def generate_schedule_table(schedule: PaymentSchedule) -> list:
                     
                     if is_end_of_month:
                         # Последний день месяца периода
-                        next_month = datetime(period_start.year, period_start.month + 1, 1)
+                        # Правильно вычисляем следующий месяц с учетом переноса года
+                        next_month_num = period_start.month + 1
+                        next_year = period_start.year + (next_month_num - 1) // 12
+                        next_month_num = ((next_month_num - 1) % 12) + 1
+                        next_month = datetime(next_year, next_month_num, 1)
                         period_end = (next_month - timedelta(days=1)).date()
                     else:
                         period_end = payment_date + timedelta(days=end_offset)
