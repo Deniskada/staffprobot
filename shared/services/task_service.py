@@ -129,7 +129,7 @@ class TaskService:
             description=description,
             is_mandatory=is_mandatory,
             requires_media=requires_media,
-            default_amount=default_amount,
+            default_bonus_amount=default_amount,
             object_id=object_id,
             org_unit_id=org_unit_id,
             is_active=True
