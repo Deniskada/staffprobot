@@ -379,24 +379,22 @@
                                     </div>
                                 </div>
                                 
-                                <div class="row">
+                                <div class="alert alert-info mb-3">
+                                    <i class="fas fa-info-circle"></i> Настройки штрафов перенесены в <a href="/owner/rules">Правила (Rules Engine)</a>
+                                </div>
+                                <div class="row" style="opacity: 0.5; pointer-events: none;">
                                     <div class="col-md-4">
                                         <div class="mb-3">
                                             <label for="cancellation_short_notice_hours" class="form-label">
-                                                Минимальный срок отмены (часов)
-                                                <i class="fas fa-info-circle text-muted" 
-                                                   data-bs-toggle="tooltip" 
-                                                   title="За сколько часов до смены сотрудник должен отменить смену"></i>
+                                                Минимальный срок отмены (часов) [LEGACY]
                                             </label>
                                             <input type="number" 
                                                    class="form-control" 
                                                    id="cancellation_short_notice_hours" 
                                                    name="cancellation_short_notice_hours" 
-                                                   min="1"
-                                                   max="168"
+                                                   readonly
                                                    value="{{ object.cancellation_short_notice_hours or '' }}"
                                                    placeholder="24">
-                                            <div class="form-text">За сколько часов должна быть отмена без штрафа</div>
                                         </div>
                                     </div>
                                     
