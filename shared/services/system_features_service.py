@@ -151,7 +151,7 @@ class SystemFeaturesService:
             try:
                 # По умолчанию включаем функцию телеграм-бота
                 profile = OwnerProfile(user_id=user_id, enabled_features=["telegram_bot"]) 
-                await session.add(profile)  # type: ignore[arg-type]
+                session.add(profile)  # Синхронный метод, НЕ требует await
                 await session.commit()
                 await session.refresh(profile)
                 logger.info(
