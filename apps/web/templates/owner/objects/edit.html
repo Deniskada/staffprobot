@@ -508,12 +508,12 @@
                                     <div class="form-text">Краткое описание выполняемой работы</div>
                                 </div>
                                 
-                                <div class="mb-3">
+                                <div class="alert alert-info mb-3">
+                                    <i class="fas fa-info-circle"></i> Управление задачами перенесено в <a href="/owner/tasks/templates">Библиотеку задач</a>. Эти поля только для чтения.
+                                </div>
+                                <div class="mb-3" style="opacity: 0.5; pointer-events: none;">
                                     <label for="shift_tasks" class="form-label">
-                                        Задачи на смене
-                                        <i class="fas fa-info-circle text-muted" 
-                                           data-bs-toggle="tooltip" 
-                                           title="Задачи, которые сотрудник должен выполнить на смене"></i>
+                                        Задачи на смене [LEGACY]
                                     </label>
                                     <div id="tasks-container">
                                         {% if object.shift_tasks %}
