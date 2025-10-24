@@ -511,14 +511,40 @@ class PaymentScheduleEditor {
     }
     
     updateScheduleDropdown(scheduleId, scheduleName) {
-        const select = document.getElementById('payment_schedule_id');
-        if (select) {
-            // Добавить новый option
-            const option = document.createElement('option');
-            option.value = scheduleId;
-            option.text = scheduleName + ' (кастомный)';
-            option.selected = true;
-            select.appendChild(option);
+        // Обновить все dropdown'ы с графиками выплат
+        const selects = [
+            document.getElementById('create_payment_schedule_id'),
+            document.getElementById('edit_payment_schedule_id'),
+            document.getElementById('payment_schedule_id')
+        ];
+        
+        selects.forEach(select => {
+            if (select) {
+                // Найти опцию "Создать новый график" если она есть
+                const createNewOption = select.querySelector('option[value="create_new"]');
+                
+                // Создать новый option
+                const option = document.createElement('option');
+                option.value = scheduleId;
+                option.text = scheduleName + ' (кастомный)';
+                option.setAttribute('data-is-custom', 'true');
+                option.selected = true;
+                
+                // Вставить перед опцией "Создать новый" если она есть, иначе в конец
+                if (createNewOption) {
+                    select.insertBefore(option, createNewOption);
+                } else {
+                    select.appendChild(option);
+                }
+            }
+        });
+        
+        // Обновить кнопки и описание для форм создания/редактирования
+        if (typeof updateCreateScheduleActions === 'function') {
+            updateCreateScheduleActions();
+        }
+        if (typeof updateEditScheduleActions === 'function') {
+            updateEditScheduleActions();
         }
     }
     

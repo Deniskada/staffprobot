@@ -74,7 +74,8 @@ async def owner_payroll_list(
             entries = await payroll_service.get_payroll_entries_by_employee(
                 employee_id=employee_id,
                 period_start=date.fromisoformat(period_start),
-                period_end=date.fromisoformat(period_end)
+                period_end=date.fromisoformat(period_end),
+                owner_id=owner_id  # Фильтровать по договорам владельца
             )
         else:
             # Получить начисления для всех сотрудников
@@ -84,7 +85,8 @@ async def owner_payroll_list(
                     employee_id=emp.id,
                     period_start=date.fromisoformat(period_start),
                     period_end=date.fromisoformat(period_end),
-                    limit=50
+                    limit=50,
+                    owner_id=owner_id  # Фильтровать по договорам владельца
                 )
                 entries.extend(emp_entries)
             
