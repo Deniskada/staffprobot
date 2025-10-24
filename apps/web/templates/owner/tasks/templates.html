@@ -31,7 +31,7 @@
         <td>{{ t.title }}</td>
         <td>{{ 'Да' if t.is_mandatory else 'Нет' }}</td>
         <td>{{ 'Да' if t.requires_media else 'Нет' }}</td>
-        <td>{{ t.default_amount or '—' }}</td>
+        <td>{{ t.default_bonus_amount or '—' }}</td>
         <td>{{ t.object_id or 'Все' }}</td>
         <td>{{ 'Да' if t.is_active else 'Нет' }}</td>
         <td>
