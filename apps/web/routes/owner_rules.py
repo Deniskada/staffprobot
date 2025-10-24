@@ -56,16 +56,22 @@ async def owner_rules_seed(
     """SEED стартовых правил из текущих настроек объектов/org_units владельца."""
     from domain.entities.object import Object
     from domain.entities.org_structure import OrgStructureUnit
+    from core.logging.logger import logger
     import json
+    
+    # owner_id берем из User.id (внутренний БД ID)
     owner_id = current_user.id
+    logger.info(f"SEED rules: owner_id={owner_id}")
     
     # Late penalties: сканируем объекты и org_units
     objs_query = select(Object).where(Object.owner_id == owner_id)
     objs_res = await session.execute(objs_query)
     objs = objs_res.scalars().all()
+    logger.info(f"SEED: found {len(objs)} objects for owner {owner_id}")
     
     # Правило по умолчанию для late: если obj имеет late_threshold_minutes и late_penalty_per_minute
     for obj in objs:
+        logger.info(f"Processing obj {obj.id}: late_threshold={obj.late_threshold_minutes}, penalty={obj.late_penalty_per_minute}")
         if obj.late_threshold_minutes and obj.late_penalty_per_minute:
             code = f"late_default_obj{obj.id}"
             rule = Rule(
