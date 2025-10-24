@@ -263,6 +263,33 @@
                 </li>
                 {% endif %}
                 
+                <!-- Правила (Rules Engine) -->
+                <li class="sidebar-item">
+                    <a href="/owner/rules" class="sidebar-link">
+                        <i class="fas fa-gavel"></i>
+                        <span class="sidebar-text">Правила</span>
+                    </a>
+                    <div class="sidebar-tooltip">Правила</div>
+                </li>
+                
+                <!-- Задачи v2 -->
+                <li class="sidebar-item">
+                    <a href="/owner/tasks" class="sidebar-link">
+                        <i class="fas fa-tasks"></i>
+                        <span class="sidebar-text">Задачи</span>
+                    </a>
+                    <div class="sidebar-tooltip">Задачи</div>
+                </li>
+                
+                <!-- Инциденты -->
+                <li class="sidebar-item">
+                    <a href="/owner/incidents" class="sidebar-link">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span class="sidebar-text">Инциденты</span>
+                    </a>
+                    <div class="sidebar-tooltip">Инциденты</div>
+                </li>
+                
                 <!-- Отклики кандидатов (функции 1,2,3,4) -->
                 {% if enabled_features is defined and enabled_features | is_menu_visible('applications') %}
                 <li class="sidebar-item">
