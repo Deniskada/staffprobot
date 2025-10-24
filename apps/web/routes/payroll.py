@@ -553,15 +553,16 @@ async def owner_payroll_manual_recalculate(
         from core.celery.tasks.payroll_tasks import _get_payment_period_for_date
         from shared.services.payroll_adjustment_service import PayrollAdjustmentService
         
-        # Найти все активные payment_schedules владельца
+        # Найти все активные payment_schedules (системные + кастомные владельца)
+        # Логика такая же как в автоматическом пересчете - берем ВСЕ активные графики,
+        # а объекты фильтруем по owner_id
         schedules_query = select(PaymentSchedule).where(
-            PaymentSchedule.owner_id == owner_id,
             PaymentSchedule.is_active == True
         )
         schedules_result = await db.execute(schedules_query)
         schedules = schedules_result.scalars().all()
         
-        logger.info(f"Found {len(schedules)} active schedules for owner {owner_id}")
+        logger.info(f"Found {len(schedules)} active schedules total")
         
         total_entries_created = 0
         total_entries_updated = 0
