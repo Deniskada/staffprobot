@@ -10,10 +10,24 @@ from apps.web.dependencies import get_current_user_dependency, require_role
 from core.database.session import get_db_session
 from domain.entities.user import User
 from shared.services.task_service import TaskService
-from shared.services.user_service import get_user_id_from_current_user
+from sqlalchemy import select
 
 
 router = APIRouter()
+
+
+async def get_user_id_from_current_user(current_user, session: AsyncSession) -> int:
+    """Получить внутренний user_id из current_user (может быть dict или User)."""
+    if isinstance(current_user, dict):
+        telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        result = await session.execute(
+            select(User.id).where(User.telegram_id == telegram_id)
+        )
+        user_id = result.scalar_one_or_none()
+        if not user_id:
+            raise ValueError(f"User with telegram_id={telegram_id} not found")
+        return user_id
+    return current_user.id
 
 
 @router.get("/manager/tasks/templates")
