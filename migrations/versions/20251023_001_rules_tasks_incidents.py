@@ -4,7 +4,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '20251023_001'
-down_revision = '20251022_001_add_cancellation_reasons'
+down_revision = '20251022_001'
 branch_labels = None
 depends_on = None
 
