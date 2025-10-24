@@ -1,0 +1,26 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}Выполнение задач{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Выполнение и аудит задач</h2>
+  <p class="text-muted">История выполнения задач сотрудниками. В разработке.</p>
+  <table class="table table-sm">
+    <thead>
+      <tr><th>ID</th><th>Шаблон</th><th>Смена</th><th>Сотрудник</th><th>Выполнено</th><th>Дата</th></tr>
+    </thead>
+    <tbody>
+    {% for e in entries %}
+      <tr>
+        <td>{{ e.id }}</td>
+        <td>{{ e.template_id }}</td>
+        <td>{{ e.shift_schedule_id or '—' }}</td>
+        <td>{{ e.employee_id or '—' }}</td>
+        <td>{{ 'Да' if e.is_completed else 'Нет' }}</td>
+        <td>{{ e.created_at.strftime('%d.%m.%Y %H:%M') if e.created_at else '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
