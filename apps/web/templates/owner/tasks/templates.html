@@ -2,9 +2,103 @@
 {% block title %}Библиотека задач{% endblock %}
 {% block content %}
 <div class="container mt-4">
-  <h2>Библиотека шаблонов задач</h2>
-  <p class="text-muted">Здесь будет управление шаблонами задач (создание/редактирование/удаление). В разработке.</p>
-  <a href="/owner/tasks/plan" class="btn btn-primary">Перейти к планированию</a>
+  <div class="d-flex justify-content-between mb-3">
+    <h2>Библиотека шаблонов задач</h2>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createTemplateModal">
+      <i class="fas fa-plus"></i> Создать шаблон
+    </button>
+  </div>
+  
+  <table class="table table-sm table-hover">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Код</th>
+        <th>Название</th>
+        <th>Обязательна</th>
+        <th>Требует медиа</th>
+        <th>Бонус/Штраф</th>
+        <th>Объект</th>
+        <th>Активна</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in templates_list %}
+      <tr>
+        <td>{{ t.id }}</td>
+        <td><code>{{ t.code }}</code></td>
+        <td>{{ t.title }}</td>
+        <td>{{ 'Да' if t.is_mandatory else 'Нет' }}</td>
+        <td>{{ 'Да' if t.requires_media else 'Нет' }}</td>
+        <td>{{ t.default_amount or '—' }}</td>
+        <td>{{ t.object_id or 'Все' }}</td>
+        <td>{{ 'Да' if t.is_active else 'Нет' }}</td>
+        <td>
+          <button class="btn btn-sm btn-warning" title="Редактировать">
+            <i class="fas fa-edit"></i>
+          </button>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="9" class="text-center text-muted">Шаблоны не найдены. Создайте первый шаблон.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  
+  <a href="/owner/tasks/plan" class="btn btn-secondary mt-3">Перейти к планированию</a>
+</div>
+
+<!-- Modal: Создать шаблон -->
+<div class="modal fade" id="createTemplateModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/owner/tasks/templates/create">
+        <div class="modal-header">
+          <h5 class="modal-title">Создать шаблон задачи</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="code" class="form-label">Код (уникальный)</label>
+            <input type="text" class="form-control" id="code" name="code" required placeholder="photo_report">
+          </div>
+          <div class="mb-3">
+            <label for="title" class="form-label">Название</label>
+            <input type="text" class="form-control" id="title" name="title" required placeholder="Фото-отчёт смены">
+          </div>
+          <div class="mb-3">
+            <label for="description" class="form-label">Описание</label>
+            <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="is_mandatory" name="is_mandatory" value="1">
+            <label class="form-check-label" for="is_mandatory">Обязательная задача</label>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="requires_media" name="requires_media" value="1">
+            <label class="form-check-label" for="requires_media">Требует фото/видео</label>
+          </div>
+          <div class="mb-3">
+            <label for="default_amount" class="form-label">Бонус/Штраф (₽)</label>
+            <input type="number" step="0.01" class="form-control" id="default_amount" name="default_amount" placeholder="100.00">
+            <small class="text-muted">Положительное — бонус, отрицательное — штраф</small>
+          </div>
+          <div class="mb-3">
+            <label for="object_id" class="form-label">Объект (опционально)</label>
+            <select class="form-select" id="object_id" name="object_id">
+              <option value="">Все объекты</option>
+              <!-- TODO: загрузить список объектов владельца -->
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">Создать</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
