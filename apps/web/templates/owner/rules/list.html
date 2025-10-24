@@ -1,7 +1,18 @@
-{% extends "owner/layout.html" %}
+{% extends "owner/base_owner.html" %} 
+
+{% block title %}Правила (Rules Engine){% endblock %}
+
 {% block content %}
 <div class="container mt-4">
-  <h2>Правила (Rules Engine)</h2>
+  <div class="d-flex justify-content-between mb-3">
+    <h2>Правила (Rules Engine)</h2>
+    <div>
+      <a href="/owner/cancellations/reasons" class="btn btn-info btn-sm">Причины отмен</a>
+      <form method="post" action="/owner/rules/seed" class="d-inline" onsubmit="return confirm('Создать стартовые правила из текущих настроек?');">
+        <button type="submit" class="btn btn-success btn-sm">Загрузить стартовые правила</button>
+      </form>
+    </div>
+  </div>
   <table class="table table-sm">
     <thead>
       <tr>
