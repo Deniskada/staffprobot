@@ -1,0 +1,42 @@
+{% extends "owner/layout.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Правила (Rules Engine)</h2>
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Scope</th>
+        <th>Code</th>
+        <th>Name</th>
+        <th>Priority</th>
+        <th>Active</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rules %}
+      <tr>
+        <td>{{ r.id }}</td>
+        <td>{{ r.scope }}</td>
+        <td>{{ r.code }}</td>
+        <td>{{ r.name }}</td>
+        <td>{{ r.priority }}</td>
+        <td>{{ 'Да' if r.is_active else 'Нет' }}</td>
+        <td>
+          <form method="post" action="/owner/rules/toggle" class="d-inline">
+            <input type="hidden" name="rule_id" value="{{ r.id }}" />
+            <input type="hidden" name="is_active" value="{{ 0 if r.is_active else 1 }}" />
+            <button type="submit" class="btn btn-sm {{ 'btn-warning' if r.is_active else 'btn-success' }}">
+              {{ 'Выключить' if r.is_active else 'Включить' }}
+            </button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+

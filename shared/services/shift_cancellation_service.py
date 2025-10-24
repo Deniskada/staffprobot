@@ -135,10 +135,37 @@ class ShiftCancellationService:
                     'message': 'Ваша заявка на модерации. Владелец проверит документ.'
                 }
 
-            # Неуважительная отмена — рассчитываем штрафы немедленно
+            # Неуважительная отмена — сначала пробуем Rules Engine (если есть правила)
             total_fine = Decimal('0')
             applied_parts: list[str] = []
             if obj:
+                try:
+                    from shared.services.rules_engine import RulesEngine
+                    engine = RulesEngine(self.session)
+                    actions = await engine.evaluate(obj.owner_id, 'cancellation', {
+                        'cancellation_reason': cancellation_reason,
+                        'hours_before_shift': float(hours_before_shift) if hours_before_shift is not None else None,
+                        'object_id': obj.id,
+                    })
+                    for act in actions:
+                        if act.get('type') == 'fine':
+                            amount = Decimal(str(act.get('amount', 0)))
+                            if amount and amount > 0:
+                                await self._create_specific_payroll_adjustment(
+                                    cancellation,
+                                    shift,
+                                    amount,
+                                    act.get('fine_code', 'invalid_reason'),
+                                    hours_before_shift,
+                                    cancelled_by_user_id,
+                                )
+                                total_fine += amount
+                                applied_parts.append(act.get('label', 'правило'))
+                except Exception as _:
+                    pass
+
+            # Базовая логика по настройкам объекта (для совместимости)
+            if obj and total_fine == 0:
                 settings = obj.get_cancellation_settings()
                 short_notice_hours = settings.get('short_notice_hours')
                 short_notice_fine = settings.get('short_notice_fine')
