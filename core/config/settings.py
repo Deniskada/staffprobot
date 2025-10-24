@@ -87,6 +87,12 @@ class Settings(BaseSettings):
     log_format: str = "json"
     log_file: Optional[str] = None
     
+    # Feature flags (новые функции)
+    enable_rules_engine: bool = True  # Rules Engine для штрафов/премий
+    enable_tasks_v2: bool = True  # Новая система задач (TaskTemplateV2)
+    enable_incidents: bool = True  # Инциденты (нарушения)
+    enable_media_orchestrator: bool = False  # Единый поток медиа (в разработке)
+    
     # API
     api_host: str = "0.0.0.0"
     api_port: int = 8000

@@ -2,9 +2,90 @@
 {% block title %}Планирование задач{% endblock %}
 {% block content %}
 <div class="container mt-4">
-  <h2>Планирование задач</h2>
-  <p class="text-muted">Канбан/календарь назначения задач на объекты/тайм-слоты. В разработке.</p>
-  <a href="/owner/tasks/entries" class="btn btn-primary">Выполнение и аудит</a>
+  <div class="d-flex justify-content-between mb-3">
+    <h2>Планирование задач</h2>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createPlanModal">
+      <i class="fas fa-plus"></i> Назначить задачу
+    </button>
+  </div>
+  
+  <table class="table table-sm table-hover">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Шаблон</th>
+        <th>Объект</th>
+        <th>Тайм-слот</th>
+        <th>Дата</th>
+        <th>Активен</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for p in plans %}
+      <tr>
+        <td>{{ p.id }}</td>
+        <td>{{ p.template.title if p.template else p.template_id }}</td>
+        <td>{{ p.object.name if p.object else 'Все' }}</td>
+        <td>{{ p.time_slot_id or '—' }}</td>
+        <td>{{ p.planned_date.strftime('%d.%m.%Y') if p.planned_date else '—' }}</td>
+        <td>{{ 'Да' if p.is_active else 'Нет' }}</td>
+        <td>
+          <form method="post" action="/owner/tasks/plan/{{ p.id }}/toggle" class="d-inline">
+            <button type="submit" class="btn btn-sm {{ 'btn-warning' if p.is_active else 'btn-success' }}">
+              {{ 'Выключить' if p.is_active else 'Включить' }}
+            </button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="text-center text-muted">Планы не найдены. Назначьте шаблон на объект/дату.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal: Назначить задачу -->
+<div class="modal fade" id="createPlanModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/owner/tasks/plan/create">
+        <div class="modal-header">
+          <h5 class="modal-title">Назначить задачу</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="template_id" class="form-label">Шаблон задачи</label>
+            <select class="form-select" id="template_id" name="template_id" required>
+              <option value="">Выберите шаблон</option>
+              {% for t in templates_list %}
+                <option value="{{ t.id }}">{{ t.title }} ({{ t.code }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="object_id" class="form-label">Объект</label>
+            <select class="form-select" id="object_id" name="object_id">
+              <option value="">Все объекты</option>
+              {% for obj in objects_list %}
+                <option value="{{ obj.id }}">{{ obj.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="planned_date" class="form-label">Дата (опционально)</label>
+            <input type="date" class="form-control" id="planned_date" name="planned_date">
+            <small class="text-muted">Оставьте пустым для постоянного назначения</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">Назначить</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
