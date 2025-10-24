@@ -368,12 +368,26 @@ class ShiftCancellationService:
             cancellation.verified_by_id = verified_by_user_id
             cancellation.verified_at = datetime.now(timezone.utc)
             
-            # Если справка подтверждена - штрафов нет
-            if is_approved:
-                logger.info(f"Cancellation {cancellation_id} approved - no fines")
+            # Проверяем причину через CancellationPolicyService
+            from shared.services.cancellation_policy_service import CancellationPolicyService
             
-            # Если справка отклонена - создаем штрафы
-            elif not is_approved:
+            # Получаем объект для owner_id
+            object_query_for_reason = select(Object).where(Object.id == cancellation.object_id)
+            object_result_for_reason = await self.session.execute(object_query_for_reason)
+            obj_for_reason = object_result_for_reason.scalar_one_or_none()
+            
+            policy_service = CancellationPolicyService(self.session)
+            reason_obj = await policy_service.get_reason_by_code(
+                code=cancellation.cancellation_reason,
+                owner_id=obj_for_reason.owner_id if obj_for_reason else None
+            )
+            
+            # Если справка подтверждена И причина уважительная - штрафов нет
+            if is_approved and reason_obj and reason_obj.treated_as_valid:
+                logger.info(f"Cancellation {cancellation_id} approved with respectful reason '{reason_obj.code}' - no fines")
+            
+            # Если справка отклонена ИЛИ причина не уважительная - создаем штрафы
+            elif not is_approved or (reason_obj and not reason_obj.treated_as_valid):
                 # Получаем объект для настроек (с eager loading org_unit и цепочки parent'ов)
                 object_query = select(Object).where(Object.id == cancellation.object_id).options(
                     joinedload(Object.org_unit).joinedload('parent').joinedload('parent').joinedload('parent').joinedload('parent')
