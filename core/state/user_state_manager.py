@@ -31,6 +31,7 @@ class UserAction(str, Enum):
     EDIT_TIMESLOT_EMPLOYEES = "edit_timeslot_employees"
     EDIT_TIMESLOT_NOTES = "edit_timeslot_notes"
     REPORT_DATES = "report_dates"
+    MEDIA_FLOW = "media_flow"  # Единый поток сбора текста/фото через Media Orchestrator
 
 
 class UserStep(str, Enum):
