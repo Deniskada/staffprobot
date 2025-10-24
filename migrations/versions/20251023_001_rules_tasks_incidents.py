@@ -29,7 +29,7 @@ def upgrade() -> None:
     op.create_index('ix_rules_scope', 'rules', ['scope'])
 
     op.create_table(
-        'task_templates',
+        'task_templates_v2',
         sa.Column('id', sa.Integer(), primary_key=True),
         sa.Column('owner_id', sa.Integer(), nullable=True),
         sa.Column('org_unit_id', sa.Integer(), nullable=True),
@@ -44,13 +44,13 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     )
-    op.create_index('ix_task_templates_owner_id', 'task_templates', ['owner_id'])
-    op.create_index('ix_task_templates_org_unit_id', 'task_templates', ['org_unit_id'])
-    op.create_index('ix_task_templates_object_id', 'task_templates', ['object_id'])
-    op.create_index('ix_task_templates_code', 'task_templates', ['code'])
+    op.create_index('ix_task_templates_v2_owner_id', 'task_templates_v2', ['owner_id'])
+    op.create_index('ix_task_templates_v2_org_unit_id', 'task_templates_v2', ['org_unit_id'])
+    op.create_index('ix_task_templates_v2_object_id', 'task_templates_v2', ['object_id'])
+    op.create_index('ix_task_templates_v2_code', 'task_templates_v2', ['code'])
 
     op.create_table(
-        'task_plans',
+        'task_plans_v2',
         sa.Column('id', sa.Integer(), primary_key=True),
         sa.Column('template_id', sa.Integer(), nullable=False),
         sa.Column('owner_id', sa.Integer(), nullable=True),
@@ -61,13 +61,13 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     )
-    op.create_index('ix_task_plans_template_id', 'task_plans', ['template_id'])
-    op.create_index('ix_task_plans_owner_id', 'task_plans', ['owner_id'])
-    op.create_index('ix_task_plans_object_id', 'task_plans', ['object_id'])
-    op.create_index('ix_task_plans_time_slot_id', 'task_plans', ['time_slot_id'])
+    op.create_index('ix_task_plans_v2_template_id', 'task_plans_v2', ['template_id'])
+    op.create_index('ix_task_plans_v2_owner_id', 'task_plans_v2', ['owner_id'])
+    op.create_index('ix_task_plans_v2_object_id', 'task_plans_v2', ['object_id'])
+    op.create_index('ix_task_plans_v2_time_slot_id', 'task_plans_v2', ['time_slot_id'])
 
     op.create_table(
-        'task_entries',
+        'task_entries_v2',
         sa.Column('id', sa.Integer(), primary_key=True),
         sa.Column('plan_id', sa.Integer(), nullable=True),
         sa.Column('template_id', sa.Integer(), nullable=False),
@@ -79,10 +79,10 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     )
-    op.create_index('ix_task_entries_plan_id', 'task_entries', ['plan_id'])
-    op.create_index('ix_task_entries_template_id', 'task_entries', ['template_id'])
-    op.create_index('ix_task_entries_shift_schedule_id', 'task_entries', ['shift_schedule_id'])
-    op.create_index('ix_task_entries_employee_id', 'task_entries', ['employee_id'])
+    op.create_index('ix_task_entries_v2_plan_id', 'task_entries_v2', ['plan_id'])
+    op.create_index('ix_task_entries_v2_template_id', 'task_entries_v2', ['template_id'])
+    op.create_index('ix_task_entries_v2_shift_schedule_id', 'task_entries_v2', ['shift_schedule_id'])
+    op.create_index('ix_task_entries_v2_employee_id', 'task_entries_v2', ['employee_id'])
 
     op.create_table(
         'incidents',
@@ -114,23 +114,23 @@ def downgrade() -> None:
     op.drop_index('ix_incidents_owner_id', table_name='incidents')
     op.drop_table('incidents')
 
-    op.drop_index('ix_task_entries_employee_id', table_name='task_entries')
-    op.drop_index('ix_task_entries_shift_schedule_id', table_name='task_entries')
-    op.drop_index('ix_task_entries_template_id', table_name='task_entries')
-    op.drop_index('ix_task_entries_plan_id', table_name='task_entries')
-    op.drop_table('task_entries')
+    op.drop_index('ix_task_entries_v2_employee_id', table_name='task_entries_v2')
+    op.drop_index('ix_task_entries_v2_shift_schedule_id', table_name='task_entries_v2')
+    op.drop_index('ix_task_entries_v2_template_id', table_name='task_entries_v2')
+    op.drop_index('ix_task_entries_v2_plan_id', table_name='task_entries_v2')
+    op.drop_table('task_entries_v2')
 
-    op.drop_index('ix_task_plans_time_slot_id', table_name='task_plans')
-    op.drop_index('ix_task_plans_object_id', table_name='task_plans')
-    op.drop_index('ix_task_plans_owner_id', table_name='task_plans')
-    op.drop_index('ix_task_plans_template_id', table_name='task_plans')
-    op.drop_table('task_plans')
+    op.drop_index('ix_task_plans_v2_time_slot_id', table_name='task_plans_v2')
+    op.drop_index('ix_task_plans_v2_object_id', table_name='task_plans_v2')
+    op.drop_index('ix_task_plans_v2_owner_id', table_name='task_plans_v2')
+    op.drop_index('ix_task_plans_v2_template_id', table_name='task_plans_v2')
+    op.drop_table('task_plans_v2')
 
-    op.drop_index('ix_task_templates_code', table_name='task_templates')
-    op.drop_index('ix_task_templates_object_id', table_name='task_templates')
-    op.drop_index('ix_task_templates_org_unit_id', table_name='task_templates')
-    op.drop_index('ix_task_templates_owner_id', table_name='task_templates')
-    op.drop_table('task_templates')
+    op.drop_index('ix_task_templates_v2_code', table_name='task_templates_v2')
+    op.drop_index('ix_task_templates_v2_object_id', table_name='task_templates_v2')
+    op.drop_index('ix_task_templates_v2_org_unit_id', table_name='task_templates_v2')
+    op.drop_index('ix_task_templates_v2_owner_id', table_name='task_templates_v2')
+    op.drop_table('task_templates_v2')
 
     op.drop_index('ix_rules_scope', table_name='rules')
     op.drop_index('ix_rules_code', table_name='rules')

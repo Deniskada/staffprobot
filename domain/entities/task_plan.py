@@ -7,11 +7,11 @@ from sqlalchemy.orm import relationship
 from .base import Base
 
 
-class TaskPlan(Base):
-    __tablename__ = "task_plans"
+class TaskPlanV2(Base):
+    __tablename__ = "task_plans_v2"
 
     id = Column(Integer, primary_key=True, index=True)
-    template_id = Column(Integer, ForeignKey("task_templates.id"), nullable=False, index=True)
+    template_id = Column(Integer, ForeignKey("task_templates_v2.id"), nullable=False, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     object_id = Column(Integer, ForeignKey("objects.id"), nullable=True, index=True)
     time_slot_id = Column(Integer, ForeignKey("time_slots.id"), nullable=True, index=True)
@@ -22,6 +22,6 @@ class TaskPlan(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    template = relationship("TaskTemplate")
+    template = relationship("TaskTemplateV2")
 
 
