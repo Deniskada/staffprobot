@@ -35,9 +35,7 @@
         <td>{{ t.object_id or 'Все' }}</td>
         <td>{{ 'Да' if t.is_active else 'Нет' }}</td>
         <td>
-          <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editTemplateModal{{ t.id }}" title="Редактировать">
-            <i class="fas fa-edit"></i>
-          </button>
+          <!-- Редактирование TODO: добавить endpoint /owner/tasks/templates/{id}/edit -->
           <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteTemplateModal{{ t.id }}" title="Удалить">
             <i class="fas fa-trash"></i>
           </button>

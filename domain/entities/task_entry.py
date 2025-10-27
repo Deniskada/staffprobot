@@ -23,7 +23,10 @@ class TaskEntryV2(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    template = relationship("TaskTemplateV2")
-    plan = relationship("TaskPlanV2")
+    # Relationships
+    template = relationship("TaskTemplateV2", foreign_keys=[template_id])
+    plan = relationship("TaskPlanV2", foreign_keys=[plan_id])
+    shift_schedule = relationship("ShiftSchedule", foreign_keys=[shift_schedule_id])
+    employee = relationship("User", foreign_keys=[employee_id])
 
 
