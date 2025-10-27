@@ -12,7 +12,7 @@ from domain.entities.object import Object
 from domain.entities.shift import Shift
 from domain.entities.time_slot import TimeSlot
 from domain.entities.timeslot_task_template import TimeslotTaskTemplate
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from core.state import user_state_manager, UserAction, UserStep
@@ -1775,7 +1775,7 @@ async def _handle_my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"[MY_TASKS] Task list shown successfully")
             
     except Exception as e:
-        logger.error(f"Error showing my tasks: {e}")
+        logger.error(f"Error showing my tasks: {e}", exc_info=True)
         await query.edit_message_text(
             text="❌ Ошибка загрузки задач. Попробуйте позже.",
             parse_mode='HTML'
