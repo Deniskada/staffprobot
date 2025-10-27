@@ -67,14 +67,14 @@ async def create_task_entries_for_date(session: AsyncSession, target_date: datet
                 template_id=plan.template_id,
                 plan_id=plan.id,
                 shift_schedule_id=shift.id,
-                employee_id=shift.employee_id,
+                employee_id=shift.user_id,  # В ShiftSchedule поле называется user_id
                 is_completed=False,
                 created_at=datetime.utcnow()
             )
             session.add(entry)
             created_count += 1
             logger.debug(
-                f"Created TaskEntryV2 for plan {plan.id}, shift {shift.id}, employee {shift.employee_id}"
+                f"Created TaskEntryV2 for plan {plan.id}, shift {shift.id}, employee {shift.user_id}"
             )
     
     await session.commit()
@@ -140,9 +140,9 @@ async def get_relevant_shift_schedules(
     # Базовый запрос - активные смены на заданную дату
     query = select(ShiftSchedule).where(
         and_(
-            ShiftSchedule.status.in_(["active", "confirmed"]),
-            ShiftSchedule.start_time >= datetime.combine(target_date, time.min),
-            ShiftSchedule.start_time < datetime.combine(target_date + timedelta(days=1), time.min)
+            ShiftSchedule.status.in_(["confirmed", "planned"]),
+            ShiftSchedule.planned_start >= datetime.combine(target_date, time.min),
+            ShiftSchedule.planned_start < datetime.combine(target_date + timedelta(days=1), time.min)
         )
     ).options(
         selectinload(ShiftSchedule.time_slot)
@@ -150,17 +150,17 @@ async def get_relevant_shift_schedules(
     
     # Фильтр по объекту (если указан в плане)
     if plan.object_id:
-        query = query.join(TimeSlot).where(TimeSlot.object_id == plan.object_id)
+        query = query.where(ShiftSchedule.object_id == plan.object_id)
     
     # Фильтр по времени начала (если указано в плане)
     if plan.planned_time_start:
-        # Ищем тайм-слоты, время начала которых попадает в окно ±30 минут
+        # Ищем смены, время начала которых попадает в окно ±30 минут
         time_start = datetime.combine(target_date, plan.planned_time_start)
         time_end = time_start + timedelta(minutes=30)
         query = query.where(
             and_(
-                ShiftSchedule.start_time >= time_start - timedelta(minutes=30),
-                ShiftSchedule.start_time <= time_end
+                ShiftSchedule.planned_start >= time_start - timedelta(minutes=30),
+                ShiftSchedule.planned_start <= time_end
             )
         )
     
@@ -186,8 +186,8 @@ async def create_task_entries_for_active_shifts(session: AsyncSession, plan: Tas
     # Получаем активные смены (сегодня и будущие)
     query = select(ShiftSchedule).where(
         and_(
-            ShiftSchedule.status.in_(["active", "confirmed"]),
-            ShiftSchedule.start_time >= datetime.combine(today, time.min)
+            ShiftSchedule.status.in_(["confirmed", "planned"]),
+            ShiftSchedule.planned_start >= datetime.combine(today, time.min)
         )
     ).options(
         selectinload(ShiftSchedule.time_slot)
@@ -195,20 +195,14 @@ async def create_task_entries_for_active_shifts(session: AsyncSession, plan: Tas
     
     # Фильтр по объекту (если указан в плане)
     if plan.object_id:
-        query = query.join(TimeSlot).where(TimeSlot.object_id == plan.object_id)
-    
-    # Фильтр по времени начала (если указано в плане)
-    if plan.planned_time_start:
-        # Ищем тайм-слоты, время начала которых попадает в окно ±30 минут
-        # Для каждой смены проверяем отдельно
-        pass  # Фильтруем после получения
+        query = query.where(ShiftSchedule.object_id == plan.object_id)
     
     result = await session.execute(query)
     shifts = result.scalars().all()
     
     for shift in shifts:
         # Проверяем, подходит ли смена для этого плана
-        shift_date = shift.start_time.date()
+        shift_date = shift.planned_start.date()
         
         # Проверяем соответствие дате/периодичности
         if not should_create_entry_for_date(plan, shift_date):
@@ -216,7 +210,7 @@ async def create_task_entries_for_active_shifts(session: AsyncSession, plan: Tas
         
         # Проверяем время начала
         if plan.planned_time_start:
-            shift_time = shift.start_time.time()
+            shift_time = shift.planned_start.time()
             plan_time_seconds = (
                 plan.planned_time_start.hour * 3600 + 
                 plan.planned_time_start.minute * 60
@@ -245,14 +239,14 @@ async def create_task_entries_for_active_shifts(session: AsyncSession, plan: Tas
             template_id=plan.template_id,
             plan_id=plan.id,
             shift_schedule_id=shift.id,
-            employee_id=shift.employee_id,
+            employee_id=shift.user_id,  # В ShiftSchedule поле называется user_id
             is_completed=False,
             created_at=datetime.utcnow()
         )
         session.add(entry)
         created_count += 1
         logger.debug(
-            f"Created TaskEntryV2 for plan {plan.id}, shift {shift.id}, employee {shift.employee_id}"
+            f"Created TaskEntryV2 for plan {plan.id}, shift {shift.id}, employee {shift.user_id}"
         )
     
     return created_count
