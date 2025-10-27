@@ -47,13 +47,11 @@
         <td>{{ 'Да' if t.requires_media else 'Нет' }}</td>
         <td>{{ t.default_bonus_amount or '—' }}</td>
         <td>
-          <form method="post" action="/owner/tasks/templates/{{ t.id }}/toggle" class="d-inline">
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="activeSwitch{{ t.id }}" 
-                     {{ 'checked' if t.is_active else '' }}
-                     onchange="toggleTemplateActive({{ t.id }}, this.checked, '{{ t.title }}')">
-            </div>
-          </form>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="activeSwitch{{ t.id }}" 
+                   {{ 'checked' if t.is_active else '' }}
+                   onchange="showToggleModal({{ t.id }}, this.checked, '{{ t.title }}')">
+          </div>
         </td>
         <td>
           <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editTemplateModal{{ t.id }}" title="Редактировать">
@@ -145,6 +143,31 @@
   <a href="/owner/tasks/plan" class="btn btn-secondary mt-3">Перейти к планированию</a>
 </div>
 
+<!-- Modal: Подтверждение активации/деактивации шаблона -->
+<div class="modal fade" id="toggleTemplateModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" id="toggleTemplateForm">
+        <div class="modal-header" id="toggleModalHeader">
+          <h5 class="modal-title" id="toggleModalTitle"></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="cancelToggle()"></button>
+        </div>
+        <div class="modal-body">
+          <p id="toggleModalQuestion"></p>
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="update_plans_checkbox" name="update_plans" value="1" checked>
+            <label class="form-check-label" for="update_plans_checkbox" id="updatePlansLabel"></label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="cancelToggle()">Отмена</button>
+          <button type="submit" class="btn btn-primary">Подтвердить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Создать шаблон -->
 <div class="modal fade" id="createTemplateModal" tabindex="-1">
   <div class="modal-dialog">
@@ -216,28 +239,60 @@ document.addEventListener('DOMContentLoaded', function() {
   toggleCodeField();
 });
 
-// Переключение активности шаблона
-function toggleTemplateActive(templateId, isActive, templateTitle) {
-  const message = isActive 
-    ? `Активировать шаблон "${templateTitle}"?\n\nСделать активными все неактивные запланированные задачи по этому шаблону?`
-    : `Деактивировать шаблон "${templateTitle}"?\n\nСделать неактивными все запланированные задачи по этому шаблону?`;
+// Хранение текущего состояния toggle
+let currentToggle = {
+  templateId: null,
+  newState: false,
+  originalState: false
+};
+
+// Показать модал подтверждения toggle
+function showToggleModal(templateId, newState, templateTitle) {
+  currentToggle = {
+    templateId: templateId,
+    newState: newState,
+    originalState: !newState
+  };
   
-  if (confirm(message)) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `/owner/tasks/templates/${templateId}/toggle`;
-    
-    const updatePlansInput = document.createElement('input');
-    updatePlansInput.type = 'hidden';
-    updatePlansInput.name = 'update_plans';
-    updatePlansInput.value = '1';
-    form.appendChild(updatePlansInput);
-    
-    document.body.appendChild(form);
-    form.submit();
+  const modal = document.getElementById('toggleTemplateModal');
+  const form = document.getElementById('toggleTemplateForm');
+  const title = document.getElementById('toggleModalTitle');
+  const question = document.getElementById('toggleModalQuestion');
+  const checkbox = document.getElementById('update_plans_checkbox');
+  const checkboxLabel = document.getElementById('updatePlansLabel');
+  const header = document.getElementById('toggleModalHeader');
+  
+  // Настраиваем содержимое модала
+  if (newState) {
+    // Активация
+    header.className = 'modal-header bg-success text-white';
+    title.textContent = `Активировать шаблон "${templateTitle}"?`;
+    question.textContent = 'Шаблон будет активирован.';
+    checkboxLabel.textContent = 'Сделать активными все неактивные запланированные задачи по этому шаблону';
   } else {
-    // Откатываем переключатель
-    document.getElementById(`activeSwitch${templateId}`).checked = !isActive;
+    // Деактивация
+    header.className = 'modal-header bg-warning';
+    title.textContent = `Деактивировать шаблон "${templateTitle}"?`;
+    question.textContent = 'Шаблон будет деактивирован.';
+    checkboxLabel.textContent = 'Сделать неактивными все запланированные задачи по этому шаблону';
+  }
+  
+  // Устанавливаем action формы
+  form.action = `/owner/tasks/templates/${templateId}/toggle`;
+  
+  // Чекбокс по умолчанию отмечен
+  checkbox.checked = true;
+  
+  // Показываем модал
+  const bsModal = new bootstrap.Modal(modal);
+  bsModal.show();
+}
+
+// Отмена toggle
+function cancelToggle() {
+  // Возвращаем переключатель в исходное состояние
+  if (currentToggle.templateId) {
+    document.getElementById(`activeSwitch${currentToggle.templateId}`).checked = currentToggle.originalState;
   }
 }
 </script>
