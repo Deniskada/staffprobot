@@ -120,6 +120,63 @@ async def _collect_shift_tasks(
             )
         except Exception as e:
             logger.error(f"Error loading TaskEntryV2: {e}", exc_info=True)
+    else:
+        # Для спонтанной смены (без schedule_id) - создаём TaskEntry на лету
+        # из активных планов для этого объекта
+        try:
+            from shared.services.task_service import TaskService
+            from domain.entities.task_plan import TaskPlanV2
+            from domain.entities.task_entry import TaskEntryV2
+            from datetime import datetime
+            
+            task_service = TaskService(session)
+            
+            if not object_:
+                logger.debug("Spontaneous shift without object - no tasks v2")
+            else:
+                # Находим активные планы для этого объекта (или общие)
+                plans_query = select(TaskPlanV2).where(
+                    and_(
+                        TaskPlanV2.is_active == True,
+                        or_(
+                            TaskPlanV2.object_ids.contains([object_.id]),
+                            TaskPlanV2.object_id == object_.id,
+                            and_(
+                                TaskPlanV2.object_ids.is_(None),
+                                TaskPlanV2.object_id.is_(None)
+                            )
+                        )
+                    )
+                ).options(selectinload(TaskPlanV2.template))
+                
+                plans_result = await session.execute(plans_query)
+                plans = plans_result.scalars().all()
+                
+                for plan in plans:
+                    template = plan.template
+                    if not template:
+                        continue
+                    
+                    # Для спонтанных смен показываем задачи напрямую из плана
+                    all_tasks.append({
+                        'text': template.title,
+                        'description': template.description,
+                        'is_mandatory': template.is_mandatory,
+                        'deduction_amount': float(template.default_bonus_amount) if template.default_bonus_amount else 0,
+                        'requires_media': template.requires_media,
+                        'source': 'task_v2_adhoc',  # Специальный маркер для спонтанных смен
+                        'plan_id': plan.id,
+                        'template_id': template.id,
+                        'is_completed': False
+                    })
+                
+                logger.debug(
+                    f"Loaded {len(plans)} TaskPlans for spontaneous shift",
+                    shift_id=shift.id,
+                    object_id=object_.id if object_ else None
+                )
+        except Exception as e:
+            logger.error(f"Error loading TaskPlans for spontaneous shift: {e}", exc_info=True)
     
     # LEGACY: Вариант 1 - Запланированная смена (с timeslot)
     if timeslot:

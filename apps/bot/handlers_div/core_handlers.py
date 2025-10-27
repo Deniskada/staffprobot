@@ -282,7 +282,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 except Exception:
                     tasks_lines = []
                 tasks_text = ("\n".join(tasks_lines)) if tasks_lines else "—"
-                keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
+                keyboard = [
+                    [InlineKeyboardButton("📋 Мои задачи", callback_data="my_tasks")],
+                    [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+                ]
                 await update.message.reply_text(
                     f"✅ Смена успешно открыта!\n"
                     f"📍 Объект: {object_name}\n"
