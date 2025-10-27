@@ -9,6 +9,7 @@ from apps.bot.services.object_service import ObjectService
 from core.database.session import get_async_session
 from core.utils.timezone_helper import timezone_helper
 from domain.entities.object import Object
+from domain.entities.shift import Shift
 from sqlalchemy import select
 from core.state import user_state_manager, UserAction, UserStep
 from datetime import date, timedelta
@@ -566,13 +567,50 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
                         local_time = timezone_helper.format_local_time(opening.opened_at, object_timezone, '%H:%M')
                         
+                        # Собираем задачи для показа
+                        tasks_lines = []
+                        try:
+                            shift_id = result.get('shift_id')
+                            if shift_id:
+                                shift_q = select(Shift).where(Shift.id == shift_id)
+                                shift_res = await session.execute(shift_q)
+                                shift_obj = shift_res.scalar_one_or_none()
+                                
+                                if shift_obj:
+                                    from .shift_handlers import _collect_shift_tasks
+                                    tasks = await _collect_shift_tasks(session, shift_obj, timeslot=None, object_=obj)
+                                    for t in tasks:
+                                        name = t.get('text') or t.get('task_text') or 'Без названия'
+                                        amt = t.get('deduction_amount') or 0
+                                        badges = []
+                                        if t.get('is_mandatory'):
+                                            badges.append('⚠️')
+                                        if t.get('requires_media'):
+                                            badges.append('📸')
+                                        amt_str = f" ({'+' if amt > 0 else ''}{int(amt)}₽)" if amt else ""
+                                        badge_str = " ".join(badges)
+                                        line = f"• {badge_str} {name}{amt_str}".strip()
+                                        tasks_lines.append(line)
+                        except Exception as e:
+                            logger.error(f"Error loading tasks for object opening message: {e}")
+                            tasks_lines = []
+                        
+                        tasks_text = "\n".join(tasks_lines) if tasks_lines else "—"
+                        
+                        keyboard = [
+                            [InlineKeyboardButton("📋 Мои задачи", callback_data="my_tasks")],
+                            [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+                        ]
+                        
                         await update.message.reply_text(
                             f"✅ <b>Объект открыт!</b>\n\n"
                             f"🏢 Объект: {obj.name}\n"
                             f"⏰ Время: {local_time}\n\n"
                             f"✅ <b>Смена автоматически открыта</b>\n"
-                            f"💰 Ставка: {result.get('hourly_rate', 0)}₽/час",
-                            parse_mode='HTML'
+                            f"💰 Ставка: {result.get('hourly_rate', 0)}₽/час\n\n"
+                            f"📝 <b>Задачи на смену:</b>\n{tasks_text}",
+                            parse_mode='HTML',
+                            reply_markup=InlineKeyboardMarkup(keyboard)
                         )
                         await user_state_manager.clear_state(user_id)
                     else:

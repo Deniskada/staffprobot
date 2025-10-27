@@ -15,6 +15,7 @@ from sqlalchemy import select, func, desc, and_
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta, date, time
 from typing import Optional, List, Dict, Any
+from decimal import Decimal
 import calendar
 import io
 import pandas as pd
@@ -2633,7 +2634,7 @@ async def owner_calendar_quick_create_timeslot(
     slot_date: str = Form(...),
     start_time: str = Form(...),
     end_time: str = Form(...),
-    hourly_rate: int = Form(...),
+    hourly_rate: str = Form(...),
 ):
     """API: быстрое создание тайм-слота из drag&drop-панели."""
     current_user = await get_current_user(request)
@@ -2646,12 +2647,13 @@ async def owner_calendar_quick_create_timeslot(
             slot_date_obj = datetime.strptime(slot_date, "%Y-%m-%d").date()
             start_time_obj = time.fromisoformat(start_time)
             end_time_obj = time.fromisoformat(end_time)
+            hourly_rate_decimal = Decimal(hourly_rate) if hourly_rate else Decimal(0)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Неверный формат данных: {str(e)}")
 
         if start_time_obj >= end_time_obj:
             raise HTTPException(status_code=400, detail="Время начала должно быть меньше времени окончания")
-        if hourly_rate <= 0:
+        if hourly_rate_decimal <= 0:
             raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
 
         async with get_async_session() as session:
@@ -2665,7 +2667,7 @@ async def owner_calendar_quick_create_timeslot(
                 "slot_date": slot_date_obj,
                 "start_time": start_time,
                 "end_time": end_time,
-                "hourly_rate": hourly_rate,
+                "hourly_rate": hourly_rate_decimal,
                 "is_active": True,
             }
 

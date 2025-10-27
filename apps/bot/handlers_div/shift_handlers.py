@@ -68,115 +68,54 @@ async def _collect_shift_tasks(
     object_: Optional[Object] = None
 ) -> List[Dict]:
     """
-    Собрать ВСЕ задачи смены из трёх источников: TaskEntryV2 (новая система), timeslot, object (legacy).
+    Собрать ВСЕ задачи смены из TaskEntryV2 (новая система) + legacy источников.
     
     Единая функция для загрузки задач везде вместо дублирования кода.
     
     Args:
         session: Асинхронная сессия БД
         shift: Смена для которой собираем задачи
-        timeslot: TimeSlot (если запланированная смена)
-        object_: Object с потенциальными shift_tasks
+        timeslot: TimeSlot (для legacy задач из TimeslotTaskTemplate)
+        object_: Object (для legacy задач из shift_tasks JSONB)
     
     Returns:
         Список задач с метаданными: [{'text', 'is_mandatory', 'deduction_amount', 'requires_media', 'source', 'entry_id'}, ...]
     
     Logic:
-        1. Загружаем TaskEntryV2 для shift.schedule_id (новая система задач)
+        1. Загружаем TaskEntryV2 по shift.id (УНИВЕРСАЛЬНО для запланированных И спонтанных смен!)
         2. Если есть timeslot → загружаем из TimeslotTaskTemplate (legacy)
         3. Если есть object и не ignore_object_tasks → добавляем из object.shift_tasks (legacy)
-        4. Если спонтанная смена (нет timeslot) → берём из object.shift_tasks (legacy)
     """
     all_tasks = []
     
-    # НОВОЕ: Загружаем TaskEntryV2 (Tasks v2)
-    if shift.schedule_id:
-        try:
-            from shared.services.task_service import TaskService
-            task_service = TaskService(session)
-            task_entries = await task_service.get_entries_for_shift_schedule(shift.schedule_id)
-            
-            for entry in task_entries:
-                template = entry.template
-                if template:
-                    all_tasks.append({
-                        'text': template.title,
-                        'description': template.description,
-                        'is_mandatory': template.is_mandatory,
-                        'deduction_amount': float(template.default_bonus_amount) if template.default_bonus_amount else 0,
-                        'requires_media': template.requires_media,
-                        'source': 'task_v2',
-                        'entry_id': entry.id,
-                        'is_completed': entry.is_completed,
-                        'completion_notes': entry.completion_notes,
-                        'completion_media': entry.completion_media or []
-                    })
-            
-            logger.debug(
-                f"Loaded TaskEntryV2 for shift",
-                shift_id=shift.id,
-                schedule_id=shift.schedule_id,
-                task_entries_count=len(task_entries)
-            )
-        except Exception as e:
-            logger.error(f"Error loading TaskEntryV2: {e}", exc_info=True)
-    else:
-        # Для спонтанной смены (без schedule_id) - создаём TaskEntry на лету
-        # из активных планов для этого объекта
-        try:
-            from shared.services.task_service import TaskService
-            from domain.entities.task_plan import TaskPlanV2
-            from domain.entities.task_entry import TaskEntryV2
-            from datetime import datetime
-            
-            task_service = TaskService(session)
-            
-            if not object_:
-                logger.debug("Spontaneous shift without object - no tasks v2")
-            else:
-                # Находим активные планы для этого объекта (или общие)
-                plans_query = select(TaskPlanV2).where(
-                    and_(
-                        TaskPlanV2.is_active == True,
-                        or_(
-                            TaskPlanV2.object_ids.contains([object_.id]),
-                            TaskPlanV2.object_id == object_.id,
-                            and_(
-                                TaskPlanV2.object_ids.is_(None),
-                                TaskPlanV2.object_id.is_(None)
-                            )
-                        )
-                    )
-                ).options(selectinload(TaskPlanV2.template))
-                
-                plans_result = await session.execute(plans_query)
-                plans = plans_result.scalars().all()
-                
-                for plan in plans:
-                    template = plan.template
-                    if not template:
-                        continue
-                    
-                    # Для спонтанных смен показываем задачи напрямую из плана
-                    all_tasks.append({
-                        'text': template.title,
-                        'description': template.description,
-                        'is_mandatory': template.is_mandatory,
-                        'deduction_amount': float(template.default_bonus_amount) if template.default_bonus_amount else 0,
-                        'requires_media': template.requires_media,
-                        'source': 'task_v2_adhoc',  # Специальный маркер для спонтанных смен
-                        'plan_id': plan.id,
-                        'template_id': template.id,
-                        'is_completed': False
-                    })
-                
-                logger.debug(
-                    f"Loaded {len(plans)} TaskPlans for spontaneous shift",
-                    shift_id=shift.id,
-                    object_id=object_.id if object_ else None
-                )
-        except Exception as e:
-            logger.error(f"Error loading TaskPlans for spontaneous shift: {e}", exc_info=True)
+    # НОВОЕ: Универсальная загрузка TaskEntryV2 по shift.id (работает для ВСЕХ смен!)
+    try:
+        from shared.services.task_service import TaskService
+        task_service = TaskService(session)
+        task_entries = await task_service.get_entries_for_shift(shift.id)
+        
+        for entry in task_entries:
+            template = entry.template
+            if template:
+                all_tasks.append({
+                    'text': template.title,
+                    'description': template.description,
+                    'is_mandatory': template.is_mandatory,
+                    'deduction_amount': float(template.default_bonus_amount) if template.default_bonus_amount else 0,
+                    'requires_media': template.requires_media,
+                    'source': 'task_v2',
+                    'entry_id': entry.id,
+                    'is_completed': entry.is_completed,
+                    'completion_notes': entry.completion_notes,
+                    'completion_media': entry.completion_media or []
+                })
+        
+        logger.info(
+            f"Loaded {len(task_entries)} TaskEntryV2 for shift {shift.id} "
+            f"(planned={bool(shift.schedule_id)})"
+        )
+    except Exception as e:
+        logger.error(f"Error loading TaskEntryV2 for shift {shift.id}: {e}", exc_info=True)
     
     # LEGACY: Вариант 1 - Запланированная смена (с timeslot)
     if timeslot:
@@ -908,9 +847,12 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
             selected_schedule_id=schedule_id
         )
         
-        # Форматируем время
-        start_time = shift_data['planned_start'].strftime("%H:%M")
-        end_time = shift_data['planned_end'].strftime("%H:%M")
+        # Форматируем время с учетом временной зоны объекта
+        from core.utils.timezone_helper import timezone_helper
+        object_timezone = shift_data.get('object_timezone', 'Europe/Moscow')
+        
+        start_time_local = timezone_helper.format_local_time(shift_data['planned_start'], object_timezone)
+        end_time_local = timezone_helper.format_local_time(shift_data['planned_end'], object_timezone)
         planned_date = shift_data['planned_start'].strftime("%d.%m.%Y")
         
         # Запрашиваем геопозицию
@@ -918,7 +860,7 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
             text=f"📅 <b>Запланированная смена</b>\n\n"
                  f"🏢 <b>Объект:</b> {shift_data['object_name']}\n"
                  f"📅 <b>Дата:</b> {planned_date}\n"
-                 f"🕐 <b>Время:</b> {start_time}-{end_time}\n\n"
+                 f"🕐 <b>Время:</b> {start_time_local}-{end_time_local}\n\n"
                  f"📍 <b>Отправьте геопозицию</b>",
             parse_mode='HTML'
         )
@@ -1390,22 +1332,23 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
     user_state = await user_state_manager.get_state(user_id)
     logger.info(f"User state: {user_state}, step: {user_state.step if user_state else None}")
     
-    # Проверяем, это фото для отмены смены? (ВЫСОКИЙ ПРИОРИТЕТ)
+    # ПРИОРИТЕТ 1: Tasks v2 медиа (САМЫЙ ВЫСОКИЙ!)
+    if user_state and user_state.step == UserStep.TASK_V2_MEDIA_UPLOAD:
+        await _handle_received_task_v2_media(update, context)
+        return
+    
+    # ПРИОРИТЕТ 2: Отмена смены
     if user_state and user_state.action == UserAction.CANCEL_SCHEDULE and user_state.step == UserStep.INPUT_PHOTO:
         from .schedule_handlers import handle_cancellation_photo_upload
         await handle_cancellation_photo_upload(update, context)
         return
     
-    # Игнорируем медиа, если пользователь уже завершил загрузку
+    # ПРИОРИТЕТ 3: Игнорируем медиа, если пользователь уже завершил загрузку
     if user_state and user_state.step == UserStep.TASK_COMPLETION:
         logger.info(f"Ignoring media - user already completed task upload: user_id={user_id}")
         return
     
-    # Обработка медиа для Tasks v2
-    if user_state and user_state.step == UserStep.TASK_V2_MEDIA_UPLOAD:
-        await _handle_received_task_v2_media(update, context)
-        return
-    
+    # ПРИОРИТЕТ 4: Legacy MEDIA_UPLOAD
     if not user_state or user_state.step != UserStep.MEDIA_UPLOAD:
         # Подсказка если состояние потеряно
         logger.info(f"Media received but no valid state: user_id={user_id}, state={user_state}, step={user_state.step if user_state else None}")
@@ -2494,32 +2437,19 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
                 pending_task_v2_entry_id=None
             )
             
-            # Подтверждение
+            # Подтверждение (БЕЗ автоматического показа списка задач)
             await update.message.reply_text(
                 f"✅ <b>Отчет принят!</b>\n\n"
                 f"📋 Задача: <i>{template.title}</i>\n"
                 f"✅ Отмечена как выполненная\n"
-                f"📤 Отправлено в группу отчетов",
-                parse_mode='HTML'
+                f"📤 Отправлено в группу отчетов\n\n"
+                f"💡 Используйте '📋 Мои задачи' для продолжения.",
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("📋 Мои задачи", callback_data="my_tasks"),
+                    InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+                ]])
             )
-            
-            # Показываем обновлённый список задач
-            from domain.entities.time_slot import TimeSlot
-            
-            timeslot = None
-            if active_shift.time_slot_id:
-                timeslot_query = select(TimeSlot).where(TimeSlot.id == active_shift.time_slot_id)
-                timeslot_result = await session.execute(timeslot_query)
-                timeslot = timeslot_result.scalar_one_or_none()
-            
-            shift_tasks = await _collect_shift_tasks(
-                session=session,
-                shift=active_shift,
-                timeslot=timeslot,
-                object_=obj
-            )
-            
-            await _show_my_tasks_list(context, user_id, active_shift.id, shift_tasks, [], {})
     
     except Exception as e:
         logger.error(f"Error in _handle_received_task_v2_media: {e}", exc_info=True)

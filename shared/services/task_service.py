@@ -216,11 +216,39 @@ class TaskService:
         """
         Получить все задачи для конкретной смены (ShiftSchedule).
         Используется в боте для показа задач во время смены.
+        
+        DEPRECATED: Используйте get_entries_for_shift(shift_id) вместо этого метода.
         """
         from sqlalchemy.orm import selectinload
         
         query = select(TaskEntryV2).where(
             TaskEntryV2.shift_schedule_id == shift_schedule_id
+        ).options(
+            selectinload(TaskEntryV2.template),
+            selectinload(TaskEntryV2.plan)
+        ).order_by(TaskEntryV2.created_at)
+        
+        result = await self.session.execute(query)
+        return result.scalars().all()
+    
+    async def get_entries_for_shift(
+        self,
+        shift_id: int
+    ) -> List[TaskEntryV2]:
+        """
+        Получить все задачи для конкретной смены (Shift).
+        Универсальный метод для запланированных и спонтанных смен.
+        
+        Args:
+            shift_id: ID смены (Shift.id)
+            
+        Returns:
+            Список TaskEntryV2 с загруженными template и plan
+        """
+        from sqlalchemy.orm import selectinload
+        
+        query = select(TaskEntryV2).where(
+            TaskEntryV2.shift_id == shift_id
         ).options(
             selectinload(TaskEntryV2.template),
             selectinload(TaskEntryV2.plan)

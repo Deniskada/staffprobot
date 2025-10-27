@@ -6,9 +6,10 @@ from datetime import datetime, timedelta, time
 from typing import List, Optional
 from decimal import Decimal
 
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, cast, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.dialects.postgresql import JSONB
 
 from core.celery.celery_app import celery_app
 from core.database.session import get_async_session
@@ -17,6 +18,7 @@ from domain.entities.task_plan import TaskPlanV2
 from domain.entities.task_entry import TaskEntryV2
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.time_slot import TimeSlot
+from domain.entities.shift import Shift
 
 
 async def create_task_entries_for_date(session: AsyncSession, target_date: datetime.date) -> int:
@@ -280,4 +282,111 @@ def auto_assign_tasks_celery():
             return count_today + count_tomorrow
     
     return asyncio.run(_run())
+
+
+async def create_task_entries_for_shift(session: AsyncSession, shift: Shift) -> int:
+    """
+    Создать TaskEntryV2 для одной открытой смены (запланированной или спонтанной).
+    Вызывается сразу после открытия смены через бот.
+    
+    Args:
+        session: Асинхронная сессия БД
+        shift: Открытая смена
+        
+    Returns:
+        Количество созданных TaskEntryV2
+    """
+    created_count = 0
+    shift_date = shift.start_time.date()
+    
+    # Получаем все активные планы для этого объекта С eager loading шаблонов
+    query = select(TaskPlanV2).where(
+        TaskPlanV2.is_active == True
+    ).options(
+        selectinload(TaskPlanV2.template)  # КРИТИЧНО: загружаем шаблоны заранее!
+    )
+    
+    # Фильтр по объекту смены (работает для всех типов смен)
+    # Используем JSONB оператор @> для проверки содержания элемента в массиве
+    query = query.where(
+        or_(
+            TaskPlanV2.object_id == shift.object_id,
+            cast(TaskPlanV2.object_ids, JSONB).op('@>')(cast([shift.object_id], JSONB)),
+            # Общие планы (без привязки к объектам)
+            and_(
+                TaskPlanV2.object_ids.is_(None),
+                TaskPlanV2.object_id.is_(None)
+            )
+        )
+    )
+    
+    result = await session.execute(query)
+    plans = result.scalars().all()
+    
+    logger.info(f"Found {len(plans)} active TaskPlanV2 for shift {shift.id} (object={shift.object_id})")
+    
+    for plan in plans:
+        # Проверяем, подходит ли план для даты смены
+        if not should_create_entry_for_date(plan, shift_date):
+            logger.debug(f"Plan {plan.id} skipped: date mismatch")
+            continue
+        
+        # Проверяем время начала (если указано в плане)
+        if plan.planned_time_start and shift.schedule_id:
+            # Для запланированных смен проверяем время
+            from domain.entities.shift_schedule import ShiftSchedule
+            schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == shift.schedule_id)
+            schedule_result = await session.execute(schedule_query)
+            schedule = schedule_result.scalar_one_or_none()
+            
+            if schedule:
+                shift_time = schedule.planned_start.time()
+                plan_time_seconds = (
+                    plan.planned_time_start.hour * 3600 + 
+                    plan.planned_time_start.minute * 60
+                )
+                shift_time_seconds = (
+                    shift_time.hour * 3600 + 
+                    shift_time.minute * 60
+                )
+                # Разница не более 30 минут
+                if abs(plan_time_seconds - shift_time_seconds) > 1800:
+                    logger.debug(f"Plan {plan.id} skipped: time mismatch")
+                    continue
+        
+        # Проверяем, не существует ли уже TaskEntry для ЭТОЙ СМЕНЫ (по shift_id - универсально!)
+        existing_query = select(TaskEntryV2).where(
+            and_(
+                TaskEntryV2.plan_id == plan.id,
+                TaskEntryV2.shift_id == shift.id  # Используем shift_id вместо shift_schedule_id!
+            )
+        )
+        existing_result = await session.execute(existing_query)
+        if existing_result.scalar_one_or_none():
+            logger.debug(f"TaskEntry for plan {plan.id} and shift {shift.id} already exists")
+            continue
+        
+        # Создаём TaskEntryV2 (теперь безопасно обращаться к plan.template!)
+        if not plan.template:
+            logger.warning(f"Plan {plan.id} has no template, skipping")
+            continue
+            
+        entry = TaskEntryV2(
+            template_id=plan.template_id,
+            plan_id=plan.id,
+            shift_id=shift.id,  # Основная привязка - работает для всех типов смен!
+            shift_schedule_id=shift.schedule_id if shift.schedule_id else None,  # Для аналитики
+            employee_id=shift.user_id,
+            is_completed=False,
+            requires_media=plan.template.requires_media,  # Теперь безопасно!
+            created_at=datetime.utcnow()
+        )
+        session.add(entry)
+        created_count += 1
+        logger.info(
+            f"Created TaskEntryV2 for shift {shift.id} (planned={bool(shift.schedule_id)}), "
+            f"plan {plan.id}, template={plan.template.title}"
+        )
+    
+    return created_count
 
