@@ -208,4 +208,56 @@ class TaskService:
         query = query.order_by(TaskEntryV2.created_at.desc()).limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
+    
+    async def get_entries_for_shift_schedule(
+        self,
+        shift_schedule_id: int
+    ) -> List[TaskEntryV2]:
+        """
+        Получить все задачи для конкретной смены (ShiftSchedule).
+        Используется в боте для показа задач во время смены.
+        """
+        from sqlalchemy.orm import selectinload
+        
+        query = select(TaskEntryV2).where(
+            TaskEntryV2.shift_schedule_id == shift_schedule_id
+        ).options(
+            selectinload(TaskEntryV2.template),
+            selectinload(TaskEntryV2.plan)
+        ).order_by(TaskEntryV2.created_at)
+        
+        result = await self.session.execute(query)
+        return result.scalars().all()
+    
+    async def mark_entry_completed(
+        self,
+        entry_id: int,
+        completion_notes: Optional[str] = None,
+        completion_media: Optional[List[Dict[str, Any]]] = None
+    ) -> bool:
+        """
+        Отметить задачу как выполненную.
+        
+        Args:
+            entry_id: ID записи задачи
+            completion_notes: Текстовые комментарии
+            completion_media: Список медиафайлов [{"url": "...", "type": "photo"}]
+            
+        Returns:
+            True если успешно
+        """
+        from datetime import datetime
+        
+        entry = await self.session.get(TaskEntryV2, entry_id)
+        if not entry:
+            return False
+        
+        entry.is_completed = True
+        entry.completed_at = datetime.utcnow()
+        entry.completion_notes = completion_notes
+        entry.completion_media = completion_media or []
+        
+        await self.session.commit()
+        logger.info(f"Marked TaskEntryV2 {entry_id} as completed")
+        return True
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, Boolean, Text
+from sqlalchemy import Column, Integer, DateTime, ForeignKey, Boolean, Text, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -19,6 +19,11 @@ class TaskEntryV2(Base):
     notes = Column(Text, nullable=True)
     requires_media = Column(Boolean, default=False, nullable=False)
     is_completed = Column(Boolean, default=False, nullable=False)
+    
+    # Результаты выполнения
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    completion_notes = Column(Text, nullable=True)  # Текстовый отчёт
+    completion_media = Column(JSON, nullable=True)  # [{"url": "...", "type": "photo"}]
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
