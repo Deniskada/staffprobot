@@ -16,7 +16,8 @@ celery_app = Celery(
         "core.celery.tasks.shift_tasks", 
         "core.celery.tasks.analytics_tasks",
         "core.celery.tasks.payroll_tasks",
-        "core.celery.tasks.adjustment_tasks"  # Phase 4A
+        "core.celery.tasks.adjustment_tasks",  # Phase 4A
+        "core.celery.tasks.task_assignment"  # Tasks v2
     ]
 )
 
@@ -86,6 +87,11 @@ celery_app.conf.update(
             'task': 'create_final_settlements_by_termination_date',
             'schedule': crontab(hour=4, minute=5),  # каждый день в 04:05 MSK
         },
+        # Автоматическое назначение задач на смены — в 04:00 (MSK)
+        'auto-assign-tasks': {
+            'task': 'auto_assign_tasks',
+            'schedule': crontab(hour=4, minute=0),  # каждый день в 04:00 MSK
+        },
     },
     
     # Маршрутизация задач
@@ -95,9 +101,11 @@ celery_app.conf.update(
         'core.celery.tasks.analytics_tasks.*': {'queue': 'analytics'},
         'core.celery.tasks.payroll_tasks.*': {'queue': 'shifts'},  # Используем shifts для payroll
         'core.celery.tasks.adjustment_tasks.*': {'queue': 'shifts'},  # Phase 4A: adjustments
+        'core.celery.tasks.task_assignment.*': {'queue': 'shifts'},  # Tasks v2
         'process_closed_shifts_adjustments': {'queue': 'shifts'},  # Phase 4A: явно для задачи
         'create_payroll_entries_by_schedule': {'queue': 'shifts'},  # Phase 4A: явно для задачи
         'create_final_settlements_by_termination_date': {'queue': 'shifts'},  # Финальный расчёт при увольнении
+        'auto_assign_tasks': {'queue': 'shifts'},  # Tasks v2: авто-назначение задач
     },
 )
 

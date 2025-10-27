@@ -289,31 +289,108 @@ async def owner_tasks_plan(
 @router.post("/owner/tasks/plan/create")
 async def owner_tasks_plan_create(
     request: Request,
-    template_id: int = Form(...),
+    creation_mode: str = Form("template"),
+    template_id: str = Form(None),
+    task_title: str = Form(None),
+    task_description: str = Form(None),
+    task_mandatory: int = Form(0),
+    task_media: int = Form(0),
+    task_amount: str = Form(None),
+    task_code: str = Form(None),
     object_id: str = Form(None),
     planned_date: str = Form(None),
+    planned_time_start: str = Form(None),
+    recurrence_type: str = Form(None),
+    weekday: list[str] = Form(None),
+    day_interval: int = Form(None),
+    recurrence_end_date: str = Form(None),
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
-    """Создать план задачи."""
+    """Создать план задачи (с шаблоном или без)."""
     from domain.entities.task_plan import TaskPlanV2
-    from datetime import datetime
+    from domain.entities.task_template import TaskTemplateV2
+    from decimal import Decimal
+    from datetime import datetime, time, date
+    import re
     from core.logging.logger import logger
     
     owner_id = current_user.id
     obj_id = int(object_id) if object_id else None
     p_date = datetime.fromisoformat(planned_date) if planned_date else None
+    p_time = datetime.strptime(planned_time_start, "%H:%M").time() if planned_time_start else None
+    end_date = date.fromisoformat(recurrence_end_date) if recurrence_end_date else None
     
+    # Определяем template_id в зависимости от режима
+    final_template_id = None
+    if creation_mode == "template" and template_id:
+        final_template_id = int(template_id)
+    elif creation_mode == "custom":
+        # Создаём новый шаблон на лету
+        if not task_code:
+            # Автогенерация кода
+            code_base = re.sub(r'[^\w\s-]', '', (task_title or 'task').lower())
+            code_base = re.sub(r'[-\s]+', '_', code_base)[:50]
+            counter = 1
+            task_code = code_base
+            while True:
+                check = await session.execute(
+                    select(TaskTemplateV2).where(
+                        TaskTemplateV2.owner_id == owner_id,
+                        TaskTemplateV2.code == task_code
+                    )
+                )
+                if not check.scalar_one_or_none():
+                    break
+                task_code = f"{code_base}_{counter}"
+                counter += 1
+        
+        # Создаём шаблон
+        new_template = TaskTemplateV2(
+            owner_id=owner_id,
+            code=task_code,
+            title=task_title or "Без названия",
+            description=task_description,
+            is_mandatory=bool(task_mandatory),
+            requires_media=bool(task_media),
+            default_amount=Decimal(task_amount) if task_amount else None,
+            is_active=True,
+            object_id=None  # Шаблоны без привязки к объекту
+        )
+        session.add(new_template)
+        await session.flush()
+        final_template_id = new_template.id
+        logger.info(f"Created on-the-fly template: {new_template.id} ({task_code})")
+    
+    # Формируем recurrence_config
+    recurrence_config = None
+    if recurrence_type == "weekdays" and weekday:
+        recurrence_config = {"weekdays": [int(d) for d in weekday]}
+    elif recurrence_type == "day_interval" and day_interval:
+        recurrence_config = {"interval": day_interval}
+    
+    # Создаём план
     plan = TaskPlanV2(
-        template_id=template_id,
+        template_id=final_template_id,
         owner_id=owner_id,
         object_id=obj_id,
         planned_date=p_date,
+        planned_time_start=p_time,
+        recurrence_type=recurrence_type if recurrence_type else None,
+        recurrence_config=recurrence_config,
+        recurrence_end_date=end_date,
         is_active=True
     )
     session.add(plan)
+    await session.flush()  # Получаем plan.id
+    logger.info(f"Created TaskPlanV2: {plan.id}, template={final_template_id}, object={obj_id}, recurrence={recurrence_type}")
+    
+    # Мгновенное создание TaskEntry для уже активных смен
+    from core.celery.tasks.task_assignment import create_task_entries_for_active_shifts
+    created_entries = await create_task_entries_for_active_shifts(session, plan)
+    logger.info(f"Created {created_entries} TaskEntryV2 for active shifts of plan {plan.id}")
+    
     await session.commit()
-    logger.info(f"Created TaskPlanV2: {plan.id}, template={template_id}, object={obj_id}")
     
     return RedirectResponse(url="/owner/tasks/plan", status_code=303)
 
