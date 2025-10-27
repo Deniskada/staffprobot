@@ -10,7 +10,7 @@ from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from core.celery.app import celery_app
+from core.celery.celery_app import celery_app
 from core.database.session import get_async_session
 from core.logging.logger import logger
 from domain.entities.task_plan import TaskPlanV2
