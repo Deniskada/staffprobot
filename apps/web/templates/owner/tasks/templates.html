@@ -18,9 +18,8 @@
         <th>Обязательна</th>
         <th>Требует медиа</th>
         <th>Бонус/Штраф</th>
-        <th>Объект</th>
-        <th>Активна</th>
-        <th></th>
+        <th>Активен</th>
+        <th>Действия</th>
       </tr>
     </thead>
     <tbody>
@@ -32,15 +31,69 @@
         <td>{{ 'Да' if t.is_mandatory else 'Нет' }}</td>
         <td>{{ 'Да' if t.requires_media else 'Нет' }}</td>
         <td>{{ t.default_bonus_amount or '—' }}</td>
-        <td>{{ t.object_id or 'Все' }}</td>
-        <td>{{ 'Да' if t.is_active else 'Нет' }}</td>
         <td>
-          <!-- Редактирование TODO: добавить endpoint /owner/tasks/templates/{id}/edit -->
+          <form method="post" action="/owner/tasks/templates/{{ t.id }}/toggle" class="d-inline">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="activeSwitch{{ t.id }}" 
+                     {{ 'checked' if t.is_active else '' }}
+                     onchange="toggleTemplateActive({{ t.id }}, this.checked, '{{ t.title }}')">
+            </div>
+          </form>
+        </td>
+        <td>
+          <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editTemplateModal{{ t.id }}" title="Редактировать">
+            <i class="fas fa-edit"></i>
+          </button>
           <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteTemplateModal{{ t.id }}" title="Удалить">
             <i class="fas fa-trash"></i>
           </button>
         </td>
       </tr>
+      <!-- Modal: Редактирование шаблона -->
+      <div class="modal fade" id="editTemplateModal{{ t.id }}" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <form method="post" action="/owner/tasks/templates/{{ t.id }}/edit">
+              <div class="modal-header">
+                <h5 class="modal-title">Редактировать "{{ t.title }}"</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                <div class="mb-3">
+                  <label for="edit_code{{ t.id }}" class="form-label">Код (уникальный)</label>
+                  <input type="text" class="form-control" id="edit_code{{ t.id }}" name="code" value="{{ t.code }}" required>
+                </div>
+                <div class="mb-3">
+                  <label for="edit_title{{ t.id }}" class="form-label">Название</label>
+                  <input type="text" class="form-control" id="edit_title{{ t.id }}" name="title" value="{{ t.title }}" required>
+                </div>
+                <div class="mb-3">
+                  <label for="edit_description{{ t.id }}" class="form-label">Описание</label>
+                  <textarea class="form-control" id="edit_description{{ t.id }}" name="description" rows="2">{{ t.description or '' }}</textarea>
+                </div>
+                <div class="mb-3 form-check">
+                  <input type="checkbox" class="form-check-input" id="edit_is_mandatory{{ t.id }}" name="is_mandatory" value="1" {{ 'checked' if t.is_mandatory else '' }}>
+                  <label class="form-check-label" for="edit_is_mandatory{{ t.id }}">Обязательная задача</label>
+                </div>
+                <div class="mb-3 form-check">
+                  <input type="checkbox" class="form-check-input" id="edit_requires_media{{ t.id }}" name="requires_media" value="1" {{ 'checked' if t.requires_media else '' }}>
+                  <label class="form-check-label" for="edit_requires_media{{ t.id }}">Требует фото/видео</label>
+                </div>
+                <div class="mb-3">
+                  <label for="edit_default_amount{{ t.id }}" class="form-label">Бонус/Штраф (₽)</label>
+                  <input type="number" step="0.01" class="form-control" id="edit_default_amount{{ t.id }}" name="default_amount" value="{{ t.default_bonus_amount or '' }}">
+                  <small class="text-muted">Положительное — бонус, отрицательное — штраф</small>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="submit" class="btn btn-warning">Сохранить</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      
       <!-- Modal: Удаление шаблона -->
       <div class="modal fade" id="deleteTemplateModal{{ t.id }}" tabindex="-1">
         <div class="modal-dialog">
@@ -87,9 +140,13 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <div class="mb-3">
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="auto_generate_code" checked onchange="toggleCodeField()">
+            <label class="form-check-label" for="auto_generate_code">Заполнить автоматически</label>
+          </div>
+          <div class="mb-3" id="code-field-group">
             <label for="code" class="form-label">Код (уникальный)</label>
-            <input type="text" class="form-control" id="code" name="code" required placeholder="photo_report">
+            <input type="text" class="form-control" id="code" name="code" placeholder="Оставьте пустым для автогенерации">
           </div>
           <div class="mb-3">
             <label for="title" class="form-label">Название</label>
@@ -112,13 +169,6 @@
             <input type="number" step="0.01" class="form-control" id="default_amount" name="default_amount" placeholder="100.00">
             <small class="text-muted">Положительное — бонус, отрицательное — штраф</small>
           </div>
-          <div class="mb-3">
-            <label for="object_id" class="form-label">Объект (опционально)</label>
-            <select class="form-select" id="object_id" name="object_id">
-              <option value="">Все объекты</option>
-              <!-- TODO: загрузить список объектов владельца -->
-            </select>
-          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
@@ -128,5 +178,53 @@
     </div>
   </div>
 </div>
+
+<script>
+// Переключение автогенерации кода
+function toggleCodeField() {
+  const autoGen = document.getElementById('auto_generate_code');
+  const codeField = document.getElementById('code');
+  const codeGroup = document.getElementById('code-field-group');
+  
+  if (autoGen.checked) {
+    codeField.value = '';
+    codeField.required = false;
+    codeGroup.style.display = 'none';
+  } else {
+    codeGroup.style.display = 'block';
+    codeField.required = true;
+  }
+}
+
+// Инициализация при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+  toggleCodeField();
+});
+
+// Переключение активности шаблона
+function toggleTemplateActive(templateId, isActive, templateTitle) {
+  const message = isActive 
+    ? `Активировать шаблон "${templateTitle}"?\n\nСделать активными все неактивные запланированные задачи по этому шаблону?`
+    : `Деактивировать шаблон "${templateTitle}"?\n\nСделать неактивными все запланированные задачи по этому шаблону?`;
+  
+  if (confirm(message)) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/owner/tasks/templates/${templateId}/toggle`;
+    
+    const updatePlansInput = document.createElement('input');
+    updatePlansInput.type = 'hidden';
+    updatePlansInput.name = 'update_plans';
+    updatePlansInput.value = '1';
+    form.appendChild(updatePlansInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+  } else {
+    // Откатываем переключатель
+    document.getElementById(`activeSwitch${templateId}`).checked = !isActive;
+  }
+}
+</script>
 {% endblock %}
 
