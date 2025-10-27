@@ -148,8 +148,10 @@ async def get_relevant_shift_schedules(
         selectinload(ShiftSchedule.time_slot)
     )
     
-    # Фильтр по объекту (если указан в плане)
-    if plan.object_id:
+    # Фильтр по объектам (если указаны в плане)
+    if plan.object_ids:
+        query = query.where(ShiftSchedule.object_id.in_(plan.object_ids))
+    elif plan.object_id:  # Для обратной совместимости
         query = query.where(ShiftSchedule.object_id == plan.object_id)
     
     # Фильтр по времени начала (если указано в плане)
@@ -193,8 +195,10 @@ async def create_task_entries_for_active_shifts(session: AsyncSession, plan: Tas
         selectinload(ShiftSchedule.time_slot)
     )
     
-    # Фильтр по объекту (если указан в плане)
-    if plan.object_id:
+    # Фильтр по объектам (если указаны в плане)
+    if plan.object_ids:
+        query = query.where(ShiftSchedule.object_id.in_(plan.object_ids))
+    elif plan.object_id:  # Для обратной совместимости
         query = query.where(ShiftSchedule.object_id == plan.object_id)
     
     result = await session.execute(query)

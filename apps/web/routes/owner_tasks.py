@@ -297,7 +297,7 @@ async def owner_tasks_plan_create(
     task_media: int = Form(0),
     task_amount: str = Form(None),
     task_code: str = Form(None),
-    object_id: str = Form(None),
+    object_ids: list[str] = Form(None),
     planned_date: str = Form(None),
     planned_time_start: str = Form(None),
     recurrence_type: str = Form(None),
@@ -316,7 +316,8 @@ async def owner_tasks_plan_create(
     from core.logging.logger import logger
     
     owner_id = current_user.id
-    obj_id = int(object_id) if object_id else None
+    obj_ids = [int(oid) for oid in object_ids] if object_ids else None
+    obj_id = obj_ids[0] if obj_ids and len(obj_ids) == 1 else None  # Для обратной совместимости
     p_date = datetime.fromisoformat(planned_date) if planned_date else None
     p_time = datetime.strptime(planned_time_start, "%H:%M").time() if planned_time_start else None
     end_date = date.fromisoformat(recurrence_end_date) if recurrence_end_date else None
@@ -373,7 +374,8 @@ async def owner_tasks_plan_create(
     plan = TaskPlanV2(
         template_id=final_template_id,
         owner_id=owner_id,
-        object_id=obj_id,
+        object_id=obj_id,  # Для обратной совместимости (один объект)
+        object_ids=obj_ids,  # Новое поле (несколько объектов)
         planned_date=p_date,
         planned_time_start=p_time,
         recurrence_type=recurrence_type if recurrence_type else None,
@@ -417,7 +419,7 @@ async def owner_tasks_plan_toggle(
 async def owner_tasks_plan_edit(
     request: Request,
     plan_id: int,
-    object_id: str = Form(None),
+    object_ids: list[str] = Form(None),
     planned_date: str = Form(None),
     planned_time_start: str = Form(None),
     recurrence_type: str = Form(None),
@@ -437,7 +439,9 @@ async def owner_tasks_plan_edit(
         return RedirectResponse(url="/owner/tasks/plan", status_code=303)
     
     # Обновляем поля
-    plan.object_id = int(object_id) if object_id else None
+    obj_ids = [int(oid) for oid in object_ids] if object_ids else None
+    plan.object_ids = obj_ids
+    plan.object_id = obj_ids[0] if obj_ids and len(obj_ids) == 1 else None  # Для обратной совместимости
     plan.planned_date = datetime.fromisoformat(planned_date) if planned_date else None
     plan.planned_time_start = datetime.strptime(planned_time_start, "%H:%M").time() if planned_time_start else None
     plan.recurrence_end_date = date.fromisoformat(recurrence_end_date) if recurrence_end_date else None

@@ -13,7 +13,8 @@ class TaskPlanV2(Base):
     id = Column(Integer, primary_key=True, index=True)
     template_id = Column(Integer, ForeignKey("task_templates_v2.id"), nullable=False, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    object_id = Column(Integer, ForeignKey("objects.id"), nullable=True, index=True)
+    object_id = Column(Integer, ForeignKey("objects.id"), nullable=True, index=True)  # Deprecated: используйте object_ids
+    object_ids = Column(JSON, nullable=True)  # Массив ID объектов [1, 2, 3] или null для всех
     time_slot_id = Column(Integer, ForeignKey("time_slots.id"), nullable=True, index=True)
 
     planned_date = Column(DateTime(timezone=True), nullable=True)
