@@ -22,6 +22,10 @@ class TaskPlanV2(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    template = relationship("TaskTemplateV2")
+    # Relationships
+    template = relationship("TaskTemplateV2", foreign_keys=[template_id])
+    owner = relationship("User", foreign_keys=[owner_id])
+    object = relationship("Object", foreign_keys=[object_id])
+    time_slot = relationship("TimeSlot", foreign_keys=[time_slot_id])
 
 
