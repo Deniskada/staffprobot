@@ -27,8 +27,10 @@ class PayrollAdjustment(Base):
     
     # Контекст
     shift_id = Column(Integer, ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True, index=True)
+    shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id", ondelete="SET NULL"), nullable=True, index=True)
     employee_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     object_id = Column(Integer, ForeignKey("objects.id", ondelete="SET NULL"), nullable=True, index=True)
+    task_entry_v2_id = Column(Integer, ForeignKey("task_entries_v2.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # Тип и сумма корректировки
     adjustment_type = Column(String(50), nullable=False, index=True)
