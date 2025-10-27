@@ -303,6 +303,7 @@ class ShiftService:
                 )
                 
                 session.add(new_shift)
+                await session.flush()  # Получаем new_shift.id без коммита
                 
                 # Обновляем статус shift_schedule, если это запланированная смена
                 if shift_type == "planned" and schedule_id:
@@ -320,10 +321,17 @@ class ShiftService:
                             shift_id=new_shift.id
                         )
                 
+                # Tasks v2: Создаём TaskEntryV2 для только что открытой смены (ДО коммита, в той же транзакции)
+                try:
+                    from core.celery.tasks.task_assignment import create_task_entries_for_shift
+                    created_entries = await create_task_entries_for_shift(session, new_shift)
+                    logger.info(f"Created {created_entries} TaskEntryV2 for shift {new_shift.id}")
+                except Exception as e:
+                    logger.error(f"Failed to create TaskEntryV2 for shift {new_shift.id}: {e}")
+                    # Не блокируем успешное открытие смены
+                
                 await session.commit()
                 await session.refresh(new_shift)
-                
-                # Phase 4A: Задачи обрабатываются при закрытии смены через Celery
                 
                 logger.info(
                     f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}"

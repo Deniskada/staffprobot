@@ -13,7 +13,8 @@ class TaskEntryV2(Base):
     id = Column(Integer, primary_key=True, index=True)
     plan_id = Column(Integer, ForeignKey("task_plans_v2.id"), nullable=True, index=True)
     template_id = Column(Integer, ForeignKey("task_templates_v2.id"), nullable=False, index=True)
-    shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True, index=True)
+    shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True, index=True)  # Основная привязка к смене
+    shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True, index=True)  # Для аналитики
     employee_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     notes = Column(Text, nullable=True)
@@ -31,6 +32,7 @@ class TaskEntryV2(Base):
     # Relationships
     template = relationship("TaskTemplateV2", foreign_keys=[template_id])
     plan = relationship("TaskPlanV2", foreign_keys=[plan_id])
+    shift = relationship("Shift", foreign_keys=[shift_id])  # Основная связь со сменой
     shift_schedule = relationship("ShiftSchedule", foreign_keys=[shift_schedule_id])
     employee = relationship("User", foreign_keys=[employee_id])
 
