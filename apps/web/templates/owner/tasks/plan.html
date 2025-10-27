@@ -86,7 +86,7 @@
                         data-description="{{ t.description or '' }}" 
                         data-mandatory="{{ t.is_mandatory }}"
                         data-media="{{ t.requires_media }}"
-                        data-amount="{{ t.default_amount or '' }}"
+                        data-amount="{{ t.default_bonus_amount or '' }}"
                         data-code="{{ t.code }}">
                   {{ t.title }} ({{ t.code }})
                 </option>
@@ -237,13 +237,19 @@ function toggleCreationMode() {
   const codeField = document.getElementById('task_code');
   
   if (mode === 'template') {
-    // Режим "по шаблону": показываем выбор шаблона, поля неактивны
+    // Режим "по шаблону": показываем выбор шаблона, поля неактивны и серые
     templateGroup.style.display = 'block';
     templateSelect.required = true;
-    [titleField, descField, mandatoryField, mediaField, amountField, codeField].forEach(f => {
+    [titleField, descField, amountField].forEach(f => {
       f.disabled = true;
       f.style.backgroundColor = '#e9ecef';
     });
+    [mandatoryField, mediaField].forEach(f => {
+      f.disabled = true;
+      f.parentElement.style.opacity = '0.6';
+    });
+    codeField.disabled = true;
+    codeField.style.backgroundColor = '#e9ecef';
     fillFromTemplate(); // Заполним поля из текущего выбранного шаблона
   } else {
     // Режим "без шаблона": скрываем выбор, поля активны
@@ -258,8 +264,10 @@ function toggleCreationMode() {
     [mandatoryField, mediaField].forEach(f => {
       f.disabled = false;
       f.checked = false;
+      f.parentElement.style.opacity = '1';
     });
     codeField.disabled = true; // Код всегда readonly
+    codeField.style.backgroundColor = '#e9ecef';
     codeField.value = '[авто]';
   }
 }
