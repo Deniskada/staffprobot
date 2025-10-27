@@ -52,22 +52,47 @@ async def owner_tasks_templates(
 @router.post("/owner/tasks/templates/create")
 async def owner_tasks_templates_create(
     request: Request,
-    code: str = Form(...),
+    code: str = Form(None),
     title: str = Form(...),
     description: str = Form(None),
     is_mandatory: int = Form(0),
     requires_media: int = Form(0),
     default_amount: str = Form(None),
-    object_id: str = Form(None),
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Создать шаблон задачи."""
     from decimal import Decimal
+    import re
+    from core.logging.logger import logger
+    
     task_service = TaskService(session)
     
+    # Автогенерация кода если не указан
+    if not code or not code.strip():
+        # Генерируем код из названия
+        code_base = re.sub(r'[^\w\s-]', '', title.lower())
+        code_base = re.sub(r'[-\s]+', '_', code_base)
+        code = code_base[:50]
+        
+        # Проверяем уникальность
+        counter = 1
+        original_code = code
+        while True:
+            from domain.entities.task_template import TaskTemplateV2
+            check_query = select(TaskTemplateV2).where(
+                TaskTemplateV2.owner_id == current_user.id,
+                TaskTemplateV2.code == code
+            )
+            existing = await session.execute(check_query)
+            if not existing.scalar_one_or_none():
+                break
+            code = f"{original_code}_{counter}"
+            counter += 1
+        
+        logger.info(f"Auto-generated code: {code} for template: {title}")
+    
     amount = Decimal(default_amount) if default_amount else None
-    obj_id = int(object_id) if object_id else None
     
     await task_service.create_template(
         owner_id=current_user.id,
@@ -77,8 +102,79 @@ async def owner_tasks_templates_create(
         is_mandatory=bool(is_mandatory),
         requires_media=bool(requires_media),
         default_amount=amount,
-        object_id=obj_id
+        object_id=None
     )
+    
+    return RedirectResponse(url="/owner/tasks/templates", status_code=303)
+
+
+@router.post("/owner/tasks/templates/{template_id}/edit")
+async def owner_tasks_templates_edit(
+    request: Request,
+    template_id: int,
+    code: str = Form(...),
+    title: str = Form(...),
+    description: str = Form(None),
+    is_mandatory: int = Form(0),
+    requires_media: int = Form(0),
+    default_amount: str = Form(None),
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
+):
+    """Редактировать шаблон задачи."""
+    from decimal import Decimal
+    from domain.entities.task_template import TaskTemplateV2
+    from core.logging.logger import logger
+    
+    template = await session.get(TaskTemplateV2, template_id)
+    if not template or template.owner_id != current_user.id:
+        return RedirectResponse(url="/owner/tasks/templates", status_code=303)
+    
+    template.code = code
+    template.title = title
+    template.description = description
+    template.is_mandatory = bool(is_mandatory)
+    template.requires_media = bool(requires_media)
+    template.default_bonus_amount = Decimal(default_amount) if default_amount else None
+    
+    await session.commit()
+    logger.info(f"Updated TaskTemplateV2: {template_id}")
+    
+    return RedirectResponse(url="/owner/tasks/templates", status_code=303)
+
+
+@router.post("/owner/tasks/templates/{template_id}/toggle")
+async def owner_tasks_templates_toggle(
+    request: Request,
+    template_id: int,
+    update_plans: int = Form(0),
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
+):
+    """Переключить активность шаблона."""
+    from domain.entities.task_template import TaskTemplateV2
+    from domain.entities.task_plan import TaskPlanV2
+    from core.logging.logger import logger
+    
+    template = await session.get(TaskTemplateV2, template_id)
+    if not template or template.owner_id != current_user.id:
+        return RedirectResponse(url="/owner/tasks/templates", status_code=303)
+    
+    new_state = not template.is_active
+    template.is_active = new_state
+    
+    if update_plans:
+        plans_query = select(TaskPlanV2).where(TaskPlanV2.template_id == template_id)
+        plans_result = await session.execute(plans_query)
+        plans = plans_result.scalars().all()
+        
+        for plan in plans:
+            plan.is_active = new_state
+        
+        logger.info(f"Updated {len(plans)} plans for template {template_id} to active={new_state}")
+    
+    await session.commit()
+    logger.info(f"Toggled TaskTemplateV2 {template_id}: active={new_state}")
     
     return RedirectResponse(url="/owner/tasks/templates", status_code=303)
 
