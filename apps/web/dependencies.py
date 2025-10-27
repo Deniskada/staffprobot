@@ -54,7 +54,12 @@ def require_role(roles: List[str]):
     """Декоратор для проверки роли пользователя."""
     async def role_checker(request: Request, current_user: Optional[User] = Depends(get_current_user_dependency())):
         if not current_user:
-            return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+            # FastAPI не может возвращать Response из dependency напрямую
+            # Нужно либо raise HTTPException, либо использовать middleware
+            raise HTTPException(
+                status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+                headers={"Location": "/auth/login"}
+            )
         
         if current_user.role not in roles:
             raise HTTPException(
