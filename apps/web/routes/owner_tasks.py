@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, or_
+from sqlalchemy.orm import selectinload
 
 from apps.web.jinja import templates
 from apps.web.dependencies import get_current_user_dependency, require_role
@@ -172,6 +174,27 @@ async def owner_tasks_plan_toggle(
     return RedirectResponse(url="/owner/tasks/plan", status_code=303)
 
 
+@router.post("/owner/tasks/plan/{plan_id}/delete")
+async def owner_tasks_plan_delete(
+    request: Request,
+    plan_id: int,
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Удалить план задачи."""
+    from domain.entities.task_plan import TaskPlanV2
+    from core.logging.logger import logger
+    
+    plan = await session.get(TaskPlanV2, plan_id)
+    if plan and plan.owner_id == current_user.id:
+        await session.delete(plan)
+        await session.commit()
+        logger.info(f"Deleted TaskPlanV2: {plan_id}")
+    
+    return RedirectResponse(url="/owner/tasks/plan", status_code=303)
+
+
 @router.get("/owner/tasks/entries")
 async def owner_tasks_entries(
     request: Request,
@@ -209,4 +232,88 @@ async def owner_tasks_entries(
         "owner/tasks/entries.html",
         {"request": request, "entries": entries}
     )
+
+
+@router.post("/owner/tasks/entries/create")
+async def owner_tasks_entries_create(
+    request: Request,
+    plan_id: int = Form(None),
+    template_id: int = Form(...),
+    shift_schedule_id: int = Form(None),
+    employee_id: int = Form(None),
+    notes: str = Form(None),
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Создать запись выполнения задачи (вручную)."""
+    from domain.entities.task_entry import TaskEntryV2
+    from domain.entities.task_template import TaskTemplateV2
+    from core.logging.logger import logger
+    
+    # Проверяем, что шаблон принадлежит владельцу
+    template = await session.get(TaskTemplateV2, template_id)
+    if not template or template.owner_id != current_user.id:
+        return RedirectResponse(url="/owner/tasks/entries", status_code=303)
+    
+    entry = TaskEntryV2(
+        plan_id=plan_id,
+        template_id=template_id,
+        shift_schedule_id=shift_schedule_id,
+        employee_id=employee_id,
+        notes=notes,
+        requires_media=template.requires_media,
+        is_completed=False
+    )
+    session.add(entry)
+    await session.commit()
+    logger.info(f"Created TaskEntryV2 manually: {entry.id}, template={template_id}")
+    
+    return RedirectResponse(url="/owner/tasks/entries", status_code=303)
+
+
+@router.post("/owner/tasks/entries/{entry_id}/complete")
+async def owner_tasks_entries_complete(
+    request: Request,
+    entry_id: int,
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Отметить задачу как выполненную."""
+    from domain.entities.task_entry import TaskEntryV2
+    from domain.entities.task_template import TaskTemplateV2
+    from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+    from core.logging.logger import logger
+    
+    # Получаем entry с template
+    entry_query = select(TaskEntryV2).where(TaskEntryV2.id == entry_id).options(
+        selectinload(TaskEntryV2.template)
+    )
+    entry_result = await session.execute(entry_query)
+    entry = entry_result.scalar_one_or_none()
+    
+    if not entry or entry.template.owner_id != current_user.id:
+        return RedirectResponse(url="/owner/tasks/entries", status_code=303)
+    
+    if not entry.is_completed:
+        entry.is_completed = True
+        
+        # Если есть начисление по задаче - создаём adjustment
+        if entry.template.default_bonus_amount and entry.shift_schedule_id and entry.employee_id:
+            adj_service = PayrollAdjustmentService(session)
+            await adj_service.create_task_adjustment(
+                shift_schedule_id=entry.shift_schedule_id,
+                employee_id=entry.employee_id,
+                task_code=entry.template.code,
+                task_title=entry.template.title,
+                amount=entry.template.default_bonus_amount,
+                notes=f"Задача выполнена: {entry.template.title}"
+            )
+            logger.info(f"Created adjustment for TaskEntryV2: {entry_id}, amount={entry.template.default_bonus_amount}")
+        
+        await session.commit()
+        logger.info(f"TaskEntryV2 completed: {entry_id}")
+    
+    return RedirectResponse(url="/owner/tasks/entries", status_code=303)
 
