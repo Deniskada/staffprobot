@@ -413,6 +413,50 @@ async def owner_tasks_plan_toggle(
     return RedirectResponse(url="/owner/tasks/plan", status_code=303)
 
 
+@router.post("/owner/tasks/plan/{plan_id}/edit")
+async def owner_tasks_plan_edit(
+    request: Request,
+    plan_id: int,
+    object_id: str = Form(None),
+    planned_date: str = Form(None),
+    planned_time_start: str = Form(None),
+    recurrence_type: str = Form(None),
+    weekday: list[str] = Form(None),
+    day_interval: int = Form(None),
+    recurrence_end_date: str = Form(None),
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
+):
+    """Редактировать план задачи."""
+    from domain.entities.task_plan import TaskPlanV2
+    from datetime import datetime, date
+    from core.logging.logger import logger
+    
+    plan = await session.get(TaskPlanV2, plan_id)
+    if not plan or plan.owner_id != current_user.id:
+        return RedirectResponse(url="/owner/tasks/plan", status_code=303)
+    
+    # Обновляем поля
+    plan.object_id = int(object_id) if object_id else None
+    plan.planned_date = datetime.fromisoformat(planned_date) if planned_date else None
+    plan.planned_time_start = datetime.strptime(planned_time_start, "%H:%M").time() if planned_time_start else None
+    plan.recurrence_end_date = date.fromisoformat(recurrence_end_date) if recurrence_end_date else None
+    
+    # Обновляем периодичность
+    plan.recurrence_type = recurrence_type if recurrence_type else None
+    if recurrence_type == "weekdays" and weekday:
+        plan.recurrence_config = {"weekdays": [int(d) for d in weekday]}
+    elif recurrence_type == "day_interval" and day_interval:
+        plan.recurrence_config = {"interval": day_interval}
+    else:
+        plan.recurrence_config = None
+    
+    await session.commit()
+    logger.info(f"Updated TaskPlanV2: {plan_id}")
+    
+    return RedirectResponse(url="/owner/tasks/plan", status_code=303)
+
+
 @router.post("/owner/tasks/plan/{plan_id}/delete")
 async def owner_tasks_plan_delete(
     request: Request,
