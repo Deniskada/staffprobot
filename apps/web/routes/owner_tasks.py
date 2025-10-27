@@ -353,7 +353,7 @@ async def owner_tasks_plan_create(
             description=task_description,
             is_mandatory=bool(task_mandatory),
             requires_media=bool(task_media),
-            default_amount=Decimal(task_amount) if task_amount else None,
+            default_bonus_amount=Decimal(task_amount) if task_amount else None,
             is_active=True,
             object_id=None  # Шаблоны без привязки к объекту
         )
