@@ -26,7 +26,18 @@
       <tr>
         <td>{{ p.id }}</td>
         <td>{{ p.template.title if p.template else p.template_id }}</td>
-        <td>{{ p.object.name if p.object else 'Все' }}</td>
+        <td>
+          {% if p.object_ids %}
+            {% for obj_id in p.object_ids %}
+              {% set obj = objects_list | selectattr('id', 'equalto', obj_id) | first %}
+              {{ obj.name if obj else '#' + obj_id|string }}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+          {% elif p.object %}
+            {{ p.object.name }}
+          {% else %}
+            Все
+          {% endif %}
+        </td>
         <td>
           {% if p.planned_date %}
             {{ p.planned_date.strftime('%d.%m.%Y') }}
@@ -138,15 +149,15 @@
 
           <hr>
 
-          <!-- Назначение: объект -->
+          <!-- Назначение: объекты (множественный выбор) -->
           <div class="mb-3">
-            <label for="object_id" class="form-label">Объект</label>
-            <select class="form-select" id="object_id" name="object_id">
-              <option value="">Все объекты</option>
+            <label for="object_ids" class="form-label">Объекты</label>
+            <select class="form-select" id="object_ids" name="object_ids" multiple>
               {% for obj in objects_list %}
                 <option value="{{ obj.id }}">{{ obj.name }}</option>
               {% endfor %}
             </select>
+            <small class="text-muted">Не выбрано = все объекты. Ctrl+Click для множественного выбора.</small>
           </div>
 
           <!-- Дата и время начала -->
@@ -353,13 +364,13 @@ document.addEventListener('DOMContentLoaded', function() {
             <input type="text" class="form-control" value="{{ p.template.title if p.template else 'Не найден' }}" disabled>
           </div>
           <div class="mb-3">
-            <label for="edit_object_{{ p.id }}" class="form-label">Объект</label>
-            <select class="form-select" name="object_id" id="edit_object_{{ p.id }}">
-              <option value="">Все объекты</option>
+            <label for="edit_object_ids_{{ p.id }}" class="form-label">Объекты</label>
+            <select class="form-select" name="object_ids" id="edit_object_ids_{{ p.id }}" multiple>
               {% for obj in objects_list %}
-                <option value="{{ obj.id }}" {{ 'selected' if p.object_id == obj.id else '' }}>{{ obj.name }}</option>
+                <option value="{{ obj.id }}" {{ 'selected' if p.object_ids and obj.id in p.object_ids else ('selected' if p.object_id == obj.id else '') }}>{{ obj.name }}</option>
               {% endfor %}
             </select>
+            <small class="text-muted">Не выбрано = все объекты. Ctrl+Click для выбора нескольких.</small>
           </div>
           <div class="mb-3">
             <label for="edit_date_{{ p.id }}" class="form-label">Дата (опционально)</label>
