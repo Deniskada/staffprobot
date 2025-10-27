@@ -25,10 +25,15 @@ class TaskService:
         user_id: int,
         role: str,
         owner_id: Optional[int] = None,
-        object_id: Optional[int] = None
+        object_id: Optional[int] = None,
+        active_only: bool = None
     ) -> List[TaskTemplateV2]:
         """Получить шаблоны задач с учётом роли."""
         query = select(TaskTemplateV2)
+        
+        # Владелец видит все свои шаблоны (активные и неактивные) по умолчанию
+        if active_only is None:
+            active_only = (role != "owner")
         
         if role == "owner":
             query = query.where(TaskTemplateV2.owner_id == user_id)
@@ -98,7 +103,11 @@ class TaskService:
                 )
             )
         
-        query = query.where(TaskTemplateV2.is_active == True).order_by(TaskTemplateV2.title)
+        # Фильтр по активности (только для manager/employee по умолчанию)
+        if active_only:
+            query = query.where(TaskTemplateV2.is_active == True)
+        
+        query = query.order_by(TaskTemplateV2.title)
         result = await self.session.execute(query)
         return result.scalars().all()
     
