@@ -21,9 +21,8 @@ router = APIRouter()
 @router.get("/owner/tasks")
 async def owner_tasks_index(
     request: Request,
-    current_user: User = Depends(get_current_user_dependency()),
-    _: User = Depends(require_role(["owner", "superadmin"])),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Главная страница задач."""
     return templates.TemplateResponse(
@@ -35,9 +34,8 @@ async def owner_tasks_index(
 @router.get("/owner/tasks/templates")
 async def owner_tasks_templates(
     request: Request,
-    current_user: User = Depends(get_current_user_dependency()),
-    _: User = Depends(require_role(["owner", "superadmin"])),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Библиотека шаблонов задач."""
     task_service = TaskService(session)
@@ -61,9 +59,8 @@ async def owner_tasks_templates_create(
     requires_media: int = Form(0),
     default_amount: str = Form(None),
     object_id: str = Form(None),
-    current_user: User = Depends(get_current_user_dependency()),
-    _: User = Depends(require_role(["owner", "superadmin"])),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Создать шаблон задачи."""
     from decimal import Decimal
@@ -86,18 +83,75 @@ async def owner_tasks_templates_create(
     return RedirectResponse(url="/owner/tasks/templates", status_code=303)
 
 
+@router.post("/owner/tasks/templates/{template_id}/delete")
+async def owner_tasks_templates_delete(
+    request: Request,
+    template_id: int,
+    delete_entries: int = Form(0),
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
+):
+    """Удалить шаблон задачи."""
+    from domain.entities.task_template import TaskTemplateV2
+    from domain.entities.task_plan import TaskPlanV2
+    from domain.entities.task_entry import TaskEntryV2
+    from core.logging.logger import logger
+    
+    # Проверяем владельца
+    template = await session.get(TaskTemplateV2, template_id)
+    if not template or template.owner_id != current_user.id:
+        return RedirectResponse(url="/owner/tasks/templates", status_code=303)
+    
+    if delete_entries:
+        # Удаляем все entries и планы
+        entries_query = select(TaskEntryV2).where(TaskEntryV2.template_id == template_id)
+        entries_result = await session.execute(entries_query)
+        entries = entries_result.scalars().all()
+        for entry in entries:
+            await session.delete(entry)
+        
+        plans_query = select(TaskPlanV2).where(TaskPlanV2.template_id == template_id)
+        plans_result = await session.execute(plans_query)
+        plans = plans_result.scalars().all()
+        for plan in plans:
+            await session.delete(plan)
+        
+        logger.info(f"Deleted {len(entries)} entries and {len(plans)} plans for template {template_id}")
+    else:
+        # Отвязываем от шаблона (обнуляем template_id)
+        entries_query = select(TaskEntryV2).where(TaskEntryV2.template_id == template_id)
+        entries_result = await session.execute(entries_query)
+        entries = entries_result.scalars().all()
+        for entry in entries:
+            entry.template_id = None
+        
+        plans_query = select(TaskPlanV2).where(TaskPlanV2.template_id == template_id)
+        plans_result = await session.execute(plans_query)
+        plans = plans_result.scalars().all()
+        for plan in plans:
+            await session.delete(plan)  # Планы удаляем всегда
+        
+        logger.info(f"Unlinked {len(entries)} entries and deleted {len(plans)} plans for template {template_id}")
+    
+    await session.delete(template)
+    await session.commit()
+    logger.info(f"Deleted TaskTemplateV2: {template_id}")
+    
+    return RedirectResponse(url="/owner/tasks/templates", status_code=303)
+
+
 @router.get("/owner/tasks/plan")
 async def owner_tasks_plan(
     request: Request,
-    current_user: User = Depends(get_current_user_dependency()),
-    _: User = Depends(require_role(["owner", "superadmin"])),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Планирование задач."""
     from domain.entities.task_plan import TaskPlanV2
     from domain.entities.object import Object
     from sqlalchemy.orm import selectinload
     
+    # require_role уже вернул User или редирект
     owner_id = current_user.id
     
     # Получаем планы с eager loading template и object
@@ -128,9 +182,8 @@ async def owner_tasks_plan_create(
     template_id: int = Form(...),
     object_id: str = Form(None),
     planned_date: str = Form(None),
-    current_user: User = Depends(get_current_user_dependency()),
-    _: User = Depends(require_role(["owner", "superadmin"])),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Создать план задачи."""
     from domain.entities.task_plan import TaskPlanV2
@@ -159,9 +212,8 @@ async def owner_tasks_plan_create(
 async def owner_tasks_plan_toggle(
     request: Request,
     plan_id: int,
-    current_user: User = Depends(get_current_user_dependency()),
-    _: User = Depends(require_role(["owner", "superadmin"])),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Toggle активности плана."""
     from domain.entities.task_plan import TaskPlanV2
@@ -178,9 +230,8 @@ async def owner_tasks_plan_toggle(
 async def owner_tasks_plan_delete(
     request: Request,
     plan_id: int,
-    current_user: User = Depends(get_current_user_dependency()),
-    _: User = Depends(require_role(["owner", "superadmin"])),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Удалить план задачи."""
     from domain.entities.task_plan import TaskPlanV2
@@ -198,9 +249,8 @@ async def owner_tasks_plan_delete(
 @router.get("/owner/tasks/entries")
 async def owner_tasks_entries(
     request: Request,
-    current_user: User = Depends(get_current_user_dependency()),
-    _: User = Depends(require_role(["owner", "superadmin"])),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Выполнение и аудит задач."""
     from domain.entities.task_entry import TaskEntryV2
@@ -242,9 +292,8 @@ async def owner_tasks_entries_create(
     shift_schedule_id: int = Form(None),
     employee_id: int = Form(None),
     notes: str = Form(None),
-    current_user: User = Depends(get_current_user_dependency()),
-    _: User = Depends(require_role(["owner", "superadmin"])),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Создать запись выполнения задачи (вручную)."""
     from domain.entities.task_entry import TaskEntryV2
@@ -276,9 +325,8 @@ async def owner_tasks_entries_create(
 async def owner_tasks_entries_complete(
     request: Request,
     entry_id: int,
-    current_user: User = Depends(get_current_user_dependency()),
-    _: User = Depends(require_role(["owner", "superadmin"])),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Отметить задачу как выполненную."""
     from domain.entities.task_entry import TaskEntryV2
