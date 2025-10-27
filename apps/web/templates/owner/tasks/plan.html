@@ -23,15 +23,18 @@
     </thead>
     <tbody>
     {% for p in plans %}
-      <tr>
+      <tr class="{{ 'text-muted' if not p.is_active else '' }}">
         <td>{{ p.id }}</td>
         <td>{{ p.template.title if p.template else p.template_id }}</td>
         <td>
           {% if p.object_ids %}
-            {% for obj_id in p.object_ids %}
-              {% set obj = objects_list | selectattr('id', 'equalto', obj_id) | first %}
-              {{ obj.name if obj else '#' + obj_id|string }}{% if not loop.last %}, {% endif %}
-            {% endfor %}
+            {% if p.object_ids|length == 1 %}
+              {% set obj = objects_list | selectattr('id', 'equalto', p.object_ids[0]) | first %}
+              {{ obj.name if obj else '#' + p.object_ids[0]|string }}
+            {% else %}
+              {% set first_obj = objects_list | selectattr('id', 'equalto', p.object_ids[0]) | first %}
+              {{ first_obj.name if first_obj else '#' + p.object_ids[0]|string }} <small class="text-muted">и еще {{ p.object_ids|length - 1 }}</small>
+            {% endif %}
           {% elif p.object %}
             {{ p.object.name }}
           {% else %}
@@ -52,7 +55,13 @@
           {% if p.recurrence_end_date %}<br><small class="text-muted">до {{ p.recurrence_end_date.strftime('%d.%m.%Y') }}</small>{% endif %}
         </td>
         <td>{{ p.planned_time_start.strftime('%H:%M') if p.planned_time_start else '—' }}</td>
-        <td>{{ 'Да' if p.is_active else 'Нет' }}</td>
+        <td>
+          {% if p.is_active %}
+            <span class="badge bg-success">Активен</span>
+          {% else %}
+            <span class="badge bg-secondary">Неактивен</span>
+          {% endif %}
+        </td>
         <td>
           <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editPlanModal{{ p.id }}" title="Редактировать">
             <i class="fas fa-edit"></i>
