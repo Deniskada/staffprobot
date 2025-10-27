@@ -15,8 +15,8 @@
         <th>ID</th>
         <th>Шаблон</th>
         <th>Объект</th>
-        <th>Тайм-слот</th>
-        <th>Дата</th>
+        <th>Дата/Периодичность</th>
+        <th>Время</th>
         <th>Активен</th>
         <th></th>
       </tr>
@@ -27,17 +27,32 @@
         <td>{{ p.id }}</td>
         <td>{{ p.template.title if p.template else p.template_id }}</td>
         <td>{{ p.object.name if p.object else 'Все' }}</td>
-        <td>{{ p.time_slot_id or '—' }}</td>
-        <td>{{ p.planned_date.strftime('%d.%m.%Y') if p.planned_date else '—' }}</td>
+        <td>
+          {% if p.planned_date %}
+            {{ p.planned_date.strftime('%d.%m.%Y') }}
+          {% elif p.recurrence_type == 'weekdays' and p.recurrence_config %}
+            {% set weekday_names = {1: 'Пн', 2: 'Вт', 3: 'Ср', 4: 'Чт', 5: 'Пт', 6: 'Сб', 7: 'Вс'} %}
+            Дни: {% for day in p.recurrence_config.weekdays %}{{ weekday_names[day] }}{% if not loop.last %}, {% endif %}{% endfor %}
+          {% elif p.recurrence_type == 'day_interval' and p.recurrence_config %}
+            Интервал: каждые {{ p.recurrence_config.interval }} дн.
+          {% else %}
+            Постоянно
+          {% endif %}
+          {% if p.recurrence_end_date %}<br><small class="text-muted">до {{ p.recurrence_end_date.strftime('%d.%m.%Y') }}</small>{% endif %}
+        </td>
+        <td>{{ p.planned_time_start.strftime('%H:%M') if p.planned_time_start else '—' }}</td>
         <td>{{ 'Да' if p.is_active else 'Нет' }}</td>
         <td>
+          <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editPlanModal{{ p.id }}" title="Редактировать">
+            <i class="fas fa-edit"></i>
+          </button>
           <form method="post" action="/owner/tasks/plan/{{ p.id }}/toggle" class="d-inline">
-            <button type="submit" class="btn btn-sm {{ 'btn-warning' if p.is_active else 'btn-success' }}">
-              {{ 'Выключить' if p.is_active else 'Включить' }}
+            <button type="submit" class="btn btn-sm {{ 'btn-warning' if p.is_active else 'btn-success' }}" title="{{ 'Выключить' if p.is_active else 'Включить' }}">
+              <i class="fas fa-{{ 'pause' if p.is_active else 'play' }}"></i>
             </button>
           </form>
           <form method="post" action="/owner/tasks/plan/{{ p.id }}/delete" class="d-inline" onsubmit="return confirm('Удалить план?')">
-            <button type="submit" class="btn btn-sm btn-danger">
+            <button type="submit" class="btn btn-sm btn-danger" title="Удалить">
               <i class="fas fa-trash"></i>
             </button>
           </form>
@@ -321,5 +336,119 @@ document.addEventListener('DOMContentLoaded', function() {
   toggleRecurrence();
 });
 </script>
+
+<!-- Модалы редактирования для каждого плана -->
+{% for p in plans %}
+<div class="modal fade" id="editPlanModal{{ p.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/owner/tasks/plan/{{ p.id }}/edit">
+        <div class="modal-header">
+          <h5 class="modal-title">Редактировать план #{{ p.id }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Шаблон задачи</label>
+            <input type="text" class="form-control" value="{{ p.template.title if p.template else 'Не найден' }}" disabled>
+          </div>
+          <div class="mb-3">
+            <label for="edit_object_{{ p.id }}" class="form-label">Объект</label>
+            <select class="form-select" name="object_id" id="edit_object_{{ p.id }}">
+              <option value="">Все объекты</option>
+              {% for obj in objects_list %}
+                <option value="{{ obj.id }}" {{ 'selected' if p.object_id == obj.id else '' }}>{{ obj.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="edit_date_{{ p.id }}" class="form-label">Дата (опционально)</label>
+            <input type="date" class="form-control" name="planned_date" id="edit_date_{{ p.id }}" 
+                   value="{{ p.planned_date.strftime('%Y-%m-%d') if p.planned_date else '' }}">
+          </div>
+          <div class="mb-3">
+            <label for="edit_time_{{ p.id }}" class="form-label">Время начала (опционально)</label>
+            <input type="time" class="form-control" name="planned_time_start" id="edit_time_{{ p.id }}"
+                   value="{{ p.planned_time_start.strftime('%H:%M') if p.planned_time_start else '' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Периодичность</label>
+            <div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" value="" 
+                       {{ 'checked' if not p.recurrence_type else '' }}>
+                <label class="form-check-label">Не повторять</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" value="weekdays"
+                       {{ 'checked' if p.recurrence_type == 'weekdays' else '' }}>
+                <label class="form-check-label">По дням недели</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" value="day_interval"
+                       {{ 'checked' if p.recurrence_type == 'day_interval' else '' }}>
+                <label class="form-check-label">Интервал дней</label>
+              </div>
+            </div>
+          </div>
+          {% if p.recurrence_type == 'weekdays' and p.recurrence_config %}
+          <div class="mb-3">
+            <label class="form-label">Дни недели</label>
+            <div>
+              {% set selected_days = p.recurrence_config.weekdays or [] %}
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="1" {{ 'checked' if 1 in selected_days else '' }}>
+                <label class="form-check-label">Пн</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="2" {{ 'checked' if 2 in selected_days else '' }}>
+                <label class="form-check-label">Вт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="3" {{ 'checked' if 3 in selected_days else '' }}>
+                <label class="form-check-label">Ср</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="4" {{ 'checked' if 4 in selected_days else '' }}>
+                <label class="form-check-label">Чт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="5" {{ 'checked' if 5 in selected_days else '' }}>
+                <label class="form-check-label">Пт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="6" {{ 'checked' if 6 in selected_days else '' }}>
+                <label class="form-check-label">Сб</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="7" {{ 'checked' if 7 in selected_days else '' }}>
+                <label class="form-check-label">Вс</label>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+          {% if p.recurrence_type == 'day_interval' and p.recurrence_config %}
+          <div class="mb-3">
+            <label for="edit_interval_{{ p.id }}" class="form-label">Частота (дни)</label>
+            <input type="number" class="form-control" name="day_interval" id="edit_interval_{{ p.id }}"
+                   value="{{ p.recurrence_config.interval or 1 }}" min="1">
+          </div>
+          {% endif %}
+          <div class="mb-3">
+            <label for="edit_end_date_{{ p.id }}" class="form-label">Дата окончания (опционально)</label>
+            <input type="date" class="form-control" name="recurrence_end_date" id="edit_end_date_{{ p.id }}"
+                   value="{{ p.recurrence_end_date.strftime('%Y-%m-%d') if p.recurrence_end_date else '' }}">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
 {% endblock %}
 
