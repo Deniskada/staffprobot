@@ -3,7 +3,17 @@
 {% block content %}
 <div class="container mt-4">
   <div class="d-flex justify-content-between mb-3">
-    <h2>Библиотека шаблонов задач</h2>
+    <div>
+      <h2>Библиотека шаблонов задач</h2>
+      <div class="form-check form-switch mt-2">
+        <input class="form-check-input" type="checkbox" id="showInactiveToggle" 
+               {{ 'checked' if show_inactive else '' }}
+               onchange="window.location.href='/owner/tasks/templates?show_inactive=' + (this.checked ? '1' : '0')">
+        <label class="form-check-label text-muted" for="showInactiveToggle">
+          Показывать неактивные шаблоны
+        </label>
+      </div>
+    </div>
     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createTemplateModal">
       <i class="fas fa-plus"></i> Создать шаблон
     </button>
@@ -24,10 +34,15 @@
     </thead>
     <tbody>
     {% for t in templates_list %}
-      <tr>
+      <tr class="{{ 'text-muted' if not t.is_active else '' }}">
         <td>{{ t.id }}</td>
         <td><code>{{ t.code }}</code></td>
-        <td>{{ t.title }}</td>
+        <td>
+          {{ t.title }}
+          {% if not t.is_active %}
+            <span class="badge bg-secondary ms-1">Неактивен</span>
+          {% endif %}
+        </td>
         <td>{{ 'Да' if t.is_mandatory else 'Нет' }}</td>
         <td>{{ 'Да' if t.requires_media else 'Нет' }}</td>
         <td>{{ t.default_bonus_amount or '—' }}</td>
