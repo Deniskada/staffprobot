@@ -35,11 +35,41 @@
         <td>{{ t.object_id or 'Все' }}</td>
         <td>{{ 'Да' if t.is_active else 'Нет' }}</td>
         <td>
-          <button class="btn btn-sm btn-warning" title="Редактировать">
+          <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editTemplateModal{{ t.id }}" title="Редактировать">
             <i class="fas fa-edit"></i>
+          </button>
+          <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteTemplateModal{{ t.id }}" title="Удалить">
+            <i class="fas fa-trash"></i>
           </button>
         </td>
       </tr>
+      <!-- Modal: Удаление шаблона -->
+      <div class="modal fade" id="deleteTemplateModal{{ t.id }}" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <form method="post" action="/owner/tasks/templates/{{ t.id }}/delete">
+              <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Удалить шаблон "{{ t.title }}"?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                <p><strong>Внимание!</strong> Удаление шаблона повлияет на задачи и планы.</p>
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" id="delete_entries{{ t.id }}" name="delete_entries" value="1">
+                  <label class="form-check-label" for="delete_entries{{ t.id }}">
+                    Удалить все задачи, созданные по этому шаблону
+                  </label>
+                </div>
+                <p class="text-muted mt-2"><small>Если не отмечено, задачи будут отвязаны от шаблона.</small></p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="submit" class="btn btn-danger">Удалить</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     {% else %}
       <tr><td colspan="9" class="text-center text-muted">Шаблоны не найдены. Создайте первый шаблон.</td></tr>
     {% endfor %}
