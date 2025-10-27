@@ -33,6 +33,7 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession) -> 
 @router.get("/manager/tasks/templates")
 async def manager_tasks_templates(
     request: Request,
+    show_inactive: int = 0,
     current_user: User = Depends(get_current_user_dependency()),
     _: User = Depends(require_role(["manager", "owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
@@ -41,18 +42,25 @@ async def manager_tasks_templates(
     user_id = await get_user_id_from_current_user(current_user, session)
     task_service = TaskService(session)
     
-    # Для manager передаём owner_id из контракта (нужно получить)
-    # TODO: добавить получение owner_id из контракта manager
+    # Для manager передаём owner_id из контракта
     owner_id = current_user.get("owner_id") if isinstance(current_user, dict) else None
+    
+    # Явная фильтрация: show_inactive=1 показывает все, иначе только активные
+    active_only = not bool(show_inactive)
     
     templates_list = await task_service.get_templates_for_role(
         user_id=user_id,
         role="manager",
-        owner_id=owner_id
+        owner_id=owner_id,
+        active_only=active_only
     )
     return templates.TemplateResponse(
         "manager/tasks/templates.html",
-        {"request": request, "templates_list": templates_list}
+        {
+            "request": request, 
+            "templates_list": templates_list,
+            "show_inactive": show_inactive
+        }
     )
 
 

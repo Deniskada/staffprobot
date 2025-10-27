@@ -34,18 +34,28 @@ async def owner_tasks_index(
 @router.get("/owner/tasks/templates")
 async def owner_tasks_templates(
     request: Request,
+    show_inactive: int = 0,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Библиотека шаблонов задач."""
     task_service = TaskService(session)
+    
+    # active_only зависит от переключателя show_inactive
+    active_only = None if show_inactive else False  # False = показывать все для owner
+    
     templates_list = await task_service.get_templates_for_role(
         user_id=current_user.id,
-        role="owner"
+        role="owner",
+        active_only=active_only
     )
     return templates.TemplateResponse(
         "owner/tasks/templates.html",
-        {"request": request, "templates_list": templates_list}
+        {
+            "request": request, 
+            "templates_list": templates_list,
+            "show_inactive": show_inactive
+        }
     )
 
 
@@ -258,9 +268,13 @@ async def owner_tasks_plan(
     plans_result = await session.execute(plans_query)
     plans = plans_result.scalars().all()
     
-    # Получаем шаблоны и объекты для модала
+    # Для модала - только активные шаблоны
     task_service = TaskService(session)
-    templates_list = await task_service.get_templates_for_role(user_id=owner_id, role="owner")
+    templates_list = await task_service.get_templates_for_role(
+        user_id=owner_id, 
+        role="owner",
+        for_selection=True  # Только активные для формы
+    )
     
     objects_query = select(Object).where(Object.owner_id == owner_id, Object.is_active == True).order_by(Object.name)
     objects_result = await session.execute(objects_query)

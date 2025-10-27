@@ -26,12 +26,27 @@ class TaskService:
         role: str,
         owner_id: Optional[int] = None,
         object_id: Optional[int] = None,
-        active_only: bool = None
+        active_only: Optional[bool] = None,
+        for_selection: bool = False
     ) -> List[TaskTemplateV2]:
-        """Получить шаблоны задач с учётом роли."""
+        """
+        Получить шаблоны задач с учётом роли.
+        
+        Args:
+            user_id: ID пользователя
+            role: Роль (owner/manager/employee)
+            owner_id: ID владельца (для manager/employee)
+            object_id: Фильтр по объекту
+            active_only: Явная фильтрация по активности (None = авто-режим)
+            for_selection: Для форм выбора (всегда только активные)
+        """
         query = select(TaskTemplateV2)
         
-        # Владелец видит все свои шаблоны (активные и неактивные) по умолчанию
+        # Для форм выбора (создание задачи/плана) - ВСЕГДА только активные
+        if for_selection:
+            active_only = True
+        
+        # Авто-режим: owner видит все, остальные - только активные по умолчанию
         if active_only is None:
             active_only = (role != "owner")
         
