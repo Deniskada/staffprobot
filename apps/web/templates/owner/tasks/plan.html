@@ -52,23 +52,78 @@
 
 <!-- Modal: Назначить задачу -->
 <div class="modal fade" id="createPlanModal" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
-      <form method="post" action="/owner/tasks/plan/create">
+      <form method="post" action="/owner/tasks/plan/create" id="planForm">
         <div class="modal-header">
           <h5 class="modal-title">Назначить задачу</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
+          <!-- Режим создания: по шаблону или без -->
           <div class="mb-3">
+            <label class="form-label">Режим создания</label>
+            <div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="creation_mode" id="mode_template" value="template" checked onchange="toggleCreationMode()">
+                <label class="form-check-label" for="mode_template">По шаблону</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="creation_mode" id="mode_custom" value="custom" onchange="toggleCreationMode()">
+                <label class="form-check-label" for="mode_custom">Без шаблона</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Выбор шаблона (режим "по шаблону") -->
+          <div class="mb-3" id="template_select_group">
             <label for="template_id" class="form-label">Шаблон задачи</label>
-            <select class="form-select" id="template_id" name="template_id" required>
+            <select class="form-select" id="template_id" name="template_id" onchange="fillFromTemplate()">
               <option value="">Выберите шаблон</option>
               {% for t in templates_list %}
-                <option value="{{ t.id }}">{{ t.title }} ({{ t.code }})</option>
+                <option value="{{ t.id }}" 
+                        data-title="{{ t.title }}" 
+                        data-description="{{ t.description or '' }}" 
+                        data-mandatory="{{ t.is_mandatory }}"
+                        data-media="{{ t.requires_media }}"
+                        data-amount="{{ t.default_amount or '' }}"
+                        data-code="{{ t.code }}">
+                  {{ t.title }} ({{ t.code }})
+                </option>
               {% endfor %}
             </select>
           </div>
+
+          <!-- Поля задачи (заполняются из шаблона или вручную) -->
+          <div class="mb-3">
+            <label for="task_title" class="form-label">Название задачи</label>
+            <input type="text" class="form-control" id="task_title" name="task_title">
+          </div>
+          <div class="mb-3">
+            <label for="task_description" class="form-label">Описание</label>
+            <textarea class="form-control" id="task_description" name="task_description" rows="2"></textarea>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="task_mandatory" name="task_mandatory" value="1">
+            <label class="form-check-label" for="task_mandatory">Обязательная задача</label>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="task_media" name="task_media" value="1">
+            <label class="form-check-label" for="task_media">Фотоотчёт</label>
+          </div>
+          <div class="mb-3">
+            <label for="task_amount" class="form-label">Премия/Штраф (₽)</label>
+            <input type="number" step="0.01" class="form-control" id="task_amount" name="task_amount">
+          </div>
+          <div class="mb-3">
+            <label for="task_code" class="form-label">Код</label>
+            <input type="text" class="form-control" id="task_code" name="task_code" readonly>
+            <small class="text-muted">Генерируется автоматически</small>
+          </div>
+
+          <hr>
+
+          <!-- Назначение: объект -->
           <div class="mb-3">
             <label for="object_id" class="form-label">Объект</label>
             <select class="form-select" id="object_id" name="object_id">
@@ -78,10 +133,86 @@
               {% endfor %}
             </select>
           </div>
+
+          <!-- Дата и время начала -->
           <div class="mb-3">
             <label for="planned_date" class="form-label">Дата (опционально)</label>
             <input type="date" class="form-control" id="planned_date" name="planned_date">
             <small class="text-muted">Оставьте пустым для постоянного назначения</small>
+          </div>
+          <div class="mb-3">
+            <label for="planned_time_start" class="form-label">Время начала (опционально)</label>
+            <input type="time" class="form-control" id="planned_time_start" name="planned_time_start">
+            <small class="text-muted">Оставьте пустым для назначения на каждую смену объекта. Если укажете время, задача будет назначена на тайм-слоты с этим временем.</small>
+          </div>
+
+          <!-- Периодичность -->
+          <div class="mb-3">
+            <label class="form-label">Периодичность</label>
+            <div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" id="recur_none" value="" checked onchange="toggleRecurrence()">
+                <label class="form-check-label" for="recur_none">Не повторять</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" id="recur_weekdays" value="weekdays" onchange="toggleRecurrence()">
+                <label class="form-check-label" for="recur_weekdays">По дням недели</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" id="recur_interval" value="day_interval" onchange="toggleRecurrence()">
+                <label class="form-check-label" for="recur_interval">Интервал дней</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Дни недели (если выбрана периодичность "По дням недели") -->
+          <div class="mb-3" id="weekdays_group" style="display:none;">
+            <label class="form-label">Выберите дни недели</label>
+            <small class="text-muted d-block mb-2">Выберите хотя бы один день недели</small>
+            <div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="1" id="wd_mon">
+                <label class="form-check-label" for="wd_mon">Пн</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="2" id="wd_tue">
+                <label class="form-check-label" for="wd_tue">Вт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="3" id="wd_wed">
+                <label class="form-check-label" for="wd_wed">Ср</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="4" id="wd_thu">
+                <label class="form-check-label" for="wd_thu">Чт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="5" id="wd_fri">
+                <label class="form-check-label" for="wd_fri">Пт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="6" id="wd_sat">
+                <label class="form-check-label" for="wd_sat">Сб</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="7" id="wd_sun">
+                <label class="form-check-label" for="wd_sun">Вс</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Интервал дней (если выбрана периодичность "Интервал дней") -->
+          <div class="mb-3" id="interval_group" style="display:none;">
+            <label for="day_interval" class="form-label">Частота повторения (дни)</label>
+            <input type="number" class="form-control" id="day_interval" name="day_interval" min="1" value="1">
+            <small class="text-muted">Задача будет повторяться каждые N дней</small>
+          </div>
+
+          <!-- Дата окончания периодичности -->
+          <div class="mb-3" id="end_date_group" style="display:none;">
+            <label for="recurrence_end_date" class="form-label">Дата окончания повторений (опционально)</label>
+            <input type="date" class="form-control" id="recurrence_end_date" name="recurrence_end_date">
+            <small class="text-muted">Оставьте пустым для бесконечного повторения (пока план активен)</small>
           </div>
         </div>
         <div class="modal-footer">
@@ -92,5 +223,95 @@
     </div>
   </div>
 </div>
+
+<script>
+function toggleCreationMode() {
+  const mode = document.querySelector('input[name="creation_mode"]:checked').value;
+  const templateGroup = document.getElementById('template_select_group');
+  const templateSelect = document.getElementById('template_id');
+  const titleField = document.getElementById('task_title');
+  const descField = document.getElementById('task_description');
+  const mandatoryField = document.getElementById('task_mandatory');
+  const mediaField = document.getElementById('task_media');
+  const amountField = document.getElementById('task_amount');
+  const codeField = document.getElementById('task_code');
+  
+  if (mode === 'template') {
+    // Режим "по шаблону": показываем выбор шаблона, поля неактивны
+    templateGroup.style.display = 'block';
+    templateSelect.required = true;
+    [titleField, descField, mandatoryField, mediaField, amountField, codeField].forEach(f => {
+      f.disabled = true;
+      f.style.backgroundColor = '#e9ecef';
+    });
+    fillFromTemplate(); // Заполним поля из текущего выбранного шаблона
+  } else {
+    // Режим "без шаблона": скрываем выбор, поля активны
+    templateGroup.style.display = 'none';
+    templateSelect.required = false;
+    templateSelect.value = '';
+    [titleField, descField, amountField].forEach(f => {
+      f.disabled = false;
+      f.style.backgroundColor = '';
+      f.value = '';
+    });
+    [mandatoryField, mediaField].forEach(f => {
+      f.disabled = false;
+      f.checked = false;
+    });
+    codeField.disabled = true; // Код всегда readonly
+    codeField.value = '[авто]';
+  }
+}
+
+function fillFromTemplate() {
+  const templateSelect = document.getElementById('template_id');
+  const option = templateSelect.options[templateSelect.selectedIndex];
+  
+  if (!option || !option.value) {
+    // Не выбран шаблон
+    document.getElementById('task_title').value = '';
+    document.getElementById('task_description').value = '';
+    document.getElementById('task_mandatory').checked = false;
+    document.getElementById('task_media').checked = false;
+    document.getElementById('task_amount').value = '';
+    document.getElementById('task_code').value = '';
+    return;
+  }
+  
+  // Заполняем поля из data-атрибутов
+  document.getElementById('task_title').value = option.dataset.title || '';
+  document.getElementById('task_description').value = option.dataset.description || '';
+  document.getElementById('task_mandatory').checked = option.dataset.mandatory === 'True';
+  document.getElementById('task_media').checked = option.dataset.media === 'True';
+  document.getElementById('task_amount').value = option.dataset.amount || '';
+  document.getElementById('task_code').value = option.dataset.code || '';
+}
+
+function toggleRecurrence() {
+  const recurrenceType = document.querySelector('input[name="recurrence_type"]:checked').value;
+  const weekdaysGroup = document.getElementById('weekdays_group');
+  const intervalGroup = document.getElementById('interval_group');
+  const endDateGroup = document.getElementById('end_date_group');
+  
+  weekdaysGroup.style.display = 'none';
+  intervalGroup.style.display = 'none';
+  endDateGroup.style.display = 'none';
+  
+  if (recurrenceType === 'weekdays') {
+    weekdaysGroup.style.display = 'block';
+    endDateGroup.style.display = 'block';
+  } else if (recurrenceType === 'day_interval') {
+    intervalGroup.style.display = 'block';
+    endDateGroup.style.display = 'block';
+  }
+}
+
+// Инициализация при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+  toggleCreationMode();
+  toggleRecurrence();
+});
+</script>
 {% endblock %}
 
