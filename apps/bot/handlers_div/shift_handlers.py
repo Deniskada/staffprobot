@@ -1344,6 +1344,11 @@ async def _handle_received_media(update: Update, context: ContextTypes.DEFAULT_T
         logger.info(f"Ignoring media - user already completed task upload: user_id={user_id}")
         return
     
+    # Обработка медиа для Tasks v2
+    if user_state and user_state.step == UserStep.TASK_V2_MEDIA_UPLOAD:
+        await _handle_received_task_v2_media(update, context)
+        return
+    
     if not user_state or user_state.step != UserStep.MEDIA_UPLOAD:
         # Подсказка если состояние потеряно
         logger.info(f"Media received but no valid state: user_id={user_id}, state={user_state}, step={user_state.step if user_state else None}")
@@ -1731,9 +1736,12 @@ async def _show_my_tasks_list(context, user_id: int, shift_id: int, shift_tasks:
         deduction_amount = task.get('deduction_amount') or task.get('bonus_amount', 0)
         requires_media = task.get('requires_media', False)
         
+        # Для Tasks v2 проверяем is_completed из базы, для legacy - из completed_tasks
+        is_task_completed = task.get('is_completed', False) if task.get('source') == 'task_v2' else (idx in completed_tasks)
+        
         # Иконки
         mandatory_icon = "⚠️" if is_mandatory else "⭐"
-        completed_icon = "✅ " if idx in completed_tasks else ""
+        completed_icon = "✅ " if is_task_completed else ""
         media_icon = "📸 " if requires_media else ""
         
         # Стоимость
@@ -1746,7 +1754,7 @@ async def _show_my_tasks_list(context, user_id: int, shift_id: int, shift_tasks:
                 cost_text = f" ({amount}₽)"
         
         task_line = f"{completed_icon}{media_icon}{mandatory_icon} {task_text}{cost_text}"
-        if idx in completed_tasks:
+        if is_task_completed:
             task_line = f"<s>{task_line}</s>"
         tasks_text += task_line + "\n"
     
@@ -1757,13 +1765,24 @@ async def _show_my_tasks_list(context, user_id: int, shift_id: int, shift_tasks:
         is_mandatory = task.get('is_mandatory', True)
         requires_media = task.get('requires_media', False)
         
+        # Для Tasks v2 проверяем is_completed из базы
+        is_task_completed = task.get('is_completed', False) if task.get('source') == 'task_v2' else (idx in completed_tasks)
+        
         icon = "⚠️" if is_mandatory else "⭐"
         media_icon = "📸 " if requires_media else ""
-        check = "✓ " if idx in completed_tasks else "☐ "
+        check = "✓ " if is_task_completed else "☐ "
+        
+        # Для Tasks v2 используем отдельный callback с entry_id
+        if task.get('source') == 'task_v2' and task.get('entry_id'):
+            callback_data = f"complete_task_v2:{task['entry_id']}"
+        else:
+            # Legacy задачи - по индексу
+            callback_data = f"complete_my_task:{shift_id}:{idx}"
+        
         keyboard.append([
             InlineKeyboardButton(
                 f"{check}{media_icon}{icon} {task_text[:30]}...",
-                callback_data=f"complete_my_task:{shift_id}:{idx}"
+                callback_data=callback_data
             )
         ])
     
@@ -2015,5 +2034,438 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
     except Exception as e:
         logger.error(f"Error handling my task media upload: {e}")
         await query.answer("❌ Ошибка запроса медиа", show_alert=True)
+
+
+async def _handle_complete_task_v2(update: Update, context: ContextTypes.DEFAULT_TYPE, entry_id: int):
+    """
+    Обработчик выполнения задачи Tasks v2.
+    
+    Логика:
+    - Если задача требует медиа → запрашиваем фото через Media Orchestrator
+    - Если нет → просто отмечаем выполненной
+    - Сохраняем в TaskEntryV2 через TaskService
+    """
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        async with get_async_session() as session:
+            from shared.services.task_service import TaskService
+            from domain.entities.user import User
+            from domain.entities.shift import Shift
+            
+            task_service = TaskService(session)
+            
+            # Получаем внутренний user_id
+            user_query = select(User).where(User.telegram_id == user_id)
+            user_result = await session.execute(user_query)
+            db_user = user_result.scalar_one_or_none()
+            
+            if not db_user:
+                await query.answer("❌ Пользователь не найден", show_alert=True)
+                return
+            
+            # Получаем TaskEntry
+            from domain.entities.task_entry import TaskEntryV2
+            from sqlalchemy.orm import selectinload
+            
+            entry_query = select(TaskEntryV2).where(
+                TaskEntryV2.id == entry_id
+            ).options(
+                selectinload(TaskEntryV2.template),
+                selectinload(TaskEntryV2.shift_schedule)
+            )
+            entry_result = await session.execute(entry_query)
+            entry = entry_result.scalar_one_or_none()
+            
+            if not entry:
+                await query.answer("❌ Задача не найдена", show_alert=True)
+                return
+            
+            # Проверяем права (только владелец задачи может выполнить)
+            if entry.employee_id != db_user.id:
+                await query.answer("❌ Это не ваша задача", show_alert=True)
+                return
+            
+            template = entry.template
+            
+            # Переключаем статус
+            if entry.is_completed:
+                # Снимаем отметку
+                entry.is_completed = False
+                entry.completed_at = None
+                entry.completion_notes = None
+                entry.completion_media = None
+                await session.commit()
+                
+                await query.answer("☐ Задача снята с отметки", show_alert=False)
+                logger.info(f"TaskEntryV2 {entry_id} unmarked by user {db_user.id}")
+            else:
+                # Отмечаем выполненной
+                if template.requires_media:
+                    # Требуется фото - переходим к загрузке
+                    await _handle_task_v2_media_upload(update, context, entry_id)
+                    return
+                else:
+                    # Простая отметка без медиа
+                    from datetime import datetime
+                    entry.is_completed = True
+                    entry.completed_at = datetime.utcnow()
+                    await session.commit()
+                    
+                    await query.answer("✅ Задача выполнена", show_alert=False)
+                    logger.info(f"TaskEntryV2 {entry_id} completed by user {db_user.id}")
+            
+            # Обновляем список задач
+            # Находим активную смену
+            shifts_query = select(Shift).where(
+                and_(
+                    Shift.user_id == db_user.id,
+                    Shift.status == "active"
+                )
+            )
+            shifts_result = await session.execute(shifts_query)
+            active_shift = shifts_result.scalar_one_or_none()
+            
+            if active_shift:
+                # Перезагружаем и показываем список задач
+                from domain.entities.time_slot import TimeSlot
+                from domain.entities.object import Object
+                
+                timeslot = None
+                obj = None
+                
+                if active_shift.time_slot_id:
+                    timeslot_query = select(TimeSlot).where(TimeSlot.id == active_shift.time_slot_id)
+                    timeslot_result = await session.execute(timeslot_query)
+                    timeslot = timeslot_result.scalar_one_or_none()
+                
+                if active_shift.object_id:
+                    object_query = select(Object).where(Object.id == active_shift.object_id)
+                    object_result = await session.execute(object_query)
+                    obj = object_result.scalar_one_or_none()
+                
+                shift_tasks = await _collect_shift_tasks(
+                    session=session,
+                    shift=active_shift,
+                    timeslot=timeslot,
+                    object_=obj
+                )
+                
+                # Показываем обновлённый список
+                await _show_my_tasks_list(context, user_id, active_shift.id, shift_tasks, [], {})
+    
+    except Exception as e:
+        logger.error(f"Error in _handle_complete_task_v2: {e}", exc_info=True)
+        await query.answer("❌ Ошибка обработки задачи", show_alert=True)
+
+
+async def _handle_task_v2_media_upload(update: Update, context: ContextTypes.DEFAULT_TYPE, entry_id: int):
+    """Запросить загрузку медиа для задачи v2."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        async with get_async_session() as session:
+            from shared.services.task_service import TaskService
+            from domain.entities.task_entry import TaskEntryV2
+            from sqlalchemy.orm import selectinload
+            
+            task_service = TaskService(session)
+            
+            # Получаем TaskEntry
+            entry_query = select(TaskEntryV2).where(
+                TaskEntryV2.id == entry_id
+            ).options(
+                selectinload(TaskEntryV2.template)
+            )
+            entry_result = await session.execute(entry_query)
+            entry = entry_result.scalar_one_or_none()
+            
+            if not entry or not entry.template:
+                await query.answer("❌ Задача не найдена", show_alert=True)
+                return
+            
+            template = entry.template
+            
+            # Сохраняем в состояние пользователя
+            await user_state_manager.update_state(
+                user_id,
+                step=UserStep.TASK_V2_MEDIA_UPLOAD,
+                pending_task_v2_entry_id=entry_id
+            )
+            
+            await query.edit_message_text(
+                text=f"📸 <b>Фотоотчёт</b>\n\n"
+                     f"Задача: <b>{template.title}</b>\n"
+                     f"{template.description or ''}\n\n"
+                     f"📤 Отправьте фото для отчёта.",
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Отмена", callback_data="cancel_task_v2_media")
+                ]])
+            )
+            
+            logger.info(f"Requesting media for TaskEntryV2 {entry_id}")
+    
+    except Exception as e:
+        logger.error(f"Error in _handle_task_v2_media_upload: {e}", exc_info=True)
+        await query.answer("❌ Ошибка запроса медиа", show_alert=True)
+
+
+async def _handle_cancel_task_v2_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отмена загрузки медиа для задачи v2."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        # Очищаем состояние
+        await user_state_manager.update_state(
+            user_id,
+            step=UserStep.TASK_COMPLETION,
+            pending_task_v2_entry_id=None
+        )
+        
+        # Возвращаемся к списку задач
+        async with get_async_session() as session:
+            from domain.entities.user import User
+            from domain.entities.shift import Shift
+            from domain.entities.time_slot import TimeSlot
+            from domain.entities.object import Object
+            
+            # Получаем внутренний user_id
+            user_query = select(User).where(User.telegram_id == user_id)
+            user_result = await session.execute(user_query)
+            db_user = user_result.scalar_one_or_none()
+            
+            if not db_user:
+                await query.edit_message_text("❌ Пользователь не найден")
+                return
+            
+            # Находим активную смену
+            shifts_query = select(Shift).where(
+                and_(
+                    Shift.user_id == db_user.id,
+                    Shift.status == "active"
+                )
+            )
+            shifts_result = await session.execute(shifts_query)
+            active_shift = shifts_result.scalar_one_or_none()
+            
+            if not active_shift:
+                await query.edit_message_text("❌ Активная смена не найдена")
+                return
+            
+            # Загружаем задачи
+            timeslot = None
+            obj = None
+            
+            if active_shift.time_slot_id:
+                timeslot_query = select(TimeSlot).where(TimeSlot.id == active_shift.time_slot_id)
+                timeslot_result = await session.execute(timeslot_query)
+                timeslot = timeslot_result.scalar_one_or_none()
+            
+            if active_shift.object_id:
+                object_query = select(Object).where(Object.id == active_shift.object_id)
+                object_result = await session.execute(object_query)
+                obj = object_result.scalar_one_or_none()
+            
+            shift_tasks = await _collect_shift_tasks(
+                session=session,
+                shift=active_shift,
+                timeslot=timeslot,
+                object_=obj
+            )
+            
+            # Показываем список задач
+            await _show_my_tasks_list(context, user_id, active_shift.id, shift_tasks, [], {})
+    
+    except Exception as e:
+        logger.error(f"Error in _handle_cancel_task_v2_media: {e}", exc_info=True)
+        await query.answer("❌ Ошибка отмены", show_alert=True)
+
+
+async def _handle_received_task_v2_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка полученного фото/видео для задачи Tasks v2."""
+    user_id = update.message.from_user.id
+    
+    try:
+        user_state = await user_state_manager.get_state(user_id)
+        entry_id = getattr(user_state, 'pending_task_v2_entry_id', None)
+        
+        if not entry_id:
+            await update.message.reply_text("❌ Ошибка: задача не найдена")
+            return
+        
+        # Определяем тип медиа
+        media_type = None
+        media_file_id = None
+        if update.message.photo:
+            media_type = 'photo'
+            media_file_id = update.message.photo[-1].file_id
+        elif update.message.video:
+            media_type = 'video'
+            media_file_id = update.message.video.file_id
+        else:
+            await update.message.reply_text("❌ Отправьте фото или видео")
+            return
+        
+        async with get_async_session() as session:
+            from shared.services.task_service import TaskService
+            from domain.entities.task_entry import TaskEntryV2
+            from domain.entities.user import User
+            from domain.entities.shift import Shift
+            from domain.entities.object import Object
+            from domain.entities.org_unit import OrgStructureUnit
+            from sqlalchemy.orm import selectinload
+            from datetime import datetime
+            
+            task_service = TaskService(session)
+            
+            # Получаем TaskEntry с template
+            entry_query = select(TaskEntryV2).where(
+                TaskEntryV2.id == entry_id
+            ).options(
+                selectinload(TaskEntryV2.template),
+                selectinload(TaskEntryV2.shift_schedule)
+            )
+            entry_result = await session.execute(entry_query)
+            entry = entry_result.scalar_one_or_none()
+            
+            if not entry or not entry.template:
+                await update.message.reply_text("❌ Задача не найдена")
+                return
+            
+            template = entry.template
+            
+            # Получаем информацию для отправки в группу
+            db_user_query = select(User).where(User.telegram_id == user_id)
+            db_user_result = await session.execute(db_user_query)
+            db_user = db_user_result.scalar_one_or_none()
+            
+            if not db_user:
+                await update.message.reply_text("❌ Пользователь не найден")
+                return
+            
+            # Получаем активную смену для определения объекта
+            shift_query = select(Shift).where(
+                and_(
+                    Shift.user_id == db_user.id,
+                    Shift.status == "active"
+                )
+            )
+            shift_result = await session.execute(shift_query)
+            active_shift = shift_result.scalar_one_or_none()
+            
+            if not active_shift:
+                await update.message.reply_text("❌ Активная смена не найдена")
+                return
+            
+            # Получаем объект для определения telegram_chat_id
+            object_query = select(Object).where(Object.id == active_shift.object_id)
+            object_result = await session.execute(object_query)
+            obj = object_result.scalar_one_or_none()
+            
+            telegram_chat_id = None
+            object_name = "Объект"
+            
+            if obj:
+                object_name = obj.name
+                telegram_chat_id = obj.telegram_chat_id
+                
+                # Если нет в объекте - ищем в division
+                if not telegram_chat_id and obj.division_id:
+                    division_query = select(OrgStructureUnit).where(OrgStructureUnit.id == obj.division_id)
+                    division_result = await session.execute(division_query)
+                    division = division_result.scalar_one_or_none()
+                    if division:
+                        telegram_chat_id = division.telegram_chat_id
+            
+            if not telegram_chat_id:
+                await update.message.reply_text(
+                    "❌ Telegram группа для отчетов не настроена.\n"
+                    "Обратитесь к администратору."
+                )
+                return
+            
+            # Отправляем медиа в группу
+            user_name = f"{update.message.from_user.first_name} {update.message.from_user.last_name or ''}".strip()
+            caption = f"📋 Отчет (Tasks v2): {template.title}\n👤 {user_name}\n🏢 {object_name}"
+            
+            sent_message = None
+            if media_type == 'photo':
+                sent_message = await context.bot.send_photo(
+                    chat_id=telegram_chat_id,
+                    photo=media_file_id,
+                    caption=caption
+                )
+            elif media_type == 'video':
+                sent_message = await context.bot.send_video(
+                    chat_id=telegram_chat_id,
+                    video=media_file_id,
+                    caption=caption
+                )
+            
+            # Формируем ссылку на медиа
+            chat_id_str = str(telegram_chat_id)
+            if chat_id_str.startswith('-100'):
+                chat_id_str = chat_id_str[4:]
+            elif chat_id_str.startswith('-'):
+                chat_id_str = chat_id_str[1:]
+            media_url = f"https://t.me/c/{chat_id_str}/{sent_message.message_id}"
+            
+            # Сохраняем результат выполнения в TaskEntryV2
+            entry.is_completed = True
+            entry.completed_at = datetime.utcnow()
+            entry.completion_media = [{
+                'url': media_url,
+                'type': media_type,
+                'file_id': media_file_id
+            }]
+            await session.commit()
+            
+            logger.info(
+                f"TaskEntryV2 {entry_id} completed with media",
+                media_type=media_type,
+                media_url=media_url
+            )
+            
+            # Очищаем состояние
+            await user_state_manager.update_state(
+                user_id,
+                step=UserStep.TASK_COMPLETION,
+                pending_task_v2_entry_id=None
+            )
+            
+            # Подтверждение
+            await update.message.reply_text(
+                f"✅ <b>Отчет принят!</b>\n\n"
+                f"📋 Задача: <i>{template.title}</i>\n"
+                f"✅ Отмечена как выполненная\n"
+                f"📤 Отправлено в группу отчетов",
+                parse_mode='HTML'
+            )
+            
+            # Показываем обновлённый список задач
+            from domain.entities.time_slot import TimeSlot
+            
+            timeslot = None
+            if active_shift.time_slot_id:
+                timeslot_query = select(TimeSlot).where(TimeSlot.id == active_shift.time_slot_id)
+                timeslot_result = await session.execute(timeslot_query)
+                timeslot = timeslot_result.scalar_one_or_none()
+            
+            shift_tasks = await _collect_shift_tasks(
+                session=session,
+                shift=active_shift,
+                timeslot=timeslot,
+                object_=obj
+            )
+            
+            await _show_my_tasks_list(context, user_id, active_shift.id, shift_tasks, [], {})
+    
+    except Exception as e:
+        logger.error(f"Error in _handle_received_task_v2_media: {e}", exc_info=True)
+        await update.message.reply_text("❌ Ошибка обработки медиа")
 
 

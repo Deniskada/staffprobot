@@ -779,6 +779,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         task_idx = int(parts[2])
         await _handle_complete_shift_task(update, context, shift_id, task_idx)
         return
+    # Tasks v2: выполнение задачи
+    elif query.data.startswith("complete_task_v2:"):
+        from .shift_handlers import _handle_complete_task_v2
+        entry_id = int(query.data.split(":", 1)[1])
+        await _handle_complete_task_v2(update, context, entry_id)
+        return
+    # Tasks v2: отмена загрузки медиа
+    elif query.data == "cancel_task_v2_media":
+        from .shift_handlers import _handle_cancel_task_v2_media
+        await _handle_cancel_task_v2_media(update, context)
+        return
     elif query.data.startswith("close_shift_with_tasks:"):
         from .shift_handlers import _handle_close_shift_with_tasks
         shift_id = int(query.data.split(":", 1)[1])
