@@ -247,6 +247,78 @@ async def owner_payroll_report(
             "grand_total": grand_total
         }
         
+        # Формируем данные для отчёта по выплатам
+        from domain.entities.employee_payment import EmployeePayment
+        
+        # Группируем начисления и выплаты по сотрудникам
+        employee_payment_data = {}
+        
+        for entry in entries:
+            emp_id = entry.employee_id
+            if emp_id not in employee_payment_data:
+                employee_payment_data[emp_id] = {
+                    "employee_id": emp_id,
+                    "last_name": entry.employee.last_name or "",
+                    "first_name": entry.employee.first_name or "",
+                    "gross_total": 0.0,
+                    "net_total": 0.0,
+                    "paid": 0.0,
+                    "payment_methods": set()
+                }
+            
+            employee_payment_data[emp_id]["gross_total"] += float(entry.gross_amount or 0)
+            employee_payment_data[emp_id]["net_total"] += float(entry.net_amount or 0)
+        
+        # Получаем выплаты за период
+        payments_query = select(EmployeePayment).join(
+            PayrollEntry, EmployeePayment.payroll_entry_id == PayrollEntry.id
+        ).join(
+            Contract, Contract.id == PayrollEntry.contract_id
+        ).where(
+            Contract.owner_id == owner_id,
+            PayrollEntry.period_start >= period_start_date,
+            PayrollEntry.period_end <= period_end_date
+        )
+        
+        payments_result = await db.execute(payments_query)
+        payments = list(payments_result.scalars().all())
+        
+        for payment in payments:
+            emp_id = payment.employee_id
+            if emp_id in employee_payment_data:
+                employee_payment_data[emp_id]["paid"] += float(payment.amount or 0)
+                if payment.payment_method:
+                    employee_payment_data[emp_id]["payment_methods"].add(payment.payment_method)
+        
+        # Рассчитываем остатки и форматируем способы оплаты
+        employees_list = []
+        total_gross = 0.0
+        total_net = 0.0
+        total_paid = 0.0
+        total_remainder = 0.0
+        
+        for emp_data in employee_payment_data.values():
+            remainder = emp_data["net_total"] - emp_data["paid"]
+            emp_data["remainder"] = remainder
+            emp_data["payment_methods"] = ", ".join(sorted(emp_data["payment_methods"])) if emp_data["payment_methods"] else ""
+            
+            employees_list.append(emp_data)
+            total_gross += emp_data["gross_total"]
+            total_net += emp_data["net_total"]
+            total_paid += emp_data["paid"]
+            total_remainder += remainder
+        
+        # Сортируем по фамилии
+        employees_list.sort(key=lambda x: (x["last_name"], x["first_name"]))
+        
+        payments_data = {
+            "employees": employees_list,
+            "total_gross": total_gross,
+            "total_net": total_net,
+            "total_paid": total_paid,
+            "total_remainder": total_remainder
+        }
+        
         return templates.TemplateResponse(
             "owner/payroll/report.html",
             {
@@ -254,7 +326,8 @@ async def owner_payroll_report(
                 "current_user": current_user,
                 "period_start": period_start,
                 "period_end": period_end,
-                "report_data": report_data
+                "report_data": report_data,
+                "payments_data": payments_data
             }
         )
         
