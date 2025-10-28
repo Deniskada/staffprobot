@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 
 from apps.web.jinja import templates
-from apps.web.middleware.auth_middleware import get_current_user, require_owner_or_superadmin
+from apps.web.middleware.auth_middleware import get_current_user
+from apps.web.dependencies import require_role
 from apps.web.middleware.role_middleware import require_employee_or_applicant
 from core.database.session import get_db_session
 from core.logging.logger import logger
@@ -28,19 +29,25 @@ from sqlalchemy import cast
 router = APIRouter()
 
 
-async def get_user_id_from_current_user(current_user: dict, session: AsyncSession) -> Optional[int]:
-    """Получает внутренний ID пользователя из current_user (JWT payload)."""
-    telegram_id = current_user.get("telegram_id") or current_user.get("id")
-    user_query = select(User).where(User.telegram_id == telegram_id)
-    user_result = await session.execute(user_query)
-    user_obj = user_result.scalar_one_or_none()
-    return user_obj.id if user_obj else None
+async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:
+    """Получает внутренний ID пользователя из current_user."""
+    # current_user может быть dict (из JWT) или User объект (из dependencies)
+    if isinstance(current_user, dict):
+        telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        user_query = select(User).where(User.telegram_id == telegram_id)
+        user_result = await session.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        return user_obj.id if user_obj else None
+    elif isinstance(current_user, User):
+        return current_user.id
+    else:
+        return None
 
 
 @router.get("/payroll", response_class=HTMLResponse, name="owner_payroll_list")
 async def owner_payroll_list(
     request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session),
     employee_id: Optional[int] = None,
     period_start: Optional[str] = None,
@@ -112,11 +119,157 @@ async def owner_payroll_list(
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки начислений: {str(e)}")
 
 
+@router.get("/payroll/report", response_class=HTMLResponse, name="owner_payroll_report")
+async def owner_payroll_report(
+    request: Request,
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    db: AsyncSession = Depends(get_db_session),
+    period_start: str = None,
+    period_end: str = None
+):
+    """Отчёт по начислениям с группировкой по объектам."""
+    try:
+        # Получить текущего пользователя из request
+        current_user = await get_current_user(request)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Требуется авторизация")
+        
+        # Получить внутренний ID владельца
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+        
+        # Парсинг дат
+        if not period_start or not period_end:
+            raise HTTPException(status_code=400, detail="Укажите период")
+        
+        period_start_date = date.fromisoformat(period_start)
+        period_end_date = date.fromisoformat(period_end)
+        
+        # Получить все начисления за период
+        from sqlalchemy.orm import selectinload
+        
+        entries_query = select(PayrollEntry).options(
+            selectinload(PayrollEntry.employee),
+            selectinload(PayrollEntry.object_),
+            selectinload(PayrollEntry.contract)
+        ).join(
+            Contract, Contract.id == PayrollEntry.contract_id
+        ).where(
+            Contract.owner_id == owner_id,
+            PayrollEntry.period_start >= period_start_date,
+            PayrollEntry.period_end <= period_end_date
+        ).order_by(PayrollEntry.object_id, PayrollEntry.employee_id)
+        
+        entries_result = await db.execute(entries_query)
+        entries = list(entries_result.scalars().all())
+        
+        if not entries:
+            return templates.TemplateResponse(
+                "owner/payroll/report.html",
+                {
+                    "request": request,
+                    "current_user": current_user,
+                    "period_start": period_start,
+                    "period_end": period_end,
+                    "report_data": None,
+                    "error": "Нет начислений за выбранный период"
+                }
+            )
+        
+        # Группировка по сотрудникам: считаем на скольких объектах работал каждый
+        employee_objects_count = {}
+        for entry in entries:
+            if entry.employee_id not in employee_objects_count:
+                employee_objects_count[entry.employee_id] = set()
+            employee_objects_count[entry.employee_id].add(entry.object_id)
+        
+        # Разделяем сотрудников: один объект vs несколько
+        single_object_employees = {emp_id for emp_id, objs in employee_objects_count.items() if len(objs) == 1}
+        multi_object_employees = {emp_id for emp_id, objs in employee_objects_count.items() if len(objs) > 1}
+        
+        # Группировка по объектам
+        objects_data = {}
+        multi_object_rows = []
+        
+        for entry in entries:
+            # Получить данные о смене для подсчёта
+            shifts_count = len(entry.calculation_details.get("shifts", [])) if entry.calculation_details else 0
+            
+            # Статус сотрудника на дату выплаты
+            contract = entry.contract
+            if contract.status == 'active':
+                status = "Работает"
+            elif contract.status == 'terminated':
+                status = "Уволен"
+            else:
+                status = contract.status.capitalize()
+            
+            row_data = {
+                "employee_id": entry.employee_id,
+                "last_name": entry.employee.last_name or "",
+                "first_name": entry.employee.first_name or "",
+                "status": status,
+                "shifts_count": shifts_count,
+                "hours": float(entry.hours_worked or 0),
+                "rate": float(entry.hourly_rate or 0),
+                "bonus": float(entry.total_bonuses or 0),
+                "penalty": float(entry.total_deductions or 0),
+                "total": float(entry.net_amount or 0)
+            }
+            
+            if entry.employee_id in multi_object_employees:
+                # Сотрудник работал на нескольких объектах
+                row_data["object_name"] = entry.object_.name if entry.object_ else "—"
+                multi_object_rows.append(row_data)
+            else:
+                # Сотрудник работал на одном объекте
+                object_id = entry.object_id
+                if object_id not in objects_data:
+                    objects_data[object_id] = {
+                        "object_name": entry.object_.name if entry.object_ else f"Объект #{object_id}",
+                        "rows": [],
+                        "subtotal": 0
+                    }
+                
+                objects_data[object_id]["rows"].append(row_data)
+                objects_data[object_id]["subtotal"] += row_data["total"]
+        
+        # Сортировка объектов по имени
+        objects_list = sorted(objects_data.values(), key=lambda x: x["object_name"])
+        
+        # Общий итог
+        grand_total = sum(obj["subtotal"] for obj in objects_list) + sum(row["total"] for row in multi_object_rows)
+        
+        report_data = {
+            "objects": objects_list,
+            "multi_object_employees": sorted(multi_object_rows, key=lambda x: (x["last_name"], x["first_name"])),
+            "grand_total": grand_total
+        }
+        
+        return templates.TemplateResponse(
+            "owner/payroll/report.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "period_start": period_start,
+                "period_end": period_end,
+                "report_data": report_data
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating payroll report: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка формирования отчёта: {str(e)}")
+
+
 @router.get("/payroll/{entry_id}", response_class=HTMLResponse, name="owner_payroll_detail")
 async def owner_payroll_detail(
     request: Request,
     entry_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Детальная страница начисления."""
@@ -228,7 +381,7 @@ async def owner_payroll_detail(
 async def owner_payroll_add_deduction(
     request: Request,
     entry_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session),
     deduction_type: str = Form(...),
     amount: float = Form(...),
@@ -314,7 +467,7 @@ async def owner_payroll_add_deduction(
 async def owner_payroll_add_bonus(
     request: Request,
     entry_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session),
     bonus_type: str = Form(...),
     amount: float = Form(...),
@@ -401,7 +554,7 @@ async def complete_payment(
     request: Request,
     entry_id: int,
     payment_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session),
     confirmation_code: Optional[str] = Form(None)
 ):
@@ -458,7 +611,7 @@ async def complete_payment(
 async def owner_payroll_create_payment(
     request: Request,
     entry_id: int,
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session),
     amount: float = Form(...),
     payment_date: str = Form(...),
@@ -522,7 +675,7 @@ async def owner_payroll_create_payment(
 async def owner_payroll_manual_recalculate(
     request: Request,
     target_date: str = Form(...),
-    current_user: dict = Depends(require_owner_or_superadmin),
+    current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Ручной запуск пересчёта выплат на указанную дату (идемпотентно)."""
