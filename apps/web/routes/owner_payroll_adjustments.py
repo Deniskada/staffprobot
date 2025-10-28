@@ -19,7 +19,7 @@ from domain.entities.object import Object
 from domain.entities.shift import Shift
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 
-router = APIRouter(prefix="/payroll-adjustments", tags=["owner-payroll-adjustments"])
+router = APIRouter(tags=["owner-payroll-adjustments"])
 
 
 @router.get("", response_class=HTMLResponse)
