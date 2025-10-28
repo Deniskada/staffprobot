@@ -566,8 +566,8 @@ document.getElementById('editAdjustmentForm')?.addEventListener('submit', async 
     formData.append('description', description);
     
     try {
-        console.log(`Отправка запроса на /owner/payroll-adjustments/${adjustmentId}/edit`);
-        const response = await fetch(`/owner/payroll-adjustments/${adjustmentId}/edit`, {
+        console.log(`Отправка запроса на /owner/payroll/adjustments/${adjustmentId}/edit`);
+        const response = await fetch(`/owner/payroll/adjustments/${adjustmentId}/edit`, {
             method: 'POST',
             body: formData
         });
@@ -601,8 +601,8 @@ document.querySelectorAll('.btn-delete-adjustment').forEach(btn => {
         const adjustmentId = this.dataset.adjustmentId;
         
         try {
-            console.log(`Отправка запроса на /owner/payroll-adjustments/${adjustmentId}/delete`);
-            const response = await fetch(`/owner/payroll-adjustments/${adjustmentId}/delete`, {
+            console.log(`Отправка запроса на /owner/payroll/adjustments/${adjustmentId}/delete`);
+            const response = await fetch(`/owner/payroll/adjustments/${adjustmentId}/delete`, {
                 method: 'POST'
             });
             
