@@ -463,6 +463,13 @@ async def owner_tasks_plan_edit(
     else:
         plan.recurrence_config = None
     
+    await session.flush()
+    
+    # Мгновенное создание TaskEntry для активных смен после редактирования
+    from core.celery.tasks.task_assignment import create_task_entries_for_active_shifts
+    created_entries = await create_task_entries_for_active_shifts(session, plan)
+    logger.info(f"Updated plan {plan.id}, created {created_entries} TaskEntryV2 for active shifts")
+    
     await session.commit()
     logger.info(f"Updated TaskPlanV2: {plan_id}")
     
