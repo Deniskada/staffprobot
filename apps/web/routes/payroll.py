@@ -55,10 +55,11 @@ async def owner_payroll_list(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        # Получить всех сотрудников владельца
+        # Получить ВСЕХ сотрудников владельца (включая уволенных)
+        # для возможности просмотра и создания начислений задним числом
         query = select(User).join(Contract, Contract.employee_id == User.id).where(
-            Contract.owner_id == owner_id,
-            Contract.status == 'active'
+            Contract.owner_id == owner_id
+            # Убран фильтр status == 'active' — показываем всех когда-либо работавших
         ).distinct()
         result = await db.execute(query)
         employees = result.scalars().all()
