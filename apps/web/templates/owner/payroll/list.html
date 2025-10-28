@@ -8,9 +8,14 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h1><i class="fas fa-money-bill-wave text-success"></i> Начисления и выплаты</h1>
-                <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#manualRecalculateModal">
-                    <i class="bi bi-calculator"></i> Пересчитать вручную
-                </button>
+                <div>
+                    <button type="button" class="btn btn-info me-2" onclick="openReportModal()">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Отчёт
+                    </button>
+                    <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#manualRecalculateModal">
+                        <i class="bi bi-calculator"></i> Пересчитать вручную
+                    </button>
+                </div>
             </div>
             
             <!-- Фильтры -->
@@ -188,6 +193,60 @@ document.getElementById('manualRecalculateForm').addEventListener('submit', asyn
         submitBtn.innerHTML = originalText;
     }
 });
+
+// Модальное окно для отчёта
+function openReportModal() {
+    const reportModal = new bootstrap.Modal(document.getElementById('reportModal'));
+    reportModal.show();
+}
+
+// Ожидаем загрузку DOM для привязки событий
+document.addEventListener('DOMContentLoaded', function() {
+    const generateReportBtn = document.getElementById('generateReportBtn');
+    if (generateReportBtn) {
+        generateReportBtn.addEventListener('click', function() {
+            const reportPeriodStart = document.getElementById('report_period_start').value;
+            const reportPeriodEnd = document.getElementById('report_period_end').value;
+            
+            if (!reportPeriodStart || !reportPeriodEnd) {
+                alert('Пожалуйста, укажите период отчёта');
+                return;
+            }
+            
+            // Открываем отчёт в новой вкладке
+            const url = `/owner/payroll/report?period_start=${reportPeriodStart}&period_end=${reportPeriodEnd}`;
+            window.open(url, '_blank');
+        });
+    }
+});
 </script>
+
+<!-- Модальное окно для отчёта -->
+<div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reportModalLabel">Сформировать отчёт</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="report_period_start" class="form-label">Дата начала периода</label>
+                    <input type="date" class="form-control" id="report_period_start" value="{{ period_start }}">
+                </div>
+                <div class="mb-3">
+                    <label for="report_period_end" class="form-label">Дата окончания периода</label>
+                    <input type="date" class="form-control" id="report_period_end" value="{{ period_end }}">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="generateReportBtn">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Сформировать
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 

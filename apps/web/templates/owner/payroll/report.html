@@ -1,0 +1,230 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Отчёт по начислениям{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Шапка отчёта -->
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i class="bi bi-file-earmark-spreadsheet"></i> Отчёт по начислениям</h2>
+                    <p class="text-muted mb-0">
+                        Период: <strong>{{ period_start }}</strong> — <strong>{{ period_end }}</strong>
+                    </p>
+                </div>
+                <div>
+                    <a href="/owner/payroll" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Назад
+                    </a>
+                    <button onclick="window.print()" class="btn btn-primary">
+                        <i class="bi bi-printer"></i> Печать
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i> {{ error }}
+    </div>
+    {% elif report_data %}
+    
+    <!-- Навигация по вкладкам -->
+    <ul class="nav nav-tabs mb-3" id="reportTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="accruals-tab" data-bs-toggle="tab" data-bs-target="#accruals" type="button" role="tab">
+                <i class="bi bi-calculator"></i> Отчёт по начислениям
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="payments-tab" data-bs-toggle="tab" data-bs-target="#payments" type="button" role="tab">
+                <i class="bi bi-cash-stack"></i> Отчёт по выплатам
+            </button>
+        </li>
+    </ul>
+    
+    <div class="tab-content" id="reportTabsContent">
+        <!-- Вкладка: Отчёт по начислениям -->
+        <div class="tab-pane fade show active" id="accruals" role="tabpanel">
+            <div class="card">
+                <div class="card-body">
+                    <table class="table table-hover table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Сотрудник</th>
+                        <th>Статус</th>
+                        <th class="text-center">Смен</th>
+                        <th class="text-end">Часов</th>
+                        <th class="text-end">Ставка</th>
+                        <th class="text-end">Премия</th>
+                        <th class="text-end">Штраф</th>
+                        <th class="text-end"><strong>Сумма</strong></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for object in report_data.objects %}
+                    <!-- Заголовок объекта -->
+                    <tr class="table-secondary">
+                        <td colspan="8">
+                            <strong><i class="bi bi-building"></i> {{ object.object_name }}</strong>
+                        </td>
+                    </tr>
+                    
+                    <!-- Сотрудники объекта -->
+                    {% for row in object.rows %}
+                    <tr>
+                        <td>{{ row.last_name }} {{ row.first_name }}</td>
+                        <td>
+                            {% if row.status == "Работает" %}
+                                <span class="badge bg-success">{{ row.status }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ row.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">{{ row.shifts_count }}</td>
+                        <td class="text-end">{{ "%.2f"|format(row.hours) }}</td>
+                        <td class="text-end">{{ "%.2f"|format(row.rate) }}₽</td>
+                        <td class="text-end text-success">{{ "%.2f"|format(row.bonus) }}₽</td>
+                        <td class="text-end text-danger">{{ "%.2f"|format(row.penalty) }}₽</td>
+                        <td class="text-end"><strong>{{ "%.2f"|format(row.total) }}₽</strong></td>
+                    </tr>
+                    {% endfor %}
+                    
+                    <!-- Подитог по объекту -->
+                    <tr class="table-info">
+                        <td colspan="7" class="text-end"><strong>Итого по объекту:</strong></td>
+                        <td class="text-end"><strong>{{ "%.2f"|format(object.subtotal) }}₽</strong></td>
+                    </tr>
+                    {% endfor %}
+                    
+                    <!-- Сотрудники с несколькими объектами -->
+                    {% if report_data.multi_object_employees %}
+                    <tr class="table-secondary">
+                        <td colspan="8">
+                            <strong><i class="bi bi-people"></i> Сотрудники на нескольких объектах</strong>
+                        </td>
+                    </tr>
+                    
+                    {% for row in report_data.multi_object_employees %}
+                    <tr>
+                        <td>
+                            {{ row.last_name }} {{ row.first_name }}
+                            <br><small class="text-muted">{{ row.object_name }}</small>
+                        </td>
+                        <td>
+                            {% if row.status == "Работает" %}
+                                <span class="badge bg-success">{{ row.status }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ row.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">{{ row.shifts_count }}</td>
+                        <td class="text-end">{{ "%.2f"|format(row.hours) }}</td>
+                        <td class="text-end">{{ "%.2f"|format(row.rate) }}₽</td>
+                        <td class="text-end text-success">{{ "%.2f"|format(row.bonus) }}₽</td>
+                        <td class="text-end text-danger">{{ "%.2f"|format(row.penalty) }}₽</td>
+                        <td class="text-end"><strong>{{ "%.2f"|format(row.total) }}₽</strong></td>
+                    </tr>
+                    {% endfor %}
+                    {% endif %}
+                    
+                    <!-- Общий итог -->
+                    <tr class="table-success">
+                        <td colspan="7" class="text-end"><strong>ОБЩИЙ ИТОГ:</strong></td>
+                        <td class="text-end"><strong>{{ "%.2f"|format(report_data.grand_total) }}₽</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+        </div>
+        
+        <!-- Вкладка: Отчёт по выплатам -->
+        <div class="tab-pane fade" id="payments" role="tabpanel">
+            <div class="card">
+                <div class="card-body">
+                    <table class="table table-hover table-sm">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Сотрудник</th>
+                                <th class="text-end">К выплате</th>
+                                <th class="text-end">Выплачено</th>
+                                <th class="text-center">Способ оплаты</th>
+                                <th class="text-end"><strong>Остаток</strong></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if payments_data %}
+                                {% for row in payments_data.employees %}
+                                <tr>
+                                    <td>{{ row.last_name }} {{ row.first_name }}</td>
+                                    <td class="text-end">
+                                        <span class="badge bg-warning text-dark">{{ "%.2f"|format(row.net_total) }}₽</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="badge bg-success">{{ "%.2f"|format(row.paid) }}₽</span>
+                                    </td>
+                                    <td class="text-center">
+                                        {% if row.payment_methods %}
+                                            {{ row.payment_methods }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {% if row.remainder > 0 %}
+                                            <strong class="text-danger">{{ "%.2f"|format(row.remainder) }}₽</strong>
+                                        {% elif row.remainder < 0 %}
+                                            <strong class="text-success">{{ "%.2f"|format(row.remainder) }}₽</strong>
+                                        {% else %}
+                                            <span class="text-muted">0.00₽</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                
+                                <!-- Итоги -->
+                                <tr class="table-info">
+                                    <td><strong>ИТОГО:</strong></td>
+                                    <td class="text-end"><strong>{{ "%.2f"|format(payments_data.total_net) }}₽</strong></td>
+                                    <td class="text-end"><strong>{{ "%.2f"|format(payments_data.total_paid) }}₽</strong></td>
+                                    <td class="text-center"></td>
+                                    <td class="text-end">
+                                        <strong class="{% if payments_data.total_remainder > 0 %}text-danger{% elif payments_data.total_remainder < 0 %}text-success{% endif %}">
+                                            {{ "%.2f"|format(payments_data.total_remainder) }}₽
+                                        </strong>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">Нет данных о выплатах</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+@media print {
+    .btn, nav, .sidebar, .nav-tabs {
+        display: none !important;
+    }
+    .container-fluid {
+        max-width: 100% !important;
+    }
+    .tab-pane {
+        display: block !important;
+        opacity: 1 !important;
+    }
+}
+</style>
+{% endblock %}
+
