@@ -57,9 +57,17 @@ SYSTEM_FEATURES_REGISTRY: Dict[str, FeatureDefinition] = {
     'payroll': {
         'name': 'Штатное расписание, начисления, выплаты',
         'description': 'Управление штатным расписанием, автоматические начисления и выплаты. Полный контроль финансов персонала.',
-        'menu_items': ['payroll_menu', 'payroll_payouts', 'payroll_accruals', 'payroll_departments', 'payroll_contracts'],
-        'form_elements': ['employee_time_slot', 'object_contract_template'],
+        'menu_items': ['payroll_menu', 'payroll_payouts', 'payroll_accruals', 'payroll_departments'],
+        'form_elements': ['employee_time_slot'],
         'sort_order': 6
+    },
+    'contract_templates': {
+        'name': 'Шаблоны договоров',
+        'description': 'Создание и управление шаблонами договоров с динамическими полями. Автоматизируйте оформление документов.',
+        'menu_items': ['payroll_contracts'],  # Показывается в меню Зарплата, но контролируется отдельно
+        'form_elements': ['object_contract_template'],
+        'sort_order': 7,
+        'depends_on': ['payroll']  # Требует включённую фичу payroll
     },
     'rules_engine': {
         'name': 'Начисления премий и штрафов',
