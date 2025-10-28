@@ -80,11 +80,10 @@ async def payroll_adjustments_list(
         if not owner_id:
             raise HTTPException(status_code=400, detail="Не удалось определить владельца")
         
-        # Получаем список employee_id с активными договорами у этого владельца
+        # Получаем список ВСЕХ employee_id владельца (включая уволенных)
+        # для возможности просмотра и создания корректировок задним числом
         employee_ids_query = select(Contract.employee_id).where(
-            Contract.owner_id == owner_id,
-            Contract.is_active == True,
-            Contract.status == 'active'
+            Contract.owner_id == owner_id
         ).distinct()
         employee_ids_result = await session.execute(employee_ids_query)
         employee_ids = [row[0] for row in employee_ids_result.all()]
