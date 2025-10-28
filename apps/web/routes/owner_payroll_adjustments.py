@@ -118,9 +118,17 @@ async def payroll_adjustments_list(
             )
         
         # Базовый запрос с фильтром по сотрудникам владельца И его объектам
+        # Конвертируем даты в UTC для сравнения с created_at (который хранится в UTC)
+        from datetime import datetime, timezone, timedelta
+        
+        # Moscow timezone = UTC+3
+        moscow_tz = timezone(timedelta(hours=3))
+        start_datetime_utc = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=moscow_tz).astimezone(timezone.utc)
+        end_datetime_utc = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=moscow_tz).astimezone(timezone.utc)
+        
         query = select(PayrollAdjustment).where(
-            func.date(PayrollAdjustment.created_at) >= start_date,
-            func.date(PayrollAdjustment.created_at) <= end_date,
+            PayrollAdjustment.created_at >= start_datetime_utc,
+            PayrollAdjustment.created_at <= end_datetime_utc,
             PayrollAdjustment.employee_id.in_(employee_ids),
             or_(
                 PayrollAdjustment.object_id.in_(owner_object_ids),
