@@ -1169,7 +1169,14 @@ async function updateSidebarMenu() {
             const currentSidebar = document.querySelector('.sidebar-nav');
             if (currentSidebar) {
                 currentSidebar.innerHTML = newSidebar.innerHTML;
-                console.log('✅ Menu updated');
+                
+                // КРИТИЧНО: Переинициализируем обработчики сайдбара
+                if (window.ownerSidebar) {
+                    window.ownerSidebar.menuItems = document.querySelectorAll('.sidebar-item');
+                    window.ownerSidebar.attachEventListeners();
+                }
+                
+                console.log('✅ Menu updated and re-initialized');
             }
         }
     } catch (error) {

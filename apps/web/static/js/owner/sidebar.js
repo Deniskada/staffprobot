@@ -342,6 +342,6 @@ class OwnerSidebar {
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
-    new OwnerSidebar();
+    window.ownerSidebar = new OwnerSidebar();
 });
 
