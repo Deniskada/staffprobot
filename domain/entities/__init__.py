@@ -28,6 +28,11 @@ from .application import Application, ApplicationStatus
 from .interview import Interview, InterviewType, InterviewStatus
 from .task_category import TaskCategory
 from .task_template import TaskTemplateV2
+from .task_plan import TaskPlanV2
+from .task_entry import TaskEntryV2
+from .rule import Rule
+from .incident import Incident
+from .cancellation_reason import CancellationReason
 from .tariff_plan import TariffPlan
 from .user_subscription import UserSubscription, SubscriptionStatus, BillingPeriod
 from .billing_transaction import BillingTransaction, TransactionType, TransactionStatus, PaymentMethod
