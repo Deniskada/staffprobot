@@ -74,7 +74,8 @@ async def owner_payroll_list(
             entries = await payroll_service.get_payroll_entries_by_employee(
                 employee_id=employee_id,
                 period_start=date.fromisoformat(period_start),
-                period_end=date.fromisoformat(period_end)
+                period_end=date.fromisoformat(period_end),
+                owner_id=owner_id  # Фильтровать по договорам владельца
             )
         else:
             # Получить начисления для всех сотрудников
@@ -84,7 +85,8 @@ async def owner_payroll_list(
                     employee_id=emp.id,
                     period_start=date.fromisoformat(period_start),
                     period_end=date.fromisoformat(period_end),
-                    limit=50
+                    limit=50,
+                    owner_id=owner_id  # Фильтровать по договорам владельца
                 )
                 entries.extend(emp_entries)
             
@@ -551,15 +553,16 @@ async def owner_payroll_manual_recalculate(
         from core.celery.tasks.payroll_tasks import _get_payment_period_for_date
         from shared.services.payroll_adjustment_service import PayrollAdjustmentService
         
-        # Найти все активные payment_schedules владельца
+        # Найти все активные payment_schedules (системные + кастомные владельца)
+        # Логика такая же как в автоматическом пересчете - берем ВСЕ активные графики,
+        # а объекты фильтруем по owner_id
         schedules_query = select(PaymentSchedule).where(
-            PaymentSchedule.owner_id == owner_id,
             PaymentSchedule.is_active == True
         )
         schedules_result = await db.execute(schedules_query)
         schedules = schedules_result.scalars().all()
         
-        logger.info(f"Found {len(schedules)} active schedules for owner {owner_id}")
+        logger.info(f"Found {len(schedules)} active schedules total")
         
         total_entries_created = 0
         total_entries_updated = 0
@@ -600,13 +603,13 @@ async def owner_payroll_manual_recalculate(
                 
                 for obj in objects:
                     try:
-                        # Найти контракты (ВСЕ: активные + уволенные с settlement_policy='schedule')
+                        # Найти контракты
                         contracts_query = select(Contract).where(
                             and_(
                                 Contract.allowed_objects.isnot(None),
                                 cast(Contract.allowed_objects, JSONB).op('@>')(cast([obj.id], JSONB)),
                                 or_(
-                                    Contract.status == 'active',  # Все активные (независимо от is_active)
+                                    Contract.status == 'active'  # Все активные,
                                     and_(
                                         Contract.status == 'terminated',
                                         Contract.settlement_policy == 'schedule'

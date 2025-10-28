@@ -21,7 +21,7 @@ from domain.entities.contract import Contract
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 from shared.services.manager_permission_service import ManagerPermissionService
 
-router = APIRouter(tags=["manager-payroll-adjustments"])
+router = APIRouter(prefix="/payroll-adjustments", tags=["manager-payroll-adjustments"])
 
 
 @router.get("", response_class=HTMLResponse)
@@ -141,12 +141,13 @@ async def manager_payroll_adjustments_list(
         result = await session.execute(query)
         adjustments = result.scalars().all()
         
-        # Получить список ВСЕХ сотрудников управляющего (включая уволенных)
-        # для возможности создания корректировок задним числом
+        # Получить список сотрудников управляющего для выпадающего списка
+        # Получаем всех сотрудников, работающих на доступных объектах
         employees_query = select(User).join(
             Contract, Contract.employee_id == User.id
+        ).where(
+            # Показываем всех сотрудников
         )
-        # Убран фильтр is_active и status — показываем всех
         
         # Добавляем фильтр по allowed_objects
         from sqlalchemy import text, cast
