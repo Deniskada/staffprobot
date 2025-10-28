@@ -671,7 +671,14 @@ async def owner_payroll_manual_recalculate(
                                     else:
                                         total_deductions += abs(amount_decimal)
                                 
-                                # Получить часы и ставку из смен
+                                # Получить часы и ставку из смен + формируем протокол
+                                calculation_details = {
+                                    "created_by": "manual_recalculate",
+                                    "created_at": target_date_obj.isoformat(),
+                                    "shifts": [],
+                                    "adjustments": []
+                                }
+                                
                                 if shift_adjustments:
                                     shift_ids = [adj.shift_id for adj in shift_adjustments if adj.shift_id]
                                     if shift_ids:
@@ -680,10 +687,22 @@ async def owner_payroll_manual_recalculate(
                                         )
                                         shifts = shifts_result.scalars().all()
                                         for shift in shifts:
+                                            shift_hours = Decimal(str(shift.total_hours)) if shift.total_hours else Decimal('0')
+                                            shift_rate = Decimal(str(shift.hourly_rate)) if shift.hourly_rate else Decimal('0')
+                                            shift_payment = shift_hours * shift_rate
+                                            
+                                            calculation_details["shifts"].append({
+                                                "shift_id": shift.id,
+                                                "date": shift.start_time.date().isoformat() if shift.start_time else None,
+                                                "hours": float(shift_hours),
+                                                "rate": float(shift_rate),
+                                                "amount": float(shift_payment)
+                                            })
+                                            
                                             if shift.total_hours:
-                                                total_hours += Decimal(str(shift.total_hours))
+                                                total_hours += shift_hours
                                             if shift.hourly_rate:
-                                                avg_hourly_rate = Decimal(str(shift.hourly_rate))
+                                                avg_hourly_rate = shift_rate
                                 
                                 # Если нет часов, попытаться рассчитать
                                 if total_hours == 0 and gross_amount > 0 and avg_hourly_rate > 0:
@@ -692,6 +711,16 @@ async def owner_payroll_manual_recalculate(
                                 # Если всё ещё нет ставки, взять из объекта
                                 if avg_hourly_rate == 0:
                                     avg_hourly_rate = Decimal(str(obj.hourly_rate)) if obj.hourly_rate else Decimal('200.00')
+                                
+                                # Добавляем детали корректировок в протокол
+                                for adj in adjustments:
+                                    calculation_details["adjustments"].append({
+                                        "adjustment_id": adj.id,
+                                        "type": adj.adjustment_type,
+                                        "amount": float(adj.amount),
+                                        "description": adj.description,
+                                        "shift_id": adj.shift_id
+                                    })
                                 
                                 net_amount = gross_amount + total_bonuses - total_deductions
                                 
@@ -716,6 +745,7 @@ async def owner_payroll_manual_recalculate(
                                     existing_entry.total_bonuses = float(total_bonuses)
                                     existing_entry.total_deductions = float(total_deductions)
                                     existing_entry.net_amount = float(net_amount)
+                                    existing_entry.calculation_details = calculation_details  # Протокол расчёта
                                     
                                     # Применяем adjustments заново
                                     adjustment_ids = [adj.id for adj in adjustments]
@@ -748,7 +778,8 @@ async def owner_payroll_manual_recalculate(
                                         total_bonuses=float(total_bonuses),
                                         total_deductions=float(total_deductions),
                                         net_amount=float(net_amount),
-                                        created_by_id=owner_id
+                                        created_by_id=owner_id,
+                                        calculation_details=calculation_details  # Протокол расчёта
                                     )
                                     
                                     db.add(payroll_entry)
