@@ -350,7 +350,12 @@ class PayrollAdjustmentService:
         )
         
         result = await self.session.execute(query)
-        return list(result.scalars().all())
+        adjustments_list = list(result.scalars().all())
+        
+        # DEBUG: print для диагностики (временно, обходим структурированное логирование)
+        print(f"[PAYROLL_DEBUG] get_unapplied_adjustments: employee_id={employee_id}, period={period_start} to {period_end}, found={len(adjustments_list)}, ids={[a.id for a in adjustments_list[:5]]}")
+        
+        return adjustments_list
     
     async def get_unapplied_adjustments_until(
         self,
