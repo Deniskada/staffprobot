@@ -83,9 +83,12 @@
 
     <!-- Действия -->
     <div class="row mb-3">
-        <div class="col-12">
+        <div class="col-12 d-flex gap-2">
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createAdjustmentModal">
                 <i class="bi bi-plus-circle"></i> Добавить начисление
+            </button>
+            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#manualRecalculateModal">
+                <i class="bi bi-calculator"></i> Пересчитать начисления
             </button>
         </div>
     </div>
@@ -322,6 +325,38 @@
     </div>
 </div>
 
+<!-- Модальное окно для пересчёта начислений -->
+<div class="modal fade" id="manualRecalculateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Пересчитать начисления вручную</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="manualRecalculateForm">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        Выберите дату расчёта. Система создаст начисления для всех сотрудников за соответствующий период графика выплат.
+                        Существующие начисления будут пересчитаны, недостающие — созданы.
+                    </div>
+                    <div class="mb-3">
+                        <label for="recalculate_date" class="form-label">Дата расчёта *</label>
+                        <input type="date" class="form-control" id="recalculate_date" name="target_date" required>
+                        <small class="form-text text-muted">Выберите день выплаты из вашего графика (например, вторник)</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-check-circle"></i> Пересчитать
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Модальное окно для просмотра истории -->
 <div class="modal fade" id="historyModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -455,6 +490,38 @@ document.querySelectorAll('.btn-view-history').forEach(btn => {
             alert('Ошибка загрузки истории: ' + error);
         }
     });
+});
+
+// Обработка формы пересчёта начислений
+document.getElementById('manualRecalculateForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Пересчитываю...';
+    
+    try {
+        const response = await fetch('/owner/payroll/manual-recalculate', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✅ Успешно!\n\n${data.message}\nОбработано: ${data.processed} записей`);
+            bootstrap.Modal.getInstance(document.getElementById('manualRecalculateModal')).hide();
+            location.reload();
+        } else {
+            alert('❌ Ошибка: ' + (data.error || 'Не удалось пересчитать начисления'));
+        }
+    } catch (error) {
+        alert('❌ Ошибка запроса: ' + error);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Пересчитать';
+    }
 });
 </script>
 {% endblock %}
