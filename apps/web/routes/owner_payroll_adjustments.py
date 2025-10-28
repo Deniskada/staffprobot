@@ -577,3 +577,154 @@ async def delete_adjustment(
             content={"success": False, "error": str(e)}
         )
 
+
+
+@router.get("/check-missing", response_class=JSONResponse)
+async def check_missing_adjustments(
+    date_from: str = Query(...),
+    date_to: str = Query(...),
+    current_user = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Проверка пропущенных корректировок."""
+    try:
+        from datetime import date as date_class, datetime, timezone, timedelta
+        from apps.web.routes.reports import get_user_id_from_current_user
+        from domain.entities.shift import Shift
+        from domain.entities.task_entry import TaskEntryV2
+        from sqlalchemy import exists
+        
+        owner_id = await get_user_id_from_current_user(current_user, session)
+        start_date = date_class.fromisoformat(date_from)
+        end_date = date_class.fromisoformat(date_to)
+        
+        moscow_tz = timezone(timedelta(hours=3))
+        start_utc = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=moscow_tz).astimezone(timezone.utc)
+        end_utc = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=moscow_tz).astimezone(timezone.utc)
+        
+        # Закрытые смены без shift_base
+        missing_shift_base_q = select(func.count(Shift.id)).where(
+            Shift.status == 'closed',
+            Shift.end_time >= start_utc,
+            Shift.end_time <= end_utc,
+            ~exists(select(1).where(and_(
+                PayrollAdjustment.shift_id == Shift.id,
+                PayrollAdjustment.adjustment_type == 'shift_base'
+            )))
+        )
+        missing_shift_base = (await session.execute(missing_shift_base_q)).scalar()
+        
+        # Выполненные задачи v2 без корректировок
+        missing_tasks_q = select(func.count(TaskEntryV2.id)).where(
+            TaskEntryV2.is_completed == True,
+            TaskEntryV2.completed_at >= start_utc,
+            TaskEntryV2.completed_at <= end_utc,
+            ~exists(select(1).where(and_(
+                PayrollAdjustment.task_entry_v2_id == TaskEntryV2.id,
+                PayrollAdjustment.adjustment_type.in_(['task_bonus', 'task_penalty'])
+            )))
+        )
+        missing_task_bonuses = (await session.execute(missing_tasks_q)).scalar()
+        
+        total = missing_shift_base + missing_task_bonuses
+        
+        return JSONResponse(content={
+            "success": True,
+            "total": total,
+            "missing_shift_base": missing_shift_base or 0,
+            "missing_task_bonuses": missing_task_bonuses or 0,
+            "missing_late_penalties": 0,
+            "missing_cancellation_fines": 0
+        })
+    except Exception as e:
+        logger.error(f"Error checking missing: {e}")
+        return JSONResponse(content={"success": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/fix-missing", response_class=JSONResponse)
+async def fix_missing_adjustments(
+    request: Request,
+    current_user = Depends(get_current_user_dependency()),
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Создание пропущенных корректировок."""
+    try:
+        from datetime import date as date_class, datetime, timezone, timedelta
+        from apps.web.routes.reports import get_user_id_from_current_user
+        from domain.entities.shift import Shift
+        from domain.entities.task_entry import TaskEntryV2
+        from sqlalchemy import exists
+        from sqlalchemy.orm import selectinload
+        
+        data = await request.json()
+        owner_id = await get_user_id_from_current_user(current_user, session)
+        start_date = date_class.fromisoformat(data["date_from"])
+        end_date = date_class.fromisoformat(data["date_to"])
+        
+        moscow_tz = timezone(timedelta(hours=3))
+        start_utc = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=moscow_tz).astimezone(timezone.utc)
+        end_utc = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=moscow_tz).astimezone(timezone.utc)
+        
+        created = 0
+        
+        # Создаём shift_base
+        shifts_q = select(Shift).where(
+            Shift.status == 'closed',
+            Shift.end_time >= start_utc,
+            Shift.end_time <= end_utc,
+            ~exists(select(1).where(and_(
+                PayrollAdjustment.shift_id == Shift.id,
+                PayrollAdjustment.adjustment_type == 'shift_base'
+            )))
+        ).options(selectinload(Shift.user))
+        
+        shifts = (await session.execute(shifts_q)).scalars().all()
+        for shift in shifts:
+            if shift.user_id and shift.hourly_rate:
+                hours = (shift.end_time - shift.start_time).total_seconds() / 3600
+                session.add(PayrollAdjustment(
+                    employee_id=shift.user_id,
+                    object_id=shift.object_id,
+                    shift_id=shift.id,
+                    adjustment_type='shift_base',
+                    amount=shift.hourly_rate * hours,
+                    description=f"Базовая оплата ({hours:.2f}ч × {shift.hourly_rate}₽)",
+                    is_applied=False
+                ))
+                created += 1
+        
+        # Создаём task_bonus
+        tasks_q = select(TaskEntryV2).where(
+            TaskEntryV2.is_completed == True,
+            TaskEntryV2.completed_at >= start_utc,
+            TaskEntryV2.completed_at <= end_utc,
+            ~exists(select(1).where(and_(
+                PayrollAdjustment.task_entry_v2_id == TaskEntryV2.id,
+                PayrollAdjustment.adjustment_type.in_(['task_bonus', 'task_penalty'])
+            )))
+        ).options(selectinload(TaskEntryV2.template), selectinload(TaskEntryV2.shift))
+        
+        tasks = (await session.execute(tasks_q)).scalars().all()
+        for task in tasks:
+            if task.template and task.template.default_bonus_amount and task.employee_id:
+                amount = task.template.default_bonus_amount
+                session.add(PayrollAdjustment(
+                    employee_id=task.employee_id,
+                    object_id=task.shift.object_id if task.shift else None,
+                    shift_id=task.shift_id,
+                    task_entry_v2_id=task.id,
+                    adjustment_type='task_bonus' if amount > 0 else 'task_penalty',
+                    amount=amount,
+                    description=f"За задачу: {task.template.title}",
+                    is_applied=False
+                ))
+                created += 1
+        
+        await session.commit()
+        return JSONResponse(content={"success": True, "created": created})
+    except Exception as e:
+        logger.error(f"Error fixing missing: {e}", exc_info=True)
+        await session.rollback()
+        return JSONResponse(content={"success": False, "error": str(e)}, status_code=500)

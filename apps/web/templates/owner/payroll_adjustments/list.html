@@ -87,8 +87,8 @@
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createAdjustmentModal">
                 <i class="bi bi-plus-circle"></i> Добавить начисление
             </button>
-            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#manualRecalculateModal">
-                <i class="bi bi-calculator"></i> Пересчитать начисления
+            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#checkMissingAdjustmentsModal">
+                <i class="bi bi-search"></i> Проверить пропущенные корректировки
             </button>
         </div>
     </div>
@@ -325,34 +325,47 @@
     </div>
 </div>
 
-<!-- Модальное окно для пересчёта начислений -->
-<div class="modal fade" id="manualRecalculateModal" tabindex="-1">
-    <div class="modal-dialog">
+<!-- Модальное окно для проверки пропущенных корректировок -->
+<div class="modal fade" id="checkMissingAdjustmentsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Пересчитать начисления вручную</h5>
+                <h5 class="modal-title">Проверить пропущенные корректировки</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="manualRecalculateForm">
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> 
-                        Выберите дату расчёта. Система создаст начисления для всех сотрудников за соответствующий период графика выплат.
-                        Существующие начисления будут пересчитаны, недостающие — созданы.
-                    </div>
-                    <div class="mb-3">
-                        <label for="recalculate_date" class="form-label">Дата расчёта *</label>
-                        <input type="date" class="form-control" id="recalculate_date" name="target_date" required>
-                        <small class="form-text text-muted">Выберите день выплаты из вашего графика (например, вторник)</small>
-                    </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> 
+                    Система проверит:
+                    <ul class="mb-0">
+                        <li>Закрытые смены без базовых корректировок</li>
+                        <li>Выполненные задачи (v1 + v2) без премий/штрафов</li>
+                        <li>Опоздания без штрафов</li>
+                        <li>Отмены смен без штрафов</li>
+                    </ul>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-warning">
-                        <i class="bi bi-check-circle"></i> Пересчитать
-                    </button>
+                <div class="mb-3">
+                    <label for="check_date_from" class="form-label">Период проверки: с</label>
+                    <input type="date" class="form-control" id="check_date_from" name="date_from" required>
                 </div>
-            </form>
+                <div class="mb-3">
+                    <label for="check_date_to" class="form-label">по</label>
+                    <input type="date" class="form-control" id="check_date_to" name="date_to" required>
+                </div>
+                <div id="checkResults" class="d-none">
+                    <h6>Результаты проверки:</h6>
+                    <div id="checkResultsContent"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" id="btnCheckMissing">
+                    <i class="bi bi-search"></i> Проверить
+                </button>
+                <button type="button" class="btn btn-success d-none" id="btnFixMissing">
+                    <i class="bi bi-check-circle"></i> Создать корректировки
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -492,35 +505,83 @@ document.querySelectorAll('.btn-view-history').forEach(btn => {
     });
 });
 
-// Обработка формы пересчёта начислений
-document.getElementById('manualRecalculateForm')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
+// Проверка пропущенных корректировок
+document.getElementById('btnCheckMissing')?.addEventListener('click', async function() {
+    const dateFrom = document.getElementById('check_date_from').value;
+    const dateTo = document.getElementById('check_date_to').value;
     
-    const formData = new FormData(this);
-    const submitBtn = this.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Пересчитываю...';
+    if (!dateFrom || !dateTo) {
+        alert('Укажите период проверки');
+        return;
+    }
+    
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Проверяю...';
     
     try {
-        const response = await fetch('/owner/payroll/manual-recalculate', {
+        const response = await fetch(`/owner/payroll/adjustments/check-missing?date_from=${dateFrom}&date_to=${dateTo}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const results = document.getElementById('checkResults');
+            const content = document.getElementById('checkResultsContent');
+            
+            let html = '<div class="alert alert-success">';
+            html += `<strong>Найдено пропущенных корректировок: ${data.total}</strong><ul class="mb-0">`;
+            if (data.missing_shift_base > 0) html += `<li>Базовые начисления смен: ${data.missing_shift_base}</li>`;
+            if (data.missing_task_bonuses > 0) html += `<li>Премии за задачи: ${data.missing_task_bonuses}</li>`;
+            if (data.missing_late_penalties > 0) html += `<li>Штрафы за опоздания: ${data.missing_late_penalties}</li>`;
+            if (data.missing_cancellation_fines > 0) html += `<li>Штрафы за отмены: ${data.missing_cancellation_fines}</li>`;
+            html += '</ul></div>';
+            
+            content.innerHTML = html;
+            results.classList.remove('d-none');
+            
+            if (data.total > 0) {
+                document.getElementById('btnFixMissing').classList.remove('d-none');
+            }
+        } else {
+            alert('❌ Ошибка: ' + (data.error || 'Не удалось выполнить проверку'));
+        }
+    } catch (error) {
+        alert('❌ Ошибка запроса: ' + error);
+    } finally {
+        this.disabled = false;
+        this.innerHTML = '<i class="bi bi-search"></i> Проверить';
+    }
+});
+
+// Создание пропущенных корректировок
+document.getElementById('btnFixMissing')?.addEventListener('click', async function() {
+    if (!confirm('Создать все пропущенные корректировки?')) return;
+    
+    const dateFrom = document.getElementById('check_date_from').value;
+    const dateTo = document.getElementById('check_date_to').value;
+    
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Создаю...';
+    
+    try {
+        const response = await fetch('/owner/payroll/adjustments/fix-missing', {
             method: 'POST',
-            body: formData
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({date_from: dateFrom, date_to: dateTo})
         });
         
         const data = await response.json();
         
         if (data.success) {
-            alert(`✅ Успешно!\n\n${data.message}\nОбработано: ${data.processed} записей`);
-            bootstrap.Modal.getInstance(document.getElementById('manualRecalculateModal')).hide();
+            alert(`✅ Успешно создано корректировок: ${data.created}`);
+            bootstrap.Modal.getInstance(document.getElementById('checkMissingAdjustmentsModal')).hide();
             location.reload();
         } else {
-            alert('❌ Ошибка: ' + (data.error || 'Не удалось пересчитать начисления'));
+            alert('❌ Ошибка: ' + (data.error || 'Не удалось создать корректировки'));
         }
     } catch (error) {
         alert('❌ Ошибка запроса: ' + error);
     } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Пересчитать';
+        this.disabled = false;
+        this.innerHTML = '<i class="bi bi-check-circle"></i> Создать корректировки';
     }
 });
 </script>
