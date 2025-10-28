@@ -246,6 +246,62 @@
                 </div>
             </div>
             
+            <!-- Детали расчёта (calculation_details) -->
+            {% if entry.calculation_details %}
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-calculator"></i> Детали расчёта</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Создано:</strong> {{ entry.calculation_details.created_by }} ({{ entry.calculation_details.created_at }})</p>
+                    
+                    {% if entry.calculation_details.shifts %}
+                    <h6 class="mt-3">Смены ({{ entry.calculation_details.shifts | length }}):</h6>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>ID смены</th>
+                                <th>Дата</th>
+                                <th>Часы</th>
+                                <th>Ставка</th>
+                                <th>Сумма</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for shift in entry.calculation_details.shifts %}
+                            <tr>
+                                <td>#{{ shift.shift_id }}</td>
+                                <td>{{ shift.date }}</td>
+                                <td>{{ shift.hours }} ч</td>
+                                <td>{{ shift.rate }}₽/ч</td>
+                                <td><strong>{{ shift.amount }}₽</strong></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% endif %}
+                    
+                    {% if entry.calculation_details.adjustments %}
+                    <h6 class="mt-3">Корректировки ({{ entry.calculation_details.adjustments | length }}):</h6>
+                    <ul class="list-group">
+                    {% for adj in entry.calculation_details.adjustments %}
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>
+                                <strong>#{{ adj.adjustment_id }}</strong>: {{ adj.type }}
+                                {% if adj.description %}({{ adj.description }}){% endif %}
+                                {% if adj.shift_id %}<small class="text-muted">смена #{{ adj.shift_id }}</small>{% endif %}
+                            </span>
+                            <span class="badge {{ 'bg-success' if adj.amount > 0 else 'bg-danger' }}">
+                                {{ adj.amount }}₽
+                            </span>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
             <!-- Протокол изменений корректировок -->
             <div class="card">
                 <div class="card-header bg-secondary text-white">
