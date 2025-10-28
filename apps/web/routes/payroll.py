@@ -7,7 +7,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, func
 
 from apps.web.jinja import templates
 from apps.web.middleware.auth_middleware import get_current_user
@@ -780,32 +780,6 @@ async def owner_payroll_manual_recalculate(
                             try:
                                 adjustment_service = PayrollAdjustmentService(db)
                                 
-                                # Получить неприменённые adjustments за период
-                                adjustments = await adjustment_service.get_unapplied_adjustments(
-                                    employee_id=contract.employee_id,
-                                    period_start=period_start,
-                                    period_end=period_end
-                                )
-                                
-                                # ВАЖНО: фильтруем корректировки по object_id
-                                # Берём только те, что относятся к текущему объекту ИЛИ не привязаны к объекту (ручные)
-                                adjustments_for_object = [
-                                    adj for adj in adjustments
-                                    if adj.object_id == obj.id or adj.object_id is None
-                                ]
-                                
-                                if not adjustments_for_object:
-                                    logger.debug(
-                                        f"No unapplied adjustments for employee on this object",
-                                        employee_id=contract.employee_id,
-                                        object_id=obj.id,
-                                        period_start=period_start,
-                                        period_end=period_end
-                                    )
-                                    continue
-                                
-                                adjustments = adjustments_for_object
-                                
                                 # Проверить, существует ли уже начисление за этот период
                                 existing_entry_query = select(PayrollEntry).where(
                                     PayrollEntry.employee_id == contract.employee_id,
@@ -816,155 +790,128 @@ async def owner_payroll_manual_recalculate(
                                 existing_entry_result = await db.execute(existing_entry_query)
                                 existing_entry = existing_entry_result.scalar_one_or_none()
                                 
-                                # Рассчитать суммы
-                                gross_amount = Decimal('0.00')
-                                total_bonuses = Decimal('0.00')
-                                total_deductions = Decimal('0.00')
-                                total_hours = Decimal('0.00')
-                                avg_hourly_rate = Decimal('0.00')
+                                if not existing_entry:
+                                    logger.debug(
+                                        f"No payroll entry exists for employee on this object",
+                                        employee_id=contract.employee_id,
+                                        object_id=obj.id,
+                                        period_start=period_start,
+                                        period_end=period_end
+                                    )
+                                    continue
                                 
-                                shift_adjustments = []
+                                # КРИТИЧНО: найти ВСЕ корректировки для этого сотрудника за этот период
+                                # 1. is_applied = false (обычные неприменённые)
+                                # 2. is_applied = true AND payroll_entry_id IS NULL ("зависшие")
+                                all_adjustments_query = select(PayrollAdjustment).outerjoin(
+                                    Shift, PayrollAdjustment.shift_id == Shift.id
+                                ).where(
+                                    PayrollAdjustment.employee_id == contract.employee_id,
+                                    or_(
+                                        PayrollAdjustment.is_applied == False,
+                                        and_(
+                                            PayrollAdjustment.is_applied == True,
+                                            PayrollAdjustment.payroll_entry_id.is_(None)
+                                        )
+                                    ),
+                                    or_(
+                                        and_(
+                                            PayrollAdjustment.shift_id.isnot(None),
+                                            func.date(Shift.end_time) >= period_start,
+                                            func.date(Shift.end_time) <= period_end
+                                        ),
+                                        and_(
+                                            PayrollAdjustment.shift_id.is_(None),
+                                            func.date(PayrollAdjustment.created_at) >= period_start,
+                                            func.date(PayrollAdjustment.created_at) <= period_end
+                                        )
+                                    )
+                                )
+                                
+                                all_result = await db.execute(all_adjustments_query)
+                                all_adjustments = list(all_result.scalars().all())
+                                
+                                # Фильтруем по правилам:
+                                # shift_base - только для текущего объекта
+                                # Остальные - для всех объектов владельца
+                                adjustments = []
+                                for adj in all_adjustments:
+                                    # Сбрасываем статус "зависших" корректировок
+                                    if adj.is_applied and adj.payroll_entry_id is None:
+                                        adj.is_applied = False
+                                        adj.payroll_entry_id = None
+                                    
+                                    if adj.adjustment_type == 'shift_base':
+                                        # shift_base - только для текущего объекта
+                                        if adj.object_id == obj.id:
+                                            adjustments.append(adj)
+                                    else:
+                                        # Все остальные корректировки - для любых объектов
+                                        adjustments.append(adj)
+                                
+                                # Flush изменений статусов перед использованием
+                                if any(adj.is_applied == False and adj.payroll_entry_id is None for adj in all_adjustments):
+                                    await db.flush()
+                                
+                                if not adjustments:
+                                    logger.debug(
+                                        f"No unapplied adjustments to apply",
+                                        employee_id=contract.employee_id,
+                                        object_id=obj.id
+                                    )
+                                    continue
+                                
+                                logger.info(
+                                    f"Found {len(adjustments)} unapplied adjustments for employee",
+                                    employee_id=contract.employee_id,
+                                    adjustment_types=[adj.adjustment_type for adj in adjustments],
+                                    amounts=[float(adj.amount) for adj in adjustments]
+                                )
+                                
+                                # Рассчитать ТОЛЬКО суммы для НОВЫХ корректировок (которые ещё не применены)
+                                # Если начисление уже существует - берём его суммы и ДОБАВЛЯЕМ новые корректировки
+                                gross_amount = Decimal(str(existing_entry.gross_amount or 0))
+                                total_bonuses = Decimal(str(existing_entry.total_bonuses or 0))
+                                total_deductions = Decimal(str(existing_entry.total_deductions or 0))
+                                total_hours = Decimal(str(existing_entry.hours_worked or 0))
+                                avg_hourly_rate = Decimal(str(existing_entry.hourly_rate or 0))
+                                
+                                # Добавляем суммы ТОЛЬКО для неприменённых корректировок
                                 for adj in adjustments:
                                     amount_decimal = Decimal(str(adj.amount))
                                     
                                     if adj.adjustment_type == 'shift_base':
-                                        gross_amount += amount_decimal
-                                        shift_adjustments.append(adj)
+                                        # shift_base уже в gross_amount, НЕ ДОБАВЛЯЕМ повторно
+                                        pass
                                     elif amount_decimal > 0:
                                         total_bonuses += amount_decimal
                                     else:
                                         total_deductions += abs(amount_decimal)
                                 
-                                # Получить часы и ставку из смен + формируем протокол
-                                calculation_details = {
-                                    "created_by": "manual_recalculate",
-                                    "created_at": target_date_obj.isoformat(),
-                                    "shifts": [],
-                                    "adjustments": []
-                                }
-                                
-                                if shift_adjustments:
-                                    shift_ids = [adj.shift_id for adj in shift_adjustments if adj.shift_id]
-                                    if shift_ids:
-                                        shifts_result = await db.execute(
-                                            select(Shift).where(Shift.id.in_(shift_ids))
-                                        )
-                                        shifts = shifts_result.scalars().all()
-                                        for shift in shifts:
-                                            shift_hours = Decimal(str(shift.total_hours)) if shift.total_hours else Decimal('0')
-                                            shift_rate = Decimal(str(shift.hourly_rate)) if shift.hourly_rate else Decimal('0')
-                                            shift_payment = shift_hours * shift_rate
-                                            
-                                            calculation_details["shifts"].append({
-                                                "shift_id": shift.id,
-                                                "date": shift.start_time.date().isoformat() if shift.start_time else None,
-                                                "hours": float(shift_hours),
-                                                "rate": float(shift_rate),
-                                                "amount": float(shift_payment)
-                                            })
-                                            
-                                            if shift.total_hours:
-                                                total_hours += shift_hours
-                                            if shift.hourly_rate:
-                                                avg_hourly_rate = shift_rate
-                                
-                                # Если нет часов, попытаться рассчитать
-                                if total_hours == 0 and gross_amount > 0 and avg_hourly_rate > 0:
-                                    total_hours = gross_amount / avg_hourly_rate
-                                
-                                # Если всё ещё нет ставки, взять из объекта
-                                if avg_hourly_rate == 0:
-                                    avg_hourly_rate = Decimal(str(obj.hourly_rate)) if obj.hourly_rate else Decimal('200.00')
-                                
-                                # Добавляем детали корректировок в протокол
-                                for adj in adjustments:
-                                    calculation_details["adjustments"].append({
-                                        "adjustment_id": adj.id,
-                                        "type": adj.adjustment_type,
-                                        "amount": float(adj.amount),
-                                        "description": adj.description,
-                                        "shift_id": adj.shift_id
-                                    })
-                                
                                 net_amount = gross_amount + total_bonuses - total_deductions
                                 
-                                if existing_entry:
-                                    # ОБНОВЛЯЕМ существующее начисление
-                                    # Сначала сбросим все старые adjustments этого entry
-                                    old_adjustments_query = select(PayrollAdjustment).where(
-                                        PayrollAdjustment.payroll_entry_id == existing_entry.id,
-                                        PayrollAdjustment.is_applied == True
-                                    )
-                                    old_adjustments_result = await db.execute(old_adjustments_query)
-                                    old_adjustments = old_adjustments_result.scalars().all()
-                                    
-                                    for old_adj in old_adjustments:
-                                        old_adj.payroll_entry_id = None
-                                        old_adj.is_applied = False
-                                    
-                                    # Обновляем суммы в entry
-                                    existing_entry.hours_worked = float(total_hours)
-                                    existing_entry.hourly_rate = float(avg_hourly_rate)
-                                    existing_entry.gross_amount = float(gross_amount)
-                                    existing_entry.total_bonuses = float(total_bonuses)
-                                    existing_entry.total_deductions = float(total_deductions)
-                                    existing_entry.net_amount = float(net_amount)
-                                    existing_entry.calculation_details = calculation_details  # Протокол расчёта
-                                    
-                                    # Применяем adjustments заново
-                                    adjustment_ids = [adj.id for adj in adjustments]
-                                    applied_count = await adjustment_service.mark_adjustments_as_applied(
-                                        adjustment_ids=adjustment_ids,
-                                        payroll_entry_id=existing_entry.id
-                                    )
-                                    
-                                    total_entries_updated += 1
-                                    total_adjustments_applied += applied_count
-                                    
-                                    logger.info(
-                                        f"Updated existing payroll entry",
-                                        payroll_entry_id=existing_entry.id,
-                                        employee_id=contract.employee_id,
-                                        adjustments_count=applied_count
-                                    )
-                                    
-                                else:
-                                    # СОЗДАЁМ новое начисление
-                                    payroll_entry = PayrollEntry(
-                                        employee_id=contract.employee_id,
-                                        contract_id=contract.id,
-                                        object_id=obj.id,
-                                        period_start=period_start,
-                                        period_end=period_end,
-                                        hours_worked=float(total_hours),
-                                        hourly_rate=float(avg_hourly_rate),
-                                        gross_amount=float(gross_amount),
-                                        total_bonuses=float(total_bonuses),
-                                        total_deductions=float(total_deductions),
-                                        net_amount=float(net_amount),
-                                        created_by_id=owner_id,
-                                        calculation_details=calculation_details  # Протокол расчёта
-                                    )
-                                    
-                                    db.add(payroll_entry)
-                                    await db.flush()
-                                    
-                                    # Применяем adjustments
-                                    adjustment_ids = [adj.id for adj in adjustments]
-                                    applied_count = await adjustment_service.mark_adjustments_as_applied(
-                                        adjustment_ids=adjustment_ids,
-                                        payroll_entry_id=payroll_entry.id
-                                    )
-                                    
-                                    total_entries_created += 1
-                                    total_adjustments_applied += applied_count
-                                    
-                                    logger.info(
-                                        f"Created new payroll entry",
-                                        payroll_entry_id=payroll_entry.id,
-                                        employee_id=contract.employee_id,
-                                        adjustments_count=applied_count
-                                    )
+                                # ОБНОВЛЯЕМ существующее начисление - ТОЛЬКО суммы
+                                # НЕ ТРОГАЕМ calculation_details и уже применённые корректировки!
+                                existing_entry.total_bonuses = float(total_bonuses)
+                                existing_entry.total_deductions = float(total_deductions)
+                                existing_entry.net_amount = float(net_amount)
+                                
+                                # Применяем ТОЛЬКО новые корректировки
+                                adjustment_ids = [adj.id for adj in adjustments]
+                                applied_count = await adjustment_service.mark_adjustments_as_applied(
+                                    adjustment_ids=adjustment_ids,
+                                    payroll_entry_id=existing_entry.id
+                                )
+                                
+                                total_entries_updated += 1
+                                total_adjustments_applied += applied_count
+                                
+                                logger.info(
+                                    f"Updated existing payroll entry",
+                                    payroll_entry_id=existing_entry.id,
+                                    employee_id=contract.employee_id,
+                                    adjustments_count=applied_count
+                                )
                                 
                             except Exception as e:
                                 error_msg = f"Error processing contract {contract.id}: {e}"
