@@ -603,13 +603,13 @@ async def owner_payroll_manual_recalculate(
                 
                 for obj in objects:
                     try:
-                        # Найти контракты
+                        # Найти контракты (ВСЕ активные + уволенные с settlement_policy='schedule')
                         contracts_query = select(Contract).where(
                             and_(
                                 Contract.allowed_objects.isnot(None),
                                 cast(Contract.allowed_objects, JSONB).op('@>')(cast([obj.id], JSONB)),
                                 or_(
-                                    and_(Contract.status == 'active', Contract.is_active == True),
+                                    Contract.status == 'active',  # Все активные (независимо от is_active)
                                     and_(
                                         Contract.status == 'terminated',
                                         Contract.settlement_policy == 'schedule'
