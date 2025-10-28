@@ -61,7 +61,7 @@ async def owner_rules_seed(
     _: User = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """SEED стартовых правил из текущих настроек объектов/org_units владельца."""
+    """SEED стартовых правил из текущих настроек объектов/org_units владельца (идемпотентно)."""
     from domain.entities.object import Object
     from domain.entities.org_structure import OrgStructureUnit
     from core.logging.logger import logger
@@ -70,6 +70,13 @@ async def owner_rules_seed(
     # owner_id берем из User.id (внутренний БД ID)
     owner_id = current_user.id
     logger.info(f"SEED rules: owner_id={owner_id}")
+    
+    # Проверяем, есть ли уже правила для этого владельца
+    existing_query = select(Rule).where(Rule.owner_id == owner_id)
+    existing_result = await session.execute(existing_query)
+    if existing_result.scalars().first():
+        logger.info(f"SEED rules: owner {owner_id} already has rules, skipping")
+        return RedirectResponse(url="/owner/rules", status_code=303)
     
     # Создаём дефолтные правила для владельца (общие для всех объектов)
     # Late penalty: 10 мин порог, 5₽/мин
@@ -94,11 +101,11 @@ async def owner_rules_seed(
     rule_cancel_short = Rule(
         owner_id=owner_id,
         code="cancel_short_notice",
-        name="Штраф за отмену в короткий срок",
+        name="Штраф за отмену смены в короткий срок",
         scope="cancellation",
         priority=100,
         is_active=True,
-        condition_json=json.dumps({}),
+        condition_json=json.dumps({"description": "Применяется, когда сотрудник отменяет смену менее чем за 24 часа до её начала"}),
         action_json=json.dumps({
             "type": "fine",
             "amount": 500,
@@ -113,11 +120,11 @@ async def owner_rules_seed(
     rule_cancel_invalid = Rule(
         owner_id=owner_id,
         code="cancel_invalid_reason",
-        name="Штраф за неуважительную причину отмены",
+        name="Штраф за неуважительную причину отмены смены",
         scope="cancellation",
         priority=200,
         is_active=True,
-        condition_json=json.dumps({}),
+        condition_json=json.dumps({"description": "Применяется, когда причина отмены не входит в список уважительных. Настройте список причин в разделе 'Причины отмен'"}),
         action_json=json.dumps({
             "type": "fine",
             "amount": 1000,
