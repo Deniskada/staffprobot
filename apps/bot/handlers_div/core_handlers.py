@@ -1077,9 +1077,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Отправляем ответ с кнопками
-    await query.edit_message_text(
-        text=response,
-        parse_mode='HTML',
-        reply_markup=reply_markup
-    )
+    # ИСПРАВЛЕНИЕ: fallback на новое сообщение если edit не сработает
+    try:
+        await query.edit_message_text(
+            text=response,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        logger.warning(f"Failed to edit main_menu message: {e}, sending new message instead")
+        await query.message.reply_text(
+            text=response,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
