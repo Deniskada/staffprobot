@@ -6,7 +6,8 @@ from sqlalchemy import select
 
 from core.database.session import get_async_session
 from domain.entities.payment_schedule import PaymentSchedule
-from shared.services.user_service import get_user_id_from_telegram_id
+from domain.entities.user import User
+from sqlalchemy import select as sql_select
 
 
 async def manual_recalculate(target_date_str: str, owner_telegram_id: int):
@@ -21,10 +22,15 @@ async def manual_recalculate(target_date_str: str, owner_telegram_id: int):
     
     async with get_async_session() as session:
         # Получить user_id владельца
-        owner_id = await get_user_id_from_telegram_id(owner_telegram_id, session)
-        if not owner_id:
+        owner_query = select(User).where(User.telegram_id == owner_telegram_id)
+        owner_result = await session.execute(owner_query)
+        owner = owner_result.scalar_one_or_none()
+        
+        if not owner:
             print(f"❌ Владелец с telegram_id={owner_telegram_id} не найден")
             return
+        
+        owner_id = owner.id
         
         print(f"✅ Owner ID: {owner_id}, target_date: {target_date_obj}")
         
