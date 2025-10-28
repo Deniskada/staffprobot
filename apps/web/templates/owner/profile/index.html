@@ -1140,6 +1140,19 @@ async function toggleFeature(featureKey, enabled) {
         } else {
             // Успешно сохранено - обновляем меню БЕЗ перезагрузки
             console.log('Feature toggled successfully, updating menu...');
+            
+            // Отключаем зависимые фичи в UI
+            if (data.disabled_dependent_features && data.disabled_dependent_features.length > 0) {
+                for (const depKey of data.disabled_dependent_features) {
+                    const depCheckbox = document.getElementById(`feature_${depKey}`);
+                    if (depCheckbox) {
+                        depCheckbox.checked = false;
+                        console.log(`Auto-disabled dependent feature: ${depKey}`);
+                    }
+                }
+                showToast(`Отключено зависимых фич: ${data.disabled_dependent_features.length}`, 'warning');
+            }
+            
             await updateSidebarMenu();
             
             // Показываем уведомление

@@ -82,10 +82,14 @@ async def toggle_feature(
             await _handle_rules_engine_toggle(session, user_id, enabled)
         
         # Автоотключение зависимых фич при отключении родительской
+        disabled_features = []
         if not enabled:
-            await _disable_dependent_features(session, user_id, feature_key, service)
+            disabled_features = await _disable_dependent_features(session, user_id, feature_key, service)
         
-        return JSONResponse({"success": True})
+        return JSONResponse({
+            "success": True,
+            "disabled_dependent_features": disabled_features  # Список автоотключённых фич
+        })
     except Exception as e:
         logger.error(f"Error toggling feature: {e}")
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
@@ -184,10 +188,15 @@ async def _handle_rules_engine_toggle(session: AsyncSession, user_id: int, enabl
         raise
 
 
-async def _disable_dependent_features(session: AsyncSession, user_id: int, parent_key: str, service) -> None:
-    """Отключение зависимых фич при отключении родительской."""
+async def _disable_dependent_features(session: AsyncSession, user_id: int, parent_key: str, service) -> list:
+    """Отключение зависимых фич при отключении родительской.
+    
+    Returns:
+        Список автоматически отключённых ключей фич
+    """
     from core.config.features import SYSTEM_FEATURES_REGISTRY
     
+    disabled = []
     try:
         # Находим все фичи, зависящие от parent_key
         for key, feature_def in SYSTEM_FEATURES_REGISTRY.items():
@@ -195,6 +204,9 @@ async def _disable_dependent_features(session: AsyncSession, user_id: int, paren
             if parent_key in depends_on:
                 logger.info(f"Auto-disabling dependent feature {key} (parent {parent_key} disabled)")
                 await service.toggle_user_feature(session, user_id, key, False)
+                disabled.append(key)
     
     except Exception as e:
         logger.error(f"Error disabling dependent features: {e}", exc_info=True)
+    
+    return disabled
