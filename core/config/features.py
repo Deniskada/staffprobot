@@ -8,13 +8,14 @@
 from typing import Dict, List, TypedDict
 
 
-class FeatureDefinition(TypedDict):
+class FeatureDefinition(TypedDict, total=False):
     """Определение функции системы."""
     name: str
     description: str
     menu_items: List[str]
     form_elements: List[str]
     sort_order: int
+    depends_on: List[str]  # Опциональное поле для зависимостей
 
 
 # Централизованный реестр функций системы
