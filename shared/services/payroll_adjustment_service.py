@@ -350,7 +350,20 @@ class PayrollAdjustmentService:
         )
         
         result = await self.session.execute(query)
-        return list(result.scalars().all())
+        adjustments_list = list(result.scalars().all())
+        
+        # DEBUG: логирование для диагностики
+        from core.logging.logger import logger
+        logger.debug(
+            f"get_unapplied_adjustments result",
+            employee_id=employee_id,
+            period_start=period_start,
+            period_end=period_end,
+            found_count=len(adjustments_list),
+            adjustment_ids=[a.id for a in adjustments_list[:5]]  # Первые 5 ID
+        )
+        
+        return adjustments_list
     
     async def get_unapplied_adjustments_until(
         self,
