@@ -181,13 +181,13 @@ async def payroll_adjustments_list(
         result = await session.execute(query)
         adjustments = result.scalars().all()
         
-        # Получить список сотрудников владельца для фильтра
+        # Получить список ВСЕХ сотрудников владельца (включая уволенных)
+        # для возможности создания корректировок задним числом
         employees_query = select(User).join(
             Contract, Contract.employee_id == User.id
         ).where(
-            Contract.owner_id == owner_id,
-            Contract.is_active == True,
-            Contract.status == 'active'
+            Contract.owner_id == owner_id
+            # Убран фильтр is_active и status — показываем всех когда-либо работавших
         ).distinct().order_by(User.last_name, User.first_name)
         employees_result = await session.execute(employees_query)
         employees = employees_result.scalars().all()

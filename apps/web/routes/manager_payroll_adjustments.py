@@ -141,14 +141,12 @@ async def manager_payroll_adjustments_list(
         result = await session.execute(query)
         adjustments = result.scalars().all()
         
-        # Получить список сотрудников управляющего для выпадающего списка
-        # Получаем всех сотрудников, работающих на доступных объектах
+        # Получить список ВСЕХ сотрудников управляющего (включая уволенных)
+        # для возможности создания корректировок задним числом
         employees_query = select(User).join(
             Contract, Contract.employee_id == User.id
-        ).where(
-            Contract.is_active == True,
-            Contract.status == 'active'
         )
+        # Убран фильтр is_active и status — показываем всех
         
         # Добавляем фильтр по allowed_objects
         from sqlalchemy import text, cast
