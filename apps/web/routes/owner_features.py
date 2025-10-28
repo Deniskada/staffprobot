@@ -120,11 +120,13 @@ async def _handle_rules_engine_toggle(session: AsyncSession, user_id: int, enabl
                         scope="late",
                         priority=100,
                         is_active=True,
-                        condition_json=json.dumps({"description": "Применяется, когда сотрудник приходит на смену с опозданием более чем на 10 минут"}),
+                        condition_json=json.dumps({
+                            "description": "Применяется при опоздании на смену. Порог опоздания настраивается в подразделениях/объектах (каскадное наследование настроек)."
+                        }),
                         action_json=json.dumps({
                             "type": "fine",
                             "amount": 50,
-                            "label": "Штраф за опоздание >10 мин",
+                            "label": "Штраф за опоздание (по умолчанию)",
                             "code": "late_default"
                         })
                     ),
@@ -135,12 +137,14 @@ async def _handle_rules_engine_toggle(session: AsyncSession, user_id: int, enabl
                         scope="cancellation",
                         priority=100,
                         is_active=True,
-                        condition_json=json.dumps({"description": "Применяется, когда сотрудник отменяет смену менее чем за 24 часа до её начала"}),
+                        condition_json=json.dumps({
+                            "description": "Применяется при отмене смены в короткий срок. Минимальный срок уведомления настраивается в подразделениях/объектах (каскадное наследование)."
+                        }),
                         action_json=json.dumps({
                             "type": "fine",
                             "amount": 500,
                             "fine_code": "short_notice",
-                            "label": "Штраф за отмену <24ч",
+                            "label": "Штраф за отмену в короткий срок",
                             "code": "cancel_short_notice"
                         })
                     ),
@@ -151,7 +155,9 @@ async def _handle_rules_engine_toggle(session: AsyncSession, user_id: int, enabl
                         scope="cancellation",
                         priority=200,
                         is_active=True,
-                        condition_json=json.dumps({"description": "Применяется, когда причина отмены не входит в список уважительных. Настройте список причин в разделе 'Причины отмен'"}),
+                        condition_json=json.dumps({
+                            "description": "Применяется, когда причина отмены не входит в список уважительных. Список уважительных причин настраивается в разделе 'Причины отмен' → позволяет отличать форс-мажор от простого 'не хочу'."
+                        }),
                         action_json=json.dumps({
                             "type": "fine",
                             "amount": 1000,
