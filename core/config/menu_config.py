@@ -33,7 +33,7 @@ class MenuConfig:
         'payroll_payouts': ['payroll'],
         'payroll_accruals': ['payroll'],
         'payroll_departments': ['payroll'],
-        'payroll_contracts': ['payroll'],
+        'payroll_contracts': ['contract_templates'],  # Контролируется отдельной фичей!
         
         # Штрафы и премии (контролируется rules_engine)
         'penalties_menu': ['rules_engine'],

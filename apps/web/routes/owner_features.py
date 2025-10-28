@@ -81,6 +81,10 @@ async def toggle_feature(
         if feature_key == 'rules_engine':
             await _handle_rules_engine_toggle(session, user_id, enabled)
         
+        # Автоотключение зависимых фич при отключении родительской
+        if not enabled:
+            await _disable_dependent_features(session, user_id, feature_key, service)
+        
         return JSONResponse({"success": True})
     except Exception as e:
         logger.error(f"Error toggling feature: {e}")
@@ -178,3 +182,19 @@ async def _handle_rules_engine_toggle(session: AsyncSession, user_id: int, enabl
         logger.error(f"Error handling rules_engine toggle: {e}", exc_info=True)
         await session.rollback()
         raise
+
+
+async def _disable_dependent_features(session: AsyncSession, user_id: int, parent_key: str, service) -> None:
+    """Отключение зависимых фич при отключении родительской."""
+    from core.config.features import SYSTEM_FEATURES_REGISTRY
+    
+    try:
+        # Находим все фичи, зависящие от parent_key
+        for key, feature_def in SYSTEM_FEATURES_REGISTRY.items():
+            depends_on = feature_def.get('depends_on', [])
+            if parent_key in depends_on:
+                logger.info(f"Auto-disabling dependent feature {key} (parent {parent_key} disabled)")
+                await service.toggle_user_feature(session, user_id, key, False)
+    
+    except Exception as e:
+        logger.error(f"Error disabling dependent features: {e}", exc_info=True)
