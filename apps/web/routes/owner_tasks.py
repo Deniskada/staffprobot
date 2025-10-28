@@ -11,8 +11,10 @@ from sqlalchemy.orm import selectinload
 from apps.web.jinja import templates
 from apps.web.dependencies import get_current_user_dependency, require_role
 from core.database.session import get_db_session
+from core.config.settings import settings
 from domain.entities.user import User
 from shared.services.task_service import TaskService
+from fastapi import HTTPException
 
 
 router = APIRouter()
@@ -25,6 +27,12 @@ async def owner_tasks_index(
     current_user: User = Depends(require_role(["owner", "superadmin"]))
 ):
     """Главная страница задач."""
+    if not settings.enable_tasks_v2:
+        raise HTTPException(
+            status_code=404,
+            detail="Tasks v2 отключен. Включите enable_tasks_v2 в настройках."
+        )
+    
     return templates.TemplateResponse(
         "owner/tasks/index.html",
         {"request": request}

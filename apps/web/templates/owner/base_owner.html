@@ -264,6 +264,7 @@
                 {% endif %}
                 
                 <!-- Правила (Rules Engine) -->
+                {% if settings.enable_rules_engine %}
                 <li class="sidebar-item">
                     <a href="/owner/rules" class="sidebar-link">
                         <i class="fas fa-gavel"></i>
@@ -271,8 +272,10 @@
                     </a>
                     <div class="sidebar-tooltip">Правила</div>
                 </li>
+                {% endif %}
                 
                 <!-- Задачи v2 -->
+                {% if settings.enable_tasks_v2 %}
                 <li class="sidebar-item">
                     <a href="/owner/tasks" class="sidebar-link">
                         <i class="fas fa-tasks"></i>
@@ -280,8 +283,10 @@
                     </a>
                     <div class="sidebar-tooltip">Задачи</div>
                 </li>
+                {% endif %}
                 
                 <!-- Инциденты -->
+                {% if settings.enable_incidents %}
                 <li class="sidebar-item">
                     <a href="/owner/incidents" class="sidebar-link">
                         <i class="fas fa-exclamation-triangle"></i>
@@ -289,6 +294,7 @@
                     </a>
                     <div class="sidebar-tooltip">Инциденты</div>
                 </li>
+                {% endif %}
                 
                 <!-- Отклики кандидатов (функции 1,2,3,4) -->
                 {% if enabled_features is defined and enabled_features | is_menu_visible('applications') %}

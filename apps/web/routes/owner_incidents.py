@@ -11,8 +11,10 @@ from sqlalchemy.orm import selectinload
 from apps.web.jinja import templates
 from apps.web.dependencies import get_current_user_dependency, require_role
 from core.database.session import get_db_session
+from core.config.settings import settings
 from domain.entities.user import User
 from shared.services.incident_service import IncidentService
+from fastapi import HTTPException
 
 
 router = APIRouter()
@@ -27,6 +29,12 @@ async def owner_incidents_list(
     session: AsyncSession = Depends(get_db_session)
 ):
     """Список инцидентов."""
+    if not settings.enable_incidents:
+        raise HTTPException(
+            status_code=404,
+            detail="Incidents отключены. Включите enable_incidents в настройках."
+        )
+    
     from domain.entities.incident import Incident
     
     owner_id = current_user.id

@@ -8,8 +8,10 @@ from sqlalchemy import select
 from apps.web.jinja import templates
 from apps.web.dependencies import get_current_user_dependency, require_role
 from core.database.session import get_db_session
+from core.config.settings import settings
 from domain.entities.rule import Rule
 from domain.entities.user import User
+from fastapi import HTTPException
 
 
 router = APIRouter()
@@ -22,6 +24,12 @@ async def owner_rules_list(
     _: User = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
+    if not settings.enable_rules_engine:
+        raise HTTPException(
+            status_code=404, 
+            detail="Rules Engine отключен. Включите enable_rules_engine в настройках."
+        )
+    
     owner_id = getattr(current_user, "id", None)
     query = select(Rule).where((Rule.owner_id == owner_id) | (Rule.owner_id.is_(None))).order_by(Rule.scope, Rule.priority, Rule.id)
     result = await session.execute(query)
