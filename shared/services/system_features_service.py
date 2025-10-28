@@ -105,7 +105,17 @@ class SystemFeaturesService:
             select(OwnerProfile).where(OwnerProfile.user_id == user_id)
         )
         profile = result.scalar_one_or_none()
-        enabled_keys = profile.enabled_features if profile and profile.enabled_features else []
+        
+        # Парсим enabled_features (может быть JSON строка или список)
+        import json
+        enabled_keys = []
+        if profile and profile.enabled_features:
+            if isinstance(profile.enabled_features, str):
+                enabled_keys = json.loads(profile.enabled_features)
+            elif isinstance(profile.enabled_features, list):
+                enabled_keys = profile.enabled_features
+            else:
+                enabled_keys = []
         
         # Формируем статус
         status = {}
@@ -164,7 +174,16 @@ class SystemFeaturesService:
                 return False
         
         # Обновляем список включенных функций
-        enabled_features = list(profile.enabled_features) if profile.enabled_features else []
+        import json
+        if profile.enabled_features:
+            if isinstance(profile.enabled_features, str):
+                enabled_features = json.loads(profile.enabled_features)
+            elif isinstance(profile.enabled_features, list):
+                enabled_features = list(profile.enabled_features)
+            else:
+                enabled_features = []
+        else:
+            enabled_features = []
         
         logger.info(
             f"Current enabled features for user {user_id}: {enabled_features}"
