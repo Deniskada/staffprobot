@@ -634,14 +634,24 @@ async def owner_payroll_manual_recalculate(
                                     period_end=period_end
                                 )
                                 
-                                if not adjustments:
+                                # ВАЖНО: фильтруем корректировки по object_id
+                                # Берём только те, что относятся к текущему объекту ИЛИ не привязаны к объекту (ручные)
+                                adjustments_for_object = [
+                                    adj for adj in adjustments
+                                    if adj.object_id == obj.id or adj.object_id is None
+                                ]
+                                
+                                if not adjustments_for_object:
                                     logger.debug(
-                                        f"No unapplied adjustments for employee",
+                                        f"No unapplied adjustments for employee on this object",
                                         employee_id=contract.employee_id,
+                                        object_id=obj.id,
                                         period_start=period_start,
                                         period_end=period_end
                                     )
                                     continue
+                                
+                                adjustments = adjustments_for_object
                                 
                                 # Проверить, существует ли уже начисление за этот период
                                 existing_entry_query = select(PayrollEntry).where(
