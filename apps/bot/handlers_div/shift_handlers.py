@@ -2188,7 +2188,23 @@ async def _handle_task_v2_media_upload(update: Update, context: ContextTypes.DEF
             
             template = entry.template
             
-            # Сохраняем в состояние пользователя
+            # Запускаем Media Orchestrator
+            from shared.services.media_orchestrator import MediaOrchestrator, MediaFlowConfig
+            orchestrator = MediaOrchestrator()
+            await orchestrator.begin_flow(
+                MediaFlowConfig(
+                    user_id=user_id,
+                    context_type="task_v2_proof",
+                    context_id=entry_id,
+                    require_text=False,
+                    require_photo=True,
+                    max_photos=1,
+                    allow_skip=False
+                )
+            )
+            await orchestrator.close()
+            
+            # Сохраняем в состояние пользователя (для совместимости)
             await user_state_manager.update_state(
                 user_id,
                 step=UserStep.TASK_V2_MEDIA_UPLOAD,
@@ -2206,7 +2222,7 @@ async def _handle_task_v2_media_upload(update: Update, context: ContextTypes.DEF
                 ]])
             )
             
-            logger.info(f"Requesting media for TaskEntryV2 {entry_id}")
+            logger.info(f"Media Orchestrator started for TaskEntryV2 {entry_id}")
     
     except Exception as e:
         logger.error(f"Error in _handle_task_v2_media_upload: {e}", exc_info=True)
@@ -2286,16 +2302,21 @@ async def _handle_cancel_task_v2_media(update: Update, context: ContextTypes.DEF
 
 
 async def _handle_received_task_v2_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка полученного фото/видео для задачи Tasks v2."""
+    """Обработка полученного фото/видео для задачи Tasks v2 через Media Orchestrator."""
     user_id = update.message.from_user.id
     
     try:
-        user_state = await user_state_manager.get_state(user_id)
-        entry_id = getattr(user_state, 'pending_task_v2_entry_id', None)
+        # Проверяем Media Orchestrator
+        from shared.services.media_orchestrator import MediaOrchestrator
+        orchestrator = MediaOrchestrator()
+        media_flow = await orchestrator.get_flow(user_id)
         
-        if not entry_id:
-            await update.message.reply_text("❌ Ошибка: задача не найдена")
+        if not media_flow or media_flow.context_type != "task_v2_proof":
+            await orchestrator.close()
+            await update.message.reply_text("❌ Ошибка: медиа-поток не найден")
             return
+        
+        entry_id = media_flow.context_id
         
         # Определяем тип медиа
         media_type = None
@@ -2414,6 +2435,13 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
                 chat_id_str = chat_id_str[1:]
             media_url = f"https://t.me/c/{chat_id_str}/{sent_message.message_id}"
             
+            # Добавляем медиа в Media Orchestrator
+            await orchestrator.add_photo(user_id, media_file_id)
+            
+            # Завершаем поток и получаем финальные данные
+            final_flow = await orchestrator.finish(user_id)
+            await orchestrator.close()
+            
             # Сохраняем результат выполнения в TaskEntryV2
             entry.is_completed = True
             entry.completed_at = datetime.utcnow()
@@ -2425,9 +2453,10 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
             await session.commit()
             
             logger.info(
-                f"TaskEntryV2 {entry_id} completed with media",
+                f"TaskEntryV2 {entry_id} completed with media via Media Orchestrator",
                 media_type=media_type,
-                media_url=media_url
+                media_url=media_url,
+                photos_count=len(final_flow.collected_photos) if final_flow else 0
             )
             
             # Очищаем состояние
