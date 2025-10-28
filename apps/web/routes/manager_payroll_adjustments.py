@@ -21,7 +21,7 @@ from domain.entities.contract import Contract
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 from shared.services.manager_permission_service import ManagerPermissionService
 
-router = APIRouter(tags=["manager-payroll-adjustments"])
+router = APIRouter(prefix="/payroll-adjustments", tags=["manager-payroll-adjustments"])
 
 
 @router.get("", response_class=HTMLResponse)
