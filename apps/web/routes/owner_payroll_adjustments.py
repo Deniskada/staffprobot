@@ -79,11 +79,10 @@ async def payroll_adjustments_list(
         if not owner_id:
             raise HTTPException(status_code=400, detail="Не удалось определить владельца")
         
-        # Получаем список employee_id с активными договорами у этого владельца
+        # Получаем список ВСЕХ employee_id, которые когда-либо работали у владельца
+        # (не фильтруем по статусу договора - владелец должен видеть ВСЕ корректировки)
         employee_ids_query = select(Contract.employee_id).where(
-            Contract.owner_id == owner_id,
-            Contract.is_active == True,
-            Contract.status == 'active'
+            Contract.owner_id == owner_id
         ).distinct()
         employee_ids_result = await session.execute(employee_ids_query)
         employee_ids = [row[0] for row in employee_ids_result.all()]
@@ -93,8 +92,8 @@ async def payroll_adjustments_list(
         owner_objects_result = await session.execute(owner_objects_query)
         owner_object_ids = [row[0] for row in owner_objects_result.all()]
         
-        if not employee_ids or not owner_object_ids:
-            # Нет сотрудников или объектов - возвращаем пустой список
+        if not employee_ids and not owner_object_ids:
+            # Нет сотрудников И объектов - возвращаем пустой список
             return templates.TemplateResponse(
                 "owner/payroll_adjustments/list.html",
                 {
@@ -126,15 +125,28 @@ async def payroll_adjustments_list(
         start_datetime_utc = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=moscow_tz).astimezone(timezone.utc)
         end_datetime_utc = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=moscow_tz).astimezone(timezone.utc)
         
+        # Строим базовый запрос с датами
         query = select(PayrollAdjustment).where(
             PayrollAdjustment.created_at >= start_datetime_utc,
-            PayrollAdjustment.created_at <= end_datetime_utc,
-            PayrollAdjustment.employee_id.in_(employee_ids),
-            or_(
-                PayrollAdjustment.object_id.in_(owner_object_ids),
-                PayrollAdjustment.object_id.is_(None)
+            PayrollAdjustment.created_at <= end_datetime_utc
+        )
+        
+        # Фильтр по владельцу: сотрудники ИЛИ объекты (если есть хотя бы одно)
+        owner_filters = []
+        if employee_ids:
+            owner_filters.append(PayrollAdjustment.employee_id.in_(employee_ids))
+        if owner_object_ids:
+            owner_filters.append(
+                or_(
+                    PayrollAdjustment.object_id.in_(owner_object_ids),
+                    PayrollAdjustment.object_id.is_(None)
+                )
             )
-        ).options(
+        
+        if owner_filters:
+            query = query.where(or_(*owner_filters))
+        
+        query = query.options(
             selectinload(PayrollAdjustment.employee),
             selectinload(PayrollAdjustment.object),
             selectinload(PayrollAdjustment.shift),
