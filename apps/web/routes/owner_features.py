@@ -80,6 +80,8 @@ async def toggle_feature(
         # Хуки при включении/отключении функций
         if feature_key == 'rules_engine':
             await _handle_rules_engine_toggle(session, user_id, enabled)
+            # Автоматически включаем/выключаем tasks_v2
+            await service.toggle_user_feature(session, user_id, 'tasks_v2', enabled)
         
         return JSONResponse({"success": True})
     except Exception as e:

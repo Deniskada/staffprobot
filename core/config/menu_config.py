@@ -13,24 +13,44 @@ class MenuConfig:
     # Маппинг пунктов меню на функции
     # Пункт меню отображается, если хотя бы одна из указанных функций включена
     MENU_ITEMS_FEATURES_MAP = {
-        'objects': [],  # Всегда видны
-        'employees': [],  # Всегда видны
-        'reports': ['basic_reports'],  # Базовые отчеты
+        # Базовые (контролируются telegram_bot)
+        'objects': ['telegram_bot'],
+        'employees': ['telegram_bot'],
+        
+        # Отчеты и аналитика
+        'reports': ['basic_reports'],
         'analytics': ['analytics'],
-        'calendar': ['shared_calendar'],
-        'planning': ['payroll'],
-        'planning_shifts': ['payroll'],
-        'planning_departments': ['payroll'],
-        'planning_schedule': ['payroll'],
+        
+        # Планирование (контролируется shared_calendar)
+        'planning_menu': ['shared_calendar'],
+        'planning_calendar': ['shared_calendar'],
+        'planning_shifts': ['shared_calendar'],
+        'planning_timeslots': ['shared_calendar'],
         'planning_contracts': ['contract_templates'],
-        'payroll_menu': ['bonuses_and_penalties', 'shift_tasks'],
-        'payroll_payouts': ['bonuses_and_penalties'],
-        'payroll_accruals': ['bonuses_and_penalties'],
-        'moderation_cancellations': ['shift_tasks'],
-        'analytics_cancellations': ['shift_tasks'],
-        'applications': ['recruitment_and_reviews'],  # Найм сотрудников
-        'reviews': ['recruitment_and_reviews'],  # Найм сотрудников
-        'notifications_settings': ['notifications'],  # Уведомления
+        
+        # Зарплата (контролируется payroll)
+        'payroll_menu': ['payroll'],
+        'payroll_payouts': ['payroll'],
+        'payroll_accruals': ['payroll'],
+        'payroll_departments': ['payroll'],
+        
+        # Задачи (контролируется rules_engine → tasks_v2)
+        'tasks_menu': ['rules_engine'],
+        'tasks_templates': ['rules_engine'],
+        'tasks_plan': ['rules_engine'],
+        'tasks_entries': ['rules_engine'],
+        
+        # Устаревшие (скрыты)
+        'moderation_cancellations': [],
+        'analytics_cancellations': [],
+        
+        # Найм и отзывы
+        'applications': ['recruitment_and_reviews'],
+        'reviews': ['recruitment_and_reviews'],
+        
+        # Уведомления
+        'notifications_settings': ['notifications'],
+        
         # Настройки всегда видны
         'settings': [],
         'profile': [],
