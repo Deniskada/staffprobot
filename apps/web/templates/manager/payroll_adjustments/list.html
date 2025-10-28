@@ -17,7 +17,7 @@
             <h5 class="mb-0"><i class="bi bi-funnel"></i> Фильтры</h5>
         </div>
         <div class="card-body">
-            <form method="get" action="/manager/payroll-adjustments">
+            <form method="get" action="/manager/payroll/adjustments">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label for="date_from" class="form-label">Дата начала</label>
@@ -72,7 +72,7 @@
                         <button type="submit" class="btn btn-primary me-2">
                             <i class="bi bi-search"></i> Применить фильтры
                         </button>
-                        <a href="/manager/payroll-adjustments" class="btn btn-outline-secondary">
+                        <a href="/manager/payroll/adjustments" class="btn btn-outline-secondary">
                             <i class="bi bi-x-circle"></i> Сбросить
                         </a>
                     </div>
@@ -337,7 +337,7 @@ document.getElementById('createAdjustmentForm').addEventListener('submit', async
     const formData = new FormData(this);
     
     try {
-        const response = await fetch('/manager/payroll-adjustments/create', {
+        const response = await fetch('/manager/payroll/adjustments/create', {
             method: 'POST',
             body: formData
         });
@@ -376,7 +376,7 @@ document.getElementById('editAdjustmentForm').addEventListener('submit', async f
     const formData = new FormData(this);
     
     try {
-        const response = await fetch(`/manager/payroll-adjustments/${adjustmentId}/edit`, {
+        const response = await fetch(`/manager/payroll/adjustments/${adjustmentId}/edit`, {
             method: 'POST',
             body: formData
         });
