@@ -33,16 +33,22 @@ class MenuConfig:
         'payroll_payouts': ['payroll'],
         'payroll_accruals': ['payroll'],
         'payroll_departments': ['payroll'],
+        'payroll_contracts': ['payroll'],
         
-        # Задачи (контролируется rules_engine → tasks_v2)
-        'tasks_menu': ['rules_engine'],
-        'tasks_templates': ['rules_engine'],
-        'tasks_plan': ['rules_engine'],
-        'tasks_entries': ['rules_engine'],
+        # Штрафы и премии (контролируется rules_engine)
+        'penalties_menu': ['rules_engine'],
+        'penalties_rules': ['rules_engine'],
+        'penalties_moderation': ['rules_engine'],
+        'penalties_analytics': ['rules_engine'],
         
-        # Устаревшие (скрыты)
-        'moderation_cancellations': [],
-        'analytics_cancellations': [],
+        # Задачи (контролируется tasks_v2)
+        'tasks_menu': ['tasks_v2'],
+        'tasks_templates': ['tasks_v2'],
+        'tasks_plan': ['tasks_v2'],
+        'tasks_entries': ['tasks_v2'],
+        
+        # Инциденты (контролируется incidents)
+        'incidents_menu': ['incidents'],
         
         # Найм и отзывы
         'applications': ['recruitment_and_reviews'],
