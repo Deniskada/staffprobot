@@ -77,8 +77,104 @@ async def toggle_feature(
                 "error": "Функция недоступна в вашем тарифном плане"
             }, status_code=403)
         
+        # Хуки при включении/отключении функций
+        if feature_key == 'rules_engine':
+            await _handle_rules_engine_toggle(session, user_id, enabled)
+        
         return JSONResponse({"success": True})
     except Exception as e:
         logger.error(f"Error toggling feature: {e}")
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
+
+
+async def _handle_rules_engine_toggle(session: AsyncSession, user_id: int, enabled: bool) -> None:
+    """Обработка включения/отключения Rules Engine."""
+    from domain.entities.rule import Rule
+    from sqlalchemy import select, update
+    import json
+    
+    try:
+        if enabled:
+            # При ВКЛЮЧЕНИИ: проверяем, есть ли правила, если нет — создаём
+            existing_query = select(Rule).where(Rule.owner_id == user_id)
+            existing_result = await session.execute(existing_query)
+            
+            if not existing_result.scalars().first():
+                # Создаём стартовые правила
+                logger.info(f"Auto-creating rules for owner {user_id} on enable")
+                
+                rules = [
+                    Rule(
+                        owner_id=user_id,
+                        code="late_default",
+                        name="Штраф за опоздание на смену (по умолчанию)",
+                        scope="late",
+                        priority=100,
+                        is_active=True,
+                        condition_json=json.dumps({"description": "Применяется, когда сотрудник приходит на смену с опозданием более чем на 10 минут"}),
+                        action_json=json.dumps({
+                            "type": "fine",
+                            "amount": 50,
+                            "label": "Штраф за опоздание >10 мин",
+                            "code": "late_default"
+                        })
+                    ),
+                    Rule(
+                        owner_id=user_id,
+                        code="cancel_short_notice",
+                        name="Штраф за отмену смены в короткий срок",
+                        scope="cancellation",
+                        priority=100,
+                        is_active=True,
+                        condition_json=json.dumps({"description": "Применяется, когда сотрудник отменяет смену менее чем за 24 часа до её начала"}),
+                        action_json=json.dumps({
+                            "type": "fine",
+                            "amount": 500,
+                            "fine_code": "short_notice",
+                            "label": "Штраф за отмену <24ч",
+                            "code": "cancel_short_notice"
+                        })
+                    ),
+                    Rule(
+                        owner_id=user_id,
+                        code="cancel_invalid_reason",
+                        name="Штраф за неуважительную причину отмены смены",
+                        scope="cancellation",
+                        priority=200,
+                        is_active=True,
+                        condition_json=json.dumps({"description": "Применяется, когда причина отмены не входит в список уважительных. Настройте список причин в разделе 'Причины отмен'"}),
+                        action_json=json.dumps({
+                            "type": "fine",
+                            "amount": 1000,
+                            "fine_code": "invalid_reason",
+                            "label": "Штраф за неуважительную причину",
+                            "code": "cancel_invalid_reason"
+                        })
+                    )
+                ]
+                
+                for rule in rules:
+                    session.add(rule)
+                
+                await session.commit()
+                logger.info(f"Created {len(rules)} default rules for owner {user_id}")
+            else:
+                # Правила уже есть — делаем их активными
+                await session.execute(
+                    update(Rule).where(Rule.owner_id == user_id).values(is_active=True)
+                )
+                await session.commit()
+                logger.info(f"Activated existing rules for owner {user_id}")
+        else:
+            # При ОТКЛЮЧЕНИИ: деактивируем все правила владельца
+            await session.execute(
+                update(Rule).where(Rule.owner_id == user_id).values(is_active=False)
+            )
+            await session.commit()
+            logger.info(f"Deactivated all rules for owner {user_id}")
+    
+    except Exception as e:
+        logger.error(f"Error handling rules_engine toggle: {e}", exc_info=True)
+        await session.rollback()
+        raise

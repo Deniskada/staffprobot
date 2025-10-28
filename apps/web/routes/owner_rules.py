@@ -83,11 +83,11 @@ async def owner_rules_seed(
     rule_late = Rule(
         owner_id=owner_id,
         code="late_default",
-        name="Штраф за опоздание (по умолчанию)",
+        name="Штраф за опоздание на смену (по умолчанию)",
         scope="late",
         priority=100,
         is_active=True,
-        condition_json=json.dumps({}),  # применяется всегда
+        condition_json=json.dumps({"description": "Применяется, когда сотрудник приходит на смену с опозданием более чем на 10 минут"}),
         action_json=json.dumps({
             "type": "fine",
             "amount": 50,  # 10 мин * 5₽
