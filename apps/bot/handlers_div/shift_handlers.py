@@ -1275,6 +1275,12 @@ async def _handle_close_shift_with_tasks(update: Update, context: ContextTypes.D
                 await query.answer("❌ Смена не найдена", show_alert=True)
                 return
             
+            # ИСПРАВЛЕНИЕ: проверяем, не закрыта ли уже смена
+            if shift.status in ["completed", "cancelled"]:
+                await query.answer(f"⚠️ Смена уже {shift.status}", show_alert=True)
+                await user_state_manager.clear_state(user_id)
+                return
+            
             obj_query = select(Object).where(Object.id == shift.object_id)
             obj_result = await session.execute(obj_query)
             obj = obj_result.scalar_one_or_none()
@@ -2103,6 +2109,8 @@ async def _handle_complete_task_v2(update: Update, context: ContextTypes.DEFAULT
             else:
                 # Отмечаем выполненной
                 if template.requires_media:
+                    # ИСПРАВЛЕНИЕ: отвечаем на callback ДО перехода к загрузке медиа
+                    await query.answer("📸 Отправьте фото отчёта", show_alert=False)
                     # Требуется фото - переходим к загрузке
                     await _handle_task_v2_media_upload(update, context, entry_id)
                     return
@@ -2235,6 +2243,15 @@ async def _handle_cancel_task_v2_media(update: Update, context: ContextTypes.DEF
     user_id = query.from_user.id
     
     try:
+        # ИСПРАВЛЕНИЕ: отвечаем на callback сразу
+        await query.answer("❌ Загрузка отменена", show_alert=False)
+        
+        # Очищаем Media Orchestrator
+        from shared.services.media_orchestrator import MediaOrchestrator
+        orchestrator = MediaOrchestrator()
+        await orchestrator.cancel(user_id)
+        await orchestrator.close()
+        
         # Очищаем состояние
         await user_state_manager.update_state(
             user_id,
