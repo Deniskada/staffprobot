@@ -349,26 +349,11 @@ class PayrollAdjustmentService:
             .order_by(PayrollAdjustment.created_at)
         )
         
-        # DEBUG: логирование SQL и параметров
-        from core.logging.logger import logger
-        compiled = query.compile(compile_kwargs={"literal_binds": True})
-        logger.debug(
-            f"get_unapplied_adjustments SQL",
-            employee_id=employee_id,
-            period_start=period_start,
-            period_end=period_end,
-            sql=str(compiled)[:500]
-        )
-        
         result = await self.session.execute(query)
         adjustments_list = list(result.scalars().all())
         
-        logger.debug(
-            f"get_unapplied_adjustments result",
-            employee_id=employee_id,
-            found_count=len(adjustments_list),
-            adjustment_ids=[a.id for a in adjustments_list[:5]] if adjustments_list else []
-        )
+        # DEBUG: print для диагностики (временно, обходим структурированное логирование)
+        print(f"[PAYROLL_DEBUG] get_unapplied_adjustments: employee_id={employee_id}, period={period_start} to {period_end}, found={len(adjustments_list)}, ids={[a.id for a in adjustments_list[:5]]}")
         
         return adjustments_list
     
