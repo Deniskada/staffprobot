@@ -369,18 +369,78 @@ async def _get_payment_period_for_date(
     
     # Обработка месячных графиков
     elif schedule.frequency == 'monthly':
-        # Проверяем, совпадает ли сегодняшний день месяца с днем выплаты
+        period_config = schedule.payment_period
+        
+        # НОВЫЙ формат: поддержка массива payments (несколько выплат в месяц)
+        payments = period_config.get('payments', [])
+        
+        if payments:
+            # Ищем выплату, у которой next_payment_date совпадает с target_date
+            matching_payment = None
+            for payment in payments:
+                next_payment_str = payment.get('next_payment_date')
+                if next_payment_str:
+                    try:
+                        next_payment = date.fromisoformat(next_payment_str)
+                        if next_payment == target_date:
+                            matching_payment = payment
+                            break
+                    except (ValueError, TypeError):
+                        continue
+            
+            if not matching_payment:
+                # Дата не совпадает ни с одной выплатой
+                return None
+            
+            # Нашли нужную выплату - рассчитываем период
+            start_offset = matching_payment.get('start_offset', 0)
+            end_offset = matching_payment.get('end_offset', 0)
+            
+            period_start = target_date + timedelta(days=start_offset)
+            period_end = target_date + timedelta(days=end_offset)
+            
+            # Если is_end_of_month=True, корректируем period_end до последнего дня месяца
+            if matching_payment.get('is_end_of_month', False):
+                # Вычисляем последний день месяца для period_end
+                # Берём первый день следующего месяца и вычитаем 1 день
+                if period_end.month == 12:
+                    next_month_start = date(period_end.year + 1, 1, 1)
+                else:
+                    next_month_start = date(period_end.year, period_end.month + 1, 1)
+                period_end = next_month_start - timedelta(days=1)
+            
+            return {
+                'period_start': period_start,
+                'period_end': period_end
+            }
+        
+        # СТАРЫЙ формат: обратная совместимость (для системных графиков)
+        # Проверяем, совпадает ли день месяца с днем выплаты
         if target_date.day != schedule.payment_day:
             return None
         
-        # Получаем настройки периода из payment_period
-        period_config = schedule.payment_period
+        # Используем старый формат с прямыми offset'ами
         start_offset = period_config.get('start_offset', -60)  # По умолчанию -60 дней назад
         end_offset = period_config.get('end_offset', -30)  # По умолчанию -30 дней назад
         
         # Рассчитываем период относительно даты выплаты
         period_start = target_date + timedelta(days=start_offset)
         period_end = target_date + timedelta(days=end_offset)
+        
+        # Проверяем calc_rules для старого формата
+        calc_rules = period_config.get('calc_rules', {})
+        if calc_rules.get('period') == 'previous_month':
+            # Период - весь предыдущий месяц
+            prev_month = target_date.month - 1
+            prev_year = target_date.year
+            if prev_month < 1:
+                prev_month = 12
+                prev_year -= 1
+            
+            period_start = date(prev_year, prev_month, 1)
+            # Последний день предыдущего месяца
+            first_day_current = date(target_date.year, target_date.month, 1)
+            period_end = first_day_current - timedelta(days=1)
         
         return {
             'period_start': period_start,
