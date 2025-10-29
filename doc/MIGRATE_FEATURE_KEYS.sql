@@ -34,6 +34,22 @@ WHERE key = 'shift_tasks';
 -- Показать обновлённое состояние
 SELECT key, name FROM system_features WHERE key IN ('rules_engine', 'tasks_v2');
 
+-- Добавить фичу incidents (если её нет)
+INSERT INTO system_features (key, name, description, sort_order, menu_items, form_elements, is_active, usage_count)
+VALUES (
+    'incidents',
+    'Инциденты',
+    'Регистрация и управление инцидентами на объектах. Контролируйте нарушения и проблемные ситуации.',
+    10,
+    '["incidents_menu"]'::json,
+    '[]'::json,
+    true,
+    0
+)
+ON CONFLICT (key) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description;
+
 
 -- ============================================================
 -- ЧАСТЬ 2: Обновление owner_profiles.enabled_features
