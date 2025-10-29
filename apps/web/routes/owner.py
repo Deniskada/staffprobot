@@ -121,55 +121,43 @@ async def owner_dashboard(request: Request):
             )
             active_shifts = active_shifts_count.scalar()
             
-            # Последние объекты
-            recent_objects_result = await session.execute(
-                select(
-                    Object.id,
-                    Object.name,
-                    Object.address,
-                    ShiftSchedule.id.label("schedule_id"),
-                    ShiftSchedule.planned_start,
-                    ShiftSchedule.planned_end,
-                    User.first_name.label("employee_first_name"),
-                    User.last_name.label("employee_last_name"),
-                    ShiftSchedule.status.label("schedule_status"),
-                )
-                .join(ShiftSchedule, ShiftSchedule.object_id == Object.id, isouter=True)
-                .join(User, ShiftSchedule.user_id == User.id, isouter=True)
+            # Все объекты владельца с вычислением статуса и времени последнего изменения статуса
+            from domain.entities.object_opening import ObjectOpening
+            objects_result = await session.execute(
+                select(Object.id, Object.name, Object.address)
                 .where(Object.owner_id == user_id)
-                .order_by(ShiftSchedule.planned_start.asc().nulls_last(), desc(Object.created_at))
-                .limit(5)
+                .order_by(desc(Object.created_at))
             )
-
-            recent_objects = []
-            for row in recent_objects_result:
-                recent_objects.append(
-                    type("RecentObject", (), {
-                        "name": row.name,
-                        "address": row.address,
-                        "first_shift_start": row.planned_start,
-                        "first_shift_end": row.planned_end,
-                        "first_name": row.employee_first_name,
-                        "last_name": row.employee_last_name,
-                        "schedule_status": row.schedule_status,
+            rows = objects_result.all()
+            
+            # Для каждого объекта берём последнюю запись открытия/закрытия
+            all_objects = []
+            for r in rows:
+                last_opening_res = await session.execute(
+                    select(ObjectOpening)
+                    .where(ObjectOpening.object_id == r.id)
+                    .order_by(desc(ObjectOpening.opened_at))
+                    .limit(1)
+                )
+                last_opening = last_opening_res.scalar_one_or_none()
+                status = "Закрыт"
+                status_time = None
+                if last_opening:
+                    if last_opening.closed_at is None:
+                        status = "Открыт"
+                        status_time = last_opening.opened_at
+                    else:
+                        status = "Закрыт"
+                        status_time = last_opening.closed_at
+                all_objects.append(
+                    type("OwnerObjectRow", (), {
+                        "id": r.id,
+                        "name": r.name,
+                        "address": r.address,
+                        "status": status,
+                        "status_time": status_time,
                     })
                 )
-            
-            # Получаем открытые объекты
-            from domain.entities.object_opening import ObjectOpening
-            open_objects_query = select(ObjectOpening).where(
-                and_(
-                    ObjectOpening.object_id.in_(
-                        select(Object.id).where(Object.owner_id == user_id)
-                    ),
-                    ObjectOpening.closed_at.is_(None)
-                )
-            ).options(
-                selectinload(ObjectOpening.object),
-                selectinload(ObjectOpening.opener)
-            ).order_by(ObjectOpening.opened_at.desc())
-            result = await session.execute(open_objects_query)
-            open_objects = result.scalars().all()
             
             # Получаем данные для переключения интерфейсов
             available_interfaces = await get_available_interfaces_for_user(user_id)
@@ -190,8 +178,7 @@ async def owner_dashboard(request: Request):
             "current_user": current_user,
             "title": "Дашборд владельца",
             "stats": stats,
-            "recent_objects": recent_objects,
-            "open_objects": open_objects,
+            "all_objects": all_objects,
             "available_interfaces": available_interfaces,
             "enabled_features": enabled_features,
         })
