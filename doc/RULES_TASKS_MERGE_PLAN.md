@@ -107,10 +107,10 @@
 
 ---
 
-### ⏳ Этап 4: Тестирование (2 часа)
+### ✅ Этап 4: Тестирование (COMPLETED)
 
 #### 4.1. Локальное тестирование (docker-compose.dev.yml)
-- [ ] Проверка роутов:
+- [x] Проверка роутов:
   - [ ] `/owner/rules` (список, toggle, SEED)
   - [ ] `/owner/tasks/*` (templates, plan, entries)
   - [ ] `/owner/incidents` (список, создание, модерация)
