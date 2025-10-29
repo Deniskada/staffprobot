@@ -10,6 +10,12 @@ from typing import List, Dict, Any, Optional
 class MenuConfig:
     """Конфигурация меню владельца."""
     
+    # Маппинг старых ключей фич на новые (для обратной совместимости)
+    LEGACY_FEATURE_MAPPING = {
+        'bonuses_and_penalties': 'rules_engine',
+        'shift_tasks': 'tasks_v2',
+    }
+    
     # Маппинг пунктов меню на функции
     # Пункт меню отображается, если хотя бы одна из указанных функций включена
     MENU_ITEMS_FEATURES_MAP = {
@@ -65,6 +71,27 @@ class MenuConfig:
     }
     
     @classmethod
+    def normalize_features(cls, features: List[str]) -> List[str]:
+        """
+        Преобразовать старые ключи фич в новые (для обратной совместимости).
+        
+        Args:
+            features: Список ключей функций (могут быть старые или новые)
+            
+        Returns:
+            Список с новыми ключами функций
+        """
+        if not features:
+            return []
+        
+        normalized = []
+        for feature in features:
+            # Если есть маппинг старого ключа - используем новый
+            normalized_key = cls.LEGACY_FEATURE_MAPPING.get(feature, feature)
+            normalized.append(normalized_key)
+        return normalized
+    
+    @classmethod
     def is_menu_item_visible(
         cls,
         menu_item_key: str,
@@ -80,6 +107,9 @@ class MenuConfig:
         Returns:
             True если пункт меню должен отображаться
         """
+        # Нормализуем фичи (преобразуем старые ключи в новые)
+        normalized_features = cls.normalize_features(enabled_features)
+        
         # Если пункт не привязан к функциям, всегда отображаем
         if menu_item_key not in cls.MENU_ITEMS_FEATURES_MAP:
             return True
@@ -91,7 +121,7 @@ class MenuConfig:
             return True
         
         # Проверяем, включена ли хотя бы одна из требуемых функций
-        return any(feature in enabled_features for feature in required_features)
+        return any(feature in normalized_features for feature in required_features)
     
     @classmethod
     def get_visible_menu_items(
