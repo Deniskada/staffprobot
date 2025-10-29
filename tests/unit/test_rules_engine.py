@@ -2,7 +2,7 @@
 
 import pytest
 from decimal import Decimal
-from shared.services.rules_engine import RulesEngine, RuleContext
+from shared.services.rules_engine import RulesEngine
 from domain.entities.rule import Rule
 
 

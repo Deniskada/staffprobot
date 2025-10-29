@@ -6,11 +6,8 @@ from dataclasses import dataclass, asdict
 from typing import Optional, List, Dict, Any
 import json
 import redis.asyncio as redis
-from core.config.settings import get_settings
+from core.config.settings import settings
 from core.logging.logger import logger
-
-
-settings = get_settings()
 
 
 @dataclass
