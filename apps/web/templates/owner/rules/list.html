@@ -1,0 +1,78 @@
+{% extends "owner/base_owner.html" %} 
+
+{% block title %}Правила (Rules Engine){% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-shield-check"></i> Автоправила (Rules Engine)</h2>
+    <div>
+      <a href="/owner/cancellations/reasons" class="btn btn-info btn-sm me-2">
+        <i class="bi bi-list-ul"></i> Причины отмен
+      </a>
+    </div>
+  </div>
+  
+  {% if not rules %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> 
+    <strong>Правила еще не загружены.</strong><br>
+    Система автоматически создает стартовые правила при включении функции "Автоправила" в профиле.
+    <br>Если правила не появились, обратитесь к администратору.
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-header">
+      <h5 class="mb-0">Активные правила</h5>
+    </div>
+    <div class="card-body">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th style="width: 40%;">Наименование</th>
+            <th style="width: 35%;">Описание</th>
+            <th style="width: 10%;" class="text-center">Активно</th>
+            <th style="width: 15%;" class="text-center">Действие</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for r in rules %}
+          <tr>
+            <td><strong>{{ r.name }}</strong></td>
+            <td>
+              <small class="text-muted">
+                {% if r.condition_json %}
+                  {% set cond = r.condition_json | from_json %}
+                  {{ cond.description if cond.description else '—' }}
+                {% else %}
+                  —
+                {% endif %}
+              </small>
+            </td>
+            <td class="text-center">
+              <span class="badge {{ 'bg-success' if r.is_active else 'bg-secondary' }}">
+                {{ 'Да' if r.is_active else 'Нет' }}
+              </span>
+            </td>
+            <td class="text-center">
+              <form method="post" action="/owner/rules/toggle" class="d-inline">
+                <input type="hidden" name="rule_id" value="{{ r.id }}" />
+                <input type="hidden" name="is_active" value="{{ 0 if r.is_active else 1 }}" />
+                <button type="submit" class="btn btn-sm {{ 'btn-warning' if r.is_active else 'btn-success' }}">
+                  <i class="bi {{ 'bi-toggle-on' if r.is_active else 'bi-toggle-off' }}"></i>
+                  {{ 'Выключить' if r.is_active else 'Включить' }}
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+
+

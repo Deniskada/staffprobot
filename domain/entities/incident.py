@@ -16,15 +16,23 @@ class Incident(Base):
     shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True, index=True)
     employee_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
-    category = Column(String(100), nullable=False)
-    severity = Column(String(50), nullable=True)
-    status = Column(String(50), nullable=False, default="new")
-    reason_code = Column(String(100), nullable=True)
+    category = Column(String(100), nullable=False)  # e.g., 'late_arrival', 'task_non_completion', 'damage', 'violation'
+    severity = Column(String(50), nullable=True)  # e.g., 'low', 'medium', 'high', 'critical'
+    status = Column(String(50), nullable=False, default="new")  # 'new', 'in_review', 'resolved', 'rejected'
+    reason_code = Column(String(100), nullable=True)  # Link to predefined reason
     notes = Column(Text, nullable=True)
-    evidence_media_ids = Column(Text, nullable=True)  # comma-separated IDs (простое хранение)
+    evidence_media_ids = Column(Text, nullable=True)  # JSON list of media IDs
+    suggested_adjustments = Column(Text, nullable=True)  # JSON list of suggested payroll adjustments
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    owner = relationship("User", foreign_keys=[owner_id])
+    object = relationship("Object", foreign_keys=[object_id])
+    shift_schedule = relationship("ShiftSchedule", foreign_keys=[shift_schedule_id])
+    employee = relationship("User", foreign_keys=[employee_id])
+    creator = relationship("User", foreign_keys=[created_by])
 
 

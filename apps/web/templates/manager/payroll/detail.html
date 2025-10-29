@@ -544,7 +544,7 @@ document.getElementById('editAdjustmentForm').addEventListener('submit', async f
     formData.append('description', description);
     
     try {
-        const response = await fetch(`/manager/payroll-adjustments/${adjustmentId}/edit`, {
+        const response = await fetch(`/manager/payroll/adjustments/${adjustmentId}/edit`, {
             method: 'POST',
             body: formData
         });
@@ -571,7 +571,7 @@ document.querySelectorAll('.btn-delete-adjustment').forEach(btn => {
         const adjustmentId = this.dataset.adjustmentId;
         
         try {
-            const response = await fetch(`/manager/payroll-adjustments/${adjustmentId}/delete`, {
+            const response = await fetch(`/manager/payroll/adjustments/${adjustmentId}/delete`, {
                 method: 'POST'
             });
             

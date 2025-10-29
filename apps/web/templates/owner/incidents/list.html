@@ -1,0 +1,171 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}Инциденты{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between mb-3">
+    <h2>Инциденты</h2>
+    <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#createIncidentModal">
+      <i class="fas fa-exclamation-triangle"></i> Создать инцидент
+    </button>
+  </div>
+
+  <!-- Фильтры -->
+  <div class="mb-3">
+    <a href="/owner/incidents" class="btn btn-sm {{ 'btn-primary' if not status_filter else 'btn-outline-primary' }}">Все</a>
+    <a href="/owner/incidents?status=new" class="btn btn-sm {{ 'btn-primary' if status_filter == 'new' else 'btn-outline-primary' }}">Новые</a>
+    <a href="/owner/incidents?status=in_review" class="btn btn-sm {{ 'btn-primary' if status_filter == 'in_review' else 'btn-outline-primary' }}">На рассмотрении</a>
+    <a href="/owner/incidents?status=resolved" class="btn btn-sm {{ 'btn-primary' if status_filter == 'resolved' else 'btn-outline-primary' }}">Решённые</a>
+    <a href="/owner/incidents?status=rejected" class="btn btn-sm {{ 'btn-primary' if status_filter == 'rejected' else 'btn-outline-primary' }}">Отклонённые</a>
+  </div>
+  
+  <table class="table table-sm table-hover">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Категория</th>
+        <th>Критичность</th>
+        <th>Объект</th>
+        <th>Смена</th>
+        <th>Сотрудник</th>
+        <th>Статус</th>
+        <th>Создал</th>
+        <th>Дата</th>
+        <th>Действия</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for inc in incidents %}
+      <tr class="{{ 'table-danger' if inc.severity == 'critical' else 'table-warning' if inc.severity == 'high' else '' }}">
+        <td>{{ inc.id }}</td>
+        <td>
+          {% if inc.category == 'late_arrival' %}
+            <i class="fas fa-clock"></i> Опоздание
+          {% elif inc.category == 'task_non_completion' %}
+            <i class="fas fa-tasks"></i> Невыполнение задачи
+          {% elif inc.category == 'damage' %}
+            <i class="fas fa-tools"></i> Повреждение
+          {% elif inc.category == 'violation' %}
+            <i class="fas fa-ban"></i> Нарушение
+          {% else %}
+            {{ inc.category }}
+          {% endif %}
+        </td>
+        <td>
+          {% if inc.severity == 'critical' %}
+            <span class="badge bg-danger">Критично</span>
+          {% elif inc.severity == 'high' %}
+            <span class="badge bg-warning">Высокая</span>
+          {% elif inc.severity == 'medium' %}
+            <span class="badge bg-info">Средняя</span>
+          {% else %}
+            <span class="badge bg-secondary">Низкая</span>
+          {% endif %}
+        </td>
+        <td>{{ inc.object.name if inc.object else '—' }}</td>
+        <td>{{ inc.shift_schedule_id or '—' }}</td>
+        <td>
+          {% if inc.employee %}
+            {{ inc.employee.last_name }} {{ inc.employee.first_name }}
+          {% else %}
+            {{ inc.employee_id or '—' }}
+          {% endif %}
+        </td>
+        <td>
+          {% if inc.status == 'new' %}
+            <span class="badge bg-danger">Новый</span>
+          {% elif inc.status == 'in_review' %}
+            <span class="badge bg-warning">На рассмотрении</span>
+          {% elif inc.status == 'resolved' %}
+            <span class="badge bg-success">Решён</span>
+          {% elif inc.status == 'rejected' %}
+            <span class="badge bg-secondary">Отклонён</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if inc.creator %}
+            {{ inc.creator.first_name }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>{{ inc.created_at.strftime('%d.%m.%Y %H:%M') if inc.created_at else '—' }}</td>
+        <td>
+          {% if inc.status == 'new' %}
+            <form method="post" action="/owner/incidents/{{ inc.id }}/status" class="d-inline">
+              <input type="hidden" name="new_status" value="in_review">
+              <button type="submit" class="btn btn-sm btn-warning" title="Взять на рассмотрение">
+                <i class="fas fa-eye"></i>
+              </button>
+            </form>
+          {% elif inc.status == 'in_review' %}
+            <form method="post" action="/owner/incidents/{{ inc.id }}/status" class="d-inline">
+              <input type="hidden" name="new_status" value="resolved">
+              <button type="submit" class="btn btn-sm btn-success" title="Решить">
+                <i class="fas fa-check"></i>
+              </button>
+            </form>
+            <form method="post" action="/owner/incidents/{{ inc.id }}/status" class="d-inline">
+              <input type="hidden" name="new_status" value="rejected">
+              <button type="submit" class="btn btn-sm btn-secondary" title="Отклонить">
+                <i class="fas fa-times"></i>
+              </button>
+            </form>
+          {% endif %}
+          {% if inc.suggested_adjustments and inc.status != 'rejected' %}
+            <form method="post" action="/owner/incidents/{{ inc.id }}/apply-adjustments" class="d-inline" onsubmit="return confirm('Применить корректировки?')">
+              <button type="submit" class="btn btn-sm btn-info" title="Применить корректировки">
+                <i class="fas fa-coins"></i>
+              </button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="10" class="text-center text-muted">Инцидентов не найдено.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal: Создать инцидент -->
+<div class="modal fade" id="createIncidentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/owner/incidents/create">
+        <div class="modal-header">
+          <h5 class="modal-title">Создать инцидент</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="category" class="form-label">Категория</label>
+            <select class="form-select" id="category" name="category" required>
+              <option value="late_arrival">Опоздание</option>
+              <option value="task_non_completion">Невыполнение задачи</option>
+              <option value="damage">Повреждение имущества</option>
+              <option value="violation">Нарушение правил</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="severity" class="form-label">Критичность</label>
+            <select class="form-select" id="severity" name="severity">
+              <option value="low">Низкая</option>
+              <option value="medium" selected>Средняя</option>
+              <option value="high">Высокая</option>
+              <option value="critical">Критичная</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="notes" class="form-label">Описание</label>
+            <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-danger">Создать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

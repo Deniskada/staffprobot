@@ -606,9 +606,25 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
                 report_chat_id = org_unit.telegram_report_chat_id
                 org_unit = org_unit.parent if hasattr(org_unit, 'parent') else None
         
-        # Если есть группа для отчетов - запрашиваем фото
+        # Если есть группа для отчетов - запрашиваем фото через Media Orchestrator
         if report_chat_id:
             context.user_data['report_chat_id'] = report_chat_id
+            
+            # Запускаем Media Orchestrator
+            from shared.services.media_orchestrator import MediaOrchestrator, MediaFlowConfig
+            orchestrator = MediaOrchestrator()
+            await orchestrator.begin_flow(
+                MediaFlowConfig(
+                    user_id=telegram_id,
+                    context_type="cancellation_doc",
+                    context_id=shift_id,
+                    require_text=False,
+                    require_photo=False,  # Опционально
+                    max_photos=1,
+                    allow_skip=True
+                )
+            )
+            await orchestrator.close()
             
             # Устанавливаем состояние ожидания фото
             from core.state.user_state_manager import user_state_manager, UserAction, UserStep
@@ -647,7 +663,7 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
 
 
 async def handle_cancellation_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработка загрузки фото для подтверждения отмены."""
+    """Обработка загрузки фото для подтверждения отмены через Media Orchestrator."""
     telegram_id = update.effective_user.id
     
     shift_id = context.user_data.get('cancelling_shift_id')
@@ -660,6 +676,13 @@ async def handle_cancellation_photo_upload(update: Update, context: ContextTypes
     
     # Получаем фото
     photo = update.message.photo[-1] if update.message.photo else None
+    
+    # Добавляем в Media Orchestrator
+    if photo:
+        from shared.services.media_orchestrator import MediaOrchestrator
+        orchestrator = MediaOrchestrator()
+        await orchestrator.add_photo(telegram_id, photo.file_id)
+        await orchestrator.close()
     
     # Если есть фото и группа - отправляем в группу
     if photo and report_chat_id:

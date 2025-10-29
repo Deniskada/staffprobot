@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 374/427 (87.6%)  
+**Общий прогресс:** 395/455 (86.8%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
@@ -14,7 +14,6 @@
 **Итерация 33 (Payroll System Improvements):** ✅ Завершена (4/4 задачи)  
 **Итерация 34 (Payroll Adjustments Enhancement):** ✅ Завершена (5/5 задач)  
 **Итерация 35 (Bot UX Improvements):** ✅ Завершена (2/2 задачи)
-**Итерация 36 (Payroll Critical Fixes):** ✅ Завершена (8/8 задач)
 
 ## Итерация 25: Система управления уведомлениями в админке
 
@@ -560,132 +559,161 @@
 - [Bot Commands](../vision_v1/bot/README.md)
 - [Shared Services](../vision_v1/shared/schedule_service.md)
 
-## Итерация 36: Payroll Critical Fixes ✅
-
-**Статус:** ✅ Завершена  
-**Длительность:** 1 день  
-**Приоритет:** Критический  
-**Описание:** Критические исправления системы начислений: поддержка сложных monthly графиков, пересчёт с учётом привязанных корректировок, детали расчёта, синхронизация логики celery и manual_recalculate.
-
-### Задачи
-
-- [x] **1.1. Исправление пересчёта с учётом привязанных корректировок (0.2 дня)**
-  - Type: bugfix | Files: apps/web/routes/payroll.py
-  - Acceptance: manual_recalculate учитывает корректировки shift_base, уже привязанные к начислению, и пересчитывает gross_amount с нуля
-
-- [x] **1.2. Отчёты: переименование колонок и расчёт остатка (0.1 дня)**
-  - Type: feature | Files: apps/web/templates/owner/payroll/report.html
-  - Acceptance: "Премия" → "Доплачено", "Штраф" → "Удержано", остаток учитывается в итого
-
-- [x] **1.3. Учёт корректировок без смены, привязанных к начислению (0.2 дня)**
-  - Type: bugfix | Files: apps/web/routes/payroll.py
-  - Acceptance: manual_deduction, созданные после начисления и привязанные к нему, учитываются при пересчёте независимо от created_at
-
-- [x] **1.4. Поддержка monthly графиков с массивом payments (0.3 дня)**
-  - Type: feature | Files: core/celery/tasks/payroll_tasks.py
-  - Acceptance: функция _get_payment_period_for_date корректно обрабатывает графики с payments_per_month > 1, учитывает is_end_of_month для месяцев с 28/30/31 днями
-
-- [x] **1.5. Создание начислений в manual_recalculate (0.2 дня)**
-  - Type: bugfix | Files: apps/web/routes/payroll.py
-  - Acceptance: кнопка "Пересчитать вручную" не только обновляет, но и создаёт новые начисления при наличии корректировок
-
-- [x] **1.6. Добавление calculation_details в manual_recalculate (0.3 дня)**
-  - Type: feature | Files: apps/web/routes/payroll.py
-  - Acceptance: начисления, созданные через manual_recalculate, содержат детальный протокол расчёта (смены, корректировки)
-
-- [x] **1.7. Синхронизация логики celery с manual_recalculate (0.4 дня)**
-  - Type: refactoring | Files: core/celery/tasks/payroll_tasks.py
-  - Acceptance: create_payroll_entries_by_schedule использует ту же логику что manual_recalculate: расширенный фильтр корректировок, создание/обновление, calculation_details
-
-- [x] **1.8. Синхронизация ветки feature/rules-tasks-incidents с main (0.3 дня)**
-  - Type: maintenance | Files: синхронизация 8 файлов payroll между ветками
-  - Acceptance: все изменения payroll из main перенесены в feature-ветку, риск конфликтов при мердже минимален
-
-### Критические проблемы
-
-**Проблема 1:** Начисления с gross_amount=0 для уволенных сотрудников
-- **Причина:** manual_recalculate искал только `is_applied=false` корректировки, пропускал привязанные (`is_applied=true, payroll_entry_id!=NULL`)
-- **Решение:** Добавлен третий вариант фильтра для корректировок, уже привязанных к ЭТОМУ начислению; пересчёт с нуля всех сумм
-
-**Проблема 2:** Корректировки НДФЛ не учитываются в начислениях
-- **Причина:** manual_deduction создавались после начисления и фильтровались по created_at, не попадая в период
-- **Решение:** Для корректировок без смены, привязанных к начислению, игнорируем фильтр по created_at
-
-**Проблема 3:** Начисления не создаются для владельца 1170536174
-- **Причина:** Функция _get_payment_period_for_date не поддерживала графики с payments_per_month > 1, использовала дефолтные офсеты
-- **Решение:** Добавлена поддержка массива payments с правильным расчётом периода и is_end_of_month
-
-**Проблема 4:** manual_recalculate только обновляет, не создаёт
-- **Причина:** Код пропускал обработку если `existing_entry = None`
-- **Решение:** Добавлена логика создания новых начислений
-
-**Проблема 5:** Нет деталей расчёта у новых начислений
-- **Причина:** calculation_details утрачены при рефакторинге manual_recalculate
-- **Решение:** Восстановлено формирование calculation_details с деталями смен и корректировок
-
-**Проблема 6:** Celery и manual_recalculate используют разную логику
-- **Причина:** Celery не обновлялся после изменений manual_recalculate, имел старые фильтры и не создавал calculation_details
-- **Решение:** Полная синхронизация логики: расширенный фильтр корректировок, создание/обновление, calculation_details
-
-### Результат
-- ✅ Начисления пересчитываются правильно с учётом всех корректировок
-- ✅ Поддержка любых monthly графиков (1, 2, 3+ выплат в месяц)
-- ✅ Детальный протокол расчёта для всех начислений
-- ✅ Идентичная логика в celery и manual_recalculate
-- ✅ Отчёты с правильными названиями колонок
-- ✅ Задеплоено на production
-
-### DoD
-- [x] Код следует правилам проекта ✅
-- [x] Функционал протестирован на dev ✅
-- [x] Документация обновлена ✅
-- [x] Задеплоено на production ✅
-
-### Связанная документация
-- [Payroll System](../vision_v1/entities/payroll.md)
-- [Payment Schedules](../vision_v1/entities/payment_schedule.md)
-
-## Итерация 37: Mobile App Integration
+## Итерация 36: Mobile App Integration
 
 **Статус:** В планировании  
 **Длительность:** 10 дней  
 **Приоритет:** Высокий  
 **Описание:** Интеграция с мобильным приложением для сотрудников с push-уведомлениями и геолокацией.
 
-## Итерация 38: API v2
+## Итерация 36: API v2
 
 **Статус:** В планировании  
 **Длительность:** 7 дней  
 **Приоритет:** Средний  
 **Описание:** Создание второй версии API с улучшенной архитектурой и дополнительными возможностями.
 
-## Итерация 39: Performance Optimization
+## Итерация 37: Performance Optimization
 
 **Статус:** В планировании  
 **Длительность:** 6 дней  
 **Приоритет:** Высокий  
 **Описание:** Оптимизация производительности системы, включая кэширование, индексы БД и асинхронные операции.
 
-## Итерация 40: Security Hardening
+## Итерация 38: Security Hardening
 
 **Статус:** В планировании  
 **Длительность:** 4 дня  
 **Приоритет:** Высокий  
 **Описание:** Усиление безопасности системы, включая аудит доступа, шифрование данных и защиту от атак.
 
-## Итерация 41: Documentation & Training
+## Итерация 39: Documentation & Training
 
 **Статус:** В планировании  
 **Длительность:** 3 дня  
 **Приоритет:** Средний  
 **Описание:** Создание подробной документации для пользователей и обучающих материалов.
 
-## Итерация 42: Final Testing & Deployment
+## Итерация 40: Final Testing & Deployment
 
 **Статус:** В планировании  
 **Длительность:** 5 дней  
 **Приоритет:** Высокий  
 **Описание:** Финальное тестирование системы, подготовка к продакшену и развертывание.
+
+---
+
+## Итерация 36: Рефакторинг автоправил, задач и инцидентов ✅
+
+**Статус:** ✅ Завершена (merge в main 29.10.2025)  
+**Длительность:** 12 дней (фактически)  
+**Приоритет:** Критичный (техдолг и архитектура)  
+**Описание:** Унификация правил штрафов/премий, консолидация задач и внедрение инцидентов через shared-компоненты.
+
+### Цели (100% выполнено):
+- ✅ Заменить разрозненные поля late/cancellation/task в Object/OrgUnit/Timeslot на единый Rules Engine
+- ✅ Консолидировать систему задач (shift_tasks JSONB → TaskTemplateV2/TaskPlanV2/TaskEntryV2)
+- ✅ Внедрить Incidents (нарушения, проблемы) с жизненным циклом
+- ✅ Унифицировать работу с медиа (Media Orchestrator)
+- ✅ Исправить критические баги Tasks v2 и Feature Flags
+
+### Задачи:
+- [x] 1. Аудит legacy-полей и инвентаризация использования (1 день)
+- [x] 2. Rules Engine (модель, сервис, интеграция late/cancel) (2 дня)
+  - [x] 2.1. Создать `domain/entities/rule.py` (owner_id, code, scope, condition_json, action_json)
+  - [x] 2.2. Реализовать `shared/services/rules_engine.py` (evaluate с приоритетами)
+  - [x] 2.3. Интегрировать в `adjustment_tasks.py` (late) и `shift_cancellation_service.py` (cancel)
+  - [x] 2.4. UI `/owner/rules` (список, toggle, SEED 3 дефолтных)
+- [x] 3. Tasks v2 shared-архитектура (3 дня)
+  - [x] 3.1. Создать TaskTemplateV2/TaskPlanV2/TaskEntryV2
+  - [x] 3.2. Реализовать `shared/services/task_service.py` (права по ролям)
+  - [x] 3.3. Shared-роутеры: owner/manager/employee через единый сервис
+  - [x] 3.4. UI `/owner/tasks/*`, `/manager/tasks/*`, `/employee/tasks/my`
+  - [x] 3.5. Миграция данных shift_tasks→TaskTemplateV2 (8 шаблонов)
+  - [x] 3.6. Депрекация Object.shift_tasks (readonly + алерт)
+- [x] 4. Cancellation Reasons (DB-driven) (1 день)
+  - [x] 4.1. Модель CancellationReason + миграция + SEED 11 глобальных
+  - [x] 4.2. CancellationPolicyService (owner overrides, treated_as_valid)
+  - [x] 4.3. UI `/owner/cancellations/reasons`
+  - [x] 4.4. Интеграция в бот (динамическая загрузка)
+  - [x] 4.5. Интеграция в модерацию (verify_cancellation_document)
+- [x] 5. Incidents (MVP) (0.5 дня)
+  - [x] 5.1. Модель Incident (category, severity, status, evidence_media_json)
+  - [x] 5.2. Роутер `/owner/incidents` + базовый UI CRUD
+- [x] 6. Media Orchestrator (1 день)
+  - [x] 6.1. Сервис `shared/services/media_orchestrator.py`
+  - [x] 6.2. UserAction.MEDIA_FLOW в state manager
+  - [x] 6.3. Интеграция в Tasks v2 (фото/видео отчёты)
+- [x] 7. Депрекация legacy-полей (0.5 дня)
+  - [x] 7.1. Object late/cancel поля → readonly + алерт в `/owner/objects/edit`
+  - [x] 7.2. Object.shift_tasks → readonly + алерт "Используйте /owner/tasks"
+- [x] 8. Feature-flags migration (2 дня) ✅
+  - [x] 8.1. Миграция ключей: bonuses_and_penalties → rules_engine, shift_tasks → tasks_v2
+  - [x] 8.2. Backward compatibility через LEGACY_FEATURE_MAPPING
+  - [x] 8.3. Добавлена фича `incidents` в system_features
+  - [x] 8.4. SQL миграция для БД + очистка дубликатов
+- [x] 9. Critical Bug Fixes (2 дня) ✅
+  - [x] 9.1. Исправлена инверсия статусов задач v2 при закрытии смены
+  - [x] 9.2. Исправлены ошибки загрузки медиа для Tasks v2 (ImportError, AttributeError)
+  - [x] 9.3. Исправлен created_by в task_bonuses (user_id=1 → 9)
+  - [x] 9.4. Исправлен роутинг payroll-adjustments (двойной префикс)
+- [x] 10. Тесты (1 день) ✅
+  - [x] Unit тесты: Rules Engine, TaskService, Media Orchestrator
+  - [x] Integration тесты: задачи v2, правила, инциденты
+  - [x] E2E тесты: 3 полных сценария
+- [x] 11. Документация (1 день) ✅
+  - [x] ITERATION_36_CHANGES.md - сводный отчёт
+  - [x] TASK_STATUS_INVERSION_BUG.md - анализ и решение
+  - [x] TASK_MEDIA_UPLOAD_BUG.md - анализ и решение
+  - [x] FEATURE_KEYS_MISMATCH_ANALYSIS.md - анализ миграции
+  - [x] MIGRATE_FEATURE_KEYS.sql - SQL миграция
+  - [x] Обновлена документация в vision_v1/
+
+### Статистика:
+- **Коммитов:** 88
+- **Файлов изменено:** 150+
+- **Новых файлов:** ~50
+- **Миграций БД:** 3
+- **Unit тестов:** 15+
+- **Integration тестов:** 8+
+
+### Acceptance Criteria:
+- [x] Rules Engine работает с fallback на legacy ✅
+- [x] Tasks v2 доступны для owner/manager/employee ✅
+- [x] UI правил/задач/инцидентов функционален (базовый CRUD) ✅
+- [x] Legacy-поля помечены deprecated (readonly + алерты) ✅
+- [x] Бот использует MediaOrchestrator (Tasks v2) ✅
+- [x] Feature keys migration завершена ✅
+- [x] Критические баги исправлены ✅
+- [x] Тесты покрывают критичные компоненты ✅
+- [x] Документация обновлена ✅
+- [x] Задеплоено на production ✅
+
+### Результат:
+- ✅ Единая система Rules Engine для всех штрафов/премий
+- ✅ Tasks v2 с полным lifecycle management
+- ✅ Incidents MVP для регистрации нарушений
+- ✅ Унифицированная работа с медиа через Media Orchestrator
+- ✅ Корректное отображение меню и фич
+- ✅ Исправлены все критические баги
+- ✅ Задеплоено на production без ошибок
+
+### DoD:
+- [x] Код следует правилам проекта ✅
+- [x] Миграции созданы и применены ✅
+- [x] Функционал протестирован на dev ✅
+- [x] Документация создана ✅
+- [x] Merge в main выполнен ✅
+- [x] Задеплоено на production ✅
+
+### Связанная документация:
+- [Сводный отчёт](../ITERATION_36_CHANGES.md)
+- [Rules Tasks Refactoring Status](../RULES_TASKS_REFACTORING_STATUS.md)
+- [Task Status Inversion Bug](../TASK_STATUS_INVERSION_BUG.md)
+- [Task Media Upload Bug](../TASK_MEDIA_UPLOAD_BUG.md)
+- [Feature Keys Mismatch Analysis](../FEATURE_KEYS_MISMATCH_ANALYSIS.md)
+
+---
 
 ---
 

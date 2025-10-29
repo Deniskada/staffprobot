@@ -9,6 +9,7 @@ from apps.bot.services.object_service import ObjectService
 from core.database.session import get_async_session
 from core.utils.timezone_helper import timezone_helper
 from domain.entities.object import Object
+from domain.entities.shift import Shift
 from sqlalchemy import select
 from core.state import user_state_manager, UserAction, UserStep
 from datetime import date, timedelta
@@ -244,51 +245,17 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 # Убираем клавиатуру
                 from telegram import ReplyKeyboardRemove
-                # Подгружаем список задач и показываем пользователю
-                tasks_lines = []
-                try:
-                    async with get_async_session() as session:
-                        from domain.entities.shift import Shift as ShiftModel
-                        from domain.entities.time_slot import TimeSlot
-                        from domain.entities.object import Object as ObjectModel
-                        shift_q = select(ShiftModel).where(ShiftModel.id == result.get('shift_id'))
-                        shift_res = await session.execute(shift_q)
-                        shift_obj = shift_res.scalar_one_or_none()
-                        timeslot = None
-                        obj = None
-                        if shift_obj and shift_obj.time_slot_id:
-                            ts_q = select(TimeSlot).where(TimeSlot.id == shift_obj.time_slot_id)
-                            ts_res = await session.execute(ts_q)
-                            timeslot = ts_res.scalar_one_or_none()
-                        if shift_obj and shift_obj.object_id:
-                            obj_q = select(ObjectModel).where(ObjectModel.id == shift_obj.object_id)
-                            obj_res = await session.execute(obj_q)
-                            obj = obj_res.scalar_one_or_none()
-                        # собрать задачи
-                        from .shift_handlers import _collect_shift_tasks
-                        tasks = await _collect_shift_tasks(session, shift_obj, timeslot=timeslot, object_=obj)
-                        for t in tasks:
-                            name = t.get('text') or t.get('task_text') or t.get('description') or 'Без названия'
-                            amt = t.get('deduction_amount') or t.get('amount') or t.get('bonus_amount') or 0
-                            badges = []
-                            if t.get('is_mandatory'):
-                                badges.append('Обязательная')
-                            if t.get('requires_media'):
-                                badges.append('Медиа')
-                            amt_str = f"+{int(amt)} ₽" if amt and float(amt) > 0 else (f"{int(amt)} ₽" if amt else "")
-                            badge_str = f" [{' ,'.join(badges)}]" if badges else ""
-                            line = f"• {name}{' — ' + amt_str if amt_str else ''}{badge_str}"
-                            tasks_lines.append(line)
-                except Exception:
-                    tasks_lines = []
-                tasks_text = ("\n".join(tasks_lines)) if tasks_lines else "—"
-                keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
+                
+                keyboard = [
+                    [InlineKeyboardButton("📋 Мои задачи", callback_data="my_tasks")],
+                    [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+                ]
                 await update.message.reply_text(
                     f"✅ Смена успешно открыта!\n"
                     f"📍 Объект: {object_name}\n"
                     f"🕐 Время начала: {start_time}\n"
                     f"💰 Часовая ставка: {hourly_rate}₽\n\n"
-                    f"📝 Задачи на смену:\n{tasks_text}",
+                    f"💡 Используйте '📋 Мои задачи' для просмотра задач на смену.",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
                 
@@ -563,13 +530,20 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         object_timezone = getattr(obj, 'timezone', None) or 'Europe/Moscow'
                         local_time = timezone_helper.format_local_time(opening.opened_at, object_timezone, '%H:%M')
                         
+                        keyboard = [
+                            [InlineKeyboardButton("📋 Мои задачи", callback_data="my_tasks")],
+                            [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+                        ]
+                        
                         await update.message.reply_text(
                             f"✅ <b>Объект открыт!</b>\n\n"
                             f"🏢 Объект: {obj.name}\n"
                             f"⏰ Время: {local_time}\n\n"
                             f"✅ <b>Смена автоматически открыта</b>\n"
-                            f"💰 Ставка: {result.get('hourly_rate', 0)}₽/час",
-                            parse_mode='HTML'
+                            f"💰 Ставка: {result.get('hourly_rate', 0)}₽/час\n\n"
+                            f"💡 Используйте '📋 Мои задачи' для просмотра задач на смену.",
+                            parse_mode='HTML',
+                            reply_markup=InlineKeyboardMarkup(keyboard)
                         )
                         await user_state_manager.clear_state(user_id)
                     else:
@@ -778,6 +752,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         shift_id = int(parts[1])
         task_idx = int(parts[2])
         await _handle_complete_shift_task(update, context, shift_id, task_idx)
+        return
+    # Tasks v2: выполнение задачи
+    elif query.data.startswith("complete_task_v2:"):
+        from .shift_handlers import _handle_complete_task_v2
+        entry_id = int(query.data.split(":", 1)[1])
+        await _handle_complete_task_v2(update, context, entry_id)
+        return
+    # Tasks v2: отмена загрузки медиа
+    elif query.data == "cancel_task_v2_media":
+        from .shift_handlers import _handle_cancel_task_v2_media
+        await _handle_cancel_task_v2_media(update, context)
         return
     elif query.data.startswith("close_shift_with_tasks:"):
         from .shift_handlers import _handle_close_shift_with_tasks
@@ -1092,9 +1077,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Отправляем ответ с кнопками
-    await query.edit_message_text(
-        text=response,
-        parse_mode='HTML',
-        reply_markup=reply_markup
-    )
+    # ИСПРАВЛЕНИЕ: fallback на новое сообщение если edit не сработает
+    try:
+        await query.edit_message_text(
+            text=response,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        logger.warning(f"Failed to edit main_menu message: {e}, sending new message instead")
+        await query.message.reply_text(
+            text=response,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )

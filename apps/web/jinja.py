@@ -4,6 +4,7 @@
 """
 
 from fastapi.templating import Jinja2Templates
+from core.config.settings import settings
 
 # Создаем единый экземпляр шаблонизатора
 templates = Jinja2Templates(directory="apps/web/templates")
@@ -13,7 +14,7 @@ from apps.web.utils.jinja_filters import register_filters
 
 register_filters(templates)
 
-# Добавляем полезные функции в глобальные переменные Jinja2
-# (не нужны, т.к. используем request.state напрямую с фильтром default)
+# Добавляем settings в глобальные переменные Jinja2
+templates.env.globals['settings'] = settings
 
 

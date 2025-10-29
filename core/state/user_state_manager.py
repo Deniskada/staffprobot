@@ -31,6 +31,7 @@ class UserAction(str, Enum):
     EDIT_TIMESLOT_EMPLOYEES = "edit_timeslot_employees"
     EDIT_TIMESLOT_NOTES = "edit_timeslot_notes"
     REPORT_DATES = "report_dates"
+    MEDIA_FLOW = "media_flow"  # Единый поток сбора текста/фото через Media Orchestrator
 
 
 class UserStep(str, Enum):
@@ -39,6 +40,7 @@ class UserStep(str, Enum):
     SHIFT_SELECTION = "shift_selection"
     TASK_COMPLETION = "task_completion"  # Phase 4A: отметка задач при закрытии смены
     MEDIA_UPLOAD = "media_upload"  # Загрузка фото/видео отчета для задачи
+    TASK_V2_MEDIA_UPLOAD = "task_v2_media_upload"  # Tasks v2: загрузка фото для задачи
     LOCATION_REQUEST = "location_request"
     OPENING_OBJECT_LOCATION = "opening_object_location"  # Геолокация при открытии объекта
     CLOSING_OBJECT_LOCATION = "closing_object_location"  # Геолокация при закрытии объекта

@@ -203,8 +203,45 @@ def process_closed_shifts_adjustments():
                                         source=late_settings.get('source')
                                     )
                                     
-                                    # Если у объекта не задан штраф - пропускаем
-                                    if penalty_per_minute and late_minutes > threshold_minutes:
+                                    # Попытка применить Rules Engine для late
+                                    applied_by_rule = False
+                                    try:
+                                        from shared.services.rules_engine import RulesEngine
+                                        engine = RulesEngine(session)
+                                        actions = await engine.evaluate(obj.owner_id, 'late', {
+                                            'late_minutes': late_minutes,
+                                            'threshold_minutes': threshold_minutes or 0,
+                                            'penalty_per_minute': float(penalty_per_minute) if penalty_per_minute else None,
+                                            'object_id': obj.id,
+                                        })
+                                        for act in actions:
+                                            if act.get('type') == 'fine':
+                                                amount = Decimal(str(act.get('amount', 0)))
+                                                if amount and amount > 0:
+                                                    late_adjustment = PayrollAdjustment(
+                                                        shift_id=shift.id,
+                                                        employee_id=shift.user_id,
+                                                        object_id=shift.object_id,
+                                                        adjustment_type='late_start',
+                                                        amount=-abs(amount),
+                                                        description=act.get('label', 'Штраф за опоздание (правило)'),
+                                                        details={
+                                                            'shift_id': shift.id,
+                                                            'late_minutes': late_minutes,
+                                                            'rule_code': act.get('code'),
+                                                        },
+                                                        created_by=shift.user_id,
+                                                        is_applied=False
+                                                    )
+                                                    session.add(late_adjustment)
+                                                    total_adjustments += 1
+                                                    applied_by_rule = True
+                                                    break
+                                    except Exception:
+                                        pass
+
+                                    # Если правил нет/не применились: базовая формула
+                                    if not applied_by_rule and penalty_per_minute and late_minutes > threshold_minutes:
                                         # Штрафуем только за минуты сверх порога
                                         penalized_minutes = late_minutes - threshold_minutes
                                         penalty_amount = Decimal(str(penalized_minutes)) * Decimal(str(penalty_per_minute))

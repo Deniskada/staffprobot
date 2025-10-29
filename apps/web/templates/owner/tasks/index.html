@@ -1,0 +1,37 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}Задачи{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Управление задачами</h2>
+  <div class="row mt-4">
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fas fa-book"></i> Библиотека шаблонов</h5>
+          <p class="card-text">Создание и редактирование шаблонов задач для объектов.</p>
+          <a href="/owner/tasks/templates" class="btn btn-primary">Открыть</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fas fa-calendar-check"></i> Планирование</h5>
+          <p class="card-text">Назначение задач на объекты, тайм-слоты и даты.</p>
+          <a href="/owner/tasks/plan" class="btn btn-primary">Открыть</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fas fa-tasks"></i> Выполнение и аудит</h5>
+          <p class="card-text">История выполнения задач сотрудниками.</p>
+          <a href="/owner/tasks/entries" class="btn btn-primary">Открыть</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

@@ -20,7 +20,7 @@ from domain.entities.shift import Shift
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 from shared.services.payroll_verification_service import PayrollVerificationService
 
-router = APIRouter(prefix="/payroll-adjustments", tags=["owner-payroll-adjustments"])
+router = APIRouter(tags=["owner-payroll-adjustments"])
 
 
 @router.get("", response_class=HTMLResponse)

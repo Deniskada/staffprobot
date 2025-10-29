@@ -3,6 +3,7 @@ Jinja2 фильтры для приложения
 """
 from datetime import datetime
 from typing import Optional, List
+import json
 from .static_version import get_static_url_with_version
 from core.utils.timezone_helper import TimezoneHelper
 from core.config.menu_config import MenuConfig
@@ -76,6 +77,26 @@ def is_menu_visible_filter(enabled_features: List[str], menu_item_key: str) -> b
     return MenuConfig.is_menu_item_visible(menu_item_key, enabled_features)
 
 
+def from_json_filter(json_str: Optional[str]):
+    """
+    Jinja2 фильтр для парсинга JSON строки в Python объект.
+    
+    Usage: {% set data = json_string | from_json %}
+    
+    Args:
+        json_str: JSON строка
+        
+    Returns:
+        Python dict/list или {} при ошибке
+    """
+    if not json_str:
+        return {}
+    try:
+        return json.loads(json_str)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
 def register_filters(templates):
     """
     Регистрирует фильтры и глобальные функции в Jinja2
@@ -89,11 +110,12 @@ def register_filters(templates):
         templates.env.filters['format_datetime_local'] = format_datetime_local
         templates.env.filters['has_feature'] = has_feature_filter
         templates.env.filters['is_menu_visible'] = is_menu_visible_filter
+        templates.env.filters['from_json'] = from_json_filter
         
         # ТАКЖЕ регистрируем как глобальные функции (для синтаксиса {{ func(...) }})
         templates.env.globals['static_version'] = static_version_filter
         templates.env.globals['format_datetime_local'] = format_datetime_local
         
-        print(f"✅ Фильтры зарегистрированы: static_version, format_datetime_local, has_feature, is_menu_visible")
+        print(f"✅ Фильтры зарегистрированы: static_version, format_datetime_local, has_feature, is_menu_visible, from_json")
     except Exception as e:
         print(f"❌ Ошибка регистрации: {e}")
