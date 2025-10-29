@@ -38,6 +38,34 @@
 
 ## Недавние изменения (main, 29.10.2025)
 
+### Итерация 36: Rules, Tasks v2, Incidents (29.10.2025) ✅
+- **Rules Engine:** Единая система правил штрафов/премий
+  - Роутер `/owner/rules` для управления правилами (late, cancel, task)
+  - Депрекация legacy-полей (late_penalty_amount, cancellation_penalty) в Object/OrgUnit
+  - Fallback на legacy-настройки для обратной совместимости
+- **Tasks v2:** Новая архитектура задач
+  - Роутеры: `/owner/tasks/*`, `/manager/tasks/*`, `/employee/tasks/my`
+  - Модели: TaskTemplateV2, TaskPlanV2, TaskEntryV2
+  - Планирование задач с периодичностью и множественным выбором объектов
+  - Выполнение задач через бот с фото/видео отчётами
+  - Автоматические начисления через Celery (task_bonuses)
+  - Депрекация Object.shift_tasks (readonly + алерт)
+- **Incidents:** MVP система инцидентов
+  - Роутер `/owner/incidents` с базовым CRUD
+  - Регистрация нарушений и проблем с медиа-доказательствами
+- **Media Orchestrator:** Унифицированная работа с медиа
+  - Единый сервис для всех медиа-потоков (задачи, отмены, инциденты)
+- **Feature Keys Migration:**
+  - Миграция ключей: bonuses_and_penalties → rules_engine, shift_tasks → tasks_v2
+  - Backward compatibility через LEGACY_FEATURE_MAPPING
+  - Добавлена фича `incidents` в system_features
+- **Critical Bug Fixes:**
+  - Исправлена инверсия статусов задач v2 при закрытии смены
+  - Исправлены ошибки загрузки медиа для Tasks v2 (ImportError, AttributeError)
+  - Исправлен created_by в task_bonuses (user_id=1 → 9)
+  - Исправлен роутинг payroll-adjustments (двойной префикс)
+
+### Итерации 32-35: Payroll и Contract Improvements
 - Начисления (/owner/payroll): критические исправления системы начислений
   - Пересчёт с учётом привязанных корректировок (is_applied=true, payroll_entry_id!=NULL)
   - Поддержка monthly графиков с несколькими выплатами в месяц (payments_per_month > 1)
@@ -51,9 +79,14 @@
   - Добавлена логика обновления существующих начислений
   - Расширенный фильтр корректировок (is_applied + зависшие + привязанные)
   - Формирование calculation_details с деталями смен и корректировок
+  - Новая задача: task_bonuses для автоматических начислений за задачи v2
 - Payment schedules (_get_payment_period_for_date):
   - Поддержка массива payments для monthly графиков
   - Корректная обработка is_end_of_month (месяцы с 28/30/31 днями)
   - Обратная совместимость со старым форматом (calc_rules)
+- Contract Termination Settlement:
+  - Финальные расчёты при расторжении договора
+  - Режимы: по графику или в дату увольнения
+  - Автоотмена плановых смен после увольнения
 
-См. также: `doc/vision_v1/entities/payroll.md`, `doc/plans/roadmap.md` — Итерация 36.
+См. также: `doc/ITERATION_36_CHANGES.md`, `doc/vision_v1/entities/payroll.md`, `doc/plans/roadmap.md`.
