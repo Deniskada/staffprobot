@@ -10,33 +10,86 @@ from typing import List, Dict, Any, Optional
 class MenuConfig:
     """Конфигурация меню владельца."""
     
+    # Маппинг старых ключей фич на новые (для обратной совместимости)
+    LEGACY_FEATURE_MAPPING = {
+        'bonuses_and_penalties': 'rules_engine',
+        'shift_tasks': 'tasks_v2',
+    }
+    
     # Маппинг пунктов меню на функции
     # Пункт меню отображается, если хотя бы одна из указанных функций включена
     MENU_ITEMS_FEATURES_MAP = {
-        'objects': [],  # Всегда видны
-        'employees': [],  # Всегда видны
-        'reports': ['basic_reports'],  # Базовые отчеты
+        # Базовые (контролируются telegram_bot)
+        'objects': ['telegram_bot'],
+        'employees': ['telegram_bot'],
+        
+        # Отчеты и аналитика
+        'reports': ['basic_reports'],
         'analytics': ['analytics'],
-        'calendar': ['shared_calendar'],
-        'planning': ['payroll'],
-        'planning_shifts': ['payroll'],
-        'planning_departments': ['payroll'],
-        'planning_schedule': ['payroll'],
+        
+        # Планирование (контролируется shared_calendar)
+        'planning_menu': ['shared_calendar'],
+        'planning_calendar': ['shared_calendar'],
+        'planning_shifts': ['shared_calendar'],
+        'planning_timeslots': ['shared_calendar'],
         'planning_contracts': ['contract_templates'],
-        'payroll_menu': ['bonuses_and_penalties', 'shift_tasks'],
-        'payroll_payouts': ['bonuses_and_penalties'],
-        'payroll_accruals': ['bonuses_and_penalties'],
-        'moderation_cancellations': ['shift_tasks'],
-        'analytics_cancellations': ['shift_tasks'],
-        'applications': ['recruitment_and_reviews'],  # Найм сотрудников
-        'reviews': ['recruitment_and_reviews'],  # Найм сотрудников
-        'notifications_settings': ['notifications'],  # Уведомления
+        
+        # Зарплата (контролируется payroll)
+        'payroll_menu': ['payroll'],
+        'payroll_payouts': ['payroll'],
+        'payroll_accruals': ['payroll'],
+        'payroll_departments': ['payroll'],
+        'payroll_contracts': ['contract_templates'],  # Контролируется отдельной фичей!
+        
+        # Штрафы и премии (контролируется rules_engine)
+        'penalties_menu': ['rules_engine'],
+        'penalties_rules': ['rules_engine'],
+        'penalties_moderation': ['rules_engine'],
+        'penalties_analytics': ['rules_engine'],
+        
+        # Задачи (контролируется tasks_v2)
+        'tasks_menu': ['tasks_v2'],
+        'tasks_templates': ['tasks_v2'],
+        'tasks_plan': ['tasks_v2'],
+        'tasks_entries': ['tasks_v2'],
+        
+        # Инциденты (контролируется incidents)
+        'incidents_menu': ['incidents'],
+        
+        # Найм и отзывы
+        'applications': ['recruitment_and_reviews'],
+        'reviews': ['recruitment_and_reviews'],
+        
+        # Уведомления
+        'notifications_settings': ['notifications'],
+        
         # Настройки всегда видны
         'settings': [],
         'profile': [],
         'tariff': [],
         'limits': [],
     }
+    
+    @classmethod
+    def normalize_features(cls, features: List[str]) -> List[str]:
+        """
+        Преобразовать старые ключи фич в новые (для обратной совместимости).
+        
+        Args:
+            features: Список ключей функций (могут быть старые или новые)
+            
+        Returns:
+            Список с новыми ключами функций
+        """
+        if not features:
+            return []
+        
+        normalized = []
+        for feature in features:
+            # Если есть маппинг старого ключа - используем новый
+            normalized_key = cls.LEGACY_FEATURE_MAPPING.get(feature, feature)
+            normalized.append(normalized_key)
+        return normalized
     
     @classmethod
     def is_menu_item_visible(
@@ -54,6 +107,9 @@ class MenuConfig:
         Returns:
             True если пункт меню должен отображаться
         """
+        # Нормализуем фичи (преобразуем старые ключи в новые)
+        normalized_features = cls.normalize_features(enabled_features)
+        
         # Если пункт не привязан к функциям, всегда отображаем
         if menu_item_key not in cls.MENU_ITEMS_FEATURES_MAP:
             return True
@@ -65,7 +121,7 @@ class MenuConfig:
             return True
         
         # Проверяем, включена ли хотя бы одна из требуемых функций
-        return any(feature in enabled_features for feature in required_features)
+        return any(feature in normalized_features for feature in required_features)
     
     @classmethod
     def get_visible_menu_items(

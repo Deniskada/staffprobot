@@ -1,0 +1,474 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}Планирование задач{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between mb-3">
+    <h2>Планирование задач</h2>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createPlanModal">
+      <i class="fas fa-plus"></i> Назначить задачу
+    </button>
+  </div>
+  
+  <table class="table table-sm table-hover">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Шаблон</th>
+        <th>Объект</th>
+        <th>Дата/Периодичность</th>
+        <th>Время</th>
+        <th>Активен</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for p in plans %}
+      <tr class="{{ 'text-muted' if not p.is_active else '' }}">
+        <td>{{ p.id }}</td>
+        <td>{{ p.template.title if p.template else p.template_id }}</td>
+        <td>
+          {% if p.object_ids %}
+            {% if p.object_ids|length == 1 %}
+              {% set obj = objects_list | selectattr('id', 'equalto', p.object_ids[0]) | first %}
+              {{ obj.name if obj else '#' + p.object_ids[0]|string }}
+            {% else %}
+              {% set first_obj = objects_list | selectattr('id', 'equalto', p.object_ids[0]) | first %}
+              {{ first_obj.name if first_obj else '#' + p.object_ids[0]|string }} <small class="text-muted">и еще {{ p.object_ids|length - 1 }}</small>
+            {% endif %}
+          {% elif p.object %}
+            {{ p.object.name }}
+          {% else %}
+            Все
+          {% endif %}
+        </td>
+        <td>
+          {% if p.planned_date %}
+            {{ p.planned_date.strftime('%d.%m.%Y') }}
+          {% elif p.recurrence_type == 'weekdays' and p.recurrence_config %}
+            {% set weekday_names = {1: 'Пн', 2: 'Вт', 3: 'Ср', 4: 'Чт', 5: 'Пт', 6: 'Сб', 7: 'Вс'} %}
+            Дни: {% for day in p.recurrence_config.weekdays %}{{ weekday_names[day] }}{% if not loop.last %}, {% endif %}{% endfor %}
+          {% elif p.recurrence_type == 'day_interval' and p.recurrence_config %}
+            Интервал: каждые {{ p.recurrence_config.interval }} дн.
+          {% else %}
+            Постоянно
+          {% endif %}
+          {% if p.recurrence_end_date %}<br><small class="text-muted">до {{ p.recurrence_end_date.strftime('%d.%m.%Y') }}</small>{% endif %}
+        </td>
+        <td>{{ p.planned_time_start.strftime('%H:%M') if p.planned_time_start else '—' }}</td>
+        <td>
+          {% if p.is_active %}
+            <span class="badge bg-success">Активен</span>
+          {% else %}
+            <span class="badge bg-secondary">Неактивен</span>
+          {% endif %}
+        </td>
+        <td>
+          <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editPlanModal{{ p.id }}" title="Редактировать">
+            <i class="fas fa-edit"></i>
+          </button>
+          <form method="post" action="/owner/tasks/plan/{{ p.id }}/toggle" class="d-inline">
+            <button type="submit" class="btn btn-sm {{ 'btn-warning' if p.is_active else 'btn-success' }}" title="{{ 'Выключить' if p.is_active else 'Включить' }}">
+              <i class="fas fa-{{ 'pause' if p.is_active else 'play' }}"></i>
+            </button>
+          </form>
+          <form method="post" action="/owner/tasks/plan/{{ p.id }}/delete" class="d-inline" onsubmit="return confirm('Удалить план?')">
+            <button type="submit" class="btn btn-sm btn-danger" title="Удалить">
+              <i class="fas fa-trash"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="text-center text-muted">Планы не найдены. Назначьте шаблон на объект/дату.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal: Назначить задачу -->
+<div class="modal fade" id="createPlanModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" action="/owner/tasks/plan/create" id="planForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Назначить задачу</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Режим создания: по шаблону или без -->
+          <div class="mb-3">
+            <label class="form-label">Режим создания</label>
+            <div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="creation_mode" id="mode_template" value="template" checked onchange="toggleCreationMode()">
+                <label class="form-check-label" for="mode_template">По шаблону</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="creation_mode" id="mode_custom" value="custom" onchange="toggleCreationMode()">
+                <label class="form-check-label" for="mode_custom">Без шаблона</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Выбор шаблона (режим "по шаблону") -->
+          <div class="mb-3" id="template_select_group">
+            <label for="template_id" class="form-label">Шаблон задачи</label>
+            <select class="form-select" id="template_id" name="template_id" onchange="fillFromTemplate()">
+              <option value="">Выберите шаблон</option>
+              {% for t in templates_list %}
+                <option value="{{ t.id }}" 
+                        data-title="{{ t.title }}" 
+                        data-description="{{ t.description or '' }}" 
+                        data-mandatory="{{ t.is_mandatory }}"
+                        data-media="{{ t.requires_media }}"
+                        data-amount="{{ t.default_bonus_amount or '' }}"
+                        data-code="{{ t.code }}">
+                  {{ t.title }} ({{ t.code }})
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Поля задачи (заполняются из шаблона или вручную) -->
+          <div class="mb-3">
+            <label for="task_title" class="form-label">Название задачи</label>
+            <input type="text" class="form-control" id="task_title" name="task_title">
+          </div>
+          <div class="mb-3">
+            <label for="task_description" class="form-label">Описание</label>
+            <textarea class="form-control" id="task_description" name="task_description" rows="2"></textarea>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="task_mandatory" name="task_mandatory" value="1">
+            <label class="form-check-label" for="task_mandatory">Обязательная задача</label>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="task_media" name="task_media" value="1">
+            <label class="form-check-label" for="task_media">Фотоотчёт</label>
+          </div>
+          <div class="mb-3">
+            <label for="task_amount" class="form-label">Премия/Штраф (₽)</label>
+            <input type="number" step="0.01" class="form-control" id="task_amount" name="task_amount">
+          </div>
+          <div class="mb-3">
+            <label for="task_code" class="form-label">Код</label>
+            <input type="text" class="form-control" id="task_code" name="task_code" readonly>
+            <small class="text-muted">Генерируется автоматически</small>
+          </div>
+
+          <hr>
+
+          <!-- Назначение: объекты (множественный выбор) -->
+          <div class="mb-3">
+            <label for="object_ids" class="form-label">Объекты</label>
+            <select class="form-select" id="object_ids" name="object_ids" multiple>
+              {% for obj in objects_list %}
+                <option value="{{ obj.id }}">{{ obj.name }}</option>
+              {% endfor %}
+            </select>
+            <small class="text-muted">Не выбрано = все объекты. Ctrl+Click для множественного выбора.</small>
+          </div>
+
+          <!-- Дата и время начала -->
+          <div class="mb-3">
+            <label for="planned_date" class="form-label">Дата (опционально)</label>
+            <input type="date" class="form-control" id="planned_date" name="planned_date">
+            <small class="text-muted">Оставьте пустым для постоянного назначения</small>
+          </div>
+          <div class="mb-3">
+            <label for="planned_time_start" class="form-label">Время начала (опционально)</label>
+            <input type="time" class="form-control" id="planned_time_start" name="planned_time_start">
+            <small class="text-muted">Оставьте пустым для назначения на каждую смену объекта. Если укажете время, задача будет назначена на тайм-слоты с этим временем.</small>
+          </div>
+
+          <!-- Периодичность -->
+          <div class="mb-3">
+            <label class="form-label">Периодичность</label>
+            <div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" id="recur_none" value="" checked onchange="toggleRecurrence()">
+                <label class="form-check-label" for="recur_none">Не повторять</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" id="recur_weekdays" value="weekdays" onchange="toggleRecurrence()">
+                <label class="form-check-label" for="recur_weekdays">По дням недели</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" id="recur_interval" value="day_interval" onchange="toggleRecurrence()">
+                <label class="form-check-label" for="recur_interval">Интервал дней</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Дни недели (если выбрана периодичность "По дням недели") -->
+          <div class="mb-3" id="weekdays_group" style="display:none;">
+            <label class="form-label">Выберите дни недели</label>
+            <small class="text-muted d-block mb-2">Выберите хотя бы один день недели</small>
+            <div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="1" id="wd_mon">
+                <label class="form-check-label" for="wd_mon">Пн</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="2" id="wd_tue">
+                <label class="form-check-label" for="wd_tue">Вт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="3" id="wd_wed">
+                <label class="form-check-label" for="wd_wed">Ср</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="4" id="wd_thu">
+                <label class="form-check-label" for="wd_thu">Чт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="5" id="wd_fri">
+                <label class="form-check-label" for="wd_fri">Пт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="6" id="wd_sat">
+                <label class="form-check-label" for="wd_sat">Сб</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="7" id="wd_sun">
+                <label class="form-check-label" for="wd_sun">Вс</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Интервал дней (если выбрана периодичность "Интервал дней") -->
+          <div class="mb-3" id="interval_group" style="display:none;">
+            <label for="day_interval" class="form-label">Частота повторения (дни)</label>
+            <input type="number" class="form-control" id="day_interval" name="day_interval" min="1" value="1">
+            <small class="text-muted">Задача будет повторяться каждые N дней</small>
+          </div>
+
+          <!-- Дата окончания периодичности -->
+          <div class="mb-3" id="end_date_group" style="display:none;">
+            <label for="recurrence_end_date" class="form-label">Дата окончания повторений (опционально)</label>
+            <input type="date" class="form-control" id="recurrence_end_date" name="recurrence_end_date">
+            <small class="text-muted">Оставьте пустым для бесконечного повторения (пока план активен)</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">Назначить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleCreationMode() {
+  const mode = document.querySelector('input[name="creation_mode"]:checked').value;
+  const templateGroup = document.getElementById('template_select_group');
+  const templateSelect = document.getElementById('template_id');
+  const titleField = document.getElementById('task_title');
+  const descField = document.getElementById('task_description');
+  const mandatoryField = document.getElementById('task_mandatory');
+  const mediaField = document.getElementById('task_media');
+  const amountField = document.getElementById('task_amount');
+  const codeField = document.getElementById('task_code');
+  
+  if (mode === 'template') {
+    // Режим "по шаблону": показываем выбор шаблона, поля неактивны и серые
+    templateGroup.style.display = 'block';
+    templateSelect.required = true;
+    [titleField, descField, amountField].forEach(f => {
+      f.disabled = true;
+      f.style.backgroundColor = '#e9ecef';
+    });
+    [mandatoryField, mediaField].forEach(f => {
+      f.disabled = true;
+      f.parentElement.style.opacity = '0.6';
+    });
+    codeField.disabled = true;
+    codeField.style.backgroundColor = '#e9ecef';
+    fillFromTemplate(); // Заполним поля из текущего выбранного шаблона
+  } else {
+    // Режим "без шаблона": скрываем выбор, поля активны
+    templateGroup.style.display = 'none';
+    templateSelect.required = false;
+    templateSelect.value = '';
+    [titleField, descField, amountField].forEach(f => {
+      f.disabled = false;
+      f.style.backgroundColor = '';
+      f.value = '';
+    });
+    [mandatoryField, mediaField].forEach(f => {
+      f.disabled = false;
+      f.checked = false;
+      f.parentElement.style.opacity = '1';
+    });
+    codeField.disabled = true; // Код всегда readonly
+    codeField.style.backgroundColor = '#e9ecef';
+    codeField.value = '[авто]';
+  }
+}
+
+function fillFromTemplate() {
+  const templateSelect = document.getElementById('template_id');
+  const option = templateSelect.options[templateSelect.selectedIndex];
+  
+  if (!option || !option.value) {
+    // Не выбран шаблон
+    document.getElementById('task_title').value = '';
+    document.getElementById('task_description').value = '';
+    document.getElementById('task_mandatory').checked = false;
+    document.getElementById('task_media').checked = false;
+    document.getElementById('task_amount').value = '';
+    document.getElementById('task_code').value = '';
+    return;
+  }
+  
+  // Заполняем поля из data-атрибутов
+  document.getElementById('task_title').value = option.dataset.title || '';
+  document.getElementById('task_description').value = option.dataset.description || '';
+  document.getElementById('task_mandatory').checked = option.dataset.mandatory === 'True';
+  document.getElementById('task_media').checked = option.dataset.media === 'True';
+  document.getElementById('task_amount').value = option.dataset.amount || '';
+  document.getElementById('task_code').value = option.dataset.code || '';
+}
+
+function toggleRecurrence() {
+  const recurrenceType = document.querySelector('input[name="recurrence_type"]:checked').value;
+  const weekdaysGroup = document.getElementById('weekdays_group');
+  const intervalGroup = document.getElementById('interval_group');
+  const endDateGroup = document.getElementById('end_date_group');
+  
+  weekdaysGroup.style.display = 'none';
+  intervalGroup.style.display = 'none';
+  endDateGroup.style.display = 'none';
+  
+  if (recurrenceType === 'weekdays') {
+    weekdaysGroup.style.display = 'block';
+    endDateGroup.style.display = 'block';
+  } else if (recurrenceType === 'day_interval') {
+    intervalGroup.style.display = 'block';
+    endDateGroup.style.display = 'block';
+  }
+}
+
+// Инициализация при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+  toggleCreationMode();
+  toggleRecurrence();
+});
+</script>
+
+<!-- Модалы редактирования для каждого плана -->
+{% for p in plans %}
+<div class="modal fade" id="editPlanModal{{ p.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/owner/tasks/plan/{{ p.id }}/edit">
+        <div class="modal-header">
+          <h5 class="modal-title">Редактировать план #{{ p.id }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Шаблон задачи</label>
+            <input type="text" class="form-control" value="{{ p.template.title if p.template else 'Не найден' }}" disabled>
+          </div>
+          <div class="mb-3">
+            <label for="edit_object_ids_{{ p.id }}" class="form-label">Объекты</label>
+            <select class="form-select" name="object_ids" id="edit_object_ids_{{ p.id }}" multiple>
+              {% for obj in objects_list %}
+                <option value="{{ obj.id }}" {{ 'selected' if p.object_ids and obj.id in p.object_ids else ('selected' if p.object_id == obj.id else '') }}>{{ obj.name }}</option>
+              {% endfor %}
+            </select>
+            <small class="text-muted">Не выбрано = все объекты. Ctrl+Click для выбора нескольких.</small>
+          </div>
+          <div class="mb-3">
+            <label for="edit_date_{{ p.id }}" class="form-label">Дата (опционально)</label>
+            <input type="date" class="form-control" name="planned_date" id="edit_date_{{ p.id }}" 
+                   value="{{ p.planned_date.strftime('%Y-%m-%d') if p.planned_date else '' }}">
+          </div>
+          <div class="mb-3">
+            <label for="edit_time_{{ p.id }}" class="form-label">Время начала (опционально)</label>
+            <input type="time" class="form-control" name="planned_time_start" id="edit_time_{{ p.id }}"
+                   value="{{ p.planned_time_start.strftime('%H:%M') if p.planned_time_start else '' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Периодичность</label>
+            <div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" value="" 
+                       {{ 'checked' if not p.recurrence_type else '' }}>
+                <label class="form-check-label">Не повторять</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" value="weekdays"
+                       {{ 'checked' if p.recurrence_type == 'weekdays' else '' }}>
+                <label class="form-check-label">По дням недели</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="recurrence_type" value="day_interval"
+                       {{ 'checked' if p.recurrence_type == 'day_interval' else '' }}>
+                <label class="form-check-label">Интервал дней</label>
+              </div>
+            </div>
+          </div>
+          {% if p.recurrence_type == 'weekdays' and p.recurrence_config %}
+          <div class="mb-3">
+            <label class="form-label">Дни недели</label>
+            <div>
+              {% set selected_days = p.recurrence_config.weekdays or [] %}
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="1" {{ 'checked' if 1 in selected_days else '' }}>
+                <label class="form-check-label">Пн</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="2" {{ 'checked' if 2 in selected_days else '' }}>
+                <label class="form-check-label">Вт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="3" {{ 'checked' if 3 in selected_days else '' }}>
+                <label class="form-check-label">Ср</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="4" {{ 'checked' if 4 in selected_days else '' }}>
+                <label class="form-check-label">Чт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="5" {{ 'checked' if 5 in selected_days else '' }}>
+                <label class="form-check-label">Пт</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="6" {{ 'checked' if 6 in selected_days else '' }}>
+                <label class="form-check-label">Сб</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="weekday" value="7" {{ 'checked' if 7 in selected_days else '' }}>
+                <label class="form-check-label">Вс</label>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+          {% if p.recurrence_type == 'day_interval' and p.recurrence_config %}
+          <div class="mb-3">
+            <label for="edit_interval_{{ p.id }}" class="form-label">Частота (дни)</label>
+            <input type="number" class="form-control" name="day_interval" id="edit_interval_{{ p.id }}"
+                   value="{{ p.recurrence_config.interval or 1 }}" min="1">
+          </div>
+          {% endif %}
+          <div class="mb-3">
+            <label for="edit_end_date_{{ p.id }}" class="form-label">Дата окончания (опционально)</label>
+            <input type="date" class="form-control" name="recurrence_end_date" id="edit_end_date_{{ p.id }}"
+                   value="{{ p.recurrence_end_date.strftime('%Y-%m-%d') if p.recurrence_end_date else '' }}">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}
+

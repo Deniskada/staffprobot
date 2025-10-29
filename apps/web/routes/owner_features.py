@@ -77,8 +77,142 @@ async def toggle_feature(
                 "error": "Функция недоступна в вашем тарифном плане"
             }, status_code=403)
         
-        return JSONResponse({"success": True})
+        # Хуки при включении/отключении функций
+        if feature_key == 'rules_engine':
+            await _handle_rules_engine_toggle(session, user_id, enabled)
+        
+        # Автоотключение зависимых фич при отключении родительской
+        disabled_features = []
+        if not enabled:
+            disabled_features = await _disable_dependent_features(session, user_id, feature_key, service)
+        
+        return JSONResponse({
+            "success": True,
+            "disabled_dependent_features": disabled_features  # Список автоотключённых фич
+        })
     except Exception as e:
         logger.error(f"Error toggling feature: {e}")
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
+
+
+async def _handle_rules_engine_toggle(session: AsyncSession, user_id: int, enabled: bool) -> None:
+    """Обработка включения/отключения Rules Engine."""
+    from domain.entities.rule import Rule
+    from sqlalchemy import select, update
+    import json
+    
+    try:
+        if enabled:
+            # При ВКЛЮЧЕНИИ: проверяем, есть ли правила, если нет — создаём
+            existing_query = select(Rule).where(Rule.owner_id == user_id)
+            existing_result = await session.execute(existing_query)
+            
+            if not existing_result.scalars().first():
+                # Создаём стартовые правила
+                logger.info(f"Auto-creating rules for owner {user_id} on enable")
+                
+                rules = [
+                    Rule(
+                        owner_id=user_id,
+                        code="late_default",
+                        name="Штраф за опоздание на смену (по умолчанию)",
+                        scope="late",
+                        priority=100,
+                        is_active=True,
+                        condition_json=json.dumps({
+                            "description": "Применяется при опоздании на смену. Порог опоздания настраивается в подразделениях/объектах (каскадное наследование настроек)."
+                        }),
+                        action_json=json.dumps({
+                            "type": "fine",
+                            "amount": 50,
+                            "label": "Штраф за опоздание (по умолчанию)",
+                            "code": "late_default"
+                        })
+                    ),
+                    Rule(
+                        owner_id=user_id,
+                        code="cancel_short_notice",
+                        name="Штраф за отмену смены в короткий срок",
+                        scope="cancellation",
+                        priority=100,
+                        is_active=True,
+                        condition_json=json.dumps({
+                            "description": "Применяется при отмене смены в короткий срок. Минимальный срок уведомления настраивается в подразделениях/объектах (каскадное наследование)."
+                        }),
+                        action_json=json.dumps({
+                            "type": "fine",
+                            "amount": 500,
+                            "fine_code": "short_notice",
+                            "label": "Штраф за отмену в короткий срок",
+                            "code": "cancel_short_notice"
+                        })
+                    ),
+                    Rule(
+                        owner_id=user_id,
+                        code="cancel_invalid_reason",
+                        name="Штраф за неуважительную причину отмены смены",
+                        scope="cancellation",
+                        priority=200,
+                        is_active=True,
+                        condition_json=json.dumps({
+                            "description": "Применяется, когда причина отмены не входит в список уважительных. Список уважительных причин настраивается в разделе 'Причины отмен' → позволяет отличать форс-мажор от простого 'не хочу'."
+                        }),
+                        action_json=json.dumps({
+                            "type": "fine",
+                            "amount": 1000,
+                            "fine_code": "invalid_reason",
+                            "label": "Штраф за неуважительную причину",
+                            "code": "cancel_invalid_reason"
+                        })
+                    )
+                ]
+                
+                for rule in rules:
+                    session.add(rule)
+                
+                await session.commit()
+                logger.info(f"Created {len(rules)} default rules for owner {user_id}")
+            else:
+                # Правила уже есть — делаем их активными
+                await session.execute(
+                    update(Rule).where(Rule.owner_id == user_id).values(is_active=True)
+                )
+                await session.commit()
+                logger.info(f"Activated existing rules for owner {user_id}")
+        else:
+            # При ОТКЛЮЧЕНИИ: деактивируем все правила владельца
+            await session.execute(
+                update(Rule).where(Rule.owner_id == user_id).values(is_active=False)
+            )
+            await session.commit()
+            logger.info(f"Deactivated all rules for owner {user_id}")
+    
+    except Exception as e:
+        logger.error(f"Error handling rules_engine toggle: {e}", exc_info=True)
+        await session.rollback()
+        raise
+
+
+async def _disable_dependent_features(session: AsyncSession, user_id: int, parent_key: str, service) -> list:
+    """Отключение зависимых фич при отключении родительской.
+    
+    Returns:
+        Список автоматически отключённых ключей фич
+    """
+    from core.config.features import SYSTEM_FEATURES_REGISTRY
+    
+    disabled = []
+    try:
+        # Находим все фичи, зависящие от parent_key
+        for key, feature_def in SYSTEM_FEATURES_REGISTRY.items():
+            depends_on = feature_def.get('depends_on', [])
+            if parent_key in depends_on:
+                logger.info(f"Auto-disabling dependent feature {key} (parent {parent_key} disabled)")
+                await service.toggle_user_feature(session, user_id, key, False)
+                disabled.append(key)
+    
+    except Exception as e:
+        logger.error(f"Error disabling dependent features: {e}", exc_info=True)
+    
+    return disabled

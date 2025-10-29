@@ -135,10 +135,37 @@ class ShiftCancellationService:
                     'message': 'Ваша заявка на модерации. Владелец проверит документ.'
                 }
 
-            # Неуважительная отмена — рассчитываем штрафы немедленно
+            # Неуважительная отмена — сначала пробуем Rules Engine (если есть правила)
             total_fine = Decimal('0')
             applied_parts: list[str] = []
             if obj:
+                try:
+                    from shared.services.rules_engine import RulesEngine
+                    engine = RulesEngine(self.session)
+                    actions = await engine.evaluate(obj.owner_id, 'cancellation', {
+                        'cancellation_reason': cancellation_reason,
+                        'hours_before_shift': float(hours_before_shift) if hours_before_shift is not None else None,
+                        'object_id': obj.id,
+                    })
+                    for act in actions:
+                        if act.get('type') == 'fine':
+                            amount = Decimal(str(act.get('amount', 0)))
+                            if amount and amount > 0:
+                                await self._create_specific_payroll_adjustment(
+                                    cancellation,
+                                    shift,
+                                    amount,
+                                    act.get('fine_code', 'invalid_reason'),
+                                    hours_before_shift,
+                                    cancelled_by_user_id,
+                                )
+                                total_fine += amount
+                                applied_parts.append(act.get('label', 'правило'))
+                except Exception as _:
+                    pass
+
+            # Базовая логика по настройкам объекта (для совместимости)
+            if obj and total_fine == 0:
                 settings = obj.get_cancellation_settings()
                 short_notice_hours = settings.get('short_notice_hours')
                 short_notice_fine = settings.get('short_notice_fine')
@@ -341,12 +368,26 @@ class ShiftCancellationService:
             cancellation.verified_by_id = verified_by_user_id
             cancellation.verified_at = datetime.now(timezone.utc)
             
-            # Если справка подтверждена - штрафов нет
-            if is_approved:
-                logger.info(f"Cancellation {cancellation_id} approved - no fines")
+            # Проверяем причину через CancellationPolicyService
+            from shared.services.cancellation_policy_service import CancellationPolicyService
             
-            # Если справка отклонена - создаем штрафы
-            elif not is_approved:
+            # Получаем объект для owner_id
+            object_query_for_reason = select(Object).where(Object.id == cancellation.object_id)
+            object_result_for_reason = await self.session.execute(object_query_for_reason)
+            obj_for_reason = object_result_for_reason.scalar_one_or_none()
+            
+            policy_service = CancellationPolicyService(self.session)
+            reason_obj = await policy_service.get_reason_by_code(
+                code=cancellation.cancellation_reason,
+                owner_id=obj_for_reason.owner_id if obj_for_reason else None
+            )
+            
+            # Если справка подтверждена И причина уважительная - штрафов нет
+            if is_approved and reason_obj and reason_obj.treated_as_valid:
+                logger.info(f"Cancellation {cancellation_id} approved with respectful reason '{reason_obj.code}' - no fines")
+            
+            # Если справка отклонена ИЛИ причина не уважительная - создаем штрафы
+            elif not is_approved or (reason_obj and not reason_obj.treated_as_valid):
                 # Получаем объект для настроек (с eager loading org_unit и цепочки parent'ов)
                 object_query = select(Object).where(Object.id == cancellation.object_id).options(
                     joinedload(Object.org_unit).joinedload('parent').joinedload('parent').joinedload('parent').joinedload('parent')

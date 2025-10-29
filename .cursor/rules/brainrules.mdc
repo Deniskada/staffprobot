@@ -255,13 +255,37 @@ async def get_user(session: AsyncSession, user_id: int) -> User:
 3. Тестируй через веб-интерфейс или Telegram bot
 4. Коммит на русском: "Исправление: краткое описание"
 
-### Docker (dev)
+### Docker (dev и prod - ОДИНАКОВЫЕ контейнеры!)
+
+**ВАЖНО**: Dev содержит ВСЕ те же контейнеры что и prod!
+
+**Контейнеры:**
+- `web` - FastAPI приложение
+- `bot` - Telegram бот  
+- `celery_worker` - Celery worker (обработка фоновых задач)
+- `celery_beat` - Celery scheduler (расписание)
+- `postgres` - PostgreSQL + PostGIS
+- `redis` - Кэш и очереди
+- `rabbitmq` - Message broker
+
+**Правила перезапуска:**
 ```bash
-# Перезапуск веб-приложения
+# apps/web/* → перезапуск web
 docker compose -f docker-compose.dev.yml restart web
+
+# apps/bot/* → перезапуск bot
+docker compose -f docker-compose.dev.yml restart bot
+
+# core/celery/tasks/* → перезапуск worker и beat
+docker compose -f docker-compose.dev.yml restart celery_worker celery_beat
+
+# shared/* или domain/* → перезапуск ВСЕХ
+docker compose -f docker-compose.dev.yml restart web bot celery_worker celery_beat
 
 # Логи
 docker compose -f docker-compose.dev.yml logs web --tail 50
+docker compose -f docker-compose.dev.yml logs bot --tail 50
+docker compose -f docker-compose.dev.yml logs celery_worker --tail 50
 
 # Выполнение команды
 docker compose -f docker-compose.dev.yml exec web python -c "код"
@@ -695,13 +719,37 @@ async def get_user(session: AsyncSession, user_id: int) -> User:
 3. Тестируй через веб-интерфейс или Telegram bot
 4. Коммит на русском: "Исправление: краткое описание"
 
-### Docker (dev)
+### Docker (dev и prod - ОДИНАКОВЫЕ контейнеры!)
+
+**ВАЖНО**: Dev содержит ВСЕ те же контейнеры что и prod!
+
+**Контейнеры:**
+- `web` - FastAPI приложение
+- `bot` - Telegram бот  
+- `celery_worker` - Celery worker (обработка фоновых задач)
+- `celery_beat` - Celery scheduler (расписание)
+- `postgres` - PostgreSQL + PostGIS
+- `redis` - Кэш и очереди
+- `rabbitmq` - Message broker
+
+**Правила перезапуска:**
 ```bash
-# Перезапуск веб-приложения
+# apps/web/* → перезапуск web
 docker compose -f docker-compose.dev.yml restart web
+
+# apps/bot/* → перезапуск bot
+docker compose -f docker-compose.dev.yml restart bot
+
+# core/celery/tasks/* → перезапуск worker и beat
+docker compose -f docker-compose.dev.yml restart celery_worker celery_beat
+
+# shared/* или domain/* → перезапуск ВСЕХ
+docker compose -f docker-compose.dev.yml restart web bot celery_worker celery_beat
 
 # Логи
 docker compose -f docker-compose.dev.yml logs web --tail 50
+docker compose -f docker-compose.dev.yml logs bot --tail 50
+docker compose -f docker-compose.dev.yml logs celery_worker --tail 50
 
 # Выполнение команды
 docker compose -f docker-compose.dev.yml exec web python -c "код"

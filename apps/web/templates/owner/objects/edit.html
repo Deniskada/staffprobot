@@ -379,24 +379,22 @@
                                     </div>
                                 </div>
                                 
-                                <div class="row">
+                                <div class="alert alert-info mb-3">
+                                    <i class="fas fa-info-circle"></i> Настройки штрафов перенесены в <a href="/owner/rules">Правила (Rules Engine)</a>
+                                </div>
+                                <div class="row" style="opacity: 0.5; pointer-events: none;">
                                     <div class="col-md-4">
                                         <div class="mb-3">
                                             <label for="cancellation_short_notice_hours" class="form-label">
-                                                Минимальный срок отмены (часов)
-                                                <i class="fas fa-info-circle text-muted" 
-                                                   data-bs-toggle="tooltip" 
-                                                   title="За сколько часов до смены сотрудник должен отменить смену"></i>
+                                                Минимальный срок отмены (часов) [LEGACY]
                                             </label>
                                             <input type="number" 
                                                    class="form-control" 
                                                    id="cancellation_short_notice_hours" 
                                                    name="cancellation_short_notice_hours" 
-                                                   min="1"
-                                                   max="168"
+                                                   readonly
                                                    value="{{ object.cancellation_short_notice_hours or '' }}"
                                                    placeholder="24">
-                                            <div class="form-text">За сколько часов должна быть отмена без штрафа</div>
                                         </div>
                                     </div>
                                     
@@ -510,12 +508,12 @@
                                     <div class="form-text">Краткое описание выполняемой работы</div>
                                 </div>
                                 
-                                <div class="mb-3">
+                                <div class="alert alert-info mb-3">
+                                    <i class="fas fa-info-circle"></i> Управление задачами перенесено в <a href="/owner/tasks/templates">Библиотеку задач</a>. Эти поля только для чтения.
+                                </div>
+                                <div class="mb-3" style="opacity: 0.5; pointer-events: none;">
                                     <label for="shift_tasks" class="form-label">
-                                        Задачи на смене
-                                        <i class="fas fa-info-circle text-muted" 
-                                           data-bs-toggle="tooltip" 
-                                           title="Задачи, которые сотрудник должен выполнить на смене"></i>
+                                        Задачи на смене [LEGACY]
                                     </label>
                                     <div id="tasks-container">
                                         {% if object.shift_tasks %}

@@ -1138,9 +1138,25 @@ async function toggleFeature(featureKey, enabled) {
             const checkbox = document.getElementById(`feature_${featureKey}`);
             if (checkbox) checkbox.checked = !enabled;
         } else {
-            // Успешно сохранено - перезагружаем страницу для обновления меню
-            console.log('Feature toggled successfully, reloading...');
-            location.reload();
+            // Успешно сохранено - обновляем меню БЕЗ перезагрузки
+            console.log('Feature toggled successfully, updating menu...');
+            
+            // Отключаем зависимые фичи в UI
+            if (data.disabled_dependent_features && data.disabled_dependent_features.length > 0) {
+                for (const depKey of data.disabled_dependent_features) {
+                    const depCheckbox = document.getElementById(`feature_${depKey}`);
+                    if (depCheckbox) {
+                        depCheckbox.checked = false;
+                        console.log(`Auto-disabled dependent feature: ${depKey}`);
+                    }
+                }
+                showToast(`Отключено зависимых фич: ${data.disabled_dependent_features.length}`, 'warning');
+            }
+            
+            await updateSidebarMenu();
+            
+            // Показываем уведомление
+            showToast(`Функция "${featureKey}" ${enabled ? 'включена' : 'отключена'}`, 'success');
         }
     } catch (error) {
         console.error('Error toggling feature:', error);
@@ -1148,6 +1164,54 @@ async function toggleFeature(featureKey, enabled) {
         const checkbox = document.getElementById(`feature_${featureKey}`);
         if (checkbox) checkbox.checked = !enabled;
     }
+}
+
+// Обновление меню без перезагрузки страницы
+async function updateSidebarMenu() {
+    try {
+        // Перезагружаем только сайдбар
+        const response = await fetch('/owner');
+        const html = await response.text();
+        
+        // Извлекаем сайдбар из ответа
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newSidebar = doc.querySelector('.sidebar-nav');
+        
+        if (newSidebar) {
+            const currentSidebar = document.querySelector('.sidebar-nav');
+            if (currentSidebar) {
+                currentSidebar.innerHTML = newSidebar.innerHTML;
+                
+                // КРИТИЧНО: Переинициализируем обработчики сайдбара
+                if (window.ownerSidebar) {
+                    window.ownerSidebar.menuItems = document.querySelectorAll('.sidebar-item');
+                    window.ownerSidebar.attachEventListeners();
+                }
+                
+                console.log('✅ Menu updated and re-initialized');
+            }
+        }
+    } catch (error) {
+        console.error('Error updating menu:', error);
+    }
+}
+
+// Toast уведомления
+function showToast(message, type = 'info') {
+    const toastHtml = `
+        <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0" role="alert" style="position: fixed; top: 80px; right: 20px; z-index: 9999;">
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', toastHtml);
+    const toastEl = document.body.lastElementChild;
+    const toast = new bootstrap.Toast(toastEl, {delay: 3000});
+    toast.show();
+    toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
 }
 
 // Автосохранение профиля (debounce)

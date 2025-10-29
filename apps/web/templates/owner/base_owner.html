@@ -160,19 +160,8 @@
                 </li>
                 {% endif %}
                 
-                <!-- Календарь (функция 5) -->
-                {% if enabled_features is defined and enabled_features | is_menu_visible('calendar') %}
-                <li class="sidebar-item">
-                    <a href="/owner/calendar" class="sidebar-link">
-                        <i class="bi bi-calendar-event"></i>
-                        <span class="sidebar-text">Календарь</span>
-                    </a>
-                    <div class="sidebar-tooltip">Календарь</div>
-                </li>
-                {% endif %}
-                
-                <!-- Планирование (функции 6,7) -->
-                {% if enabled_features is defined and enabled_features | is_menu_visible('planning') %}
+                <!-- Планирование (функция shared_calendar) -->
+                {% if enabled_features is defined and enabled_features | is_menu_visible('planning_menu') %}
                 <li class="sidebar-item" data-section="planning">
                     <a href="#" class="sidebar-link">
                         <i class="bi bi-calendar3"></i>
@@ -181,6 +170,14 @@
                     </a>
                     <div class="sidebar-tooltip">Планирование</div>
                     <ul class="sidebar-submenu">
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('planning_calendar') %}
+                        <li>
+                            <a href="/owner/calendar" class="sidebar-link">
+                                <i class="bi bi-calendar-event"></i>
+                                <span class="sidebar-text">Календарь</span>
+                            </a>
+                        </li>
+                        {% endif %}
                         {% if enabled_features is defined and enabled_features | is_menu_visible('planning_shifts') %}
                         <li>
                             <a href="/owner/shifts" class="sidebar-link">
@@ -189,27 +186,11 @@
                             </a>
                         </li>
                         {% endif %}
-                        {% if enabled_features is defined and enabled_features | is_menu_visible('planning_departments') %}
-                        <li>
-                            <a href="/owner/org-structure" class="sidebar-link">
-                                <i class="fas fa-sitemap"></i>
-                                <span class="sidebar-text">Подразделения</span>
-                            </a>
-                        </li>
-                        {% endif %}
-                        {% if enabled_features is defined and enabled_features | is_menu_visible('planning_schedule') %}
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('planning_timeslots') %}
                         <li>
                             <a href="/owner/timeslots" class="sidebar-link">
                                 <i class="bi bi-clock-history"></i>
-                                <span class="sidebar-text">Штатное расписание</span>
-                            </a>
-                        </li>
-                        {% endif %}
-                        {% if enabled_features is defined and enabled_features | is_menu_visible('planning_contracts') %}
-                        <li>
-                            <a href="/owner/contract-templates" class="sidebar-link">
-                                <i class="fas fa-file-contract"></i>
-                                <span class="sidebar-text">Шаблоны договоров</span>
+                                <span class="sidebar-text">Тайм-слоты</span>
                             </a>
                         </li>
                         {% endif %}
@@ -217,15 +198,15 @@
                 </li>
                 {% endif %}
                 
-                <!-- Зарплаты и премии (функции 8,9) -->
+                <!-- Зарплата (функция payroll) -->
                 {% if enabled_features is defined and enabled_features | is_menu_visible('payroll_menu') %}
                 <li class="sidebar-item" data-section="payroll">
                     <a href="#" class="sidebar-link">
                         <i class="bi bi-cash-stack"></i>
-                        <span class="sidebar-text">Зарплаты и премии</span>
+                        <span class="sidebar-text">Зарплата</span>
                         <i class="bi bi-chevron-right sidebar-arrow"></i>
                     </a>
-                    <div class="sidebar-tooltip">Зарплаты и премии</div>
+                    <div class="sidebar-tooltip">Зарплата</div>
                     <ul class="sidebar-submenu">
                         {% if enabled_features is defined and enabled_features | is_menu_visible('payroll_payouts') %}
                         <li>
@@ -237,29 +218,116 @@
                         {% endif %}
                         {% if enabled_features is defined and enabled_features | is_menu_visible('payroll_accruals') %}
                         <li>
-                            <a href="/owner/payroll-adjustments" class="sidebar-link">
+                            <a href="/owner/payroll/adjustments" class="sidebar-link">
                                 <i class="bi bi-cash-coin"></i>
                                 <span class="sidebar-text">Начисления</span>
                             </a>
                         </li>
                         {% endif %}
-                        {% if enabled_features is defined and enabled_features | is_menu_visible('moderation_cancellations') %}
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('payroll_departments') %}
                         <li>
-                            <a href="/owner/cancellations" class="sidebar-link">
-                                <i class="bi bi-clipboard-check"></i>
-                                <span class="sidebar-text">Модерация отмен</span>
+                            <a href="/owner/org-structure" class="sidebar-link">
+                                <i class="fas fa-sitemap"></i>
+                                <span class="sidebar-text">Подразделения</span>
                             </a>
                         </li>
                         {% endif %}
-                        {% if enabled_features is defined and enabled_features | is_menu_visible('analytics_cancellations') %}
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('payroll_contracts') %}
                         <li>
-                            <a href="/owner/analytics/cancellations" class="sidebar-link">
-                                <i class="fas fa-chart-line"></i>
-                                <span class="sidebar-text">Аналитика отмен</span>
+                            <a href="/owner/contract-templates" class="sidebar-link">
+                                <i class="fas fa-file-contract"></i>
+                                <span class="sidebar-text">Шаблоны договоров</span>
                             </a>
                         </li>
                         {% endif %}
                     </ul>
+                </li>
+                {% endif %}
+                
+                <!-- Штрафы и премии (функция rules_engine) -->
+                {% if enabled_features is defined and enabled_features | is_menu_visible('penalties_menu') %}
+                <li class="sidebar-item" data-section="penalties">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-cash-coin"></i>
+                        <span class="sidebar-text">Штрафы и премии</span>
+                        <i class="bi bi-chevron-right sidebar-arrow"></i>
+                    </a>
+                    <div class="sidebar-tooltip">Штрафы и премии</div>
+                    <ul class="sidebar-submenu">
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('penalties_rules') %}
+                        <li>
+                            <a href="/owner/rules" class="sidebar-link">
+                                <i class="fas fa-gavel"></i>
+                                <span class="sidebar-text">Правила</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('penalties_moderation') %}
+                        <li>
+                            <a href="/owner/cancellations" class="sidebar-link">
+                                <i class="bi bi-clipboard-check"></i>
+                                <span class="sidebar-text">Модерация</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('penalties_analytics') %}
+                        <li>
+                            <a href="/owner/analytics/cancellations" class="sidebar-link">
+                                <i class="fas fa-chart-line"></i>
+                                <span class="sidebar-text">Аналитика</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </li>
+                {% endif %}
+                
+                <!-- Задачи (функция tasks_v2) -->
+                {% if enabled_features is defined and enabled_features | is_menu_visible('tasks_menu') %}
+                <li class="sidebar-item" data-section="tasks">
+                    <a href="#" class="sidebar-link">
+                        <i class="fas fa-tasks"></i>
+                        <span class="sidebar-text">Задачи</span>
+                        <i class="bi bi-chevron-right sidebar-arrow"></i>
+                    </a>
+                    <div class="sidebar-tooltip">Задачи</div>
+                    <ul class="sidebar-submenu">
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('tasks_templates') %}
+                        <li>
+                            <a href="/owner/tasks/templates" class="sidebar-link">
+                                <i class="bi bi-file-earmark-text"></i>
+                                <span class="sidebar-text">Шаблоны</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('tasks_plan') %}
+                        <li>
+                            <a href="/owner/tasks/plan" class="sidebar-link">
+                                <i class="bi bi-calendar-check"></i>
+                                <span class="sidebar-text">Планирование</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if enabled_features is defined and enabled_features | is_menu_visible('tasks_entries') %}
+                        <li>
+                            <a href="/owner/tasks/entries" class="sidebar-link">
+                                <i class="bi bi-list-check"></i>
+                                <span class="sidebar-text">Аудит</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </li>
+                {% endif %}
+                
+                <!-- Инциденты (функция incidents) -->
+                {% if enabled_features is defined and enabled_features | is_menu_visible('incidents_menu') %}
+                <li class="sidebar-item">
+                    <a href="/owner/incidents" class="sidebar-link">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span class="sidebar-text">Инциденты</span>
+                    </a>
+                    <div class="sidebar-tooltip">Инциденты</div>
                 </li>
                 {% endif %}
                 

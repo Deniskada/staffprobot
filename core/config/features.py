@@ -8,13 +8,14 @@
 from typing import Dict, List, TypedDict
 
 
-class FeatureDefinition(TypedDict):
+class FeatureDefinition(TypedDict, total=False):
     """Определение функции системы."""
     name: str
     description: str
     menu_items: List[str]
     form_elements: List[str]
     sort_order: int
+    depends_on: List[str]  # Опциональное поле для зависимостей
 
 
 # Централизованный реестр функций системы
@@ -29,7 +30,7 @@ SYSTEM_FEATURES_REGISTRY: Dict[str, FeatureDefinition] = {
     'telegram_bot': {
         'name': 'Telegram-бот',
         'description': 'Полнофункциональный бот для управления сменами и коммуникации с сотрудниками. Доступ к системе прямо из мессенджера.',
-        'menu_items': [],
+        'menu_items': ['objects', 'employees'],
         'form_elements': [],
         'sort_order': 2
     },
@@ -49,38 +50,46 @@ SYSTEM_FEATURES_REGISTRY: Dict[str, FeatureDefinition] = {
     },
     'shared_calendar': {
         'name': 'Общий календарь',
-        'description': 'Календарное представление смен и событий. Визуализация расписания для удобного планирования.',
-        'menu_items': ['calendar'],
+        'description': 'Календарное представление смен и событий. Визуализация расписания, управление сменами и тайм-слотами для удобного планирования.',
+        'menu_items': ['planning_menu', 'planning_calendar', 'planning_shifts', 'planning_timeslots'],
         'form_elements': [],
         'sort_order': 5
     },
     'payroll': {
         'name': 'Штатное расписание, начисления, выплаты',
         'description': 'Управление штатным расписанием, автоматические начисления и выплаты. Полный контроль финансов персонала.',
-        'menu_items': ['planning_shifts', 'planning_departments', 'planning_schedule'],
+        'menu_items': ['payroll_menu', 'payroll_payouts', 'payroll_accruals', 'payroll_departments'],
         'form_elements': ['employee_time_slot'],
         'sort_order': 6
     },
     'contract_templates': {
         'name': 'Шаблоны договоров',
         'description': 'Создание и управление шаблонами договоров с динамическими полями. Автоматизируйте оформление документов.',
-        'menu_items': ['planning_contracts'],
+        'menu_items': ['payroll_contracts'],  # Показывается в меню Зарплата, но контролируется отдельно
         'form_elements': ['object_contract_template'],
-        'sort_order': 7
+        'sort_order': 7,
+        'depends_on': ['payroll']  # Требует включённую фичу payroll
     },
-    'bonuses_and_penalties': {
+    'rules_engine': {
         'name': 'Начисления премий и штрафов',
         'description': 'Система начисления премий и штрафов сотрудникам. Мотивируйте команду и контролируйте дисциплину.',
-        'menu_items': ['payroll_payouts', 'payroll_accruals'],
+        'menu_items': ['penalties_menu', 'penalties_rules', 'penalties_moderation', 'penalties_analytics'],
         'form_elements': ['employee_bonus_penalty'],
         'sort_order': 8
     },
-    'shift_tasks': {
+    'tasks_v2': {
         'name': 'Задачи сотрудникам на смену',
         'description': 'Назначение и контроль выполнения задач на смене. Управляйте рабочими процессами и отслеживайте отмены.',
-        'menu_items': ['moderation_cancellations', 'analytics_cancellations'],
+        'menu_items': ['tasks_menu', 'tasks_templates', 'tasks_plan', 'tasks_entries'],
         'form_elements': ['shift_tasks_section'],
         'sort_order': 9
+    },
+    'incidents': {
+        'name': 'Инциденты',
+        'description': 'Регистрация и управление инцидентами на объектах. Контролируйте нарушения и проблемные ситуации.',
+        'menu_items': ['incidents_menu'],
+        'form_elements': [],
+        'sort_order': 10
     },
     'analytics': {
         'name': 'Аналитика',
