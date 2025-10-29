@@ -18,9 +18,13 @@ depends_on = None
 
 
 def upgrade():
-    # Add suggested_adjustments column if missing
-    with op.batch_alter_table('incidents') as batch_op:
-        batch_op.add_column(sa.Column('suggested_adjustments', sa.Text(), nullable=True))
+    # Add suggested_adjustments column if missing (idempotent)
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = [col['name'] for col in inspector.get_columns('incidents')]
+    if 'suggested_adjustments' not in columns:
+        with op.batch_alter_table('incidents') as batch_op:
+            batch_op.add_column(sa.Column('suggested_adjustments', sa.Text(), nullable=True))
 
     # Create index on id to match dev (redundant but for parity)
     try:
