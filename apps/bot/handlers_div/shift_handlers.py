@@ -577,7 +577,9 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                         
                         icon = "⚠️" if is_mandatory else "⭐"
                         media_icon = "📸 " if requires_media else ""
-                        check = "✓ " if idx in completed_tasks else "☐ "
+                        # Для Tasks v2 проверяем is_completed из базы, для legacy - из completed_tasks
+                        is_task_completed = task.get('is_completed', False) if task.get('source') == 'task_v2' else (idx in completed_tasks)
+                        check = "✓ " if is_task_completed else "☐ "
                         keyboard.append([
                             InlineKeyboardButton(
                                 f"{check}{media_icon}{icon} {task_text[:30]}...",
@@ -1138,7 +1140,9 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
             
             # Иконки
             mandatory_icon = "⚠️" if is_mandatory else "⭐"
-            completed_icon = "✅ " if idx in completed_tasks else ""
+            # Для Tasks v2 проверяем is_completed из базы, для legacy - из completed_tasks
+            is_task_completed = task.get('is_completed', False) if task.get('source') == 'task_v2' else (idx in completed_tasks)
+            completed_icon = "✅ " if is_task_completed else ""
             media_icon = "📸 " if requires_media else ""
             
             # Стоимость
@@ -1151,7 +1155,7 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
                     cost_text = f" ({amount}₽)"
             
             task_line = f"{completed_icon}{media_icon}{mandatory_icon} {task_text}{cost_text}"
-            if idx in completed_tasks:
+            if is_task_completed:
                 task_line = f"<s>{task_line}</s>"
             tasks_text += task_line + "\n"
         
@@ -1164,7 +1168,9 @@ async def _handle_complete_shift_task(update: Update, context: ContextTypes.DEFA
             
             icon = "⚠️" if is_mandatory else "⭐"
             media_icon = "📸 " if requires_media else ""
-            check = "✓ " if idx in completed_tasks else "☐ "
+            # Для Tasks v2 проверяем is_completed из базы, для legacy - из completed_tasks
+            is_task_completed = task.get('is_completed', False) if task.get('source') == 'task_v2' else (idx in completed_tasks)
+            check = "✓ " if is_task_completed else "☐ "
             keyboard.append([
                 InlineKeyboardButton(
                     f"{check}{media_icon}{icon} {task_text[:30]}...",
@@ -1884,7 +1890,9 @@ async def _show_my_tasks_list_update(query, shift_id: int, shift_tasks: list, co
         requires_media = task.get('requires_media', False)
         
         mandatory_icon = "⚠️" if is_mandatory else "⭐"
-        completed_icon = "✅ " if idx in completed_tasks else ""
+        # Для Tasks v2 проверяем is_completed из базы, для legacy - из completed_tasks
+        is_task_completed = task.get('is_completed', False) if task.get('source') == 'task_v2' else (idx in completed_tasks)
+        completed_icon = "✅ " if is_task_completed else ""
         media_icon = "📸 " if requires_media else ""
         
         cost_text = ""
@@ -1896,7 +1904,7 @@ async def _show_my_tasks_list_update(query, shift_id: int, shift_tasks: list, co
                 cost_text = f" ({amount}₽)"
         
         task_line = f"{completed_icon}{media_icon}{mandatory_icon} {task_text}{cost_text}"
-        if idx in completed_tasks:
+        if is_task_completed:
             task_line = f"<s>{task_line}</s>"
         tasks_text += task_line + "\n"
     
@@ -1908,7 +1916,9 @@ async def _show_my_tasks_list_update(query, shift_id: int, shift_tasks: list, co
         
         icon = "⚠️" if is_mandatory else "⭐"
         media_icon = "📸 " if requires_media else ""
-        check = "✓ " if idx in completed_tasks else "☐ "
+        # Для Tasks v2 проверяем is_completed из базы, для legacy - из completed_tasks
+        is_task_completed = task.get('is_completed', False) if task.get('source') == 'task_v2' else (idx in completed_tasks)
+        check = "✓ " if is_task_completed else "☐ "
         keyboard.append([
             InlineKeyboardButton(
                 f"{check}{media_icon}{icon} {task_text[:30]}...",
