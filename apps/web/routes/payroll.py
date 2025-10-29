@@ -893,15 +893,25 @@ async def owner_payroll_manual_recalculate(
                                         )
                                     ),
                                     or_(
+                                        # Корректировки со сменой - фильтр по дате смены
                                         and_(
                                             PayrollAdjustment.shift_id.isnot(None),
                                             func.date(Shift.end_time) >= period_start,
                                             func.date(Shift.end_time) <= period_end
                                         ),
+                                        # Корректировки БЕЗ смены:
+                                        # - Если НЕ привязаны к начислению - по created_at
+                                        # - Если УЖЕ привязаны к ЭТОМУ начислению - берём без фильтра по дате
                                         and_(
                                             PayrollAdjustment.shift_id.is_(None),
-                                            func.date(PayrollAdjustment.created_at) >= period_start,
-                                            func.date(PayrollAdjustment.created_at) <= period_end
+                                            or_(
+                                                and_(
+                                                    PayrollAdjustment.payroll_entry_id.is_(None),
+                                                    func.date(PayrollAdjustment.created_at) >= period_start,
+                                                    func.date(PayrollAdjustment.created_at) <= period_end
+                                                ),
+                                                PayrollAdjustment.payroll_entry_id == existing_entry.id
+                                            )
                                         )
                                     )
                                 )
