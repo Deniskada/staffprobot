@@ -81,7 +81,7 @@ async def process_completed_tasks_bonuses(session: AsyncSession) -> int:
             amount=amount,
             description=description,
             details={"task_code": template.code, "task_title": template.title},
-            created_by=1,  # Системный пользователь (admin)
+            created_by=9,  # Системный пользователь (superadmin)
             is_applied=False,  # Будет применено Celery задачей
             created_at=datetime.utcnow()
         )
