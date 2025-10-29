@@ -4341,7 +4341,7 @@ async def owner_shift_detail_legacy(
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
 
 
-# Phase 4A: shift-tasks роуты удалены, используйте /owner/payroll-adjustments для управления корректировками
+# Phase 4A: shift-tasks роуты удалены, используйте /owner/payroll/adjustments для управления корректировками
 # См. apps/web/routes/owner_payroll_adjustments.py
 
 
