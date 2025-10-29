@@ -909,7 +909,8 @@ async def owner_payroll_manual_recalculate(
                                                     func.date(PayrollAdjustment.created_at) >= period_start,
                                                     func.date(PayrollAdjustment.created_at) <= period_end
                                                 ),
-                                                PayrollAdjustment.payroll_entry_id == existing_entry.id
+                                                # Только если existing_entry существует
+                                                PayrollAdjustment.payroll_entry_id == existing_entry.id if existing_entry else False
                                             )
                                         )
                                     )
@@ -990,6 +991,45 @@ async def owner_payroll_manual_recalculate(
                                 avg_hourly_rate = gross_amount / total_hours if total_hours > 0 else Decimal('0')
                                 net_amount = gross_amount + total_bonuses - total_deductions
                                 
+                                # Формируем calculation_details для протокола расчёта
+                                calculation_details = {
+                                    "created_by": "manual_recalculate",
+                                    "created_at": target_date_obj.isoformat(),
+                                    "shifts": [],
+                                    "adjustments": []
+                                }
+                                
+                                # Собираем детали смен из shift_base корректировок
+                                shift_adjustments = [adj for adj in all_relevant_adjustments if adj.adjustment_type == 'shift_base']
+                                if shift_adjustments:
+                                    shift_ids = [adj.shift_id for adj in shift_adjustments if adj.shift_id]
+                                    if shift_ids:
+                                        shifts_query = select(Shift).where(Shift.id.in_(shift_ids))
+                                        shifts_result = await db.execute(shifts_query)
+                                        shifts = shifts_result.scalars().all()
+                                        for shift in shifts:
+                                            shift_hours = Decimal(str(shift.total_hours)) if shift.total_hours else Decimal('0')
+                                            shift_rate = Decimal(str(shift.hourly_rate)) if shift.hourly_rate else Decimal('0')
+                                            shift_payment = shift_hours * shift_rate
+                                            
+                                            calculation_details["shifts"].append({
+                                                "shift_id": shift.id,
+                                                "date": shift.start_time.date().isoformat() if shift.start_time else None,
+                                                "hours": float(shift_hours),
+                                                "rate": float(shift_rate),
+                                                "amount": float(shift_payment)
+                                            })
+                                
+                                # Собираем детали всех корректировок
+                                for adj in all_relevant_adjustments:
+                                    calculation_details["adjustments"].append({
+                                        "adjustment_id": adj.id,
+                                        "type": adj.adjustment_type,
+                                        "amount": float(adj.amount),
+                                        "description": adj.description or "",
+                                        "shift_id": adj.shift_id
+                                    })
+                                
                                 # Если начисления не существует - СОЗДАЁМ новое
                                 if not existing_entry:
                                     new_entry = PayrollEntry(
@@ -1004,6 +1044,7 @@ async def owner_payroll_manual_recalculate(
                                         net_amount=float(net_amount),
                                         hours_worked=float(total_hours),
                                         hourly_rate=float(avg_hourly_rate),
+                                        calculation_details=calculation_details,
                                         created_by_id=owner_id
                                     )
                                     db.add(new_entry)
@@ -1039,6 +1080,7 @@ async def owner_payroll_manual_recalculate(
                                     existing_entry.net_amount = float(net_amount)
                                     existing_entry.hours_worked = float(total_hours)
                                     existing_entry.hourly_rate = float(avg_hourly_rate)
+                                    existing_entry.calculation_details = calculation_details
                                     
                                     # Применяем ТОЛЬКО новые корректировки (if any)
                                     if new_adjustments:
