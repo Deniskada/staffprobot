@@ -27,10 +27,13 @@ auth_service = AuthService()
 async def login_page(request: Request):
     """Страница входа"""
     success_msg = request.query_params.get("success")
+    telegram_id_qs = request.query_params.get("telegram_id")
     return templates.TemplateResponse("auth/login.html", {
         "request": request,
         "title": "Вход в систему",
-        "success": success_msg
+        "success": success_msg,
+        "telegram_id": telegram_id_qs,
+        "pin_code": ""
     })
 
 
@@ -80,6 +83,73 @@ async def login(
                 "pin_code": pin_code
             })
         
+        # Назначение тарифа и инициализация фич при первом входе (идемпотентно)
+        try:
+            from sqlalchemy import select as sql_select, and_ as sql_and
+            from domain.entities.user import User as UserModel
+            from domain.entities.user_subscription import UserSubscription, SubscriptionStatus
+            from domain.entities.tariff_plan import TariffPlan
+            from domain.entities.owner_profile import OwnerProfile
+            from datetime import datetime, timezone, timedelta
+
+            async with get_async_session() as session:
+                # Внутренний user_id
+                db_user_res = await session.execute(
+                    sql_select(UserModel).where(UserModel.telegram_id == telegram_id)
+                )
+                db_user_obj = db_user_res.scalar_one_or_none()
+                if db_user_obj:
+                    # Проверяем активную подписку
+                    sub_res = await session.execute(
+                        sql_select(UserSubscription).where(
+                            sql_and(
+                                UserSubscription.user_id == db_user_obj.id,
+                                UserSubscription.status == SubscriptionStatus.ACTIVE
+                            )
+                        ).limit(1)
+                    )
+                    subscription = sub_res.scalar_one_or_none()
+                    if not subscription:
+                        # «Популярный» тариф: is_popular=True, активный, дешевый
+                        t_res = await session.execute(
+                            sql_select(TariffPlan)
+                            .where(TariffPlan.is_active == True, TariffPlan.is_popular == True)
+                            .order_by(TariffPlan.price)
+                            .limit(1)
+                        )
+                        popular_tariff = t_res.scalar_one_or_none()
+                        if popular_tariff:
+                            expires_at = None
+                            if popular_tariff.price and float(popular_tariff.price) > 0:
+                                if popular_tariff.billing_period == "month":
+                                    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+                                elif popular_tariff.billing_period == "year":
+                                    expires_at = datetime.now(timezone.utc) + timedelta(days=365)
+                            new_sub = UserSubscription(
+                                user_id=db_user_obj.id,
+                                tariff_plan_id=popular_tariff.id,
+                                status=SubscriptionStatus.ACTIVE,
+                                expires_at=expires_at,
+                            )
+                            session.add(new_sub)
+                            await session.commit()
+                            await session.refresh(new_sub)
+
+                            # Инициализация фич строго из тарифного плана
+                            prof_res = await session.execute(
+                                sql_select(OwnerProfile).where(OwnerProfile.user_id == db_user_obj.id)
+                            )
+                            profile = prof_res.scalar_one_or_none()
+                            features_from_plan = list(popular_tariff.features or [])
+                            if not profile:
+                                profile = OwnerProfile(user_id=db_user_obj.id, enabled_features=features_from_plan)
+                                session.add(profile)
+                            else:
+                                profile.enabled_features = features_from_plan
+                            await session.commit()
+        except Exception as init_err:
+            logger.error(f"First-login init (tariff/features) failed for {telegram_id}: {init_err}")
+
         # Создание JWT токена с ролью из базы данных
         token = await auth_service.create_token({
             "id": user["id"],
@@ -159,7 +229,7 @@ async def register(
     request: Request,
     first_name: str = Form(...),
     last_name: str = Form(...),
-    username: str = Form(...),
+    username: Optional[str] = Form(None),
     telegram_id: int = Form(...),
     email: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
@@ -187,6 +257,12 @@ async def register(
                 }
             })
         
+        # Если username не передан, сформируем по умолчанию
+        if not username or not str(username).strip():
+            base = (first_name or "user").strip().lower()
+            suffix = str(telegram_id)[-4:] if telegram_id else secrets.token_hex(2)
+            username = f"{base}_{suffix}"
+
         # Проверка существования пользователя
         async with get_async_session() as session:
             q = select(User).where(User.telegram_id == telegram_id)

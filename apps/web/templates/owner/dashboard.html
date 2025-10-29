@@ -126,29 +126,55 @@
         </div>
     </div>
 
-    <!-- Статистика -->
+    <!-- Таблица объектов (сразу под приветствием) -->
     <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="stat-card text-center">
-                <div class="stat-number">{{ stats.total_objects }}</div>
-                <div class="stat-label">
-                    <i class="bi bi-building"></i> Объектов
+        <div class="col-12">
+            <div class="card owner-card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">🏢 Мои объекты</h5>
                 </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="stat-card text-center">
-                <div class="stat-number">{{ stats.total_shifts }}</div>
-                <div class="stat-label">
-                    <i class="bi bi-clock"></i> Всего смен
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="stat-card text-center">
-                <div class="stat-number">{{ stats.active_shifts }}</div>
-                <div class="stat-label">
-                    <i class="bi bi-play-circle"></i> Активных смен
+                <div class="card-body">
+                    {% if all_objects %}
+                    {% set table_scroll = (all_objects|length) > 10 %}
+                    <div class="table-responsive" {% if table_scroll %}style="max-height: 520px; overflow-y: auto;"{% endif %}>
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Объект</th>
+                                    <th>Адрес</th>
+                                    <th>Статус</th>
+                                    <th>Время</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for obj in all_objects %}
+                                <tr>
+                                    <td><a class="text-decoration-none" href="/owner/objects/{{ obj.id }}"><strong>{{ obj.name }}</strong></a></td>
+                                    <td>{{ obj.address or '-' }}</td>
+                                    <td>
+                                        {% if obj.status == 'Открыт' %}
+                                            <span class="badge bg-success">Открыт</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Закрыт</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if obj.status_time %}
+                                            {{ format_datetime_local(obj.status_time, 'Europe/Moscow', '%d.%m.%Y %H:%M') }}
+                                        {% else %}-{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-building text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">Объекты ещё не созданы</p>
+                        <a href="/owner/objects/create" class="btn btn-success">Создать объект</a>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -156,143 +182,130 @@
 
     <!-- Основной контент -->
     <div class="row">
-        <!-- Последние объекты -->
-        <div class="col-md-6">
-            <div class="card owner-card">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">🔓 Открытые объекты</h5>
-                </div>
-                <div class="card-body">
-                    {% if open_objects %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Объект</th>
-                                        <th>Дата открытия</th>
-                                        <th>Время открытия</th>
-                                        <th>Открыл</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for opening in open_objects %}
-                                    <tr>
-                                        <td>
-                                            <a href="/owner/objects/{{ opening.object.id }}" class="text-decoration-none">
-                                                <strong>{{ opening.object.name }}</strong>
-                                            </a>
-                                        </td>
-                                        <td>{{ format_datetime_local(opening.opened_at, 'Europe/Moscow', '%d.%m.%Y') }}</td>
-                                        <td>{{ format_datetime_local(opening.opened_at, 'Europe/Moscow', '%H:%M') }}</td>
-                                        <td>
-                                            <span class="fw-semibold">{{ opening.opener.first_name }} {{ opening.opener.last_name or '' }}</span>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    {% else %}
-                        <div class="text-center py-4">
-                            <i class="bi bi-lock text-muted" style="font-size: 3rem;"></i>
-                            <p class="text-muted mt-2">Нет открытых объектов</p>
-                            <a href="/owner/objects" class="btn btn-success">
-                                Просмотреть объекты
-                            </a>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Быстрые действия -->
-        <div class="col-md-6">
+        <!-- Быстрые действия (5 блоков) на всю ширину -->
+        <div class="col-12">
             <div class="card owner-card">
                 <div class="card-header bg-info text-white">
                     <h5 class="mb-0"><i class="bi bi-lightning-charge"></i> Быстрые действия</h5>
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-6">
-                            <a href="/owner/employees/create" class="quick-action-card">
-                                <div class="quick-action-icon bg-primary">
-                                    <i class="bi bi-person-plus"></i>
+                        <!-- 4.2.1 Доступны всегда -->
+                        <div class="col-12">
+                            <div class="p-3 border rounded-3">
+                                <div class="mb-2 fw-semibold">Первые шаги</div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <a href="/owner/objects/create" class="btn btn-outline-primary btn-sm">Создать объект</a>
+                                    <a href="/owner/employees/create" class="btn btn-outline-primary btn-sm">Добавить сотрудника</a>
+                                    <a href="/owner/reports" class="btn btn-outline-primary btn-sm">Отчеты</a>
                                 </div>
-                                <div class="quick-action-title">Добавить сотрудника</div>
-                            </a>
+                                <div class="mt-2 text-muted small">
+                                    Объекты — места работы; сотрудники — пользователи для смен; отчеты — свод по сменам и начислениям.
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-6">
-                            <a href="/owner/shifts?action=plan" class="quick-action-card">
-                                <div class="quick-action-icon bg-success">
-                                    <i class="bi bi-calendar-plus"></i>
+
+                        {% set has_shared_calendar = 'shared_calendar' in (enabled_features or []) %}
+                        {% set has_payroll = 'payroll' in (enabled_features or []) %}
+                        {% set has_tasks_v2 = 'tasks_v2' in (enabled_features or []) %}
+                        {% set has_rules_engine = 'rules_engine' in (enabled_features or []) %}
+
+                        <!-- 4.2.2 shared_calendar -->
+                        <div class="col-12">
+                            <div class="p-3 border rounded-3 {% if not has_shared_calendar %}opacity-50{% endif %}">
+                                <div class="mb-2 fw-semibold">Календарь и планирование смен</div>
+                                <div class="d-flex flex-wrap gap-2 mb-1">
+                                    <a class="btn btn-outline-success btn-sm {% if not has_shared_calendar %}disabled{% endif %}" href="/owner/timeslots/create">Создать тайм-слот</a>
+                                    <a class="btn btn-outline-success btn-sm {% if not has_shared_calendar %}disabled{% endif %}" href="/owner/shifts?action=plan">Запланировать смену</a>
+                                    <a class="btn btn-outline-success btn-sm {% if not has_shared_calendar %}disabled{% endif %}" href="/owner/calendar">Календарь</a>
                                 </div>
-                                <div class="quick-action-title">Запланировать смену</div>
-                            </a>
+                                <div class="text-muted small">
+                                    Тайм‑слот — окно времени для планирования; смены планируются через календарь или список; календарь даёт обзор загрузки.
+                                </div>
+                                {% if not has_shared_calendar %}
+                                <div class="mt-2">
+                                    <a href="/owner/profile" class="small">Как включить? Откройте профиль и включите функцию «Календарь».</a>
+                                </div>
+                                {% endif %}
+                            </div>
                         </div>
-                        <div class="col-6">
-                            <a href="/owner/calendar" class="quick-action-card">
-                                <div class="quick-action-icon bg-warning">
-                                    <i class="bi bi-calendar3"></i>
+
+                        <!-- 4.2.3 payroll -->
+                        <div class="col-12">
+                            <div class="p-3 border rounded-3 {% if not has_payroll %}opacity-50{% endif %}">
+                                <div class="mb-2 fw-semibold">Выплаты и графики</div>
+                                <div class="d-flex flex-wrap gap-2 mb-1">
+                                    <a class="btn btn-outline-info btn-sm {% if not has_payroll %}disabled{% endif %}" href="/owner/payroll/schedules/create">Создать график выплат</a>
+                                    <a class="btn btn-outline-info btn-sm {% if not has_payroll %}disabled{% endif %}" href="/owner/org-structure">Настроить подразделение</a>
+                                    <a class="btn btn-outline-info btn-sm {% if not has_payroll %}disabled{% endif %}" href="/owner/payroll/adjustments">Добавить начисление</a>
+                                    <a class="btn btn-outline-info btn-sm {% if not has_payroll %}disabled{% endif %}" href="/owner/payroll">Проверить выплаты</a>
                                 </div>
-                                <div class="quick-action-title">Календарь</div>
-                            </a>
+                                <div class="text-muted small">
+                                    Графики определяют периодичность выплат; подразделения нужны для правил выплат; начисления — ручные корректировки.
+                                </div>
+                                {% if not has_payroll %}
+                                <div class="mt-2">
+                                    <a href="/owner/profile" class="small">Как включить? Включите «Выплаты (payroll)» в профиле.</a>
+                                </div>
+                                {% endif %}
+                            </div>
                         </div>
-                        <div class="col-6">
-                            <a href="/owner/payroll" class="quick-action-card">
-                                <div class="quick-action-icon bg-info">
-                                    <i class="bi bi-wallet2"></i>
+
+                        <!-- 4.2.4 tasks_v2 -->
+                        <div class="col-12">
+                            <div class="p-3 border rounded-3 {% if not has_tasks_v2 %}opacity-50{% endif %}">
+                                <div class="mb-2 fw-semibold">Задачи и контроль</div>
+                                <div class="d-flex flex-wrap gap-2 mb-1">
+                                    <a class="btn btn-outline-secondary btn-sm {% if not has_tasks_v2 %}disabled{% endif %}" href="/owner/tasks/templates">Создать шаблон задачи</a>
+                                    <a class="btn btn-outline-secondary btn-sm {% if not has_tasks_v2 %}disabled{% endif %}" href="/owner/tasks/plan">Запланировать задачу</a>
+                                    <a class="btn btn-outline-secondary btn-sm {% if not has_tasks_v2 %}disabled{% endif %}" href="/owner/tasks/entries">Аудит выполнения задач</a>
                                 </div>
-                                <div class="quick-action-title">Выплаты</div>
-                            </a>
+                                <div class="text-muted small">
+                                    Шаблоны определяют чек‑листы; планы назначают задачи на смены; аудит показывает выполнение и медиа‑отчеты.
+                                </div>
+                                {% if not has_tasks_v2 %}
+                                <div class="mt-2">
+                                    <a href="/owner/profile" class="small">Как включить? Активируйте «Задачи v2» в профиле.</a>
+                                </div>
+                                {% endif %}
+                            </div>
                         </div>
-                        <div class="col-6">
-                            <a href="/owner/reports" class="quick-action-card">
-                                <div class="quick-action-icon bg-secondary">
-                                    <i class="bi bi-graph-up"></i>
+
+                        <!-- 4.2.5 rules_engine -->
+                        <div class="col-12">
+                            <div class="p-3 border rounded-3 {% if not has_rules_engine %}opacity-50{% endif %}">
+                                <div class="mb-2 fw-semibold">Правила и отмены</div>
+                                <div class="d-flex flex-wrap gap-2 mb-1">
+                                    <a class="btn btn-outline-warning btn-sm {% if not has_rules_engine %}disabled{% endif %}" href="/owner/rules">Настроить правила автоштрафов</a>
+                                    <a class="btn btn-outline-warning btn-sm {% if not has_rules_engine %}disabled{% endif %}" href="/owner/cancellations">Модерация отмен смен</a>
+                                    <a class="btn btn-outline-warning btn-sm {% if not has_rules_engine %}disabled{% endif %}" href="/owner/analytics/cancellations">Аналитика отмен</a>
                                 </div>
-                                <div class="quick-action-title">Отчеты</div>
-                            </a>
-                        </div>
-                        <div class="col-6">
-                            <a href="/owner/reviews" class="quick-action-card">
-                                <div class="quick-action-icon bg-warning">
-                                    <i class="bi bi-star"></i>
+                                <div class="text-muted small">
+                                    Правила начисляют штрафы/бонусы автоматически; модерация проверяет причины отмен; аналитика показывает динамику.
                                 </div>
-                                <div class="quick-action-title">Отзывы</div>
-                            </a>
+                                {% if not has_rules_engine %}
+                                <div class="mt-2">
+                                    <a href="/owner/profile" class="small">Как включить? Активируйте «Rules Engine» в профиле.</a>
+                                </div>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Полезные ссылки -->
+            <!-- Полезные ссылки (в строку) -->
             <div class="card owner-card mt-3">
                 <div class="card-header bg-secondary text-white">
                     <h5 class="mb-0">📚 Полезные ссылки</h5>
                 </div>
                 <div class="card-body">
-                    <ul class="list-unstyled">
-                        <li class="mb-2">
-                            <a href="/owner/profile" class="text-decoration-none">
-                                <i class="bi bi-person"></i> Мой профиль
-                            </a>
-                        </li>
-                        <li class="mb-2">
-                            <a href="/owner/settings" class="text-decoration-none">
-                                <i class="bi bi-gear"></i> Настройки
-                            </a>
-                        </li>
-                        <li class="mb-2">
-                            <a href="#" class="text-decoration-none">
-                                <i class="bi bi-question-circle"></i> Помощь
-                            </a>
-                        </li>
-                        <li>
-                            <a href="#" class="text-decoration-none">
-                                <i class="bi bi-chat-dots"></i> Поддержка
-                            </a>
-                        </li>
-                    </ul>
+                    <div class="d-flex flex-wrap gap-3 align-items-center">
+                        <a href="/owner/profile" class="text-decoration-none"><i class="bi bi-person"></i> Мой профиль</a>
+                        <a href="/owner/reports" class="text-decoration-none"><i class="bi bi-graph-up"></i> Отчеты</a>
+                        <a href="/owner/objects" class="text-decoration-none"><i class="bi bi-building"></i> Объекты</a>
+                        <a href="/owner/employees" class="text-decoration-none"><i class="bi bi-people"></i> Сотрудники</a>
+                    </div>
                 </div>
             </div>
         </div>
