@@ -2354,7 +2354,7 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
             from domain.entities.user import User
             from domain.entities.shift import Shift
             from domain.entities.object import Object
-            from domain.entities.org_unit import OrgStructureUnit
+            from domain.entities.org_structure import OrgStructureUnit
             from sqlalchemy.orm import selectinload
             from datetime import datetime
             
@@ -2409,15 +2409,16 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
             
             if obj:
                 object_name = obj.name
-                telegram_chat_id = obj.telegram_chat_id
-                
-                # Если нет в объекте - ищем в division
-                if not telegram_chat_id and obj.division_id:
-                    division_query = select(OrgStructureUnit).where(OrgStructureUnit.id == obj.division_id)
-                    division_result = await session.execute(division_query)
-                    division = division_result.scalar_one_or_none()
-                    if division:
-                        telegram_chat_id = division.telegram_chat_id
+                # Получаем telegram_report_chat_id для медиа отчетов (наследование)
+                if not obj.inherit_telegram_chat and obj.telegram_report_chat_id:
+                    telegram_chat_id = obj.telegram_report_chat_id
+                elif obj.org_unit:
+                    org_unit = obj.org_unit
+                    while org_unit:
+                        if org_unit.telegram_report_chat_id:
+                            telegram_chat_id = org_unit.telegram_report_chat_id
+                            break
+                        org_unit = org_unit.parent
             
             if not telegram_chat_id:
                 await update.message.reply_text(
@@ -2498,7 +2499,7 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
             )
     
     except Exception as e:
-        logger.error(f"Error in _handle_received_task_v2_media: {e}", exc_info=True)
+        logger.exception(f"Error in _handle_received_task_v2_media: {e}")
         await update.message.reply_text("❌ Ошибка обработки медиа")
 
 
