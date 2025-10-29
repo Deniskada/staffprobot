@@ -144,7 +144,7 @@ def create_payroll_entries_by_schedule():
                                         Contract.allowed_objects.isnot(None),
                                         cast(Contract.allowed_objects, JSONB).op('@>')(cast([obj.id], JSONB)),
                                         or_(
-                                            and_(Contract.status == 'active', Contract.is_active == True),
+                                            Contract.status == 'active',
                                             and_(
                                                 Contract.status == 'terminated',
                                                 Contract.settlement_policy == 'schedule'
@@ -159,106 +159,237 @@ def create_payroll_entries_by_schedule():
                                 
                                 for contract in contracts:
                                     try:
-                                        # 4. Создать payroll_entry для сотрудника
                                         adjustment_service = PayrollAdjustmentService(session)
                                         
-                                        # Получить неприменённые adjustments за период
-                                        adjustments = await adjustment_service.get_unapplied_adjustments(
-                                            employee_id=contract.employee_id,
-                                            period_start=period_start,
-                                            period_end=period_end
+                                        # Проверить, существует ли уже начисление за этот период
+                                        existing_entry_query = select(PayrollEntry).where(
+                                            PayrollEntry.employee_id == contract.employee_id,
+                                            PayrollEntry.period_start == period_start,
+                                            PayrollEntry.period_end == period_end,
+                                            PayrollEntry.object_id == obj.id
+                                        )
+                                        existing_entry_result = await session.execute(existing_entry_query)
+                                        existing_entry = existing_entry_result.scalar_one_or_none()
+                                        
+                                        # РАСШИРЕННЫЙ фильтр корректировок (как в manual_recalculate)
+                                        # 1. is_applied = false
+                                        # 2. is_applied = true AND payroll_entry_id IS NULL (зависшие)
+                                        # 3. is_applied = true AND payroll_entry_id = existing_entry.id (привязанные к ЭТОМУ начислению)
+                                        from domain.entities.shift import Shift
+                                        from sqlalchemy import func
+                                        
+                                        apply_status_conditions = [
+                                            PayrollAdjustment.is_applied == False,
+                                            and_(
+                                                PayrollAdjustment.is_applied == True,
+                                                PayrollAdjustment.payroll_entry_id.is_(None)
+                                            )
+                                        ]
+                                        
+                                        if existing_entry:
+                                            apply_status_conditions.append(
+                                                and_(
+                                                    PayrollAdjustment.is_applied == True,
+                                                    PayrollAdjustment.payroll_entry_id == existing_entry.id
+                                                )
+                                            )
+                                        
+                                        all_adjustments_query = select(PayrollAdjustment).outerjoin(
+                                            Shift, PayrollAdjustment.shift_id == Shift.id
+                                        ).where(
+                                            PayrollAdjustment.employee_id == contract.employee_id,
+                                            or_(*apply_status_conditions),
+                                            or_(
+                                                and_(
+                                                    PayrollAdjustment.shift_id.isnot(None),
+                                                    func.date(Shift.end_time) >= period_start,
+                                                    func.date(Shift.end_time) <= period_end
+                                                ),
+                                                and_(
+                                                    PayrollAdjustment.shift_id.is_(None),
+                                                    or_(
+                                                        and_(
+                                                            PayrollAdjustment.payroll_entry_id.is_(None),
+                                                            func.date(PayrollAdjustment.created_at) >= period_start,
+                                                            func.date(PayrollAdjustment.created_at) <= period_end
+                                                        ),
+                                                        PayrollAdjustment.payroll_entry_id == existing_entry.id if existing_entry else False
+                                                    )
+                                                )
+                                            )
                                         )
                                         
-                                        if not adjustments:
+                                        all_result = await session.execute(all_adjustments_query)
+                                        all_adjustments = list(all_result.scalars().all())
+                                        
+                                        # Фильтруем и разделяем корректировки
+                                        already_applied_adjustments = []
+                                        new_adjustments = []
+                                        
+                                        for adj in all_adjustments:
+                                            # Сбрасываем статус "зависших"
+                                            if adj.is_applied and adj.payroll_entry_id is None:
+                                                adj.is_applied = False
+                                                adj.payroll_entry_id = None
+                                            
+                                            # Фильтр по объекту
+                                            if adj.adjustment_type == 'shift_base':
+                                                if adj.object_id != obj.id:
+                                                    continue
+                                            
+                                            # Разделяем
+                                            if existing_entry and adj.is_applied and adj.payroll_entry_id == existing_entry.id:
+                                                already_applied_adjustments.append(adj)
+                                            else:
+                                                new_adjustments.append(adj)
+                                        
+                                        # Flush изменений
+                                        if new_adjustments:
+                                            await session.flush()
+                                        
+                                        # Пропускаем если нет корректировок
+                                        if not new_adjustments and not already_applied_adjustments:
                                             logger.debug(
                                                 f"No adjustments for employee",
                                                 employee_id=contract.employee_id,
-                                                period_start=period_start,
-                                                period_end=period_end
+                                                object_id=obj.id
                                             )
                                             continue
                                         
-                                        # Рассчитать итоговые суммы и часы
+                                        # ПЕРЕСЧИТЫВАЕМ с использованием ВСЕХ корректировок
+                                        all_relevant_adjustments = already_applied_adjustments + new_adjustments
+                                        
                                         gross_amount = Decimal('0.00')
                                         total_bonuses = Decimal('0.00')
                                         total_deductions = Decimal('0.00')
                                         total_hours = Decimal('0.00')
-                                        avg_hourly_rate = Decimal('0.00')
                                         
-                                        shift_adjustments = []
-                                        for adj in adjustments:
+                                        for adj in all_relevant_adjustments:
                                             amount_decimal = Decimal(str(adj.amount))
                                             
                                             if adj.adjustment_type == 'shift_base':
                                                 gross_amount += amount_decimal
-                                                shift_adjustments.append(adj)
+                                                # Извлекаем часы из details корректировки
+                                                if adj.details and 'hours' in adj.details:
+                                                    total_hours += Decimal(str(adj.details['hours']))
                                             elif amount_decimal > 0:
                                                 total_bonuses += amount_decimal
                                             else:
                                                 total_deductions += abs(amount_decimal)
                                         
-                                        # Получить часы и ставку из смен
-                                        if shift_adjustments:
-                                            from domain.entities.shift import Shift
-                                            shift_ids = [adj.shift_id for adj in shift_adjustments if adj.shift_id]
-                                            if shift_ids:
-                                                shifts_result = await session.execute(
-                                                    select(Shift).where(Shift.id.in_(shift_ids))
-                                                )
-                                                shifts = shifts_result.scalars().all()
-                                                for shift in shifts:
-                                                    if shift.total_hours:
-                                                        total_hours += Decimal(str(shift.total_hours))
-                                                    if shift.hourly_rate:
-                                                        avg_hourly_rate = Decimal(str(shift.hourly_rate))
-                                        
-                                        # Если нет часов, попытаться рассчитать
-                                        if total_hours == 0 and gross_amount > 0 and avg_hourly_rate > 0:
-                                            total_hours = gross_amount / avg_hourly_rate
-                                        
-                                        # Если всё ещё нет ставки, взять из объекта
-                                        if avg_hourly_rate == 0:
-                                            avg_hourly_rate = Decimal(str(obj.hourly_rate)) if obj.hourly_rate else Decimal('200.00')
-                                        
+                                        avg_hourly_rate = gross_amount / total_hours if total_hours > 0 else Decimal('0')
                                         net_amount = gross_amount + total_bonuses - total_deductions
                                         
-                                        # Создать PayrollEntry
-                                        payroll_entry = PayrollEntry(
-                                            employee_id=contract.employee_id,
-                                            contract_id=contract.id,
-                                            object_id=obj.id,
-                                            period_start=period_start,
-                                            period_end=period_end,
-                                            hours_worked=float(total_hours),
-                                            hourly_rate=float(avg_hourly_rate),
-                                            gross_amount=float(gross_amount),
-                                            total_bonuses=float(total_bonuses),
-                                            total_deductions=float(total_deductions),
-                                            net_amount=float(net_amount)
-                                        )
+                                        # Формируем calculation_details для протокола расчёта
+                                        calculation_details = {
+                                            "created_by": "celery_schedule",
+                                            "created_at": today.isoformat(),
+                                            "shifts": [],
+                                            "adjustments": []
+                                        }
                                         
-                                        session.add(payroll_entry)
-                                        await session.flush()
+                                        # Собираем детали смен
+                                        shift_base_adjustments = [adj for adj in all_relevant_adjustments if adj.adjustment_type == 'shift_base']
+                                        if shift_base_adjustments:
+                                            shift_ids = [adj.shift_id for adj in shift_base_adjustments if adj.shift_id]
+                                            if shift_ids:
+                                                shifts_query = select(Shift).where(Shift.id.in_(shift_ids))
+                                                shifts_result = await session.execute(shifts_query)
+                                                shifts = shifts_result.scalars().all()
+                                                for shift in shifts:
+                                                    shift_hours = Decimal(str(shift.total_hours)) if shift.total_hours else Decimal('0')
+                                                    shift_rate = Decimal(str(shift.hourly_rate)) if shift.hourly_rate else Decimal('0')
+                                                    shift_payment = shift_hours * shift_rate
+                                                    
+                                                    calculation_details["shifts"].append({
+                                                        "shift_id": shift.id,
+                                                        "date": shift.start_time.date().isoformat() if shift.start_time else None,
+                                                        "hours": float(shift_hours),
+                                                        "rate": float(shift_rate),
+                                                        "amount": float(shift_payment)
+                                                    })
                                         
-                                        # Отметить adjustments как примененные
-                                        adjustment_ids = [adj.id for adj in adjustments]
-                                        applied_count = await adjustment_service.mark_adjustments_as_applied(
-                                            adjustment_ids=adjustment_ids,
-                                            payroll_entry_id=payroll_entry.id
-                                        )
+                                        # Собираем детали всех корректировок
+                                        for adj in all_relevant_adjustments:
+                                            calculation_details["adjustments"].append({
+                                                "adjustment_id": adj.id,
+                                                "type": adj.adjustment_type,
+                                                "amount": float(adj.amount),
+                                                "description": adj.description or "",
+                                                "shift_id": adj.shift_id
+                                            })
                                         
-                                        total_entries_created += 1
-                                        total_adjustments_applied += applied_count
-                                        
-                                        logger.info(
-                                            f"Created payroll entry",
-                                            payroll_entry_id=payroll_entry.id,
-                                            employee_id=contract.employee_id,
-                                            object_id=obj.id,
-                                            gross_amount=float(gross_amount),
-                                            net_amount=float(net_amount),
-                                            adjustments_count=applied_count
-                                        )
+                                        # Если начисления не существует - СОЗДАЁМ новое
+                                        if not existing_entry:
+                                            payroll_entry = PayrollEntry(
+                                                employee_id=contract.employee_id,
+                                                contract_id=contract.id,
+                                                object_id=obj.id,
+                                                period_start=period_start,
+                                                period_end=period_end,
+                                                hours_worked=float(total_hours),
+                                                hourly_rate=float(avg_hourly_rate),
+                                                gross_amount=float(gross_amount),
+                                                total_bonuses=float(total_bonuses),
+                                                total_deductions=float(total_deductions),
+                                                net_amount=float(net_amount),
+                                                calculation_details=calculation_details
+                                            )
+                                            
+                                            session.add(payroll_entry)
+                                            await session.flush()
+                                            
+                                            # Применяем ТОЛЬКО новые корректировки
+                                            if new_adjustments:
+                                                new_adjustment_ids = [adj.id for adj in new_adjustments]
+                                                applied_count = await adjustment_service.mark_adjustments_as_applied(
+                                                    adjustment_ids=new_adjustment_ids,
+                                                    payroll_entry_id=payroll_entry.id
+                                                )
+                                            else:
+                                                applied_count = 0
+                                            
+                                            total_entries_created += 1
+                                            total_adjustments_applied += applied_count
+                                            
+                                            logger.info(
+                                                f"Created payroll entry",
+                                                payroll_entry_id=payroll_entry.id,
+                                                employee_id=contract.employee_id,
+                                                object_id=obj.id,
+                                                gross_amount=float(gross_amount),
+                                                net_amount=float(net_amount),
+                                                adjustments_count=applied_count
+                                            )
+                                        else:
+                                            # ОБНОВЛЯЕМ существующее начисление
+                                            existing_entry.gross_amount = float(gross_amount)
+                                            existing_entry.total_bonuses = float(total_bonuses)
+                                            existing_entry.total_deductions = float(total_deductions)
+                                            existing_entry.net_amount = float(net_amount)
+                                            existing_entry.hours_worked = float(total_hours)
+                                            existing_entry.hourly_rate = float(avg_hourly_rate)
+                                            existing_entry.calculation_details = calculation_details
+                                            
+                                            # Применяем ТОЛЬКО новые корректировки
+                                            if new_adjustments:
+                                                new_adjustment_ids = [adj.id for adj in new_adjustments]
+                                                applied_count = await adjustment_service.mark_adjustments_as_applied(
+                                                    adjustment_ids=new_adjustment_ids,
+                                                    payroll_entry_id=existing_entry.id
+                                                )
+                                            else:
+                                                applied_count = 0
+                                            
+                                            total_entries_updated += 1
+                                            total_adjustments_applied += applied_count
+                                            
+                                            logger.info(
+                                                f"Updated payroll entry",
+                                                payroll_entry_id=existing_entry.id,
+                                                employee_id=contract.employee_id,
+                                                adjustments_count=applied_count
+                                            )
                                         
                                     except Exception as e:
                                         error_msg = f"Error creating payroll entry for contract {contract.id}: {e}"
@@ -369,18 +500,78 @@ async def _get_payment_period_for_date(
     
     # Обработка месячных графиков
     elif schedule.frequency == 'monthly':
-        # Проверяем, совпадает ли сегодняшний день месяца с днем выплаты
+        period_config = schedule.payment_period
+        
+        # НОВЫЙ формат: поддержка массива payments (несколько выплат в месяц)
+        payments = period_config.get('payments', [])
+        
+        if payments:
+            # Ищем выплату, у которой next_payment_date совпадает с target_date
+            matching_payment = None
+            for payment in payments:
+                next_payment_str = payment.get('next_payment_date')
+                if next_payment_str:
+                    try:
+                        next_payment = date.fromisoformat(next_payment_str)
+                        if next_payment == target_date:
+                            matching_payment = payment
+                            break
+                    except (ValueError, TypeError):
+                        continue
+            
+            if not matching_payment:
+                # Дата не совпадает ни с одной выплатой
+                return None
+            
+            # Нашли нужную выплату - рассчитываем период
+            start_offset = matching_payment.get('start_offset', 0)
+            end_offset = matching_payment.get('end_offset', 0)
+            
+            period_start = target_date + timedelta(days=start_offset)
+            period_end = target_date + timedelta(days=end_offset)
+            
+            # Если is_end_of_month=True, корректируем period_end до последнего дня месяца
+            if matching_payment.get('is_end_of_month', False):
+                # Вычисляем последний день месяца для period_end
+                # Берём первый день следующего месяца и вычитаем 1 день
+                if period_end.month == 12:
+                    next_month_start = date(period_end.year + 1, 1, 1)
+                else:
+                    next_month_start = date(period_end.year, period_end.month + 1, 1)
+                period_end = next_month_start - timedelta(days=1)
+            
+            return {
+                'period_start': period_start,
+                'period_end': period_end
+            }
+        
+        # СТАРЫЙ формат: обратная совместимость (для системных графиков)
+        # Проверяем, совпадает ли день месяца с днем выплаты
         if target_date.day != schedule.payment_day:
             return None
         
-        # Получаем настройки периода из payment_period
-        period_config = schedule.payment_period
+        # Используем старый формат с прямыми offset'ами
         start_offset = period_config.get('start_offset', -60)  # По умолчанию -60 дней назад
         end_offset = period_config.get('end_offset', -30)  # По умолчанию -30 дней назад
         
         # Рассчитываем период относительно даты выплаты
         period_start = target_date + timedelta(days=start_offset)
         period_end = target_date + timedelta(days=end_offset)
+        
+        # Проверяем calc_rules для старого формата
+        calc_rules = period_config.get('calc_rules', {})
+        if calc_rules.get('period') == 'previous_month':
+            # Период - весь предыдущий месяц
+            prev_month = target_date.month - 1
+            prev_year = target_date.year
+            if prev_month < 1:
+                prev_month = 12
+                prev_year -= 1
+            
+            period_start = date(prev_year, prev_month, 1)
+            # Последний день предыдущего месяца
+            first_day_current = date(target_date.year, target_date.month, 1)
+            period_end = first_day_current - timedelta(days=1)
         
         return {
             'period_start': period_start,
