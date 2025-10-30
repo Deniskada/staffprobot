@@ -95,18 +95,24 @@ class TelegramNotificationSender:
             # Подготавливаем переменные для шаблона
             template_vars = variables or notification.data or {}
             
-            # Рендерим шаблон
-            rendered = NotificationTemplateManager.render(
-                notification_type=notification.type,
-                channel=notification.channel,
-                variables=template_vars
-            )
-            
+            # Если в уведомлении задан явный текст, используем его; иначе — рендерим шаблон
+            if notification.message:
+                title_to_use = notification.title or "Уведомление"
+                message_to_use = notification.message
+            else:
+                rendered = NotificationTemplateManager.render(
+                    notification_type=notification.type,
+                    channel=notification.channel,
+                    variables=template_vars
+                )
+                title_to_use = rendered["title"]
+                message_to_use = rendered["message"]
+
             # Форматируем сообщение для Telegram
             message = self._format_message(
                 notification=notification,
-                title=rendered["title"],
-                message=rendered["message"]
+                title=title_to_use,
+                message=message_to_use
             )
             
             # Определяем parse_mode (используем HTML для Telegram)
