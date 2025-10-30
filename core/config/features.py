@@ -37,7 +37,7 @@ SYSTEM_FEATURES_REGISTRY: Dict[str, FeatureDefinition] = {
     'notifications': {
         'name': 'Уведомления',
         'description': 'Система уведомлений о важных событиях: начало смены, опоздания, отмены. Будьте в курсе всего происходящего.',
-        'menu_items': [],
+        'menu_items': ['notifications_settings'],
         'form_elements': [],
         'sort_order': 3
     },

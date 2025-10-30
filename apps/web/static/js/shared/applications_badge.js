@@ -1,66 +1,69 @@
 (() => {
-    function initApplicationsBadge() {
-        const scripts = document.querySelectorAll('script[src$="/static/js/shared/applications_badge.js"]');
-        if (!scripts.length) {
+    function initNotificationsBadge() {
+        // Находим текущий <script>: учитываем query (?v=)
+        const scriptByCurrent = document.currentScript;
+        let currentScript = scriptByCurrent;
+        if (!currentScript) {
+            const byContains = document.querySelector('script[src*="/static/js/shared/applications_badge.js"]');
+            currentScript = byContains || null;
+        }
+        if (!currentScript) {
             console.warn('[applications_badge] Скрипт не найден в DOM');
             return;
         }
 
-        const currentScript = scripts[scripts.length - 1];
         const role = currentScript.dataset.role;
         if (!role) {
             console.error('[applications_badge] Атрибут data-role не задан');
             return;
         }
 
-        const badgeId = role === 'manager'
-            ? 'manager-new-applications-badge'
-            : 'owner-new-applications-badge';
-        const badgeElement = document.getElementById(badgeId);
+        // Поддержка старых id (applications) и новых (notifications)
+        const candidateIds = role === 'manager'
+            ? ['manager-notifications-badge', 'manager-new-applications-badge']
+            : ['owner-notifications-badge', 'owner-new-applications-badge'];
+        const badgeElement = candidateIds
+            .map((id) => document.getElementById(id))
+            .find((el) => !!el) || null;
         if (!badgeElement) {
-            console.warn('[applications_badge] Элемент бейджа не найден', { badgeId });
+            console.warn('[applications_badge] Элемент бейджа не найден', { candidateIds });
             return;
         }
 
-        const endpoint = role === 'manager'
-            ? '/manager/api/applications/count'
-            : '/owner/api/applications/count';
-
-        console.debug('[applications_badge] Запрос количества заявок', { role, endpoint });
-
-        fetch(endpoint, {
-            headers: {
-                'Accept': 'application/json'
-            },
-            credentials: 'include'
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                return response.json();
+        const endpoint = '/api/notifications/unread-count';
+        const update = () => {
+            fetch(endpoint, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'include'
             })
-            .then((data) => {
-                const count = Number(data?.count ?? 0);
-                console.debug('[applications_badge] Ответ сервера', { role, count, raw: data });
-                if (Number.isNaN(count) || count <= 0) {
-                    badgeElement.textContent = '';
-                    badgeElement.classList.add('d-none');
-                    return;
-                }
+                .then((response) => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then((data) => {
+                    const count = Number(data?.count ?? 0);
+                    if (Number.isNaN(count) || count <= 0) {
+                        badgeElement.textContent = '';
+                        badgeElement.classList.add('d-none');
+                        return;
+                    }
+                    badgeElement.textContent = String(count);
+                    badgeElement.classList.remove('d-none');
+                })
+                .catch((error) => {
+                    console.error('[applications_badge] Не удалось получить количество уведомлений', error);
+                });
+        };
 
-                badgeElement.textContent = String(count);
-                badgeElement.classList.remove('d-none');
-            })
-            .catch((error) => {
-                console.error('[applications_badge] Не удалось получить количество заявок', error);
-            });
+        // Первая загрузка и простой пуллинг
+        update();
+        setInterval(update, 30000);
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initApplicationsBadge);
+        document.addEventListener('DOMContentLoaded', initNotificationsBadge);
     } else {
-        initApplicationsBadge();
+        initNotificationsBadge();
     }
 })();
 
