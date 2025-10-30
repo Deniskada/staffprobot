@@ -41,6 +41,8 @@
                 <!-- Уведомления -->
                 <button class="topbar-notifications" aria-label="Notifications">
                     <i class="bi bi-bell"></i>
+                    <!-- Постоянный бейдж для In-App уведомлений -->
+                    <span class="badge bg-danger d-none" id="owner-notifications-badge"></span>
                     {% if new_applications_count and new_applications_count > 0 %}
                     <span class="badge bg-warning" id="owner-new-applications-badge">{{ new_applications_count }}</span>
                     {% endif %}

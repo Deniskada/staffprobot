@@ -101,6 +101,15 @@
                 
                 <ul class="navbar-nav">
                     {% if current_user %}
+                        <!-- Колокольчик уведомлений -->
+                        <li class="nav-item position-relative">
+                            <a class="nav-link" href="#" aria-label="Уведомления">
+                                <i class="bi bi-bell"></i>
+                                <span
+                                    id="manager-notifications-badge"
+                                    class="badge bg-danger ms-1 d-none"></span>
+                            </a>
+                        </li>
                         <!-- Переключатель ролей -->
                         {% if available_interfaces and available_interfaces|length > 1 %}
                         <li class="nav-item dropdown">
