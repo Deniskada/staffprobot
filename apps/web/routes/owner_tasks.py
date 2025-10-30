@@ -294,6 +294,33 @@ async def owner_tasks_plan(
     )
 
 
+@router.get("/owner/tasks/plan/create")
+async def owner_tasks_plan_create_page(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
+):
+    """Полноэкранная форма создания плана задач (вместо модального окна)."""
+    task_service = TaskService(session)
+    owner_id = current_user.id
+
+    templates_list = await task_service.get_templates_for_role(
+        user_id=owner_id,
+        role="owner",
+        for_selection=True
+    )
+
+    from domain.entities.object import Object
+    objects_query = select(Object).where(Object.owner_id == owner_id, Object.is_active == True).order_by(Object.name)
+    objects_result = await session.execute(objects_query)
+    objects_list = objects_result.scalars().all()
+
+    return templates.TemplateResponse(
+        "owner/tasks/plan_create.html",
+        {"request": request, "templates_list": templates_list, "objects_list": objects_list}
+    )
+
+
 @router.post("/owner/tasks/plan/create")
 async def owner_tasks_plan_create(
     request: Request,
@@ -310,7 +337,7 @@ async def owner_tasks_plan_create(
     planned_time_start: str = Form(None),
     recurrence_type: str = Form(None),
     weekday: list[str] = Form(None),
-    day_interval: int = Form(None),
+    day_interval: int | None = Form(None),
     recurrence_end_date: str = Form(None),
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_role(["owner", "superadmin"]))
@@ -371,14 +398,20 @@ async def owner_tasks_plan_create(
         final_template_id = new_template.id
         logger.info(f"Created on-the-fly template: {new_template.id} ({task_code})")
     
-    # Формируем recurrence_config
+    # Формируем recurrence_config (безопасный парсинг интервала)
     recurrence_config = None
     if recurrence_type == "weekdays" and weekday:
         recurrence_config = {"weekdays": [int(d) for d in weekday]}
-    elif recurrence_type == "day_interval" and day_interval:
-        recurrence_config = {"interval": day_interval}
+    elif recurrence_type == "day_interval":
+        try:
+            interval = int(day_interval) if day_interval is not None else 1
+        except Exception:
+            interval = 1
+        interval = max(1, interval)
+        recurrence_config = {"interval": interval}
     
     # Создаём план
+    from datetime import datetime, timezone
     plan = TaskPlanV2(
         template_id=final_template_id,
         owner_id=owner_id,
@@ -391,6 +424,11 @@ async def owner_tasks_plan_create(
         recurrence_end_date=end_date,
         is_active=True
     )
+    # Устанавливаем created_at сразу, чтобы избежать lazy-load (MissingGreenlet) при расчете периодичности
+    try:
+        setattr(plan, "created_at", datetime.now(timezone.utc))
+    except Exception:
+        pass
     session.add(plan)
     await session.flush()  # Получаем plan.id
     logger.info(f"Created TaskPlanV2: {plan.id}, template={final_template_id}, object={obj_id}, recurrence={recurrence_type}")
@@ -400,6 +438,63 @@ async def owner_tasks_plan_create(
     created_entries = await create_task_entries_for_active_shifts(session, plan)
     logger.info(f"Created {created_entries} TaskEntryV2 for active shifts of plan {plan.id}")
     
+    # Экстренные уведомления сотрудникам о новых задачах (без изменения старых тасок)
+    try:
+        from domain.entities.task_entry import TaskEntryV2
+        from domain.entities.shift import Shift
+        from sqlalchemy import and_
+        # Целевые объекты плана
+        target_object_ids = plan.object_ids or ([plan.object_id] if plan.object_id else None)
+
+        # Собираем сотрудников из только что созданных schedule-entries
+        entries_result = await session.execute(
+            select(TaskEntryV2.employee_id).where(TaskEntryV2.plan_id == plan.id)
+        )
+        employee_ids = {eid for (eid,) in entries_result.all() if eid}
+
+        # Плюс сотрудники с АКТИВНЫМИ сменами на целевых объектах: создаём entry по shift.id
+        created_for_active = 0
+        if target_object_ids:
+            active_shifts_q = select(Shift).where(
+                and_(
+                    Shift.status == "active",
+                    Shift.object_id.in_(target_object_ids)
+                )
+            )
+            active_shifts_res = await session.execute(active_shifts_q)
+            active_shifts = active_shifts_res.scalars().all()
+            from domain.entities.task_template import TaskTemplateV2
+            template = await session.get(TaskTemplateV2, plan.template_id)
+            for sh in active_shifts:
+                employee_ids.add(sh.user_id)
+                # Проверим, не существует ли уже entry для этой смены
+                exists_q = select(TaskEntryV2.id).where(
+                    and_(TaskEntryV2.plan_id == plan.id, TaskEntryV2.shift_id == sh.id)
+                )
+                exists_res = await session.execute(exists_q)
+                if exists_res.scalar_one_or_none():
+                    continue
+                entry = TaskEntryV2(
+                    template_id=plan.template_id,
+                    plan_id=plan.id,
+                    shift_id=sh.id,
+                    shift_schedule_id=sh.schedule_id if sh.schedule_id else None,
+                    employee_id=sh.user_id,
+                    is_completed=False,
+                    requires_media=template.requires_media if template else False
+                )
+                session.add(entry)
+                created_for_active += 1
+            logger.info("Ensured task entries for active shifts", plan_id=plan.id, active_shifts=len(active_shifts), created=created_for_active)
+
+        if employee_ids:
+            from core.celery.tasks.task_notifications import notify_tasks_updated
+            notify_tasks_updated.apply_async(args=[list(employee_ids)], queue='notifications')
+            logger.info("Enqueued notify_tasks_updated", plan_id=plan.id, employees=len(employee_ids), queue='notifications')
+    except Exception as e:
+        from core.logging.logger import logger as _logger
+        _logger.error("Failed to enqueue notify_tasks_updated", plan_id=plan.id, error=str(e))
+
     await session.commit()
     
     return RedirectResponse(url="/owner/tasks/plan", status_code=303)
@@ -469,6 +564,47 @@ async def owner_tasks_plan_edit(
     from core.celery.tasks.task_assignment import create_task_entries_for_active_shifts
     created_entries = await create_task_entries_for_active_shifts(session, plan)
     logger.info(f"Updated plan {plan.id}, created {created_entries} TaskEntryV2 for active shifts")
+
+    # Дополнительно: обеспечить привязку к активным сменам (shift_id) и уведомить сотрудников
+    try:
+        from domain.entities.task_entry import TaskEntryV2
+        from domain.entities.shift import Shift
+        from sqlalchemy import select, and_
+        target_object_ids = plan.object_ids or ([plan.object_id] if plan.object_id else None)
+        employee_ids = set()
+        if target_object_ids:
+            active_shifts_q = select(Shift).where(
+                and_(Shift.status == "active", Shift.object_id.in_(target_object_ids))
+            )
+            active_shifts_res = await session.execute(active_shifts_q)
+            active_shifts = active_shifts_res.scalars().all()
+            from domain.entities.task_template import TaskTemplateV2
+            template = await session.get(TaskTemplateV2, plan.template_id)
+            for sh in active_shifts:
+                employee_ids.add(sh.user_id)
+                exists_q = select(TaskEntryV2.id).where(
+                    and_(TaskEntryV2.plan_id == plan.id, TaskEntryV2.shift_id == sh.id)
+                )
+                exists_res = await session.execute(exists_q)
+                if exists_res.scalar_one_or_none():
+                    continue
+                entry = TaskEntryV2(
+                    template_id=plan.template_id,
+                    plan_id=plan.id,
+                    shift_id=sh.id,
+                    shift_schedule_id=sh.schedule_id if sh.schedule_id else None,
+                    employee_id=sh.user_id,
+                    is_completed=False,
+                    requires_media=template.requires_media if template else False
+                )
+                session.add(entry)
+            if employee_ids:
+                from core.celery.tasks.task_notifications import notify_tasks_updated
+                notify_tasks_updated.apply_async(args=[list(employee_ids)], queue='notifications')
+                logger.info("Enqueued notify_tasks_updated (edit)", plan_id=plan.id, employees=len(employee_ids), queue='notifications')
+    except Exception as e:
+        from core.logging.logger import logger as _logger
+        _logger.error("Failed to ensure/notify on plan edit", plan_id=plan.id, error=str(e))
     
     await session.commit()
     logger.info(f"Updated TaskPlanV2: {plan_id}")
