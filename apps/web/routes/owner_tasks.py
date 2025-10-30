@@ -504,8 +504,23 @@ async def owner_tasks_plan_create(
                 from core.celery.tasks.notification_tasks import send_notification_now
 
                 notif_service = NotificationService()
-                created_ids: list[int] = []
+                created_ids: list[int] = []  # только для TELEGRAM, IN_APP не шлём через Celery
                 for eid in employee_ids:
+                    # In-App (колокольчик)
+                    await notif_service.create_notification(
+                        user_id=int(eid),
+                        type=NotificationType.FEATURE_ANNOUNCEMENT,
+                        channel=NotificationChannel.IN_APP,
+                        title="Новая задача",
+                        message=(
+                            "📋 Новая задача назначена. "
+                            "Откройте ‘📝 Мои задачи’, чтобы посмотреть список."
+                        ),
+                        data={"plan_id": plan.id},
+                        priority=NotificationPriority.NORMAL,
+                        scheduled_at=None,
+                    )
+                    # Telegram
                     n = await notif_service.create_notification(
                         user_id=int(eid),
                         type=NotificationType.FEATURE_ANNOUNCEMENT,
@@ -659,6 +674,21 @@ async def owner_tasks_plan_edit(
                     notif_service = NotificationService()
                     created_ids: list[int] = []
                     for eid in employee_ids:
+                        # In-App (колокольчик)
+                        await notif_service.create_notification(
+                            user_id=int(eid),
+                            type=NotificationType.FEATURE_ANNOUNCEMENT,
+                            channel=NotificationChannel.IN_APP,
+                            title="Новая задача",
+                            message=(
+                                "📋 Новая задача назначена. "
+                                "Откройте ‘📝 Мои задачи’, чтобы посмотреть список."
+                            ),
+                            data={"plan_id": plan.id},
+                            priority=NotificationPriority.NORMAL,
+                            scheduled_at=None,
+                        )
+                        # Telegram
                         n = await notif_service.create_notification(
                             user_id=int(eid),
                             type=NotificationType.FEATURE_ANNOUNCEMENT,
@@ -787,6 +817,53 @@ async def owner_tasks_entries_create(
     session.add(entry)
     await session.commit()
     logger.info(f"Created TaskEntryV2 manually: {entry.id}, template={template_id}")
+
+    # Создаём In‑App и Telegram уведомления сотруднику (если указан)
+    try:
+        if employee_id:
+            from shared.services.notification_service import NotificationService
+            from domain.entities.notification import (
+                NotificationType,
+                NotificationChannel,
+                NotificationPriority,
+            )
+            from core.celery.tasks.notification_tasks import send_notification_now
+
+            notif_service = NotificationService()
+            # In‑App
+            await notif_service.create_notification(
+                user_id=int(employee_id),
+                type=NotificationType.FEATURE_ANNOUNCEMENT,
+                channel=NotificationChannel.IN_APP,
+                title="Новая задача",
+                message=(
+                    "📋 Новая задача назначена. "
+                    "Откройте ‘📝 Мои задачи’, чтобы посмотреть список."
+                ),
+                data={"entry_id": entry.id, "template_id": template_id},
+                priority=NotificationPriority.NORMAL,
+                scheduled_at=None,
+            )
+            # Telegram
+            n = await notif_service.create_notification(
+                user_id=int(employee_id),
+                type=NotificationType.FEATURE_ANNOUNCEMENT,
+                channel=NotificationChannel.TELEGRAM,
+                title="Новая задача",
+                message=(
+                    "📋 Новая задача назначена. "
+                    "Откройте ‘📝 Мои задачи’, чтобы посмотреть список."
+                ),
+                data={"entry_id": entry.id, "template_id": template_id},
+                priority=NotificationPriority.NORMAL,
+                scheduled_at=None,
+            )
+            if n and getattr(n, "id", None):
+                send_notification_now.apply_async(args=[int(n.id)], queue='notifications')
+                logger.info("Enqueued send_notification_now for manual entry", entry_id=entry.id, notification_id=int(n.id))
+    except Exception as _e:
+        from core.logging.logger import logger as _logger
+        _logger.error("Failed to create notifications for manual entry", entry_id=entry.id, error=str(_e))
     
     return RedirectResponse(url="/owner/tasks/entries", status_code=303)
 
