@@ -1,0 +1,40 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}Категории инцидентов{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Категории инцидентов</h3>
+  </div>
+  <form method="post" class="row g-2 mb-3" action="/owner/incidents/categories">
+    <div class="col-md-6">
+      <input type="text" name="name" class="form-control" placeholder="Новая категория" required>
+    </div>
+    <div class="col-md-3">
+      <button class="btn btn-primary" type="submit">Добавить</button>
+    </div>
+  </form>
+
+  <table class="table table-sm table-hover">
+    <thead><tr><th>Название</th><th style="width:160px;" class="text-end">Действия</th></tr></thead>
+    <tbody>
+      {% for c in categories %}
+        <tr>
+          <td>{{ c.name }}</td>
+          <td class="text-end">
+            <form method="post" action="/owner/incidents/categories" class="d-inline">
+              <input type="hidden" name="category_id" value="{{ c.id }}">
+              <input type="hidden" name="name" value="{{ c.name }}">
+              <input type="hidden" name="action" value="deactivate">
+              <button class="btn btn-outline-danger btn-sm" onclick="return confirm('Отключить категорию?')">Деактивировать</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="2" class="text-muted">Категорий нет</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+

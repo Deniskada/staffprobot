@@ -515,3 +515,59 @@ class PayrollAdjustmentService:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def create_incident_deduction(
+        self,
+        *,
+        employee_id: int,
+        object_id: Optional[int],
+        amount: Decimal,
+        adjustment_date: Optional[date],
+        description: str,
+        created_by: int,
+        incident_id: int
+    ) -> PayrollAdjustment:
+        """Удержание за ущерб по инциденту (amount будет отрицательной)."""
+        from datetime import timezone, datetime as dt
+        adj_amount = -abs(Decimal(amount))
+        adjustment = PayrollAdjustment(
+            employee_id=employee_id,
+            object_id=object_id,
+            adjustment_type='incident_deduction',
+            amount=adj_amount,
+            description=description,
+            details={'incident_id': incident_id},
+            created_by=created_by,
+            is_applied=False
+        )
+        if adjustment_date:
+            naive_dt = dt.combine(adjustment_date, dt.min.time())
+            adjustment.created_at = naive_dt.replace(tzinfo=timezone.utc)
+        self.session.add(adjustment)
+        logger.info("Создано удержание по инциденту", employee_id=employee_id, incident_id=incident_id, amount=float(adj_amount))
+        return adjustment
+
+    async def create_incident_refund(
+        self,
+        *,
+        employee_id: int,
+        object_id: Optional[int],
+        amount: Decimal,
+        description: str,
+        created_by: int,
+        incident_id: int
+    ) -> PayrollAdjustment:
+        """Возврат удержания по инциденту (положительная сумма)."""
+        adjustment = PayrollAdjustment(
+            employee_id=employee_id,
+            object_id=object_id,
+            adjustment_type='incident_refund',
+            amount=abs(Decimal(amount)),
+            description=description,
+            details={'incident_id': incident_id},
+            created_by=created_by,
+            is_applied=False
+        )
+        self.session.add(adjustment)
+        logger.info("Создан возврат удержания по инциденту", employee_id=employee_id, incident_id=incident_id, amount=float(abs(Decimal(amount))))
+        return adjustment
+

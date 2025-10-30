@@ -193,6 +193,35 @@ class SystemFeaturesService:
             if feature_key not in enabled_features:
                 enabled_features.append(feature_key)
                 logger.info(f"Added {feature_key}, now: {enabled_features}")
+            # Автоправила по умолчанию при включении rules_engine
+            if feature_key == 'rules_engine':
+                try:
+                    from sqlalchemy import select as sql_select
+                    from domain.entities.rule import Rule
+                    exists_q = await session.execute(
+                        sql_select(Rule).where(Rule.owner_id == user_id, Rule.code == 'incident_damage_deduction')
+                    )
+                    if not exists_q.scalar_one_or_none():
+                        import json
+                        rule = Rule(
+                            owner_id=user_id,
+                            code='incident_damage_deduction',
+                            name='Удержание за ущерб по инцидентам',
+                            scope='incident',
+                            is_active=True,
+                            priority=100,
+                            condition_json=json.dumps({
+                                "description": "Удержание при создании инцидента с ущербом",
+                                "has_damage": True
+                            }),
+                            action_json=json.dumps({
+                                "action": "create_incident_deduction"
+                            })
+                        )
+                        session.add(rule)
+                        logger.info("Added default rule incident_damage_deduction for owner", owner_id=user_id)
+                except Exception as e:
+                    logger.error(f"Failed to seed default rules for rules_engine: {e}")
         else:
             if feature_key in enabled_features:
                 enabled_features.remove(feature_key)

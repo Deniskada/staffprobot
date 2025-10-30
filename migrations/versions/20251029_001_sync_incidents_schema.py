@@ -26,35 +26,24 @@ def upgrade():
         with op.batch_alter_table('incidents') as batch_op:
             batch_op.add_column(sa.Column('suggested_adjustments', sa.Text(), nullable=True))
 
-    # Create index on id to match dev (redundant but for parity)
-    try:
+    # Create index on id only if not exists
+    existing_indexes = {idx['name'] for idx in inspector.get_indexes('incidents')}
+    if 'ix_incidents_id' not in existing_indexes:
         op.create_index('ix_incidents_id', 'incidents', ['id'])
-    except Exception:
-        # Index may already exist
-        pass
 
-    # Create foreign keys if missing
-    # Note: use explicit names to match dev
-    try:
+    # Create foreign keys only if not exists
+    existing_fks = {fk['name'] for fk in inspector.get_foreign_keys('incidents') if fk.get('name')}
+
+    if 'incidents_created_by_fkey' not in existing_fks:
         op.create_foreign_key('incidents_created_by_fkey', 'incidents', 'users', ['created_by'], ['id'])
-    except Exception:
-        pass
-    try:
+    if 'incidents_employee_id_fkey' not in existing_fks:
         op.create_foreign_key('incidents_employee_id_fkey', 'incidents', 'users', ['employee_id'], ['id'])
-    except Exception:
-        pass
-    try:
+    if 'incidents_object_id_fkey' not in existing_fks:
         op.create_foreign_key('incidents_object_id_fkey', 'incidents', 'objects', ['object_id'], ['id'])
-    except Exception:
-        pass
-    try:
+    if 'incidents_owner_id_fkey' not in existing_fks:
         op.create_foreign_key('incidents_owner_id_fkey', 'incidents', 'users', ['owner_id'], ['id'])
-    except Exception:
-        pass
-    try:
+    if 'incidents_shift_schedule_id_fkey' not in existing_fks:
         op.create_foreign_key('incidents_shift_schedule_id_fkey', 'incidents', 'shift_schedules', ['shift_schedule_id'], ['id'])
-    except Exception:
-        pass
 
 
 def downgrade():

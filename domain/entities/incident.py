@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, Date, Numeric
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -23,6 +23,11 @@ class Incident(Base):
     notes = Column(Text, nullable=True)
     evidence_media_ids = Column(Text, nullable=True)  # JSON list of media IDs
     suggested_adjustments = Column(Text, nullable=True)  # JSON list of suggested payroll adjustments
+
+    # Пользовательские реквизиты
+    custom_number = Column(String(100), nullable=True, index=True)
+    custom_date = Column(Date, nullable=True, index=True)
+    damage_amount = Column(Numeric(10, 2), nullable=True)
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
