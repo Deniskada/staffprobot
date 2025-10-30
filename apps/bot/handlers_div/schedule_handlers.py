@@ -597,14 +597,8 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
         object_result = await session.execute(object_query)
         obj = object_result.scalar_one_or_none()
         
-        # Проверяем наличие telegram_report_chat_id (с учетом наследования от подразделения)
-        report_chat_id = obj.telegram_report_chat_id if obj else None
-        if not report_chat_id and obj and obj.org_unit:
-            # Проверяем подразделение
-            org_unit = obj.org_unit
-            while org_unit and not report_chat_id:
-                report_chat_id = org_unit.telegram_report_chat_id
-                org_unit = org_unit.parent if hasattr(org_unit, 'parent') else None
+        # Определяем чат для отчетов с учетом наследования
+        report_chat_id = obj.get_effective_report_chat_id() if obj else None
         
         # Если есть группа для отчетов - запрашиваем фото через Media Orchestrator
         if report_chat_id:

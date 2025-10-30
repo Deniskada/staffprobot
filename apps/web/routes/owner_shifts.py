@@ -317,37 +317,36 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
         
         # Загрузить задачи смены
         shift_tasks = []
-        from shared.services.shift_task_journal import ShiftTaskJournal
         from domain.entities.timeslot_task_template import TimeslotTaskTemplate
+        from domain.entities.task_entry import TaskEntryV2
         
         if shift_type == "shift":
-            # Реальная смена: синхронизировать журнал и читать из него
-            journal = ShiftTaskJournal(session)
-            tasks_entities = await journal.get_by_shift(shift_id)
-            
-            # Если журнал пуст - синхронизировать из конфигурации
-            if not tasks_entities:
-                tasks_entities = await journal.sync_from_config(
-                    shift_id=shift_id,
-                    time_slot_id=shift.time_slot_id,
-                    object_id=shift.object_id,
-                    created_by_id=user_id
-                )
-            
+            # Реальная смена: использовать TaskEntryV2 (новая система задач)
+            entries_query = (
+                select(TaskEntryV2)
+                .where(TaskEntryV2.shift_id == shift_id)
+                .options(selectinload(TaskEntryV2.template))
+                .order_by(TaskEntryV2.id)
+            )
+            entries_res = await session.execute(entries_query)
+            entries = entries_res.scalars().all()
+
             # Преобразовать в dict для шаблона
-            shift_tasks = [{
-                'id': t.id,
-                'task_text': t.task_text,
-                'source': t.source,
-                'source_id': t.source_id,
-                'is_mandatory': t.is_mandatory,
-                'requires_media': t.requires_media,
-                'deduction_amount': float(t.deduction_amount) if t.deduction_amount else 0,
-                'is_completed': t.is_completed,
-                'completed_at': t.completed_at,
-                'media_refs': t.media_refs,
-                'cost': float(t.cost) if t.cost else None
-            } for t in tasks_entities]
+            for e in entries:
+                tpl = e.template
+                shift_tasks.append({
+                    'id': e.id,
+                    'task_text': (tpl.title if tpl else ''),
+                    'source': 'task_v2',
+                    'source_id': e.template_id,
+                    'is_mandatory': bool(tpl.is_mandatory) if tpl else False,
+                    'requires_media': bool(tpl.requires_media) if tpl else False,
+                    'deduction_amount': float(tpl.default_bonus_amount) if (tpl and tpl.default_bonus_amount) else 0,
+                    'is_completed': bool(e.is_completed),
+                    'completed_at': e.completed_at,
+                    'media_refs': e.completion_media or [],
+                    'cost': None
+                })
             
         elif shift_type == "schedule":
             # Запланированная смена: превью из конфигурации (без статусов)

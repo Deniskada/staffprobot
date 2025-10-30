@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 401/458 (87.6%)  
+**Общий прогресс:** 404/458 (88.2%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
@@ -100,6 +100,7 @@
 - ✅ Добавлены комбинированные фильтры
 - ✅ Улучшен UX фильтрации
 - ✅ Обновлена документация
+**Пост-фикс 30.10.2025:** Быстрое создание тайм-слота — объект из фильтра календаря; автоподстановка времени по первой «дыре» между тайм‑слотами (fallback API при отсутствии данных).
 
 ## Итерация 29: Система отмены смен с учетом ответственности ✅
 
@@ -224,6 +225,7 @@
 - [x] Функционал протестирован на dev ✅
 - [x] Документация создана ✅
 - [x] Задеплоено на production ✅
+**Пост-фикс 30.10.2025:** Автооткрытие последовательных смен — actual_start берётся из планового начала тайм‑слота; фильтр «следующей» по тому же объекту и точному времени.
 
 ## Итерация 31: Owner Profile Enhancement ✅
 
@@ -554,10 +556,7 @@
 - [x] Функционал протестирован на dev ✅
 - [x] Документация обновлена ✅
 - [x] Задеплоено на production ✅
-
-### Связанная документация
-- [Bot Commands](../vision_v1/bot/README.md)
-- [Shared Services](../vision_v1/shared/schedule_service.md)
+**Пост-фикс 30.10.2025:** Наследование Telegram‑чата для отчётов: `get_effective_report_chat_id()` + eager‑load `Object.org_unit` (исключает MissingGreenlet).
 
 ## Итерация 36: Mobile App Integration
 
@@ -712,6 +711,7 @@
 - [Task Status Inversion Bug](../TASK_STATUS_INVERSION_BUG.md)
 - [Task Media Upload Bug](../TASK_MEDIA_UPLOAD_BUG.md)
 - [Feature Keys Mismatch Analysis](../FEATURE_KEYS_MISMATCH_ANALYSIS.md)
+**Пост-фикс 30.10.2025:** Детали смены (Owner) — задачи из `TaskEntryV2` вместо legacy `shift_tasks`.
 
 ---
 

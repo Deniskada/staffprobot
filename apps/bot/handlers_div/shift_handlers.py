@@ -477,7 +477,7 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                 logger.info(f"[CLOSE_SHIFT] Loading Shift object from DB: shift_id={shift.get('id')}")
                 shift_query = select(Shift).options(
                     selectinload(Shift.time_slot),
-                    selectinload(Shift.object)
+                    selectinload(Shift.object).selectinload(Object.org_unit)
                 ).where(Shift.id == shift['id'])
                 shift_result = await session.execute(shift_query)
                 shift_obj = shift_result.scalar_one_or_none()
@@ -499,17 +499,8 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                 
                 # Если есть задачи - показываем их для подтверждения выполнения
                 if shift_tasks:
-                    # Получаем telegram_report_chat_id для медиа отчетов (наследование)
-                    telegram_chat_id = None
-                    if not obj.inherit_telegram_chat and obj.telegram_report_chat_id:
-                        telegram_chat_id = obj.telegram_report_chat_id
-                    elif obj.org_unit:
-                        org_unit = obj.org_unit
-                        while org_unit:
-                            if org_unit.telegram_report_chat_id:
-                                telegram_chat_id = org_unit.telegram_report_chat_id
-                                break
-                            org_unit = org_unit.parent
+                    # Получаем telegram_report_chat_id для медиа отчетов (с учетом наследования)
+                    telegram_chat_id = obj.get_effective_report_chat_id() if obj else None
                     
                     # Формируем текст с задачами
                     tasks_text = "📋 <b>Задачи на смену:</b>\n\n"
@@ -2409,8 +2400,10 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
                 await update.message.reply_text("❌ Активная смена не найдена")
                 return
             
-            # Получаем объект для определения telegram_chat_id
-            object_query = select(Object).where(Object.id == active_shift.object_id)
+            # Получаем объект для определения telegram_chat_id (eager-load org_unit во избежание lazy load)
+            object_query = select(Object).where(Object.id == active_shift.object_id).options(
+                selectinload(Object.org_unit)
+            )
             object_result = await session.execute(object_query)
             obj = object_result.scalar_one_or_none()
             
@@ -2419,16 +2412,8 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
             
             if obj:
                 object_name = obj.name
-                # Получаем telegram_report_chat_id для медиа отчетов (наследование)
-                if not obj.inherit_telegram_chat and obj.telegram_report_chat_id:
-                    telegram_chat_id = obj.telegram_report_chat_id
-                elif obj.org_unit:
-                    org_unit = obj.org_unit
-                    while org_unit:
-                        if org_unit.telegram_report_chat_id:
-                            telegram_chat_id = org_unit.telegram_report_chat_id
-                            break
-                        org_unit = org_unit.parent
+                # Получаем telegram_report_chat_id для медиа отчетов (с учетом наследования)
+                telegram_chat_id = obj.get_effective_report_chat_id()
             
             if not telegram_chat_id:
                 await update.message.reply_text(
