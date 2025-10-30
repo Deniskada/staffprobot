@@ -285,6 +285,16 @@ class CalendarPanels {
                         closingTime: found.closing_time || '18:00'
                     };
                 }
+            } else if (Array.isArray(this.objectsData) && this.objectsData.length === 1) {
+                // Если фильтра нет и у пользователя ровно один объект — выбираем его
+                const only = this.objectsData[0];
+                object = {
+                    id: only.id,
+                    name: only.name,
+                    hourlyRate: only.hourly_rate || 0,
+                    openingTime: only.opening_time || '09:00',
+                    closingTime: only.closing_time || '18:00'
+                };
             }
         }
 
