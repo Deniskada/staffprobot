@@ -488,9 +488,51 @@ async def owner_tasks_plan_create(
             logger.info("Ensured task entries for active shifts", plan_id=plan.id, active_shifts=len(active_shifts), created=created_for_active)
 
         if employee_ids:
+            # 1) Старый механизм экстренных уведомлений (оставляем для совместимости)
             from core.celery.tasks.task_notifications import notify_tasks_updated
             notify_tasks_updated.apply_async(args=[list(employee_ids)], queue='notifications')
             logger.info("Enqueued notify_tasks_updated", plan_id=plan.id, employees=len(employee_ids), queue='notifications')
+
+            # 2) Новый универсальный pipeline уведомлений: создаём записи и отправляем через Celery
+            try:
+                from shared.services.notification_service import NotificationService
+                from domain.entities.notification import (
+                    NotificationType,
+                    NotificationChannel,
+                    NotificationPriority,
+                )
+                from core.celery.tasks.notification_tasks import send_notification_now
+
+                notif_service = NotificationService()
+                created_ids: list[int] = []
+                for eid in employee_ids:
+                    n = await notif_service.create_notification(
+                        user_id=int(eid),
+                        type=NotificationType.FEATURE_ANNOUNCEMENT,
+                        channel=NotificationChannel.TELEGRAM,
+                        title="Новая задача",
+                        message=(
+                            "📋 Новая задача назначена. "
+                            "Откройте ‘📝 Мои задачи’, чтобы посмотреть список."
+                        ),
+                        data={"plan_id": plan.id},
+                        priority=NotificationPriority.NORMAL,
+                        scheduled_at=None,
+                    )
+                    if n and getattr(n, "id", None):
+                        created_ids.append(int(n.id))
+
+                for nid in created_ids:
+                    send_notification_now.apply_async(args=[nid], queue="notifications")
+                if created_ids:
+                    logger.info(
+                        "Enqueued send_notification_now for created notifications",
+                        plan_id=plan.id,
+                        total=len(created_ids),
+                    )
+            except Exception as _e:
+                from core.logging.logger import logger as _logger
+                _logger.error("Failed to enqueue universal notifications", plan_id=plan.id, error=str(_e))
     except Exception as e:
         from core.logging.logger import logger as _logger
         _logger.error("Failed to enqueue notify_tasks_updated", plan_id=plan.id, error=str(e))
@@ -599,9 +641,51 @@ async def owner_tasks_plan_edit(
                 )
                 session.add(entry)
             if employee_ids:
+                # 1) Совместимость: экстренное уведомление
                 from core.celery.tasks.task_notifications import notify_tasks_updated
                 notify_tasks_updated.apply_async(args=[list(employee_ids)], queue='notifications')
                 logger.info("Enqueued notify_tasks_updated (edit)", plan_id=plan.id, employees=len(employee_ids), queue='notifications')
+
+                # 2) Новый pipeline уведомлений
+                try:
+                    from shared.services.notification_service import NotificationService
+                    from domain.entities.notification import (
+                        NotificationType,
+                        NotificationChannel,
+                        NotificationPriority,
+                    )
+                    from core.celery.tasks.notification_tasks import send_notification_now
+
+                    notif_service = NotificationService()
+                    created_ids: list[int] = []
+                    for eid in employee_ids:
+                        n = await notif_service.create_notification(
+                            user_id=int(eid),
+                            type=NotificationType.FEATURE_ANNOUNCEMENT,
+                            channel=NotificationChannel.TELEGRAM,
+                            title="Новая задача",
+                            message=(
+                                "📋 Новая задача назначена. "
+                                "Откройте ‘📝 Мои задачи’, чтобы посмотреть список."
+                            ),
+                            data={"plan_id": plan.id},
+                            priority=NotificationPriority.NORMAL,
+                            scheduled_at=None,
+                        )
+                        if n and getattr(n, "id", None):
+                            created_ids.append(int(n.id))
+
+                    for nid in created_ids:
+                        send_notification_now.apply_async(args=[nid], queue="notifications")
+                    if created_ids:
+                        logger.info(
+                            "Enqueued send_notification_now (edit) for created notifications",
+                            plan_id=plan.id,
+                            total=len(created_ids),
+                        )
+                except Exception as _e:
+                    from core.logging.logger import logger as _logger
+                    _logger.error("Failed to enqueue universal notifications (edit)", plan_id=plan.id, error=str(_e))
     except Exception as e:
         from core.logging.logger import logger as _logger
         _logger.error("Failed to ensure/notify on plan edit", plan_id=plan.id, error=str(e))
