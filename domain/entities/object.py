@@ -199,6 +199,21 @@ class Object(Base):
             'invalid_reason_fine': None,
             'source': 'default'
         }
+
+    def get_effective_report_chat_id(self) -> Optional[str]:
+        """
+        Получить Telegram чат для медиа-отчетов с учетом наследования от подразделения.
+        
+        Логика:
+        - Если inherit_telegram_chat == False и у объекта задан chat → использовать его
+        - Если inherit_telegram_chat == True и у подразделения задан chat → использовать подразделение
+        - Иначе None
+        """
+        if not self.inherit_telegram_chat and self.telegram_report_chat_id:
+            return self.telegram_report_chat_id
+        if self.inherit_telegram_chat and self.org_unit and getattr(self.org_unit, 'telegram_report_chat_id', None):
+            return self.org_unit.telegram_report_chat_id
+        return None
     
     # Связи с заявками и собеседованиями
     applications = relationship("Application", back_populates="object", cascade="all, delete-orphan")

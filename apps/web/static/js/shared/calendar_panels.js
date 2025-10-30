@@ -270,11 +270,28 @@ class CalendarPanels {
         // Populate objects list in form
         await this.populateQuickCreateObjects();
         
+        // 1) Если объект не передан кликом из панели — возьмем активный фильтр из URL
+        if (!object) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const objectIdFromUrl = urlParams.get('object_id');
+            if (objectIdFromUrl) {
+                const found = (this.objectsData || []).find(o => String(o.id) === String(objectIdFromUrl));
+                if (found) {
+                    object = {
+                        id: found.id,
+                        name: found.name,
+                        hourlyRate: found.hourly_rate || 0,
+                        openingTime: found.opening_time || '09:00',
+                        closingTime: found.closing_time || '18:00'
+                    };
+                }
+            }
+        }
+
+        // Применяем выбранный объект в форму (если есть)
         if (object) {
             document.getElementById('quickObject').value = object.id;
             document.getElementById('quickRate').value = object.hourlyRate;
-            document.getElementById('quickStartTime').value = object.openingTime;
-            document.getElementById('quickEndTime').value = object.closingTime;
         }
         
         if (date) {
@@ -283,6 +300,107 @@ class CalendarPanels {
             document.getElementById('quickDate').value = new Date().toISOString().split('T')[0];
         }
         
+        // 2) Логика подстановки времени: рабочие часы объекта или первая "дыра" между существующими тайм-слотами дня
+        try {
+            const quickObjectId = document.getElementById('quickObject').value;
+            const quickDate = document.getElementById('quickDate').value; // YYYY-MM-DD
+            let openingTime = '09:00';
+            let closingTime = '18:00';
+            if (object) {
+                openingTime = object.openingTime || openingTime;
+                closingTime = object.closingTime || closingTime;
+            } else {
+                // если объект выбран из select, можно вытащить часы из кеша
+                const found = (this.objectsData || []).find(o => String(o.id) === String(quickObjectId));
+                if (found) {
+                    openingTime = found.opening_time || openingTime;
+                    closingTime = found.closing_time || closingTime;
+                }
+            }
+
+            // Из данных календаря собираем тайм-слоты на дату по объекту (именно тайм-слоты, НЕ смены)
+            const data = (window.universalCalendar && window.universalCalendar.calendarData) || null;
+            let slots = [];
+            if (data && Array.isArray(data.timeslots)) {
+                slots = data.timeslots
+                    .filter(ts => ts && ts.date === quickDate && String(ts.object_id) === String(quickObjectId))
+                    .map(ts => ({
+                        start: ts.start_time, // 'HH:MM'
+                        end: ts.end_time
+                    }));
+            }
+            // Fallback: если календарные данные ещё не успели загрузиться — подтянем тайм-слоты напрямую из API
+            if ((!slots || slots.length === 0) && quickObjectId && quickDate) {
+                try {
+                    const params = new URLSearchParams({ start_date: quickDate, end_date: quickDate, object_ids: String(quickObjectId) });
+                    const resp = await fetch(`/owner/calendar/api/data?${params.toString()}`, { credentials: 'same-origin' });
+                    if (resp.ok) {
+                        const payload = await resp.json();
+                        const list = Array.isArray(payload?.timeslots) ? payload.timeslots : [];
+                        slots = list
+                            .filter(t => t && t.date === quickDate && String(t.object_id) === String(quickObjectId))
+                            .map(t => ({ start: t.start_time, end: t.end_time }));
+                    }
+                } catch (e) { /* ignore */ }
+            }
+
+            const toMinutes = (hhmm) => {
+                const [h, m] = (hhmm || '00:00').split(':').map(Number);
+                return (h * 60) + (m || 0);
+            };
+            const toHHMM = (mins) => {
+                const h = Math.floor(mins / 60);
+                const m = mins % 60;
+                return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            };
+
+            // Если слотов нет — подставляем рабочие часы объекта
+            if (!slots || slots.length === 0) {
+                document.getElementById('quickStartTime').value = openingTime;
+                document.getElementById('quickEndTime').value = closingTime;
+            } else {
+                // Ищем первую пустоту в пределах рабочих часов
+                const workStart = toMinutes(openingTime);
+                const workEnd = toMinutes(closingTime);
+                // сортируем интервалы существующих тайм-слотов
+                const intervals = slots
+                    .map(s => ({ s: toMinutes(s.start), e: toMinutes(s.end) }))
+                    .filter(iv => iv.s < iv.e)
+                    .sort((a, b) => a.s - b.s);
+
+                let cursor = workStart;
+                let foundGap = null;
+                for (const iv of intervals) {
+                    if (cursor < iv.s) {
+                        foundGap = { s: cursor, e: Math.min(iv.s, workEnd) };
+                        break;
+                    }
+                    cursor = Math.max(cursor, iv.e);
+                    if (cursor >= workEnd) break;
+                }
+                // Если пустота не найдена в середине — возможно есть хвост после последнего слота
+                if (!foundGap && cursor < workEnd) {
+                    foundGap = { s: cursor, e: workEnd };
+                }
+
+                if (foundGap && (foundGap.e - foundGap.s) > 0) {
+                    // Заполним всю найденную пустоту целиком (или оставим коротким интервалом — как есть)
+                    document.getElementById('quickStartTime').value = toHHMM(foundGap.s);
+                    document.getElementById('quickEndTime').value = toHHMM(foundGap.e);
+                } else {
+                    // Пустот нет — не подставляем, оставим пустыми поля времени
+                    document.getElementById('quickStartTime').value = '';
+                    document.getElementById('quickEndTime').value = '';
+                }
+            }
+        } catch (e) {
+            // Fallback на рабочие часы, если что-то пошло не так
+            if (object) {
+                document.getElementById('quickStartTime').value = object.openingTime || '';
+                document.getElementById('quickEndTime').value = object.closingTime || '';
+            }
+        }
+
         modal.show();
     }
 
@@ -293,11 +411,13 @@ class CalendarPanels {
         try {
             const response = await fetch(`/${this.role}/calendar/api/objects`, { credentials: 'same-origin' });
             const objects = await response.json();
+            // Обновляем кэш объектов, чтобы можно было найти объект по фильтру URL
+            this.objectsData = Array.isArray(objects) ? objects : [];
             
             // Clear and populate list
             quickObjectSelect.innerHTML = '<option value="">Выберите объект</option>';
             
-            objects.forEach(object => {
+            this.objectsData.forEach(object => {
                 const option = document.createElement('option');
                 option.value = object.id;
                 option.dataset.rate = object.hourly_rate || 0;

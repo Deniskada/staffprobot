@@ -141,8 +141,15 @@ def auto_close_shifts(self):
                                             .order_by(ShiftSchedule.planned_start)
                                         )
                                         
+                                        # Допфильтр: тот же объект и точное совпадение времени (planned_start == конец закрытой)
+                                        next_schedule_query = next_schedule_query.filter(
+                                            and_(
+                                                ShiftSchedule.object_id == shift.object_id,
+                                                ShiftSchedule.planned_start == end_time_utc
+                                            )
+                                        ).limit(1)
                                         next_schedule_result = await session.execute(next_schedule_query)
-                                        next_schedule = next_schedule_result.scalar_one_or_none()
+                                        next_schedule = next_schedule_result.scalars().first()
                                         
                                         if next_schedule and next_schedule.time_slot:
                                             # Проверка 2: Время начала следующей = времени окончания текущей?
@@ -176,7 +183,7 @@ def auto_close_shifts(self):
                                                         user_id=shift.user_id,
                                                         object_id=next_schedule.object_id,
                                                         start_time=start_time_utc,
-                                                        actual_start=now_utc,
+                                                        actual_start=start_time_utc,
                                                         planned_start=planned_start,
                                                         status='active',
                                                         start_coordinates=shift.start_coordinates,
@@ -302,8 +309,15 @@ def auto_close_shifts(self):
                                     .order_by(ShiftSchedule.planned_start)
                                 )
                                 
+                                # Допфильтр: тот же объект и точное совпадение времени (planned_start == конец закрытой)
+                                next_schedule_query = next_schedule_query.filter(
+                                    and_(
+                                        ShiftSchedule.object_id == schedule.object_id,
+                                        ShiftSchedule.planned_start == end_time_utc
+                                    )
+                                ).limit(1)
                                 next_schedule_result = await session.execute(next_schedule_query)
-                                next_schedule = next_schedule_result.scalar_one_or_none()
+                                next_schedule = next_schedule_result.scalars().first()
                                 
                                 if next_schedule and next_schedule.time_slot and schedule.time_slot_id:
                                     # Проверка 2: Время начала следующей = времени окончания текущей?
@@ -348,7 +362,7 @@ def auto_close_shifts(self):
                                                     user_id=schedule.user_id,
                                                     object_id=next_schedule.object_id,
                                                     start_time=start_time_utc,
-                                                    actual_start=now_utc,
+                                                    actual_start=start_time_utc,
                                                     planned_start=planned_start,
                                                     status='active',
                                                     start_coordinates=prev_shift.start_coordinates,
