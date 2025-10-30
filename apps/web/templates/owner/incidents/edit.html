@@ -1,0 +1,97 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}Редактирование инцидента{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h3>Инцидент {{ incident.custom_number or ('#' ~ incident.id) }}</h3>
+  <form method="post" action="/owner/incidents/{{ incident.id }}/edit">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Номер</label>
+        <input type="text" name="custom_number" class="form-control" value="{{ incident.custom_number or '' }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Дата</label>
+        <input type="date" name="custom_date" class="form-control" value="{{ incident.custom_date.strftime('%Y-%m-%d') if incident.custom_date else '' }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Ущерб</label>
+        <input type="number" step="0.01" name="damage_amount" class="form-control" value="{{ incident.damage_amount or '' }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Категория</label>
+        <select name="category" class="form-select">
+          {% for c in categories %}
+            <option value="{{ c.name }}" {{ 'selected' if incident.category==c.name else '' }}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Критичность</label>
+        <select name="severity" class="form-select">
+          {% set severity_labels = {'low':'Низкая','medium':'Средняя','high':'Высокая','critical':'Критичная'} %}
+          {% for s,val in severity_labels.items() %}
+            <option value="{{ s }}" {{ 'selected' if incident.severity==s else '' }}>{{ val }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Статус</label>
+        <select name="status" class="form-select">
+          {% set status_labels = {'new':'Новый','in_review':'На рассмотрении','resolved':'Решён','rejected':'Отклонён'} %}
+          {% for st,val in status_labels.items() %}
+            <option value="{{ st }}" {{ 'selected' if incident.status==st else '' }}>{{ val }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Сотрудник</label>
+        <select name="employee_id" class="form-select">
+          <option value="">— не выбран —</option>
+          {% for e in employees %}
+            <option value="{{ e.id }}" {{ 'selected' if incident.employee_id==e.id else '' }}>{{ e.last_name }} {{ e.first_name }} (ID {{ e.id }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Объект</label>
+        <select name="object_id" class="form-select">
+          <option value="">— не выбран —</option>
+          {% for o in objects %}
+            <option value="{{ o.id }}" {{ 'selected' if incident.object_id==o.id else '' }}>{{ o.name }} (ID {{ o.id }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12">
+        <label class="form-label">Описание</label>
+        <textarea name="notes" class="form-control" rows="3">{{ incident.notes or '' }}</textarea>
+      </div>
+    </div>
+    <div class="mt-3">
+      <a href="/owner/incidents" class="btn btn-secondary">Отмена</a>
+      <button type="submit" class="btn btn-primary">Сохранить</button>
+    </div>
+  </form>
+
+  <hr class="my-4">
+  <h5>История изменений</h5>
+  <table class="table table-sm">
+    <thead><tr><th>Когда</th><th>Кто</th><th>Поле</th><th>Старое</th><th>Новое</th></tr></thead>
+    <tbody>
+      {% set hist = history if history is defined else [] %}
+      {% for h in hist %}
+        <tr>
+          <td>{{ h.changed_at.strftime('%d.%m.%Y %H:%M') if h.changed_at else '—' }}</td>
+          <td>{{ h.changer.first_name if h.changer else '—' }}</td>
+          <td>{{ h.field }}</td>
+          <td>{{ h.old_value or '—' }}</td>
+          <td>{{ h.new_value or '—' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-muted">История пуста</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+

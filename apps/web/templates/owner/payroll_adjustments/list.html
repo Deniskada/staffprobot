@@ -144,6 +144,8 @@
                                     {% elif adj.adjustment_type == 'manual_bonus' %}bg-primary
                                     {% elif adj.adjustment_type == 'manual_deduction' %}bg-dark
                                     {% elif adj.adjustment_type.startswith('cancellation_fine') %}bg-warning text-dark
+                                    {% elif adj.adjustment_type == 'incident_deduction' %}bg-danger text-dark
+                                    {% elif adj.adjustment_type == 'incident_refund' %}bg-success text-dark
                                     {% endif %}">
                                     {{ adj.get_type_label() }}
                                 </span>

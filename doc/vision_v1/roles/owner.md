@@ -23,6 +23,16 @@
 - [GET] `/owner/api/contracts/my-contracts`  — (apps/web/routes/owner.py)
 - [GET] `/owner/api/employees`  — (apps/web/routes/owner.py)
 - [GET] `/owner/api/employees/for-object/{object_id}`  — (apps/web/routes/owner.py) — список сотрудников с доступом к объекту
+  
+### Инциденты
+- [GET] `/owner/incidents` — список инцидентов (apps/web/routes/owner_incidents.py)
+- [POST] `/owner/incidents/create` — создать инцидент (необязательные поля: Номер, Дата, Объект, Сотрудник, Ущерб)
+- [GET] `/owner/incidents/{id}/edit` — форма редактирования, смена статуса, история изменений
+- [POST] `/owner/incidents/{id}/edit` — сохранить изменения
+- [POST] `/owner/incidents/{id}/status` — смена статуса (учитываются автокорректировки)
+- [GET] `/owner/incidents/categories` — пользовательские категории владельца
+- [POST] `/owner/incidents/categories` — создать/деактивировать категорию
+- [GET] `/owner/incidents/reports` — отчеты по инцидентам
   - Фильтрация: Contract.owner_id == user_id AND allowed_objects @> [object_id]
   - Используется в модальном окне планирования смен на /owner/shifts
   - **Важно:** Возвращает только сотрудников владельца с активными договорами, имеющими доступ к указанному объекту
