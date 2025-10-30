@@ -1,12 +1,63 @@
-"""API для работы с уведомлениями."""
+"""API для работы с уведомлениями (In-App канал)."""
 
-# ВРЕМЕННО ОТКЛЮЧЕНО - система уведомлений будет восстановлена позже
-from fastapi import APIRouter
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from core.logging.logger import logger
+from core.database.session import get_db_session
+from apps.web.dependencies import get_current_user_dependency
+from domain.entities.user import User
+from shared.services.notification_service import NotificationService
+from domain.entities.notification import Notification, NotificationStatus, NotificationType, NotificationChannel
 
-logger.warning("Notifications API временно отключен")
 
 router = APIRouter()
 
-# Все функции временно отключены
-logger.warning("Все функции notifications API временно отключены")
+
+@router.get("/unread-count")
+async def api_unread_count(
+    session: AsyncSession = Depends(get_db_session),
+    current_user: Optional[User] = Depends(get_current_user_dependency())
+):
+    """Количество непрочитанных уведомлений текущего пользователя."""
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    service = NotificationService()
+    count = await service.get_unread_count(current_user.id)
+    return {"count": int(count)}
+
+
+@router.get("/list")
+async def api_notifications_list(
+    limit: int = 10,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: Optional[User] = Depends(get_current_user_dependency())
+):
+    """Список последних уведомлений (по умолчанию 10)."""
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    limit = max(1, min(50, int(limit)))
+    service = NotificationService()
+    items = await service.get_user_notifications(
+        user_id=current_user.id,
+        status=None,
+        type=None,
+        limit=limit,
+        offset=0,
+        include_read=True,
+    )
+    return {"items": [n.to_dict() for n in items]}
+
+
+@router.post("/mark-all-read")
+async def api_mark_all_read(
+    session: AsyncSession = Depends(get_db_session),
+    current_user: Optional[User] = Depends(get_current_user_dependency())
+):
+    """Отметить все уведомления как прочитанные."""
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    service = NotificationService()
+    updated = await service.mark_all_as_read(current_user.id)
+    return {"updated": int(updated)}
