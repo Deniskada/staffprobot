@@ -13,6 +13,7 @@ celery_app = Celery(
     backend=settings.redis_url,
     include=[
         "core.celery.tasks.notification_tasks",
+        "core.celery.tasks.task_notifications",
         "core.celery.tasks.shift_tasks", 
         "core.celery.tasks.analytics_tasks",
         "core.celery.tasks.payroll_tasks",
@@ -103,6 +104,8 @@ celery_app.conf.update(
     # Маршрутизация задач
     task_routes={
         'core.celery.tasks.notification_tasks.*': {'queue': 'notifications'},
+        'core.celery.tasks.task_notifications.*': {'queue': 'notifications'},
+        'notify_tasks_updated': {'queue': 'notifications'},
         'core.celery.tasks.shift_tasks.*': {'queue': 'shifts'},
         'core.celery.tasks.analytics_tasks.*': {'queue': 'analytics'},
         'core.celery.tasks.payroll_tasks.*': {'queue': 'shifts'},  # Используем shifts для payroll
