@@ -6,6 +6,7 @@ Create Date: 2025-10-31 11:50:11.000000
 
 """
 from typing import Sequence, Union
+import json
 
 from alembic import op
 import sqlalchemy as sa
@@ -84,18 +85,23 @@ def upgrade() -> None:
     
     for task_type in task_types:
         op.execute(
-            notification_types_meta.insert().values(
-                type_code=task_type['type_code'],
-                title=task_type['title'],
-                description=task_type['description'],
-                category=task_type['category'],
-                default_priority=task_type['default_priority'],
-                is_user_configurable=task_type['is_user_configurable'],
-                is_admin_only=task_type['is_admin_only'],
-                available_channels=task_type['available_channels'],
-                sort_order=task_type['sort_order'],
-                is_active=True
-            ).on_conflict_do_nothing(index_elements=['type_code'])
+            f"""
+            INSERT INTO notification_types_meta 
+            (type_code, title, description, category, default_priority, is_user_configurable, is_admin_only, available_channels, sort_order, is_active)
+            VALUES (
+                '{task_type['type_code']}',
+                '{task_type['title']}',
+                '{task_type['description']}',
+                '{task_type['category']}',
+                '{task_type['default_priority']}',
+                {task_type['is_user_configurable']},
+                {task_type['is_admin_only']},
+                '{json.dumps(task_type['available_channels'])}'::json,
+                {task_type['sort_order']},
+                true
+            )
+            ON CONFLICT (type_code) DO NOTHING
+            """
         )
 
 
