@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 406/458 (88.6%)  
+**Общий прогресс:** 412/458 (90.0%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
@@ -13,7 +13,8 @@
 **Итерация 32 (Contract Termination Settlement):** ✅ Завершена (8/8 задач)  
 **Итерация 33 (Payroll System Improvements):** ✅ Завершена (4/4 задачи)  
 **Итерация 34 (Payroll Adjustments Enhancement):** ✅ Завершена (5/5 задач)  
-**Итерация 35 (Bot UX Improvements):** ✅ Завершена (2/2 задачи)
+**Итерация 35 (Bot UX Improvements):** ✅ Завершена (2/2 задачи)  
+**Итерация 36 (In-App Notifications & Bell Icon):** ✅ Завершена (6/6 задач)
 
 ## Итерация 25: Система управления уведомлениями в админке
 
@@ -749,6 +750,35 @@
 - [x] Документация обновлена (roadmap)
 
 ---
+
+## Итерация 36: In-App уведомления и колокольчик
+
+**Статус:** ✅ Завершена  
+**Дата:** 31.10.2025  
+**Приоритет:** Высокий  
+**Описание:** Завершение функционала In-App уведомлений: колокольчик с дропдауном, бейдж с пуллингом, страница настроек владельца.
+
+**Задачи:**
+- [x] 1. Исправить ошибку DOM в `applications_badge.js` (работа с `?v=` в пути скрипта)
+- [x] 2. Добавить колокольчик с бейджем в интерфейс Manager (`manager/base_manager.html`)
+- [x] 3. Реализовать дропдаун колокольчика (10 последних, кнопка "Отметить все")
+  - [x] Скрипт `apps/web/static/js/shared/notifications_dropdown.js`
+  - [x] Подключение в `owner/base_owner.html`
+- [x] 4. API методы в `NotificationService`:
+  - [x] `get_user_notification_settings(user_id)`
+  - [x] `set_user_notification_preference(user_id, type, telegram, inapp)`
+- [x] 5. Страница настроек уведомлений владельца `/owner/notifications/settings`
+  - [x] Шаблон `owner/notifications_settings.html`
+  - [x] Роуты GET/POST в `apps/web/routes/notifications.py`
+  - [x] Контроль фичей `notifications_settings`
+- [x] 6. Документация обновлена (`DOCUMENTATION_RULES.md`, `roadmap.md`)
+
+**Результаты:**
+- ✅ Колокольчик стабильно отображает количество непрочитанных уведомлений
+- ✅ Дропдаун показывает последние 10 уведомлений
+- ✅ Telegram уведомления работают (send_notification_now)
+- ✅ In-App уведомления создаются и отображаются
+- ✅ Настройки владельца позволяют управлять каналами доставки по типам
 
 ---
 
