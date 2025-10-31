@@ -484,3 +484,76 @@ class NotificationService:
             
         except Exception as e:
             logger.warning(f"Failed to invalidate cache for user {user_id}: {e}")
+    
+    async def get_user_notification_settings(self, user_id: int) -> Dict[str, Dict[str, bool]]:
+        """
+        Получить настройки уведомлений пользователя.
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            Словарь {type_code: {"telegram": bool, "inapp": bool}}
+        """
+        try:
+            async with get_async_session() as session:
+                # Получить User для доступа к JSON-полю notification_preferences
+                result = await session.execute(
+                    select(User).where(User.id == user_id)
+                )
+                user = result.scalar_one_or_none()
+                if not user:
+                    return {}
+                
+                # notification_preferences - это JSON поле: {type_code: {"telegram": bool, "inapp": bool}}
+                prefs = user.notification_preferences or {}
+                return prefs
+        except Exception as e:
+            logger.error(f"Ошибка получения настроек уведомлений для user {user_id}: {e}")
+            return {}
+    
+    async def set_user_notification_preference(
+        self,
+        user_id: int,
+        notification_type: str,
+        channel_telegram: bool,
+        channel_inapp: bool
+    ) -> bool:
+        """
+        Установить настройки уведомлений для конкретного типа.
+        
+        Args:
+            user_id: ID пользователя
+            notification_type: Код типа уведомления
+            channel_telegram: Включить/выключить Telegram
+            channel_inapp: Включить/выключить In-App
+            
+        Returns:
+            True если успешно, False при ошибке
+        """
+        try:
+            async with get_async_session() as session:
+                result = await session.execute(
+                    select(User).where(User.id == user_id)
+                )
+                user = result.scalar_one_or_none()
+                if not user:
+                    logger.error(f"User {user_id} не найден")
+                    return False
+                
+                prefs = user.notification_preferences or {}
+                prefs[notification_type] = {
+                    "telegram": channel_telegram,
+                    "inapp": channel_inapp
+                }
+                user.notification_preferences = prefs
+                await session.commit()
+                
+                logger.info(
+                    f"Обновлены настройки уведомлений user {user_id}, type={notification_type}, "
+                    f"telegram={channel_telegram}, inapp={channel_inapp}"
+                )
+                return True
+        except Exception as e:
+            logger.error(f"Ошибка установки настроек уведомлений для user {user_id}: {e}")
+            return False
