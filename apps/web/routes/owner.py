@@ -248,33 +248,39 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
     if not user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
-    # Получить все типы уведомлений из БД
-    from domain.entities.notification import NotificationType
-    result = await session.execute(
-        select(NotificationType).order_by(NotificationType.priority.desc(), NotificationType.type_code)
-    )
-    types_db = result.scalars().all()
-    
-    # Получить текущие настройки пользователя
+    # Получить все типы уведомлений (используем enum напрямую, т.к. таблицы нет)
+    from domain.entities.notification import NotificationType as NotificationTypeEnum
     from shared.services.notification_service import NotificationService
     service = NotificationService()
     user_settings = await service.get_user_notification_settings(user_id)
     
+    # Определяем типы уведомлений с их описаниями
+    notification_type_defs = [
+        ("shift_reminder", "Напоминание о смене", "Уведомление о начале смены за 1 час", "high"),
+        ("shift_confirmed", "Смена подтверждена", "Уведомление о подтверждении смены", "normal"),
+        ("shift_cancelled", "Смена отменена", "Уведомление об отмене смены", "high"),
+        ("contract_signed", "Договор подписан", "Уведомление о подписании договора", "normal"),
+        ("review_received", "Получен отзыв", "Уведомление о новом отзыве", "normal"),
+        ("payment_due", "Предстоящий платёж", "Уведомление о предстоящем платеже", "high"),
+        ("payment_success", "Платёж успешен", "Уведомление об успешном платеже", "normal"),
+        ("subscription_expiring", "Подписка истекает", "Уведомление об истечении подписки", "high"),
+        ("task_assigned", "Новая задача", "Уведомление о назначении новой задачи", "normal"),
+    ]
+    
     notification_types = []
-    for ntype in types_db:
-        setting_key = f"{ntype.type_code}"
-        user_pref = user_settings.get(setting_key, {})
+    for type_code, title, description, priority in notification_type_defs:
+        user_pref = user_settings.get(type_code, {})
         notification_types.append({
-            "type_code": ntype.type_code,
-            "title": ntype.title,
-            "description": ntype.description,
-            "priority": ntype.priority,
+            "type_code": type_code,
+            "title": title,
+            "description": description,
+            "priority": priority,
             "priority_label": {
                 "critical": "Критический",
                 "high": "Высокий",
                 "medium": "Средний",
                 "low": "Низкий"
-            }.get(ntype.priority, ntype.priority),
+            }.get(priority, priority),
             "telegram_enabled": user_pref.get("telegram", True),
             "inapp_enabled": user_pref.get("inapp", True),
         })
@@ -314,23 +320,25 @@ async def owner_notifications_save(
     # Парсинг формы
     form_data = await request.form()
     
-    # Получить все типы уведомлений
-    from domain.entities.notification import NotificationType
-    result = await session.execute(select(NotificationType))
-    types_db = result.scalars().all()
+    # Список всех типов уведомлений (соответствует списку в GET)
+    notification_type_codes = [
+        "shift_reminder", "shift_confirmed", "shift_cancelled",
+        "contract_signed", "review_received", "payment_due",
+        "payment_success", "subscription_expiring", "task_assigned"
+    ]
     
     from shared.services.notification_service import NotificationService
     service = NotificationService()
-    for ntype in types_db:
-        telegram_key = f"telegram_{ntype.type_code}"
-        inapp_key = f"inapp_{ntype.type_code}"
+    for type_code in notification_type_codes:
+        telegram_key = f"telegram_{type_code}"
+        inapp_key = f"inapp_{type_code}"
         
         telegram_enabled = telegram_key in form_data
         inapp_enabled = inapp_key in form_data
         
         await service.set_user_notification_preference(
             user_id=user_id,
-            notification_type=ntype.type_code,
+            notification_type=type_code,
             channel_telegram=telegram_enabled,
             channel_inapp=inapp_enabled
         )
