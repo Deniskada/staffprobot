@@ -194,6 +194,37 @@ async def owner_dashboard_redirect(request: Request):
     return RedirectResponse(url="/owner/", status_code=status.HTTP_302_FOUND)
 
 
+@router.get("/features", response_class=HTMLResponse, name="owner_features")
+async def owner_features(request: Request, session: AsyncSession = Depends(get_db_session)):
+    """Страница управления функциями системы"""
+    current_user = await get_current_user(request)
+    if not current_user:
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    
+    telegram_id = current_user.get("id")
+    # Получить User.id
+    from sqlalchemy import select
+    from domain.entities.user import User
+    user_result = await session.execute(
+        select(User.id).where(User.telegram_id == telegram_id)
+    )
+    user_id = user_result.scalar_one_or_none()
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    owner_context = await get_owner_context(user_id, session)
+    
+    return templates.TemplateResponse("owner/features.html", {
+        "request": request,
+        "current_user": current_user,
+        **owner_context
+    })
+
+
 @router.get("/notifications", response_class=HTMLResponse, name="owner_notifications")
 async def owner_notifications(request: Request, session: AsyncSession = Depends(get_db_session)):
     """Страница настроек уведомлений владельца"""
@@ -206,8 +237,6 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
     telegram_id = current_user.get("id")
-    features_service = SystemFeaturesService()
-    is_feature_enabled = await features_service.is_feature_enabled(session, telegram_id, "notifications")
     
     # Получить User.id
     from sqlalchemy import select
@@ -219,44 +248,42 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
     if not user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
+    # Получить все типы уведомлений из БД
+    from domain.entities.notification import NotificationType
+    result = await session.execute(
+        select(NotificationType).order_by(NotificationType.priority.desc(), NotificationType.type_code)
+    )
+    types_db = result.scalars().all()
+    
+    # Получить текущие настройки пользователя
+    from shared.services.notification_service import NotificationService
+    service = NotificationService()
+    user_settings = await service.get_user_notification_settings(user_id)
+    
     notification_types = []
-    if is_feature_enabled:
-        # Получить все типы уведомлений из БД
-        from domain.entities.notification import NotificationType
-        result = await session.execute(
-            select(NotificationType).order_by(NotificationType.priority.desc(), NotificationType.type_code)
-        )
-        types_db = result.scalars().all()
-        
-        # Получить текущие настройки пользователя
-        from shared.services.notification_service import NotificationService
-        service = NotificationService()
-        user_settings = await service.get_user_notification_settings(user_id)
-        
-        for ntype in types_db:
-            setting_key = f"{ntype.type_code}"
-            user_pref = user_settings.get(setting_key, {})
-            notification_types.append({
-                "type_code": ntype.type_code,
-                "title": ntype.title,
-                "description": ntype.description,
-                "priority": ntype.priority,
-                "priority_label": {
-                    "critical": "Критический",
-                    "high": "Высокий",
-                    "medium": "Средний",
-                    "low": "Низкий"
-                }.get(ntype.priority, ntype.priority),
-                "telegram_enabled": user_pref.get("telegram", True),
-                "inapp_enabled": user_pref.get("inapp", True),
-            })
+    for ntype in types_db:
+        setting_key = f"{ntype.type_code}"
+        user_pref = user_settings.get(setting_key, {})
+        notification_types.append({
+            "type_code": ntype.type_code,
+            "title": ntype.title,
+            "description": ntype.description,
+            "priority": ntype.priority,
+            "priority_label": {
+                "critical": "Критический",
+                "high": "Высокий",
+                "medium": "Средний",
+                "low": "Низкий"
+            }.get(ntype.priority, ntype.priority),
+            "telegram_enabled": user_pref.get("telegram", True),
+            "inapp_enabled": user_pref.get("inapp", True),
+        })
     
     owner_context = await get_owner_context(user_id, session)
     
     return templates.TemplateResponse("owner/notifications.html", {
         "request": request,
         "current_user": current_user,
-        "is_feature_enabled": is_feature_enabled,
         "notification_types": notification_types,
         **owner_context
     })
@@ -273,11 +300,6 @@ async def owner_notifications_save(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     
     telegram_id = current_user.get("id")
-    features_service = SystemFeaturesService()
-    is_feature_enabled = await features_service.is_feature_enabled(session, telegram_id, "notifications")
-    
-    if not is_feature_enabled:
-        return RedirectResponse(url="/owner/notifications", status_code=status.HTTP_303_SEE_OTHER)
     
     # Получить User.id
     from sqlalchemy import select

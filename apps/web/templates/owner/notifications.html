@@ -14,13 +14,6 @@
                 </h1>
             </div>
 
-            {% if not is_feature_enabled %}
-            <div class="alert alert-warning">
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                Функция уведомлений отключена. Включите её на странице <a href="/owner/features">Функции системы</a>.
-            </div>
-            {% else %}
-
             <!-- Форма настроек -->
             <div class="card shadow-sm">
                 <div class="card-body">
@@ -94,8 +87,6 @@
                     </form>
                 </div>
             </div>
-
-            {% endif %}
         </div>
     </div>
 </div>
