@@ -206,8 +206,8 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
     telegram_id = current_user.get("id")
-    features_service = SystemFeaturesService(session)
-    is_feature_enabled = await features_service.is_feature_enabled(telegram_id, "notifications")
+    features_service = SystemFeaturesService()
+    is_feature_enabled = await features_service.is_feature_enabled(session, telegram_id, "notifications")
     
     # Получить User.id
     from sqlalchemy import select
@@ -273,8 +273,8 @@ async def owner_notifications_save(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     
     telegram_id = current_user.get("id")
-    features_service = SystemFeaturesService(session)
-    is_feature_enabled = await features_service.is_feature_enabled(telegram_id, "notifications")
+    features_service = SystemFeaturesService()
+    is_feature_enabled = await features_service.is_feature_enabled(session, telegram_id, "notifications")
     
     if not is_feature_enabled:
         return RedirectResponse(url="/owner/notifications", status_code=status.HTTP_303_SEE_OTHER)
