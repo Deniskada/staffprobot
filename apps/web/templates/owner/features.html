@@ -1,0 +1,33 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Функции системы - StaffProBot{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="bi bi-toggles text-primary"></i>
+                    Функции системы
+                </h1>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        Управляйте доступностью функций системы. Отключенные функции не будут отображаться в меню.
+                    </p>
+
+                    <div id="featuresContainer">
+                        <!-- Динамически загружается через JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ 'js/owner/features.js' | static_version }}"></script>
+{% endblock %}
+
