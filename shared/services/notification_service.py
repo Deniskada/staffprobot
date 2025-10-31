@@ -547,6 +547,11 @@ class NotificationService:
                     "inapp": channel_inapp
                 }
                 user.notification_preferences = prefs
+                
+                # Явно помечаем поле как изменённое (для JSON полей)
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(user, "notification_preferences")
+                
                 await session.commit()
                 
                 logger.info(

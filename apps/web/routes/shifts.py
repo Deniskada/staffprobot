@@ -309,6 +309,48 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
                 shift.updated_at = datetime.utcnow()
                 await session.commit()
                 
+                # Создаём уведомление о завершении смены
+                try:
+                    from shared.services.notification_service import NotificationService
+                    from domain.entities.notification import (
+                        NotificationType,
+                        NotificationChannel,
+                        NotificationPriority,
+                    )
+                    from core.celery.tasks.notification_tasks import send_notification_now
+                    
+                    notif_service = NotificationService()
+                    
+                    # In-App уведомление
+                    await notif_service.create_notification(
+                        user_id=shift.user_id,
+                        type=NotificationType.SHIFT_COMPLETED,
+                        channel=NotificationChannel.IN_APP,
+                        title="Смена завершена",
+                        message=f"Смена на объекте {shift.object.name} завершена",
+                        data={"shift_id": shift.id, "object_id": shift.object_id},
+                        priority=NotificationPriority.LOW,
+                        scheduled_at=None,
+                    )
+                    
+                    # Telegram уведомление
+                    notif = await notif_service.create_notification(
+                        user_id=shift.user_id,
+                        type=NotificationType.SHIFT_COMPLETED,
+                        channel=NotificationChannel.TELEGRAM,
+                        title="Смена завершена",
+                        message=f"Смена на объекте {shift.object.name} завершена",
+                        data={"shift_id": shift.id, "object_id": shift.object_id},
+                        priority=NotificationPriority.LOW,
+                        scheduled_at=None,
+                    )
+                    
+                    if notif and getattr(notif, "id", None):
+                        send_notification_now.apply_async(args=[notif.id], queue="notifications")
+                        logger.info("Shift completed notification created", shift_id=shift.id, user_id=shift.user_id)
+                except Exception as e:
+                    logger.error(f"Failed to create shift completed notification: {e}")
+                
                 return JSONResponse({"success": True, "message": "Смена завершена"})
             else:
                 return JSONResponse({"success": False, "error": "Смена не найдена или уже завершена"})

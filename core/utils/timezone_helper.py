@@ -145,6 +145,63 @@ class TimezoneHelper:
         except pytz.UnknownTimeZoneError:
             logger.warning(f"Unknown timezone {timezone_str}, using default")
             return datetime.now(self.default_timezone).date()
+    
+    def start_of_day_utc(self, local_date: date, timezone_str: Optional[str] = None) -> datetime:
+        """
+        Возвращает начало дня (00:00:00) в UTC для указанной локальной даты.
+        
+        Args:
+            local_date: Локальная дата
+            timezone_str: Временная зона (если не указана, используется по умолчанию)
+            
+        Returns:
+            datetime: Начало дня в UTC
+        """
+        from datetime import time as dt_time
+        
+        # Определяем временную зону
+        if timezone_str:
+            tz = pytz.timezone(timezone_str)
+        else:
+            tz = self.default_timezone
+        
+        # Создаём локальное время начала дня
+        local_datetime = datetime.combine(local_date, dt_time(0, 0, 0))
+        
+        # Локализуем и конвертируем в UTC
+        localized = tz.localize(local_datetime)
+        return localized.astimezone(pytz.UTC)
+    
+    def end_of_day_utc(self, local_date: date, timezone_str: Optional[str] = None) -> datetime:
+        """
+        Возвращает конец дня (23:59:59.999999) в UTC для указанной локальной даты.
+        
+        Args:
+            local_date: Локальная дата
+            timezone_str: Временная зона (если не указана, используется по умолчанию)
+            
+        Returns:
+            datetime: Конец дня в UTC
+        """
+        from datetime import time as dt_time, timedelta
+        
+        # Определяем временную зону
+        if timezone_str:
+            tz = pytz.timezone(timezone_str)
+        else:
+            tz = self.default_timezone
+        
+        # Создаём локальное время конца дня
+        local_datetime = datetime.combine(local_date, dt_time(23, 59, 59, 999999))
+        
+        # Локализуем и конвертируем в UTC
+        localized = tz.localize(local_datetime)
+        return localized.astimezone(pytz.UTC)
+    
+    @property
+    def local_tz(self):
+        """Возвращает локальную временную зону."""
+        return self.default_timezone
 
 
 # Глобальный экземпляр
