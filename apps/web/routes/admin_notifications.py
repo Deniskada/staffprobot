@@ -65,7 +65,7 @@ async def admin_notifications_list(
     status_filter: Optional[str] = Query(None),
     channel_filter: Optional[str] = Query(None),
     type_filter: Optional[str] = Query(None),
-    user_id: Optional[int] = Query(None),
+    user_id: Optional[str] = Query(None),  # Принимаем как строку, чтобы обработать пустые значения
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
     current_user: dict = Depends(require_superadmin),
@@ -89,6 +89,14 @@ async def admin_notifications_list(
             except ValueError:
                 pass
         
+        # Парсим user_id
+        user_id_parsed = None
+        if user_id and user_id.strip():
+            try:
+                user_id_parsed = int(user_id)
+            except ValueError:
+                pass
+        
         # Получаем уведомления с фильтрами
         notifications, total_count = await service.get_notifications_paginated(
             page=page,
@@ -96,7 +104,7 @@ async def admin_notifications_list(
             status_filter=status_filter,
             channel_filter=channel_filter,
             type_filter=type_filter,
-            user_id=user_id,
+            user_id=user_id_parsed,
             date_from=date_from_parsed,
             date_to=date_to_parsed
         )
@@ -447,7 +455,7 @@ async def admin_notifications_api_get_notification(
             "status": notification.status.value if notification.status else None,
             "channel": notification.channel.value if notification.channel else None,
             "priority": notification.priority.value if notification.priority else None,
-            "subject": notification.subject,
+            "subject": notification.title,  # title используется как subject
             "message": notification.message,
             "user_id": notification.user_id,
             "created_at": notification.created_at.isoformat() if notification.created_at else None,
@@ -1174,4 +1182,232 @@ async def admin_notifications_api_template_toggle(
     except Exception as e:
         logger.error(f"Error toggling template: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка переключения статуса: {str(e)}")
+
+
+# ============================================================================
+# РОУТЫ ДЛЯ УПРАВЛЕНИЯ ТИПАМИ УВЕДОМЛЕНИЙ (Iteration 37, Phase 4)
+# ============================================================================
+
+@router.get("/types", response_class=HTMLResponse, name="admin_notifications_types_list")
+async def admin_notifications_types_list(
+    request: Request,
+    category: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Список типов уведомлений с фильтрами"""
+    try:
+        from shared.services.notification_type_meta_service import NotificationTypeMetaService
+        service = NotificationTypeMetaService()
+        
+        # Получаем все типы
+        all_types = await service.get_all_types(db, active_only=False)
+        
+        # Применяем фильтры
+        filtered_types = all_types
+        
+        if category:
+            filtered_types = [t for t in filtered_types if t.category == category]
+        
+        if status == 'active':
+            filtered_types = [t for t in filtered_types if t.is_active]
+        elif status == 'inactive':
+            filtered_types = [t for t in filtered_types if not t.is_active]
+        elif status == 'user_configurable':
+            filtered_types = [t for t in filtered_types if t.is_user_configurable]
+        elif status == 'admin_only':
+            filtered_types = [t for t in filtered_types if t.is_admin_only]
+        
+        # Статистика
+        stats = {
+            "total": len(all_types),
+            "user_configurable": len([t for t in all_types if t.is_user_configurable]),
+            "admin_only": len([t for t in all_types if t.is_admin_only]),
+        }
+        
+        # Категории
+        categories = await service.get_categories_list(db)
+        
+        return templates.TemplateResponse("admin/notifications/types/list.html", {
+            "request": request,
+            "current_user": current_user,
+            "title": "Типы уведомлений",
+            "types": filtered_types,
+            "stats": stats,
+            "categories": categories,
+            "category_filter": category,
+            "status_filter": status
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading types list: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки списка типов: {str(e)}")
+
+
+@router.get("/api/types/{type_code}")
+async def admin_notifications_api_get_type(
+    type_code: str,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Получить тип уведомления по коду"""
+    try:
+        from shared.services.notification_type_meta_service import NotificationTypeMetaService
+        service = NotificationTypeMetaService()
+        
+        type_meta = await service.get_type_by_code(db, type_code)
+        if not type_meta:
+            raise HTTPException(status_code=404, detail="Тип не найден")
+        
+        return JSONResponse({
+            "id": type_meta.id,
+            "type_code": type_meta.type_code,
+            "title": type_meta.title,
+            "description": type_meta.description,
+            "category": type_meta.category,
+            "default_priority": type_meta.default_priority,
+            "is_user_configurable": type_meta.is_user_configurable,
+            "is_admin_only": type_meta.is_admin_only,
+            "available_channels": type_meta.available_channels,
+            "sort_order": type_meta.sort_order,
+            "is_active": type_meta.is_active
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading type {type_code}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки типа: {str(e)}")
+
+
+@router.post("/api/types/{type_code}/update")
+async def admin_notifications_api_update_type(
+    type_code: str,
+    request: Request,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Обновить мета-информацию типа"""
+    try:
+        from shared.services.notification_type_meta_service import NotificationTypeMetaService
+        service = NotificationTypeMetaService()
+        
+        data = await request.json()
+        
+        updated_type = await service.update_type(
+            db,
+            type_code=type_code,
+            title=data.get("title"),
+            description=data.get("description"),
+            default_priority=data.get("default_priority"),
+            available_channels=data.get("available_channels"),
+            sort_order=data.get("sort_order")
+        )
+        
+        if not updated_type:
+            raise HTTPException(status_code=404, detail="Тип не найден")
+        
+        logger.info(f"Type {type_code} updated by user {current_user.get('id')}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "Тип успешно обновлён",
+            "data": {
+                "id": updated_type.id,
+                "type_code": updated_type.type_code,
+                "title": updated_type.title,
+                "description": updated_type.description,
+                "category": updated_type.category,
+                "default_priority": updated_type.default_priority,
+                "is_user_configurable": updated_type.is_user_configurable,
+                "is_admin_only": updated_type.is_admin_only,
+                "available_channels": updated_type.available_channels,
+                "sort_order": updated_type.sort_order,
+                "is_active": updated_type.is_active
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating type {type_code}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления типа: {str(e)}")
+
+
+@router.post("/api/types/{type_code}/toggle-user-access")
+async def admin_notifications_api_toggle_user_access(
+    type_code: str,
+    request: Request,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Переключить доступность типа для пользователей"""
+    try:
+        from shared.services.notification_type_meta_service import NotificationTypeMetaService
+        service = NotificationTypeMetaService()
+        
+        data = await request.json()
+        enable = data.get("enable", False)
+        
+        # Получаем тип
+        type_meta = await service.get_type_by_code(db, type_code)
+        if not type_meta:
+            raise HTTPException(status_code=404, detail="Тип не найден")
+        
+        # Обновляем is_user_configurable
+        type_meta.is_user_configurable = enable
+        await db.commit()
+        
+        action = "добавлен в" if enable else "удалён из"
+        logger.info(f"Type {type_code} {action} настройки пользователей by user {current_user.get('id')}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Тип {action} настройки пользователей"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling user access for {type_code}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка изменения доступа: {str(e)}")
+
+
+@router.post("/api/types/{type_code}/toggle-active")
+async def admin_notifications_api_toggle_active(
+    type_code: str,
+    request: Request,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API: Переключить активность типа"""
+    try:
+        from shared.services.notification_type_meta_service import NotificationTypeMetaService
+        service = NotificationTypeMetaService()
+        
+        data = await request.json()
+        activate = data.get("activate", False)
+        
+        if activate:
+            success = await service.activate_type(db, type_code)
+        else:
+            success = await service.deactivate_type(db, type_code)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Тип не найден")
+        
+        action = "активирован" if activate else "деактивирован"
+        logger.info(f"Type {type_code} {action} by user {current_user.get('id')}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Тип {action}"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling active status for {type_code}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка изменения статуса: {str(e)}")
 

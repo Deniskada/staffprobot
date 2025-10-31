@@ -19,6 +19,13 @@ class NotificationType(enum.Enum):
     SHIFT_STARTED = "shift_started"                     # Смена началась
     SHIFT_COMPLETED = "shift_completed"                 # Смена завершена
     
+    # Объекты (lowercase для совместимости с новыми миграциями)
+    OBJECT_OPENED = "object_opened"                     # Объект открылся вовремя
+    OBJECT_CLOSED = "object_closed"                     # Объект закрылся
+    OBJECT_LATE_OPENING = "object_late_opening"         # Объект открылся с опозданием
+    OBJECT_NO_SHIFTS_TODAY = "object_no_shifts_today"   # На объекте нет смен сегодня
+    OBJECT_EARLY_CLOSING = "object_early_closing"       # Объект закрыт раньше времени
+    
     # Договоры
     CONTRACT_SIGNED = "contract_signed"                 # Договор подписан
     CONTRACT_TERMINATED = "contract_terminated"         # Договор расторгнут
@@ -39,6 +46,11 @@ class NotificationType(enum.Enum):
     SUBSCRIPTION_EXPIRED = "subscription_expired"       # Подписка истекла
     USAGE_LIMIT_WARNING = "usage_limit_warning"         # Предупреждение о лимите
     USAGE_LIMIT_EXCEEDED = "usage_limit_exceeded"       # Лимит превышен
+    
+    # Задачи (lowercase для совместимости с новыми миграциями)
+    TASK_ASSIGNED = "task_assigned"                     # Назначена новая задача
+    TASK_COMPLETED = "task_completed"                   # Задача выполнена
+    TASK_OVERDUE = "task_overdue"                       # Задача просрочена
     
     # Системные
     WELCOME = "welcome"                                 # Приветствие

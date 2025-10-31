@@ -46,6 +46,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     # Тестовый пользователь (для веб-аутентификации без отправки PIN)
     is_test_user = Column(Boolean, default=False)
+    # Настройки уведомлений пользователя (JSON: {type_code: {telegram: bool, inapp: bool}})
+    notification_preferences = Column(JSONB, nullable=True, server_default='{}')
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

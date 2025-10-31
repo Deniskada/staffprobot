@@ -9,7 +9,7 @@
 // КОНФИГУРАЦИЯ
 // ============================================================================
 
-const NOTIFICATION_API_BASE = '/admin/api/notifications';
+const NOTIFICATION_API_BASE = '/admin/notifications/api';
 
 // ============================================================================
 // UTILS

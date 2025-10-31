@@ -150,73 +150,73 @@
                                     <tr>
                                         <td>
                                             <input type="checkbox" class="form-check-input notification-checkbox" 
-                                                   value="{{ notification.id }}">
+                                                   value="{{ notification['id'] }}">
                                         </td>
-                                        <td>{{ notification.id }}</td>
+                                        <td>{{ notification['id'] }}</td>
                                         <td>
                                             <span class="badge badge-secondary">
-                                                {{ notification.type.replace('_', ' ') }}
+                                                {{ notification['type'].replace('_', ' ') }}
                                             </span>
                                         </td>
                                         <td>
-                                            {% if notification.status == 'delivered' %}
-                                                <span class="badge badge-success">{{ notification.status }}</span>
-                                            {% elif notification.status == 'pending' %}
-                                                <span class="badge badge-warning">{{ notification.status }}</span>
-                                            {% elif notification.status == 'failed' %}
-                                                <span class="badge badge-danger">{{ notification.status }}</span>
-                                            {% elif notification.status == 'cancelled' %}
-                                                <span class="badge badge-secondary">{{ notification.status }}</span>
+                                            {% if notification['status'] == 'delivered' %}
+                                                <span class="badge badge-success">{{ notification['status'] }}</span>
+                                            {% elif notification['status'] == 'pending' %}
+                                                <span class="badge badge-warning">{{ notification['status'] }}</span>
+                                            {% elif notification['status'] == 'failed' %}
+                                                <span class="badge badge-danger">{{ notification['status'] }}</span>
+                                            {% elif notification['status'] == 'cancelled' %}
+                                                <span class="badge badge-secondary">{{ notification['status'] }}</span>
                                             {% else %}
-                                                <span class="badge badge-info">{{ notification.status }}</span>
+                                                <span class="badge badge-info">{{ notification['status'] }}</span>
                                             {% endif %}
                                         </td>
                                         <td>
                                             <span class="badge badge-outline-primary">
-                                                {{ notification.channel }}
+                                                {{ notification['channel'] }}
                                             </span>
                                         </td>
                                         <td>
-                                            {% if notification.priority %}
-                                                {% if notification.priority == 'high' %}
-                                                    <span class="badge badge-danger">{{ notification.priority }}</span>
-                                                {% elif notification.priority == 'medium' %}
-                                                    <span class="badge badge-warning">{{ notification.priority }}</span>
+                                            {% if notification['priority'] %}
+                                                {% if notification['priority'] == 'high' %}
+                                                    <span class="badge badge-danger">{{ notification['priority'] }}</span>
+                                                {% elif notification['priority'] == 'medium' %}
+                                                    <span class="badge badge-warning">{{ notification['priority'] }}</span>
                                                 {% else %}
-                                                    <span class="badge badge-info">{{ notification.priority }}</span>
+                                                    <span class="badge badge-info">{{ notification['priority'] }}</span>
                                                 {% endif %}
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                         <td>
-                                            <a href="#" onclick="viewUser({{ notification.user_id }})">
-                                                {{ notification.user_name }}
+                                            <a href="#" onclick="viewUser({{ notification['user_id'] }})">
+                                                {{ notification['user_name'] }}
                                             </a>
                                         </td>
                                         <td>
-                                            <span title="{{ notification.subject }}">
-                                                {{ notification.subject[:50] }}{% if notification.subject|length > 50 %}...{% endif %}
+                                            <span title="{{ notification['title'] }}">
+                                                {{ notification['title'][:50] }}{% if notification['title']|length > 50 %}...{% endif %}
                                             </span>
                                         </td>
-                                        <td>{{ notification.created_at.strftime('%d.%m.%Y %H:%M') if notification.created_at else '-' }}</td>
+                                        <td>{{ notification['created_at'].strftime('%d.%m.%Y %H:%M') if notification['created_at'] else '-' }}</td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
                                                 <button class="btn btn-outline-info" 
-                                                        onclick="viewNotification({{ notification.id }})"
+                                                        onclick="viewNotification({{ notification['id'] }})"
                                                         title="Просмотр">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
-                                                {% if notification.status == 'failed' %}
+                                                {% if notification['status'] == 'failed' %}
                                                 <button class="btn btn-outline-warning" 
-                                                        onclick="retryNotification({{ notification.id }})"
+                                                        onclick="retryNotification({{ notification['id'] }})"
                                                         title="Повторить">
                                                     <i class="fas fa-redo"></i>
                                                 </button>
                                                 {% endif %}
-                                                {% if notification.status in ['pending', 'scheduled'] %}
+                                                {% if notification['status'] in ['pending', 'scheduled'] %}
                                                 <button class="btn btn-outline-danger" 
-                                                        onclick="cancelNotification({{ notification.id }})"
+                                                        onclick="cancelNotification({{ notification['id'] }})"
                                                         title="Отменить">
                                                     <i class="fas fa-times"></i>
                                                 </button>

@@ -13,6 +13,7 @@ celery_app = Celery(
     backend=settings.redis_url,
     include=[
         "core.celery.tasks.notification_tasks",
+        "core.celery.tasks.reminder_tasks",  # Создание напоминаний о сменах
         "core.celery.tasks.task_notifications",
         "core.celery.tasks.shift_tasks", 
         "core.celery.tasks.analytics_tasks",
@@ -54,10 +55,20 @@ celery_app.conf.update(
     
     # Настройки планировщика
     beat_schedule={
-        # Проверка напоминаний каждые 30 минут
+        # Создание напоминаний о сменах каждые 5 минут
+        'create-shift-reminders': {
+            'task': 'create_shift_reminders',
+            'schedule': 5 * 60,  # 5 минут
+        },
+        # Проверка открытия/закрытия объектов каждые 10 минут
+        'check-object-openings': {
+            'task': 'check_object_openings',
+            'schedule': 10 * 60,  # 10 минут
+        },
+        # Обработка и отправка запланированных уведомлений каждую минуту
         'process-reminders': {
             'task': 'core.celery.tasks.notification_tasks.process_reminders',
-            'schedule': 30 * 60,  # 30 минут
+            'schedule': 60,  # 1 минута
         },
         # Автоматическое закрытие смен каждые 30 минут
         'auto-close-shifts': {
@@ -105,6 +116,9 @@ celery_app.conf.update(
     task_routes={
         'core.celery.tasks.notification_tasks.*': {'queue': 'notifications'},
         'core.celery.tasks.task_notifications.*': {'queue': 'notifications'},
+        'core.celery.tasks.reminder_tasks.*': {'queue': 'notifications'},
+        'create_shift_reminders': {'queue': 'celery'},
+        'check_object_openings': {'queue': 'celery'},
         'notify_tasks_updated': {'queue': 'notifications'},
         'core.celery.tasks.shift_tasks.*': {'queue': 'shifts'},
         'core.celery.tasks.analytics_tasks.*': {'queue': 'analytics'},

@@ -19,7 +19,8 @@ class NotificationTemplateManager:
 <p>Напоминаем, что ваша смена начинается через <strong>$time_until</strong> на объекте <strong>'$object_name'</strong>.</p>
 <p><strong>Время смены:</strong> $shift_time<br>
 <strong>Адрес:</strong> $object_address</p>
-<p>Не забудьте отметиться по геолокации!</p>"""
+<p>Не забудьте отметиться по геолокации!</p>""",
+            "telegram": "🔔 *Напоминание о смене*\n\nПривет, $user_name!\n\nТвоя смена начинается через *$time_until* на объекте *$object_name*.\n\n⏰ Время: $shift_time\n📍 Адрес: $object_address\n\n⚠️ Не забудь отметиться по геолокации!"
         },
         NotificationType.SHIFT_CONFIRMED: {
             "title": "Смена подтверждена",
@@ -259,13 +260,68 @@ class NotificationTemplateManager:
         }
     }
     
+    # Шаблоны для объектов
+    OBJECT_TEMPLATES = {
+        NotificationType.OBJECT_OPENED: {
+            "title": "Объект открылся",
+            "plain": "Объект '$object_name' открылся вовремя.\n\nВремя открытия: $open_time\nСотрудник: $employee_name",
+            "html": """<h2>Объект открылся ✅</h2>
+<p>Объект <strong>'$object_name'</strong> открылся вовремя.</p>
+<p><strong>Время открытия:</strong> $open_time<br>
+<strong>Сотрудник:</strong> $employee_name</p>""",
+            "telegram": "✅ *Объект открылся*\n\n📍 $object_name\n⏰ Время: $open_time\n👤 Сотрудник: $employee_name"
+        },
+        NotificationType.OBJECT_CLOSED: {
+            "title": "Объект закрылся",
+            "plain": "Объект '$object_name' закрылся.\n\nВремя закрытия: $close_time\nСотрудник: $employee_name",
+            "html": """<h2>Объект закрылся 🔒</h2>
+<p>Объект <strong>'$object_name'</strong> закрылся.</p>
+<p><strong>Время закрытия:</strong> $close_time<br>
+<strong>Сотрудник:</strong> $employee_name</p>""",
+            "telegram": "🔒 *Объект закрылся*\n\n📍 $object_name\n⏰ Время: $close_time\n👤 Сотрудник: $employee_name"
+        },
+        NotificationType.OBJECT_LATE_OPENING: {
+            "title": "Объект открылся с опозданием",
+            "plain": "⚠️ ВНИМАНИЕ!\n\nОбъект '$object_name' открылся с опозданием $delay_minutes мин.\n\nПлановое время: $planned_time\nФактическое время: $actual_time\nСотрудник: $employee_name",
+            "html": """<h2>Объект открылся с опозданием ⚠️</h2>
+<p><strong>ВНИМАНИЕ!</strong></p>
+<p>Объект <strong>'$object_name'</strong> открылся с опозданием <strong>$delay_minutes мин</strong>.</p>
+<p><strong>Плановое время:</strong> $planned_time<br>
+<strong>Фактическое время:</strong> $actual_time<br>
+<strong>Сотрудник:</strong> $employee_name</p>""",
+            "telegram": "⚠️ *ОПОЗДАНИЕ!*\n\n📍 $object_name\n⏱ Опоздание: *$delay_minutes мин*\n\n📅 Плановое время: $planned_time\n⏰ Фактическое: $actual_time\n👤 Сотрудник: $employee_name"
+        },
+        NotificationType.OBJECT_NO_SHIFTS_TODAY: {
+            "title": "Нет смен на объекте",
+            "plain": "⚠️ ВНИМАНИЕ!\n\nНа объекте '$object_name' нет запланированных смен на сегодня.\n\nДата: $date\nАдрес: $object_address",
+            "html": """<h2>Нет смен на объекте ⚠️</h2>
+<p><strong>ВНИМАНИЕ!</strong></p>
+<p>На объекте <strong>'$object_name'</strong> нет запланированных смен на сегодня.</p>
+<p><strong>Дата:</strong> $date<br>
+<strong>Адрес:</strong> $object_address</p>""",
+            "telegram": "⚠️ *НЕТ СМЕН!*\n\n📍 $object_name\n📅 Дата: $date\n📌 $object_address\n\nНет запланированных смен на сегодня!"
+        },
+        NotificationType.OBJECT_EARLY_CLOSING: {
+            "title": "Объект закрылся раньше",
+            "plain": "⚠️ ВНИМАНИЕ!\n\nОбъект '$object_name' закрылся раньше на $early_minutes мин.\n\nПлановое время: $planned_time\nФактическое время: $actual_time\nСотрудник: $employee_name",
+            "html": """<h2>Объект закрылся раньше ⚠️</h2>
+<p><strong>ВНИМАНИЕ!</strong></p>
+<p>Объект <strong>'$object_name'</strong> закрылся раньше на <strong>$early_minutes мин</strong>.</p>
+<p><strong>Плановое время:</strong> $planned_time<br>
+<strong>Фактическое время:</strong> $actual_time<br>
+<strong>Сотрудник:</strong> $employee_name</p>""",
+            "telegram": "⚠️ *РАННЕЕ ЗАКРЫТИЕ!*\n\n📍 $object_name\n⏱ Раньше на: *$early_minutes мин*\n\n📅 Плановое время: $planned_time\n⏰ Фактическое: $actual_time\n👤 Сотрудник: $employee_name"
+        }
+    }
+    
     # Объединяем все шаблоны
     ALL_TEMPLATES = {
         **SHIFT_TEMPLATES,
         **CONTRACT_TEMPLATES,
         **REVIEW_TEMPLATES,
         **PAYMENT_TEMPLATES,
-        **SYSTEM_TEMPLATES
+        **SYSTEM_TEMPLATES,
+        **OBJECT_TEMPLATES
     }
     
     @classmethod
@@ -298,8 +354,12 @@ class NotificationTemplateManager:
                 }
             
             # Определяем формат в зависимости от канала
-            use_html = channel in [NotificationChannel.EMAIL, NotificationChannel.IN_APP]
-            message_template = template_data.get("html" if use_html else "plain", template_data.get("plain", ""))
+            if channel == NotificationChannel.TELEGRAM:
+                message_template = template_data.get("telegram", template_data.get("plain", ""))
+            elif channel in [NotificationChannel.EMAIL, NotificationChannel.IN_APP]:
+                message_template = template_data.get("html", template_data.get("plain", ""))
+            else:
+                message_template = template_data.get("plain", "")
             
             # Рендерим с подстановкой переменных
             title = Template(template_data["title"]).safe_substitute(variables)

@@ -144,6 +144,7 @@
                                     <th>Адрес</th>
                                     <th>Статус</th>
                                     <th>Время</th>
+                                    <th>Статус работы</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -162,6 +163,25 @@
                                         {% if obj.status_time %}
                                             {{ format_datetime_local(obj.status_time, 'Europe/Moscow', '%d.%m.%Y %H:%M') }}
                                         {% else %}-{% endif %}
+                                    </td>
+                                    <td>
+                                        {% if obj.work_status %}
+                                            {% if obj.work_status == 'timely_opening' %}
+                                                <span class="badge bg-success">Открылся вовремя</span>
+                                                {% if obj.work_employee %}<br><small>{{ obj.work_employee }}</small>{% endif %}
+                                            {% elif obj.work_status == 'late_opening' %}
+                                                <span class="badge bg-warning">Опоздание {{ obj.work_delay }} мин</span>
+                                                {% if obj.work_employee %}<br><small>{{ obj.work_employee }}</small>{% endif %}
+                                            {% elif obj.work_status == 'early_closing' %}
+                                                <span class="badge bg-warning">Раннее закрытие {{ obj.work_early }} мин</span>
+                                                {% if obj.work_employee %}<br><small>{{ obj.work_employee }}</small>{% endif %}
+                                            {% elif obj.work_status == 'closed' %}
+                                                <span class="badge bg-secondary">Закрылся вовремя</span>
+                                                {% if obj.work_employee %}<br><small>{{ obj.work_employee }}</small>{% endif %}
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}

@@ -1,0 +1,254 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Управление типами уведомлений - Админ-панель{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Заголовок -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="bi bi-tags-fill text-primary"></i>
+                    Типы уведомлений
+                </h1>
+                <a href="/admin/notifications" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>К дашборду
+                </a>
+            </div>
+
+            <!-- Статистика -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">Всего типов</h5>
+                            <h2>{{ stats.total }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">Для пользователей</h5>
+                            <h2>{{ stats.user_configurable }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">Только админ</h5>
+                            <h2>{{ stats.admin_only }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">Категорий</h5>
+                            <h2>{{ categories|length }}</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Фильтры -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <form method="GET" action="/admin/notifications/types" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="category" class="form-label">Категория</label>
+                            <select class="form-select" id="category" name="category">
+                                <option value="">Все категории</option>
+                                {% for cat in categories %}
+                                <option value="{{ cat.code }}" {% if category_filter == cat.code %}selected{% endif %}>
+                                    {{ cat.name }} ({{ cat.count }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="status" class="form-label">Статус</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="">Все</option>
+                                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активные</option>
+                                <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Неактивные</option>
+                                <option value="user_configurable" {% if status_filter == 'user_configurable' %}selected{% endif %}>Доступны пользователям</option>
+                                <option value="admin_only" {% if status_filter == 'admin_only' %}selected{% endif %}>Только админ</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="bi bi-funnel me-2"></i>Применить
+                            </button>
+                            <a href="/admin/notifications/types" class="btn btn-secondary">
+                                <i class="bi bi-x-circle me-2"></i>Сбросить
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Таблица типов -->
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Код</th>
+                                    <th>Название</th>
+                                    <th>Категория</th>
+                                    <th>Приоритет</th>
+                                    <th>Каналы</th>
+                                    <th>Статус</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for type_meta in types %}
+                                <tr>
+                                    <td><code>{{ type_meta.type_code }}</code></td>
+                                    <td>
+                                        <strong>{{ type_meta.title }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ type_meta.description }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ type_meta.category }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if type_meta.default_priority == 'critical' else 'warning' if type_meta.default_priority == 'high' else 'info' if type_meta.default_priority == 'normal' else 'secondary' }}">
+                                            {{ type_meta.default_priority }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% for channel in type_meta.available_channels %}
+                                        <span class="badge bg-light text-dark">{{ channel }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% if type_meta.is_admin_only %}
+                                        <span class="badge bg-warning">Только админ</span>
+                                        {% elif type_meta.is_user_configurable %}
+                                        <span class="badge bg-success">Для пользователей</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Скрыт</span>
+                                        {% endif %}
+                                        
+                                        {% if not type_meta.is_active %}
+                                        <span class="badge bg-danger">Неактивен</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" 
+                                                    onclick="editType('{{ type_meta.type_code }}')"
+                                                    title="Редактировать">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            {% if type_meta.is_user_configurable %}
+                                            <button class="btn btn-outline-warning" 
+                                                    onclick="toggleUserAccess('{{ type_meta.type_code }}', false)"
+                                                    title="Скрыть от пользователей">
+                                                <i class="bi bi-eye-slash"></i>
+                                            </button>
+                                            {% else %}
+                                            <button class="btn btn-outline-success" 
+                                                    onclick="toggleUserAccess('{{ type_meta.type_code }}', true)"
+                                                    title="Показать пользователям">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            {% endif %}
+                                            {% if type_meta.is_active %}
+                                            <button class="btn btn-outline-danger" 
+                                                    onclick="toggleActive('{{ type_meta.type_code }}', false)"
+                                                    title="Деактивировать">
+                                                <i class="bi bi-toggle-off"></i>
+                                            </button>
+                                            {% else %}
+                                            <button class="btn btn-outline-success" 
+                                                    onclick="toggleActive('{{ type_meta.type_code }}', true)"
+                                                    title="Активировать">
+                                                <i class="bi bi-toggle-on"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать тип уведомления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editForm">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_type_code" name="type_code">
+                    
+                    <div class="mb-3">
+                        <label for="edit_title" class="form-label">Название</label>
+                        <input type="text" class="form-control" id="edit_title" name="title" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_priority" class="form-label">Приоритет</label>
+                        <select class="form-select" id="edit_priority" name="default_priority">
+                            <option value="low">Низкий</option>
+                            <option value="normal">Обычный</option>
+                            <option value="high">Высокий</option>
+                            <option value="critical">Критический</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Доступные каналы</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="channel_telegram" value="telegram">
+                            <label class="form-check-label" for="channel_telegram">Telegram</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="channel_inapp" value="inapp">
+                            <label class="form-check-label" for="channel_inapp">In-App</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="channel_email" value="email">
+                            <label class="form-check-label" for="channel_email">Email</label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_sort_order" class="form-label">Порядок сортировки</label>
+                        <input type="number" class="form-control" id="edit_sort_order" name="sort_order">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="{{ 'js/admin/notification_types.js' | static_version }}"></script>
+{% endblock %}
+

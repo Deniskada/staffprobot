@@ -509,12 +509,12 @@ async def owner_tasks_plan_create(
                     # In-App (колокольчик)
                     await notif_service.create_notification(
                         user_id=int(eid),
-                        type=NotificationType.FEATURE_ANNOUNCEMENT,
+                        type=NotificationType.TASK_ASSIGNED,
                         channel=NotificationChannel.IN_APP,
                         title="Новая задача",
                         message=(
                             "📋 Новая задача назначена. "
-                            "Откройте ‘📝 Мои задачи’, чтобы посмотреть список."
+                            "Откройте '📝 Мои задачи', чтобы посмотреть список."
                         ),
                         data={"plan_id": plan.id},
                         priority=NotificationPriority.NORMAL,
@@ -523,12 +523,12 @@ async def owner_tasks_plan_create(
                     # Telegram
                     n = await notif_service.create_notification(
                         user_id=int(eid),
-                        type=NotificationType.FEATURE_ANNOUNCEMENT,
+                        type=NotificationType.TASK_ASSIGNED,
                         channel=NotificationChannel.TELEGRAM,
                         title="Новая задача",
                         message=(
                             "📋 Новая задача назначена. "
-                            "Откройте ‘📝 Мои задачи’, чтобы посмотреть список."
+                            "Откройте '📝 Мои задачи', чтобы посмотреть список."
                         ),
                         data={"plan_id": plan.id},
                         priority=NotificationPriority.NORMAL,
@@ -677,7 +677,7 @@ async def owner_tasks_plan_edit(
                         # In-App (колокольчик)
                         await notif_service.create_notification(
                             user_id=int(eid),
-                            type=NotificationType.FEATURE_ANNOUNCEMENT,
+                            type=NotificationType.TASK_ASSIGNED,
                             channel=NotificationChannel.IN_APP,
                             title="Новая задача",
                             message=(
@@ -691,7 +691,7 @@ async def owner_tasks_plan_edit(
                         # Telegram
                         n = await notif_service.create_notification(
                             user_id=int(eid),
-                            type=NotificationType.FEATURE_ANNOUNCEMENT,
+                            type=NotificationType.TASK_ASSIGNED,
                             channel=NotificationChannel.TELEGRAM,
                             title="Новая задача",
                             message=(

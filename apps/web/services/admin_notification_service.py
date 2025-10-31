@@ -261,7 +261,8 @@ class AdminNotificationService(NotificationService):
                     "sent_at": n.sent_at,
                     "delivered_at": n.read_at,  # Используем read_at как delivered_at
                     "read_at": n.read_at,
-                    "subject": n.title,  # Используем title как subject
+                    "title": n.title,  # Добавляем title для шаблона
+                    "subject": n.title,  # Используем title как subject (для совместимости)
                     "content": n.message[:200] + "..." if len(n.message) > 200 else n.message,
                     "error_message": n.error_message
                 }

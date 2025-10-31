@@ -13,7 +13,7 @@ from core.database.session import get_db_session
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from sqlalchemy import select, func, desc, and_
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timedelta, date, time
+from datetime import datetime, timedelta, date, time, timezone
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
 import calendar
@@ -124,19 +124,24 @@ async def owner_dashboard(request: Request):
             
             # Все объекты владельца с вычислением статуса и времени последнего изменения статуса
             from domain.entities.object_opening import ObjectOpening
+            from core.utils.timezone_helper import timezone_helper
+            
             objects_result = await session.execute(
-                select(Object.id, Object.name, Object.address)
+                select(Object)
                 .where(Object.owner_id == user_id)
                 .order_by(desc(Object.created_at))
             )
-            rows = objects_result.all()
+            objects_list = objects_result.scalars().all()
             
-            # Для каждого объекта берём последнюю запись открытия/закрытия
+            # Сегодняшняя дата
+            today_local = timezone_helper.utc_to_local(datetime.now(timezone.utc)).date()
+            
+            # Для каждого объекта берём последнюю запись открытия/закрытия + статус работы
             all_objects = []
-            for r in rows:
+            for obj in objects_list:
                 last_opening_res = await session.execute(
                     select(ObjectOpening)
-                    .where(ObjectOpening.object_id == r.id)
+                    .where(ObjectOpening.object_id == obj.id)
                     .order_by(desc(ObjectOpening.opened_at))
                     .limit(1)
                 )
@@ -150,13 +155,69 @@ async def owner_dashboard(request: Request):
                     else:
                         status = "Закрыт"
                         status_time = last_opening.closed_at
+                
+                # Вычислить статус работы (только для сегодняшних смен)
+                work_status = None
+                work_employee = None
+                work_delay = None
+                work_early = None
+                
+                if obj.opening_time and obj.closing_time:
+                    # Получить смены объекта на сегодня
+                    shifts_query = select(Shift).where(
+                        and_(
+                            Shift.object_id == obj.id,
+                            Shift.planned_start >= timezone_helper.start_of_day_utc(today_local),
+                            Shift.planned_start < timezone_helper.end_of_day_utc(today_local)
+                        )
+                    ).options(selectinload(Shift.user))
+                    
+                    shifts_result = await session.execute(shifts_query)
+                    shifts_today = list(shifts_result.scalars().all())
+                    
+                    if shifts_today:
+                        first_shift = min(shifts_today, key=lambda s: s.planned_start or s.start_time)
+                        last_shift = max(shifts_today, key=lambda s: s.end_time or s.start_time)
+                        
+                        # Проверка открытия
+                        if first_shift.actual_start:
+                            expected_open = datetime.combine(today_local, obj.opening_time).replace(tzinfo=timezone_helper.local_tz)
+                            actual_open_local = timezone_helper.utc_to_local(first_shift.actual_start)
+                            delay_minutes = int((actual_open_local - expected_open).total_seconds() / 60)
+                            
+                            if delay_minutes > 5:
+                                work_status = 'late_opening'
+                                work_delay = delay_minutes
+                                work_employee = f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный"
+                            else:
+                                work_status = 'timely_opening'
+                                work_employee = f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный"
+                        
+                        # Проверка закрытия (перезапишет, если есть)
+                        if last_shift.end_time and last_shift.status == 'completed':
+                            expected_close = datetime.combine(today_local, obj.closing_time).replace(tzinfo=timezone_helper.local_tz)
+                            actual_close_local = timezone_helper.utc_to_local(last_shift.end_time)
+                            early_minutes = int((expected_close - actual_close_local).total_seconds() / 60)
+                            
+                            if early_minutes > 5:
+                                work_status = 'early_closing'
+                                work_early = early_minutes
+                                work_employee = f"{last_shift.user.first_name} {last_shift.user.last_name}" if last_shift.user else "Неизвестный"
+                            else:
+                                work_status = 'closed'
+                                work_employee = f"{last_shift.user.first_name} {last_shift.user.last_name}" if last_shift.user else "Неизвестный"
+                
                 all_objects.append(
                     type("OwnerObjectRow", (), {
-                        "id": r.id,
-                        "name": r.name,
-                        "address": r.address,
+                        "id": obj.id,
+                        "name": obj.name,
+                        "address": obj.address,
                         "status": status,
                         "status_time": status_time,
+                        "work_status": work_status,
+                        "work_employee": work_employee,
+                        "work_delay": work_delay,
+                        "work_early": work_early,
                     })
                 )
             
@@ -248,49 +309,74 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
     if not user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
-    # Получить все типы уведомлений (используем enum напрямую, т.к. таблицы нет)
-    from domain.entities.notification import NotificationType as NotificationTypeEnum
+    # Получить типы уведомлений из мета-таблицы
     from shared.services.notification_service import NotificationService
-    service = NotificationService()
-    user_settings = await service.get_user_notification_settings(user_id)
+    from shared.services.notification_type_meta_service import NotificationTypeMetaService
     
-    # Определяем типы уведомлений с их описаниями
-    notification_type_defs = [
-        ("shift_reminder", "Напоминание о смене", "Уведомление о начале смены за 1 час", "high"),
-        ("shift_confirmed", "Смена подтверждена", "Уведомление о подтверждении смены", "normal"),
-        ("shift_cancelled", "Смена отменена", "Уведомление об отмене смены", "high"),
-        ("contract_signed", "Договор подписан", "Уведомление о подписании договора", "normal"),
-        ("review_received", "Получен отзыв", "Уведомление о новом отзыве", "normal"),
-        ("payment_due", "Предстоящий платёж", "Уведомление о предстоящем платеже", "high"),
-        ("payment_success", "Платёж успешен", "Уведомление об успешном платеже", "normal"),
-        ("subscription_expiring", "Подписка истекает", "Уведомление об истечении подписки", "high"),
-        ("task_assigned", "Новая задача", "Уведомление о назначении новой задачи", "normal"),
-    ]
+    notification_service = NotificationService()
+    meta_service = NotificationTypeMetaService()
     
-    notification_types = []
-    for type_code, title, description, priority in notification_type_defs:
-        user_pref = user_settings.get(type_code, {})
-        notification_types.append({
-            "type_code": type_code,
-            "title": title,
-            "description": description,
-            "priority": priority,
-            "priority_label": {
-                "critical": "Критический",
-                "high": "Высокий",
-                "medium": "Средний",
-                "low": "Низкий"
-            }.get(priority, priority),
-            "telegram_enabled": user_pref.get("telegram", True),
-            "inapp_enabled": user_pref.get("inapp", True),
-        })
+    # Получить настройки пользователя
+    user_settings = await notification_service.get_user_notification_settings(user_id)
+    
+    # Получить типы, сгруппированные по категориям (только для настройки владельцем)
+    types_grouped = await meta_service.get_types_grouped_by_category(
+        session,
+        user_configurable_only=True,
+        active_only=True
+    )
+    
+    # Названия категорий на русском
+    category_names = {
+        "shifts": "Смены",
+        "objects": "Объекты",
+        "contracts": "Договоры",
+        "reviews": "Отзывы",
+        "payments": "Платежи",
+        "system": "Системные",
+        "tasks": "Задачи",
+        "applications": "Заявки"
+    }
+    
+    # Формирование данных для шаблона
+    priority_labels = {
+        "critical": "Критический",
+        "high": "Высокий",
+        "normal": "Обычный",
+        "low": "Низкий"
+    }
+    
+    categories_data = []
+    for category_code in ["shifts", "objects", "contracts", "reviews", "payments", "tasks", "applications", "system"]:
+        if category_code not in types_grouped:
+            continue
+        
+        types_in_category = []
+        for type_meta in types_grouped[category_code]:
+            user_pref = user_settings.get(type_meta.type_code, {})
+            types_in_category.append({
+                "type_code": type_meta.type_code,
+                "title": type_meta.title,
+                "description": type_meta.description,
+                "priority": type_meta.default_priority,
+                "priority_label": priority_labels.get(type_meta.default_priority, type_meta.default_priority),
+                "telegram_enabled": user_pref.get("telegram", True),
+                "inapp_enabled": user_pref.get("inapp", True),
+            })
+        
+        if types_in_category:
+            categories_data.append({
+                "code": category_code,
+                "name": category_names.get(category_code, category_code),
+                "types": types_in_category
+            })
     
     owner_context = await get_owner_context(user_id, session)
     
     return templates.TemplateResponse("owner/notifications.html", {
         "request": request,
         "current_user": current_user,
-        "notification_types": notification_types,
+        "categories": categories_data,
         **owner_context
     })
 
@@ -320,23 +406,29 @@ async def owner_notifications_save(
     # Парсинг формы
     form_data = await request.form()
     
-    # Список всех типов уведомлений (соответствует списку в GET)
-    notification_type_codes = [
-        "shift_reminder", "shift_confirmed", "shift_cancelled",
-        "contract_signed", "review_received", "payment_due",
-        "payment_success", "subscription_expiring", "task_assigned"
-    ]
-    
+    # Получить список доступных типов из мета-таблицы
     from shared.services.notification_service import NotificationService
-    service = NotificationService()
-    for type_code in notification_type_codes:
+    from shared.services.notification_type_meta_service import NotificationTypeMetaService
+    
+    notification_service = NotificationService()
+    meta_service = NotificationTypeMetaService()
+    
+    # Получить типы, доступные для настройки владельцем
+    user_configurable_types = await meta_service.get_user_configurable_types(
+        session,
+        active_only=True
+    )
+    
+    # Сохранить настройки для каждого типа
+    for type_meta in user_configurable_types:
+        type_code = type_meta.type_code
         telegram_key = f"telegram_{type_code}"
         inapp_key = f"inapp_{type_code}"
         
         telegram_enabled = telegram_key in form_data
         inapp_enabled = inapp_key in form_data
         
-        await service.set_user_notification_preference(
+        await notification_service.set_user_notification_preference(
             user_id=user_id,
             notification_type=type_code,
             channel_telegram=telegram_enabled,
