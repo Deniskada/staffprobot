@@ -111,7 +111,7 @@ def upgrade() -> None:
                 available_channels=obj_type['available_channels'],
                 sort_order=obj_type['sort_order'],
                 is_active=True
-            )
+            ).on_conflict_do_nothing(index_elements=['type_code'])
         )
 
 
