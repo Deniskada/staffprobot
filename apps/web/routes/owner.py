@@ -28,6 +28,7 @@ from apps.web.middleware.auth_middleware import get_current_user
 from apps.web.dependencies import get_current_user_dependency, require_role
 from apps.web.services.object_service import ObjectService, TimeSlotService
 from apps.web.utils.timezone_utils import web_timezone_helper
+from shared.services.system_features_service import SystemFeaturesService
 from shared.services.calendar_filter_service import CalendarFilterService
 from domain.entities.user import User, UserRole
 from domain.entities.object import Object
