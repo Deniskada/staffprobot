@@ -194,8 +194,8 @@ async def owner_dashboard_redirect(request: Request):
 
 
 @router.get("/notifications", response_class=HTMLResponse, name="owner_notifications")
-async def owner_notifications(request: Request):
-    """Страница управления уведомлениями"""
+async def owner_notifications(request: Request, session: AsyncSession = Depends(get_db_session)):
+    """Страница настроек уведомлений владельца"""
     current_user = await get_current_user(request)
     if not current_user:
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
@@ -204,19 +204,121 @@ async def owner_notifications(request: Request):
     if user_role != "owner":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
-    try:
-        async with get_async_session() as session:
-            user_id = await get_user_id_from_current_user(current_user, session)
-            owner_context = await get_owner_context(user_id, session)
-            
-            return templates.TemplateResponse("owner/notifications.html", {
-                "request": request,
-                "current_user": current_user,
-                **owner_context
+    telegram_id = current_user.get("id")
+    features_service = SystemFeaturesService(session)
+    is_feature_enabled = await features_service.is_feature_enabled(telegram_id, "notifications")
+    
+    # Получить User.id
+    from sqlalchemy import select
+    from domain.entities.user import User
+    user_result = await session.execute(
+        select(User.id).where(User.telegram_id == telegram_id)
+    )
+    user_id = user_result.scalar_one_or_none()
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    notification_types = []
+    if is_feature_enabled:
+        # Получить все типы уведомлений из БД
+        from domain.entities.notification import NotificationType
+        result = await session.execute(
+            select(NotificationType).order_by(NotificationType.priority.desc(), NotificationType.type_code)
+        )
+        types_db = result.scalars().all()
+        
+        # Получить текущие настройки пользователя
+        from shared.services.notification_service import NotificationService
+        service = NotificationService()
+        user_settings = await service.get_user_notification_settings(user_id)
+        
+        for ntype in types_db:
+            setting_key = f"{ntype.type_code}"
+            user_pref = user_settings.get(setting_key, {})
+            notification_types.append({
+                "type_code": ntype.type_code,
+                "title": ntype.title,
+                "description": ntype.description,
+                "priority": ntype.priority,
+                "priority_label": {
+                    "critical": "Критический",
+                    "high": "Высокий",
+                    "medium": "Средний",
+                    "low": "Низкий"
+                }.get(ntype.priority, ntype.priority),
+                "telegram_enabled": user_pref.get("telegram", True),
+                "inapp_enabled": user_pref.get("inapp", True),
             })
-    except Exception as e:
-        logger.error(f"Error loading notifications page: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки страницы уведомлений")
+    
+    owner_context = await get_owner_context(user_id, session)
+    
+    return templates.TemplateResponse("owner/notifications.html", {
+        "request": request,
+        "current_user": current_user,
+        "is_feature_enabled": is_feature_enabled,
+        "notification_types": notification_types,
+        **owner_context
+    })
+
+
+@router.post("/notifications")
+async def owner_notifications_save(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Сохранение настроек уведомлений владельца"""
+    current_user = await get_current_user(request)
+    if not current_user or current_user.get("role") != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    
+    telegram_id = current_user.get("id")
+    features_service = SystemFeaturesService(session)
+    is_feature_enabled = await features_service.is_feature_enabled(telegram_id, "notifications")
+    
+    if not is_feature_enabled:
+        return RedirectResponse(url="/owner/notifications", status_code=status.HTTP_303_SEE_OTHER)
+    
+    # Получить User.id
+    from sqlalchemy import select
+    from domain.entities.user import User
+    user_result = await session.execute(
+        select(User.id).where(User.telegram_id == telegram_id)
+    )
+    user_id = user_result.scalar_one_or_none()
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    # Парсинг формы
+    form_data = await request.form()
+    
+    # Получить все типы уведомлений
+    from domain.entities.notification import NotificationType
+    result = await session.execute(select(NotificationType))
+    types_db = result.scalars().all()
+    
+    from shared.services.notification_service import NotificationService
+    service = NotificationService()
+    for ntype in types_db:
+        telegram_key = f"telegram_{ntype.type_code}"
+        inapp_key = f"inapp_{ntype.type_code}"
+        
+        telegram_enabled = telegram_key in form_data
+        inapp_enabled = inapp_key in form_data
+        
+        await service.set_user_notification_preference(
+            user_id=user_id,
+            notification_type=ntype.type_code,
+            channel_telegram=telegram_enabled,
+            channel_inapp=inapp_enabled
+        )
+    
+    logger.info(
+        "Настройки уведомлений обновлены",
+        user_id=user_id,
+        telegram_id=telegram_id
+    )
+    
+    return RedirectResponse(url="/owner/notifications", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/objects", response_class=HTMLResponse, name="owner_objects")
