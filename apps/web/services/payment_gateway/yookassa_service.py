@@ -3,8 +3,16 @@
 from typing import Dict, Any, Optional
 import hashlib
 import hmac
-from yookassa import Configuration, Payment
-from yookassa.domain.notification import WebhookNotificationFactory
+
+try:
+    from yookassa import Configuration, Payment
+    from yookassa.domain.notification import WebhookNotificationFactory
+    YOOKASSA_AVAILABLE = True
+except ImportError:
+    YOOKASSA_AVAILABLE = False
+    Configuration = None
+    Payment = None
+    WebhookNotificationFactory = None
 
 from core.config.settings import settings
 from core.logging.logger import logger
@@ -15,6 +23,11 @@ class YooKassaService:
     
     def __init__(self):
         """Инициализация сервиса YooKassa."""
+        if not YOOKASSA_AVAILABLE:
+            logger.warning("YooKassa SDK not installed - payments will fail")
+            self.is_configured = False
+            return
+        
         # Настройка YooKassa SDK
         if not settings.yookassa_shop_id or not settings.yookassa_secret_key:
             logger.warning("YooKassa credentials not configured - payments will fail")
@@ -45,6 +58,9 @@ class YooKassaService:
         Returns:
             dict с данными платежа: id, status, confirmation_url
         """
+        if not YOOKASSA_AVAILABLE:
+            raise ValueError("YooKassa SDK not installed. Install with: pip install yookassa>=3.0.0")
+        
         if not self.is_configured:
             raise ValueError("YooKassa credentials not configured. Set YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY")
         
@@ -148,6 +164,12 @@ class YooKassaService:
         Returns:
             dict с данными платежа
         """
+        if not YOOKASSA_AVAILABLE:
+            raise ValueError("YooKassa SDK not installed. Install with: pip install yookassa>=3.0.0")
+        
+        if not self.is_configured:
+            raise ValueError("YooKassa credentials not configured. Set YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY")
+        
         try:
             payment = Payment.find_one(payment_id)
             
