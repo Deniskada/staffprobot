@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database.session import get_db_session
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
-from sqlalchemy import select, func, desc, and_
+from sqlalchemy import select, func, desc, and_, or_
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta, date, time, timezone
 from typing import Optional, List, Dict, Any
@@ -164,11 +164,36 @@ async def owner_dashboard(request: Request):
                 
                 if obj.opening_time and obj.closing_time:
                     # Получить смены объекта на сегодня
+                    # Учитываем как запланированные смены (по planned_start), так и спонтанные (по start_time/actual_start)
+                    start_of_day_utc = timezone_helper.start_of_day_utc(today_local)
+                    end_of_day_utc = timezone_helper.end_of_day_utc(today_local)
                     shifts_query = select(Shift).where(
                         and_(
                             Shift.object_id == obj.id,
-                            Shift.planned_start >= timezone_helper.start_of_day_utc(today_local),
-                            Shift.planned_start < timezone_helper.end_of_day_utc(today_local)
+                            or_(
+                                # Запланированные смены
+                                and_(
+                                    Shift.planned_start.isnot(None),
+                                    Shift.planned_start >= start_of_day_utc,
+                                    Shift.planned_start < end_of_day_utc
+                                ),
+                                # Спонтанные смены (без planned_start, но с start_time или actual_start)
+                                and_(
+                                    Shift.planned_start.is_(None),
+                                    or_(
+                                        and_(
+                                            Shift.start_time.isnot(None),
+                                            Shift.start_time >= start_of_day_utc,
+                                            Shift.start_time < end_of_day_utc
+                                        ),
+                                        and_(
+                                            Shift.actual_start.isnot(None),
+                                            Shift.actual_start >= start_of_day_utc,
+                                            Shift.actual_start < end_of_day_utc
+                                        )
+                                    )
+                                )
+                            )
                         )
                     ).options(selectinload(Shift.user))
                     
@@ -178,6 +203,9 @@ async def owner_dashboard(request: Request):
                     if shifts_today:
                         first_shift = min(shifts_today, key=lambda s: s.planned_start or s.start_time)
                         last_shift = max(shifts_today, key=lambda s: s.end_time or s.start_time)
+                        
+                        # Проверяем наличие активных смен
+                        active_shifts_on_object = [s for s in shifts_today if s.status == 'active']
                         
                         # Проверка открытия
                         if first_shift.actual_start:
@@ -194,7 +222,8 @@ async def owner_dashboard(request: Request):
                                 work_employee = f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный"
                         
                         # Проверка закрытия (перезапишет, если есть)
-                        if last_shift.end_time and last_shift.status == 'completed':
+                        # Раннее закрытие считается только если объект действительно закрыт (нет активных смен)
+                        if last_shift.end_time and last_shift.status == 'completed' and not active_shifts_on_object:
                             expected_close = datetime.combine(today_local, obj.closing_time).replace(tzinfo=timezone_helper.local_tz)
                             actual_close_local = timezone_helper.utc_to_local(last_shift.end_time)
                             early_minutes = int((expected_close - actual_close_local).total_seconds() / 60)
