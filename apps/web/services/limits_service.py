@@ -292,7 +292,23 @@ class LimitsService:
                 selectinload(UserSubscription.tariff_plan)
             )
         )
-        return result.scalar_one_or_none()
+        subscription = result.scalar_one_or_none()
+        
+        # Проверяем, что подписка действительно активна (не истекла)
+        if subscription and subscription.is_expired():
+            # Подписка истекла, но статус еще не обновлен
+            # Обновляем статус и возвращаем None
+            subscription.status = SubscriptionStatus.EXPIRED
+            await self.session.commit()
+            logger.warning(
+                f"Found expired subscription with ACTIVE status",
+                subscription_id=subscription.id,
+                user_id=user_id,
+                expires_at=subscription.expires_at
+            )
+            return None
+        
+        return subscription
     
     async def _check_payment_status(self, user_id: int) -> Dict[str, Any]:
         """Проверка статуса платежей."""

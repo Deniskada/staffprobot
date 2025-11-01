@@ -6724,6 +6724,19 @@ async def owner_change_tariff_post(
         # Получаем текущую активную подписку для определения даты начала нового тарифа
         current_subscription = await limits_service._get_active_subscription(user_id)
         
+        # Деактивируем старую подписку перед созданием новой
+        if current_subscription:
+            from apps.web.services.tariff_service import TariffService
+            tariff_service = TariffService(db)
+            await tariff_service.deactivate_user_subscriptions(user_id)
+            logger.info(
+                f"Deactivated old subscription before creating new one",
+                user_id=user_id,
+                old_subscription_id=current_subscription.id
+            )
+            # Обновляем current_subscription для правильного вычисления даты начала
+            await db.refresh(current_subscription)
+        
         # Определяем дату начала нового тарифа
         # Если есть активная подписка - новый тариф начнется после её окончания
         # Если нет - новый тариф начнется сейчас
