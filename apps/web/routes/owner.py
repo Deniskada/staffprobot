@@ -126,10 +126,19 @@ async def owner_dashboard(request: Request):
             from domain.entities.object_opening import ObjectOpening
             from core.utils.timezone_helper import timezone_helper
             
+            # Загружаем объекты с org_unit и всей цепочкой родителей (до 5 уровней иерархии)
+            from domain.entities.org_structure import OrgStructureUnit
             objects_result = await session.execute(
                 select(Object)
                 .where(Object.owner_id == user_id)
                 .order_by(desc(Object.created_at))
+                .options(
+                    selectinload(Object.org_unit).selectinload(OrgStructureUnit.parent)
+                    .selectinload(OrgStructureUnit.parent)
+                    .selectinload(OrgStructureUnit.parent)
+                    .selectinload(OrgStructureUnit.parent)
+                    .selectinload(OrgStructureUnit.parent)
+                )
             )
             objects_list = objects_result.scalars().all()
             
@@ -201,33 +210,134 @@ async def owner_dashboard(request: Request):
                     shifts_today = list(shifts_result.scalars().all())
                     
                     if shifts_today:
-                        first_shift = min(shifts_today, key=lambda s: s.planned_start or s.start_time)
+                        # Единая логика: считаем открытие по первому фактическому событию НЕ РАНЬШЕ opening_time
+                        # planned → actual_start; spontaneous → start_time (всё в локальной TZ)
+                        # ПРАВИЛЬНО локализуем время (не replace, а localize!)
+                        naive_expected = datetime.combine(today_local, obj.opening_time)
+                        expected_open = timezone_helper.local_tz.localize(naive_expected)
+                        logger.debug(
+                            f"Dashboard: object {obj.id} ({obj.name}) expected_open={expected_open.isoformat()}"
+                        )
+
+                        starts_and_ends: list[tuple[Optional[datetime], Optional[datetime], str, object]] = []
+                        for s in shifts_today:
+                            start_local = None
+                            if s.planned_start and s.actual_start:
+                                start_local = timezone_helper.utc_to_local(s.actual_start)
+                                logger.debug(
+                                    f"Dashboard: shift {s.id} planned shift: actual_start UTC={s.actual_start.isoformat()}, "
+                                    f"local={start_local.isoformat() if start_local else None}"
+                                )
+                            elif not s.planned_start and s.start_time:
+                                start_local = timezone_helper.utc_to_local(s.start_time)
+                                logger.debug(
+                                    f"Dashboard: shift {s.id} spontaneous shift: start_time UTC={s.start_time.isoformat()}, "
+                                    f"local={start_local.isoformat() if start_local else None}"
+                                )
+
+                            end_local = timezone_helper.utc_to_local(s.end_time) if getattr(s, 'end_time', None) else None
+                            starts_and_ends.append((start_local, end_local, s.status, s))
+
+                        logger.debug(
+                            "Dashboard: starts_and_ends=" + 
+                            ", ".join([
+                                f"(start={st.isoformat() if st else None}, end={en.isoformat() if en else None}, status={stt}, id={sh.id})"
+                                for (st, en, stt, sh) in starts_and_ends
+                            ])
+                        )
+
+                        # Берём первое фактическое открытие НЕ РАНЬШЕ opening_time
+                        earliest_open_local: Optional[datetime] = None
+                        opener_shift = None
+                        candidates_after: list[tuple[datetime, object]] = []
+                        for start_local, _end_local, _s_status, s_obj in starts_and_ends:
+                            if start_local:
+                                logger.debug(
+                                    f"Dashboard: comparing start_local={start_local.isoformat()} with expected_open={expected_open.isoformat()}, "
+                                    f"start >= expected? {start_local >= expected_open}"
+                                )
+                                if start_local >= expected_open:
+                                    candidates_after.append((start_local, s_obj))
+                        
+                        logger.debug(
+                            f"Dashboard: candidates_after={len(candidates_after)}, "
+                            f"candidates={[(c[0].isoformat(), c[1].id) for c in candidates_after] if candidates_after else []}"
+                        )
+                        
+                        if candidates_after:
+                            earliest_open_local, opener_shift = min(candidates_after, key=lambda t: t[0])
+                            delay_minutes = int((earliest_open_local - expected_open).total_seconds() / 60)
+                            logger.debug(
+                                f"Dashboard: found earliest_open_local={earliest_open_local.isoformat()}, "
+                                f"delay_minutes={delay_minutes}"
+                            )
+                        else:
+                            # Нет открытия после времени начала работы — считаем без опоздания (нет данных)
+                            delay_minutes = 0
+                            earliest_open_local = None
+                            logger.debug(f"Dashboard: no candidates_after, setting delay_minutes=0")
+
+                        logger.debug(
+                            f"Dashboard: object {obj.id} ({obj.name}) expected_open={expected_open.isoformat()}, "
+                            f"earliest_open_local={earliest_open_local.isoformat() if earliest_open_local else None}, "
+                            f"delay_minutes={delay_minutes}"
+                        )
+                        
+                        # Последняя смена для расчёта закрытия (как было)
                         last_shift = max(shifts_today, key=lambda s: s.end_time or s.start_time)
                         
                         # Проверяем наличие активных смен
                         active_shifts_on_object = [s for s in shifts_today if s.status == 'active']
                         
-                        # Проверка открытия
-                        if first_shift.actual_start:
-                            expected_open = datetime.combine(today_local, obj.opening_time).replace(tzinfo=timezone_helper.local_tz)
-                            actual_open_local = timezone_helper.utc_to_local(first_shift.actual_start)
-                            delay_minutes = int((actual_open_local - expected_open).total_seconds() / 60)
-                            
-                            if delay_minutes > 5:
-                                work_status = 'late_opening'
-                                work_delay = delay_minutes
-                                work_employee = f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный"
-                            else:
-                                work_status = 'timely_opening'
-                                work_employee = f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный"
+                        # Получить эффективные настройки опоздания (с учетом наследования)
+                        async def get_effective_late_settings_for_object(obj: Object) -> dict:
+                            if not obj.inherit_late_settings and obj.late_threshold_minutes is not None:
+                                return {
+                                    'threshold_minutes': obj.late_threshold_minutes,
+                                    'penalty_per_minute': obj.late_penalty_per_minute
+                                }
+                            if obj.org_unit_id:
+                                from domain.entities.org_structure import OrgStructureUnit
+                                current_unit_id = obj.org_unit_id
+                                while current_unit_id:
+                                    unit_query = select(OrgStructureUnit).where(OrgStructureUnit.id == current_unit_id)
+                                    unit_result = await session.execute(unit_query)
+                                    unit = unit_result.scalar_one_or_none()
+                                    if not unit:
+                                        break
+                                    if not unit.inherit_late_settings and unit.late_threshold_minutes is not None:
+                                        return {
+                                            'threshold_minutes': unit.late_threshold_minutes,
+                                            'penalty_per_minute': unit.late_penalty_per_minute
+                                        }
+                                    current_unit_id = unit.parent_id
+                            return {'threshold_minutes': None, 'penalty_per_minute': None}
                         
-                        # Проверка закрытия (перезапишет, если есть)
-                        # Раннее закрытие считается только если объект действительно закрыт (нет активных смен)
+                        late_settings = await get_effective_late_settings_for_object(obj)
+                        threshold_minutes = late_settings.get('threshold_minutes') or 0
+                        
+                        if delay_minutes > threshold_minutes:
+                            work_status = 'late_opening'
+                            work_delay = delay_minutes
+                            # opener_shift уже определён выше
+                            if opener_shift and opener_shift.user:
+                                work_employee = f"{opener_shift.user.first_name} {opener_shift.user.last_name}"
+                        else:
+                            work_status = 'timely_opening'
+                            # Укажем сотрудника, кто первый открыл (если определён)
+                            if opener_shift and opener_shift.user:
+                                work_employee = f"{opener_shift.user.first_name} {opener_shift.user.last_name}"
+                        
+                        # Проверка закрытия (как было)
                         if last_shift.end_time and last_shift.status == 'completed' and not active_shifts_on_object:
-                            expected_close = datetime.combine(today_local, obj.closing_time).replace(tzinfo=timezone_helper.local_tz)
-                            actual_close_local = timezone_helper.utc_to_local(last_shift.end_time)
+                            # Используем timezone объекта, а не default_timezone
+                            obj_timezone = obj.timezone or "Europe/Moscow"
+                            naive_expected_close = datetime.combine(today_local, obj.closing_time)
+                            obj_tz = pytz.timezone(obj_timezone)
+                            expected_close = obj_tz.localize(naive_expected_close)
+                            actual_close_local = timezone_helper.utc_to_local(last_shift.end_time, timezone_str=obj_timezone)
                             early_minutes = int((expected_close - actual_close_local).total_seconds() / 60)
-                            
+                            # Порог раннего закрытия: 5 минут (хардкод, можно вынести в настройки объекта)
                             if early_minutes > 5:
                                 work_status = 'early_closing'
                                 work_early = early_minutes
@@ -252,11 +362,11 @@ async def owner_dashboard(request: Request):
             
             # Получаем данные для переключения интерфейсов
             available_interfaces = await get_available_interfaces_for_user(user_id)
-        
-        # Получаем enabled_features для меню
-        from shared.services.system_features_service import SystemFeaturesService
-        features_service = SystemFeaturesService()
-        enabled_features = await features_service.get_enabled_features(session, user_id)
+            
+            # Получаем enabled_features для меню
+            from shared.services.system_features_service import SystemFeaturesService
+            features_service = SystemFeaturesService()
+            enabled_features = await features_service.get_enabled_features(session, user_id)
         
         stats = {
             'total_objects': total_objects,
@@ -940,8 +1050,6 @@ async def owner_objects_edit(request: Request, object_id: int):
     except Exception as e:
         logger.error(f"Error loading edit form: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки формы редактирования")
-
-
 @router.post("/objects/{object_id}/edit")
 async def owner_objects_edit_post(request: Request, object_id: int):
     """Обновление объекта"""
@@ -2731,8 +2839,6 @@ async def api_employees(request: Request):
     except Exception as e:
         logger.error(f"Error getting employees: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки сотрудников")
-
-
 @router.get("/api/contracts/my-contracts")
 async def api_my_contracts(request: Request):
     """API: получение договоров владельца."""
@@ -4580,8 +4686,6 @@ async def owner_shift_detail_legacy(
     except Exception as e:
         logger.error(f"Error loading shift detail: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей смены")
-
-
 # Phase 4A: shift-tasks роуты удалены, используйте /owner/payroll/adjustments для управления корректировками
 # См. apps/web/routes/owner_payroll_adjustments.py
 
