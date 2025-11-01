@@ -20,7 +20,8 @@ celery_app = Celery(
         "core.celery.tasks.payroll_tasks",
         "core.celery.tasks.adjustment_tasks",  # Phase 4A
         "core.celery.tasks.task_assignment",  # Tasks v2: автоназначение
-        "core.celery.tasks.task_bonuses"  # Tasks v2: бонусы/штрафы
+        "core.celery.tasks.task_bonuses",  # Tasks v2: бонусы/штрафы
+        "core.celery.tasks.billing_tasks"  # Iteration 39: биллинг и автопродление подписок
     ]
 )
 
@@ -110,6 +111,21 @@ celery_app.conf.update(
             'task': 'process_task_bonuses',
             'schedule': 600,  # каждые 10 минут
         },
+        # Iteration 39: Проверка подписок, истекающих через 7 и 1 день — ежедневно в 09:00 UTC
+        'check-expiring-subscriptions': {
+            'task': 'check-expiring-subscriptions',
+            'schedule': crontab(hour=9, minute=0),  # ежедневно в 09:00 UTC
+        },
+        # Iteration 39: Проверка истёкших подписок — ежедневно в 00:05 UTC
+        'check-expired-subscriptions': {
+            'task': 'check-expired-subscriptions',
+            'schedule': crontab(hour=0, minute=5),  # ежедневно в 00:05 UTC
+        },
+        # Iteration 39: Активация отложенных подписок — каждые 5 минут
+        'activate-scheduled-subscriptions': {
+            'task': 'activate-scheduled-subscriptions',
+            'schedule': 300,  # каждые 5 минут
+        },
     },
     
     # Маршрутизация задач
@@ -131,6 +147,10 @@ celery_app.conf.update(
         'create_final_settlements_by_termination_date': {'queue': 'shifts'},  # Финальный расчёт при увольнении
         'auto_assign_tasks': {'queue': 'shifts'},  # Tasks v2: авто-назначение задач
         'process_task_bonuses': {'queue': 'shifts'},  # Tasks v2: обработка бонусов
+        'core.celery.tasks.billing_tasks.*': {'queue': 'celery'},  # Iteration 39: биллинг задачи
+        'check-expiring-subscriptions': {'queue': 'celery'},  # Iteration 39: проверка истекающих подписок
+        'check-expired-subscriptions': {'queue': 'celery'},  # Iteration 39: проверка истёкших подписок
+        'activate-scheduled-subscriptions': {'queue': 'celery'},  # Iteration 39: активация отложенных подписок
     },
 )
 

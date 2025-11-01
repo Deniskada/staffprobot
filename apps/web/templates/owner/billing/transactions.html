@@ -1,0 +1,164 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>{{ title }}</h2>
+        <a href="/owner/subscription" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> К подписке
+        </a>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label for="status" class="form-label">Статус</label>
+                    <select class="form-select" id="status" name="status">
+                        <option value="">Все статусы</option>
+                        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидает</option>
+                        <option value="processing" {% if status_filter == 'processing' %}selected{% endif %}>В обработке</option>
+                        <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Завершена</option>
+                        <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Не удалась</option>
+                        <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Отменена</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-funnel"></i> Применить фильтр
+                        </button>
+                        <a href="/owner/billing/transactions" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Сбросить
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Таблица транзакций -->
+    <div class="card">
+        <div class="card-body">
+            {% if transactions %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Дата создания</th>
+                            <th>Сумма</th>
+                            <th>Тип</th>
+                            <th>Статус</th>
+                            <th>Описание</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                        <tr>
+                            <td>#{{ transaction.id }}</td>
+                            <td>{{ transaction.created_at.strftime('%d.%m.%Y %H:%M') if transaction.created_at else '—' }}</td>
+                            <td><strong>{{ transaction.amount }} {{ transaction.currency }}</strong></td>
+                            <td>{{ transaction.transaction_type.value }}</td>
+                            <td>
+                                <span class="badge 
+                                    {% if transaction.status.value == 'completed' %}bg-success
+                                    {% elif transaction.status.value == 'pending' %}bg-warning text-dark
+                                    {% elif transaction.status.value == 'processing' %}bg-info
+                                    {% elif transaction.status.value == 'failed' %}bg-danger
+                                    {% elif transaction.status.value == 'cancelled' %}bg-secondary
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ transaction.status.value }}
+                                </span>
+                            </td>
+                            <td>{{ transaction.description or '—' }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" 
+                                        onclick="viewTransaction({{ transaction.id }})">
+                                    <i class="bi bi-eye"></i> Детали
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox fs-1 text-muted"></i>
+                <p class="text-muted mt-3">Нет транзакций</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для деталей транзакции -->
+<div class="modal fade" id="transactionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали транзакции</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="transactionDetails">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function viewTransaction(transactionId) {
+    const modal = new bootstrap.Modal(document.getElementById('transactionModal'));
+    modal.show();
+    
+    const detailsDiv = document.getElementById('transactionDetails');
+    detailsDiv.innerHTML = '<div class="text-center"><div class="spinner-border"></div></div>';
+    
+    try {
+        const response = await fetch(`/owner/billing/transactions/${transactionId}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            const t = result.data;
+            detailsDiv.innerHTML = `
+                <div class="mb-3">
+                    <strong>ID:</strong> #${t.id}
+                </div>
+                <div class="mb-3">
+                    <strong>Сумма:</strong> ${t.amount} ${t.currency}
+                </div>
+                <div class="mb-3">
+                    <strong>Тип:</strong> ${t.transaction_type}
+                </div>
+                <div class="mb-3">
+                    <strong>Статус:</strong> <span class="badge bg-success">${t.status}</span>
+                </div>
+                <div class="mb-3">
+                    <strong>Создана:</strong> ${new Date(t.created_at).toLocaleString('ru-RU')}
+                </div>
+                ${t.processed_at ? `<div class="mb-3"><strong>Обработана:</strong> ${new Date(t.processed_at).toLocaleString('ru-RU')}</div>` : ''}
+                ${t.description ? `<div class="mb-3"><strong>Описание:</strong> ${t.description}</div>` : ''}
+                ${t.external_id ? `<div class="mb-3"><strong>ID платежа:</strong> ${t.external_id}</div>` : ''}
+            `;
+        } else {
+            detailsDiv.innerHTML = '<div class="alert alert-danger">Ошибка загрузки данных</div>';
+        }
+    } catch (error) {
+        console.error('Error loading transaction details:', error);
+        detailsDiv.innerHTML = '<div class="alert alert-danger">Ошибка загрузки данных</div>';
+    }
+}
+</script>
+{% endblock %}
+

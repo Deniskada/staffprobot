@@ -88,22 +88,22 @@
                 <label for="status" class="form-label">Статус</label>
                 <select class="form-control" id="status" name="status">
                     <option value="">Все статусы</option>
-                    <option value="pending">Ожидает</option>
-                    <option value="processing">В обработке</option>
-                    <option value="completed">Завершена</option>
-                    <option value="failed">Не удалась</option>
-                    <option value="cancelled">Отменена</option>
+                    <option value="pending" {% if selected_status == 'pending' %}selected{% endif %}>Ожидает</option>
+                    <option value="processing" {% if selected_status == 'processing' %}selected{% endif %}>В обработке</option>
+                    <option value="completed" {% if selected_status == 'completed' %}selected{% endif %}>Завершена</option>
+                    <option value="failed" {% if selected_status == 'failed' %}selected{% endif %}>Не удалась</option>
+                    <option value="cancelled" {% if selected_status == 'cancelled' %}selected{% endif %}>Отменена</option>
                 </select>
             </div>
             <div class="col-md-3">
                 <label for="transaction_type" class="form-label">Тип</label>
                 <select class="form-control" id="transaction_type" name="transaction_type">
                     <option value="">Все типы</option>
-                    <option value="payment">Платеж</option>
-                    <option value="refund">Возврат</option>
-                    <option value="credit">Кредит</option>
-                    <option value="debit">Списание</option>
-                    <option value="adjustment">Корректировка</option>
+                    <option value="payment" {% if selected_transaction_type == 'payment' %}selected{% endif %}>Платеж</option>
+                    <option value="refund" {% if selected_transaction_type == 'refund' %}selected{% endif %}>Возврат</option>
+                    <option value="credit" {% if selected_transaction_type == 'credit' %}selected{% endif %}>Кредит</option>
+                    <option value="debit" {% if selected_transaction_type == 'debit' %}selected{% endif %}>Списание</option>
+                    <option value="adjustment" {% if selected_transaction_type == 'adjustment' %}selected{% endif %}>Корректировка</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -117,141 +117,237 @@
         </form>
     </div>
 
-    <!-- Список транзакций -->
-    <div class="row">
-        {% for transaction in transactions %}
-        <div class="col-md-6 mb-4">
-            <div class="card transaction-card status-{{ transaction.status.value }}">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">
-                        <i class="bi bi-credit-card"></i> 
-                        Транзакция #{{ transaction.id }}
-                    </h6>
-                    <span class="status-badge status-{{ transaction.status.value }}">
-                        {{ transaction.status.value | title }}
-                    </span>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6>👤 Пользователь</h6>
-                            <p class="mb-1"><strong>ID:</strong> {{ transaction.user_id }}</p>
-                            <p class="mb-1"><strong>Подписка:</strong> {{ transaction.subscription_id or 'Нет' }}</p>
-                        </div>
-                        <div class="col-md-6">
-                            <h6>💰 Детали платежа</h6>
-                            <p class="mb-1">
+    <!-- Информация о количестве -->
+    {% if total_count is defined %}
+    <div class="alert alert-info mb-3">
+        <i class="bi bi-info-circle"></i> Найдено транзакций: <strong>{{ total_count }}</strong>
+        {% if total_pages > 1 %}
+        | Страница <strong>{{ page }}</strong> из <strong>{{ total_pages }}</strong>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Таблица транзакций -->
+    {% if transactions %}
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>
+                                <a href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_transaction_type %}transaction_type={{ selected_transaction_type }}&{% endif %}sort_by=id&sort_order={% if sort_by == 'id' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&page={{ page }}&per_page={{ per_page }}"
+                                   class="text-decoration-none text-dark">
+                                    ID
+                                    {% if sort_by == 'id' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up text-primary"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down text-primary"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-arrows-vertical text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_transaction_type %}transaction_type={{ selected_transaction_type }}&{% endif %}sort_by=created_at&sort_order={% if sort_by == 'created_at' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&page={{ page }}&per_page={{ per_page }}"
+                                   class="text-decoration-none text-dark">
+                                    Дата
+                                    {% if sort_by == 'created_at' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up text-primary"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down text-primary"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-arrows-vertical text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>Пользователь</th>
+                            <th>
+                                <a href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_transaction_type %}transaction_type={{ selected_transaction_type }}&{% endif %}sort_by=transaction_type&sort_order={% if sort_by == 'transaction_type' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&page={{ page }}&per_page={{ per_page }}"
+                                   class="text-decoration-none text-dark">
+                                    Тип
+                                    {% if sort_by == 'transaction_type' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up text-primary"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down text-primary"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-arrows-vertical text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_transaction_type %}transaction_type={{ selected_transaction_type }}&{% endif %}sort_by=status&sort_order={% if sort_by == 'status' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&page={{ page }}&per_page={{ per_page }}"
+                                   class="text-decoration-none text-dark">
+                                    Статус
+                                    {% if sort_by == 'status' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up text-primary"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down text-primary"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-arrows-vertical text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_transaction_type %}transaction_type={{ selected_transaction_type }}&{% endif %}sort_by=amount&sort_order={% if sort_by == 'amount' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&page={{ page }}&per_page={{ per_page }}"
+                                   class="text-decoration-none text-dark">
+                                    Сумма
+                                    {% if sort_by == 'amount' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up text-primary"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down text-primary"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-arrows-vertical text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>Описание</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                        <tr>
+                            <td>
+                                <strong>#{{ transaction.id }}</strong>
+                            </td>
+                            <td>
+                                <small>{{ transaction.created_at.strftime('%d.%m.%Y') }}</small><br>
+                                <small class="text-muted">{{ transaction.created_at.strftime('%H:%M') }}</small>
+                            </td>
+                            <td>
+                                <a href="?user_id={{ transaction.user_id }}" class="text-decoration-none">
+                                    ID: {{ transaction.user_id }}
+                                </a>
+                                {% if transaction.subscription_id %}
+                                <br><small class="text-muted">Подписка: {{ transaction.subscription_id }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">{{ transaction.transaction_type.value | title }}</span>
+                            </td>
+                            <td>
+                                <span class="status-badge status-{{ transaction.status.value }}">
+                                    {{ transaction.status.value | title }}
+                                </span>
+                            </td>
+                            <td>
                                 <span class="amount-display {% if transaction.transaction_type.value in ['payment', 'credit'] %}amount-positive{% else %}amount-negative{% endif %}">
                                     {% if transaction.transaction_type.value in ['payment', 'credit'] %}+{% else %}-{% endif %}{{ transaction.amount }} {{ transaction.currency }}
                                 </span>
-                            </p>
-                            <p class="mb-1"><strong>Тип:</strong> {{ transaction.transaction_type.value | title }}</p>
-                            <p class="mb-0"><strong>Способ:</strong> {{ transaction.payment_method.value if transaction.payment_method else 'Не указан' }}</p>
-                        </div>
-                    </div>
-                    
-                    {% if transaction.description %}
-                    <div class="mt-3">
-                        <h6>📝 Описание</h6>
-                        <p class="mb-0">{{ transaction.description }}</p>
-                    </div>
-                    {% endif %}
-                    
-                    <div class="row mt-3">
-                        <div class="col-md-6">
-                            <small class="text-muted">Создана:</small>
-                            <p class="mb-0">{{ transaction.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
-                        </div>
-                        <div class="col-md-6">
-                            {% if transaction.processed_at %}
-                            <small class="text-muted">Обработана:</small>
-                            <p class="mb-0">{{ transaction.processed_at.strftime('%d.%m.%Y %H:%M') }}</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    {% if transaction.expires_at and transaction.expires_at > now %}
-                    <div class="mt-2">
-                        <small class="text-warning">
-                            <i class="bi bi-clock"></i> Истекает: {{ transaction.expires_at.strftime('%d.%m.%Y %H:%M') }}
-                        </small>
-                    </div>
-                    {% endif %}
-                    
-                    {% if transaction.external_id %}
-                    <div class="mt-2">
-                        <small class="text-info">
-                            <i class="bi bi-link"></i> Внешний ID: {{ transaction.external_id }}
-                        </small>
-                    </div>
-                    {% endif %}
-                </div>
-                <div class="card-footer">
-                    <div class="btn-group w-100">
-                        {% if transaction.status.value == 'pending' %}
-                        <button type="button" class="btn btn-outline-success btn-sm" 
-                                onclick="updateTransactionStatus({{ transaction.id }}, 'completed')">
-                            <i class="bi bi-check-circle"></i> Завершить
-                        </button>
-                        <button type="button" class="btn btn-outline-danger btn-sm" 
-                                onclick="updateTransactionStatus({{ transaction.id }}, 'failed')">
-                            <i class="bi bi-x-circle"></i> Отклонить
-                        </button>
-                        {% endif %}
-                        
-                        {% if transaction.status.value == 'processing' %}
-                        <button type="button" class="btn btn-outline-success btn-sm" 
-                                onclick="updateTransactionStatus({{ transaction.id }}, 'completed')">
-                            <i class="bi bi-check-circle"></i> Завершить
-                        </button>
-                        <button type="button" class="btn btn-outline-warning btn-sm" 
-                                onclick="updateTransactionStatus({{ transaction.id }}, 'pending')">
-                            <i class="bi bi-arrow-counterclockwise"></i> В ожидание
-                        </button>
-                        {% endif %}
-                        
-                        <a href="/admin/billing/transactions?user_id={{ transaction.user_id }}" class="btn btn-outline-info btn-sm">
-                            <i class="bi bi-person"></i> Пользователь
-                        </a>
-                    </div>
-                </div>
+                                {% if transaction.payment_method %}
+                                <br><small class="text-muted">{{ transaction.payment_method.value | title }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if transaction.description %}
+                                <small>{{ transaction.description[:50] }}{% if transaction.description|length > 50 %}...{% endif %}</small>
+                                {% else %}
+                                <small class="text-muted">—</small>
+                                {% endif %}
+                                {% if transaction.external_id %}
+                                <br><small class="text-info"><i class="bi bi-link"></i> {{ transaction.external_id[:20] }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    {% if transaction.status.value == 'pending' %}
+                                    <button type="button" class="btn btn-outline-success btn-sm" 
+                                            onclick="updateTransactionStatus({{ transaction.id }}, 'completed')"
+                                            title="Завершить">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                            onclick="updateTransactionStatus({{ transaction.id }}, 'failed')"
+                                            title="Отклонить">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                    {% endif %}
+                                    
+                                    {% if transaction.status.value == 'processing' %}
+                                    <button type="button" class="btn btn-outline-primary btn-sm" 
+                                            onclick="checkTransactionPayment({{ transaction.id }})"
+                                            title="Проверить статус">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-success btn-sm" 
+                                            onclick="updateTransactionStatus({{ transaction.id }}, 'completed')"
+                                            title="Завершить">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>
+                                    {% endif %}
+                                    
+                                    <a href="?user_id={{ transaction.user_id }}" class="btn btn-outline-info btn-sm"
+                                       title="Фильтр по пользователю">
+                                        <i class="bi bi-person"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
-        {% else %}
-        <div class="col-12">
-            <div class="alert alert-info text-center">
-                <h5>📋 Нет транзакций</h5>
-                <p>Транзакции по указанным фильтрам не найдены.</p>
-                {% if selected_user_id %}
-                <a href="/admin/billing/transactions" class="btn btn-primary">
-                    Показать все транзакции
-                </a>
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
     </div>
-
+    
     <!-- Пагинация -->
-    {% if transactions %}
-    <div class="d-flex justify-content-center mt-4">
-        <nav aria-label="Пагинация транзакций">
-            <ul class="pagination">
-                <li class="page-item">
-                    <a class="page-link" href="#" aria-label="Предыдущая">
-                        <span aria-hidden="true">&laquo;</span>
-                    </a>
-                </li>
+    {% if total_pages > 1 %}
+    <nav aria-label="Пагинация транзакций" class="mt-3">
+        <ul class="pagination justify-content-center">
+            {% if page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_transaction_type %}transaction_type={{ selected_transaction_type }}&{% endif %}sort_by={{ sort_by }}&sort_order={{ sort_order }}&page={{ page - 1 }}&per_page={{ per_page }}">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+            {% endif %}
+            
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
                 <li class="page-item active">
-                    <a class="page-link" href="#">1</a>
+                    <span class="page-link">{{ p }}</span>
                 </li>
+                {% elif p <= 3 or p > total_pages - 3 or (p >= page - 2 and p <= page + 2) %}
                 <li class="page-item">
-                    <a class="page-link" href="#" aria-label="Следующая">
-                        <span aria-hidden="true">&raquo;</span>
-                    </a>
+                    <a class="page-link" href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_transaction_type %}transaction_type={{ selected_transaction_type }}&{% endif %}sort_by={{ sort_by }}&sort_order={{ sort_order }}&page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
                 </li>
-            </ul>
-        </nav>
+                {% elif p == 4 or p == total_pages - 3 %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page < total_pages %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_transaction_type %}transaction_type={{ selected_transaction_type }}&{% endif %}sort_by={{ sort_by }}&sort_order={{ sort_order }}&page={{ page + 1 }}&per_page={{ per_page }}">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+    {% else %}
+    <div class="alert alert-info text-center">
+        <h5>📋 Нет транзакций</h5>
+        <p>Транзакции по указанным фильтрам не найдены.</p>
+        {% if selected_user_id or selected_status or selected_transaction_type %}
+        <a href="/admin/billing/transactions" class="btn btn-primary">
+            Сбросить фильтры
+        </a>
+        {% endif %}
     </div>
     {% endif %}
 </div>
@@ -280,6 +376,33 @@ function updateTransactionStatus(transactionId, newStatus) {
         
         document.body.appendChild(form);
         form.submit();
+    }
+}
+
+async function checkTransactionPayment(transactionId) {
+    try {
+        const response = await fetch(`/admin/billing/transactions/${transactionId}/check`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(data.message || 'Статус платежа проверен');
+            // Перезагружаем страницу для обновления статуса
+            if (data.payment_status && data.payment_status.status === 'succeeded') {
+                window.location.reload();
+            }
+        } else {
+            alert(`Ошибка: ${data.error || 'Неизвестная ошибка'}`);
+        }
+    } catch (error) {
+        console.error('Ошибка проверки статуса платежа:', error);
+        alert('Ошибка проверки статуса платежа');
     }
 }
 </script>

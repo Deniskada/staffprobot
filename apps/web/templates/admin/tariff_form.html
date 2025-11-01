@@ -225,6 +225,17 @@
                         <label class="form-check-label" for="is_popular">
                             Популярный тариф
                         </label>
+                        <small class="text-muted d-block">Популярный тариф автоматически назначается новым владельцам при регистрации</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="grace_period_days" class="form-label">Льготный период (Grace Period)</label>
+                        <input type="number" class="form-control" id="grace_period_days" name="grace_period_days" 
+                               value="{{ tariff_plan.grace_period_days if tariff_plan and tariff_plan.grace_period_days else '0' }}" 
+                               min="0" max="365" placeholder="0">
+                        <small class="text-muted d-block">
+                            Количество дней льготного использования для новых владельцев. При регистрации новый владелец получит этот тариф на указанное количество дней без требования оплаты (даже если тариф платный). 0 = льготный период отключен.
+                        </small>
                     </div>
                 </div>
 

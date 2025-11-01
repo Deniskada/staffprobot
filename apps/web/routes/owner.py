@@ -5107,10 +5107,21 @@ async def owner_profile(
         # Извлекаем данные о тарифе для отображения
         subscription_info = None
         if limits_summary.get('has_subscription'):
+            # Получаем информацию о подписке из БД для получения notes
+            from domain.entities.user_subscription import UserSubscription, SubscriptionStatus
+            subscription_result = await db.execute(
+                select(UserSubscription).where(
+                    UserSubscription.user_id == user_id,
+                    UserSubscription.status == SubscriptionStatus.ACTIVE
+                ).limit(1)
+            )
+            subscription = subscription_result.scalar_one_or_none()
+            
             subscription_info = {
                 'tariff_name': limits_summary['subscription']['tariff_name'],
                 'expires_at': limits_summary['subscription'].get('expires_at'),
-                'status': limits_summary['subscription'].get('status', 'active')
+                'status': limits_summary['subscription'].get('status', 'active'),
+                'notes': subscription.notes if subscription else None
             }
         
         return templates.TemplateResponse("owner/profile/index.html", {
@@ -6652,10 +6663,11 @@ async def owner_change_tariff_page(
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки страницы: {str(e)}")
 
 
-@router.post("/tariff/change", name="owner_change_tariff_post")
+@router.post("/tariff/change", response_class=JSONResponse, name="owner_change_tariff_post")
 async def owner_change_tariff_post(
     request: Request,
-    current_user: dict = Depends(require_owner_or_superadmin)
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Смена тарифа для владельца."""
     try:
@@ -6667,109 +6679,253 @@ async def owner_change_tariff_post(
             raise HTTPException(status_code=400, detail="Не указан тариф")
         
         # Получаем user_id из current_user
-        if isinstance(current_user, dict):
-            telegram_id = current_user.get("telegram_id")
-            if not telegram_id:
-                raise HTTPException(status_code=400, detail="Не удалось определить пользователя")
-            
-            async with get_async_session() as session:
-                from sqlalchemy import select
-                from domain.entities.user import User
-                
-                user_query = select(User).where(User.telegram_id == telegram_id)
-                user_result = await session.execute(user_query)
-                user_obj = user_result.scalar_one_or_none()
-                user_id = user_obj.id if user_obj else None
-        else:
-            user_id = current_user.id
-            
+        user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=400, detail="Не удалось определить пользователя")
         
-        async with get_async_session() as session:
-            from apps.web.services.limits_service import LimitsService
-            from domain.entities.user_subscription import UserSubscription, SubscriptionStatus
-            from datetime import datetime, timedelta
+        from domain.entities.tariff_plan import TariffPlan
+        from domain.entities.user_subscription import UserSubscription, SubscriptionStatus
+        from apps.web.services.billing_service import BillingService
+        from apps.web.services.limits_service import LimitsService
+        from core.utils.url_helper import URLHelper
+        from datetime import datetime, timedelta, timezone
+        
+        # Получаем тарифный план
+        tariff_result = await db.execute(
+            select(TariffPlan).where(TariffPlan.id == tariff_plan_id)
+        )
+        tariff_plan = tariff_result.scalar_one_or_none()
+        
+        if not tariff_plan:
+            raise HTTPException(status_code=404, detail="Тарифный план не найден")
+        
+        # Проверяем возможность понижения тарифа
+        limits_service = LimitsService(db)
+        downgrade_allowed, downgrade_message, downgrade_details = await limits_service.check_tariff_downgrade_allowed(
+            user_id=user_id,
+            new_tariff_plan_id=tariff_plan_id
+        )
+        
+        if not downgrade_allowed:
+            logger.info(
+                f"Tariff downgrade blocked",
+                user_id=user_id,
+                tariff_plan_id=tariff_plan_id,
+                message=downgrade_message,
+                details=downgrade_details
+            )
+            return {
+                "success": False,
+                "error": downgrade_message,
+                "details": downgrade_details,
+                "requires_action": True
+            }
+        
+        # Получаем текущую активную подписку для определения даты начала нового тарифа
+        current_subscription = await limits_service._get_active_subscription(user_id)
+        
+        # Определяем дату начала нового тарифа
+        # Если есть активная подписка - новый тариф начнется после её окончания
+        # Если нет - новый тариф начнется сейчас
+        if current_subscription and current_subscription.expires_at and current_subscription.expires_at > datetime.now(timezone.utc):
+            new_tariff_starts_at = current_subscription.expires_at
+            logger.info(
+                f"Scheduling new tariff to start after current expires",
+                user_id=user_id,
+                current_subscription_id=current_subscription.id,
+                current_expires_at=current_subscription.expires_at,
+                new_tariff_starts_at=new_tariff_starts_at
+            )
+        else:
+            new_tariff_starts_at = datetime.now(timezone.utc)
+        
+        # Если тариф платный, создаем платеж через YooKassa
+        if tariff_plan.price and float(tariff_plan.price) > 0:
+            # Вычисляем expires_at нового тарифа: начинает действовать с new_tariff_starts_at + период тарифа
+            new_tariff_expires_at = None
+            if tariff_plan.billing_period == "month":
+                new_tariff_expires_at = new_tariff_starts_at + timedelta(days=30)
+            elif tariff_plan.billing_period == "year":
+                new_tariff_expires_at = new_tariff_starts_at + timedelta(days=365)
             
-            # Создаем сервис лимитов для работы с подписками
-            limits_service = LimitsService(session)
+            # Формируем notes с информацией о дате начала
+            notes_parts = ["Смена тарифа владельцем (ожидает оплаты)"]
+            if current_subscription and new_tariff_starts_at > datetime.now(timezone.utc):
+                notes_parts.append(f"Начнет действовать с {new_tariff_starts_at.strftime('%d.%m.%Y')}")
             
-            # Отменяем текущую активную подписку
-            current_subscription = await limits_service._get_active_subscription(user_id)
-            if current_subscription:
-                current_subscription.status = SubscriptionStatus.CANCELLED
-                current_subscription.updated_at = datetime.utcnow()
-            
-            # Создаем новую подписку
+            # Создаем подписку со статусом SUSPENDED (будет активирована после оплаты и начнет действовать с scheduled даты)
             new_subscription = UserSubscription(
                 user_id=user_id,
                 tariff_plan_id=tariff_plan_id,
-                status=SubscriptionStatus.ACTIVE,
-                started_at=datetime.utcnow(),
-                expires_at=datetime.utcnow() + timedelta(days=30),  # 30 дней по умолчанию
+                status=SubscriptionStatus.SUSPENDED,  # Будет активирована после оплаты
+                started_at=new_tariff_starts_at,  # Начнет действовать с этой даты
+                expires_at=new_tariff_expires_at,  # Окончится через период тарифа от даты начала
                 auto_renewal=True,
-                payment_method="manual",
-                notes="Смена тарифа владельцем"
+                payment_method="yookassa",
+                notes=" | ".join(notes_parts)
             )
             
-            session.add(new_subscription)
-            await session.commit()
+            db.add(new_subscription)
+            await db.commit()
+            await db.refresh(new_subscription)
             
-            # КРИТИЧНО: Обновляем enabled_features в профиле владельца
-            # Отключаем функции, которых нет в новом тарифе
-            from domain.entities.tariff_plan import TariffPlan
+            # Создаем транзакцию и платеж через YooKassa
+            billing_service = BillingService(db)
+            
+            # Формируем return_url
+            return_url = await URLHelper.build_url("/owner/subscription/payment_success")
+            
+            logger.info(
+                f"Building payment return URL",
+                user_id=user_id,
+                tariff_plan_id=tariff_plan_id,
+                return_url=return_url
+            )
+            
+            try:
+                transaction, payment_url = await billing_service.create_payment_transaction(
+                    user_id=user_id,
+                    subscription_id=new_subscription.id,
+                    amount=float(tariff_plan.price),
+                    currency=tariff_plan.currency or "RUB",
+                    description=f"Оплата подписки на тариф '{tariff_plan.name}'",
+                    return_url=return_url
+                )
+                
+                logger.info(
+                    f"Created payment for tariff change",
+                    user_id=user_id,
+                    tariff_plan_id=tariff_plan_id,
+                    transaction_id=transaction.id,
+                    payment_url=payment_url
+                )
+                
+                # Формируем сообщение для пользователя
+                message = "Тариф выбран. Перейдите к оплате."
+                if current_subscription and new_tariff_starts_at > datetime.now(timezone.utc):
+                    message += f"\n\nНовый тариф начнет действовать с {new_tariff_starts_at.strftime('%d.%m.%Y')} (после окончания текущего тарифа)."
+                
+                return {
+                    "success": True,
+                    "requires_payment": True,
+                    "payment_url": payment_url,
+                    "message": message
+                }
+                
+            except Exception as e:
+                logger.error(
+                    f"Error creating payment for tariff change: {e}",
+                    error=str(e),
+                    user_id=user_id,
+                    tariff_plan_id=tariff_plan_id
+                )
+                # Откатываем создание подписки
+                await db.rollback()
+                raise HTTPException(status_code=500, detail=f"Ошибка создания платежа: {str(e)}")
+        
+        else:
+            # Бесплатный тариф - создаем подписку напрямую
+            # Вычисляем expires_at нового тарифа: начинает действовать с new_tariff_starts_at + период тарифа
+            new_tariff_expires_at = None
+            if tariff_plan.billing_period == "month":
+                new_tariff_expires_at = new_tariff_starts_at + timedelta(days=30)
+            elif tariff_plan.billing_period == "year":
+                new_tariff_expires_at = new_tariff_starts_at + timedelta(days=365)
+            
+            # Формируем notes с информацией о дате начала
+            notes_parts = ["Смена тарифа владельцем"]
+            if current_subscription and new_tariff_starts_at > datetime.now(timezone.utc):
+                notes_parts.append(f"Начнет действовать с {new_tariff_starts_at.strftime('%d.%m.%Y')}")
+            
+            # Если новый тариф начнется в будущем - создаем подписку со статусом SUSPENDED
+            # Иначе - сразу ACTIVE
+            subscription_status = SubscriptionStatus.SUSPENDED if new_tariff_starts_at > datetime.now(timezone.utc) else SubscriptionStatus.ACTIVE
+            
+            new_subscription = UserSubscription(
+                user_id=user_id,
+                tariff_plan_id=tariff_plan_id,
+                status=subscription_status,
+                started_at=new_tariff_starts_at,  # Начнет действовать с этой даты
+                expires_at=new_tariff_expires_at,  # Окончится через период тарифа от даты начала
+                auto_renewal=True,
+                payment_method="manual",
+                notes=" | ".join(notes_parts)
+            )
+            
+            db.add(new_subscription)
+            await db.commit()
+            
+            # Формируем сообщение для пользователя
+            message = "Тариф изменен."
+            if current_subscription and new_tariff_starts_at > datetime.now(timezone.utc):
+                message += f"\n\nНовый тариф начнет действовать с {new_tariff_starts_at.strftime('%d.%m.%Y')} (после окончания текущего тарифа)."
+            
+            logger.info(
+                f"Tariff changed successfully",
+                user_id=user_id,
+                tariff_plan_id=tariff_plan_id,
+                new_tariff_starts_at=new_tariff_starts_at,
+                subscription_status=subscription_status.value
+            )
+            
+            # Обновляем enabled_features в профиле владельца
             from domain.entities.owner_profile import OwnerProfile
             from sqlalchemy.orm.attributes import flag_modified
             
-            # Получаем новый тарифный план
-            tariff_result = await session.execute(
-                select(TariffPlan).where(TariffPlan.id == tariff_plan_id)
+            profile_result = await db.execute(
+                select(OwnerProfile).where(OwnerProfile.user_id == user_id)
             )
-            new_tariff = tariff_result.scalar_one_or_none()
+            owner_profile = profile_result.scalar_one_or_none()
             
-            if new_tariff:
-                # Получаем профиль владельца
-                profile_result = await session.execute(
-                    select(OwnerProfile).where(OwnerProfile.user_id == user_id)
-                )
-                owner_profile = profile_result.scalar_one_or_none()
+            if owner_profile:
+                new_tariff_features = tariff_plan.features or []
+                current_enabled = list(owner_profile.enabled_features) if owner_profile.enabled_features else []
+                filtered_enabled = [f for f in current_enabled if f in new_tariff_features]
                 
-                if owner_profile:
-                    # Получаем функции нового тарифа
-                    new_tariff_features = new_tariff.features or []
-                    
-                    # Фильтруем enabled_features - оставляем только те, что есть в тарифе
-                    current_enabled = list(owner_profile.enabled_features) if owner_profile.enabled_features else []
-                    filtered_enabled = [f for f in current_enabled if f in new_tariff_features]
-                    
-                    # Обновляем профиль
-                    owner_profile.enabled_features = filtered_enabled
-                    flag_modified(owner_profile, 'enabled_features')
-                    
-                    await session.commit()
-                    
-                    # Инвалидируем кэш Redis
-                    from core.cache.redis_cache import cache
+                owner_profile.enabled_features = filtered_enabled
+                flag_modified(owner_profile, 'enabled_features')
+                
+                await db.commit()
+                
+                # Инвалидируем кэш Redis
+                from core.cache.redis_cache import cache
+                telegram_id = current_user.get("telegram_id") if isinstance(current_user, dict) else None
+                if telegram_id:
                     cache_key = f"enabled_features:{telegram_id}"
                     await cache.delete(cache_key)
-                    
-                    logger.info(
-                        f"Tariff changed for user {user_id} to tariff {tariff_plan_id}. "
-                        f"Enabled features updated: {current_enabled} -> {filtered_enabled}"
-                    )
-                else:
-                    logger.info(f"Tariff changed for user {user_id} to tariff {tariff_plan_id}")
+                
+                logger.info(
+                    f"Tariff changed for user {user_id} to tariff {tariff_plan_id}. "
+                    f"Enabled features updated: {current_enabled} -> {filtered_enabled}"
+                )
+            else:
+                logger.info(f"Tariff changed for user {user_id} to tariff {tariff_plan_id}")
             
             return {
                 "success": True,
+                "requires_payment": False,
                 "message": "Тариф успешно изменен"
             }
         
-    except HTTPException:
-        raise
+    except HTTPException as e:
+        return JSONResponse(
+            status_code=e.status_code,
+            content={
+                "success": False,
+                "error": e.detail,
+                "message": str(e.detail)
+            }
+        )
     except Exception as e:
-        logger.error(f"Error changing tariff: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка смены тарифа: {str(e)}")
+        logger.error(f"Error changing tariff: {e}", error=str(e), exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+                "message": f"Ошибка смены тарифа: {str(e)}"
+            }
+        )
 
 
 # Роут /payment-systems удален - функционал перенесен в /org-structure

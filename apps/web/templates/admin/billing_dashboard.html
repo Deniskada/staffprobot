@@ -193,6 +193,16 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Обновляем метрики из переданных данных
+    {% if statistics %}
+    updateMetricsFromServer({
+        total_transactions: {{ statistics.total_transactions }},
+        total_revenue: {{ statistics.total_revenue }},
+        active_subscriptions: {{ statistics.active_subscriptions }},
+        pending_payments: {{ statistics.pending_payments }}
+    });
+    {% endif %}
+    
     loadDashboardData();
 });
 
@@ -204,8 +214,10 @@ async function loadDashboardData() {
         
         if (transactionsData.success) {
             displayRecentTransactions(transactionsData.data);
-            updateMetrics(transactionsData.data);
         }
+        
+        // Загружаем распределение по тарифам
+        loadTariffDistribution();
         
         // Загружаем предупреждения
         loadBillingWarnings();
@@ -213,6 +225,51 @@ async function loadDashboardData() {
     } catch (error) {
         console.error('Ошибка загрузки данных дашборда:', error);
     }
+}
+
+async function loadTariffDistribution() {
+    try {
+        const response = await fetch('/admin/billing/api/tariff-distribution');
+        const data = await response.json();
+        
+        if (data.success && data.distribution) {
+            displayTariffDistribution(data.distribution);
+        } else {
+            document.getElementById('tariff-distribution').innerHTML = 
+                '<div class="text-center text-muted"><p>Нет данных</p></div>';
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки распределения по тарифам:', error);
+        document.getElementById('tariff-distribution').innerHTML = 
+            '<div class="text-center text-danger"><p>Ошибка загрузки</p></div>';
+    }
+}
+
+function displayTariffDistribution(distribution) {
+    const container = document.getElementById('tariff-distribution');
+    
+    if (!distribution || Object.keys(distribution).length === 0) {
+        container.innerHTML = '<div class="text-center text-muted"><p>Нет активных подписок</p></div>';
+        return;
+    }
+    
+    let html = '<div class="list-group">';
+    
+    // Сортируем по количеству (убывание)
+    const sortedTariffs = Object.entries(distribution)
+        .sort((a, b) => b[1] - a[1]);
+    
+    sortedTariffs.forEach(([tariffName, count]) => {
+        html += `
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span>${tariffName}</span>
+                <span class="badge bg-primary rounded-pill">${count}</span>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
 }
 
 function displayRecentTransactions(transactions) {
@@ -245,21 +302,12 @@ function displayRecentTransactions(transactions) {
     container.innerHTML = html;
 }
 
-function updateMetrics(transactions) {
-    // Подсчитываем метрики
-    const totalTransactions = transactions.length;
-    const totalRevenue = transactions
-        .filter(t => t.status === 'completed')
-        .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-    const pendingPayments = transactions.filter(t => t.status === 'pending').length;
-    
-    // Обновляем отображение
-    document.getElementById('total-transactions').textContent = totalTransactions;
-    document.getElementById('total-revenue').textContent = `${totalRevenue.toFixed(2)} ₽`;
-    document.getElementById('pending-payments').textContent = pendingPayments;
-    
-    // TODO: Загрузить количество активных подписок отдельно
-    document.getElementById('active-subscriptions').textContent = '-';
+function updateMetricsFromServer(stats) {
+    // Обновляем отображение из данных сервера
+    document.getElementById('total-transactions').textContent = stats.total_transactions || 0;
+    document.getElementById('total-revenue').textContent = `${(stats.total_revenue || 0).toFixed(2)} ₽`;
+    document.getElementById('active-subscriptions').textContent = stats.active_subscriptions || 0;
+    document.getElementById('pending-payments').textContent = stats.pending_payments || 0;
 }
 
 async function loadBillingWarnings() {

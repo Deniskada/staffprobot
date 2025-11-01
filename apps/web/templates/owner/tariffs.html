@@ -1,0 +1,202 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.tariff-card {
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
+    transition: all 0.3s ease;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.tariff-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border-color: #007bff;
+}
+
+.tariff-card.popular {
+    border-color: #ffc107;
+    position: relative;
+}
+
+.tariff-card.popular::before {
+    content: "Популярный";
+    position: absolute;
+    top: 15px;
+    right: -30px;
+    background: #ffc107;
+    color: #000;
+    padding: 5px 40px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transform: rotate(45deg);
+    z-index: 1;
+}
+
+.tariff-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    text-align: center;
+    margin: -1px -1px 0 -1px;
+    border-radius: 15px 15px 0 0;
+}
+
+.tariff-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.tariff-price {
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 5px;
+}
+
+.tariff-period {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.tariff-features {
+    padding: 20px;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 8px 0;
+}
+
+.feature-item i {
+    color: #28a745;
+    margin-right: 10px;
+    font-size: 1.1rem;
+}
+
+.action-btn {
+    width: 100%;
+    padding: 12px;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>{{ title }}</h2>
+        <a href="/owner/subscription" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Моя подписка
+        </a>
+    </div>
+
+    <div class="row">
+        {% for tariff in tariff_plans %}
+        <div class="col-md-4">
+            <div class="tariff-card {% if tariff.is_popular %}popular{% endif %}">
+                <div class="tariff-header">
+                    <div class="tariff-name">{{ tariff.name }}</div>
+                    <div class="tariff-price">
+                        {% if tariff.price == 0 %}
+                            Бесплатно
+                        {% else %}
+                            {{ tariff.price }} {{ tariff.currency }}
+                        {% endif %}
+                    </div>
+                    <div class="tariff-period">{{ tariff.billing_period }}</div>
+                </div>
+                
+                <div class="tariff-features">
+                    <div class="feature-item">
+                        <i class="bi bi-building"></i>
+                        <span>Объекты: <strong>{% if tariff.max_objects == -1 %}Безлимит{% else %}{{ tariff.max_objects }}{% endif %}</strong></span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="bi bi-people"></i>
+                        <span>Сотрудники: <strong>{% if tariff.max_employees == -1 %}Безлимит{% else %}{{ tariff.max_employees }}{% endif %}</strong></span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="bi bi-person-gear"></i>
+                        <span>Управляющие: <strong>{% if tariff.max_managers == -1 %}Безлимит{% else %}{{ tariff.max_managers }}{% endif %}</strong></span>
+                    </div>
+                    
+                    {% if tariff.features %}
+                    <hr>
+                    <h6><i class="bi bi-star"></i> Дополнительные функции:</h6>
+                    {% for feature in tariff.features %}
+                    <div class="feature-item">
+                        <i class="bi bi-check-circle"></i>
+                        <span>{{ feature_names.get(feature, feature) }}</span>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    
+                    <div class="text-center mt-4">
+                        <button class="action-btn btn-primary" onclick="selectTariff({{ tariff.id }}, '{{ tariff.name }}', {{ tariff.price if tariff.price else 0 }})">
+                            {% if tariff.price and tariff.price > 0 %}
+                            <i class="bi bi-credit-card"></i> Оплатить {{ tariff.price }} {{ tariff.currency }}
+                            {% else %}
+                            <i class="bi bi-check-circle"></i> Выбрать тариф
+                            {% endif %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+async function selectTariff(tariffId, tariffName, tariffPrice) {
+    const isPaid = tariffPrice && tariffPrice > 0;
+    const message = isPaid 
+        ? `Выбрать тариф "${tariffName}" стоимостью ${tariffPrice} ₽ и перейти к оплате?`
+        : `Выбрать тариф "${tariffName}"?`;
+    
+    if (!confirm(message)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/owner/tariff/change', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                tariff_plan_id: tariffId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            if (result.requires_payment && result.payment_url) {
+                window.location.href = result.payment_url;
+            } else {
+                alert('Тариф успешно выбран!');
+                window.location.href = '/owner/subscription';
+            }
+        } else {
+            alert('Ошибка: ' + (result.message || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        console.error('Error selecting tariff:', error);
+        alert('Ошибка при выборе тарифа. Попробуйте позже.');
+    }
+}
+</script>
+{% endblock %}
+

@@ -326,28 +326,77 @@ async def register(
             )
             session.add(org_profile)
             
-            # Назначаем максимальный тарифный план
+            # Назначаем популярный тарифный план с grace period
             from domain.entities.tariff_plan import TariffPlan
             from domain.entities.user_subscription import UserSubscription, SubscriptionStatus
+            from datetime import datetime, timedelta, timezone
             
-            # Ищем максимальный тариф
-            max_tariff_query = select(TariffPlan).where(
-                TariffPlan.is_active == True
-            ).order_by(
-                TariffPlan.price.desc()
+            # Ищем популярный тариф (для новых владельцев)
+            popular_tariff_query = select(TariffPlan).where(
+                TariffPlan.is_active == True,
+                TariffPlan.is_popular == True
             ).limit(1)
-            result = await session.execute(max_tariff_query)
-            max_tariff = result.scalar_one_or_none()
+            result = await session.execute(popular_tariff_query)
+            popular_tariff = result.scalar_one_or_none()
             
-            if max_tariff:
-                subscription = UserSubscription(
-                    user_id=new_user.id,
-                    tariff_plan_id=max_tariff.id,
-                    status=SubscriptionStatus.ACTIVE,
-                    auto_renewal=True
-                )
+            # Если популярный тариф не найден, берем первый активный
+            if not popular_tariff:
+                fallback_query = select(TariffPlan).where(
+                    TariffPlan.is_active == True
+                ).order_by(
+                    TariffPlan.price.desc()
+                ).limit(1)
+                fallback_result = await session.execute(fallback_query)
+                popular_tariff = fallback_result.scalar_one_or_none()
+            
+            if popular_tariff:
+                # Определяем expires_at с учетом grace period
+                grace_period_days = popular_tariff.grace_period_days or 0
+                expires_at = None
+                if grace_period_days > 0:
+                    expires_at = datetime.now(timezone.utc) + timedelta(days=grace_period_days)
+                    
+                    subscription = UserSubscription(
+                        user_id=new_user.id,
+                        tariff_plan_id=popular_tariff.id,
+                        status=SubscriptionStatus.ACTIVE,
+                        started_at=datetime.now(timezone.utc),
+                        expires_at=expires_at,
+                        auto_renewal=True,
+                        payment_method="manual",
+                        notes=f"Автоматическое назначение при регистрации | Grace period: {grace_period_days} дней"
+                    )
+                    logger.info(
+                        f"Assigned popular tariff {popular_tariff.name} to user {new_user.id} with grace period {grace_period_days} days",
+                        tariff_name=popular_tariff.name,
+                        grace_period_days=grace_period_days,
+                        expires_at=expires_at
+                    )
+                else:
+                    # Если grace period не установлен, создаем подписку как обычно (без expires_at для платных тарифов)
+                    subscription = UserSubscription(
+                        user_id=new_user.id,
+                        tariff_plan_id=popular_tariff.id,
+                        status=SubscriptionStatus.ACTIVE,
+                        started_at=datetime.now(timezone.utc),
+                        auto_renewal=True,
+                        payment_method="manual",
+                        notes="Автоматическое назначение при регистрации"
+                    )
+                    # Для платных тарифов без grace period не устанавливаем expires_at (требуется оплата)
+                    if popular_tariff.price and float(popular_tariff.price) > 0:
+                        # Подписка активна, но требует оплаты (expires_at будет установлен после оплаты)
+                        pass
+                    else:
+                        # Для бесплатных тарифов устанавливаем expires_at согласно billing_period
+                        if popular_tariff.billing_period == "month":
+                            subscription.expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+                        elif popular_tariff.billing_period == "year":
+                            subscription.expires_at = datetime.now(timezone.utc) + timedelta(days=365)
+                    
+                    logger.info(f"Assigned popular tariff {popular_tariff.name} to user {new_user.id} without grace period")
+                
                 session.add(subscription)
-                logger.info(f"Assigned max tariff {max_tariff.name} to user {new_user.id}")
             
             await session.commit()
             logger.info(f"Created owner profile and organization profile for user {new_user.id}")

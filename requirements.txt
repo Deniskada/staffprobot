@@ -29,3 +29,6 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 PyJWT==2.8.0
 httpx==0.25.2
+
+# Платежные системы
+yookassa>=3.0.0

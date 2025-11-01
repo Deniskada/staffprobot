@@ -1,0 +1,89 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.success-animation {
+    text-align: center;
+    padding: 40px 0;
+}
+
+.success-icon {
+    font-size: 5rem;
+    color: #28a745;
+    animation: scaleIn 0.5s ease-out;
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.countdown {
+    font-size: 1.2rem;
+    color: #6c757d;
+    margin-top: 20px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card text-center">
+                <div class="card-body py-5">
+                    <div class="success-animation">
+                        <div class="success-icon">
+                            <i class="bi bi-check-circle-fill"></i>
+                        </div>
+                        <h2 class="mt-4 mb-3">Оплата успешно завершена!</h2>
+                        {% if payment_id %}
+                        <p class="text-muted">ID платежа: <code>{{ payment_id }}</code></p>
+                        {% endif %}
+                        <p class="text-muted">Ваша подписка активирована и продлена.</p>
+                        
+                        <div class="countdown">
+                            <p>Перенаправление на страницу подписки через <span id="countdown">5</span> секунд...</p>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <a href="/owner/subscription" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-circle"></i> Перейти к подписке
+                            </a>
+                            <a href="/owner" class="btn btn-outline-secondary">
+                                <i class="bi bi-house"></i> На главную
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let countdown = 5;
+const countdownElement = document.getElementById('countdown');
+
+const timer = setInterval(() => {
+    countdown--;
+    if (countdownElement) {
+        countdownElement.textContent = countdown;
+    }
+    
+    if (countdown <= 0) {
+        clearInterval(timer);
+        window.location.href = '/owner/subscription';
+    }
+}, 1000);
+</script>
+{% endblock %}
+

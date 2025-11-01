@@ -122,10 +122,10 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">
                         <i class="bi bi-person-circle"></i> 
-                        Пользователь {{ user_limit.subscription.user_id }}
+                        Пользователь {{ user_limit.subscription.get('user_id', 'N/A') }}
                     </h6>
                     <div>
-                        <span class="badge bg-primary">{{ user_limit.subscription.tariff_plan.name }}</span>
+                        <span class="badge bg-primary">{{ user_limit.subscription.get('tariff_plan', {}).get('name', 'N/A') }}</span>
                         {% if user_limit.warnings %}
                         <span class="badge bg-warning">
                             <i class="bi bi-exclamation-triangle"></i> Предупреждения
@@ -139,14 +139,36 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <h6>👤 Информация о пользователе</h6>
-                                <p class="mb-1"><strong>ID:</strong> {{ user_limit.subscription.user_id }}</p>
-                                <p class="mb-1"><strong>Подписка:</strong> {{ user_limit.subscription.tariff_plan.name }}</p>
-                                <p class="mb-0"><strong>Статус:</strong> {{ user_limit.subscription.status | title }}</p>
+                                <p class="mb-1"><strong>ID:</strong> {{ user_limit.subscription.get('user_id', 'N/A') }}</p>
+                                <p class="mb-1"><strong>Подписка:</strong> {{ user_limit.subscription.get('tariff_plan', {}).get('name', 'N/A') }}</p>
+                                <p class="mb-0"><strong>Статус:</strong> {{ user_limit.subscription.get('status', 'N/A') | title }}</p>
                             </div>
                             <div class="col-md-6">
                                 <h6>📅 Сроки подписки</h6>
-                                <p class="mb-1"><strong>Начало:</strong> {{ user_limit.subscription.started_at.strftime('%d.%m.%Y') if user_limit.subscription.started_at else 'Не указано' }}</p>
-                                <p class="mb-0"><strong>Истекает:</strong> {{ user_limit.subscription.expires_at.strftime('%d.%m.%Y') if user_limit.subscription.expires_at else 'Бессрочная' }}</p>
+                                {% set started_at = user_limit.subscription.get('started_at') %}
+                                {% set expires_at = user_limit.subscription.get('expires_at') %}
+                                <p class="mb-1"><strong>Начало:</strong> 
+                                    {% if started_at %}
+                                        {% if started_at is string %}
+                                            {{ started_at[:10] }}
+                                        {% else %}
+                                            {{ started_at }}
+                                        {% endif %}
+                                    {% else %}
+                                        Не указано
+                                    {% endif %}
+                                </p>
+                                <p class="mb-0"><strong>Истекает:</strong> 
+                                    {% if expires_at %}
+                                        {% if expires_at is string %}
+                                            {{ expires_at[:10] }}
+                                        {% else %}
+                                            {{ expires_at }}
+                                        {% endif %}
+                                    {% else %}
+                                        Бессрочная
+                                    {% endif %}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -226,19 +248,20 @@
                     <!-- Действия -->
                     <div class="mt-3">
                         <div class="btn-group">
+                            {% set subscription_user_id = user_limit.subscription.get('user_id', 0) %}
                             <button type="button" class="btn btn-outline-primary btn-sm" 
-                                    onclick="refreshMetrics({{ user_limit.subscription.user_id }})">
+                                    onclick="refreshMetrics({{ subscription_user_id }})">
                                 <i class="bi bi-arrow-clockwise"></i> Обновить метрики
                             </button>
                             <button type="button" class="btn btn-outline-success btn-sm" 
-                                    onclick="processAutoRenewal({{ user_limit.subscription.user_id }})">
+                                    onclick="processAutoRenewal({{ subscription_user_id }})">
                                 <i class="bi bi-arrow-repeat"></i> Автопродление
                             </button>
-                            <a href="/admin/billing/transactions?user_id={{ user_limit.subscription.user_id }}" 
+                            <a href="/admin/billing/transactions?user_id={{ subscription_user_id }}" 
                                class="btn btn-outline-info btn-sm">
                                 <i class="bi bi-credit-card"></i> Транзакции
                             </a>
-                            <a href="/admin/subscriptions/assign?user_id={{ user_limit.subscription.user_id }}" 
+                            <a href="/admin/subscriptions/assign?user_id={{ subscription_user_id }}" 
                                class="btn btn-outline-secondary btn-sm">
                                 <i class="bi bi-gear"></i> Изменить тариф
                             </a>

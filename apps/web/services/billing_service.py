@@ -4,8 +4,22 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc, update
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 import json
+import re
+from decimal import Decimal
+
+
+def json_serializer(obj):
+    """Кастомный сериализатор для JSON, обрабатывает Decimal, datetime и другие типы."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    elif isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    elif hasattr(obj, '__dict__'):
+        # Объект с атрибутами - конвертируем в словарь
+        return obj.__dict__
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 from domain.entities.billing_transaction import BillingTransaction, TransactionType, TransactionStatus, PaymentMethod
 from domain.entities.usage_metrics import UsageMetrics
@@ -14,6 +28,7 @@ from domain.entities.user_subscription import UserSubscription, SubscriptionStat
 from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.contract import Contract
+from apps.web.services.payment_gateway.yookassa_service import YooKassaService
 from core.logging.logger import logger
 
 
@@ -96,6 +111,119 @@ class BillingService:
         result = await self.session.execute(query)
         return list(result.scalars().all())
     
+    async def create_payment_transaction(
+        self,
+        user_id: int,
+        subscription_id: int,
+        amount: float,
+        currency: str,
+        description: str,
+        return_url: str
+    ) -> tuple[BillingTransaction, str]:
+        """
+        Создание транзакции и платежа в YooKassa.
+        
+        Args:
+            user_id: ID пользователя
+            subscription_id: ID подписки
+            amount: Сумма платежа
+            currency: Валюта (RUB)
+            description: Описание платежа
+            return_url: URL для возврата после оплаты
+            
+        Returns:
+            tuple: (transaction, payment_url)
+        """
+        # Получаем подписку для метаданных
+        subscription_result = await self.session.execute(
+            select(UserSubscription).where(
+                UserSubscription.id == subscription_id,
+                UserSubscription.user_id == user_id
+            ).options(selectinload(UserSubscription.tariff_plan))
+        )
+        subscription = subscription_result.scalar_one_or_none()
+        
+        if not subscription:
+            raise ValueError(f"Subscription {subscription_id} not found for user {user_id}")
+        
+        # Создаем транзакцию со статусом PENDING
+        transaction = await self.create_transaction(
+            user_id=user_id,
+            subscription_id=subscription_id,
+            transaction_type=TransactionType.PAYMENT,
+            amount=amount,
+            currency=currency,
+            payment_method=PaymentMethod.YOOKASSA,
+            description=description,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7)
+        )
+        
+        # Создаем платеж в YooKassa
+        yookassa_service = YooKassaService()
+        metadata = {
+            "transaction_id": str(transaction.id),
+            "user_id": str(user_id),
+            "subscription_id": str(subscription_id),
+            "tariff_plan_id": str(subscription.tariff_plan_id)
+        }
+        
+        logger.info(
+            f"Creating YooKassa payment",
+            transaction_id=transaction.id,
+            amount=amount,
+            currency=currency,
+            return_url=return_url,
+            metadata=metadata
+        )
+        
+        try:
+            payment_data = await yookassa_service.create_payment(
+                amount=amount,
+                currency=currency,
+                description=description,
+                return_url=return_url,
+                metadata=metadata
+            )
+            
+            logger.info(
+                f"YooKassa payment created",
+                transaction_id=transaction.id,
+                payment_id=payment_data.get("id"),
+                confirmation_url=payment_data.get("confirmation_url")
+            )
+            
+            # Обновляем транзакцию с external_id и gateway_response
+            transaction.external_id = payment_data["id"]
+            transaction.gateway_response = json.dumps(payment_data, default=json_serializer)
+            transaction.status = TransactionStatus.PROCESSING
+            await self.session.commit()
+            await self.session.refresh(transaction)
+            
+            logger.info(
+                f"Created payment transaction {transaction.id} with YooKassa payment {payment_data['id']}",
+                transaction_id=transaction.id,
+                payment_id=payment_data["id"],
+                amount=amount
+            )
+            
+            payment_url = payment_data.get("confirmation_url")
+            if not payment_url:
+                raise ValueError("YooKassa payment confirmation_url not found")
+            
+            return transaction, payment_url
+            
+        except Exception as e:
+            # В случае ошибки обновляем статус транзакции на FAILED
+            logger.error(
+                f"Error creating YooKassa payment for transaction {transaction.id}: {e}",
+                transaction_id=transaction.id,
+                error=str(e)
+            )
+            transaction.status = TransactionStatus.FAILED
+            transaction.gateway_response = json.dumps({"error": str(e)}, default=json_serializer)
+            await self.session.commit()
+            raise
+    
     # === Метрики использования ===
     
     async def update_usage_metrics(self, user_id: int, subscription_id: int) -> UsageMetrics:
@@ -118,8 +246,14 @@ class BillingService:
         )
         objects_count = objects_count_result.scalar() or 0
         
+        # Считаем количество уникальных сотрудников (employee_id) по активным контрактам владельца
+        # Contract связан с владельцем напрямую через owner_id
         employees_count_result = await self.session.execute(
-            select(func.count(Contract.id.distinct())).join(Object).where(Object.owner_id == user_id)
+            select(func.count(func.distinct(Contract.employee_id)))
+            .where(
+                Contract.owner_id == user_id,
+                Contract.status == "active"
+            )
         )
         employees_count = employees_count_result.scalar() or 0
         
@@ -206,9 +340,20 @@ class BillingService:
         if metrics.is_limit_exceeded("managers"):
             warnings.append(f"Превышен лимит управляющих: {metrics.current_managers}/{metrics.max_managers}")
         
+        # Получаем информацию о тарифе
+        subscription_dict = subscription.to_dict()
+        if subscription.tariff_plan:
+            subscription_dict["tariff_plan"] = {
+                "id": subscription.tariff_plan.id,
+                "name": subscription.tariff_plan.name,
+                "price": float(subscription.tariff_plan.price) if subscription.tariff_plan.price else 0,
+                "currency": subscription.tariff_plan.currency,
+                "billing_period": subscription.tariff_plan.billing_period
+            }
+        
         return {
             "has_subscription": True,
-            "subscription": subscription.to_dict(),
+            "subscription": subscription_dict,
             "limits": {
                 "objects": metrics.max_objects,
                 "employees": metrics.max_employees,
@@ -257,7 +402,7 @@ class BillingService:
             title=title,
             message=message,
             scheduled_at=scheduled_at,
-            notification_data=json.dumps(notification_data) if notification_data else None
+            notification_data=json.dumps(notification_data, default=json_serializer) if notification_data else None
         )
         
         self.session.add(notification)
@@ -311,10 +456,113 @@ class BillingService:
         
         return notifications
     
+    async def process_payment_success(
+        self,
+        transaction_id: int,
+        payment_id: str
+    ) -> None:
+        """
+        Обработка успешной оплаты.
+        
+        Args:
+            transaction_id: ID транзакции в БД
+            payment_id: ID платежа в YooKassa
+        """
+        # Получаем транзакцию
+        transaction = await self.session.get(BillingTransaction, transaction_id)
+        if not transaction:
+            logger.error(f"Transaction {transaction_id} not found")
+            return
+        
+        # Обновляем статус транзакции на COMPLETED
+        transaction.status = TransactionStatus.COMPLETED
+        transaction.processed_at = datetime.now(timezone.utc)
+        if payment_id:
+            transaction.external_id = payment_id
+        
+        # Получаем подписку
+        if transaction.subscription_id:
+            subscription_result = await self.session.execute(
+                select(UserSubscription).where(
+                    UserSubscription.id == transaction.subscription_id
+                ).options(selectinload(UserSubscription.tariff_plan))
+            )
+            subscription = subscription_result.scalar_one_or_none()
+            
+            if subscription:
+                # Активируем подписку (из SUSPENDED в ACTIVE) после оплаты
+                # expires_at уже установлен правильно при создании подписки (начинается после окончания предыдущей)
+                # НЕ изменяем expires_at - он уже вычислен правильно
+                
+                subscription.last_payment_at = datetime.now(timezone.utc)
+                
+                # Если подписка была SUSPENDED (ожидала оплаты), активируем её
+                # Если она должна начаться в будущем - оставляем SUSPENDED до даты начала
+                # Если дата начала уже наступила - активируем
+                if subscription.status == SubscriptionStatus.SUSPENDED:
+                    if subscription.started_at and subscription.started_at <= datetime.now(timezone.utc):
+                        subscription.status = SubscriptionStatus.ACTIVE
+                        logger.info(
+                            f"Activated subscription after payment",
+                            subscription_id=subscription.id,
+                            started_at=subscription.started_at,
+                            expires_at=subscription.expires_at
+                        )
+                    else:
+                        # Подписка оплачена, но начнется в будущем - оставляем SUSPENDED
+                        logger.info(
+                            f"Subscription paid, will activate at scheduled date",
+                            subscription_id=subscription.id,
+                            started_at=subscription.started_at,
+                            expires_at=subscription.expires_at
+                        )
+                elif subscription.status == SubscriptionStatus.EXPIRED:
+                    # Если подписка истекла - активируем её снова (но expires_at уже установлен)
+                    subscription.status = SubscriptionStatus.ACTIVE
+                    logger.info(
+                        f"Reactivated expired subscription after payment",
+                        subscription_id=subscription.id,
+                        expires_at=subscription.expires_at
+                    )
+                
+                await self.session.commit()
+                
+                # Планируем уведомления о следующем продлении
+                await self.schedule_subscription_renewal_notifications(transaction.user_id)
+                
+                # Создаем уведомление владельцу
+                await self.create_payment_notification(
+                    user_id=transaction.user_id,
+                    subscription_id=subscription.id,
+                    transaction_id=transaction.id,
+                    notification_type=NotificationType.PAYMENT_SUCCESS,
+                    title="Оплата успешно завершена",
+                    message=f"Ваша подписка на тариф '{subscription.tariff_plan.name}' успешно оплачена и продлена до {new_expires_at.strftime('%d.%m.%Y')}.",
+                    channel=NotificationChannel.TELEGRAM
+                )
+                
+                logger.info(
+                    f"Processed payment success for transaction {transaction_id}, subscription extended to {new_expires_at}",
+                    transaction_id=transaction_id,
+                    payment_id=payment_id,
+                    subscription_id=subscription.id
+                )
+        
+        await self.session.commit()
+    
     # === Автоматическое продление ===
     
-    async def process_auto_renewal(self, user_id: int) -> Optional[BillingTransaction]:
-        """Обработка автоматического продления подписки."""
+    async def process_auto_renewal(self, user_id: int, return_url: Optional[str] = None) -> tuple[Optional[BillingTransaction], Optional[str]]:
+        """
+        Обработка автоматического продления подписки.
+        
+        Args:
+            user_id: ID пользователя
+            return_url: URL для возврата после оплаты (для создания платежа)
+            
+        Returns:
+            tuple: (transaction, payment_url) или (transaction, None) если бесплатный тариф
+        """
         # Получаем активную подписку с автопродлением
         subscription_result = await self.session.execute(
             select(UserSubscription).where(
@@ -326,38 +574,58 @@ class BillingService:
         subscription = subscription_result.scalar_one_or_none()
         
         if not subscription or subscription.tariff_plan.price == 0:
-            return None
+            return None, None
         
-        # Создаем транзакцию для автопродления
+        # Если return_url передан, создаем платеж через YooKassa
+        if return_url:
+            try:
+                transaction, payment_url = await self.create_payment_transaction(
+                    user_id=user_id,
+                    subscription_id=subscription.id,
+                    amount=float(subscription.tariff_plan.price),
+                    currency=subscription.tariff_plan.currency,
+                    description=f"Автоматическое продление подписки на тариф '{subscription.tariff_plan.name}'",
+                    return_url=return_url
+                )
+                
+                # Создаем уведомление владельцу о необходимости оплаты
+                await self.create_payment_notification(
+                    user_id=user_id,
+                    subscription_id=subscription.id,
+                    transaction_id=transaction.id,
+                    notification_type=NotificationType.SUBSCRIPTION_EXPIRING,
+                    title="Требуется оплата для автопродления",
+                    message=f"Ваша подписка на тариф '{subscription.tariff_plan.name}' будет автоматически продлена после оплаты.",
+                    channel=NotificationChannel.TELEGRAM
+                )
+                
+                logger.info(
+                    f"Created auto renewal payment for user {user_id}",
+                    transaction_id=transaction.id,
+                    payment_url=payment_url
+                )
+                
+                return transaction, payment_url
+                
+            except Exception as e:
+                logger.error(
+                    f"Error creating auto renewal payment for user {user_id}: {e}",
+                    error=str(e),
+                    user_id=user_id
+                )
+                return None, None
+        
+        # Если return_url не передан, создаем транзакцию без платежа (для ручной обработки админом)
         transaction = await self.create_transaction(
             user_id=user_id,
             subscription_id=subscription.id,
             transaction_type=TransactionType.PAYMENT,
             amount=float(subscription.tariff_plan.price),
             currency=subscription.tariff_plan.currency,
-            payment_method=PaymentMethod.MANUAL,  # TODO: Получить из настроек пользователя
-            description=f"Автоматическое продление подписки на тариф '{subscription.tariff_plan.name}'",
+            payment_method=PaymentMethod.MANUAL,
+            description=f"Автоматическое продление подписки на тариф '{subscription.tariff_plan.name}' (требует обработки)",
             expires_at=datetime.now(timezone.utc) + timedelta(days=7)
         )
         
-        # TODO: Здесь должна быть интеграция с платежной системой
-        # Пока что помечаем как завершенную
-        await self.update_transaction_status(transaction.id, TransactionStatus.COMPLETED)
-        
-        # Продлеваем подписку
-        if subscription.tariff_plan.billing_period == "month":
-            new_expires_at = subscription.expires_at + timedelta(days=30) if subscription.expires_at else datetime.now(timezone.utc) + timedelta(days=30)
-        elif subscription.tariff_plan.billing_period == "year":
-            new_expires_at = subscription.expires_at + timedelta(days=365) if subscription.expires_at else datetime.now(timezone.utc) + timedelta(days=365)
-        else:
-            new_expires_at = subscription.expires_at
-        
-        subscription.expires_at = new_expires_at
-        subscription.last_payment_at = datetime.now(timezone.utc)
-        await self.session.commit()
-        
-        # Планируем уведомления о следующем продлении
-        await self.schedule_subscription_renewal_notifications(user_id)
-        
-        logger.info(f"Processed auto renewal for user {user_id}, subscription extended to {new_expires_at}")
-        return transaction
+        logger.info(f"Created auto renewal transaction {transaction.id} for user {user_id} (requires manual processing)")
+        return transaction, None
