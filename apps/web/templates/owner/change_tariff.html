@@ -323,8 +323,12 @@
                             <i class="bi bi-check-circle"></i> Текущий тариф
                         </button>
                         {% else %}
-                        <button class="action-btn" onclick="changeTariff({{ tariff.id }}, '{{ tariff.name }}')">
+                        <button class="action-btn {% if tariff.price and tariff.price > 0 %}btn-primary{% endif %}" onclick="changeTariff({{ tariff.id }}, '{{ tariff.name }}', {{ tariff.price if tariff.price else 0 }})">
+                            {% if tariff.price and tariff.price > 0 %}
+                            <i class="bi bi-credit-card"></i> Оплатить {{ tariff.price }} {{ tariff.currency }}
+                            {% else %}
                             <i class="bi bi-arrow-up-circle"></i> Выбрать тариф
+                            {% endif %}
                         </button>
                         {% endif %}
                     </div>
@@ -336,8 +340,13 @@
 </div>
 
 <script>
-async function changeTariff(tariffId, tariffName) {
-    if (!confirm(`Вы уверены, что хотите сменить тариф на "${tariffName}"?`)) {
+async function changeTariff(tariffId, tariffName, tariffPrice) {
+    const isPaid = tariffPrice && tariffPrice > 0;
+    const message = isPaid 
+        ? `Выбран тариф "${tariffName}" стоимостью ${tariffPrice} ₽. Перейти к оплате?`
+        : `Вы уверены, что хотите сменить тариф на "${tariffName}"?`;
+    
+    if (!confirm(message)) {
         return;
     }
     
@@ -353,13 +362,36 @@ async function changeTariff(tariffId, tariffName) {
             })
         });
         
+        // Проверяем, что ответ - JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('Non-JSON response:', text);
+            alert('Ошибка при смене тарифа: Сервер вернул некорректный ответ. Попробуйте позже.');
+            return;
+        }
+        
         const result = await response.json();
         
         if (result.success) {
-            alert('Тариф успешно изменен!');
-            location.reload();
+            if (result.requires_payment && result.payment_url) {
+                // Показываем сообщение с датой начала нового тарифа (если есть)
+                if (result.message && result.message.includes('начнет действовать')) {
+                    alert(result.message);
+                }
+                // Редирект на страницу оплаты YooKassa
+                window.location.href = result.payment_url;
+            } else {
+                // Показываем сообщение с датой начала нового тарифа (если есть)
+                if (result.message) {
+                    alert(result.message);
+                } else {
+                    alert('Тариф успешно изменен!');
+                }
+                location.reload();
+            }
         } else {
-            alert('Ошибка при смене тарифа: ' + (result.message || 'Неизвестная ошибка'));
+            alert('Ошибка при смене тарифа: ' + (result.message || result.error || 'Неизвестная ошибка'));
         }
     } catch (error) {
         console.error('Error changing tariff:', error);

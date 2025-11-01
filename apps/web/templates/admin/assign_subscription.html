@@ -181,6 +181,32 @@
                         </div>
                     </div>
                 </div>
+                <div class="row">
+                    <div class="col-12">
+                        {% if not has_active_subscription %}
+                        <div class="mb-3">
+                            <label for="grace_period_days" class="form-label">
+                                <strong>Льготный период (Grace Period)</strong>
+                            </label>
+                            <input type="number" class="form-control" id="grace_period_days" name="grace_period_days" 
+                                   min="0" max="365" placeholder="0" 
+                                   title="Количество дней льготного использования для нового владельца. При указании этого поля подписка будет создана без требования оплаты на указанное количество дней.">
+                            <small class="text-muted d-block mt-1">
+                                Укажите количество дней льготного использования для нового владельца. При указании этого поля подписка будет создана без требования оплаты на указанное количество дней (даже если тариф платный).
+                            </small>
+                        </div>
+                        {% endif %}
+                        <div class="mb-3" id="paidCheckboxContainer" style="display: none;">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="is_paid" name="is_paid" value="true">
+                                <label class="form-check-label" for="is_paid">
+                                    <strong>Оплачено</strong>
+                                    <small class="text-muted d-block">Отметьте, если пользователь уже оплатил подписку. Иначе будет создана транзакция со статусом PENDING, которую пользователь должен будет оплатить самостоятельно.</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -211,6 +237,22 @@ function selectTariff(tariffId, element) {
     const tariffIdElement = document.getElementById('selected_tariff_id');
     if (tariffIdElement) {
         tariffIdElement.value = tariffId;
+    }
+    
+    // Проверяем, платный ли тариф (ищем цену в карточке)
+    const priceElement = element.querySelector('.text-primary');
+    const priceText = priceElement ? priceElement.textContent.trim() : '';
+    const isPaid = priceText !== 'Бесплатно' && priceText !== '';
+    
+    // Показываем/скрываем чекбокс "Оплачено"
+    const paidCheckboxContainer = document.getElementById('paidCheckboxContainer');
+    if (paidCheckboxContainer) {
+        paidCheckboxContainer.style.display = isPaid ? 'block' : 'none';
+        // Сбрасываем чекбокс при смене тарифа
+        const isPaidCheckbox = document.getElementById('is_paid');
+        if (isPaidCheckbox) {
+            isPaidCheckbox.checked = false;
+        }
     }
     
     // Проверяем, можно ли отправить форму

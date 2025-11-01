@@ -69,6 +69,7 @@ async def create_tariff(
     features: str = Form("[]"),  # JSON строка
     is_active: bool = Form(True),
     is_popular: bool = Form(False),
+    grace_period_days: Optional[int] = Form(0),
     current_user: dict = Depends(require_superadmin)
 ):
     """Создание тарифного плана."""
@@ -93,7 +94,8 @@ async def create_tariff(
             "max_managers": max_managers,
             "features": features_list,
             "is_active": is_active,
-            "is_popular": is_popular
+            "is_popular": is_popular,
+            "grace_period_days": grace_period_days or 0
         }
         
         async with get_async_session() as session:
@@ -160,6 +162,7 @@ async def edit_tariff(
     features: str = Form("[]"),  # JSON строка
     is_active: bool = Form(True),
     is_popular: bool = Form(False),
+    grace_period_days: Optional[int] = Form(0),
     current_user: dict = Depends(require_superadmin)
 ):
     """Редактирование тарифного плана."""
@@ -184,7 +187,8 @@ async def edit_tariff(
             "max_managers": max_managers,
             "features": features_list,
             "is_active": is_active,
-            "is_popular": is_popular
+            "is_popular": is_popular,
+            "grace_period_days": grace_period_days or 0
         }
         
         async with get_async_session() as session:

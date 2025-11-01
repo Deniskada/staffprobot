@@ -1,0 +1,162 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>{{ title }}</h2>
+        <a href="/owner/tariffs" class="btn btn-primary">
+            <i class="bi bi-credit-card"></i> Выбрать тариф
+        </a>
+    </div>
+
+    {% if limits_summary.has_subscription %}
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Текущая подписка</h5>
+                </div>
+                <div class="card-body">
+                    <h4>{{ limits_summary.subscription.tariff_name }}</h4>
+                    <p class="text-muted">{{ limits_summary.subscription.tariff_description or '' }}</p>
+                    
+                    <hr>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Статус:</strong> 
+                                <span class="badge bg-success">Активна</span>
+                            </p>
+                            <p><strong>Начало подписки:</strong> 
+                                {{ limits_summary.subscription.started_at|date('d.m.Y') if limits_summary.subscription.started_at else '—' }}
+                            </p>
+                            <p><strong>Истекает:</strong> 
+                                {{ limits_summary.subscription.expires_at|date('d.m.Y') if limits_summary.subscription.expires_at else 'Бессрочно' }}
+                                {% if limits_summary.subscription.notes and 'Grace period' in limits_summary.subscription.notes %}
+                                    <span class="badge bg-info ms-2" title="Льготный период">Grace Period</span>
+                                {% endif %}
+                            </p>
+                            {% if limits_summary.subscription.notes and 'Grace period' in limits_summary.subscription.notes %}
+                            <div class="alert alert-info mt-2">
+                                <i class="bi bi-info-circle"></i> 
+                                <strong>Льготный период:</strong> Вы используете тариф в рамках льготного периода. 
+                                {% if limits_summary.subscription.expires_at %}
+                                    После окончания льготного периода ({{ limits_summary.subscription.expires_at|date('d.m.Y') }}) потребуется оплата для продолжения использования.
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Лимиты:</strong></p>
+                            <ul>
+                                <li>Объекты: {{ limits_summary.usage.objects }} / {{ limits_summary.limits.objects }}</li>
+                                <li>Сотрудники: {{ limits_summary.usage.employees }} / {{ limits_summary.limits.employees }}</li>
+                                <li>Управляющие: {{ limits_summary.usage.managers }} / {{ limits_summary.limits.managers }}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    {% if limits_summary.warnings %}
+                    <div class="alert alert-warning mt-3">
+                        <strong>Предупреждения:</strong>
+                        <ul class="mb-0">
+                            {% for warning in limits_summary.warnings %}
+                            <li>{{ warning }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mt-3">
+                        <label class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" 
+                                   {% if limits_summary.subscription.auto_renewal %}checked{% endif %}
+                                   id="autoRenewalToggle">
+                            <span class="form-check-label">Автоматическое продление</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Быстрые действия</h5>
+                </div>
+                <div class="card-body">
+                    <a href="/owner/tariffs" class="btn btn-primary w-100 mb-2">
+                        <i class="bi bi-arrow-repeat"></i> Продлить подписку
+                    </a>
+                    <a href="/owner/billing/transactions" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-receipt"></i> История платежей
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Последние платежи</h5>
+                </div>
+                <div class="card-body">
+                    {% if transactions %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Дата</th>
+                                    <th>Сумма</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for transaction in transactions %}
+                                <tr>
+                                    <td>#{{ transaction.id }}</td>
+                                    <td>{{ transaction.created_at.strftime('%d.%m.%Y %H:%M') if transaction.created_at else '—' }}</td>
+                                    <td>{{ transaction.amount }} {{ transaction.currency }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if transaction.status.value == 'completed' %}bg-success
+                                            {% elif transaction.status.value == 'pending' %}bg-warning
+                                            {% elif transaction.status.value == 'failed' %}bg-danger
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ transaction.status.value }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="/owner/billing/transactions" class="btn btn-outline-primary">
+                            Показать все транзакции
+                        </a>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center">Нет транзакций</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <h4>У вас нет активной подписки</h4>
+        <p>Выберите тарифный план, чтобы начать пользоваться системой.</p>
+        <a href="/owner/tariffs" class="btn btn-primary">
+            <i class="bi bi-credit-card"></i> Выбрать тариф
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+

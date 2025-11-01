@@ -98,6 +98,12 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_reload: bool = True
     
+    # YooKassa (платежный шлюз)
+    yookassa_shop_id: str = os.getenv("YOOKASSA_SHOP_ID", "")
+    yookassa_secret_key: str = os.getenv("YOOKASSA_SECRET_KEY", "")
+    yookassa_webhook_secret: Optional[str] = os.getenv("YOOKASSA_WEBHOOK_SECRET")
+    yookassa_test_mode: bool = os.getenv("YOOKASSA_TEST_MODE", "false").lower() == "true"
+    
     class Config:
         # В production читаем .env.prod, иначе .env
         env_file = ".env.prod" if os.getenv("ENVIRONMENT") == "production" else ".env"

@@ -30,6 +30,13 @@
     border-radius: 8px;
     padding: 15px;
 }
+
+.filter-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
 </style>
 {% endblock %}
 
@@ -96,96 +103,270 @@
     </div>
     {% endif %}
 
-    <!-- Список подписок -->
-    <div class="row">
-        {% for subscription in subscriptions %}
-        <div class="col-md-6 mb-4">
-            <div class="card subscription-card status-{{ subscription.status.value }}">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">
-                        <i class="bi bi-person-circle"></i> 
-                        {{ subscription.user.first_name }} {{ subscription.user.last_name }}
-                    </h6>
-                    <span class="badge bg-{{ 'success' if subscription.status.value == 'active' else 'secondary' }}">
-                        {{ subscription.status.value | title }}
-                    </span>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="user-info mb-3">
-                                <h6>👤 Пользователь</h6>
-                                <p class="mb-1"><strong>ID:</strong> {{ subscription.user.id }}</p>
-                                <p class="mb-1"><strong>Telegram:</strong> @{{ subscription.user.username or 'не указан' }}</p>
-                                <p class="mb-0"><strong>Роль:</strong> {{ subscription.user.role }}</p>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="tariff-info mb-3">
-                                <h6>💰 Тариф</h6>
-                                <p class="mb-1"><strong>План:</strong> {{ subscription.tariff_plan.name }}</p>
-                                <p class="mb-1"><strong>Цена:</strong> {{ subscription.tariff_plan.price }} {{ subscription.tariff_plan.currency }}</p>
-                                <p class="mb-0"><strong>Период:</strong> {{ subscription.tariff_plan.billing_period }}</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <small class="text-muted">Дата создания:</small>
-                            <p class="mb-1">{{ subscription.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
-                        </div>
-                        <div class="col-md-6">
-                            <small class="text-muted">Истекает:</small>
-                            <p class="mb-1">
-                                {% if subscription.expires_at %}
-                                    {{ subscription.expires_at.strftime('%d.%m.%Y %H:%M') }}
-                                    {% if subscription.is_expired() %}
-                                        <span class="text-danger">(Истекла)</span>
-                                    {% elif subscription.days_until_expiry() <= 7 %}
-                                        <span class="text-warning">(Скоро истекает)</span>
-                                    {% endif %}
-                                {% else %}
-                                    <span class="text-success">Бессрочная</span>
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
-                    
-                    {% if subscription.notes %}
-                    <div class="mt-3">
-                        <small class="text-muted">Примечания:</small>
-                        <p class="mb-0">{{ subscription.notes }}</p>
-                    </div>
-                    {% endif %}
-                </div>
-                <div class="card-footer">
-                    <div class="btn-group w-100">
-                        {% if subscription.status.value == 'active' %}
-                        <button type="button" class="btn btn-outline-warning btn-sm" 
-                                onclick="cancelSubscription({{ subscription.id }}, '{{ subscription.user.first_name }} {{ subscription.user.last_name }}')">
-                            <i class="bi bi-pause-circle"></i> Отменить
-                        </button>
-                        {% endif %}
-                        <a href="/admin/subscriptions/assign?user_id={{ subscription.user.id }}" class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-arrow-repeat"></i> Изменить
-                        </a>
-                    </div>
+    <!-- Фильтры -->
+    <div class="filter-section mb-4">
+        <h5>🔍 Фильтры</h5>
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="user_id" class="form-label">Пользователь</label>
+                <input type="number" class="form-control" id="user_id" name="user_id" 
+                       value="{{ selected_user_id or '' }}" placeholder="ID пользователя">
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label">Статус</label>
+                <select class="form-control" id="status" name="status">
+                    <option value="">Все статусы</option>
+                    <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Активна</option>
+                    <option value="expired" {% if selected_status == 'expired' %}selected{% endif %}>Истекла</option>
+                    <option value="suspended" {% if selected_status == 'suspended' %}selected{% endif %}>Приостановлена</option>
+                    <option value="cancelled" {% if selected_status == 'cancelled' %}selected{% endif %}>Отменена</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="tariff_id" class="form-label">Тариф</label>
+                <select class="form-control" id="tariff_id" name="tariff_id">
+                    <option value="">Все тарифы</option>
+                    {% for tariff in tariff_plans %}
+                    <option value="{{ tariff.id }}" {% if selected_tariff_id == tariff.id %}selected{% endif %}>
+                        {{ tariff.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Применить
+                    </button>
                 </div>
             </div>
-        </div>
-        {% else %}
-        <div class="col-12">
-            <div class="alert alert-info text-center">
-                <h5>📋 Нет подписок</h5>
-                <p>Пока нет назначенных подписок пользователям.</p>
-                <a href="/admin/subscriptions/assign" class="btn btn-primary">
-                    <i class="bi bi-plus-circle"></i> Назначить первую подписку
-                </a>
-            </div>
-        </div>
-        {% endfor %}
+        </form>
     </div>
+
+    <!-- Информация о количестве -->
+    {% if total_count is defined %}
+    <div class="alert alert-info mb-3">
+        <i class="bi bi-info-circle"></i> Найдено подписок: <strong>{{ total_count }}</strong>
+        {% if total_pages > 1 %}
+        | Страница <strong>{{ page }}</strong> из <strong>{{ total_pages }}</strong>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Таблица подписок -->
+    {% if subscriptions %}
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>
+                                <a href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_tariff_id %}tariff_id={{ selected_tariff_id }}&{% endif %}sort_by=id&sort_order={% if sort_by == 'id' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&page={{ page }}&per_page={{ per_page }}"
+                                   class="text-decoration-none text-dark">
+                                    ID
+                                    {% if sort_by == 'id' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up text-primary"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down text-primary"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-arrows-vertical text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_tariff_id %}tariff_id={{ selected_tariff_id }}&{% endif %}sort_by=user_id&sort_order={% if sort_by == 'user_id' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&page={{ page }}&per_page={{ per_page }}"
+                                   class="text-decoration-none text-dark">
+                                    Пользователь
+                                    {% if sort_by == 'user_id' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up text-primary"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down text-primary"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-arrows-vertical text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>Тариф</th>
+                            <th>
+                                <a href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_tariff_id %}tariff_id={{ selected_tariff_id }}&{% endif %}sort_by=status&sort_order={% if sort_by == 'status' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&page={{ page }}&per_page={{ per_page }}"
+                                   class="text-decoration-none text-dark">
+                                    Статус
+                                    {% if sort_by == 'status' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up text-primary"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down text-primary"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-arrows-vertical text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_tariff_id %}tariff_id={{ selected_tariff_id }}&{% endif %}sort_by=created_at&sort_order={% if sort_by == 'created_at' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&page={{ page }}&per_page={{ per_page }}"
+                                   class="text-decoration-none text-dark">
+                                    Создана
+                                    {% if sort_by == 'created_at' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up text-primary"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down text-primary"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-arrows-vertical text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_tariff_id %}tariff_id={{ selected_tariff_id }}&{% endif %}sort_by=expires_at&sort_order={% if sort_by == 'expires_at' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&page={{ page }}&per_page={{ per_page }}"
+                                   class="text-decoration-none text-dark">
+                                    Истекает
+                                    {% if sort_by == 'expires_at' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up text-primary"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down text-primary"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-arrows-vertical text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>Примечания</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for subscription in subscriptions %}
+                        <tr>
+                            <td>
+                                <strong>#{{ subscription.id }}</strong>
+                            </td>
+                            <td>
+                                <a href="?user_id={{ subscription.user_id }}" class="text-decoration-none">
+                                    <strong>{{ subscription.user.first_name }} {{ subscription.user.last_name }}</strong>
+                                </a>
+                                <br><small class="text-muted">ID: {{ subscription.user_id }}</small>
+                                {% if subscription.user.username %}
+                                <br><small class="text-muted">@{{ subscription.user.username }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ subscription.tariff_plan.name }}</strong>
+                                <br><small class="text-muted">{{ subscription.tariff_plan.price }} {{ subscription.tariff_plan.currency }}/{{ subscription.tariff_plan.billing_period }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if subscription.status.value == 'active' %}success{% elif subscription.status.value == 'expired' %}danger{% elif subscription.status.value == 'suspended' %}warning{% else %}secondary{% endif %}">
+                                    {{ subscription.status.value | title }}
+                                </span>
+                            </td>
+                            <td>
+                                <small>{{ subscription.created_at.strftime('%d.%m.%Y') }}</small><br>
+                                <small class="text-muted">{{ subscription.created_at.strftime('%H:%M') }}</small>
+                            </td>
+                            <td>
+                                {% if subscription.expires_at %}
+                                <small>{{ subscription.expires_at.strftime('%d.%m.%Y') }}</small><br>
+                                <small class="text-muted">{{ subscription.expires_at.strftime('%H:%M') }}</small>
+                                {% if subscription.is_expired() %}
+                                <br><span class="badge bg-danger">Истекла</span>
+                                {% elif subscription.days_until_expiry() <= 7 %}
+                                <br><span class="badge bg-warning">Скоро истекает</span>
+                                {% endif %}
+                                {% else %}
+                                <span class="badge bg-success">Бессрочная</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if subscription.notes %}
+                                <small>{{ subscription.notes[:50] }}{% if subscription.notes|length > 50 %}...{% endif %}</small>
+                                {% else %}
+                                <small class="text-muted">—</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    {% if subscription.status.value == 'active' %}
+                                    <button type="button" class="btn btn-outline-warning btn-sm" 
+                                            onclick="cancelSubscription({{ subscription.id }}, '{{ subscription.user.first_name }} {{ subscription.user.last_name }}')"
+                                            title="Отменить">
+                                        <i class="bi bi-pause-circle"></i>
+                                    </button>
+                                    {% endif %}
+                                    <a href="/admin/subscriptions/assign?user_id={{ subscription.user_id }}" 
+                                       class="btn btn-outline-primary btn-sm"
+                                       title="Изменить">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Пагинация -->
+    {% if total_pages > 1 %}
+    <nav aria-label="Пагинация подписок" class="mt-3">
+        <ul class="pagination justify-content-center">
+            {% if page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_tariff_id %}tariff_id={{ selected_tariff_id }}&{% endif %}sort_by={{ sort_by }}&sort_order={{ sort_order }}&page={{ page - 1 }}&per_page={{ per_page }}">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+            {% endif %}
+            
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                <li class="page-item active">
+                    <span class="page-link">{{ p }}</span>
+                </li>
+                {% elif p <= 3 or p > total_pages - 3 or (p >= page - 2 and p <= page + 2) %}
+                <li class="page-item">
+                    <a class="page-link" href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_tariff_id %}tariff_id={{ selected_tariff_id }}&{% endif %}sort_by={{ sort_by }}&sort_order={{ sort_order }}&page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
+                </li>
+                {% elif p == 4 or p == total_pages - 3 %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page < total_pages %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if selected_user_id %}user_id={{ selected_user_id }}&{% endif %}{% if selected_status %}status={{ selected_status }}&{% endif %}{% if selected_tariff_id %}tariff_id={{ selected_tariff_id }}&{% endif %}sort_by={{ sort_by }}&sort_order={{ sort_order }}&page={{ page + 1 }}&per_page={{ per_page }}">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+    {% else %}
+    <div class="alert alert-info text-center">
+        <h5>📋 Нет подписок</h5>
+        <p>Подписки по указанным фильтрам не найдены.</p>
+        {% if selected_user_id or selected_status or selected_tariff_id %}
+        <a href="/admin/subscriptions/" class="btn btn-primary">
+            Сбросить фильтры
+        </a>
+        {% else %}
+        <a href="/admin/subscriptions/assign" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Назначить первую подписку
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
 
 <script>

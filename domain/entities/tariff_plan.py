@@ -31,6 +31,9 @@ class TariffPlan(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     is_popular = Column(Boolean, nullable=False, default=False)  # Популярный тариф
     
+    # Льготный период (Grace Period) для новых владельцев (в днях)
+    grace_period_days = Column(Integer, nullable=True, default=0)  # Количество дней льготного использования
+    
     # Временные метки
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -56,6 +59,7 @@ class TariffPlan(Base):
             "features": self.features or [],
             "is_active": self.is_active,
             "is_popular": self.is_popular,
+            "grace_period_days": self.grace_period_days or 0,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }

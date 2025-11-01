@@ -376,3 +376,204 @@ class LimitsService:
             warnings.append("Ошибка получения предупреждений")
         
         return warnings
+    
+    async def check_tariff_downgrade_allowed(
+        self, 
+        user_id: int, 
+        new_tariff_plan_id: int
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Проверка возможности понижения тарифа с учетом текущих данных.
+        
+        Returns:
+            Tuple[bool, str, Dict]:
+                - allowed: можно ли понизить тариф
+                - message: сообщение с объяснением
+                - details: детали (превышения, варианты решения)
+        """
+        try:
+            from domain.entities.tariff_plan import TariffPlan
+            
+            # Получаем текущую активную подписку
+            current_subscription = await self._get_active_subscription(user_id)
+            if not current_subscription:
+                return True, "Нет активной подписки, можно выбрать любой тариф", {}
+            
+            # Получаем новый тариф
+            new_tariff_result = await self.session.execute(
+                select(TariffPlan).where(TariffPlan.id == new_tariff_plan_id)
+            )
+            new_tariff = new_tariff_result.scalar_one_or_none()
+            if not new_tariff:
+                return False, "Новый тарифный план не найден", {}
+            
+            current_tariff = current_subscription.tariff_plan
+            
+            # Если новый тариф дороже или такой же - разрешаем (это upgrade или без изменений)
+            if new_tariff.price >= current_tariff.price:
+                return True, "Переход на более высокий тариф разрешен", {}
+            
+            # Если переходим на бесплатный тариф - проверяем превышения
+            if new_tariff.price == 0 or float(new_tariff.price) == 0:
+                # Получаем текущие количества
+                objects_count_result = await self.session.execute(
+                    select(func.count(Object.id)).where(
+                        Object.owner_id == user_id,
+                        Object.is_active == True
+                    )
+                )
+                current_objects = objects_count_result.scalar() or 0
+                
+                employees_count_result = await self.session.execute(
+                    select(func.count(Contract.id.distinct())).where(
+                        Contract.owner_id == user_id,
+                        Contract.is_active == True,
+                        Contract.is_manager == False
+                    )
+                )
+                current_employees = employees_count_result.scalar() or 0
+                
+                managers_count_result = await self.session.execute(
+                    select(func.count(Contract.id.distinct())).where(
+                        Contract.owner_id == user_id,
+                        Contract.is_active == True,
+                        Contract.is_manager == True
+                    )
+                )
+                current_managers = managers_count_result.scalar() or 0
+                
+                # Проверяем превышения лимитов бесплатного тарифа
+                violations = []
+                
+                if new_tariff.max_objects != -1 and current_objects > new_tariff.max_objects:
+                    violations.append({
+                        "type": "objects",
+                        "current": current_objects,
+                        "max": new_tariff.max_objects,
+                        "excess": current_objects - new_tariff.max_objects
+                    })
+                
+                if new_tariff.max_employees != -1 and current_employees > new_tariff.max_employees:
+                    violations.append({
+                        "type": "employees",
+                        "current": current_employees,
+                        "max": new_tariff.max_employees,
+                        "excess": current_employees - new_tariff.max_employees
+                    })
+                
+                if new_tariff.max_managers != -1 and current_managers > new_tariff.max_managers:
+                    violations.append({
+                        "type": "managers",
+                        "current": current_managers,
+                        "max": new_tariff.max_managers,
+                        "excess": current_managers - new_tariff.max_managers
+                    })
+                
+                if violations:
+                    # Есть превышения - предлагаем решения
+                    return False, "Невозможно понизить тариф: превышены лимиты", {
+                        "violations": violations,
+                        "grace_period_days": 30,
+                        "solutions": [
+                            {
+                                "type": "grace_period",
+                                "title": "Период льготного использования (30 дней)",
+                                "description": "Мы дадим вам 30 дней на приведение данных в соответствие с новым тарифом. В течение этого времени все функции будут доступны.",
+                                "recommended": True
+                            },
+                            {
+                                "type": "keep_current",
+                                "title": "Оставить текущий тариф",
+                                "description": f"Оставайтесь на тарифе '{current_tariff.name}' - он полностью соответствует вашим текущим данным.",
+                                "recommended": False
+                            },
+                            {
+                                "type": "reduce_data",
+                                "title": "Привести данные в соответствие",
+                                "description": f"Уменьшите количество объектов ({current_objects} → {new_tariff.max_objects}), сотрудников ({current_employees} → {new_tariff.max_employees}) или управляющих ({current_managers} → {new_tariff.max_managers}).",
+                                "recommended": False
+                            }
+                        ]
+                    }
+            
+            # Если новый тариф платный, но дешевле - тоже проверяем
+            if new_tariff.price > 0 and new_tariff.price < current_tariff.price:
+                # Получаем текущие количества
+                objects_count_result = await self.session.execute(
+                    select(func.count(Object.id)).where(
+                        Object.owner_id == user_id,
+                        Object.is_active == True
+                    )
+                )
+                current_objects = objects_count_result.scalar() or 0
+                
+                employees_count_result = await self.session.execute(
+                    select(func.count(Contract.id.distinct())).where(
+                        Contract.owner_id == user_id,
+                        Contract.is_active == True,
+                        Contract.is_manager == False
+                    )
+                )
+                current_employees = employees_count_result.scalar() or 0
+                
+                managers_count_result = await self.session.execute(
+                    select(func.count(Contract.id.distinct())).where(
+                        Contract.owner_id == user_id,
+                        Contract.is_active == True,
+                        Contract.is_manager == True
+                    )
+                )
+                current_managers = managers_count_result.scalar() or 0
+                
+                violations = []
+                
+                if new_tariff.max_objects != -1 and current_objects > new_tariff.max_objects:
+                    violations.append({
+                        "type": "objects",
+                        "current": current_objects,
+                        "max": new_tariff.max_objects,
+                        "excess": current_objects - new_tariff.max_objects
+                    })
+                
+                if new_tariff.max_employees != -1 and current_employees > new_tariff.max_employees:
+                    violations.append({
+                        "type": "employees",
+                        "current": current_employees,
+                        "max": new_tariff.max_employees,
+                        "excess": current_employees - new_tariff.max_employees
+                    })
+                
+                if new_tariff.max_managers != -1 and current_managers > new_tariff.max_managers:
+                    violations.append({
+                        "type": "managers",
+                        "current": current_managers,
+                        "max": new_tariff.max_managers,
+                        "excess": current_managers - new_tariff.max_managers
+                    })
+                
+                if violations:
+                    return False, "Невозможно понизить тариф: превышены лимиты", {
+                        "violations": violations,
+                        "grace_period_days": 30,
+                        "solutions": [
+                            {
+                                "type": "grace_period",
+                                "title": "Период льготного использования (30 дней)",
+                                "description": "Мы дадим вам 30 дней на приведение данных в соответствие с новым тарифом. В течение этого времени все функции будут доступны.",
+                                "recommended": True
+                            },
+                            {
+                                "type": "keep_current",
+                                "title": "Оставить текущий тариф",
+                                "description": f"Оставайтесь на тарифе '{current_tariff.name}' - он полностью соответствует вашим текущим данным.",
+                                "recommended": False
+                            }
+                        ]
+                    }
+            
+            # Все проверки пройдены
+            return True, "Понижение тарифа разрешено", {}
+            
+        except Exception as e:
+            logger.error(f"Error checking tariff downgrade for user {user_id}: {e}")
+            return False, "Ошибка проверки возможности понижения тарифа", {}
