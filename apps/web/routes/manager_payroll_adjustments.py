@@ -17,6 +17,7 @@ from domain.entities.payroll_adjustment import PayrollAdjustment
 from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
+from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.contract import Contract
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 from shared.services.manager_permission_service import ManagerPermissionService
@@ -99,12 +100,23 @@ async def manager_payroll_adjustments_list(
         
         # Базовый запрос с фильтром по доступным объектам
         # Показываем корректировки либо с доступными объектами, либо без объекта (NULL)
-        query = select(PayrollAdjustment).where(
+        # ИЛИ по корректировкам без object_id, но с shift_schedule_id, где объект смены доступен управляющему
+        query = select(PayrollAdjustment).outerjoin(
+            ShiftSchedule, PayrollAdjustment.shift_schedule_id == ShiftSchedule.id
+        ).where(
             func.date(PayrollAdjustment.created_at) >= start_date,
             func.date(PayrollAdjustment.created_at) <= end_date,
             or_(
-                PayrollAdjustment.object_id.in_(accessible_object_ids),
-                PayrollAdjustment.object_id.is_(None)  # Разрешаем корректировки без объекта
+                PayrollAdjustment.object_id.in_(accessible_object_ids),  # Прямая привязка к объекту
+                and_(
+                    PayrollAdjustment.object_id.is_(None),  # object_id = NULL
+                    PayrollAdjustment.shift_schedule_id.isnot(None),  # Но есть shift_schedule_id
+                    ShiftSchedule.object_id.in_(accessible_object_ids)  # И объект смены доступен управляющему
+                ),
+                and_(
+                    PayrollAdjustment.object_id.is_(None),  # object_id = NULL
+                    PayrollAdjustment.shift_schedule_id.is_(None)  # И нет shift_schedule_id
+                )
             )
         ).options(
             selectinload(PayrollAdjustment.employee),
