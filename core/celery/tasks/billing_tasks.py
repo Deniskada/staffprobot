@@ -11,7 +11,15 @@ from domain.entities.user_subscription import UserSubscription, SubscriptionStat
 from domain.entities.billing_transaction import BillingTransaction, TransactionStatus
 from domain.entities.notification import Notification, NotificationType, NotificationChannel
 from apps.web.services.billing_service import BillingService
-from apps.web.services.payment_gateway.yookassa_service import YooKassaService
+
+# Опциональный импорт YooKassa (если модуль не установлен, сервис не используется)
+try:
+    from apps.web.services.payment_gateway.yookassa_service import YooKassaService
+    YOOKASSA_AVAILABLE = True
+except ImportError:
+    YooKassaService = None
+    YOOKASSA_AVAILABLE = False
+
 from core.logging.logger import logger
 from core.utils.url_helper import URLHelper
 

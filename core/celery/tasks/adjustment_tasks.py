@@ -1,6 +1,6 @@
 """Celery задача для создания корректировок начислений из закрытых смен."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time
 from decimal import Decimal
 import asyncio
 
@@ -173,16 +173,85 @@ def process_closed_shifts_adjustments():
                         )
                         
                         if shift.planned_start and shift.actual_start:
-                            # Для запланированных смен - проверяем флаг penalize_late_start
+                            # Проверяем, совпадает ли время начала смены со временем начала работы объекта
+                            obj = shift.object
+                            planned_start_time = shift.planned_start.time()
+                            opening_time = obj.opening_time
+                            planned_matches_opening = planned_start_time == opening_time
+                            
+                            logger.debug(
+                                f"Shift {shift.id} time check",
+                                planned_start_time=planned_start_time.strftime('%H:%M'),
+                                opening_time=opening_time.strftime('%H:%M'),
+                                matches=planned_matches_opening
+                            )
+                            
+                            # Логика штрафа за опоздание:
+                            # 1. Если planned_start == opening_time → используем флаг из тайм-слота
+                            # 2. Если planned_start != opening_time → проверяем автоправило
                             should_penalize = True
-                            if shift.is_planned and shift.time_slot_id and shift.time_slot:
-                                if not shift.time_slot.penalize_late_start:
-                                    should_penalize = False
+                            
+                            if planned_matches_opening:
+                                # Смена запланирована в время начала работы → используем флаг из тайм-слота
+                                if shift.is_planned and shift.time_slot_id and shift.time_slot:
+                                    should_penalize = shift.time_slot.penalize_late_start
                                     logger.debug(
-                                        f"Late penalty disabled by timeslot flag",
+                                        f"Standard shift: using timeslot flag",
                                         shift_id=shift.id,
-                                        time_slot_id=shift.time_slot_id
+                                        penalize_late_start=should_penalize
                                     )
+                            else:
+                                # Смена запланирована НЕ в время начала работы → проверяем автоправило
+                                # Приоритет 1: если в тайм-слоте явно указан штраф → всегда штрафуем
+                                # Приоритет 2: проверяем автоправило (если правило включено → всегда штрафуем)
+                                timeslot_explicit = False
+                                if shift.is_planned and shift.time_slot_id and shift.time_slot:
+                                    timeslot_explicit = shift.time_slot.penalize_late_start
+                                    if timeslot_explicit:
+                                        should_penalize = True
+                                        logger.debug(
+                                            f"Non-standard shift: timeslot explicitly requires penalty",
+                                            shift_id=shift.id
+                                        )
+                                
+                                # Если в тайм-слоте не указан явный штраф → проверяем автоправило
+                                if not timeslot_explicit:
+                                    try:
+                                        from shared.services.rules_engine import RulesEngine
+                                        engine = RulesEngine(session)
+                                        rule_actions = await engine.evaluate(obj.owner_id, 'late', {
+                                            'planned_start_matches_opening_time': False,
+                                            'object_id': obj.id,
+                                        })
+                                        
+                                        # Ищем правило "penalty_non_standard_shift"
+                                        rule_found = False
+                                        for action in rule_actions:
+                                            if action.get('code') == 'penalty_non_standard_shift':
+                                                rule_found = True
+                                                should_penalize = True  # Если правило включено → всегда штрафуем
+                                                logger.debug(
+                                                    f"Non-standard shift: rule enabled, penalty will be applied",
+                                                    shift_id=shift.id,
+                                                    rule_code='penalty_non_standard_shift'
+                                                )
+                                                break
+                                        
+                                        if not rule_found:
+                                            should_penalize = False
+                                            logger.debug(
+                                                f"Non-standard shift: rule disabled, no penalty",
+                                                shift_id=shift.id
+                                            )
+                                    except Exception as e:
+                                        logger.error(
+                                            f"Error checking rule for non-standard shift",
+                                            shift_id=shift.id,
+                                            error=str(e),
+                                            exc_info=True
+                                        )
+                                        # При ошибке проверки правила → не штрафуем (безопасный вариант)
+                                        should_penalize = False
                             
                             if should_penalize:
                                 # Сравниваем actual_start с planned_start (порог уже учтен при открытии смены)
@@ -191,7 +260,7 @@ def process_closed_shifts_adjustments():
                                     late_minutes = int(late_seconds / 60)
                                     
                                     # Получить настройки штрафа с учетом наследования от org_unit
-                                    obj = shift.object
+                                    # obj уже получен выше
                                     late_settings = await get_effective_late_settings_for_object(session, obj)
                                     penalty_per_minute = late_settings.get('penalty_per_minute')
                                     threshold_minutes = late_settings.get('threshold_minutes', 0)
