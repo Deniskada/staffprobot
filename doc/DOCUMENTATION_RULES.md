@@ -38,7 +38,9 @@
 
 ## Недавние изменения (main, 01.11.2025)
 
-### Админ-панель биллинга - Табличные представления с сортировкой и фильтрацией (Iteration 39)
+### Админ-панель биллинга - Табличные представления с сортировкой и фильтрацией (Iteration 39) ✅
+
+**Статус:** Завершено, деплой на production выполнен, миграции применены
 - **Обновлённые роуты:**
   - `GET /admin/billing/transactions` - список транзакций с фильтрацией (user_id, status, transaction_type) и сортировкой (id, created_at, transaction_type, status, amount)
   - `GET /admin/subscriptions/` - список подписок с фильтрацией (user_id, status, tariff_id) и сортировкой (id, user_id, status, created_at, expires_at)
@@ -51,6 +53,8 @@
   - Исправлена обработка пустых строк в фильтрах (user_id, tariff_id принимаются как Optional[str])
   - Добавлен импорт `func` для подсчета общего количества транзакций
   - Исправлен доступ к `tariff_plan` в `check_usage_limits` (добавлена информация о тарифе в словарь подписки)
+  - Опциональный импорт `yookassa` SDK для запуска без зависимости (проверки `YOOKASSA_AVAILABLE` во всех методах)
+  - Миграции применены на production (Alembic upgrade head)
 
 ## Недавние изменения (main, 31.10.2025)
 
