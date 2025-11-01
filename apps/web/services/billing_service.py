@@ -527,6 +527,9 @@ class BillingService:
                 
                 await self.session.commit()
                 
+                # Получаем expires_at для уведомления (используем из подписки, а не undefined переменную)
+                expires_at_display = subscription.expires_at.strftime('%d.%m.%Y') if subscription.expires_at else "бессрочно"
+                
                 # Планируем уведомления о следующем продлении
                 await self.schedule_subscription_renewal_notifications(transaction.user_id)
                 
@@ -537,15 +540,16 @@ class BillingService:
                     transaction_id=transaction.id,
                     notification_type=NotificationType.PAYMENT_SUCCESS,
                     title="Оплата успешно завершена",
-                    message=f"Ваша подписка на тариф '{subscription.tariff_plan.name}' успешно оплачена и продлена до {new_expires_at.strftime('%d.%m.%Y')}.",
+                    message=f"Ваша подписка на тариф '{subscription.tariff_plan.name}' успешно оплачена и продлена до {expires_at_display}.",
                     channel=NotificationChannel.TELEGRAM
                 )
                 
                 logger.info(
-                    f"Processed payment success for transaction {transaction_id}, subscription extended to {new_expires_at}",
+                    f"Processed payment success for transaction {transaction_id}, subscription expires at {expires_at_display}",
                     transaction_id=transaction_id,
                     payment_id=payment_id,
-                    subscription_id=subscription.id
+                    subscription_id=subscription.id,
+                    expires_at=subscription.expires_at.isoformat() if subscription.expires_at else None
                 )
         
         await self.session.commit()
