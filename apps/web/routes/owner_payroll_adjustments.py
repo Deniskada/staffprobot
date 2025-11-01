@@ -17,6 +17,7 @@ from domain.entities.payroll_adjustment import PayrollAdjustment
 from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
+from domain.entities.shift_schedule import ShiftSchedule
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 from shared.services.payroll_verification_service import PayrollVerificationService
 
@@ -119,15 +120,23 @@ async def payroll_adjustments_list(
         
         # Базовый запрос с фильтром по сотрудникам владельца И его объектам
         # Важно: фильтруем по объектам владельца ИЛИ по корректировкам созданным владельцем
-        query = select(PayrollAdjustment).where(
+        # ИЛИ по корректировкам без object_id, но с shift_schedule_id, где объект смены принадлежит владельцу
+        query = select(PayrollAdjustment).outerjoin(
+            ShiftSchedule, PayrollAdjustment.shift_schedule_id == ShiftSchedule.id
+        ).where(
             func.date(PayrollAdjustment.created_at) >= start_date,
             func.date(PayrollAdjustment.created_at) <= end_date,
             PayrollAdjustment.employee_id.in_(employee_ids),
             or_(
-                PayrollAdjustment.object_id.in_(owner_object_ids),
+                PayrollAdjustment.object_id.in_(owner_object_ids),  # Прямая привязка к объекту
                 and_(
                     PayrollAdjustment.object_id.is_(None),
-                    PayrollAdjustment.created_by == owner_id  # Только если создал сам владелец
+                    PayrollAdjustment.created_by == owner_id  # Создал владелец
+                ),
+                and_(
+                    PayrollAdjustment.object_id.is_(None),  # object_id = NULL
+                    PayrollAdjustment.shift_schedule_id.isnot(None),  # Но есть shift_schedule_id
+                    ShiftSchedule.object_id.in_(owner_object_ids)  # И объект смены принадлежит владельцу
                 )
             )
         ).options(
