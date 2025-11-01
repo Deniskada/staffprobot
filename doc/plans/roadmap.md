@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 419/468 (89.5%)  
+**Общий прогресс:** 423/472 (89.6%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
@@ -17,7 +17,8 @@
 **Итерация 36 (In-App Notifications & Bell Icon):** ✅ Завершена (6/6 задач)  
 **Итерация 37 (Notification System Overhaul):** ✅ 70% завершена (7/10 задач)  
 **Итерация 38 (Notification System Completion):** ⏸️ В планировании (анализ завершён)  
-**Итерация 39 (Billing & YooKassa Integration):** ✅ Завершена (фазы 1-8 завершены, деплой выполнен, миграции применены)
+**Итерация 39 (Billing & YooKassa Integration):** ✅ Завершена (фазы 1-8 завершены, деплой выполнен, миграции применены)  
+**Итерация 40 (Penalty for Non-Standard Shifts):** ✅ Завершена (автоправило создано, логика интегрирована, тестирование выполнено)
 
 ## Итерация 37: Реорганизация системы уведомлений (Notification System Overhaul)
 
@@ -1005,6 +1006,80 @@
 - ✅ Telegram уведомления работают (send_notification_now)
 - ✅ In-App уведомления создаются и отображаются
 - ✅ Настройки владельца позволяют управлять каналами доставки по типам
+
+---
+
+---
+
+## Итерация 40: Штраф за опоздание на вечернюю смену и исправление дашборда
+
+**Статус:** ✅ Завершена  
+**Дата:** 1 ноября 2025  
+**Приоритет:** Высокий  
+**Описание:** Реализация автоправила "Штраф за опоздание на вечернюю смену (или в нерабочее время)" и исправление расчёта раннего закрытия объектов в дашборде владельца.
+
+### Задачи
+
+- [x] **1.1. Создание автоправила "Штраф за опоздание на вечернюю смену" (0.3 дня)**
+  - Type: feature | Files: migrations/versions/0827df3c36e3_add_rule_penalty_non_standard_shift.py
+  - Acceptance: правило создано с code='penalty_non_standard_shift', scope='late', условие planned_start_matches_opening_time=False
+
+- [x] **1.2. Интеграция правила в логику штрафов (0.3 дня)**
+  - Type: feature | Files: core/celery/tasks/adjustment_tasks.py
+  - Acceptance: логика проверяет совпадение planned_start с opening_time; для нестандартных смен проверяется автоправило
+
+- [x] **1.3. Исправление расчёта раннего закрытия в дашборде (0.2 дня)**
+  - Type: bugfix | Files: apps/web/routes/owner.py
+  - Acceptance: используется obj.timezone вместо timezone_helper.local_tz для расчёта expected_close и actual_close_local
+
+- [x] **1.4. Тестирование логики штрафов (0.2 дня)**
+  - Type: testing | Files: scripts/test_penalty_logic.py, doc/TEST_REPORT_PENALTY_LOGIC.md
+  - Acceptance: создан тестовый скрипт и отчёт с подтверждением корректной работы логики
+
+### Реализация
+
+**Автоправило:**
+- Создано системное правило `penalty_non_standard_shift` с условием `planned_start_matches_opening_time: False`
+- Правило применяется для смен, запланированных не в время начала работы объекта
+- Приоритет: сначала проверяется флаг `penalize_late_start` в тайм-слоте, затем правило
+
+**Логика штрафов:**
+1. Если `planned_start == opening_time` → используется флаг `penalize_late_start` из тайм-слота
+2. Если `planned_start != opening_time`:
+   - Приоритет 1: если в тайм-слоте `penalize_late_start = True` → всегда штрафуется
+   - Приоритет 2: проверяется автоправило (если включено → штрафуется)
+
+**Исправление дашборда:**
+- Использование `obj.timezone` вместо `timezone_helper.local_tz` для расчёта `expected_close`
+- Использование `obj.timezone` для конвертации `actual_close_local` из UTC
+- Исправляет проблему "Раннее закрытие" для объектов в других часовых поясах
+
+**Тестирование:**
+- Создан скрипт `test_penalty_logic.py` для проверки логики
+- Проверено на реальных данных (смена 345)
+- Создан отчёт `TEST_REPORT_PENALTY_LOGIC.md`
+
+### Результат
+
+- ✅ Автоправило создано и активно
+- ✅ Логика проверки совпадения planned_start с opening_time работает
+- ✅ Приоритет тайм-слота над правилом реализован
+- ✅ Правило проверяется только для нестандартных смен без явного штрафа в тайм-слоте
+- ✅ Исправлена проблема с расчётом раннего закрытия для объектов в других часовых поясах
+- ✅ Задеплоено на production
+
+### DoD
+
+- [x] Код следует правилам проекта ✅
+- [x] Миграция создана и применена ✅
+- [x] Функционал протестирован на dev ✅
+- [x] Документация создана (TEST_REPORT_PENALTY_LOGIC.md, ANALYSIS_EARLY_CLOSING_*.md) ✅
+- [x] Задеплоено на production ✅
+
+### Связанная документация
+
+- [TEST_REPORT_PENALTY_LOGIC.md](../TEST_REPORT_PENALTY_LOGIC.md)
+- [ANALYSIS_EARLY_CLOSING_ROOT_CAUSE.md](../ANALYSIS_EARLY_CLOSING_ROOT_CAUSE.md)
 
 ---
 
