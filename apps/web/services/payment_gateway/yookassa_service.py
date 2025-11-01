@@ -290,6 +290,14 @@ class YooKassaService:
         Returns:
             dict с данными события или None
         """
+        if not YOOKASSA_AVAILABLE:
+            logger.warning("YooKassa SDK not installed - cannot parse webhook")
+            return None
+        
+        if not self.is_configured:
+            logger.warning("YooKassa not configured - cannot parse webhook")
+            return None
+        
         try:
             # Декодируем JSON
             import json
