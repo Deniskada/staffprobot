@@ -36,6 +36,38 @@
 - Перед коммитом: быстрый diff по `doc/vision_v1` и запуск автогенерации при необходимости.
 - При обнаружении несоответствий — завести задачу на коррекцию документации.
 
+## Недавние изменения (main, 03.11.2025)
+
+### DevOps Command Center (Iteration 41) ✅
+
+**Статус:** Завершено, MVP реализован
+- **Новые роуты:**
+  - `GET /support` - Support Hub (хаб поддержки для всех ролей)
+  - `GET /support/bug` - форма подачи бага
+  - `GET /support/faq` - FAQ база знаний
+  - `GET /support/my-bugs` - список моих багов
+  - `GET /admin/devops` - DevOps Dashboard для owner/superadmin
+- **Новые бот-команды:**
+  - `/support` - меню поддержки
+  - `/bug` - FSM форма подачи бага
+  - `/faq` - быстрые ответы
+  - `/morning` - утренний обзор (owner/superadmin)
+  - `/devops` - DevOps панель (owner/superadmin)
+- **Новые таблицы БД:**
+  - `bug_logs` - отчеты о багах
+  - `deployments` - история деплоев (авторегистрация через GitHub Actions)
+  - `changelog_entries` - архитектурные изменения
+  - `faq_entries` - FAQ база знаний
+- **Новые сервисы:**
+  - `GitHubService` - работа с GitHub Issues API
+- **CI/CD:**
+  - `.github/workflows/main.yml` - автоматический деплой на production
+  - Регистрация деплоев в БД при успехе/провале
+  - Уведомления в Telegram
+- **Документация:**
+  - `doc/DEVOPS_COMMAND_CENTER.md` - полное описание компонентов
+  - `doc/GITHUB_ACTIONS_SETUP.md` - настройка CI/CD
+
 ## Недавние изменения (main, 01.11.2025)
 
 ### Админ-панель биллинга - Табличные представления с сортировкой и фильтрацией (Iteration 39) ✅

@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 423/472 (89.6%)  
+**Общий прогресс:** 431/480 (89.8%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
@@ -19,6 +19,7 @@
 **Итерация 38 (Notification System Completion):** ⏸️ В планировании (анализ завершён)  
 **Итерация 39 (Billing & YooKassa Integration):** ✅ Завершена (фазы 1-8 завершены, деплой выполнен, миграции применены)  
 **Итерация 40 (Penalty for Non-Standard Shifts):** ✅ Завершена (автоправило создано, логика интегрирована, тестирование выполнено)
+**Итерация 41 (DevOps Command Center):** ✅ Завершена (8/8 задач, MVP реализован)
 
 ## Итерация 37: Реорганизация системы уведомлений (Notification System Overhaul)
 
@@ -1080,6 +1081,94 @@
 
 - [TEST_REPORT_PENALTY_LOGIC.md](../TEST_REPORT_PENALTY_LOGIC.md)
 - [ANALYSIS_EARLY_CLOSING_ROOT_CAUSE.md](../ANALYSIS_EARLY_CLOSING_ROOT_CAUSE.md)
+
+---
+
+## Итерация 41: DevOps Command Center ✅
+
+**Статус:** ✅ Завершена  
+**Дата:** 3 ноября 2025  
+**Приоритет:** Высокий  
+**Описание:** Реализация DevOps Command Center для мониторинга, поддержки пользователей и автоматизации разработки.
+
+### Задачи
+
+- [x] **1.1. Support Hub (веб-интерфейс)** ✅
+  - Type: feature | Files: apps/web/routes/support.py, apps/web/templates/support/*
+  - Acceptance: работают /support, /support/bug, /support/faq, /support/my-bugs с ролевыми меню
+
+- [x] **1.2. SQL миграции DevOps** ✅
+  - Type: feature | Files: migrations/versions/26f081e4388f_*.py
+  - Acceptance: созданы таблицы bug_logs, deployments, changelog_entries, faq_entries
+
+- [x] **1.3. Telegram bot support** ✅
+  - Type: feature | Files: apps/bot/handlers_div/support_handlers.py
+  - Acceptance: работают команды /support, /bug (FSM), /faq
+
+- [x] **1.4. Telegram bot admin** ✅
+  - Type: feature | Files: apps/bot/handlers_div/admin_handlers.py
+  - Acceptance: работают команды /morning, /devops для owner/superadmin
+
+- [x] **1.5. Admin DevOps Dashboard** ✅
+  - Type: feature | Files: apps/web/routes/admin.py, apps/web/templates/admin/devops.html
+  - Acceptance: работает /admin/devops с DORA метриками и GitHub Issues
+
+- [x] **1.6. GitHub Actions CI/CD** ✅
+  - Type: feature | Files: .github/workflows/main.yml, doc/GITHUB_ACTIONS_SETUP.md
+  - Acceptance: автоматический деплой на production, регистрация в БД
+
+- [x] **1.7. GitHub Service** ✅
+  - Type: feature | Files: apps/web/services/github_service.py, core/config/settings.py
+  - Acceptance: создание и получение GitHub Issues
+
+- [x] **1.8. DORA Metrics Service** ✅
+  - Type: feature | Files: apps/web/routes/admin.py, domain/entities/deployment.py
+  - Acceptance: расчёт Deployment Frequency, Change Failure Rate из БД
+
+### Реализация
+
+**Компоненты:**
+1. Support Hub — веб-интерфейс для багов/FAQ
+2. Admin DevOps Dashboard — DORA метрики, статус системы
+3. Telegram Bot Support — /support, /bug, /faq
+4. Telegram Bot Admin — /morning, /devops
+5. GitHub Actions CI/CD — тесты, деплой, уведомления
+6. DORA Metrics — автоматический расчёт из БД
+
+**База данных:**
+- `bug_logs` — отчеты о багах
+- `deployments` — история деплоев (авторегистрация через GitHub Actions)
+- `changelog_entries` — архитектурные изменения
+- `faq_entries` — база знаний
+
+**Интеграции:**
+- GitHub Issues API
+- GitHub Actions для CI/CD
+- Telegram bot для уведомлений
+- Автоматическая регистрация деплоев
+
+### Результат
+
+- ✅ Централизованная поддержка пользователей
+- ✅ Автоматизация CI/CD деплоев
+- ✅ Мониторинг метрик разработки
+- ✅ Интеграция с GitHub Issues
+- ✅ Dashboard для разработчика
+- ✅ Регистрация деплоев в БД
+- ✅ DORA метрики из реальных данных
+
+### DoD
+
+- [x] Код следует правилам проекта ✅
+- [x] Миграции созданы и применены ✅
+- [x] Функционал протестирован на dev ✅
+- [x] Документация создана (DEVOPS_COMMAND_CENTER.md, GITHUB_ACTIONS_SETUP.md) ✅
+- [x] Задеплоено на production ✅
+
+### Связанная документация
+
+- [DevOps Command Center](../DEVOPS_COMMAND_CENTER.md)
+- [GitHub Actions Setup](../GITHUB_ACTIONS_SETUP.md)
 
 ---
 
