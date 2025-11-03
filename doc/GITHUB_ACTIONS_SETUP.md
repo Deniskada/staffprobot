@@ -74,11 +74,38 @@ cat /tmp/deploy_key
 3. Наблюдай за выполнением workflow
 4. Деплой произойдет автоматически если все проверки прошли
 
-### 7. Troubleshooting
+### 7. Настройка Firewall на сервере
+
+**ПРОБЛЕМА:** Сервер имеет firewall (ufw), который разрешает SSH только с определенных IP.
+
+**РЕШЕНИЕ:**
+GitHub Actions использует динамические IP, поэтому нужно разрешить доступ по SSH с проверкой ключа.
+
+На сервере выполни:
+```bash
+# Посмотреть текущие правила
+sudo ufw status
+
+# Добавить правило: SSH разрешен для всех (проверка через authorized_keys)
+sudo ufw allow 22/tcp
+
+# Или более безопасно: разрешить только ваш IP и GitHub Actions
+# Но нужно добавлять IP GitHub Actions вручную через webhook
+sudo ufw allow from 0.0.0.0/0 to any port 22 proto tcp comment "GitHub Actions deploy"
+
+# Проверить что правило добавлено
+sudo ufw status numbered
+```
+
+**Альтернатива:** Получать IP GitHub Actions автоматически
+Но это сложнее, лучше просто разрешить SSH по ключу для всех (он защищен authorized_keys).
+
+### 8. Troubleshooting
 
 Если deploy падает:
-1. Проверь что SSH ключ добавлен в authorized_keys на сервере
-2. Проверь что путь `/opt/staffprobot` существует и доступен
-3. Проверь что Docker Compose файл корректный
-4. Смотри логи в GitHub Actions → конкретный workflow → deploy job
+1. Проверь что SSH ключ добавлен в authorized_keys на сервере: `grep github-actions ~/.ssh/authorized_keys`
+2. Проверь что firewall разрешает SSH снаружи
+3. Проверь что путь `/opt/staffprobot` существует и доступен
+4. Проверь что Docker Compose файл корректный
+5. Смотри логи в GitHub Actions → конкретный workflow → deploy job
 

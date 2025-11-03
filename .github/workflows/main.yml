@@ -148,17 +148,24 @@ jobs:
           docker compose -f docker-compose.prod.yml ps
         EOF
     
-    - name: Health check
+    - name: Health check and register deployment
       env:
         SSH_HOST: staffprobot@staffprobot.ru
+        GITHUB_SHA: ${{ github.sha }}
+        GITHUB_COMMIT_MSG: ${{ github.event.head_commit.message }}
       run: |
         ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << 'EOF'
           cd /opt/staffprobot
           if docker compose -f docker-compose.prod.yml ps | grep -q "healthy"; then
             echo "✅ Все сервисы healthy"
+            # Регистрируем успешный деплой в БД (если еще не зарегистрирован)
+            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO deployments (commit_sha, commit_message, started_at, completed_at, status, triggered_by) SELECT '${GITHUB_SHA}', 'Deploy success', NOW() - INTERVAL '1 minute', NOW(), 'success', 'GitHub Actions' WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE commit_sha = '${GITHUB_SHA}');"
           else
             echo "⚠️ Некоторые сервисы не healthy"
             docker compose -f docker-compose.prod.yml ps
+            # Регистрируем провальный деплой
+            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO deployments (commit_sha, started_at, status, triggered_by) SELECT '${GITHUB_SHA}', NOW(), 'failed', 'GitHub Actions' WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE commit_sha = '${GITHUB_SHA}');"
+            exit 1
           fi
         EOF
 
