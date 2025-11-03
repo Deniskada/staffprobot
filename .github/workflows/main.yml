@@ -123,6 +123,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && needs.test.result == 'success' && needs.lint.result == 'success' && needs.security.result == 'success'
     steps:
+    - uses: actions/checkout@v4
+    
     - name: Set up SSH key
       run: |
         mkdir -p ~/.ssh
@@ -165,6 +167,8 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && (github.ref == 'refs/heads/main')
     steps:
+    - uses: actions/checkout@v4
+    
     - name: Determine workflow status
       id: status
       run: |
