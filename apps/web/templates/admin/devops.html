@@ -1,0 +1,258 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.metric-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-5px);
+}
+
+.metric-card h3 {
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+    opacity: 0.9;
+}
+
+.metric-card .metric-value {
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.metric-card .metric-label {
+    font-size: 1rem;
+    opacity: 0.9;
+}
+
+.dora-badge {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    margin: 5px;
+}
+
+.dora-elite {
+    background: #28a745;
+    color: white;
+}
+
+.dora-high {
+    background: #17a2b8;
+    color: white;
+}
+
+.dora-medium {
+    background: #ffc107;
+    color: #333;
+}
+
+.dora-low {
+    background: #dc3545;
+    color: white;
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.status-online {
+    background: #28a745;
+}
+
+.status-offline {
+    background: #dc3545;
+}
+
+.system-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+}
+
+.system-card:hover {
+    transform: translateY(-3px);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Заголовок -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>
+            <i class="bi bi-server"></i> DevOps панель
+        </h1>
+    </div>
+
+    <!-- DORA Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card system-card">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="bi bi-speedometer2"></i> DORA Metrics
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="metric-card">
+                                <h3>🚀 Deployment Frequency</h3>
+                                <div class="metric-value">{{ deploy_frequency }}</div>
+                                <div class="metric-label">раз/день (30 дней)</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <div class="metric-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                <h3>❌ Change Failure Rate</h3>
+                                <div class="metric-value">{{ failure_rate }}%</div>
+                                <div class="metric-label">% провалов</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <div class="metric-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                                <h3>✅ Successful Deploys</h3>
+                                <div class="metric-value">{{ success_deploys_count }}</div>
+                                <div class="metric-label">из {{ deployments_count }} всего</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <div class="metric-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                                <h3>🔴 Failed Deploys</h3>
+                                <div class="metric-value">{{ deployments_count - success_deploys_count }}</div>
+                                <div class="metric-label">провалов</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if deployments_count == 0 %}
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle"></i> Нет данных о деплоях за последние 30 дней
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GitHub Issues & Bugs -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card system-card">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0">
+                        <i class="bi bi-bug"></i> Баги в системе
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="metric-card" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);">
+                        <h3>🔥 Критичные баги</h3>
+                        <div class="metric-value">{{ critical_bugs_count }}</div>
+                        <div class="metric-label">требуют внимания</div>
+                    </div>
+                    <a href="/support" class="btn btn-primary w-100">
+                        <i class="bi bi-list-ul"></i> Перейти к багам
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card system-card">
+                <div class="card-header bg-dark text-white">
+                    <h3 class="mb-0">
+                        <i class="bi bi-github"></i> GitHub Issues
+                    </h3>
+                </div>
+                <div class="card-body">
+                    {% if github_configured %}
+                        <div class="metric-card" style="background: linear-gradient(135deg, #24292e 0%, #5a5a5a 100%);">
+                            <h3>📋 Открытых issues</h3>
+                            <div class="metric-value">{{ github_issues_count }}</div>
+                            <div class="metric-label">
+                                {% if critical_issues_count > 0 %}
+                                    🔥 {{ critical_issues_count }} критичных
+                                {% else %}
+                                    нет критичных
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i> GitHub не подключен
+                            <br><small>Добавьте GITHUB_TOKEN и GITHUB_REPO в .env</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card system-card">
+                <div class="card-header bg-success text-white">
+                    <h3 class="mb-0">
+                        <i class="bi bi-activity"></i> Статус системы
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center mb-3">
+                                <span class="status-indicator status-online"></span>
+                                <strong>Web</strong>
+                                <span class="badge bg-success ms-auto">Онлайн</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center mb-3">
+                                <span class="status-indicator status-online"></span>
+                                <strong>Bot</strong>
+                                <span class="badge bg-success ms-auto">Онлайн</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center mb-3">
+                                <span class="status-indicator status-online"></span>
+                                <strong>База данных</strong>
+                                <span class="badge bg-success ms-auto">Онлайн</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh every 5 minutes
+setTimeout(function() {
+    location.reload();
+}, 300000);
+</script>
+{% endblock %}
+

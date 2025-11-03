@@ -1,0 +1,160 @@
+{% extends base_template %}
+
+{% block title %}Мои обращения - StaffProBot{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex align-items-center mb-4">
+                <a href="/support" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h1 class="mb-0">
+                    <i class="bi bi-list-check text-success"></i> Мои обращения
+                </h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            {% if bugs %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Дата</th>
+                                <th>Название</th>
+                                <th>Приоритет</th>
+                                <th>Статус</th>
+                                <th>GitHub Issue</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bug in bugs %}
+                            <tr>
+                                <td>
+                                    <small>{{ bug.created_at.strftime('%d.%m.%Y %H:%M') }}</small>
+                                </td>
+                                <td>{{ bug.title }}</td>
+                                <td>
+                                    {% if bug.priority == 'critical' %}
+                                        <span class="badge bg-danger">🔴 Критичный</span>
+                                    {% elif bug.priority == 'high' %}
+                                        <span class="badge bg-warning">🟠 Высокий</span>
+                                    {% elif bug.priority == 'medium' %}
+                                        <span class="badge bg-info">🟡 Средний</span>
+                                    {% else %}
+                                        <span class="badge bg-success">🟢 Низкий</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if bug.status == 'resolved' %}
+                                        <span class="badge bg-success">✓ Решено</span>
+                                    {% elif bug.status == 'in_progress' %}
+                                        <span class="badge bg-primary">В работе</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Открыто</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if bug.github_issue_number %}
+                                        <a href="https://github.com/OWNER/REPO/issues/{{ bug.github_issue_number }}" 
+                                           target="_blank" 
+                                           class="btn btn-sm btn-outline-dark">
+                                            <i class="bi bi-github"></i> #{{ bug.github_issue_number }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" 
+                                            onclick="showBugDetails({{ bug.id }})">
+                                        <i class="bi bi-eye"></i> Подробнее
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <h5 class="alert-heading">
+                        <i class="bi bi-inbox"></i> Нет обращений
+                    </h5>
+                    <p class="mb-0">
+                        У вас пока нет зарегистрированных обращений. 
+                        <a href="/support/bug">Сообщить о проблеме?</a>
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно с деталями бага -->
+<div class="modal fade" id="bugDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали обращения</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="bugDetailsContent">
+                <!-- Загружается через JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showBugDetails(bugId) {
+    const bug = {{ bugs_json | tojson }};
+    const bugData = bug.find(b => b.id === bugId);
+    
+    if (!bugData) return;
+    
+    const content = `
+        <div class="mb-3">
+            <strong>Что делали:</strong>
+            <p class="border rounded p-2">${bugData.what_doing}</p>
+        </div>
+        
+        <div class="mb-3">
+            <strong>Ожидаемое:</strong>
+            <p class="border rounded p-2">${bugData.expected}</p>
+        </div>
+        
+        <div class="mb-3">
+            <strong>Фактическое:</strong>
+            <p class="border rounded p-2">${bugData.actual}</p>
+        </div>
+        
+        ${bugData.screenshot_url ? `
+        <div class="mb-3">
+            <strong>Скриншот:</strong>
+            <img src="${bugData.screenshot_url}" class="img-fluid rounded" alt="Screenshot">
+        </div>
+        ` : ''}
+        
+        <div class="mt-4">
+            <small class="text-muted">
+                Создано: ${new Date(bugData.created_at).toLocaleString('ru-RU')}
+                ${bugData.resolved_at ? '<br>Решено: ' + new Date(bugData.resolved_at).toLocaleString('ru-RU') : ''}
+            </small>
+        </div>
+    `;
+    
+    document.getElementById('bugDetailsContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('bugDetailsModal')).show();
+}
+</script>
+{% endblock %}
+

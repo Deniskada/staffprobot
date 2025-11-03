@@ -104,6 +104,10 @@ class Settings(BaseSettings):
     yookassa_webhook_secret: Optional[str] = os.getenv("YOOKASSA_WEBHOOK_SECRET")
     yookassa_test_mode: bool = os.getenv("YOOKASSA_TEST_MODE", "false").lower() == "true"
     
+    # GitHub (для интеграции с Issues API)
+    github_token: Optional[str] = os.getenv("GITHUB_TOKEN")
+    github_repo: str = os.getenv("GITHUB_REPO", "OWNER/REPO")  # Format: "owner/repo"
+    
     class Config:
         # В production читаем .env.prod, иначе .env
         env_file = ".env.prod" if os.getenv("ENVIRONMENT") == "production" else ".env"

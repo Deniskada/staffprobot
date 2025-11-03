@@ -1,0 +1,195 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgis/postgis:15-3.3
+        env:
+          POSTGRES_DB: staffprobot_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-asyncio
+    
+    - name: Run tests
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/staffprobot_test
+        REDIS_URL: redis://localhost:6379
+        ENVIRONMENT: test
+      run: |
+        pytest tests/ --cov=apps --cov=core --cov=shared --cov-report=xml --cov-report=term
+    
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      if: always()
+      with:
+        files: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black flake8 mypy
+    
+    - name: Run black
+      run: black --check apps core shared tests
+    
+    - name: Run flake8
+      run: flake8 apps core shared tests --max-line-length=88 --extend-ignore=E203
+    
+    - name: Run mypy
+      run: mypy apps core shared --ignore-missing-imports || true
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety bandit
+    
+    - name: Run safety check
+      run: safety check --file requirements.txt
+    
+    - name: Run bandit
+      run: bandit -r apps core shared -ll || true
+
+  deploy:
+    needs: [test, lint, security]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && needs.test.result == 'success' && needs.lint.result == 'success' && needs.security.result == 'success'
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_DEPLOY_KEY }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan staffprobot.ru >> ~/.ssh/known_hosts
+    
+    - name: Deploy to production
+      env:
+        SSH_HOST: staffprobot@staffprobot.ru
+        SSH_PORT: 22
+        DEPLOY_PATH: /opt/staffprobot
+      run: |
+        ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << 'EOF'
+          cd /opt/staffprobot
+          git fetch origin
+          git reset --hard origin/main
+          docker compose -f docker-compose.prod.yml down
+          docker compose -f docker-compose.prod.yml up -d
+          sleep 10
+          docker compose -f docker-compose.prod.yml ps
+        EOF
+    
+    - name: Health check
+      run: |
+        ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << 'EOF'
+          cd /opt/staffprobot
+          if docker compose -f docker-compose.prod.yml ps | grep -q "healthy"; then
+            echo "✅ Все сервисы healthy"
+          else
+            echo "⚠️ Некоторые сервисы не healthy"
+            docker compose -f docker-compose.prod.yml ps
+          fi
+        EOF
+
+  notify:
+    needs: [test, lint, security]
+    runs-on: ubuntu-latest
+    if: always() && (github.ref == 'refs/heads/main')
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Determine workflow status
+      id: status
+      run: |
+        if [ "${{ needs.test.result }}" == "success" ] && \
+           [ "${{ needs.lint.result }}" == "success" ] && \
+           [ "${{ needs.security.result }}" == "success" ]; then
+          echo "result=success" >> $GITHUB_OUTPUT
+        else
+          echo "result=failure" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Notify Telegram (if configured)
+      if: env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: |
+        if [ "${{ steps.status.outputs.result }}" == "success" ]; then
+          MESSAGE="✅ CI/CD успешно завершён для ${{ github.sha }}"
+        else
+          MESSAGE="❌ CI/CD провалился для ${{ github.sha }}"
+        fi
+        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+          -d chat_id="${TELEGRAM_CHAT_ID}" \
+          -d text="${MESSAGE}" || true
+

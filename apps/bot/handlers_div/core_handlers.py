@@ -1035,7 +1035,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             object_id = int(parts[1])
             slot_type = parts[2]
             await _handle_delete_slot_week(update, context, object_id, slot_type)
-        return    
+        return
+    # Admin handlers
+    elif query.data == "admin_devops":
+        from .admin_handlers import devops_command
+        await devops_command(update, context)
+        return
+    elif query.data == "admin_morning":
+        from .admin_handlers import morning_command
+        await morning_command(update, context)
+        return
     elif query.data == "main_menu" or query.data == "back_to_menu":
         response = f"""
 🏠 <b>Главное меню</b>

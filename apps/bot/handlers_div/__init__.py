@@ -70,6 +70,19 @@ from .utility_handlers import (
     handle_cancel
 )
 
+# Support handlers
+from .support_handlers import (
+    support_menu_command,
+    support_faq_callback,
+    get_support_conversation_handler
+)
+
+# Admin handlers
+from .admin_handlers import (
+    morning_command,
+    devops_command
+)
+
 __all__ = [
     # Основные обработчики
     'start_command',
@@ -127,5 +140,14 @@ __all__ = [
     '_handle_help_callback',
     '_handle_status_callback',
     'handle_message',
-    'handle_cancel'
+    'handle_cancel',
+    
+    # Support handlers
+    'support_menu_command',
+    'support_faq_callback',
+    'get_support_conversation_handler',
+    
+    # Admin handlers
+    'morning_command',
+    'devops_command'
 ]

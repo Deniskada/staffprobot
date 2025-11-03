@@ -457,3 +457,109 @@ async def admin_cache_stats(request: Request):
             "error": f"Ошибка подключения к Redis: {str(e)}",
             "available_interfaces": []
         })
+
+
+@router.get("/devops", response_class=HTMLResponse, name="admin_devops")
+async def devops_dashboard(request: Request):
+    """DevOps панель для владельца/админа"""
+    # Проверяем авторизацию и роль
+    current_user = await get_current_user_from_request(request)
+    user_role = current_user.get("role", "employee")
+    
+    # Доступ: owner или superadmin
+    if user_role not in ["owner", "superadmin"]:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        from domain.entities.bug_log import BugLog
+        from domain.entities.deployment import Deployment
+        from apps.web.services.github_service import github_service
+        
+        async with get_async_session() as session:
+            # За последние 30 дней
+            thirty_days_ago = datetime.now() - timedelta(days=30)
+            
+            # Подсчет деплоев
+            deployments_query = select(func.count(Deployment.id)).where(
+                Deployment.started_at >= thirty_days_ago
+            )
+            deployments_result = await session.execute(deployments_query)
+            deployments_count = deployments_result.scalar() or 0
+            
+            # Успешные деплои
+            success_deploys_query = select(func.count(Deployment.id)).where(
+                and_(
+                    Deployment.started_at >= thirty_days_ago,
+                    Deployment.status == 'success'
+                )
+            )
+            success_deploys_result = await session.execute(success_deploys_query)
+            success_deploys_count = success_deploys_result.scalar() or 0
+            
+            # Deployment Frequency (DORA)
+            deploy_frequency = round(deployments_count / 30, 2)
+            
+            # Failure Rate
+            failure_rate = 0
+            if deployments_count > 0:
+                failure_rate = round((deployments_count - success_deploys_count) / deployments_count * 100, 1)
+            
+            # Критичные баги
+            critical_bugs_query = select(func.count(BugLog.id)).where(
+                and_(
+                    BugLog.status == 'open',
+                    BugLog.priority.in_(['critical', 'high'])
+                )
+            )
+            critical_bugs_result = await session.execute(critical_bugs_query)
+            critical_bugs_count = critical_bugs_result.scalar() or 0
+            
+            # GitHub Issues
+            github_issues_count = 0
+            critical_issues_count = 0
+            if github_service.token:
+                try:
+                    issues = await github_service.get_issues(
+                        labels=["bug"],
+                        state="open"
+                    )
+                    github_issues_count = len(issues)
+                    critical_issues = [i for i in issues if 'priority-critical' in i.get('labels', [])]
+                    critical_issues_count = len(critical_issues)
+                except Exception as e:
+                    logger.error(f"Failed to get GitHub issues: {e}")
+        
+        # Получаем данные для переключения интерфейсов
+        from shared.services.role_based_login_service import RoleBasedLoginService
+        
+        async with get_async_session() as session:
+            # Получаем внутренний ID пользователя
+            telegram_id = current_user.get("id")
+            user_query = select(User).where(User.telegram_id == telegram_id)
+            user_result = await session.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            
+            if user_obj:
+                login_service = RoleBasedLoginService(session)
+                available_interfaces = await login_service.get_available_interfaces(user_obj.id)
+            else:
+                available_interfaces = []
+        
+        return templates.TemplateResponse("admin/devops.html", {
+            "request": request,
+            "current_user": current_user,
+            "title": "DevOps панель",
+            "deployments_count": deployments_count,
+            "success_deploys_count": success_deploys_count,
+            "deploy_frequency": deploy_frequency,
+            "failure_rate": failure_rate,
+            "critical_bugs_count": critical_bugs_count,
+            "github_issues_count": github_issues_count,
+            "critical_issues_count": critical_issues_count,
+            "github_configured": bool(github_service.token),
+            "available_interfaces": available_interfaces
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading DevOps dashboard: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки панели: {str(e)}")

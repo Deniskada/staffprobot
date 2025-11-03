@@ -20,7 +20,12 @@ from .handlers_div import (
     start_command,
     handle_message,
     button_callback,
-    handle_location
+    handle_location,
+    support_menu_command,
+    support_faq_callback,
+    get_support_conversation_handler,
+    morning_command,
+    devops_command
 )
 from .handlers import (
     help_command,
@@ -112,6 +117,15 @@ class StaffProBot:
         self.application.add_handler(CommandHandler("help", help_command))
         self.application.add_handler(CommandHandler("status", status_command))
         self.application.add_handler(CommandHandler("get_chat_id", get_chat_id_command))
+        self.application.add_handler(CommandHandler("support", support_menu_command))
+        
+        # Admin команды
+        self.application.add_handler(CommandHandler("morning", morning_command))
+        self.application.add_handler(CommandHandler("devops", devops_command))
+        
+        # Support handlers
+        self.application.add_handler(CallbackQueryHandler(support_faq_callback, pattern="^support_faq$"))
+        self.application.add_handler(get_support_conversation_handler())
         
         # Обработка геопозиции (ВАЖНО: до ConversationHandler!)
         self.application.add_handler(

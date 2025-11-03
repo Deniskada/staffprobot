@@ -1,0 +1,175 @@
+{% extends base_template %}
+
+{% block title %}Сообщить о проблеме - StaffProBot{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="d-flex align-items-center mb-4">
+                <a href="/support" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h1 class="mb-0">
+                    <i class="bi bi-bug text-danger"></i> Сообщить о проблеме
+                </h1>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <p class="text-muted mb-4">
+                        Пожалуйста, опишите проблему максимально подробно. 
+                        Это поможет нам быстрее её исправить.
+                    </p>
+
+                    <form method="post" action="/support/api/bug" enctype="multipart/form-data" id="bugForm">
+                        <!-- Что делали -->
+                        <div class="mb-4">
+                            <label for="what_doing" class="form-label">
+                                <strong>Шаг 1:</strong> Что вы делали, когда произошла ошибка?
+                                <span class="text-danger">*</span>
+                            </label>
+                            <textarea 
+                                class="form-control" 
+                                id="what_doing" 
+                                name="what_doing" 
+                                rows="3" 
+                                required
+                                placeholder="Например: Пытался открыть смену на объекте 'Торговый центр'"
+                            ></textarea>
+                            <div class="form-text">
+                                Опишите действия, которые привели к ошибке
+                            </div>
+                        </div>
+
+                        <!-- Что ожидали -->
+                        <div class="mb-4">
+                            <label for="expected" class="form-label">
+                                <strong>Шаг 2:</strong> Что вы ожидали увидеть?
+                                <span class="text-danger">*</span>
+                            </label>
+                            <textarea 
+                                class="form-control" 
+                                id="expected" 
+                                name="expected" 
+                                rows="3" 
+                                required
+                                placeholder="Например: Смена должна была открыться и показать таймер"
+                            ></textarea>
+                            <div class="form-text">
+                                Опишите ожидаемое поведение системы
+                            </div>
+                        </div>
+
+                        <!-- Что произошло -->
+                        <div class="mb-4">
+                            <label for="actual" class="form-label">
+                                <strong>Шаг 3:</strong> Что произошло вместо этого?
+                                <span class="text-danger">*</span>
+                            </label>
+                            <textarea 
+                                class="form-control" 
+                                id="actual" 
+                                name="actual" 
+                                rows="3" 
+                                required
+                                placeholder="Например: Появилось сообщение об ошибке 'Не удалось определить местоположение'"
+                            ></textarea>
+                            <div class="form-text">
+                                Опишите, что произошло на самом деле
+                            </div>
+                        </div>
+
+                        <!-- Приоритет -->
+                        <div class="mb-4">
+                            <label for="priority" class="form-label">
+                                <strong>Шаг 4:</strong> Насколько это срочно?
+                            </label>
+                            <select class="form-select" id="priority" name="priority">
+                                <option value="low">🟢 Низкий — может подождать</option>
+                                <option value="medium" selected>🟡 Средний — нужно исправить скоро</option>
+                                <option value="high">🟠 Высокий — мешает работе</option>
+                                <option value="critical">🔴 Критичный — работать невозможно</option>
+                            </select>
+                            <div class="form-text">
+                                Выберите приоритет в зависимости от влияния на вашу работу
+                            </div>
+                        </div>
+
+                        <!-- Скриншот -->
+                        <div class="mb-4">
+                            <label for="screenshot" class="form-label">
+                                <strong>Шаг 5:</strong> Скриншот (опционально)
+                            </label>
+                            <input 
+                                class="form-control" 
+                                type="file" 
+                                id="screenshot" 
+                                name="screenshot"
+                                accept="image/*"
+                            >
+                            <div class="form-text">
+                                Скриншот поможет нам быстрее понять проблему
+                            </div>
+                            <div id="imagePreview" class="mt-2"></div>
+                        </div>
+
+                        <!-- Кнопки -->
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a href="/support" class="btn btn-secondary">
+                                <i class="bi bi-x"></i> Отмена
+                            </a>
+                            <button type="submit" class="btn btn-danger" id="submitBtn">
+                                <i class="bi bi-send"></i> Отправить отчет
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Полезные советы -->
+            <div class="card mt-4 bg-light">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-lightbulb text-warning"></i> Советы для эффективного отчета
+                    </h5>
+                    <ul class="mb-0">
+                        <li>Опишите шаги для воспроизведения проблемы</li>
+                        <li>Укажите время, когда произошла ошибка</li>
+                        <li>Если возможно, приложите скриншот</li>
+                        <li>Укажите, происходит ли это постоянно или было один раз</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Превью загруженного изображения
+document.getElementById('screenshot').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const preview = document.getElementById('imagePreview');
+    
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.innerHTML = `
+                <img src="${e.target.result}" class="img-thumbnail" style="max-width: 300px;">
+            `;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        preview.innerHTML = '';
+    }
+});
+
+// Валидация формы
+document.getElementById('bugForm').addEventListener('submit', function(e) {
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Отправка...';
+});
+</script>
+{% endblock %}
+

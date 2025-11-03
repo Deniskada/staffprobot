@@ -40,5 +40,9 @@ from .usage_metrics import UsageMetrics
 from .notification import Notification
 from .payment_notification import PaymentNotification, NotificationType, NotificationStatus, NotificationChannel
 from .review import Review, ReviewMedia, ReviewAppeal, Rating, SystemRule
+from .bug_log import BugLog
+from .changelog_entry import ChangelogEntry
+from .deployment import Deployment
+from .faq_entry import FAQEntry
 
-__all__ = ["Base", "User", "PaymentSystem", "PaymentSchedule", "OrgStructureUnit", "PayrollEntry", "PayrollAdjustment", "EmployeePayment", "TimeslotTaskTemplate", "ObjectOpening", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "OrganizationProfile", "SystemFeature", "Contract", "ContractTermination", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate", "TariffPlan", "UserSubscription", "SubscriptionStatus", "BillingPeriod", "BillingTransaction", "TransactionType", "TransactionStatus", "PaymentMethod", "UsageMetrics", "Notification", "PaymentNotification", "NotificationType", "NotificationStatus", "NotificationChannel", "Review", "ReviewMedia", "ReviewAppeal", "Rating", "SystemRule"]
+__all__ = ["Base", "User", "PaymentSystem", "PaymentSchedule", "OrgStructureUnit", "PayrollEntry", "PayrollAdjustment", "EmployeePayment", "TimeslotTaskTemplate", "ObjectOpening", "Object", "Shift", "ShiftSchedule", "TimeSlot", "TagReference", "OwnerProfile", "OrganizationProfile", "SystemFeature", "Contract", "ContractTermination", "ManagerObjectPermission", "Application", "ApplicationStatus", "Interview", "InterviewType", "InterviewStatus", "TaskCategory", "TaskTemplate", "TariffPlan", "UserSubscription", "SubscriptionStatus", "BillingPeriod", "BillingTransaction", "TransactionType", "TransactionStatus", "PaymentMethod", "UsageMetrics", "Notification", "PaymentNotification", "NotificationType", "NotificationStatus", "NotificationChannel", "Review", "ReviewMedia", "ReviewAppeal", "Rating", "SystemRule", "BugLog", "ChangelogEntry", "Deployment", "FAQEntry"]
