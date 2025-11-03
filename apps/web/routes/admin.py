@@ -601,6 +601,9 @@ async def devops_architecture(request: Request):
         "http://host.docker.internal:8003",  # docker desktop / совместимые среды
         "http://127.0.0.1:8003",  # локально вне контейнера
         "http://localhost:8003",
+        # Внешние dev/prod URL, если Brain вынесен отдельно
+        "http://dev.staffprobot.ru:8083",
+        "http://staffprobot.ru:8083",
     ]
     candidates = [c.rstrip("/") for c in candidates if c]
     brain_url = None
