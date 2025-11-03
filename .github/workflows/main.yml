@@ -185,14 +185,22 @@ jobs:
         SSH_PORT: 22
         DEPLOY_PATH: /opt/staffprobot
       run: |
-        ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << 'EOF'
+        ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << EOF
+          set -e
           cd /opt/staffprobot
+          START_TS=\$(date +%s)
           git fetch origin
           git reset --hard origin/main
           docker compose -f docker-compose.prod.yml down
           docker compose -f docker-compose.prod.yml up -d
           sleep 10
           docker compose -f docker-compose.prod.yml ps
+          END_TS=\$(date +%s)
+          DUR=\$((END_TS-START_TS))
+          echo "Deploy duration: \$DUR sec"
+          echo "START_TS=\$START_TS" > .deploy_env
+          echo "END_TS=\$END_TS" >> .deploy_env
+          echo "DURATION=\$DUR" >> .deploy_env
         EOF
     
     - name: Health check and register deployment
@@ -201,23 +209,24 @@ jobs:
         GITHUB_SHA: ${{ github.sha }}
         GITHUB_COMMIT_MSG: ${{ github.event.head_commit.message }}
       run: |
-        ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << 'EOF'
+        ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << EOF
+          set -e
           cd /opt/staffprobot
-          # health check with retries
+          # load duration from previous step
+          if [ -f .deploy_env ]; then . ./.deploy_env; fi
           tries=0; max=3; ok=0
-          while [ $tries -lt $max ]; do
+          while [ \$tries -lt \$max ]; do
             if docker compose -f docker-compose.prod.yml ps | grep -q "healthy"; then ok=1; break; fi
-            tries=$((tries+1)); sleep $((tries*5))
+            tries=\$((tries+1)); sleep \$((tries*5))
           done
-          if [ "$ok" = "1" ]; then
+          if [ "\$ok" = "1" ]; then
             echo "✅ Все сервисы healthy"
-            # Регистрируем успешный деплой в БД (если еще не зарегистрирован)
-            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO deployments (commit_sha, commit_message, started_at, completed_at, duration_seconds, status, triggered_by) SELECT '${GITHUB_SHA}', 'Deploy success', NOW() - INTERVAL '1 minute', NOW(), EXTRACT(EPOCH FROM (NOW() - (NOW() - INTERVAL '1 minute')))::int, 'success', 'GitHub Actions' WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE commit_sha = '${GITHUB_SHA}');"
+            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO deployments (commit_sha, commit_message, started_at, completed_at, duration_seconds, status, triggered_by) SELECT '${GITHUB_SHA}', 'Deploy success', to_timestamp(\$START_TS), to_timestamp(\$END_TS), \$DURATION, 'success', 'GitHub Actions' WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE commit_sha = '${GITHUB_SHA}');"
           else
             echo "⚠️ Некоторые сервисы не healthy"
             docker compose -f docker-compose.prod.yml ps
-            # Регистрируем провальный деплой
-            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO deployments (commit_sha, started_at, completed_at, duration_seconds, status, triggered_by) SELECT '${GITHUB_SHA}', NOW(), NOW(), 0, 'failed', 'GitHub Actions' WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE commit_sha = '${GITHUB_SHA}');"
+            NOWTS=\$(date +%s)
+            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO deployments (commit_sha, started_at, completed_at, duration_seconds, status, triggered_by) SELECT '${GITHUB_SHA}', to_timestamp(\$START_TS), to_timestamp(\$NOWTS), (\$NOWTS-\$START_TS), 'failed', 'GitHub Actions' WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE commit_sha = '${GITHUB_SHA}');"
             exit 1
           fi
         EOF
@@ -245,8 +254,9 @@ jobs:
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        BRAIN_URL: ${{ vars.BRAIN_URL || 'http://brain:8003' }}
+        BRAIN_URL: ${{ vars.BRAIN_URL }}
       run: |
+        : "${BRAIN_URL:=http://brain:8003}"
         STATS=$(curl -s "$BRAIN_URL/api/architecture/graph" | jq -r '.stats | "nodes: \(.total_nodes)//0, edges: \(.total_edges)//0"' || echo "nodes: n/a, edges: n/a")
         if [ "${{ steps.status.outputs.result }}" == "success" ]; then
           MESSAGE="✅ CI/CD успешно завершён\nSHA: ${{ github.sha }}\nBrain: $STATS"
