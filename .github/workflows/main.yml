@@ -141,18 +141,10 @@ jobs:
         for i in 1 2 3; do \
           curl -s "$BRAIN_URL/api/architecture/graph" > doc/architecture/latest.json && break || sleep $((i*i)); \
         done || echo "WARN: cannot download graph"
-        python - << 'PY'
-import json,sys
-import urllib.request
-url = '${{ env.BRAIN_URL }}/api/architecture/diagram'
-try:
-    with urllib.request.urlopen(url, timeout=10) as r:
-        data = json.loads(r.read().decode('utf-8'))
-        mermaid = data.get('mermaid','')
-        open('doc/architecture/latest.mmd','w',encoding='utf-8').write(mermaid)
-except Exception as e:
-    sys.stderr.write(str(e)+'\n')
-PY
+        echo "Downloading mermaid diagram..."
+        for i in 1 2 3; do \
+          curl -s "$BRAIN_URL/api/architecture/diagram" | jq -r '.mermaid // empty' > doc/architecture/latest.mmd && break || sleep $((i*i)); \
+        done || echo "WARN: cannot download diagram"
 
     - name: Commit architecture artifacts
       run: |
