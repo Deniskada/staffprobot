@@ -13,14 +13,20 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPNBDyRGQGX0jvGQeT9xkArMrQiQWHcuwwKjq7RlTd7U
 
 Найден в файле: `/tmp/deploy_key` (локально на твоей машине)
 
-### 2. Добавление секрета в GitHub
+### 2. Разрешить использование Actions (ОДИН РАЗ)
 
 1. Перейди в репозиторий на GitHub
-2. Settings → Secrets and variables → Actions
-3. Убедись что выбран раздел **Repository secrets** (не Environment secrets!)
-4. Нажми "New repository secret"
-5. Name: `SSH_DEPLOY_KEY`
-6. Value: скопируй содержимое приватного ключа из `/tmp/deploy_key`:
+2. **Settings → Actions → General**
+3. В разделе "Actions permissions" выбери: **"Allow all actions and reusable workflows"**
+4. Нажми **Save** внизу страницы
+
+### 3. Добавление секрета SSH ключа
+
+1. Перейди в **Settings → Secrets and variables → Actions**
+2. Убедись что выбран раздел **Repository secrets** (не Environment secrets!)
+3. Нажми "New repository secret"
+4. Name: `SSH_DEPLOY_KEY`
+5. Value: скопируй содержимое приватного ключа из `/tmp/deploy_key`:
 
 ```bash
 cat /tmp/deploy_key
@@ -30,7 +36,7 @@ cat /tmp/deploy_key
 
 6. Сохрани секрет
 
-### 3. Как работает деплой
+### 4. Как работает деплой
 
 **Триггер:** Push в ветку `main`
 
@@ -51,7 +57,7 @@ cat /tmp/deploy_key
   - `docker compose -f docker-compose.prod.yml up -d`
   - Health check всех сервисов
 
-### 4. Опциональные секреты
+### 5. Опциональные секреты
 
 Для уведомлений в Telegram добавь:
 - `TELEGRAM_BOT_TOKEN` - токен бота
@@ -60,7 +66,7 @@ cat /tmp/deploy_key
 Для codecov добавь:
 - `CODECOV_TOKEN` - токен от codecov.io
 
-### 5. Проверка работы
+### 6. Проверка работы
 
 После добавления секрета:
 1. Сделай commit в `main`
@@ -68,7 +74,7 @@ cat /tmp/deploy_key
 3. Наблюдай за выполнением workflow
 4. Деплой произойдет автоматически если все проверки прошли
 
-### 6. Troubleshooting
+### 7. Troubleshooting
 
 Если deploy падает:
 1. Проверь что SSH ключ добавлен в authorized_keys на сервере
