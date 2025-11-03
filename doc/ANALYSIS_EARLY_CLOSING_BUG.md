@@ -164,3 +164,4 @@ if last_shift.end_time and last_shift.status == 'completed' and not active_shift
 
 
 
+

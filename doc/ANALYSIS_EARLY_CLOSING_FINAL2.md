@@ -179,3 +179,4 @@ last_shift = max(shifts_today, key=lambda s: s.end_time or s.start_time)
 
 
 
+

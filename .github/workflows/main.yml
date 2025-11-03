@@ -124,6 +124,59 @@ jobs:
     if: github.ref == 'refs/heads/main' && needs.test.result == 'success' && needs.lint.result == 'success' && needs.security.result == 'success'
     steps:
     - uses: actions/checkout@v4
+
+    - name: Analyze Architecture (Project Brain)
+      env:
+        BRAIN_URL: ${{ vars.BRAIN_URL || 'http://brain:8003' }}
+      run: |
+        echo "Triggering Brain analyze with retries..."
+        for i in 1 2 3; do \
+          curl -s -X POST "$BRAIN_URL/api/architecture/analyze" \
+            -H 'Content-Type: application/json' \
+            -d '{"project":"staffprobot","commit_sha":"${{ github.sha }}"}' && break || sleep $((i*i)); \
+        done || echo "WARN: analyze endpoint unreachable, continuing"
+        mkdir -p doc/architecture
+        echo "Downloading latest graph and diagram..."
+        for i in 1 2 3; do \
+          curl -s "$BRAIN_URL/api/architecture/graph" > doc/architecture/latest.json && break || sleep $((i*i)); \
+        done || echo "WARN: cannot download graph"
+        python - << 'PY'
+import json,sys
+import urllib.request
+url = '${{ env.BRAIN_URL }}/api/architecture/diagram'
+try:
+    with urllib.request.urlopen(url, timeout=10) as r:
+        data = json.loads(r.read().decode('utf-8'))
+        mermaid = data.get('mermaid','')
+        open('doc/architecture/latest.mmd','w',encoding='utf-8').write(mermaid)
+except Exception as e:
+    sys.stderr.write(str(e)+'\n')
+PY
+
+    - name: Commit architecture artifacts
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add doc/architecture || true
+        git commit -m "docs: update architecture [skip ci]" || true
+        git push || true
+
+    - name: Upload architecture artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: architecture-artifacts
+        path: |
+          doc/architecture/latest.json
+          doc/architecture/latest.mmd
+
+    - name: Sync Datasets (Project Brain)
+      env:
+        BRAIN_URL: ${{ vars.BRAIN_URL || 'http://brain:8003' }}
+      run: |
+        echo "Sync datasets in Brain with retries..."
+        for i in 1 2 3; do \
+          curl -s -X POST "$BRAIN_URL/api/datasets/sync" && break || sleep $((i*i)); \
+        done || echo "WARN: datasets sync failed, continuing"
     
     - name: Set up SSH key
       run: |
@@ -156,15 +209,21 @@ jobs:
       run: |
         ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << 'EOF'
           cd /opt/staffprobot
-          if docker compose -f docker-compose.prod.yml ps | grep -q "healthy"; then
+          # health check with retries
+          tries=0; max=3; ok=0
+          while [ $tries -lt $max ]; do
+            if docker compose -f docker-compose.prod.yml ps | grep -q "healthy"; then ok=1; break; fi
+            tries=$((tries+1)); sleep $((tries*5))
+          done
+          if [ "$ok" = "1" ]; then
             echo "✅ Все сервисы healthy"
             # Регистрируем успешный деплой в БД (если еще не зарегистрирован)
-            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO deployments (commit_sha, commit_message, started_at, completed_at, status, triggered_by) SELECT '${GITHUB_SHA}', 'Deploy success', NOW() - INTERVAL '1 minute', NOW(), 'success', 'GitHub Actions' WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE commit_sha = '${GITHUB_SHA}');"
+            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO deployments (commit_sha, commit_message, started_at, completed_at, duration_seconds, status, triggered_by) SELECT '${GITHUB_SHA}', 'Deploy success', NOW() - INTERVAL '1 minute', NOW(), EXTRACT(EPOCH FROM (NOW() - (NOW() - INTERVAL '1 minute')))::int, 'success', 'GitHub Actions' WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE commit_sha = '${GITHUB_SHA}');"
           else
             echo "⚠️ Некоторые сервисы не healthy"
             docker compose -f docker-compose.prod.yml ps
             # Регистрируем провальный деплой
-            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO deployments (commit_sha, started_at, status, triggered_by) SELECT '${GITHUB_SHA}', NOW(), 'failed', 'GitHub Actions' WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE commit_sha = '${GITHUB_SHA}');"
+            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d staffprobot_prod -c "INSERT INTO deployments (commit_sha, started_at, completed_at, duration_seconds, status, triggered_by) SELECT '${GITHUB_SHA}', NOW(), NOW(), 0, 'failed', 'GitHub Actions' WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE commit_sha = '${GITHUB_SHA}');"
             exit 1
           fi
         EOF
@@ -192,11 +251,13 @@ jobs:
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        BRAIN_URL: ${{ vars.BRAIN_URL || 'http://brain:8003' }}
       run: |
+        STATS=$(curl -s "$BRAIN_URL/api/architecture/graph" | jq -r '.stats | "nodes: \(.total_nodes)//0, edges: \(.total_edges)//0"' || echo "nodes: n/a, edges: n/a")
         if [ "${{ steps.status.outputs.result }}" == "success" ]; then
-          MESSAGE="✅ CI/CD успешно завершён для ${{ github.sha }}"
+          MESSAGE="✅ CI/CD успешно завершён\nSHA: ${{ github.sha }}\nBrain: $STATS"
         else
-          MESSAGE="❌ CI/CD провалился для ${{ github.sha }}"
+          MESSAGE="❌ CI/CD провалился\nSHA: ${{ github.sha }}\nBrain: $STATS"
         fi
         curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
           -d chat_id="${TELEGRAM_CHAT_ID}" \

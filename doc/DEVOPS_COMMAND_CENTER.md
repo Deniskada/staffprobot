@@ -76,6 +76,32 @@ DevOps Command Center — это централизованная система
 
 **Триггеры:** push в `main`, pull_request в `main`
 
+### Интеграция Project Brain в CI/CD (Итерация 6)
+
+В `.github/workflows/main.yml` добавлены шаги:
+
+1) Analyze Architecture (Project Brain)
+- `POST $BRAIN_URL/api/architecture/analyze` (3 ретрая, backoff)
+- Скачивание `doc/architecture/latest.json` и `doc/architecture/latest.mmd`
+- Коммит с `[skip ci]` + загрузка как GitHub artifacts
+
+2) Sync Datasets (Project Brain)
+- `POST $BRAIN_URL/api/datasets/sync` (3 ретрая, backoff)
+- Инкрементальное обновление `faq_knowledge`, `bug_context`, `dev_changes`, `commit_history`
+
+3) Deploy
+- Health‑check c 3 попытками и backoff
+- Регистрация деплоя в БД `deployments` (успешный/провальный, `duration_seconds`)
+
+4) Notify Telegram
+- Сообщение включает статус CI/CD, SHA и сводку Brain (узлы/рёбра)
+
+Переменные/секреты (GitHub → Settings → Secrets and variables → Actions):
+- Variables: `BRAIN_URL` (например, `http://brain:8003`), `STAFFPROBOT_URL` (опц.)
+- Secrets: `SSH_DEPLOY_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+
+Примечание: при недоступности Brain шаги Analyze/Sync не валят пайплайн (warn + continue). Деплой может не выполниться из‑за firewall по IP — это ожидаемо; статус фиксируется в `deployments`.
+
 ## 🗄️ База данных
 
 ### Таблицы DevOps

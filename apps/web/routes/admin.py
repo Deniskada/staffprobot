@@ -1,9 +1,11 @@
 """Роуты для администрирования системы (только для суперадмина)."""
 
-from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Query, Body
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional, List
+import os
+import httpx
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc
@@ -16,6 +18,8 @@ from domain.entities.object import Object
 from domain.entities.shift import Shift
 from domain.entities.contract import Contract
 from core.logging.logger import logger
+from core.cache.redis_cache import cache
+import json
 
 router = APIRouter()
 from apps.web.jinja import templates
@@ -504,7 +508,7 @@ async def devops_dashboard(request: Request):
             if deployments_count > 0:
                 failure_rate = round((deployments_count - success_deploys_count) / deployments_count * 100, 1)
             
-            # Критичные баги
+            # Баги (все открытые и критичные)
             critical_bugs_query = select(func.count(BugLog.id)).where(
                 and_(
                     BugLog.status == 'open',
@@ -513,6 +517,9 @@ async def devops_dashboard(request: Request):
             )
             critical_bugs_result = await session.execute(critical_bugs_query)
             critical_bugs_count = critical_bugs_result.scalar() or 0
+            open_bugs_query = select(func.count(BugLog.id)).where(BugLog.status == 'open')
+            open_bugs_result = await session.execute(open_bugs_query)
+            open_bugs_count = open_bugs_result.scalar() or 0
             
             # GitHub Issues
             github_issues_count = 0
@@ -545,6 +552,16 @@ async def devops_dashboard(request: Request):
             else:
                 available_interfaces = []
         
+        # Последние события Brain из Redis
+        brain_events = []
+        try:
+            if not cache.is_connected:
+                await cache.connect()
+            raw = await cache.lrange("devops:brain_events", 0, 9)
+            brain_events = [json.loads(x) for x in raw]
+        except Exception as e:
+            logger.warning(f"Cannot load brain events: {e}")
+
         return templates.TemplateResponse("admin/devops.html", {
             "request": request,
             "current_user": current_user,
@@ -554,12 +571,299 @@ async def devops_dashboard(request: Request):
             "deploy_frequency": deploy_frequency,
             "failure_rate": failure_rate,
             "critical_bugs_count": critical_bugs_count,
+            "open_bugs_count": open_bugs_count,
             "github_issues_count": github_issues_count,
             "critical_issues_count": critical_issues_count,
             "github_configured": bool(github_service.token),
+            "brain_events": brain_events,
             "available_interfaces": available_interfaces
         })
         
     except Exception as e:
         logger.error(f"Error loading DevOps dashboard: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки панели: {str(e)}")
+
+
+@router.get("/devops/architecture", response_class=HTMLResponse, name="admin_devops_architecture")
+async def devops_architecture(request: Request):
+    """Раздел архитектуры: снапшоты/дифф из Project Brain"""
+    # Авторизация
+    current_user = await get_current_user_from_request(request)
+    user_role = current_user.get("role", "employee")
+    if user_role not in ["owner", "superadmin"]:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+
+    # Определяем базовый URL Project Brain (в контейнере localhost указывает на сам контейнер, а не на хост)
+    configured = os.getenv("BRAIN_URL", "").strip()
+    candidates = [
+        configured,
+        "http://project-brain-api:8003",  # если в одной docker-сети с именем сервиса
+        "http://host.docker.internal:8003",  # docker desktop / совместимые среды
+        "http://127.0.0.1:8003",  # локально вне контейнера
+        "http://localhost:8003",
+    ]
+    candidates = [c.rstrip("/") for c in candidates if c]
+    brain_url = None
+    snapshots: List[dict] = []
+    diff: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            for base in candidates:
+                try:
+                    # быстрый health/ping
+                    r = await client.get(f"{base}/health")
+                    if r.status_code != 200:
+                        continue
+                    # пробуем получить данные
+                    snaps_resp = await client.get(f"{base}/api/architecture/snapshots")
+                    diff_resp = await client.get(f"{base}/api/architecture/diff")
+                    if snaps_resp.status_code == 200:
+                        snapshots = snaps_resp.json().get("items", [])
+                    if diff_resp.status_code == 200:
+                        diff = diff_resp.json()
+                    brain_url = base
+                    break
+                except Exception:
+                    continue
+            if brain_url is None:
+                raise RuntimeError("Project Brain недоступен по кандидатам URL")
+    except Exception as e:
+        logger.warning(f"DevOps architecture: cannot reach Project Brain: {e}")
+        brain_url = (configured or "").rstrip("/") or None
+
+    # Доступные интерфейсы
+    from shared.services.role_based_login_service import RoleBasedLoginService
+    async with get_async_session() as session:
+        telegram_id = current_user.get("id")
+        user_query = select(User).where(User.telegram_id == telegram_id)
+        user_result = await session.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        if user_obj:
+            login_service = RoleBasedLoginService(session)
+            available_interfaces = await login_service.get_available_interfaces(user_obj.id)
+        else:
+            available_interfaces = []
+
+    return templates.TemplateResponse("admin/devops_architecture.html", {
+        "request": request,
+        "current_user": current_user,
+        "title": "Architecture (Project Brain)",
+        "snapshots": snapshots,
+        "diff": diff,
+        "brain_arch_url": f"{brain_url}/architecture" if brain_url else None,
+        "brain_alive": bool(brain_url),
+        "brain_base_url": brain_url,
+        "available_interfaces": available_interfaces,
+    })
+
+
+@router.post("/api/admin/devops/brain/update")
+async def api_devops_brain_update(payload: dict = Body(...)):
+    """Webhook от Project Brain о завершении операций обучения/анализа.
+    Сохраняет событие в Redis список devops:brain_events (макс 100).
+    """
+    try:
+        event = {
+            "event": payload.get("event", "unknown"),
+            "commit_sha": payload.get("commit_sha"),
+            "stats": payload.get("stats") or payload.get("cur_stats"),
+            "snapshot": payload.get("snapshot"),
+            "timestamp": payload.get("updated_at") or datetime.utcnow().isoformat() + "Z",
+        }
+        if not cache.is_connected:
+            await cache.connect()
+        await cache.lpush("devops:brain_events", json.dumps(event, ensure_ascii=False))
+        # ограничиваем до 100
+        await cache.ltrim("devops:brain_events", 0, 99)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Failed to save brain event: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save brain event")
+
+
+@router.post("/devops/architecture/reindex")
+async def trigger_brain_reindex(request: Request):
+    current_user = await get_current_user_from_request(request)
+    if current_user.get("role") not in ["owner", "superadmin"]:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    brain_url = os.getenv("BRAIN_URL", "").strip() or "http://project-brain-api:8003"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(f"{brain_url.rstrip('/')}/api/architecture/reindex")
+    except Exception as e:
+        logger.warning(f"Reindex trigger failed: {e}")
+    return RedirectResponse(url="/admin/devops/architecture", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/devops/architecture/analyze")
+async def trigger_brain_analyze(request: Request, commit_sha: Optional[str] = Form(None)):
+    current_user = await get_current_user_from_request(request)
+    if current_user.get("role") not in ["owner", "superadmin"]:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    brain_url = os.getenv("BRAIN_URL", "").strip() or "http://project-brain-api:8003"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{brain_url.rstrip('/')}/api/architecture/analyze",
+                json={"project": "staffprobot", "commit_sha": commit_sha or ""},
+            )
+    except Exception as e:
+        logger.warning(f"Analyze trigger failed: {e}")
+    return RedirectResponse(url="/admin/devops/architecture", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/devops/bugs", response_class=HTMLResponse, name="admin_devops_bugs")
+async def admin_devops_bugs(request: Request, priority: Optional[str] = Query(None), status_f: Optional[str] = Query(None)):
+    current_user = await get_current_user_from_request(request)
+    if current_user.get("role") not in ["owner", "superadmin"]:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    try:
+        from domain.entities.bug_log import BugLog
+        async with get_async_session() as session:
+            q = select(BugLog)
+            if priority:
+                q = q.where(BugLog.priority == priority)
+            if status_f:
+                q = q.where(BugLog.status == status_f)
+            q = q.order_by(desc(BugLog.created_at))
+            res = await session.execute(q)
+            bugs = res.scalars().all()
+        return templates.TemplateResponse("admin/devops_bugs.html", {
+            "request": request,
+            "current_user": current_user,
+            "title": "Баги (DevOps)",
+            "bugs": bugs,
+            "priority": priority,
+            "status_f": status_f,
+        })
+    except Exception as e:
+        logger.error(f"Error loading bugs list: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки багов")
+
+
+@router.post("/devops/bugs/{bug_id}/update")
+async def admin_devops_bug_update(request: Request, bug_id: int, new_status: str = Form(...), new_priority: Optional[str] = Form(None)):
+    current_user = await get_current_user_from_request(request)
+    if current_user.get("role") not in ["owner", "superadmin"]:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    from domain.entities.bug_log import BugLog
+    try:
+        async with get_async_session() as session:
+            res = await session.execute(select(BugLog).where(BugLog.id == bug_id))
+            bug = res.scalar_one_or_none()
+            if not bug:
+                raise HTTPException(status_code=404, detail="Bug not found")
+            bug.status = new_status
+            if new_priority:
+                bug.priority = new_priority
+            await session.commit()
+        return RedirectResponse(url="/admin/devops/bugs", status_code=status.HTTP_303_SEE_OTHER)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating bug: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка обновления бага")
+
+
+@router.post("/devops/architecture/sync-datasets")
+async def trigger_brain_sync_datasets(request: Request):
+    current_user = await get_current_user_from_request(request)
+    if current_user.get("role") not in ["owner", "superadmin"]:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    brain_url = os.getenv("BRAIN_URL", "").strip() or "http://project-brain-api:8003"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(f"{brain_url.rstrip('/')}/api/datasets/sync")
+    except Exception as e:
+        logger.warning(f"Sync datasets trigger failed: {e}")
+    return RedirectResponse(url="/admin/devops/architecture", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ===== Internal exports for Project Brain datasets (read-only) =====
+@router.get("/api/admin/devops/export/faq", response_class=HTMLResponse)
+async def export_faq(request: Request):
+    current_user = await get_current_user_from_request(request)
+    if current_user.get("role") not in ["owner", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        async with get_async_session() as session:
+            from domain.entities.faq_entry import FAQEntry
+            res = await session.execute(select(FAQEntry))
+            items = [
+                {
+                    "id": e.id,
+                    "category": e.category,
+                    "question": e.question,
+                    "answer": e.answer,
+                    "updated_at": getattr(e, "updated_at", None),
+                }
+                for e in res.scalars().all()
+            ]
+            return HTMLResponse(
+                content=json.dumps({"items": items}, ensure_ascii=False),
+                media_type="application/json",
+            )
+    except Exception as e:
+        logger.error(f"export_faq failed: {e}")
+        raise HTTPException(status_code=500, detail="export_faq failed")
+
+
+@router.get("/api/admin/devops/export/bugs", response_class=HTMLResponse)
+async def export_bugs(request: Request):
+    current_user = await get_current_user_from_request(request)
+    if current_user.get("role") not in ["owner", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        async with get_async_session() as session:
+            from domain.entities.bug_log import BugLog
+            res = await session.execute(select(BugLog))
+            items = [
+                {
+                    "id": b.id,
+                    "title": b.title,
+                    "what_doing": b.what_doing,
+                    "expected": b.expected,
+                    "actual": b.actual,
+                    "priority": getattr(b, "priority", None),
+                    "status": getattr(b, "status", None),
+                    "updated_at": getattr(b, "updated_at", None),
+                }
+                for b in res.scalars().all()
+            ]
+            return HTMLResponse(
+                content=json.dumps({"items": items}, ensure_ascii=False),
+                media_type="application/json",
+            )
+    except Exception as e:
+        logger.error(f"export_bugs failed: {e}")
+        raise HTTPException(status_code=500, detail="export_bugs failed")
+
+
+@router.get("/api/admin/devops/export/changelog", response_class=HTMLResponse)
+async def export_changelog(request: Request):
+    current_user = await get_current_user_from_request(request)
+    if current_user.get("role") not in ["owner", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        async with get_async_session() as session:
+            from domain.entities.changelog_entry import ChangelogEntry
+            res = await session.execute(select(ChangelogEntry))
+            items = [
+                {
+                    "id": c.id,
+                    "component": c.component,
+                    "change_type": c.change_type,
+                    "description": c.description,
+                    "priority": c.priority,
+                    "impact_score": getattr(c, "impact_score", None),
+                    "created_at": getattr(c, "date", None),
+                }
+                for c in res.scalars().all()
+            ]
+            return HTMLResponse(
+                content=json.dumps({"items": items}, ensure_ascii=False),
+                media_type="application/json",
+            )
+    except Exception as e:
+        logger.error(f"export_changelog failed: {e}")
+        raise HTTPException(status_code=500, detail="export_changelog failed")

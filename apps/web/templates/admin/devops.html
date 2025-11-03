@@ -159,16 +159,28 @@
     <div class="row mb-4">
         <div class="col-md-6">
             <div class="card system-card">
-                <div class="card-header bg-danger text-white">
+                <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
                     <h3 class="mb-0">
                         <i class="bi bi-bug"></i> Баги в системе
                     </h3>
+                    <a href="/admin/devops/bugs" class="btn btn-sm btn-light">Открыть список</a>
                 </div>
                 <div class="card-body">
-                    <div class="metric-card" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);">
-                        <h3>🔥 Критичные баги</h3>
-                        <div class="metric-value">{{ critical_bugs_count }}</div>
-                        <div class="metric-label">требуют внимания</div>
+                    <div class="row g-3">
+                      <div class="col-6">
+                        <div class="metric-card" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);">
+                            <h3>🔥 Критичные</h3>
+                            <div class="metric-value">{{ critical_bugs_count }}</div>
+                            <div class="metric-label">open & priority ∈ {critical, high}</div>
+                        </div>
+                      </div>
+                      <div class="col-6">
+                        <div class="metric-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                            <h3>📋 Открытые</h3>
+                            <div class="metric-value">{{ open_bugs_count }}</div>
+                            <div class="metric-label">все open</div>
+                        </div>
+                      </div>
                     </div>
                     <a href="/support" class="btn btn-primary w-100">
                         <i class="bi bi-list-ul"></i> Перейти к багам
@@ -210,7 +222,7 @@
 
     <!-- System Status -->
     <div class="row">
-        <div class="col-md-12">
+        <div class="col-md-8">
             <div class="card system-card">
                 <div class="card-header bg-success text-white">
                     <h3 class="mb-0">
@@ -241,6 +253,38 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card system-card">
+                <div class="card-header bg-dark text-white">
+                    <h3 class="mb-0">
+                        <i class="bi bi-diagram-3"></i> Architecture
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <p>Снапшоты, диффы и визуализатор Project Brain.</p>
+                    <a class="btn btn-primary w-100" href="/admin/devops/architecture">
+                        Открыть раздел архитектуры
+                    </a>
+                    <hr>
+                    <h5 class="mb-2">Последние события Brain</h5>
+                    {% if brain_events and brain_events|length > 0 %}
+                    <ul class="list-group list-group-flush">
+                      {% for e in brain_events %}
+                        <li class="list-group-item">
+                          <div><strong>{{ e.event }}</strong> · <small class="text-muted">{{ e.timestamp }}</small></div>
+                          {% if e.commit_sha %}<div class="mono">{{ e.commit_sha }}</div>{% endif %}
+                          {% if e.stats %}
+                            <small class="text-muted">nodes: {{ e.stats.total_nodes or e.stats.nodes or '?' }}, edges: {{ e.stats.total_edges or e.stats.edges or '?' }}</small>
+                          {% endif %}
+                        </li>
+                      {% endfor %}
+                    </ul>
+                    {% else %}
+                      <div class="alert alert-light mb-0">Событий пока нет</div>
+                    {% endif %}
                 </div>
             </div>
         </div>
