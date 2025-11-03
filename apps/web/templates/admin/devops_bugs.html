@@ -45,7 +45,11 @@
         {% for b in bugs %}
         <tr>
           <td>{{ b.id }}</td>
-          <td style="max-width:520px">{{ b.title }}</td>
+          <td style="max-width:520px">
+            <a href="#bug-{{ b.id }}" data-bs-toggle="collapse" aria-expanded="false" aria-controls="bug-{{ b.id }}">
+              {{ b.title }}
+            </a>
+          </td>
           <td><span class="badge bg-danger">{{ b.priority }}</span></td>
           <td>{{ b.status }}</td>
           <td>
@@ -62,6 +66,64 @@
               </select>
               <button class="btn btn-sm btn-outline-success" type="submit">Сохранить</button>
             </form>
+          </td>
+        </tr>
+        <tr class="collapse" id="bug-{{ b.id }}">
+          <td colspan="5">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="card mb-3">
+                  <div class="card-header">Что делал</div>
+                  <div class="card-body"><pre class="mb-0" style="white-space: pre-wrap">{{ b.what_doing }}</pre></div>
+                </div>
+                <div class="card mb-3">
+                  <div class="card-header">Ожидал</div>
+                  <div class="card-body"><pre class="mb-0" style="white-space: pre-wrap">{{ b.expected }}</pre></div>
+                </div>
+                <div class="card mb-3">
+                  <div class="card-header">Получил</div>
+                  <div class="card-body"><pre class="mb-0" style="white-space: pre-wrap">{{ b.actual }}</pre></div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="card mb-3">
+                  <div class="card-header">Информация</div>
+                  <div class="card-body">
+                    <div class="mb-2"><strong>Скриншот:</strong> {% if b.screenshot_url %}<a href="{{ b.screenshot_url }}" target="_blank">открыть</a>{% else %}—{% endif %}</div>
+                    <div class="mb-2"><strong>GitHub Issue:</strong> {% if b.github_issue_number %}<a href="https://github.com/Deniskada/staffprobot/issues/{{ b.github_issue_number }}" target="_blank">#{{ b.github_issue_number }}</a>{% else %}—{% endif %}</div>
+                    <div class="mb-2"><strong>Создан:</strong> {{ b.created_at }}</div>
+                    <div class="mb-2"><strong>Обновлён:</strong> {{ b.updated_at }}</div>
+                    <div class="mb-2"><strong>Решён:</strong> {{ b.resolved_at or '—' }}</div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-header">Быстрое обновление</div>
+                  <div class="card-body">
+                    <form class="row gy-2 gx-2 align-items-center" method="post" action="/admin/devops/bugs/{{ b.id }}/update">
+                      <div class="col-auto">
+                        <label class="form-label">Статус</label>
+                        <select class="form-select form-select-sm" name="new_status">
+                          {% for s in ['open','in_progress','resolved','closed'] %}
+                            <option value="{{ s }}" {% if b.status==s %}selected{% endif %}>{{ s }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <div class="col-auto">
+                        <label class="form-label">Приоритет</label>
+                        <select class="form-select form-select-sm" name="new_priority">
+                          {% for p in ['critical','high','medium','low'] %}
+                            <option value="{{ p }}" {% if b.priority==p %}selected{% endif %}>{{ p }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <div class="col-auto">
+                        <button class="btn btn-sm btn-success mt-4" type="submit">Сохранить</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
           </td>
         </tr>
         {% endfor %}
