@@ -62,8 +62,9 @@
   - `GitHubService` - работа с GitHub Issues API
 - **CI/CD:**
   - `.github/workflows/main.yml` - автоматический деплой на production
-  - Регистрация деплоев в БД при успехе/провале
+  - Регистрация деплоев в БД при успехе/провале (health check шаг)
   - Уведомления в Telegram
+  - Настройка firewall для GitHub Actions SSH доступа
 - **Документация:**
   - `doc/DEVOPS_COMMAND_CENTER.md` - полное описание компонентов
   - `doc/GITHUB_ACTIONS_SETUP.md` - настройка CI/CD
