@@ -127,8 +127,9 @@ jobs:
 
     - name: Analyze Architecture (Project Brain)
       env:
-        BRAIN_URL: ${{ vars.BRAIN_URL || 'http://brain:8003' }}
+        BRAIN_URL: ${{ vars.BRAIN_URL }}
       run: |
+        : "${BRAIN_URL:=http://brain:8003}"
         echo "Triggering Brain analyze with retries..."
         for i in 1 2 3; do \
           curl -s -X POST "$BRAIN_URL/api/architecture/analyze" \
@@ -171,8 +172,9 @@ PY
 
     - name: Sync Datasets (Project Brain)
       env:
-        BRAIN_URL: ${{ vars.BRAIN_URL || 'http://brain:8003' }}
+        BRAIN_URL: ${{ vars.BRAIN_URL }}
       run: |
+        : "${BRAIN_URL:=http://brain:8003}"
         echo "Sync datasets in Brain with retries..."
         for i in 1 2 3; do \
           curl -s -X POST "$BRAIN_URL/api/datasets/sync" && break || sleep $((i*i)); \
