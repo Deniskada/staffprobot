@@ -123,8 +123,6 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && needs.test.result == 'success' && needs.lint.result == 'success' && needs.security.result == 'success'
     steps:
-    - uses: actions/checkout@v4
-    
     - name: Set up SSH key
       run: |
         mkdir -p ~/.ssh
@@ -149,6 +147,8 @@ jobs:
         EOF
     
     - name: Health check
+      env:
+        SSH_HOST: staffprobot@staffprobot.ru
       run: |
         ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << 'EOF'
           cd /opt/staffprobot
@@ -165,8 +165,6 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && (github.ref == 'refs/heads/main')
     steps:
-    - uses: actions/checkout@v4
-    
     - name: Determine workflow status
       id: status
       run: |
