@@ -585,7 +585,7 @@ async def devops_dashboard(request: Request):
 
 
 @router.get("/devops/architecture", response_class=HTMLResponse, name="admin_devops_architecture")
-async def devops_architecture(request: Request):
+async def devops_architecture(request: Request, brain: Optional[str] = Query(None)):
     """Раздел архитектуры: снапшоты/дифф из Project Brain"""
     # Авторизация
     current_user = await get_current_user_from_request(request)
@@ -595,15 +595,16 @@ async def devops_architecture(request: Request):
 
     # Определяем базовый URL Project Brain (в контейнере localhost указывает на сам контейнер, а не на хост)
     configured = os.getenv("BRAIN_URL", "").strip()
+    forced = (brain or "").strip()
     candidates = [
         configured,
+        forced,
+        "http://dev.staffprobot.ru:8083",
+        "http://staffprobot.ru:8083",
         "http://project-brain-api:8003",  # если в одной docker-сети с именем сервиса
         "http://host.docker.internal:8003",  # docker desktop / совместимые среды
         "http://127.0.0.1:8003",  # локально вне контейнера
         "http://localhost:8003",
-        # Внешние dev/prod URL, если Brain вынесен отдельно
-        "http://dev.staffprobot.ru:8083",
-        "http://staffprobot.ru:8083",
     ]
     candidates = [c.rstrip("/") for c in candidates if c]
     brain_url = None
@@ -632,7 +633,7 @@ async def devops_architecture(request: Request):
                 raise RuntimeError("Project Brain недоступен по кандидатам URL")
     except Exception as e:
         logger.warning(f"DevOps architecture: cannot reach Project Brain: {e}")
-        brain_url = (configured or "").rstrip("/") or None
+        brain_url = (forced or configured or "").rstrip("/") or None
 
     # Доступные интерфейсы
     from shared.services.role_based_login_service import RoleBasedLoginService
@@ -657,6 +658,7 @@ async def devops_architecture(request: Request):
         "brain_alive": bool(brain_url),
         "brain_base_url": brain_url,
         "available_interfaces": available_interfaces,
+        "forced_brain": forced or None,
     })
 
 
