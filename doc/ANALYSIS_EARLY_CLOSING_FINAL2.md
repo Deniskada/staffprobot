@@ -176,3 +176,6 @@ last_shift = max(shifts_today, key=lambda s: s.end_time or s.start_time)
 2. Проверить логику выбора `last_shift` при нескольких сменах
 3. Добавить логирование для отладки: вывести `expected_close`, `actual_close_local`, `early_minutes` для каждого объекта
 
+
+
+

@@ -193,3 +193,6 @@ early_minutes = int((expected_close - actual_close_local).total_seconds() / 60)
 2. Проверить, правильно ли выбирается `last_shift` при нескольких сменах
 3. Проверить условие `if last_shift.end_time and last_shift.status == 'completed' and not active_shifts_on_object` - может быть, оно не выполняется для правильной смены
 
+
+
+
