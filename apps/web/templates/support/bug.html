@@ -2,7 +2,7 @@
 
 {% block title %}Сообщить о проблеме - StaffProBot{% endblock %}
 
-{% block content %}
+{% block manager_content %}
 <div class="container mt-4">
     <div class="row">
         <div class="col-md-8 offset-md-2">
@@ -173,3 +173,98 @@ document.getElementById('bugForm').addEventListener('submit', function(e) {
 </script>
 {% endblock %}
 
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="d-flex align-items-center mb-4">
+                <a href="/support" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h1 class="mb-0">
+                    <i class="bi bi-bug text-danger"></i> Сообщить о проблеме
+                </h1>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <p class="text-muted mb-4">
+                        Пожалуйста, опишите проблему максимально подробно. 
+                        Это поможет нам быстрее её исправить.
+                    </p>
+
+                    <form method="post" action="/support/api/bug" enctype="multipart/form-data" id="bugForm">
+                        <!-- Что делали -->
+                        <div class="mb-4">
+                            <label for="what_doing" class="form-label">
+                                <strong>Шаг 1:</strong> Что вы делали, когда произошла ошибка?
+                                <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control" id="what_doing" name="what_doing" rows="4" required placeholder="Опишите последовательность действий..."></textarea>
+                        </div>
+
+                        <!-- Что ожидали -->
+                        <div class="mb-4">
+                            <label for="expected" class="form-label">
+                                <strong>Шаг 2:</strong> Что должно было произойти?
+                                <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control" id="expected" name="expected" rows="4" required placeholder="Опишите ожидаемое поведение..."></textarea>
+                        </div>
+
+                        <!-- Что получилось -->
+                        <div class="mb-4">
+                            <label for="actual" class="form-label">
+                                <strong>Шаг 3:</strong> Что произошло на самом деле?
+                                <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control" id="actual" name="actual" rows="4" required placeholder="Опишите фактическое поведение..."></textarea>
+                        </div>
+
+                        <!-- Приоритет -->
+                        <div class="mb-4">
+                            <label for="priority" class="form-label">
+                                <strong>Приоритет:</strong>
+                            </label>
+                            <select class="form-select" id="priority" name="priority">
+                                <option value="low">Низкий</option>
+                                <option value="medium" selected>Средний</option>
+                                <option value="high">Высокий</option>
+                                <option value="critical">Критический</option>
+                            </select>
+                        </div>
+
+                        <!-- Скриншот -->
+                        <div class="mb-4">
+                            <label for="screenshot" class="form-label">
+                                <strong>Скриншот (опционально):</strong>
+                            </label>
+                            <input type="file" class="form-control" id="screenshot" name="screenshot" accept="image/*">
+                            <small class="text-muted">Максимальный размер: 5MB. Поддерживаемые форматы: JPG, PNG</small>
+                        </div>
+
+                        <!-- Кнопки -->
+                        <div class="d-flex justify-content-between">
+                            <a href="/support" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Отмена
+                            </a>
+                            <button type="submit" class="btn btn-danger" id="submitBtn">
+                                <i class="bi bi-send"></i> Отправить отчет
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('bugForm').addEventListener('submit', function(e) {
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Отправка...';
+});
+</script>
+{% endblock %}

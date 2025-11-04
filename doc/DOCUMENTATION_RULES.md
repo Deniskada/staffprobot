@@ -36,6 +36,28 @@
 - Перед коммитом: быстрый diff по `doc/vision_v1` и запуск автогенерации при необходимости.
 - При обнаружении несоответствий — завести задачу на коррекцию документации.
 
+## Недавние изменения (main, 05.11.2025)
+
+### Исправление шаблонов поддержки для всех ролей ✅
+
+**Статус:** Завершено
+- **Исправлены шаблоны:**
+  - `support/hub.html` — добавлены блоки `manager_content` и `content` для совместимости с разными базовыми шаблонами
+  - `support/bug.html` — добавлены блоки `manager_content` и `content`
+  - `support/faq.html` — добавлены блоки `manager_content` и `content`
+  - `support/my_bugs.html` — добавлены блоки `manager_content` и `content`
+- **Контекст шаблонов:**
+  - Все шаблоны support используют динамический `base_template` (base_manager.html, base_employee.html, base_owner.html)
+  - Для manager используется блок `manager_content`, для employee/owner — блок `content`
+  - Добавлены переменные `applications_count` и `new_applications_count` в контекст всех support-роутов
+- **Роуты:**
+  - `GET /support` — (apps/web/routes/support.py) — доступен для owner, manager, employee
+  - `GET /support/bug` — (apps/web/routes/support.py) — доступен для owner, manager, employee
+  - `GET /support/faq` — (apps/web/routes/support.py) — доступен для owner, manager, employee
+  - `GET /support/my-bugs` — (apps/web/routes/support.py) — доступен для owner, manager, employee
+- **Документация:**
+  - Обновлены `doc/vision_v1/roles/owner.md`, `doc/vision_v1/roles/manager.md`, `doc/vision_v1/roles/employee.md`
+
 ## Недавние изменения (main, 03.11.2025)
 
 ### DevOps Command Center (Iteration 41) ✅

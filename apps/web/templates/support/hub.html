@@ -2,6 +2,188 @@
 
 {% block title %}Центр поддержки - StaffProBot{% endblock %}
 
+{% block manager_content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="mb-4">
+                <i class="bi bi-life-preserver"></i> Центр поддержки
+            </h1>
+            
+            {% if request.query_params.get('success') == 'bug_created' %}
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="bi bi-check-circle"></i> 
+                <strong>Спасибо!</strong> Ваше обращение зарегистрировано. Мы займемся этим как можно скорее.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Сообщить о баге -->
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm hover-shadow">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-danger text-white rounded-circle me-3" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-bug fs-4"></i>
+                        </div>
+                        <h3 class="card-title mb-0">Сообщить о проблеме</h3>
+                    </div>
+                    <p class="card-text text-muted">
+                        Столкнулись с ошибкой или что-то работает не так? 
+                        Сообщите нам, и мы оперативно это исправим.
+                    </p>
+                    <a href="/support/bug" class="btn btn-danger">
+                        <i class="bi bi-bug"></i> Отправить отчет
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm hover-shadow">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-primary text-white rounded-circle me-3" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-question-circle fs-4"></i>
+                        </div>
+                        <h3 class="card-title mb-0">База знаний</h3>
+                    </div>
+                    <p class="card-text text-muted">
+                        Ответы на часто задаваемые вопросы о работе системы, 
+                        сменах, расчетах и многом другом.
+                    </p>
+                    <a href="/support/faq" class="btn btn-primary">
+                        <i class="bi bi-book"></i> Открыть FAQ
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Telegram Bot -->
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm hover-shadow">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-info text-white rounded-circle me-3" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-telegram fs-4"></i>
+                        </div>
+                        <h3 class="card-title mb-0">Telegram Бот</h3>
+                    </div>
+                    <p class="card-text text-muted">
+                        Вы также можете получить поддержку через Telegram бот. 
+                        Используйте команду /support для быстрого доступа.
+                    </p>
+                    <a href="https://t.me/StaffProBot" class="btn btn-info text-white" target="_blank">
+                        <i class="bi bi-telegram"></i> Открыть бот
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Мои обращения -->
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm hover-shadow">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-success text-white rounded-circle me-3" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-list-check fs-4"></i>
+                        </div>
+                        <h3 class="card-title mb-0">Мои обращения</h3>
+                    </div>
+                    <p class="card-text text-muted">
+                        Всего обращений: <strong>{{ user_bugs_count }}</strong>
+                    </p>
+                    {% if recent_bugs %}
+                        <ul class="list-unstyled mb-3">
+                            {% for bug in recent_bugs[:3] %}
+                            <li class="mb-2">
+                                <span class="badge bg-{{ 'danger' if bug.priority == 'critical' else 'warning' if bug.priority == 'high' else 'info' }}">
+                                    {{ bug.priority }}
+                                </span>
+                                {{ bug.title[:40] }}...
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted"><small>У вас пока нет обращений</small></p>
+                    {% endif %}
+                    <a href="/support/my-bugs" class="btn btn-success">
+                        <i class="bi bi-list"></i> Все обращения
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Быстрые ответы -->
+    <div class="row mt-5">
+        <div class="col-md-12">
+            <h3 class="mb-3">
+                <i class="bi bi-lightning"></i> Быстрые ответы
+            </h3>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Как открыть смену?</h5>
+                    <p class="card-text text-muted small">
+                        Нажмите "Открыть смену" в боте или на сайте, затем отправьте геолокацию.
+                    </p>
+                    <a href="/support/faq?category=shifts#open-shift" class="btn btn-sm btn-outline-primary">
+                        Подробнее
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Когда начисляется зарплата?</h5>
+                    <p class="card-text text-muted small">
+                        Расчеты производятся автоматически после закрытия смены.
+                    </p>
+                    <a href="/support/faq?category=salary#salary-calculation" class="btn btn-sm btn-outline-primary">
+                        Подробнее
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Не работает геолокация</h5>
+                    <p class="card-text text-muted small">
+                        Проверьте разрешения приложения и включите GPS в настройках телефона.
+                    </p>
+                    <a href="/support/faq?category=technical#geo-issues" class="btn btn-sm btn-outline-primary">
+                        Подробнее
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.hover-shadow {
+    transition: box-shadow 0.3s ease;
+}
+.hover-shadow:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15) !important;
+}
+.icon-box {
+    flex-shrink: 0;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
     <div class="row">

@@ -25,10 +25,18 @@
 - [GET] `/employee/reviews`  — (apps/web/routes/employee_reviews.py)
 - [GET] `/employee/shifts`  — (apps/web/routes/employee.py)
 - [GET] `/employee/shifts/{shift_id}`  — (apps/web/routes/employee.py)
+- [GET] `/support`  — (apps/web/routes/support.py) — центр поддержки (хаб поддержки)
+- [GET] `/support/bug`  — (apps/web/routes/support.py) — форма подачи бага
+- [GET] `/support/faq`  — (apps/web/routes/support.py) — FAQ база знаний
+- [GET] `/support/my-bugs`  — (apps/web/routes/support.py) — список моих багов
 - [GET] `/employee/timeslots/{timeslot_id}`  — (apps/web/routes/employee.py)
 
 ## Шаблоны (Jinja2)
 - `employee/applications.html`
+- `support/hub.html` — центр поддержки (использует base_template для роли, блок content)
+- `support/bug.html` — форма подачи бага (использует base_template для роли, блок content)
+- `support/faq.html` — FAQ база знаний (использует base_template для роли, блок content)
+- `support/my_bugs.html` — список моих багов (использует base_template для роли, блок content)
 - `employee/calendar.html`
 - `employee/history.html`
 - `employee/index.html`

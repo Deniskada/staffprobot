@@ -58,6 +58,10 @@
 - [GET] `/shifts`  — (apps/web/routes/manager.py)
 - [GET] `/shifts/{shift_id}`  — (apps/web/routes/manager.py)
 - [POST] `/shifts/{shift_id}/cancel`  — (apps/web/routes/manager.py)
+- [GET] `/support`  — (apps/web/routes/support.py) — центр поддержки (хаб поддержки)
+- [GET] `/support/bug`  — (apps/web/routes/support.py) — форма подачи бага
+- [GET] `/support/faq`  — (apps/web/routes/support.py) — FAQ база знаний
+- [GET] `/support/my-bugs`  — (apps/web/routes/support.py) — список моих багов
 - [GET] `/timeslots/{timeslot_id}`  — (apps/web/routes/manager.py)
 - [POST] `/timeslots/{timeslot_id}/edit`  — (apps/web/routes/manager.py) — форма: form-data; ответ: 303 Redirect на `/manager/timeslots/object/{object_id}` — причина изменения: ранее ожидался JSON, теперь корректно обрабатывается форма.
 
@@ -83,6 +87,10 @@
 - `manager/reviews.html`
 - `manager/shifts/detail.html`
 - `manager/shifts/list.html`
+- `support/hub.html` — центр поддержки (использует base_template для роли, блок manager_content)
+- `support/bug.html` — форма подачи бага (использует base_template для роли, блок manager_content)
+- `support/faq.html` — FAQ база знаний (использует base_template для роли, блок manager_content)
+- `support/my_bugs.html` — список моих багов (использует base_template для роли, блок manager_content)
 
 ## Контекст управляющего (Manager Context)
 

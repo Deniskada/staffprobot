@@ -96,6 +96,10 @@
 - [GET] `/owner/shifts_legacy`  — (apps/web/routes/owner.py)
 - [GET] `/owner/shifts_legacy/{shift_id}`  — (apps/web/routes/owner.py)
 - [POST] `/owner/shifts_legacy/{shift_id}/cancel`  — (apps/web/routes/owner.py)
+- [GET] `/support`  — (apps/web/routes/support.py) — центр поддержки (хаб поддержки)
+- [GET] `/support/bug`  — (apps/web/routes/support.py) — форма подачи бага
+- [GET] `/support/faq`  — (apps/web/routes/support.py) — FAQ база знаний
+- [GET] `/support/my-bugs`  — (apps/web/routes/support.py) — список моих багов
 - [GET] `/owner/stats/summary`  — (apps/web/routes/owner_shifts.py)
 - [GET] `/owner/tariff/change`  — (apps/web/routes/owner.py)
 - [POST] `/owner/tariff/change`  — (apps/web/routes/owner.py)
@@ -171,6 +175,10 @@
 - `owner/templates/contracts/detail.html`
 - `owner/templates/contracts/edit.html`
 - `owner/timeslots/create.html`
+- `support/hub.html` — центр поддержки (использует base_template для роли, блок content)
+- `support/bug.html` — форма подачи бага (использует base_template для роли, блок content)
+- `support/faq.html` — FAQ база знаний (использует base_template для роли, блок content)
+- `support/my_bugs.html` — список моих багов (использует base_template для роли, блок content)
 - `owner/timeslots/detail.html`
 - `owner/timeslots/edit.html`
 - `owner/timeslots/list.html`

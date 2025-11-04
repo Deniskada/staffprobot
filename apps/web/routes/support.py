@@ -84,6 +84,21 @@ async def support_hub(
     user_bugs_count = 0
     recent_bugs = []
     
+    # Получаем внутренний user_id для получения статистики заявок
+    internal_user_id = await get_user_id_from_current_user(current_user, session)
+    
+    # Получаем количество заявок для менеджера/владельца
+    applications_count = 0
+    new_applications_count = 0
+    if user_role in ["manager", "owner"]:
+        try:
+            from apps.web.utils.applications_utils import get_new_applications_count
+            if internal_user_id:
+                new_applications_count = await get_new_applications_count(internal_user_id, session, user_role)
+                applications_count = new_applications_count  # Можно расширить логику
+        except Exception as e:
+            logger.error(f"Error getting applications count: {e}")
+    
     context = {
         "request": request,
         "current_user": current_user,
@@ -91,6 +106,8 @@ async def support_hub(
         "recent_bugs": recent_bugs,
         "base_template": base_template,
         "user_role": user_role,
+        "applications_count": applications_count,
+        "new_applications_count": new_applications_count,
     }
     
     return templates.TemplateResponse("support/hub.html", context)
@@ -99,7 +116,8 @@ async def support_hub(
 @router.get("/bug", response_class=HTMLResponse)
 async def bug_form(
     request: Request,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session)
 ):
     """
     Форма отчета о баге.
@@ -119,11 +137,28 @@ async def bug_form(
     user_role = current_user.get("role", "employee")
     base_template = get_base_template_for_role(user_role)
     
+    # Получаем внутренний user_id для получения статистики заявок
+    internal_user_id = await get_user_id_from_current_user(current_user, session)
+    
+    # Получаем количество заявок для менеджера/владельца
+    applications_count = 0
+    new_applications_count = 0
+    if user_role in ["manager", "owner"]:
+        try:
+            from apps.web.utils.applications_utils import get_new_applications_count
+            if internal_user_id:
+                new_applications_count = await get_new_applications_count(internal_user_id, session, user_role)
+                applications_count = new_applications_count
+        except Exception as e:
+            logger.error(f"Error getting applications count: {e}")
+    
     context = {
         "request": request,
         "current_user": current_user,
         "base_template": base_template,
         "user_role": user_role,
+        "applications_count": applications_count,
+        "new_applications_count": new_applications_count,
     }
     
     return templates.TemplateResponse("support/bug.html", context)
@@ -302,6 +337,21 @@ async def faq_page(
     user_role = current_user.get("role", "employee")
     base_template = get_base_template_for_role(user_role)
     
+    # Получаем внутренний user_id для получения статистики заявок
+    internal_user_id = await get_user_id_from_current_user(current_user, session)
+    
+    # Получаем количество заявок для менеджера/владельца
+    applications_count = 0
+    new_applications_count = 0
+    if user_role in ["manager", "owner"]:
+        try:
+            from apps.web.utils.applications_utils import get_new_applications_count
+            if internal_user_id:
+                new_applications_count = await get_new_applications_count(internal_user_id, session, user_role)
+                applications_count = new_applications_count
+        except Exception as e:
+            logger.error(f"Error getting applications count: {e}")
+    
     context = {
         "request": request,
         "current_user": current_user,
@@ -309,6 +359,8 @@ async def faq_page(
         "selected_category": category,
         "base_template": base_template,
         "user_role": user_role,
+        "applications_count": applications_count,
+        "new_applications_count": new_applications_count,
     }
     
     return templates.TemplateResponse("support/faq.html", context)
@@ -363,6 +415,18 @@ async def my_bugs(
     user_role = current_user.get("role", "employee")
     base_template = get_base_template_for_role(user_role)
     
+    # Получаем количество заявок для менеджера/владельца
+    applications_count = 0
+    new_applications_count = 0
+    if user_role in ["manager", "owner"]:
+        try:
+            from apps.web.utils.applications_utils import get_new_applications_count
+            if user_id:
+                new_applications_count = await get_new_applications_count(user_id, session, user_role)
+                applications_count = new_applications_count
+        except Exception as e:
+            logger.error(f"Error getting applications count: {e}")
+    
     context = {
         "request": request,
         "current_user": current_user,
@@ -370,6 +434,8 @@ async def my_bugs(
         "bugs_json": bugs_dict,
         "base_template": base_template,
         "user_role": user_role,
+        "applications_count": applications_count,
+        "new_applications_count": new_applications_count,
     }
     
     return templates.TemplateResponse("support/my_bugs.html", context)
