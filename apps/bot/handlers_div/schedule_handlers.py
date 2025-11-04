@@ -614,7 +614,7 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
                     context_id=shift_id,
                     require_text=False,
                     require_photo=False,  # Опционально
-                    max_photos=1,
+                    max_photos=5,  # Разрешено до 5 файлов
                     allow_skip=True
                 )
             )

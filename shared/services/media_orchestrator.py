@@ -93,6 +93,21 @@ class MediaOrchestrator:
         await self.begin_flow(cfg)
         return True
     
+    async def get_collected_count(self, user_id: int) -> int:
+        """Получить количество собранных файлов."""
+        cfg = await self.get_flow(user_id)
+        if not cfg:
+            return 0
+        return len(cfg.collected_photos) if cfg.collected_photos else 0
+    
+    async def can_add_more(self, user_id: int) -> bool:
+        """Проверить, можно ли добавить еще файлов."""
+        cfg = await self.get_flow(user_id)
+        if not cfg:
+            return False
+        current_count = len(cfg.collected_photos) if cfg.collected_photos else 0
+        return current_count < cfg.max_photos
+    
     async def is_flow_complete(self, user_id: int) -> bool:
         """Проверить, завершён ли поток (все требования выполнены)."""
         cfg = await self.get_flow(user_id)

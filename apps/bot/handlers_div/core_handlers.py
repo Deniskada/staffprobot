@@ -759,6 +759,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         entry_id = int(query.data.split(":", 1)[1])
         await _handle_complete_task_v2(update, context, entry_id)
         return
+    elif query.data.startswith("task_v2_done:"):
+        from .shift_handlers import _handle_task_v2_done
+        entry_id = int(query.data.split(":", 1)[1])
+        await _handle_task_v2_done(update, context, entry_id)
+        return
     # Tasks v2: отмена загрузки медиа
     elif query.data == "cancel_task_v2_media":
         from .shift_handlers import _handle_cancel_task_v2_media

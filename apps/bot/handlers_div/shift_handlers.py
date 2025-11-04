@@ -1,6 +1,6 @@
 """Обработчики для управления сменами."""
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, InputMediaPhoto, InputMediaVideo
 from telegram.ext import ContextTypes
 from core.logging.logger import logger
 from core.auth.user_manager import user_manager
@@ -2207,7 +2207,7 @@ async def _handle_task_v2_media_upload(update: Update, context: ContextTypes.DEF
                     context_id=entry_id,
                     require_text=False,
                     require_photo=True,
-                    max_photos=1,
+                    max_photos=5,  # Разрешено до 5 файлов
                     allow_skip=False
                 )
             )
@@ -2319,6 +2319,319 @@ async def _handle_cancel_task_v2_media(update: Update, context: ContextTypes.DEF
         await query.answer("❌ Ошибка отмены", show_alert=True)
 
 
+async def _send_multiple_media_to_group(
+    bot,
+    chat_id,
+    file_ids: List[str],
+    caption_template: str,
+    media_types: List[str]
+) -> List[str]:
+    """
+    Отправить несколько медиа-файлов в Telegram группу.
+    
+    Args:
+        bot: Telegram bot instance
+        chat_id: ID чата для отправки (str или int)
+        file_ids: Список file_id медиа-файлов
+        caption_template: Шаблон подписи (будет добавлен только к первому)
+        media_types: Список типов медиа ('photo' или 'video')
+    
+    Returns:
+        List[str]: Список URL отправленных сообщений
+    """
+    if not file_ids:
+        logger.warning("_send_multiple_media_to_group: empty file_ids")
+        return []
+    
+    urls = []
+    
+    # Формируем chat_id для URL (конвертируем в строку)
+    chat_id_for_url = str(chat_id)
+    if chat_id_for_url.startswith('-100'):
+        chat_id_for_url = chat_id_for_url[4:]
+    elif chat_id_for_url.startswith('-'):
+        chat_id_for_url = chat_id_for_url[1:]
+    
+    logger.info(f"Sending {len(file_ids)} files to chat {chat_id}, types: {media_types}")
+    
+    try:
+        # Если все файлы одного типа - используем sendMediaGroup
+        if len(set(media_types)) == 1:
+            media_type = media_types[0]
+            if media_type == 'photo':
+                # Первый файл - с caption, остальные - без
+                media_group = [
+                    InputMediaPhoto(file_ids[0], caption=caption_template if caption_template else None)
+                ] + [InputMediaPhoto(file_id) for file_id in file_ids[1:]]
+                sent_messages = await bot.send_media_group(chat_id=chat_id, media=media_group)
+                urls = [f"https://t.me/c/{chat_id_for_url}/{msg.message_id}" for msg in sent_messages]
+                logger.info(f"Sent {len(urls)} photos via media_group")
+            elif media_type == 'video':
+                # Первый файл - с caption, остальные - без
+                media_group = [
+                    InputMediaVideo(file_ids[0], caption=caption_template if caption_template else None)
+                ] + [InputMediaVideo(file_id) for file_id in file_ids[1:]]
+                sent_messages = await bot.send_media_group(chat_id=chat_id, media=media_group)
+                urls = [f"https://t.me/c/{chat_id_for_url}/{msg.message_id}" for msg in sent_messages]
+                logger.info(f"Sent {len(urls)} videos via media_group")
+            else:
+                logger.warning(f"Unknown single media type: {media_type}")
+        else:
+            # Смешанные типы - отправляем отдельными сообщениями
+            logger.info(f"Sending mixed media types as separate messages")
+            for i, (file_id, media_type) in enumerate(zip(file_ids, media_types)):
+                caption = caption_template if i == 0 else None
+                
+                try:
+                    if media_type == 'photo':
+                        sent_msg = await bot.send_photo(chat_id=chat_id, photo=file_id, caption=caption)
+                    elif media_type == 'video':
+                        sent_msg = await bot.send_video(chat_id=chat_id, video=file_id, caption=caption)
+                    else:
+                        logger.warning(f"Unknown media type: {media_type}, skipping file_id: {file_id}")
+                        continue
+                    
+                    urls.append(f"https://t.me/c/{chat_id_for_url}/{sent_msg.message_id}")
+                except Exception as e:
+                    logger.error(f"Error sending file {i+1}/{len(file_ids)}: {e}")
+                    # Продолжаем отправку остальных файлов
+    except Exception as e:
+        logger.exception(f"Error in _send_multiple_media_to_group: {e}")
+        raise
+    
+    return urls
+
+
+async def _finish_task_v2_media_upload(
+    bot,
+    user_id: int,
+    entry_id: int,
+    session: AsyncSession,
+    final_flow,
+    telegram_chat_id: str,
+    object_name: str,
+    template,
+    from_user,
+    chat_id: int = None
+) -> None:
+    """Завершить загрузку медиа для задачи Tasks v2 и отправить все файлы в группу."""
+    from shared.services.media_orchestrator import MediaFlowConfig
+    from domain.entities.task_entry import TaskEntryV2
+    from datetime import datetime
+    
+    try:
+        if not final_flow or not final_flow.collected_photos:
+            logger.warning(f"No photos collected for task entry {entry_id}")
+            return
+        
+        # Получаем типы медиа из user_state
+        user_state = await user_state_manager.get_state(user_id)
+        media_types_dict = user_state.data.get('task_v2_media_types', {}) if user_state else {}
+        
+        # Формируем списки file_ids и типов медиа
+        file_ids = final_flow.collected_photos
+        media_types = [media_types_dict.get(file_id, 'photo') for file_id in file_ids]
+        
+        logger.info(
+            f"Finishing task v2 media upload: entry_id={entry_id}, file_ids={len(file_ids)}, "
+            f"media_types_dict={len(media_types_dict)}, media_types={media_types}"
+        )
+        
+        # Формируем подпись
+        user_name = f"{from_user.first_name} {from_user.last_name or ''}".strip()
+        caption = f"📋 Отчет (Tasks v2): {template.title}\n👤 {user_name}\n🏢 {object_name}"
+        
+        # Отправляем все файлы в группу
+        try:
+            media_urls = await _send_multiple_media_to_group(
+                bot, telegram_chat_id, file_ids, caption, media_types
+            )
+            if not media_urls:
+                logger.error(f"Failed to send media to group: no URLs returned")
+                raise Exception("Не удалось отправить медиа в группу")
+            logger.info(f"Media sent to group: {len(media_urls)} URLs created")
+        except Exception as e:
+            logger.exception(f"Error sending media to group: {e}")
+            raise
+        
+        # Формируем completion_media для сохранения в БД
+        completion_media = [
+            {
+                'url': url,
+                'type': media_types[i],
+                'file_id': file_ids[i]
+            }
+            for i, url in enumerate(media_urls)
+        ]
+        
+        # Сохраняем результат в TaskEntryV2
+        entry_query = select(TaskEntryV2).where(TaskEntryV2.id == entry_id)
+        entry_result = await session.execute(entry_query)
+        entry = entry_result.scalar_one_or_none()
+        
+        if entry:
+            entry.is_completed = True
+            entry.completed_at = datetime.utcnow()
+            entry.completion_media = completion_media
+            await session.commit()
+            
+            logger.info(
+                f"TaskEntryV2 {entry_id} completed with {len(completion_media)} media files",
+                entry_id=entry_id,
+                media_count=len(completion_media)
+            )
+        
+        # Очищаем состояние
+        await user_state_manager.update_state(
+            user_id,
+            step=UserStep.TASK_COMPLETION,
+            pending_task_v2_entry_id=None
+        )
+        
+        # Очищаем типы медиа из data
+        if user_state and 'task_v2_media_types' in user_state.data:
+            user_state.data.pop('task_v2_media_types')
+            await user_state_manager.update_state(user_id, data=user_state.data)
+        
+        # Отправляем подтверждение пользователю
+        if chat_id:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    f"✅ <b>Отчет принят!</b>\n\n"
+                    f"📋 Задача: <i>{template.title}</i>\n"
+                    f"✅ Отмечена как выполненная\n"
+                    f"📤 Отправлено {len(completion_media)} файл(ов) в группу отчетов\n\n"
+                    f"💡 Используйте '📋 Мои задачи' для продолжения."
+                ),
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("📋 Мои задачи", callback_data="my_tasks"),
+                    InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+                ]])
+            )
+        
+    except Exception as e:
+        logger.exception(f"Error finishing task v2 media upload: {e}")
+        if chat_id:
+            await bot.send_message(chat_id=chat_id, text="❌ Ошибка при отправке отчета. Попробуйте позже.")
+        raise
+
+
+
+async def _handle_task_v2_done(update: Update, context: ContextTypes.DEFAULT_TYPE, entry_id: int):
+    """Обработчик кнопки 'Готово' для задач Tasks v2."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    await query.answer()
+    
+    try:
+        from shared.services.media_orchestrator import MediaOrchestrator
+        orchestrator = MediaOrchestrator()
+        media_flow = await orchestrator.get_flow(user_id)
+        
+        if not media_flow or media_flow.context_type != "task_v2_proof" or media_flow.context_id != entry_id:
+            await orchestrator.close()
+            await query.edit_message_text("❌ Ошибка: медиа-поток не найден")
+            return
+        
+        # Завершаем поток
+        final_flow = await orchestrator.finish(user_id)
+        await orchestrator.close()
+        
+        if not final_flow or not final_flow.collected_photos:
+            await query.edit_message_text("❌ Нет загруженных файлов")
+            return
+        
+        async with get_async_session() as session:
+            from domain.entities.task_entry import TaskEntryV2
+            from domain.entities.user import User
+            from domain.entities.shift import Shift
+            from domain.entities.object import Object
+            from sqlalchemy.orm import selectinload
+            
+            # Получаем TaskEntry
+            entry_query = select(TaskEntryV2).where(
+                TaskEntryV2.id == entry_id
+            ).options(
+                selectinload(TaskEntryV2.template),
+                selectinload(TaskEntryV2.shift_schedule)
+            )
+            entry_result = await session.execute(entry_query)
+            entry = entry_result.scalar_one_or_none()
+            
+            if not entry or not entry.template:
+                await query.edit_message_text("❌ Задача не найдена")
+                return
+            
+            template = entry.template
+            
+            # Получаем информацию для отправки в группу
+            db_user_query = select(User).where(User.telegram_id == user_id)
+            db_user_result = await session.execute(db_user_query)
+            db_user = db_user_result.scalar_one_or_none()
+            
+            if not db_user:
+                await query.edit_message_text("❌ Пользователь не найден")
+                return
+            
+            # Получаем активную смену
+            shift_query = select(Shift).where(
+                and_(
+                    Shift.user_id == db_user.id,
+                    Shift.status == "active"
+                )
+            )
+            shift_result = await session.execute(shift_query)
+            active_shift = shift_result.scalar_one_or_none()
+            
+            if not active_shift:
+                await query.edit_message_text("❌ Активная смена не найдена")
+                return
+            
+            # Получаем объект
+            object_query = select(Object).where(Object.id == active_shift.object_id).options(
+                selectinload(Object.org_unit)
+            )
+            object_result = await session.execute(object_query)
+            obj = object_result.scalar_one_or_none()
+            
+            telegram_chat_id = None
+            object_name = "Объект"
+            
+            if obj:
+                object_name = obj.name
+                telegram_chat_id = obj.get_effective_report_chat_id()
+            
+            if not telegram_chat_id:
+                await query.edit_message_text(
+                    "❌ Telegram группа для отчетов не настроена.\n"
+                    "Обратитесь к администратору."
+                )
+                return
+            
+            await query.edit_message_text("⏳ Отправляю отчеты...")
+            
+            # Завершаем загрузку и отправляем файлы
+            await _finish_task_v2_media_upload(
+                context.bot,
+                user_id,
+                entry_id,
+                session,
+                final_flow,
+                telegram_chat_id,
+                object_name,
+                template,
+                query.from_user,
+                chat_id=query.message.chat_id
+            )
+    
+    except Exception as e:
+        logger.exception(f"Error in _handle_task_v2_done: {e}")
+        await query.edit_message_text("❌ Ошибка при завершении загрузки. Попробуйте позже.")
+
+
 async def _handle_received_task_v2_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка полученного фото/видео для задачи Tasks v2 через Media Orchestrator."""
     user_id = update.message.from_user.id
@@ -2422,75 +2735,57 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
                 )
                 return
             
-            # Отправляем медиа в группу
-            user_name = f"{update.message.from_user.first_name} {update.message.from_user.last_name or ''}".strip()
-            caption = f"📋 Отчет (Tasks v2): {template.title}\n👤 {user_name}\n🏢 {object_name}"
-            
-            sent_message = None
-            if media_type == 'photo':
-                sent_message = await context.bot.send_photo(
-                    chat_id=telegram_chat_id,
-                    photo=media_file_id,
-                    caption=caption
-                )
-            elif media_type == 'video':
-                sent_message = await context.bot.send_video(
-                    chat_id=telegram_chat_id,
-                    video=media_file_id,
-                    caption=caption
-                )
-            
-            # Формируем ссылку на медиа
-            chat_id_str = str(telegram_chat_id)
-            if chat_id_str.startswith('-100'):
-                chat_id_str = chat_id_str[4:]
-            elif chat_id_str.startswith('-'):
-                chat_id_str = chat_id_str[1:]
-            media_url = f"https://t.me/c/{chat_id_str}/{sent_message.message_id}"
-            
             # Добавляем медиа в Media Orchestrator
-            await orchestrator.add_photo(user_id, media_file_id)
+            success = await orchestrator.add_photo(user_id, media_file_id)
+            if not success:
+                await orchestrator.close()
+                await update.message.reply_text("❌ Не удалось добавить файл. Возможно, достигнут лимит.")
+                return
             
-            # Завершаем поток и получаем финальные данные
+            # Сохраняем тип медиа в user_state для последующей отправки
+            user_state = await user_state_manager.get_state(user_id)
+            if user_state:
+                # Атомарно обновляем типы медиа
+                current_data = user_state.data.copy()
+                if 'task_v2_media_types' not in current_data:
+                    current_data['task_v2_media_types'] = {}
+                current_data['task_v2_media_types'][media_file_id] = media_type
+                await user_state_manager.update_state(user_id, data=current_data)
+                logger.debug(f"Saved media type for file_id={media_file_id[:20]}...: {media_type}")
+            
+            # Проверяем состояние ПОСЛЕ добавления файла
+            current_count = await orchestrator.get_collected_count(user_id)
+            can_add = await orchestrator.can_add_more(user_id)
+            
+            # Если можно добавить еще - показываем кнопки и НЕ закрываем поток
+            if can_add:
+                await orchestrator.close()  # Закрываем только соединение, поток остается в Redis
+                await update.message.reply_text(
+                    f"✅ <b>Файл добавлен!</b>\n\n"
+                    f"📋 Задача: <i>{template.title}</i>\n"
+                    f"📸 Загружено файлов: {current_count}/{media_flow.max_photos}\n\n"
+                    f"Можете отправить еще файлы или нажать '✅ Готово':",
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("✅ Готово", callback_data=f"task_v2_done:{entry_id}")
+                    ]])
+                )
+                return
+            
+            # Достигнут лимит - автоматически завершаем
             final_flow = await orchestrator.finish(user_id)
             await orchestrator.close()
-            
-            # Сохраняем результат выполнения в TaskEntryV2
-            entry.is_completed = True
-            entry.completed_at = datetime.utcnow()
-            entry.completion_media = [{
-                'url': media_url,
-                'type': media_type,
-                'file_id': media_file_id
-            }]
-            await session.commit()
-            
-            logger.info(
-                f"TaskEntryV2 {entry_id} completed with media via Media Orchestrator",
-                media_type=media_type,
-                media_url=media_url,
-                photos_count=len(final_flow.collected_photos) if final_flow else 0
-            )
-            
-            # Очищаем состояние
-            await user_state_manager.update_state(
+            await _finish_task_v2_media_upload(
+                context.bot,
                 user_id,
-                step=UserStep.TASK_COMPLETION,
-                pending_task_v2_entry_id=None
-            )
-            
-            # Подтверждение (БЕЗ автоматического показа списка задач)
-            await update.message.reply_text(
-                f"✅ <b>Отчет принят!</b>\n\n"
-                f"📋 Задача: <i>{template.title}</i>\n"
-                f"✅ Отмечена как выполненная\n"
-                f"📤 Отправлено в группу отчетов\n\n"
-                f"💡 Используйте '📋 Мои задачи' для продолжения.",
-                parse_mode='HTML',
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📋 Мои задачи", callback_data="my_tasks"),
-                    InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
-                ]])
+                entry_id,
+                session,
+                final_flow,
+                telegram_chat_id,
+                object_name,
+                template,
+                update.message.from_user,
+                chat_id=update.message.chat_id
             )
     
     except Exception as e:
