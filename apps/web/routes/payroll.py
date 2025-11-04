@@ -4,7 +4,7 @@ from datetime import date, timedelta, datetime
 from typing import Optional
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Request, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Request, Form, HTTPException, status, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
@@ -49,9 +49,9 @@ async def owner_payroll_list(
     request: Request,
     current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session),
-    employee_id: Optional[int] = None,
-    period_start: Optional[str] = None,
-    period_end: Optional[str] = None
+    employee_id: Optional[str] = Query(None),
+    period_start: Optional[str] = Query(None),
+    period_end: Optional[str] = Query(None)
 ):
     """Список всех начислений."""
     try:
@@ -62,37 +62,67 @@ async def owner_payroll_list(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        # Получить ВСЕХ сотрудников владельца (включая уволенных)
-        # для возможности просмотра и создания начислений задним числом
-        query = select(User).join(Contract, Contract.employee_id == User.id).where(
-            Contract.owner_id == owner_id
-            # Убран фильтр status == 'active' — показываем всех когда-либо работавших
-        ).distinct()
-        result = await db.execute(query)
-        employees = result.scalars().all()
-        
         # Фильтры по дате
         if not period_start:
             period_start = (date.today() - timedelta(days=30)).isoformat()
         if not period_end:
             period_end = date.today().isoformat()
+
+        # Парсинг дат (валидация формата)
+        try:
+            period_start_date = date.fromisoformat(period_start)
+            period_end_date = date.fromisoformat(period_end)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Неверный формат дат. Используйте YYYY-MM-DD")
+
+        # Получить ВСЕХ сотрудников владельца (включая уволенных)
+        # для возможности просмотра и создания начислений задним числом
+        all_emps_query = select(User).join(Contract, Contract.employee_id == User.id).where(
+            Contract.owner_id == owner_id
+        ).distinct()
+        all_emps_result = await db.execute(all_emps_query)
+        employees_all = all_emps_result.scalars().all()
+
+        # Сотрудники для фильтра: договор пересекается с выбранным периодом
+        # Пересечение по интервалу [start_date, effective_end], где effective_end = COALESCE(date(end_date), termination_date, +inf)
+        # Если end_date и termination_date NULL, считаем договор бессрочным
+        employees_filter_query = select(User).join(Contract, Contract.employee_id == User.id).where(
+            Contract.owner_id == owner_id,
+            func.date(Contract.start_date) <= period_end_date,
+            (
+                (
+                    (Contract.end_date.is_(None)) & (Contract.termination_date.is_(None))
+                ) |
+                (func.coalesce(func.date(Contract.end_date), Contract.termination_date) >= period_start_date)
+            )
+        ).distinct().order_by(User.last_name, User.first_name)
+        employees_result = await db.execute(employees_filter_query)
+        employees = employees_result.scalars().all()
+
+        # Нормализация employee_id: пустое значение → None
+        employee_id_int = None
+        if employee_id is not None and str(employee_id).strip() != "":
+            try:
+                employee_id_int = int(employee_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="employee_id должен быть числом")
         
         # Получить начисления
-        if employee_id:
+        if employee_id_int:
             entries = await payroll_service.get_payroll_entries_by_employee(
-                employee_id=employee_id,
-                period_start=date.fromisoformat(period_start),
-                period_end=date.fromisoformat(period_end),
+                employee_id=employee_id_int,
+                period_start=period_start_date,
+                period_end=period_end_date,
                 owner_id=owner_id  # Фильтровать по договорам владельца
             )
         else:
-            # Получить начисления для всех сотрудников
+            # Получить начисления для всех сотрудников (включая неактивных)
             entries = []
-            for emp in employees:
+            for emp in employees_all:
                 emp_entries = await payroll_service.get_payroll_entries_by_employee(
                     employee_id=emp.id,
-                    period_start=date.fromisoformat(period_start),
-                    period_end=date.fromisoformat(period_end),
+                    period_start=period_start_date,
+                    period_end=period_end_date,
                     limit=50,
                     owner_id=owner_id  # Фильтровать по договорам владельца
                 )
@@ -108,7 +138,7 @@ async def owner_payroll_list(
                 "current_user": current_user,
                 "entries": entries,
                 "employees": employees,
-                "selected_employee_id": employee_id,
+                "selected_employee_id": employee_id_int,
                 "period_start": period_start,
                 "period_end": period_end
             }
@@ -830,16 +860,25 @@ async def owner_payroll_manual_recalculate(
                 
                 for obj in objects:
                     try:
-                        # Найти контракты (ВСЕ активные + уволенные с settlement_policy='schedule')
+                        # Найти контракты:
+                        # - активные
+                        # - terminated + settlement_policy='schedule'
+                        # - terminated + settlement_policy='termination_date' И конец платёжного периода <= termination_date
                         contracts_query = select(Contract).where(
                             and_(
                                 Contract.allowed_objects.isnot(None),
                                 cast(Contract.allowed_objects, JSONB).op('@>')(cast([obj.id], JSONB)),
                                 or_(
-                                    Contract.status == 'active',  # Все активные (независимо от is_active)
+                                    Contract.status == 'active',
                                     and_(
                                         Contract.status == 'terminated',
                                         Contract.settlement_policy == 'schedule'
+                                    ),
+                                    and_(
+                                        Contract.status == 'terminated',
+                                        Contract.settlement_policy == 'termination_date',
+                                        Contract.termination_date.isnot(None),
+                                        func.date(period_end) <= Contract.termination_date
                                     )
                                 )
                             )

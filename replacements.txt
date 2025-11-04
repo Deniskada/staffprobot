@@ -1,0 +1,1 @@
+regex:\b[0-9]{5,}:[A-Za-z0-9_-]{30,}\b==>REDACTED_TELEGRAM_TOKEN

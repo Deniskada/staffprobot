@@ -118,25 +118,20 @@ async def payroll_adjustments_list(
                 }
             )
         
-        # Базовый запрос с фильтром по сотрудникам владельца И его объектам
-        # Важно: фильтруем по объектам владельца ИЛИ по корректировкам созданным владельцем
-        # ИЛИ по корректировкам без object_id, но с shift_schedule_id, где объект смены принадлежит владельцу
+        # Базовый запрос: показывать корректировки, относящиеся к объектам владельца
+        # 1) Прямая привязка к объекту владельца
+        # 2) Привязка к расписанию смены, объект которого принадлежит владельцу
         query = select(PayrollAdjustment).outerjoin(
             ShiftSchedule, PayrollAdjustment.shift_schedule_id == ShiftSchedule.id
         ).where(
             func.date(PayrollAdjustment.created_at) >= start_date,
             func.date(PayrollAdjustment.created_at) <= end_date,
-            PayrollAdjustment.employee_id.in_(employee_ids),
             or_(
-                PayrollAdjustment.object_id.in_(owner_object_ids),  # Прямая привязка к объекту
+                PayrollAdjustment.object_id.in_(owner_object_ids),
                 and_(
                     PayrollAdjustment.object_id.is_(None),
-                    PayrollAdjustment.created_by == owner_id  # Создал владелец
-                ),
-                and_(
-                    PayrollAdjustment.object_id.is_(None),  # object_id = NULL
-                    PayrollAdjustment.shift_schedule_id.isnot(None),  # Но есть shift_schedule_id
-                    ShiftSchedule.object_id.in_(owner_object_ids)  # И объект смены принадлежит владельцу
+                    PayrollAdjustment.shift_schedule_id.isnot(None),
+                    ShiftSchedule.object_id.in_(owner_object_ids)
                 )
             )
         ).options(

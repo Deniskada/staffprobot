@@ -184,12 +184,14 @@
 
 ## Начисления и выплаты (Payroll) — Итерация 23
 - [GET] `/owner/payroll` — (apps/web/routes/payroll.py) — список начислений всех сотрудников
+  - Фильтр «Сотрудник»: показывает сотрудников с договорами, пересекающими выбранный период (учёт `start_date` и `COALESCE(date(end_date), termination_date)`), сортировка по `Фамилия Имя`. При пустом сотруднике показываются все начисления (включая уволенных) по договорам владельца.
 - [GET] `/owner/payroll/{entry_id}` — (apps/web/routes/payroll.py) — детализация начисления с adjustments и payments
 - [POST] `/owner/payroll/{entry_id}/add-deduction` — (apps/web/routes/payroll.py) — добавить удержание (через PayrollAdjustmentService)
 - [POST] `/owner/payroll/{entry_id}/add-bonus` — (apps/web/routes/payroll.py) — добавить доплату (через PayrollAdjustmentService)
 - [POST] `/owner/payroll/{entry_id}/create-payment` — (apps/web/routes/payroll.py) — записать выплату (создаёт EmployeePayment со статусом pending)
 - [POST] `/owner/payroll/{entry_id}/payments/{payment_id}/complete` — (apps/web/routes/payroll.py) — подтвердить выплату (pending → completed)
 - [POST] `/owner/payroll/manual-recalculate` — (apps/web/routes/payroll.py) — ручной пересчёт выплат на выбранную дату (идемпотентно: обновляет существующие, создаёт недостающие)
+  - Включает terminated контракты с `settlement_policy='termination_date'`, если конец платёжного периода ≤ `termination_date`.
 
 ## Графики выплат (Payment Schedules) — Итерация 23
 - [GET] `/owner/payment-schedules/{schedule_id}/data` — (apps/web/routes/payment_schedule.py) — данные графика (JSON)
@@ -201,6 +203,7 @@
 
 ## Корректировки начислений (Payroll Adjustments) — Итерация 23
 - [GET] `/owner/payroll-adjustments` — (apps/web/routes/owner_payroll_adjustments.py) — список всех корректировок с фильтрами
+  - Отбор: корректировки, относящиеся к объектам владельца напрямую (`object_id`) или к расписаниям смен на объектах владельца (через `shift_schedule.object_id`). Фильтрация по договорным сотрудникам не обязательна.
   - Query: `adjustment_type` — тип корректировки (shift_base, late_start, task_bonus, task_penalty, manual_bonus, manual_deduction)
   - Query: `employee_id` — ID сотрудника (строка, конвертируется в int)
   - Query: `object_id` — ID объекта (строка, конвертируется в int)

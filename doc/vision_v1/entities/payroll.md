@@ -215,10 +215,19 @@ await payroll_service.mark_payment_completed(
 
 ### Для владельца
 - **GET** `/owner/payroll` - список начислений всех сотрудников
+  - Фильтр «Сотрудник»: выпадающий список показывает только сотрудников, чьи договоры пересекаются с выбранным периодом, независимо от текущего статуса договора (учитываются `start_date` и `COALESCE(date(end_date), termination_date)`). Сортировка: `Фамилия Имя`.
+  - При пустом выборе сотрудника отображаются начисления для всех сотрудников (включая уволенных), отфильтрованных по договорам владельца.
 - **GET** `/owner/payroll/{entry_id}` - детализация с действиями
 - **POST** `/owner/payroll/{entry_id}/add-deduction` - добавить удержание
 - **POST** `/owner/payroll/{entry_id}/add-bonus` - добавить доплату
 - **GET** `/owner/payroll-adjustments` - список всех корректировок (с фильтрами)
+  - Query: `adjustment_type` — тип корректировки (shift_base, late_start, task_bonus, task_penalty, manual_bonus, manual_deduction)
+  - Query: `employee_id` — ID сотрудника (строка, конвертируется в int)
+  - Query: `object_id` — ID объекта (строка, конвертируется в int)
+  - Query: `is_applied` — статус применения (all/applied/unapplied)
+  - Query: `date_from`, `date_to` — период (YYYY-MM-DD)
+  - Query: `page`, `per_page` — пагинация
+  - Отбор записей: корректировки, относящиеся к объектам владельца напрямую (`object_id in owner_objects`) или к расписаниям смен (`shift_schedule.object_id in owner_objects`). Привязка к сотрудникам по договорам не обязательна.
 - **POST** `/owner/payroll-adjustments/create` - создать ручную корректировку (с полем `adjustment_date`)
 - **POST** `/owner/payroll-adjustments/{adjustment_id}/edit` - редактировать ручную корректировку
 - **GET** `/owner/payroll-adjustments/{adjustment_id}/history` - история изменений корректировки
