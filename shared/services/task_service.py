@@ -141,6 +141,7 @@ class TaskService:
         description: Optional[str] = None,
         is_mandatory: bool = False,
         requires_media: bool = False,
+        requires_geolocation: bool = False,
         default_amount: Optional[Decimal] = None,
         object_id: Optional[int] = None,
         org_unit_id: Optional[int] = None
@@ -153,6 +154,7 @@ class TaskService:
             description=description,
             is_mandatory=is_mandatory,
             requires_media=requires_media,
+            requires_geolocation=requires_geolocation,
             default_bonus_amount=default_amount,
             object_id=object_id,
             org_unit_id=org_unit_id,

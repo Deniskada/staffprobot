@@ -106,6 +106,11 @@ celery_app.conf.update(
             'task': 'auto_assign_tasks',
             'schedule': crontab(hour=4, minute=0),  # каждый день в 04:00 MSK
         },
+        # Проверка просроченных задач — каждые 30 минут
+        'check-overdue-tasks': {
+            'task': 'check_overdue_tasks',
+            'schedule': 30 * 60,  # каждые 30 минут
+        },
         # Обработка бонусов/штрафов за задачи v2 — каждые 10 минут
         'process-task-bonuses': {
             'task': 'process_task_bonuses',

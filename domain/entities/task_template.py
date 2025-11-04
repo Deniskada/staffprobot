@@ -25,6 +25,7 @@ class TaskTemplateV2(Base):
     description = Column(Text, nullable=True)
 
     requires_media = Column(Boolean, default=False, nullable=False)
+    requires_geolocation = Column(Boolean, default=False, nullable=False)  # Требовать геопозицию при выполнении
     is_mandatory = Column(Boolean, default=False, nullable=False)
     default_bonus_amount = Column(Numeric(10, 2), nullable=True)  # Бонус или штраф
 

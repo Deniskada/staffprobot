@@ -92,6 +92,10 @@
                   <input type="checkbox" class="form-check-input" id="edit_requires_media{{ t.id }}" name="requires_media" value="1" {{ 'checked' if t.requires_media else '' }}>
                   <label class="form-check-label" for="edit_requires_media{{ t.id }}">Требует фото/видео</label>
                 </div>
+                <div class="mb-3 form-check">
+                  <input type="checkbox" class="form-check-input" id="edit_requires_geolocation{{ t.id }}" name="requires_geolocation" value="1" {{ 'checked' if t.requires_geolocation else '' }}>
+                  <label class="form-check-label" for="edit_requires_geolocation{{ t.id }}">Требовать геопозицию</label>
+                </div>
                 <div class="mb-3">
                   <label for="edit_default_amount{{ t.id }}" class="form-label">Бонус/Штраф (₽)</label>
                   <input type="number" step="0.01" class="form-control" id="edit_default_amount{{ t.id }}" name="default_amount" value="{{ t.default_bonus_amount or '' }}">
@@ -201,6 +205,10 @@
           <div class="mb-3 form-check">
             <input type="checkbox" class="form-check-input" id="requires_media" name="requires_media" value="1">
             <label class="form-check-label" for="requires_media">Требует фото/видео</label>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="requires_geolocation" name="requires_geolocation" value="1">
+            <label class="form-check-label" for="requires_geolocation">Требовать геопозицию</label>
           </div>
           <div class="mb-3">
             <label for="default_amount" class="form-label">Бонус/Штраф (₽)</label>

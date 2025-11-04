@@ -63,10 +63,12 @@
         return;
       }
       let d = new Date(startDate);
-      while (dates.length < 2) {
+      while (dates.length < 3) {
         const iso = (d.getDay() === 0 ? 7 : d.getDay()); // 1..7
         if (checked.includes(iso)) dates.push(new Date(d));
         d.setDate(d.getDate() + 1);
+        // Защита от бесконечного цикла
+        if (dates.length === 0 && d.getTime() - startDate.getTime() > 14 * 24 * 3600 * 1000) break;
       }
     } else if (rt === 'day_interval') {
       let interval = parseInt($('day_interval').value || '1', 10);
@@ -76,7 +78,7 @@
 
     if (dates.length === 0) { preview.textContent = ''; return; }
     const parts = dates.map(d => `${toRuWeekday(d)}, ${fmt(d)}`);
-    preview.textContent = `В следующий раз эта задача будет назначена во ${parts.join(', ')}`;
+    preview.textContent = `В следующий раз эта задача будет назначена: ${parts.join(', ')}`;
   }
 
   function toggleCreationMode() {
@@ -91,6 +93,7 @@
     const amount = $('task_amount');
     const mandatory = $('task_mandatory');
     const media = $('task_media');
+    const geolocation = $('task_geolocation');
     const code = $('task_code');
     if (mode === 'template') {
       [title, desc, amount].forEach(f => { f.disabled = true; f.style.backgroundColor = '#e9ecef'; });
@@ -99,7 +102,7 @@
       fillFromTemplate();
     } else {
       [title, desc, amount].forEach(f => { f.disabled = false; f.style.backgroundColor = ''; });
-      [mandatory, media].forEach(f => { f.disabled = false; f.parentElement.style.opacity = '1'; });
+      [mandatory, media, geolocation].forEach(f => { f.disabled = false; f.parentElement.style.opacity = '1'; });
       code.disabled = true; code.style.backgroundColor = '#e9ecef'; code.value = '[авто]';
     }
   }
@@ -112,6 +115,7 @@
       $('task_description').value = '';
       $('task_mandatory').checked = false;
       $('task_media').checked = false;
+      $('task_geolocation').checked = false;
       $('task_amount').value = '';
       $('task_code').value = '';
       return;
@@ -120,6 +124,7 @@
     $('task_description').value = opt.dataset.description || '';
     $('task_mandatory').checked = (opt.dataset.mandatory === 'True');
     $('task_media').checked = (opt.dataset.media === 'True');
+    $('task_geolocation').checked = (opt.dataset.geolocation === 'True');
     $('task_amount').value = opt.dataset.amount || '';
     $('task_code').value = opt.dataset.code || '';
   }

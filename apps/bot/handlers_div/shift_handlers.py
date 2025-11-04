@@ -97,6 +97,16 @@ async def _collect_shift_tasks(
         for entry in task_entries:
             template = entry.template
             if template:
+                # Загружаем план задач для получения дедлайна
+                deadline_time = None
+                if entry.plan_id:
+                    from domain.entities.task_plan import TaskPlanV2
+                    plan_query = select(TaskPlanV2).where(TaskPlanV2.id == entry.plan_id)
+                    plan_result = await session.execute(plan_query)
+                    plan = plan_result.scalar_one_or_none()
+                    if plan and plan.planned_time_start:
+                        deadline_time = plan.planned_time_start
+                
                 all_tasks.append({
                     'text': template.title,
                     'description': template.description,
@@ -107,7 +117,8 @@ async def _collect_shift_tasks(
                     'entry_id': entry.id,
                     'is_completed': entry.is_completed,
                     'completion_notes': entry.completion_notes,
-                    'completion_media': entry.completion_media or []
+                    'completion_media': entry.completion_media or [],
+                    'deadline_time': deadline_time.strftime('%H:%M') if deadline_time else None  # Форматируем время для отображения
                 })
         
         logger.info(
@@ -1756,7 +1767,13 @@ async def _show_my_tasks_list(context, user_id: int, shift_id: int, shift_tasks:
             else:
                 cost_text = f" ({amount}₽)"
         
-        task_line = f"{completed_icon}{media_icon}{mandatory_icon} {task_text}{cost_text}"
+        # Дедлайн (для Tasks v2)
+        deadline_text = ""
+        deadline_time = task.get('deadline_time')
+        if deadline_time:
+            deadline_text = f" 🕐 {deadline_time}"
+        
+        task_line = f"{completed_icon}{media_icon}{mandatory_icon} {task_text}{deadline_text}{cost_text}"
         if is_task_completed:
             task_line = f"<s>{task_line}</s>"
         tasks_text += task_line + "\n"
@@ -2412,7 +2429,8 @@ async def _finish_task_v2_media_upload(
     object_name: str,
     template,
     from_user,
-    chat_id: int = None
+    chat_id: int = None,
+    completion_location: str | None = None
 ) -> None:
     """Завершить загрузку медиа для задачи Tasks v2 и отправить все файлы в группу."""
     from shared.services.media_orchestrator import MediaFlowConfig
@@ -2473,6 +2491,8 @@ async def _finish_task_v2_media_upload(
             entry.is_completed = True
             entry.completed_at = datetime.utcnow()
             entry.completion_media = completion_media
+            if completion_location:
+                entry.completion_location = completion_location
             await session.commit()
             
             logger.info(
@@ -2611,6 +2631,31 @@ async def _handle_task_v2_done(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 return
             
+            # Проверяем, требуется ли геопозиция
+            if template.requires_geolocation and not entry.completion_location:
+                # Получаем текущее состояние для сохранения данных
+                current_state = await user_state_manager.get_state(user_id)
+                user_state_data = current_state.data.copy() if current_state else {}
+                user_state_data.update({
+                    'final_flow_collected_photos': final_flow.collected_photos,
+                    'pending_task_v2_entry_id_for_location': entry_id
+                })
+                await user_state_manager.update_state(
+                    user_id,
+                    step=UserStep.LOCATION_REQUEST,
+                    data=user_state_data
+                )
+                
+                # Запрашиваем геопозицию
+                await query.edit_message_text(
+                    f"📍 <b>Требуется геопозиция</b>\n\n"
+                    f"📋 Задача: <i>{template.title}</i>\n"
+                    f"📸 Фото загружены: {len(final_flow.collected_photos)} файл(ов)\n\n"
+                    f"Пожалуйста, отправьте вашу геопозицию для завершения задачи.",
+                    parse_mode='HTML'
+                )
+                return
+            
             await query.edit_message_text("⏳ Отправляю отчеты...")
             
             # Завершаем загрузку и отправляем файлы
@@ -2624,7 +2669,8 @@ async def _handle_task_v2_done(update: Update, context: ContextTypes.DEFAULT_TYP
                 object_name,
                 template,
                 query.from_user,
-                chat_id=query.message.chat_id
+                chat_id=query.message.chat_id,
+                completion_location=None
             )
     
     except Exception as e:

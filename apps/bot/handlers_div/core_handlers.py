@@ -10,6 +10,7 @@ from core.database.session import get_async_session
 from core.utils.timezone_helper import timezone_helper
 from domain.entities.object import Object
 from domain.entities.shift import Shift
+from domain.entities.user import User
 from sqlalchemy import select
 from core.state import user_state_manager, UserAction, UserStep
 from datetime import date, timedelta
@@ -154,6 +155,9 @@ from .utility_handlers import (
 
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик геопозиции пользователя."""
+    # Явно указываем, что используем глобальные импорты
+    global Shift, Object, User, select
+    
     user_id = update.effective_user.id
     location = update.message.location
     
@@ -218,7 +222,159 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Обновляем состояние на обработку
     await user_state_manager.update_state(user_id, step=UserStep.PROCESSING)
     
+    # Получаем обновленное состояние после изменения step
+    user_state = await user_state_manager.get_state(user_id)
+    if not user_state:
+        await update.message.reply_text("❌ Состояние утеряно. Попробуйте еще раз.")
+        return
+    
     coordinates = f"{location.latitude},{location.longitude}"
+    
+    # Проверяем, требуется ли геопозиция для Tasks v2 (ПРИОРИТЕТ над обычными действиями)
+    pending_task_v2_entry_id = user_state.data.get('pending_task_v2_entry_id_for_location')
+    logger.info(
+        f"[LOCATION] Processing location: user_id={user_id}, action={user_state.action}, "
+        f"pending_task_v2_entry_id={pending_task_v2_entry_id}"
+    )
+    if pending_task_v2_entry_id:
+        # Обработка геопозиции для Tasks v2
+        # Используем глобальные импорты: Shift, Object, User, select уже импортированы в начале файла
+        try:
+            # Импортируем только классы, которых нет глобально
+            from apps.bot.handlers_div.shift_handlers import _finish_task_v2_media_upload
+            from shared.services.media_orchestrator import MediaFlowConfig
+            from domain.entities.task_entry import TaskEntryV2
+            from sqlalchemy.orm import selectinload
+            from sqlalchemy import and_
+            
+            async with get_async_session() as session:
+                # Получаем TaskEntry
+                entry_query = select(TaskEntryV2).where(
+                    TaskEntryV2.id == pending_task_v2_entry_id
+                ).options(
+                    selectinload(TaskEntryV2.template),
+                    selectinload(TaskEntryV2.shift_schedule)
+                )
+                entry_result = await session.execute(entry_query)
+                entry = entry_result.scalar_one_or_none()
+                
+                if not entry or not entry.template:
+                    await update.message.reply_text("❌ Задача не найдена")
+                    await user_state_manager.clear_state(user_id)
+                    return
+                
+                # Проверяем, не выполнена ли уже задача
+                if entry.is_completed:
+                    logger.warning(
+                        f"Task entry {pending_task_v2_entry_id} already completed, clearing state",
+                        entry_id=pending_task_v2_entry_id,
+                        user_id=user_id
+                    )
+                    await update.message.reply_text(
+                        "✅ Задача уже выполнена. Можете закрыть смену."
+                    )
+                    await user_state_manager.clear_state(user_id)
+                    return
+                
+                template = entry.template
+                
+                # Получаем информацию для отправки в группу
+                db_user_query = select(User).where(User.telegram_id == user_id)
+                db_user_result = await session.execute(db_user_query)
+                db_user = db_user_result.scalar_one_or_none()
+                
+                if not db_user:
+                    await update.message.reply_text("❌ Пользователь не найден")
+                    await user_state_manager.clear_state(user_id)
+                    return
+                
+                # Получаем активную смену
+                shift_query = select(Shift).where(
+                    and_(
+                        Shift.user_id == db_user.id,
+                        Shift.status == "active"
+                    )
+                )
+                shift_result = await session.execute(shift_query)
+                active_shift = shift_result.scalar_one_or_none()
+                
+                if not active_shift:
+                    await update.message.reply_text("❌ Активная смена не найдена")
+                    await user_state_manager.clear_state(user_id)
+                    return
+                
+                # Получаем объект
+                object_query = select(Object).where(Object.id == active_shift.object_id).options(
+                    selectinload(Object.org_unit)
+                )
+                object_result = await session.execute(object_query)
+                obj = object_result.scalar_one_or_none()
+                
+                telegram_chat_id = None
+                object_name = "Объект"
+                
+                if obj:
+                    object_name = obj.name
+                    telegram_chat_id = obj.get_effective_report_chat_id()
+                
+                if not telegram_chat_id:
+                    await update.message.reply_text(
+                        "❌ Telegram группа для отчетов не настроена.\n"
+                        "Обратитесь к администратору."
+                    )
+                    await user_state_manager.clear_state(user_id)
+                    return
+                
+                # Восстанавливаем final_flow из сохраненного состояния
+                collected_photos = user_state.data.get('final_flow_collected_photos', [])
+                if not collected_photos:
+                    await update.message.reply_text("❌ Ошибка: медиа-файлы не найдены")
+                    await user_state_manager.clear_state(user_id)
+                    return
+                
+                final_flow = MediaFlowConfig(
+                    user_id=user_id,
+                    context_type="task_v2_proof",
+                    context_id=pending_task_v2_entry_id,
+                    collected_photos=collected_photos,
+                    max_photos=len(collected_photos)
+                )
+                
+                await update.message.reply_text("⏳ Отправляю отчеты...")
+                
+                # Завершаем загрузку с геопозицией
+                await _finish_task_v2_media_upload(
+                    context.bot,
+                    user_id,
+                    pending_task_v2_entry_id,
+                    session,
+                    final_flow,
+                    telegram_chat_id,
+                    object_name,
+                    template,
+                    update.message.from_user,
+                    chat_id=update.message.chat_id,
+                    completion_location=coordinates
+                )
+                
+                # Очищаем состояние
+                await user_state_manager.clear_state(user_id)
+                
+        except Exception as e:
+            logger.exception(f"Error processing location for task v2: {e}")
+            await update.message.reply_text("❌ Ошибка при обработке геопозиции. Попробуйте позже.")
+            await user_state_manager.clear_state(user_id)
+        
+        return
+    
+    # Получаем свежее состояние перед обработкой обычных действий
+    # (на случай, если оно изменилось после обработки Tasks v2)
+    user_state = await user_state_manager.get_state(user_id)
+    if not user_state:
+        await update.message.reply_text(
+            "❌ Состояние утеряно. Попробуйте начать заново с /start."
+        )
+        return
     
     try:
         if user_state.action == UserAction.OPEN_SHIFT:
@@ -298,7 +454,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 if shift_tasks:
                     # Сохраняем выполнение задач в shift.notes для Celery
                     async with get_async_session() as session:
-                        from domain.entities.shift import Shift
                         import json
                         
                         shift_query = select(Shift).where(Shift.id == user_state.selected_shift_id)
@@ -345,7 +500,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 # Проверяем: была ли это последняя смена на объекте?
                 # Если да - автоматически закрываем объект
                 from shared.services.object_opening_service import ObjectOpeningService
-                from domain.entities.user import User
                 
                 # Получаем object_id из закрытой смены
                 closed_shift_object_id = result.get('object_id')
@@ -440,7 +594,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             # Открытие объекта + автоматическое открытие смены
             from shared.services.object_opening_service import ObjectOpeningService
             from core.geolocation.location_validator import LocationValidator
-            from domain.entities.user import User
             
             async with get_async_session() as session:
                 opening_service = ObjectOpeningService(session)

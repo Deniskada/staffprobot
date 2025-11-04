@@ -23,7 +23,7 @@ class TaskPlanV2(Base):
     # Поля для периодичности и времени
     recurrence_type = Column(String(20), nullable=True)  # None, 'weekdays', 'day_interval'
     recurrence_config = Column(JSON, nullable=True)  # {"weekdays": [1,2,3]} или {"interval": 3}
-    planned_time_start = Column(Time, nullable=True)  # Время начала задачи
+    planned_time_start = Column(Time, nullable=True)  # Дедлайн: время, не позже которого задача должна быть выполнена
     recurrence_end_date = Column(Date, nullable=True)  # Дата окончания периодичности
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -75,6 +75,7 @@ async def owner_tasks_templates_create(
     description: str = Form(None),
     is_mandatory: int = Form(0),
     requires_media: int = Form(0),
+    requires_geolocation: int = Form(0),
     default_amount: str = Form(None),
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_role(["owner", "superadmin"]))
@@ -119,6 +120,7 @@ async def owner_tasks_templates_create(
         description=description,
         is_mandatory=bool(is_mandatory),
         requires_media=bool(requires_media),
+        requires_geolocation=bool(requires_geolocation),
         default_amount=amount,
         object_id=None
     )
@@ -135,6 +137,7 @@ async def owner_tasks_templates_edit(
     description: str = Form(None),
     is_mandatory: int = Form(0),
     requires_media: int = Form(0),
+    requires_geolocation: int = Form(0),
     default_amount: str = Form(None),
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_role(["owner", "superadmin"]))
@@ -153,6 +156,7 @@ async def owner_tasks_templates_edit(
     template.description = description
     template.is_mandatory = bool(is_mandatory)
     template.requires_media = bool(requires_media)
+    template.requires_geolocation = bool(requires_geolocation)
     template.default_bonus_amount = Decimal(default_amount) if default_amount else None
     
     await session.commit()
@@ -330,6 +334,7 @@ async def owner_tasks_plan_create(
     task_description: str = Form(None),
     task_mandatory: int = Form(0),
     task_media: int = Form(0),
+    task_geolocation: int = Form(0),
     task_amount: str = Form(None),
     task_code: str = Form(None),
     object_ids: list[str] = Form(None),
@@ -389,6 +394,7 @@ async def owner_tasks_plan_create(
             description=task_description,
             is_mandatory=bool(task_mandatory),
             requires_media=bool(task_media),
+            requires_geolocation=bool(task_geolocation),
             default_bonus_amount=Decimal(task_amount) if task_amount else None,
             is_active=True,
             object_id=None  # Шаблоны без привязки к объекту
@@ -575,6 +581,58 @@ async def owner_tasks_plan_toggle(
     return RedirectResponse(url="/owner/tasks/plan", status_code=303)
 
 
+@router.get("/owner/tasks/plan/{plan_id}/edit")
+async def owner_tasks_plan_edit_page(
+    request: Request,
+    plan_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(["owner", "superadmin"]))
+):
+    """Страница редактирования плана задач."""
+    from domain.entities.task_plan import TaskPlanV2
+    
+    plan = await session.get(TaskPlanV2, plan_id)
+    if not plan or plan.owner_id != current_user.id:
+        return RedirectResponse(url="/owner/tasks/plan", status_code=303)
+    
+    task_service = TaskService(session)
+    owner_id = current_user.id
+
+    templates_list = await task_service.get_templates_for_role(
+        user_id=owner_id,
+        role="owner",
+        for_selection=True
+    )
+
+    from domain.entities.object import Object
+    objects_query = select(Object).where(Object.owner_id == owner_id, Object.is_active == True).order_by(Object.name)
+    objects_result = await session.execute(objects_query)
+    objects_list = objects_result.scalars().all()
+
+    # Загружаем шаблон плана
+    from domain.entities.task_template import TaskTemplateV2
+    template = await session.get(TaskTemplateV2, plan.template_id) if plan.template_id else None
+    
+    # Форматируем данные для формы
+    planned_date_str = plan.planned_date.strftime("%Y-%m-%d") if plan.planned_date else None
+    planned_time_str = plan.planned_time_start.strftime("%H:%M") if plan.planned_time_start else None
+    recurrence_end_date_str = plan.recurrence_end_date.strftime("%Y-%m-%d") if plan.recurrence_end_date else None
+    
+    return templates.TemplateResponse(
+        "owner/tasks/plan_edit.html",
+        {
+            "request": request,
+            "plan": plan,
+            "template": template,
+            "templates_list": templates_list,
+            "objects_list": objects_list,
+            "planned_date_str": planned_date_str,
+            "planned_time_str": planned_time_str,
+            "recurrence_end_date_str": recurrence_end_date_str
+        }
+    )
+
+
 @router.post("/owner/tasks/plan/{plan_id}/edit")
 async def owner_tasks_plan_edit(
     request: Request,
@@ -603,7 +661,7 @@ async def owner_tasks_plan_edit(
     plan.object_ids = obj_ids
     plan.object_id = obj_ids[0] if obj_ids and len(obj_ids) == 1 else None  # Для обратной совместимости
     plan.planned_date = datetime.fromisoformat(planned_date) if planned_date else None
-    plan.planned_time_start = datetime.strptime(planned_time_start, "%H:%M").time() if planned_time_start else None
+    plan.planned_time_start = datetime.strptime(planned_time_start, "%H:%M").time() if planned_time_start and planned_time_start.strip() else None
     plan.recurrence_end_date = date.fromisoformat(recurrence_end_date) if recurrence_end_date else None
     
     # Обновляем периодичность
