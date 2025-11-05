@@ -158,8 +158,11 @@
                                                 {% endif %}
                                             {% endif %}
                                         </a>
-                                        <div class="mt-1">
-                                            <input type="text" class="form-control form-control-sm" placeholder="Фильтр по ФИ" value="{{ q_employee or '' }}" onkeydown="if(event.key==='Enter'){applyFilters();}">
+                                        <div class="mt-1 d-flex gap-1">
+                                            <input type="text" class="form-control form-control-sm flex-grow-1" id="filterEmployee" placeholder="Фильтр по ФИ" value="{{ q_employee or '' }}" onkeyup="filterEmployeesTable()">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearFilter('filterEmployee')" title="Очистить">
+                                                <i class="bi bi-x"></i>
+                                            </button>
                                         </div>
                                     </th>
                                     <th>
@@ -174,8 +177,11 @@
                                                 {% endif %}
                                             {% endif %}
                                         </a>
-                                        <div class="mt-1">
-                                            <input type="text" class="form-control form-control-sm" placeholder="Фильтр по ID" value="{{ q_telegram or '' }}" onkeydown="if(event.key==='Enter'){applyFilters();}">
+                                        <div class="mt-1 d-flex gap-1">
+                                            <input type="text" class="form-control form-control-sm flex-grow-1" id="filterTelegram" placeholder="Фильтр по ID" value="{{ q_telegram or '' }}" onkeyup="filterEmployeesTable()">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearFilter('filterTelegram')" title="Очистить">
+                                                <i class="bi bi-x"></i>
+                                            </button>
                                         </div>
                                     </th>
                                     <th>Договоры</th>
@@ -192,21 +198,27 @@
                                                 {% endif %}
                                             {% endif %}
                                         </a>
-                                        <div class="mt-1">
-                                            <select class="form-select form-select-sm" onchange="applyFilters()">
+                                        <div class="mt-1 d-flex gap-1">
+                                            <select class="form-select form-select-sm flex-grow-1" id="filterStatus" onchange="filterEmployeesTable()">
                                                 <option value="" {% if not q_status %}selected{% endif %}>Все</option>
                                                 <option value="active" {% if q_status == 'active' %}selected{% endif %}>Активные</option>
                                                 <option value="former" {% if q_status == 'former' %}selected{% endif %}>Бывшие</option>
                                             </select>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearFilter('filterStatus')" title="Очистить">
+                                                <i class="bi bi-x"></i>
+                                            </button>
                                         </div>
                                     </th>
                                     <th>Действия</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="employeesTableBody">
                                 {% for employee in employees %}
                                 {% set has_active_contracts = employee.contracts|selectattr('status', 'equalto', 'active')|selectattr('is_active', 'equalto', true)|list %}
-                                <tr {% if not has_active_contracts %}class="table-warning"{% endif %}>
+                                <tr {% if not has_active_contracts %}class="table-warning"{% endif %}
+                                    data-name="{{ ((employee.last_name or '') ~ ' ' ~ (employee.first_name or '')).strip().lower() }}"
+                                    data-telegram="{{ employee.telegram_id|string|lower }}"
+                                    data-status="{% if has_active_contracts %}active{% else %}former{% endif %}">
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <div class="avatar {% if has_active_contracts %}bg-primary{% else %}bg-warning{% endif %} text-white rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
@@ -311,6 +323,44 @@
 </div>
 
 <script>
+function filterEmployeesTable() {
+    const nameFilter = document.getElementById('filterEmployee')?.value.toLowerCase() || '';
+    const telegramFilter = document.getElementById('filterTelegram')?.value.toLowerCase() || '';
+    const statusFilter = document.getElementById('filterStatus')?.value || '';
+    
+    const rows = document.querySelectorAll('#employeesTableBody tr');
+    
+    rows.forEach(row => {
+        const name = row.dataset.name || '';
+        const telegram = row.dataset.telegram || '';
+        const status = row.dataset.status || '';
+        
+        let show = true;
+        
+        if (nameFilter && !name.includes(nameFilter)) {
+            show = false;
+        }
+        
+        if (telegramFilter && !telegram.includes(telegramFilter)) {
+            show = false;
+        }
+        
+        if (statusFilter && status !== statusFilter) {
+            show = false;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+function clearFilter(filterId) {
+    const filter = document.getElementById(filterId);
+    if (filter) {
+        filter.value = '';
+        filterEmployeesTable();
+    }
+}
+
 function changeViewMode(mode) {
     const url = new URL(window.location);
     url.searchParams.set('view_mode', mode);
@@ -327,28 +377,6 @@ function toggleFormerEmployees() {
         url.searchParams.delete('show_former');
     }
     
-    window.location.href = url.toString();
-}
-
-function applyFilters() {
-    const url = new URL(window.location);
-    const ths = document.querySelectorAll('thead input.form-control-sm, thead select.form-select-sm');
-    // Порядок: ФИ, Telegram, Статус
-    const fiInput = ths[0];
-    const tgInput = ths[1];
-    const stSelect = ths[2];
-    if (fiInput) {
-        if (fiInput.value.trim()) url.searchParams.set('q_employee', fiInput.value.trim());
-        else url.searchParams.delete('q_employee');
-    }
-    if (tgInput) {
-        if (tgInput.value.trim()) url.searchParams.set('q_telegram', tgInput.value.trim());
-        else url.searchParams.delete('q_telegram');
-    }
-    if (stSelect) {
-        if (stSelect.value) url.searchParams.set('q_status', stSelect.value);
-        else url.searchParams.delete('q_status');
-    }
     window.location.href = url.toString();
 }
 </script>

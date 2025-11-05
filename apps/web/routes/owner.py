@@ -4113,7 +4113,6 @@ async def owner_timeslot_update(
             "max_employees": int(form_data.get("max_employees", 1)),
             "is_active": is_active,
             "penalize_late_start": "penalize_late_start" in form_data and form_data.get("penalize_late_start") not in ["false", ""],
-            "ignore_object_tasks": "ignore_object_tasks" in form_data and form_data.get("ignore_object_tasks") not in ["false", ""],
             "shift_tasks": shift_tasks if shift_tasks else None
         }
         
@@ -4276,9 +4275,8 @@ async def owner_timeslots_bulk_edit(
         # Новые поля для Phase 4B/4C
         if "penalize_late_start" in form_data:
             update_data["penalize_late_start"] = form_data.get("penalize_late_start") not in ["false", ""]
-        
-        if "ignore_object_tasks" in form_data:
-            update_data["ignore_object_tasks"] = form_data.get("ignore_object_tasks") not in ["false", ""]
+        if "cancel_late_penalties" in form_data:
+            update_data["penalize_late_start"] = False
         
         # Обработка задач из формы (JSONB)
         shift_tasks = []

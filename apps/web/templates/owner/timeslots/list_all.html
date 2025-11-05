@@ -14,11 +14,10 @@
                     <p class="text-muted mb-0">Управление тайм-слотами {% if selected_object %}объекта {{ selected_object.name }}{% else %}всех объектов{% endif %}</p>
                 </div>
                 <div class="d-flex gap-2">
-                    {% if selected_object_id %}
-                    <a href="/owner/timeslots/object/{{ selected_object_id }}/create" class="btn btn-primary">
+                    <a href="{% if selected_object_id %}/owner/timeslots/object/{{ selected_object_id }}/create{% elif first_available_object_id %}/owner/timeslots/object/{{ first_available_object_id }}/create{% else %}#{% endif %}"
+                       class="btn btn-primary" {% if not selected_object_id and not first_available_object_id %}disabled title="Нет доступных объектов"{% endif %}>
                         <i class="bi bi-plus-circle"></i> Создать тайм-слот
                     </a>
-                    {% endif %}
                     <button type="button" class="btn btn-outline-warning" id="bulkEditBtn" disabled onclick="openBulkEditModal()">
                         <i class="bi bi-pencil-square"></i> Редактировать выбранные
                     </button>
@@ -31,11 +30,10 @@
                             <i class="bi bi-trash"></i> Удалить выбранные
                         </button>
                     </form>
-                    {% if selected_object_id %}
-                    <a href="/owner/objects/{{ selected_object_id }}" class="btn btn-outline-secondary">
+                    <a href="{% if selected_object_id %}/owner/objects/{{ selected_object_id }}{% else %}#{% endif %}"
+                       class="btn btn-outline-secondary" {% if not selected_object_id %}disabled title="Выберите объект"{% endif %}>
                         <i class="bi bi-arrow-left"></i> К объекту
                     </a>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -366,9 +364,9 @@
                         </div>
                         <div class="col-md-6">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="bulk_ignore_object_tasks" name="ignore_object_tasks">
-                                <label class="form-check-label" for="bulk_ignore_object_tasks">
-                                    <i class="bi bi-x-circle text-danger"></i> Игнорировать задачи объекта
+                                <input class="form-check-input" type="checkbox" id="bulk_cancel_late_penalties" name="cancel_late_penalties">
+                                <label class="form-check-label" for="bulk_cancel_late_penalties">
+                                    <i class="bi bi-slash-circle text-danger"></i> Отменить штрафы за опоздания
                                 </label>
                             </div>
                         </div>
@@ -412,8 +410,17 @@ function toggleSelectAll(master) {
 function updateBulkState() {
     const ids = Array.from(document.querySelectorAll('.ts-check:checked')).map(cb => cb.value);
     document.getElementById('bulk_ids').value = ids.join(',');
-    document.getElementById('bulkDeleteBtn').disabled = ids.length === 0;
-    document.getElementById('bulkEditBtn').disabled = ids.length === 0;
+    const hasSelection = ids.length > 0;
+    document.getElementById('bulkDeleteBtn').disabled = !hasSelection;
+    const bulkEditBtn = document.getElementById('bulkEditBtn');
+    bulkEditBtn.disabled = !hasSelection;
+    if (hasSelection) {
+        bulkEditBtn.classList.remove('btn-outline-warning');
+        bulkEditBtn.classList.add('btn-warning');
+    } else {
+        bulkEditBtn.classList.remove('btn-warning');
+        bulkEditBtn.classList.add('btn-outline-warning');
+    }
 }
 
 function confirmBulkDelete() {
@@ -424,7 +431,10 @@ function confirmBulkDelete() {
 
 function openBulkEditModal() {
     const selectedIds = document.getElementById('bulk_ids').value;
-    if (!selectedIds) return;
+    if (!selectedIds) {
+        alert('Выберите тайм-слоты для редактирования');
+        return;
+    }
     
     // Передаем выбранные ID в форму
     document.getElementById('bulkEditIds').value = selectedIds;

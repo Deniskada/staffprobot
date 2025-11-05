@@ -36,17 +36,54 @@
                 <table class="table align-middle">
                     <thead>
                         <tr>
-                            <th>Название</th>
-                            <th>Адрес</th>
+                            <th>
+                                <a href="?sort_by=name&sort_order={% if sort_by == 'name' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}{{ '&show_inactive=true' if show_inactive else '' }}{{ '&view_mode=' ~ view_mode if view_mode else '' }}{{ q_name and '&q_name=' ~ q_name or '' }}{{ q_address and '&q_address=' ~ q_address or '' }}"
+                                   class="text-decoration-none text-dark">
+                                    Название
+                                    {% if sort_by == 'name' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down"></i>
+                                        {% endif %}
+                                    {% endif %}
+                                </a>
+                                <div class="mt-1 d-flex gap-1">
+                                    <input type="text" class="form-control form-control-sm flex-grow-1" id="filterName" placeholder="Фильтр по названию" value="{{ q_name or '' }}" onkeyup="filterObjectsTable()">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearObjectFilter('filterName')" title="Очистить">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
+                            </th>
+                            <th>
+                                <a href="?sort_by=address&sort_order={% if sort_by == 'address' %}{% if sort_order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}{{ '&show_inactive=true' if show_inactive else '' }}{{ '&view_mode=' ~ view_mode if view_mode else '' }}{{ q_name and '&q_name=' ~ q_name or '' }}{{ q_address and '&q_address=' ~ q_address or '' }}"
+                                   class="text-decoration-none text-dark">
+                                    Адрес
+                                    {% if sort_by == 'address' %}
+                                        {% if sort_order == 'asc' %}
+                                            <i class="bi bi-arrow-up"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down"></i>
+                                        {% endif %}
+                                    {% endif %}
+                                </a>
+                                <div class="mt-1 d-flex gap-1">
+                                    <input type="text" class="form-control form-control-sm flex-grow-1" id="filterAddress" placeholder="Фильтр по адресу" value="{{ q_address or '' }}" onkeyup="filterObjectsTable()">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearObjectFilter('filterAddress')" title="Очистить">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
+                            </th>
                             <th>Ставка</th>
                             <th>Время</th>
                             <th>Статус</th>
                             <th></th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="objectsTableBody">
                         {% for object in objects %}
-                        <tr>
+                        <tr data-name="{{ (object.name or '').lower() }}"
+                            data-address="{{ (object.address or '').lower() }}">
                             <td><a href="/owner/objects/{{ object.id }}">{{ object.name }}</a></td>
                             <td class="text-muted">{{ object.address }}</td>
                             <td><strong>{{ object.hourly_rate }} ₽/час</strong></td>
@@ -168,6 +205,39 @@
 </div>
 
 <script>
+// Клиентский фильтр для таблицы объектов (без перезагрузки)
+function filterObjectsTable() {
+    const nameFilter = document.getElementById('filterName')?.value.toLowerCase() || '';
+    const addressFilter = document.getElementById('filterAddress')?.value.toLowerCase() || '';
+    
+    const rows = document.querySelectorAll('#objectsTableBody tr');
+    
+    rows.forEach(row => {
+        const name = row.dataset.name || '';
+        const address = row.dataset.address || '';
+        
+        let show = true;
+        
+        if (nameFilter && !name.includes(nameFilter)) {
+            show = false;
+        }
+        
+        if (addressFilter && !address.includes(addressFilter)) {
+            show = false;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+function clearObjectFilter(filterId) {
+    const filter = document.getElementById(filterId);
+    if (filter) {
+        filter.value = '';
+        filterObjectsTable();
+    }
+}
+
 (() => {
   const params = new URLSearchParams(window.location.search);
   const showInactive = document.getElementById('showInactive');

@@ -66,6 +66,26 @@ class PayrollAdjustment(Base):
     
     def get_type_label(self) -> str:
         """Получить человекочитаемое название типа корректировки."""
+        # Для ручных удержаний и доплат проверяем тип в details
+        if self.adjustment_type == 'manual_deduction' and self.details:
+            deduction_type = self.details.get('deduction_type', 'manual')
+            deduction_labels = {
+                'tax': 'Налог',
+                'manual': 'Ручной штраф',
+                'other': 'Другое'
+            }
+            return deduction_labels.get(deduction_type, 'Ручной штраф')
+        
+        if self.adjustment_type == 'manual_bonus' and self.details:
+            bonus_type = self.details.get('bonus_type', 'manual')
+            bonus_labels = {
+                'performance': 'За результат',
+                'overtime': 'Сверхурочные',
+                'manual': 'Ручная премия',
+                'other': 'Другое'
+            }
+            return bonus_labels.get(bonus_type, 'Ручная премия')
+        
         type_labels = {
             'shift_base': 'Базовая оплата за смену',
             'late_start': 'Штраф за опоздание',
@@ -75,9 +95,9 @@ class PayrollAdjustment(Base):
             'manual_deduction': 'Ручной штраф',
             'cancellation_fine': 'Штраф за отмену смены',
             'cancellation_fine_short_notice': 'Штраф за отмену смены',
-            'cancellation_fine_invalid_reason': 'Штраф за отмену смены'
-            , 'incident_deduction': 'Удержание по инциденту'
-            , 'incident_refund': 'Возврат удержания по инциденту'
+            'cancellation_fine_invalid_reason': 'Штраф за отмену смены',
+            'incident_deduction': 'Удержание по инциденту',
+            'incident_refund': 'Возврат удержания по инциденту'
         }
         return type_labels.get(self.adjustment_type, self.adjustment_type)
     

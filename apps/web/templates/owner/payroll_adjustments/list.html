@@ -152,6 +152,11 @@
                             </td>
                             <td>
                                 <small>{{ adj.description or '—' }}</small>
+                                {% if adj.adjustment_type == 'shift_base' and adj.shift_id %}
+                                <br><a href="/owner/shifts/{{ adj.shift_id }}?shift_type=shift" class="btn btn-sm btn-outline-info mt-1">
+                                    <i class="bi bi-calendar-event"></i> Смена #{{ adj.shift_id }}
+                                </a>
+                                {% endif %}
                                 {% if adj.details %}
                                     {% if adj.details.get('source') %}
                                     <br><span class="badge bg-secondary">{{ 'Объект' if adj.details.source == 'object' else 'Тайм-слот' }}</span>

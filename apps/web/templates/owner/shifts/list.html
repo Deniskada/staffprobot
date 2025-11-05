@@ -14,9 +14,6 @@
                     <button class="btn btn-success" onclick="showPlanShiftModal()">
                         <i class="bi bi-calendar-plus"></i> Запланировать
                     </button>
-                    <button class="btn btn-outline-primary" id="toggleFiltersBtn" onclick="toggleFilters()">
-                        <i class="bi bi-funnel"></i> Фильтры
-                    </button>
                     <button class="btn btn-primary" onclick="refreshData()">
                         <i class="bi bi-arrow-clockwise"></i> Обновить
                     </button>
@@ -88,27 +85,17 @@
             </div>
 
             <!-- Фильтры -->
-            <div class="card mb-4" id="filtersCard" style="display: none;">
+            <div class="card mb-4">
                 <div class="card-body">
-                    <form method="GET" id="filterForm">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <label for="status" class="form-label">Статус</label>
-                                <select class="form-select" id="status" name="status">
-                                    <option value="">Все статусы</option>
-                                    <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Активные</option>
-                                    <option value="planned" {% if filters.status == 'planned' %}selected{% endif %}>Запланированные</option>
-                                    <option value="completed" {% if filters.status == 'completed' %}selected{% endif %}>Завершенные</option>
-                                    <option value="cancelled" {% if filters.status == 'cancelled' %}selected{% endif %}>Отмененные</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label for="object_id" class="form-label">Объект</label>
-                                <select class="form-select" id="object_id" name="object_id">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="objectFilter" class="form-label">Объект</label>
+                            <div class="d-flex gap-1">
+                                <select class="form-select flex-grow-1" id="objectFilter" onchange="applyShiftFilters()">
                                     <option value="">Все объекты</option>
                                     {% if objects %}
                                         {% for obj in objects %}
-                                        <option value="{{ obj.id }}" {% if filters.object_id == obj.id %}selected{% endif %}>
+                                        <option value="{{ obj.id }}" {% if filters.object_id == obj.id|string %}selected{% endif %}>
                                             {{ obj.name }}
                                         </option>
                                         {% endfor %}
@@ -116,29 +103,30 @@
                                         <option value="">Нет объектов</option>
                                     {% endif %}
                                 </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="dateRange" class="form-label">Период</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="dateRange" name="dateRange" 
-                                           placeholder="Выберите период" readonly>
-                                    <button class="btn btn-outline-secondary" type="button" id="clearDateRange">
-                                        <i class="bi bi-x-circle"></i>
-                                    </button>
-                                </div>
-                                <input type="hidden" id="date_from" name="date_from" value="{{ filters.date_from or '' }}">
-                                <input type="hidden" id="date_to" name="date_to" value="{{ filters.date_to or '' }}">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">&nbsp;</label>
-                                <div class="d-grid">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="bi bi-search"></i> Применить
-                                    </button>
-                                </div>
+                                <button type="button" class="btn btn-outline-secondary" onclick="clearShiftFilter('objectFilter')" title="Очистить">
+                                    <i class="bi bi-x"></i>
+                                </button>
                             </div>
                         </div>
-                    </form>
+                        <div class="col-md-4">
+                            <label for="dateFromFilter" class="form-label">Период с</label>
+                            <div class="d-flex gap-1">
+                                <input type="date" class="form-control flex-grow-1" id="dateFromFilter" value="{{ filters.date_from or '' }}" onchange="applyShiftFilters()">
+                                <button type="button" class="btn btn-outline-secondary" onclick="clearShiftFilter('dateFromFilter')" title="Очистить">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="dateToFilter" class="form-label">Период по</label>
+                            <div class="d-flex gap-1">
+                                <input type="date" class="form-control flex-grow-1" id="dateToFilter" value="{{ filters.date_to or '' }}" onchange="applyShiftFilters()">
+                                <button type="button" class="btn btn-outline-secondary" onclick="clearShiftFilter('dateToFilter')" title="Очистить">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -153,33 +141,100 @@
                         <table class="table table-hover mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th class="sortable" data-sort="user_name">
-                                        Сотрудник
-                                        <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
+                                    <th>
+                                        <a href="?sort=user_name&order={% if sort.field == 'user_name' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Сотрудник
+                                            {% if sort.field == 'user_name' %}
+                                                {% if sort.order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                        <div class="mt-1 d-flex gap-1">
+                                            <input type="text" class="form-control form-control-sm flex-grow-1" id="filterShiftUser" placeholder="Фильтр по сотруднику" value="{{ filters.q_user or '' }}" onkeyup="filterShiftsTable()">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearShiftFilter('filterShiftUser')" title="Очистить">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
                                     </th>
-                                    <th class="sortable" data-sort="object_name">
-                                        Объект
-                                        <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
+                                    <th>
+                                        <a href="?sort=object_name&order={% if sort.field == 'object_name' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Объект
+                                            {% if sort.field == 'object_name' %}
+                                                {% if sort.order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
                                     </th>
-                                    <th class="sortable" data-sort="start_time">
-                                        Дата
-                                        <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
+                                    <th>
+                                        <a href="?sort=start_time&order={% if sort.field == 'start_time' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Дата
+                                            {% if sort.field == 'start_time' %}
+                                                {% if sort.order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
                                     </th>
-                                    <th class="sortable" data-sort="status">
-                                        Статус
-                                        <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
+                                    <th>
+                                        <a href="?sort=status&order={% if sort.field == 'status' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Статус
+                                            {% if sort.field == 'status' %}
+                                                {% if sort.order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
+                                        <div class="mt-1 d-flex gap-1">
+                                            <select class="form-select form-select-sm flex-grow-1" id="filterShiftStatus" onchange="applyShiftFilters()">
+                                                <option value="" {% if not filters.status %}selected{% endif %}>Все</option>
+                                                <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Активные</option>
+                                                <option value="planned" {% if filters.status == 'planned' %}selected{% endif %}>Запланированные</option>
+                                                <option value="completed" {% if filters.status == 'completed' %}selected{% endif %}>Завершенные</option>
+                                                <option value="cancelled" {% if filters.status == 'cancelled' %}selected{% endif %}>Отмененные</option>
+                                            </select>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearShiftFilter('filterShiftStatus')" title="Очистить">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
                                     </th>
-                                    <th class="sortable" data-sort="created_at">
-                                        Часы/Оплата
-                                        <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
+                                    <th>
+                                        <a href="?sort=created_at&order={% if sort.field == 'created_at' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}"
+                                           class="text-decoration-none text-dark">
+                                            Часы/Оплата
+                                            {% if sort.field == 'created_at' %}
+                                                {% if sort.order == 'asc' %}
+                                                    <i class="bi bi-arrow-up"></i>
+                                                {% else %}
+                                                    <i class="bi bi-arrow-down"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
                                     </th>
                                     <th>Действия</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="shiftsTableBody">
                                 {% for shift in shifts %}
                                 {% set is_incomplete = shift.type == 'shift' and shift.status == 'completed' and (not shift.total_hours or not shift.total_payment) %}
-                                <tr{% if is_incomplete %} style="background-color: rgba(220, 53, 69, 0.15);"{% endif %}>
+                                <tr{% if is_incomplete %} style="background-color: rgba(220, 53, 69, 0.15);"{% endif %}
+                                    data-user-name="{{ (shift.user_name or '').lower() }}"
+                                    data-object-name="{{ (shift.object_name or '').lower() }}"
+                                    data-object-id="{{ shift.object_id or '' }}"
+                                    data-status="{{ shift.status or '' }}">
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
@@ -307,40 +362,47 @@
             </div>
 
             <!-- Пагинация -->
-            {% if pagination.pages > 1 %}
-            <nav aria-label="Пагинация смен" class="mt-4">
-                <ul class="pagination justify-content-center">
-                    {% if pagination.page > 1 %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ pagination.page - 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">
-                            Предыдущая
-                        </a>
-                    </li>
-                    {% endif %}
-                    
-                    {% for page_num in range(1, pagination.pages + 1) %}
-                    {% if page_num == pagination.page %}
-                    <li class="page-item active">
-                        <span class="page-link">{{ page_num }}</span>
-                    </li>
-                    {% else %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_num }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">
-                            {{ page_num }}
-                        </a>
-                    </li>
-                    {% endif %}
-                    {% endfor %}
-                    
-                    {% if pagination.page < pagination.pages %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ pagination.page + 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">
-                            Следующая
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
+            {% if pagination.total > 0 %}
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <div class="d-flex align-items-center gap-2">
+                    <label for="perPageSelect" class="mb-0">На странице:</label>
+                    <select class="form-select form-select-sm" id="perPageSelect" style="width: auto;" onchange="changePerPage(this.value)">
+                        <option value="25" {% if pagination.per_page == 25 %}selected{% endif %}>25</option>
+                        <option value="50" {% if pagination.per_page == 50 %}selected{% endif %}>50</option>
+                        <option value="100" {% if pagination.per_page == 100 %}selected{% endif %}>100</option>
+                    </select>
+                </div>
+                
+                {% if pagination.pages > 1 %}
+                <nav aria-label="Пагинация смен">
+                    <ul class="pagination mb-0">
+                        <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="?page=1&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Первая</a>
+                        </li>
+                        <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="?page={{ pagination.page - 1 }}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Назад</a>
+                        </li>
+                        <li class="page-item active">
+                            <span class="page-link">{{ pagination.page }} / {{ pagination.pages }}</span>
+                        </li>
+                        <li class="page-item {% if pagination.page == pagination.pages %}disabled{% endif %}">
+                            <a class="page-link" href="?page={{ pagination.page + 1 }}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Вперед</a>
+                        </li>
+                        <li class="page-item {% if pagination.page == pagination.pages %}disabled{% endif %}">
+                            <a class="page-link" href="?page={{ pagination.pages }}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Последняя</a>
+                        </li>
+                    </ul>
+                </nav>
+                {% endif %}
+                
+                <div>
+                    {% set start_item = (pagination.page - 1) * pagination.per_page + 1 %}
+                    {% set end_item = [pagination.page * pagination.per_page, pagination.total]|min %}
+                    <span class="text-muted">
+                        {{ start_item }}-{{ end_item }} из {{ pagination.total }}
+                    </span>
+                </div>
+            </div>
             {% endif %}
         </div>
     </div>
@@ -383,6 +445,142 @@
 </div>
 
 <script>
+let __shiftFiltersTimer;
+function debouncedApplyShiftFilters() {
+    if (__shiftFiltersTimer) clearTimeout(__shiftFiltersTimer);
+    __shiftFiltersTimer = setTimeout(() => applyShiftFilters(), 300);
+}
+
+// Клиентский фильтр для таблицы смен (без перезагрузки)
+function filterShiftsTable() {
+    const userFilter = document.getElementById('filterShiftUser')?.value.toLowerCase() || '';
+    const statusFilter = document.getElementById('filterShiftStatus')?.value || '';
+    
+    const rows = document.querySelectorAll('#shiftsTableBody tr');
+    
+    rows.forEach(row => {
+        const userName = row.dataset.userName || '';
+        const status = row.dataset.status || '';
+        
+        let show = true;
+        
+        // Фильтр по сотруднику
+        if (userFilter && !userName.includes(userFilter)) {
+            show = false;
+        }
+        
+        // Фильтр по статусу (из заголовка таблицы)
+        if (statusFilter && status !== statusFilter) {
+            show = false;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// Применение фильтров через сервер (для статуса, дат и объекта)
+function applyShiftFilters() {
+    const url = new URL(window.location);
+    
+    // Фильтры из заголовков таблицы
+    const userInput = document.getElementById('filterShiftUser');
+    const statusSel = document.getElementById('filterShiftStatus');
+    
+    // Фильтры из карточки фильтров
+    const objectFilter = document.getElementById('objectFilter');
+    const dateFromFilter = document.getElementById('dateFromFilter');
+    const dateToFilter = document.getElementById('dateToFilter');
+    
+    // Фильтр по сотруднику - клиентский, не добавляем в URL (фильтруется на клиенте)
+    // НО если он есть в URL, оставляем
+    if (userInput) {
+        if (userInput.value.trim()) url.searchParams.set('q_user', userInput.value.trim());
+        else url.searchParams.delete('q_user');
+    }
+    
+    // Фильтр по статусу - серверный, обязательно добавляем в URL
+    if (statusSel) {
+        if (statusSel.value) url.searchParams.set('status', statusSel.value);
+        else url.searchParams.delete('status');
+    }
+    
+    // Фильтры из карточки
+    if (objectFilter) {
+        if (objectFilter.value) url.searchParams.set('object_id', objectFilter.value);
+        else url.searchParams.delete('object_id');
+    }
+    if (dateFromFilter) {
+        if (dateFromFilter.value) url.searchParams.set('date_from', dateFromFilter.value);
+        else url.searchParams.delete('date_from');
+    }
+    if (dateToFilter) {
+        if (dateToFilter.value) url.searchParams.set('date_to', dateToFilter.value);
+        else url.searchParams.delete('date_to');
+    }
+    
+    // Сохраняем per_page и сортировку
+    const perPage = url.searchParams.get('per_page') || '25';
+    url.searchParams.set('per_page', perPage);
+    const sortField = url.searchParams.get('sort');
+    const sortOrder = url.searchParams.get('order');
+    if (sortField) url.searchParams.set('sort', sortField);
+    if (sortOrder) url.searchParams.set('order', sortOrder);
+    
+    // ВСЕГДА сбрасываем на первую страницу при изменении фильтров
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+}
+
+function clearShiftFilter(filterId) {
+    const filter = document.getElementById(filterId);
+    if (filter) {
+        filter.value = '';
+        // Для клиентских фильтров (сотрудник) - обновляем таблицу без перезагрузки
+        if (filterId === 'filterShiftUser') {
+            filterShiftsTable();
+        } else if (filterId === 'filterShiftStatus' || filterId === 'objectFilter' || filterId === 'dateFromFilter' || filterId === 'dateToFilter') {
+            // Для серверных фильтров (статус, объект, даты) - перезагружаем страницу
+            applyShiftFilters();
+        }
+    }
+}
+
+function changePerPage(value) {
+    const url = new URL(window.location);
+    
+    // Сохраняем все фильтры
+    const userInput = document.getElementById('filterShiftUser');
+    const statusSel = document.getElementById('filterShiftStatus');
+    const objectFilter = document.getElementById('objectFilter');
+    const dateFromFilter = document.getElementById('dateFromFilter');
+    const dateToFilter = document.getElementById('dateToFilter');
+    
+    if (userInput && userInput.value.trim()) {
+        url.searchParams.set('q_user', userInput.value.trim());
+    }
+    if (statusSel && statusSel.value) {
+        url.searchParams.set('status', statusSel.value);
+    }
+    if (objectFilter && objectFilter.value) {
+        url.searchParams.set('object_id', objectFilter.value);
+    }
+    if (dateFromFilter && dateFromFilter.value) {
+        url.searchParams.set('date_from', dateFromFilter.value);
+    }
+    if (dateToFilter && dateToFilter.value) {
+        url.searchParams.set('date_to', dateToFilter.value);
+    }
+    
+    // Сохраняем сортировку
+    const sortField = url.searchParams.get('sort');
+    const sortOrder = url.searchParams.get('order');
+    if (sortField) url.searchParams.set('sort', sortField);
+    if (sortOrder) url.searchParams.set('order', sortOrder);
+    
+    url.searchParams.set('per_page', value);
+    url.searchParams.set('page', '1'); // Сбрасываем на первую страницу
+    window.location.href = url.toString();
+}
 let currentShiftId = null;
 let currentShiftType = null;
 let currentSortField = null;
@@ -394,37 +592,6 @@ let startDate = null;
 let endDate = null;
 let isSelectingStart = true;
 
-// Переключение фильтров
-function toggleFilters() {
-    const filtersCard = document.getElementById('filtersCard');
-    const toggleBtn = document.getElementById('toggleFiltersBtn');
-    
-    if (filtersCard.style.display === 'none') {
-        filtersCard.style.display = 'block';
-        toggleBtn.innerHTML = '<i class="bi bi-funnel-fill"></i> Скрыть фильтры';
-    } else {
-        // Только при явном нажатии кнопки "Скрыть фильтры"
-        clearAllFiltersAndRedirect();
-    }
-}
-
-// Очистка всех фильтров и перенаправление
-function clearAllFiltersAndRedirect() {
-    const url = new URL(window.location);
-    url.search = ''; // Очищаем все параметры
-    window.location.href = url.toString();
-}
-
-// Очистка всех фильтров
-function clearAllFilters() {
-    document.getElementById('status').value = '';
-    document.getElementById('object_id').value = '';
-    document.getElementById('dateRange').value = '';
-    document.getElementById('date_from').value = '';
-    document.getElementById('date_to').value = '';
-    startDate = null;
-    endDate = null;
-}
 
 // Инициализация выбора диапазона дат
 function initializeDateRangePicker() {
@@ -432,6 +599,11 @@ function initializeDateRangePicker() {
     const dateFromInput = document.getElementById('date_from');
     const dateToInput = document.getElementById('date_to');
     const clearBtn = document.getElementById('clearDateRange');
+    
+    // Если элементы не найдены, выходим (используются обычные input type="date")
+    if (!dateRangeInput || !dateFromInput || !dateToInput || !clearBtn) {
+        return;
+    }
     
     // Устанавливаем начальные значения если есть
     const dateFrom = dateFromInput.value;
@@ -496,7 +668,11 @@ function createDateRangePicker() {
     
     // Обработчик подтверждения
     modal.querySelector('#confirmDateRange').addEventListener('click', function() {
-        if (startDate && endDate) {
+        const dateRangeInput = document.getElementById('dateRange');
+        const dateFromInput = document.getElementById('date_from');
+        const dateToInput = document.getElementById('date_to');
+        
+        if (startDate && endDate && dateRangeInput && dateFromInput && dateToInput) {
             dateRangeInput.value = `${formatDate(startDate)} - ${formatDate(endDate)}`;
             dateFromInput.value = formatDateForInput(startDate);
             dateToInput.value = formatDateForInput(endDate);
@@ -875,9 +1051,47 @@ function showNotification(message, type) {
     }, 5000);
 }
 
+// Восстановление фильтров из URL при загрузке страницы
+function restoreFiltersFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Восстанавливаем фильтры из заголовков таблицы
+    const userInput = document.getElementById('filterShiftUser');
+    const statusSel = document.getElementById('filterShiftStatus');
+    
+    if (userInput && urlParams.get('q_user')) {
+        userInput.value = urlParams.get('q_user');
+    }
+    
+    if (statusSel && urlParams.get('status')) {
+        statusSel.value = urlParams.get('status');
+    }
+    
+    // Восстанавливаем фильтры из карточки
+    const objectFilter = document.getElementById('objectFilter');
+    const dateFromFilter = document.getElementById('dateFromFilter');
+    const dateToFilter = document.getElementById('dateToFilter');
+    
+    if (objectFilter && urlParams.get('object_id')) {
+        objectFilter.value = urlParams.get('object_id');
+    }
+    
+    if (dateFromFilter && urlParams.get('date_from')) {
+        dateFromFilter.value = urlParams.get('date_from');
+    }
+    
+    if (dateToFilter && urlParams.get('date_to')) {
+        dateToFilter.value = urlParams.get('date_to');
+    }
+    
+    // Применяем клиентские фильтры после восстановления значений
+    filterShiftsTable();
+}
+
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     initializeFilters();
+    restoreFiltersFromURL();
     
     // Автоматическое открытие модального окна планирования при action=plan
     const urlParams = new URLSearchParams(window.location.search);

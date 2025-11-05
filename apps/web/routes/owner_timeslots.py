@@ -98,6 +98,9 @@ async def timeslots_all_list(
         # Список объектов для фильтра
         objects_list = [{"id": obj.id, "name": obj.name} for obj in all_objects]
         
+        # Первый доступный объект для создания тайм-слота (если объект не выбран)
+        first_available_object_id = all_objects[0].id if all_objects else None
+        
         return templates.TemplateResponse("owner/timeslots/list_all.html", {
             "request": request,
             "title": "Тайм-слоты",
@@ -105,6 +108,7 @@ async def timeslots_all_list(
             "objects": objects_list,
             "selected_object_id": object_id,
             "selected_object": selected_object,
+            "first_available_object_id": first_available_object_id,
             "current_user": current_user,
             "date_from": date_from,
             "date_to": date_to,

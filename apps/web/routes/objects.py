@@ -53,9 +53,30 @@ async def objects_list(
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session),
     show_inactive: bool = Query(False),
-    view_mode: str = Query("cards")
+    view_mode: Optional[str] = Query(None),
+    q_name: Optional[str] = Query(None),
+    q_address: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    sort_order: str = Query("asc")
 ):
     """Список объектов владельца"""
+    # Если view_mode не указан, редиректим на list
+    if view_mode is None:
+        url_params = []
+        if show_inactive:
+            url_params.append("show_inactive=true")
+        if q_name:
+            url_params.append(f"q_name={q_name}")
+        if q_address:
+            url_params.append(f"q_address={q_address}")
+        if sort_by:
+            url_params.append(f"sort_by={sort_by}")
+        if sort_order != "asc":
+            url_params.append(f"sort_order={sort_order}")
+        url_params.append("view_mode=list")
+        redirect_url = f"/owner/objects?{'&'.join(url_params)}"
+        return RedirectResponse(url=redirect_url, status_code=303)
+    
     try:
         # Получение объектов владельца из базы данных
         object_service = ObjectService(db)
@@ -78,13 +99,41 @@ async def objects_list(
                 "owner_id": obj.owner_id
             })
         
+        # Фильтрация по названию и адресу (contains, case-insensitive)
+        if q_name:
+            qn = q_name.strip().lower()
+            objects_data = [o for o in objects_data if qn in (o["name"] or "").lower()]
+        if q_address:
+            qa = q_address.strip().lower()
+            objects_data = [o for o in objects_data if qa in (o["address"] or "").lower()]
+        
+        # Сортировка
+        if sort_by:
+            key_map = {
+                "name": lambda o: (o["name"] or "").lower(),
+                "address": lambda o: (o["address"] or "").lower(),
+                "hourly_rate": lambda o: o["hourly_rate"],
+                "opening_time": lambda o: o["opening_time"],
+                "closing_time": lambda o: o["closing_time"],
+                "is_active": lambda o: o["is_active"],
+                "created_at": lambda o: o["created_at"],
+            }
+            key_func = key_map.get(sort_by)
+            if key_func:
+                reverse = (sort_order == "desc")
+                objects_data = sorted(objects_data, key=key_func, reverse=reverse)
+        
         return templates.TemplateResponse("objects/list.html", {
             "request": request,
             "title": "Управление объектами",
             "objects": objects_data,
             "current_user": current_user,
             "show_inactive": show_inactive,
-            "view_mode": view_mode
+            "view_mode": view_mode,
+            "q_name": q_name,
+            "q_address": q_address,
+            "sort_by": sort_by,
+            "sort_order": sort_order
         })
         
     except Exception as e:

@@ -41,10 +41,12 @@ async def shifts_list(
     date_from: Optional[str] = Query(None, description="Дата начала (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
     object_id: Optional[str] = Query(None, description="ID объекта"),
+    q_user: Optional[str] = Query(None, description="Поиск по сотруднику (Фамилия Имя)"),
+    q_object: Optional[str] = Query(None, description="Поиск по названию объекта"),
     sort: Optional[str] = Query(None, description="Поле сортировки: user_name, object_name, start_time, status, created_at"),
     order: Optional[str] = Query("asc", description="Порядок сортировки: asc, desc"),
     page: int = Query(1, ge=1, description="Номер страницы"),
-    per_page: int = Query(20, ge=1, le=100, description="Количество на странице")
+    per_page: int = Query(25, ge=1, le=100, description="Количество на странице")
 ):
     """Список смен с фильтрацией"""
     current_user = await require_owner_or_superadmin(request)
@@ -86,15 +88,22 @@ async def shifts_list(
             shifts_query = shifts_query.where(Shift.object_id.in_(owner_objects))
             schedules_query = schedules_query.where(ShiftSchedule.object_id.in_(owner_objects))
         
-        # Применение фильтров
+        # Применение фильтров по статусу
         if status:
             if status == "active":
                 shifts_query = shifts_query.where(Shift.status == "active")
+                # Для плановых смен активными считаются только confirmed
+                schedules_query = schedules_query.where(ShiftSchedule.status == "confirmed")
             elif status == "planned":
-                # Для запланированных смен используем ShiftSchedule
-                pass
+                # Для запланированных смен показываем только ShiftSchedule со статусом planned
+                shifts_query = shifts_query.where(False)  # Не показываем реальные смены
+                schedules_query = schedules_query.where(ShiftSchedule.status == "planned")
             elif status == "completed":
                 shifts_query = shifts_query.where(Shift.status == "completed")
+                schedules_query = schedules_query.where(False)  # Не показываем плановые смены
+            elif status == "cancelled":
+                shifts_query = shifts_query.where(Shift.status == "cancelled")
+                schedules_query = schedules_query.where(ShiftSchedule.status == "cancelled")
         
         if date_from:
             date_from_obj = datetime.strptime(date_from, "%Y-%m-%d").date()
@@ -144,9 +153,9 @@ async def shifts_list(
                 'schedule_id': shift.schedule_id
             })
         
-        # Добавляем запланированные смены (если не отфильтрованы)
-        if not status or status == "planned":
-            for schedule in schedules:
+        # Добавляем запланированные смены
+        # (теперь фильтрация по статусу уже применена в запросе)
+        for schedule in schedules:
                 # Плановые часы/оплата для planned/confirmed
                 planned_hours = None
                 planned_payment = None
@@ -182,13 +191,29 @@ async def shifts_list(
                     'schedule_id': schedule.id
                 })
         
+        # Текстовые фильтры по сотруднику/объекту
+        if q_user:
+            qu = q_user.strip().lower()
+            def user_name_val(item):
+                u = item.get('user')
+                last_first = f"{(u.last_name or '').strip()} {(u.first_name or '').strip()}".strip() if u else ''
+                first_last = f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip() if u else ''
+                return last_first.lower(), first_last.lower()
+            all_shifts = [it for it in all_shifts if qu in user_name_val(it)[0] or qu in user_name_val(it)[1]]
+        if q_object:
+            qo = q_object.strip().lower()
+            all_shifts = [it for it in all_shifts if ((it.get('object').name.lower() if it.get('object') and it.get('object').name else '')) and qo in it.get('object').name.lower()]
+
         # Сортировка
         if sort:
             reverse = (order == "desc")
             def sort_key(item):
                 if sort == "user_name":
                     u = item.get('user')
-                    return (f"{u.first_name} {u.last_name or ''}".lower() if u else "")
+                    # Сортировка по Фамилии, затем Имени
+                    last = (u.last_name or '').lower() if u else ''
+                    first = (u.first_name or '').lower() if u else ''
+                    return (last, first)
                 if sort == "object_name":
                     o = item.get('object')
                     return (o.name.lower() if o and o.name else "")
@@ -204,7 +229,7 @@ async def shifts_list(
             # По умолчанию сортировка по времени начала (новые сверху)
             all_shifts.sort(key=lambda x: x['start_time'] or datetime.min, reverse=True)
         
-        # Пагинация
+        # Пагинация - подсчет ПОСЛЕ всех фильтров
         total = len(all_shifts)
         start = (page - 1) * per_page
         end = start + per_page
@@ -227,7 +252,7 @@ async def shifts_list(
                 'id': shift['id'],
                 'type': shift['type'],
                 'user_id': shift['user'].id if shift['user'] else None,
-                'user_name': f"{shift['user'].first_name} {shift['user'].last_name or ''}".strip() if shift['user'] else 'Неизвестно',
+                'user_name': f"{(shift['user'].last_name or '').strip()} {(shift['user'].first_name or '').strip()}".strip() if shift['user'] else 'Неизвестно',
                 'object_id': shift['object'].id if shift['object'] else None,
                 'object_name': shift['object'].name if shift['object'] else 'Неизвестно',
                 'start_time': start_time_str,
@@ -260,14 +285,16 @@ async def shifts_list(
                 "status": status,
                 "date_from": date_from,
                 "date_to": date_to,
-                "object_id": object_id
+                "object_id": object_id,
+                "q_user": q_user,
+                "q_object": q_object
             },
             "sort": {"field": sort, "order": order},
             "pagination": {
                 "page": page,
                 "per_page": per_page,
                 "total": total,
-                "pages": (total + per_page - 1) // per_page
+                "pages": (total + per_page - 1) // per_page if total > 0 else 0
             }
         })
 

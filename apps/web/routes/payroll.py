@@ -49,9 +49,14 @@ async def owner_payroll_list(
     request: Request,
     current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session),
-    employee_id: Optional[str] = Query(None),
+    object_id: Optional[str] = Query(None),
     period_start: Optional[str] = Query(None),
-    period_end: Optional[str] = Query(None)
+    period_end: Optional[str] = Query(None),
+    q_employee: Optional[str] = Query(None),
+    sort: Optional[str] = Query(None),
+    order: Optional[str] = Query("asc"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=1, le=100)
 ):
     """Список всех начислений."""
     try:
@@ -74,6 +79,19 @@ async def owner_payroll_list(
             period_end_date = date.fromisoformat(period_end)
         except Exception:
             raise HTTPException(status_code=400, detail="Неверный формат дат. Используйте YYYY-MM-DD")
+
+        # Получить объекты владельца
+        objects_query = select(Object).where(Object.owner_id == owner_id, Object.is_active == True).order_by(Object.name)
+        objects_result = await db.execute(objects_query)
+        objects = objects_result.scalars().all()
+
+        # Нормализация object_id: пустое значение → None
+        object_id_int = None
+        if object_id is not None and str(object_id).strip() != "":
+            try:
+                object_id_int = int(object_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="object_id должен быть числом")
 
         # Получить ВСЕХ сотрудников владельца (включая уволенных)
         # для возможности просмотра и создания начислений задним числом
@@ -98,47 +116,90 @@ async def owner_payroll_list(
         ).distinct().order_by(User.last_name, User.first_name)
         employees_result = await db.execute(employees_filter_query)
         employees = employees_result.scalars().all()
-
-        # Нормализация employee_id: пустое значение → None
-        employee_id_int = None
-        if employee_id is not None and str(employee_id).strip() != "":
-            try:
-                employee_id_int = int(employee_id)
-            except ValueError:
-                raise HTTPException(status_code=400, detail="employee_id должен быть числом")
         
-        # Получить начисления
-        if employee_id_int:
-            entries = await payroll_service.get_payroll_entries_by_employee(
-                employee_id=employee_id_int,
+        # Получить начисления для всех сотрудников (включая неактивных)
+        entries = []
+        for emp in employees_all:
+            emp_entries = await payroll_service.get_payroll_entries_by_employee(
+                employee_id=emp.id,
                 period_start=period_start_date,
                 period_end=period_end_date,
-                owner_id=owner_id  # Фильтровать по договорам владельца
+                limit=None,  # Без лимита
+                owner_id=owner_id
             )
-        else:
-            # Получить начисления для всех сотрудников (включая неактивных)
-            entries = []
-            for emp in employees_all:
-                emp_entries = await payroll_service.get_payroll_entries_by_employee(
-                    employee_id=emp.id,
-                    period_start=period_start_date,
-                    period_end=period_end_date,
-                    limit=50,
-                    owner_id=owner_id  # Фильтровать по договорам владельца
+            entries.extend(emp_entries)
+        
+        # Фильтрация по объекту (если указан)
+        if object_id_int:
+            entries = [e for e in entries if e.object_id == object_id_int]
+        
+        # Фильтрация по текстовому поиску сотрудника (клиентский фильтр, но применяем и на сервере для пагинации)
+        if q_employee and q_employee.strip():
+            q_employee_lower = q_employee.strip().lower()
+            entries = [
+                e for e in entries
+                if e.employee and (
+                    (e.employee.last_name or "").lower().startswith(q_employee_lower) or
+                    (e.employee.first_name or "").lower().startswith(q_employee_lower) or
+                    f"{(e.employee.last_name or '')} {(e.employee.first_name or '')}".strip().lower().startswith(q_employee_lower)
                 )
-                entries.extend(emp_entries)
-            
-            # Сортировать по дате
-            entries.sort(key=lambda e: e.period_end, reverse=True)
+            ]
+        
+        # Сортировка
+        sort_key = None
+        if sort == "id":
+            sort_key = lambda e: e.id
+        elif sort == "employee":
+            sort_key = lambda e: (
+                (e.employee.last_name or "").lower() if e.employee else "",
+                (e.employee.first_name or "").lower() if e.employee else ""
+            )
+        elif sort == "period":
+            sort_key = lambda e: e.period_end
+        else:
+            # По умолчанию - по дате периода (последние сначала)
+            sort_key = lambda e: e.period_end
+        
+        reverse_order = order == "desc"
+        entries.sort(key=sort_key, reverse=reverse_order)
+        
+        # Пагинация
+        total = len(entries)
+        pages = (total + per_page - 1) // per_page if total > 0 else 0
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_entries = entries[start_idx:end_idx]
+        
+        # Подготовка фильтров для шаблона
+        filters = {
+            "object_id": object_id_int,
+            "period_start": period_start,
+            "period_end": period_end,
+            "q_employee": q_employee or ""
+        }
+        
+        # Подготовка сортировки для шаблона
+        sort_info = {
+            "field": sort or "period",
+            "order": order or "desc"
+        }
         
         return templates.TemplateResponse(
             "owner/payroll/list.html",
             {
                 "request": request,
                 "current_user": current_user,
-                "entries": entries,
+                "entries": paginated_entries,
                 "employees": employees,
-                "selected_employee_id": employee_id_int,
+                "objects": objects,
+                "filters": filters,
+                "sort": sort_info,
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": total,
+                    "pages": pages
+                },
                 "period_start": period_start,
                 "period_end": period_end
             }
@@ -534,7 +595,8 @@ async def owner_payroll_add_deduction(
             description=description,
             created_by=owner_id,
             object_id=entry.object_id,
-            adjustment_date=adjustment_date_obj
+            adjustment_date=adjustment_date_obj,
+            details={'deduction_type': deduction_type}  # Сохраняем тип удержания
         )
         
         # Привязать к payroll_entry
@@ -620,7 +682,8 @@ async def owner_payroll_add_bonus(
             description=description,
             created_by=owner_id,
             object_id=entry.object_id,
-            adjustment_date=adjustment_date_obj
+            adjustment_date=adjustment_date_obj,
+            details={'bonus_type': bonus_type}  # Сохраняем тип доплаты
         )
         
         # Привязать к payroll_entry
