@@ -218,17 +218,22 @@ server {{
                 shutil.copy2(src, dst)
                 logger.info(f"(dev) Nginx configuration backup created: {dst}")
                 return True
-            # prod/system path
-            if not config_file_path.exists():
-                logger.warning(f"No existing configuration to backup for domain: {domain}")
-                return True
-            backup_dir = Path(nginx_config_path) / "backups"
-            backup_dir.mkdir(parents=True, exist_ok=True)
+            # prod/system path via SSH executor
+            src = f"{nginx_config_path}/staffprobot-{domain}.conf"
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_file_path = backup_dir / f"staffprobot-{domain}_{timestamp}.conf"
-            import shutil
-            shutil.copy2(config_file_path, backup_file_path)
-            logger.info(f"Nginx configuration backup created: {backup_file_path}")
+            dst_dir = f"{nginx_config_path}/backups"
+            dst = f"{dst_dir}/staffprobot-{domain}_{timestamp}.conf"
+            # ensure dir and copy
+            code, out, err = executor.run(f"sudo test -f {shlex.quote(src)}")
+            if code != 0:
+                logger.warning(f"Source config not found for backup: {src}")
+                return True
+            executor.run(f"sudo mkdir -p {shlex.quote(dst_dir)}")
+            code, out, err = executor.run(f"sudo cp -f {shlex.quote(src)} {shlex.quote(dst)}")
+            if code != 0:
+                logger.error(f"Failed to create backup: {err or out}")
+                return False
+            logger.info(f"Nginx configuration backup created: {dst}")
             return True
             
         except Exception as e:
