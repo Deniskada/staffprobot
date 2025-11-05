@@ -210,72 +210,76 @@ async def owner_dashboard(request: Request):
                     shifts_today = list(shifts_result.scalars().all())
                     
                     if shifts_today:
-                        # Единая логика: считаем открытие по первому фактическому событию НЕ РАНЬШЕ opening_time
-                        # planned → actual_start; spontaneous → start_time (всё в локальной TZ)
-                        # ПРАВИЛЬНО локализуем время (не replace, а localize!)
+                        # Логика: учитываем только смены, начало которых совпадает с временем открытия объекта
+                        # planned_start должен совпадать с opening_time объекта для учёта в статусе открытия
+                        # Спонтанные смены (без planned_start) не учитываются при расчёте статуса открытия
                         naive_expected = datetime.combine(today_local, obj.opening_time)
                         expected_open = timezone_helper.local_tz.localize(naive_expected)
                         logger.debug(
                             f"Dashboard: object {obj.id} ({obj.name}) expected_open={expected_open.isoformat()}"
                         )
 
-                        starts_and_ends: list[tuple[Optional[datetime], Optional[datetime], str, object]] = []
+                        # Фильтруем только смены, у которых planned_start совпадает с opening_time объекта
+                        opening_shifts = []
                         for s in shifts_today:
-                            start_local = None
-                            if s.planned_start and s.actual_start:
-                                start_local = timezone_helper.utc_to_local(s.actual_start)
-                                logger.debug(
-                                    f"Dashboard: shift {s.id} planned shift: actual_start UTC={s.actual_start.isoformat()}, "
-                                    f"local={start_local.isoformat() if start_local else None}"
-                                )
-                            elif not s.planned_start and s.start_time:
-                                start_local = timezone_helper.utc_to_local(s.start_time)
-                                logger.debug(
-                                    f"Dashboard: shift {s.id} spontaneous shift: start_time UTC={s.start_time.isoformat()}, "
-                                    f"local={start_local.isoformat() if start_local else None}"
-                                )
+                            if s.planned_start:
+                                # Проверяем, совпадает ли planned_start с opening_time
+                                planned_start_local = timezone_helper.utc_to_local(s.planned_start)
+                                # Сравниваем только время (часы и минуты), игнорируя дату
+                                if (planned_start_local.hour == obj.opening_time.hour and 
+                                    planned_start_local.minute == obj.opening_time.minute):
+                                    opening_shifts.append(s)
+                                    logger.debug(
+                                        f"Dashboard: shift {s.id} matches opening_time: "
+                                        f"planned_start_local={planned_start_local.isoformat()}, "
+                                        f"opening_time={obj.opening_time}"
+                                    )
+                            # Спонтанные смены (без planned_start) не учитываются при расчёте статуса открытия
 
-                            end_local = timezone_helper.utc_to_local(s.end_time) if getattr(s, 'end_time', None) else None
-                            starts_and_ends.append((start_local, end_local, s.status, s))
-
-                        logger.debug(
-                            "Dashboard: starts_and_ends=" + 
-                            ", ".join([
-                                f"(start={st.isoformat() if st else None}, end={en.isoformat() if en else None}, status={stt}, id={sh.id})"
-                                for (st, en, stt, sh) in starts_and_ends
-                            ])
-                        )
-
-                        # Берём первое фактическое открытие НЕ РАНЬШЕ opening_time
-                        earliest_open_local: Optional[datetime] = None
-                        opener_shift = None
-                        candidates_after: list[tuple[datetime, object]] = []
-                        for start_local, _end_local, _s_status, s_obj in starts_and_ends:
-                            if start_local:
-                                logger.debug(
-                                    f"Dashboard: comparing start_local={start_local.isoformat()} with expected_open={expected_open.isoformat()}, "
-                                    f"start >= expected? {start_local >= expected_open}"
-                                )
-                                if start_local >= expected_open:
-                                    candidates_after.append((start_local, s_obj))
-                        
-                        logger.debug(
-                            f"Dashboard: candidates_after={len(candidates_after)}, "
-                            f"candidates={[(c[0].isoformat(), c[1].id) for c in candidates_after] if candidates_after else []}"
-                        )
-                        
-                        if candidates_after:
-                            earliest_open_local, opener_shift = min(candidates_after, key=lambda t: t[0])
-                            delay_minutes = int((earliest_open_local - expected_open).total_seconds() / 60)
+                        if opening_shifts:
+                            # Берём первое фактическое открытие из смен, совпадающих с opening_time
+                            earliest_open_local: Optional[datetime] = None
+                            opener_shift = None
+                            candidates_after: list[tuple[datetime, object]] = []
+                            
+                            for s in opening_shifts:
+                                start_local = None
+                                if s.actual_start:
+                                    start_local = timezone_helper.utc_to_local(s.actual_start)
+                                elif s.start_time:
+                                    start_local = timezone_helper.utc_to_local(s.start_time)
+                                
+                                if start_local:
+                                    logger.debug(
+                                        f"Dashboard: comparing start_local={start_local.isoformat()} with expected_open={expected_open.isoformat()}, "
+                                        f"start >= expected? {start_local >= expected_open}"
+                                    )
+                                    if start_local >= expected_open:
+                                        candidates_after.append((start_local, s))
+                            
                             logger.debug(
-                                f"Dashboard: found earliest_open_local={earliest_open_local.isoformat()}, "
-                                f"delay_minutes={delay_minutes}"
+                                f"Dashboard: candidates_after={len(candidates_after)}, "
+                                f"candidates={[(c[0].isoformat(), c[1].id) for c in candidates_after] if candidates_after else []}"
                             )
+                            
+                            if candidates_after:
+                                earliest_open_local, opener_shift = min(candidates_after, key=lambda t: t[0])
+                                delay_minutes = int((earliest_open_local - expected_open).total_seconds() / 60)
+                                logger.debug(
+                                    f"Dashboard: found earliest_open_local={earliest_open_local.isoformat()}, "
+                                    f"delay_minutes={delay_minutes}"
+                                )
+                            else:
+                                # Нет открытия после времени начала работы — считаем без опоздания (нет данных)
+                                delay_minutes = 0
+                                earliest_open_local = None
+                                logger.debug(f"Dashboard: no candidates_after, setting delay_minutes=0")
                         else:
-                            # Нет открытия после времени начала работы — считаем без опоздания (нет данных)
+                            # Нет смен, совпадающих с opening_time — не учитываем при расчёте статуса открытия
                             delay_minutes = 0
                             earliest_open_local = None
-                            logger.debug(f"Dashboard: no candidates_after, setting delay_minutes=0")
+                            opener_shift = None
+                            logger.debug(f"Dashboard: no shifts matching opening_time, skipping opening status calculation")
 
                         logger.debug(
                             f"Dashboard: object {obj.id} ({obj.name}) expected_open={expected_open.isoformat()}, "
@@ -5960,6 +5964,119 @@ async def owner_employee_detail(
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки информации о сотруднике: {str(e)}")
 
 
+@router.get("/employees/{employee_id}/edit", response_class=HTMLResponse)
+async def owner_employee_edit_form(
+    employee_id: int,
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Форма редактирования сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        # Получаем внутренний user_id владельца
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем информацию о сотруднике
+        from apps.web.services.contract_service import ContractService
+        contract_service = ContractService()
+        # employee_id - это telegram_id
+        employee_info = await contract_service.get_employee_by_telegram_id(employee_id, current_user["id"])
+        
+        if not employee_info:
+            raise HTTPException(status_code=404, detail="Сотрудник не найден или у вас нет прав на его редактирование")
+        
+        # Получаем данные для переключения интерфейсов
+        available_interfaces = await get_available_interfaces_for_user(user_id)
+        
+        # Получаем объект User из БД для редактирования
+        from sqlalchemy import select
+        from domain.entities.user import User
+        employee_user_query = select(User).where(User.telegram_id == employee_id)
+        result = await db.execute(employee_user_query)
+        employee_user = result.scalar_one_or_none()
+        
+        if not employee_user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        return templates.TemplateResponse("owner/employees/edit.html", {
+            "request": request,
+            "current_user": current_user,
+            "employee": employee_user,  # Объект User из БД
+            "available_interfaces": available_interfaces
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in owner employee edit form: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки формы")
+
+
+@router.post("/employees/{employee_id}/edit")
+async def owner_employee_edit(
+    employee_id: int,
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin)
+):
+    """Обработка формы редактирования сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            form_data = await request.form()
+            
+            # Получаем сотрудника (employee_id - это telegram_id)
+            from sqlalchemy import select
+            from domain.entities.user import User
+            
+            employee_query = select(User).where(User.telegram_id == employee_id)
+            result = await db.execute(employee_query)
+            employee = result.scalar_one_or_none()
+            
+            if not employee:
+                raise HTTPException(status_code=404, detail="Сотрудник не найден")
+            
+            # Обновляем данные
+            employee.first_name = form_data.get("first_name", "").strip()
+            employee.last_name = form_data.get("last_name", "").strip()
+            employee.username = form_data.get("username", "").strip()
+            employee.phone = form_data.get("phone", "").strip()
+            employee.email = form_data.get("email", "").strip() or None
+            
+            # Обработка даты рождения
+            birth_date_str = form_data.get("birth_date", "").strip()
+            if birth_date_str:
+                try:
+                    employee.birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
+                except ValueError:
+                    pass
+            else:
+                employee.birth_date = None
+            
+            await db.commit()
+            await db.refresh(employee)
+            
+            logger.info(f"Updated employee {employee_id} by owner {user_id}")
+            
+            return RedirectResponse(url=f"/owner/employees/{employee_id}", status_code=302)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating employee: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка обновления сотрудника")
+
+
 @router.post("/employees/create")
 async def owner_employees_create_contract(
     request: Request,
@@ -5988,6 +6105,31 @@ async def owner_employees_create_contract(
         # Парсим даты
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+        
+        # Обновляем профиль сотрудника, если указаны поля
+        if first_name or last_name or phone or email or birth_date:
+            from sqlalchemy import select
+            from domain.entities.user import User
+            
+            employee_query = select(User).where(User.telegram_id == employee_telegram_id)
+            result = await db.execute(employee_query)
+            employee_user = result.scalar_one_or_none()
+            
+            if employee_user:
+                if first_name:
+                    employee_user.first_name = first_name.strip()
+                if last_name:
+                    employee_user.last_name = last_name.strip()
+                if phone:
+                    employee_user.phone = phone.strip()
+                if email:
+                    employee_user.email = email.strip() or None
+                if birth_date:
+                    try:
+                        employee_user.birth_date = datetime.strptime(birth_date, "%Y-%m-%d")
+                    except ValueError:
+                        pass
+                await db.commit()
         
         # Получаем данные формы для динамических полей
         form_data = await request.form()

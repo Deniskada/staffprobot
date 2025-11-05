@@ -69,11 +69,22 @@
 - [POST] `/owner/employees/contract/{contract_id}/terminate`  — (apps/web/routes/owner.py)
 - [GET] `/owner/employees/create`  — (apps/web/routes/owner.py)
 - [POST] `/owner/employees/create`  — (apps/web/routes/owner.py)
+  - Form: `employee_telegram_id`, `first_name`, `last_name`, `phone`, `email`, `birth_date` (поля профиля), `title`, `content`, `hourly_rate`, `start_date`, `end_date`, `template_id`, `allowed_objects`, `is_manager`, `manager_permissions` (поля договора)
+  - **Важно:** Поля профиля (`first_name`, `last_name`, `phone`, `email`, `birth_date`) сохраняются в `User` при создании договора
 - [GET] `/owner/employees/{employee_id}`  — (apps/web/routes/owner.py)
+- [GET] `/owner/employees/{employee_id}/edit`  — (apps/web/routes/owner.py) — форма редактирования профиля сотрудника (имя, фамилия, телефон, email, дата рождения)
+- [POST] `/owner/employees/{employee_id}/edit`  — (apps/web/routes/owner.py) — сохранение изменений профиля сотрудника
 - [GET] `/owner/object/{object_id}`  — (apps/web/routes/owner_timeslots.py)
 - [GET] `/owner/object/{object_id}/create`  — (apps/web/routes/owner_timeslots.py)
 - [POST] `/owner/object/{object_id}/create`  — (apps/web/routes/owner_timeslots.py)
-- [GET] `/owner/objects`  — (apps/web/routes/owner.py)
+- [GET] `/owner/objects`  — (apps/web/routes/objects.py)
+  - Query: `view_mode=cards|list` (default: list, редирект если не указан)
+  - Query: `q_name` — фильтр по названию (клиентский фильтр, мгновенный поиск)
+  - Query: `q_address` — фильтр по адресу (клиентский фильтр, мгновенный поиск)
+  - Query: `sort_by` — сортировка (name, address)
+  - Query: `sort_order` — направление сортировки (asc, desc)
+  - **Фильтры:** Клиентские фильтры по названию и адресу в заголовках столбцов
+  - **Сортировка:** При клике по столбцам, индикатор только на активном столбце
 - [GET] `/owner/objects/create`  — (apps/web/routes/owner.py)
 - [POST] `/owner/objects/create`  — (apps/web/routes/owner.py)
 - [GET] `/owner/objects/{object_id}`  — (apps/web/routes/owner.py)
@@ -93,6 +104,26 @@
 - [GET] `/owner/reports/stats/period`  — (apps/web/routes/owner.py)
 - [GET] `/owner/reviews`  — (apps/web/routes/owner_reviews.py)
 - [GET] `/owner/settings`  — (apps/web/routes/owner.py)
+- [GET] `/owner/shifts`  — (apps/web/routes/owner_shifts.py) — список смен с фильтрацией и пагинацией
+  - Query: `status` — фильтр по статусу (active, planned, completed)
+  - Query: `date_from`, `date_to` — период (YYYY-MM-DD)
+  - Query: `object_id` — фильтр по объекту
+  - Query: `q_user` — фильтр по сотруднику (Фамилия Имя, клиентский фильтр)
+  - Query: `q_object` — фильтр по объекту (название, клиентский фильтр)
+  - Query: `sort` — сортировка (id, user_name, object_name, planned_start, status)
+  - Query: `order` — направление сортировки (asc, desc)
+  - Query: `page`, `per_page` — пагинация (default: per_page=25)
+  - **Фильтры:** Клиентский фильтр по сотруднику (мгновенный поиск), серверные фильтры по объекту, датам и статусу
+  - **Сортировка:** По умолчанию по `planned_start` desc, сортировка по "Фамилия Имя" сотрудника
+- [GET] `/owner/shifts/plan`  — (apps/web/routes/owner_shifts.py) — страница планирования смен
+  - Query: `object_id` — ID объекта для предзаполнения
+  - Query: `return_to` — URL для возврата после планирования (default: /owner/shifts)
+  - **Замена:** Вместо модального окна на странице `/owner/shifts` теперь используется отдельная страница
+- [GET] `/owner/shifts/api/schedule/{schedule_id}/object-id`  — (apps/web/routes/owner_shifts.py) — API для получения object_id из запланированной смены (JSON)
+  - Используется в календаре для определения объекта при клике на запланированную смену
+- [GET] `/owner/shifts/{shift_id}`  — (apps/web/routes/owner_shifts.py) — детали смены
+  - Query: `shift_type` — тип смены (shift, schedule)
+- [POST] `/owner/shifts/{shift_id}/cancel`  — (apps/web/routes/owner_shifts.py) — отмена смены
 - [GET] `/owner/shifts_legacy`  — (apps/web/routes/owner.py)
 - [GET] `/owner/shifts_legacy/{shift_id}`  — (apps/web/routes/owner.py)
 - [POST] `/owner/shifts_legacy/{shift_id}/cancel`  — (apps/web/routes/owner.py)
@@ -164,17 +195,24 @@
 - `owner/settings.html`
 - `owner/shifts/access_denied.html`
 - `owner/shifts/detail.html`
-- `owner/shifts/list.html` — список смен с модальным окном планирования
-  - Модальное окно: 90% ширины и высоты экрана
-  - Автоматически открывается при переходе с параметром `?action=plan`
+- `owner/shifts/list.html` — список смен с фильтрацией и пагинацией
+  - Фильтры: клиентский фильтр по сотруднику (мгновенный поиск), серверные фильтры по объекту, датам и статусу
+  - Сортировка по столбцам (ID, Сотрудник, Объект, Дата, Статус)
+  - Пагинация: "Первая", "Назад", "X / Y", "Вперед", "Последняя" с выбором количества на странице (25, 50, 100)
+  - Отображение сотрудника: "Фамилия Имя" с сортировкой по фамилии, затем имени
+- `owner/shifts/plan.html` — страница планирования смен (замена модального окна)
   - Календарь: 5 недель (35 дней), адаптивная высота
   - Увеличенный шрифт в тайм-слотах (14px время, 12px места)
   - Фильтрация сотрудников по выбранному объекту через API
   - Информация в футере: объект + счётчик слотов (слева), кнопки (справа)
+  - Параметр `return_to` для возврата на исходную страницу (календарь или список смен)
 - `owner/shifts/not_found.html`
 - `owner/templates/contracts/detail.html`
 - `owner/templates/contracts/edit.html`
-- `owner/timeslots/create.html`
+- `owner/timeslots/create.html` — форма создания тайм-слота (удалено поле "Игнорировать задачи объекта")
+- `owner/timeslots/edit.html` — форма редактирования тайм-слота (удалено поле "Игнорировать задачи объекта")
+- `owner/employees/create.html` — форма создания сотрудника с полями профиля и договора
+- `owner/employees/edit.html` — форма редактирования профиля сотрудника (имя, фамилия, телефон, email, дата рождения)
 - `support/hub.html` — центр поддержки (использует base_template для роли, блок content)
 - `support/bug.html` — форма подачи бага (использует base_template для роли, блок content)
 - `support/faq.html` — FAQ база знаний (использует base_template для роли, блок content)

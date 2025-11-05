@@ -22,9 +22,14 @@
                         <span class="badge bg-light text-dark">{{ employee.telegram_id }}</span>
                     </p>
                 </div>
-                <a href="/owner/employees" class="btn btn-outline-secondary">
-                    <i class="fas fa-arrow-left me-2"></i>Назад к списку
-                </a>
+                <div class="d-flex gap-2">
+                    <a href="/owner/employees/{{ employee.telegram_id }}/edit" class="btn btn-primary">
+                        <i class="fas fa-edit me-2"></i>Редактировать
+                    </a>
+                    <a href="/owner/employees" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Назад к списку
+                    </a>
+                </div>
             </div>
 
             <div class="row">

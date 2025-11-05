@@ -1,0 +1,177 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Редактирование сотрудника{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex align-items-center">
+                <a href="/owner/employees/{{ employee.telegram_id }}" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left me-1"></i>
+                    Назад
+                </a>
+                <h2><i class="bi bi-pencil me-2"></i>Редактирование сотрудника</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Информация о сотруднике</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/owner/employees/{{ employee.telegram_id }}/edit">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="first_name" class="form-label">Имя *</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="first_name" 
+                                       name="first_name" 
+                                       value="{{ employee.first_name or '' }}" 
+                                       required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="last_name" class="form-label">Фамилия</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="last_name" 
+                                       name="last_name" 
+                                       value="{{ employee.last_name or '' }}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">Телефон</label>
+                                <input type="tel" 
+                                       class="form-control" 
+                                       id="phone" 
+                                       name="phone" 
+                                       value="{{ employee.phone or '' }}"
+                                       placeholder="+7 (999) 123-45-67">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" 
+                                       class="form-control" 
+                                       id="email" 
+                                       name="email" 
+                                       value="{{ employee.email or '' }}"
+                                       placeholder="user@example.com">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="birth_date" class="form-label">Дата рождения</label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="birth_date" 
+                                       name="birth_date" 
+                                       value="{{ employee.birth_date.strftime('%Y-%m-%d') if employee.birth_date else '' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Username</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="username" 
+                                       name="username" 
+                                       value="{{ employee.username or '' }}"
+                                       placeholder="@username">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check me-1"></i>
+                            Сохранить
+                        </button>
+                        <a href="/owner/employees/{{ employee.telegram_id }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x me-1"></i>
+                            Отмена
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Текущая информация</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">ID</label>
+                    <p class="form-control-plaintext">{{ employee.id }}</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Telegram ID</label>
+                    <p class="form-control-plaintext">{{ employee.telegram_id }}</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Дата регистрации</label>
+                    <p class="form-control-plaintext">
+                        {{ employee.created_at.strftime('%d.%m.%Y %H:%M') if employee.created_at else 'Не указана' }}
+                    </p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Роли</label>
+                    <div>
+                        {% if employee.roles %}
+                            {% for role in employee.roles %}
+                                <span class="badge bg-primary me-1 mb-1">{{ role }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="badge bg-secondary">{{ employee.role }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Форматирование телефона
+document.getElementById('phone').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 0) {
+        if (value[0] === '8') {
+            value = '7' + value.slice(1);
+        }
+        if (value[0] === '7' && value.length > 1) {
+            value = '+7 (' + value.slice(1, 4) + ') ' + value.slice(4, 7) + '-' + value.slice(7, 9) + '-' + value.slice(9, 11);
+        }
+    }
+    e.target.value = value;
+});
+
+// Форматирование username
+document.getElementById('username').addEventListener('input', function(e) {
+    let value = e.target.value;
+    if (value && !value.startsWith('@')) {
+        e.target.value = '@' + value;
+    }
+});
+</script>
+{% endblock %}
+

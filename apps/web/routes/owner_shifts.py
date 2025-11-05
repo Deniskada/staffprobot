@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Query, status
+from fastapi import APIRouter, Request, Query, status, HTTPException, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from datetime import date, datetime, timedelta
@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, desc
 from sqlalchemy.orm import selectinload
 
-from core.database.session import get_async_session
+from core.database.session import get_async_session, get_db_session
 from core.auth.user_manager import UserManager
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from domain.entities.shift import Shift
@@ -16,6 +16,7 @@ from domain.entities.time_slot import TimeSlot
 from domain.entities.object import Object
 from domain.entities.user import User
 from apps.web.utils.timezone_utils import web_timezone_helper
+from core.logging.logger import logger
 
 router = APIRouter()
 from apps.web.jinja import templates
@@ -32,6 +33,106 @@ async def get_user_id_from_current_user(current_user, session):
         return user_obj.id if user_obj else None
     else:
         return current_user.id
+
+
+@router.get("/plan", response_class=HTMLResponse)
+async def shifts_plan(
+    request: Request,
+    object_id: Optional[int] = Query(None, description="ID объекта для предзаполнения"),
+    return_to: Optional[str] = Query(None, description="URL для возврата после планирования"),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница планирования смен."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        # Получаем внутренний ID владельца
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем объекты владельца
+        from sqlalchemy import select
+        from domain.entities.object import Object
+        
+        objects_query = select(Object).where(Object.owner_id == user_id)
+        objects_result = await db.execute(objects_query)
+        objects = objects_result.scalars().all()
+        
+        objects_list = [{"id": obj.id, "name": obj.name} for obj in objects]
+        
+        # Если передан object_id, проверяем, что он принадлежит владельцу
+        selected_object_id = None
+        if object_id:
+            for obj in objects:
+                if obj.id == object_id:
+                    selected_object_id = object_id
+                    break
+        
+        # Получаем данные для переключения интерфейсов
+        from shared.services.role_based_login_service import RoleBasedLoginService
+        login_service = RoleBasedLoginService(db)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
+        return templates.TemplateResponse("owner/shifts/plan.html", {
+            "request": request,
+            "current_user": current_user,
+            "objects": objects_list,
+            "selected_object_id": selected_object_id,
+            "return_to": return_to or "/owner/shifts",
+            "available_interfaces": available_interfaces
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading shifts plan page: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки страницы планирования")
+
+
+@router.get("/api/schedule/{schedule_id}/object-id", response_class=JSONResponse)
+async def get_schedule_object_id(
+    schedule_id: int,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получить object_id из запланированной смены."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+        
+        # Получаем внутренний ID владельца
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            return JSONResponse({"error": "User not found"}, status_code=401)
+        
+        # Получаем запланированную смену
+        schedule_query = select(ShiftSchedule).options(
+            selectinload(ShiftSchedule.object)
+        ).where(ShiftSchedule.id == schedule_id)
+        
+        result = await db.execute(schedule_query)
+        schedule = result.scalar_one_or_none()
+        
+        if not schedule:
+            return JSONResponse({"error": "Schedule not found"}, status_code=404)
+        
+        # Проверяем, что объект принадлежит владельцу
+        objects_query = select(Object).where(Object.owner_id == user_id)
+        objects_result = await db.execute(objects_query)
+        objects = objects_result.scalars().all()
+        object_ids = [obj.id for obj in objects]
+        
+        if schedule.object_id not in object_ids:
+            return JSONResponse({"error": "Access denied"}, status_code=403)
+        
+        return JSONResponse({"object_id": schedule.object_id})
+        
+    except Exception as e:
+        logger.error(f"Error getting schedule object_id: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @router.get("/", response_class=HTMLResponse)
