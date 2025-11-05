@@ -142,6 +142,29 @@ class SystemSettingsService:
         """Установить настройку использования HTTPS"""
         return await self.set_setting("use_https", str(use_https).lower(), "Использовать HTTPS", changed_by)
 
+    # === Режим и SSH для Nginx ===
+    async def get_is_production_mode(self) -> bool:
+        value = await self.get_setting("nginx_is_production", "false")
+        return str(value).lower() == "true"
+
+    async def set_is_production_mode(self, is_prod: bool, changed_by: str = None) -> bool:
+        return await self.set_setting("nginx_is_production", str(is_prod).lower(), "Nginx: режим production", changed_by)
+
+    async def get_nginx_ssh_host(self) -> str:
+        return await self.get_setting("nginx_ssh_host", "")
+
+    async def get_nginx_ssh_user(self) -> str:
+        return await self.get_setting("nginx_ssh_user", "")
+
+    async def get_nginx_ssh_key_path(self) -> str:
+        return await self.get_setting("nginx_ssh_key_path", "")
+
+    async def set_nginx_ssh_settings(self, host: str, user: str, key_path: str, changed_by: str = None) -> bool:
+        ok1 = await self.set_setting("nginx_ssh_host", host or "", "Nginx SSH host", changed_by)
+        ok2 = await self.set_setting("nginx_ssh_user", user or "", "Nginx SSH user", changed_by)
+        ok3 = await self.set_setting("nginx_ssh_key_path", key_path or "", "Nginx SSH key path", changed_by)
+        return ok1 and ok2 and ok3
+
     # === Тестовые пользователи ===
     async def get_test_users_enabled(self) -> bool:
         """Включен ли режим тестовых пользователей"""

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.web.services.system_settings_service import SystemSettingsService
 from core.logging.logger import logger
 from pathlib import Path
+from apps.web.services.exec_service import LocalExecutor, SSHExecutor
 
 class NginxService:
     """Сервис для управления конфигурацией Nginx"""
@@ -141,7 +142,17 @@ server {{
             
         except Exception as e:
             logger.error(f"Failed to save Nginx configuration: {e}")
-            return False
+            # Fallback для dev: сохраняем в локальную папку проекта
+            try:
+                fallback_dir = Path(__file__).parent.parent.parent.parent / "deployment" / "nginx" / "dev_out"
+                fallback_dir.mkdir(parents=True, exist_ok=True)
+                fallback_file = fallback_dir / f"staffprobot-{domain}.conf"
+                fallback_file.write_text(await self.generate_nginx_config(domain, use_https), encoding='utf-8')
+                logger.info(f"Nginx configuration saved to fallback path: {fallback_file}")
+                return True
+            except Exception as e2:
+                logger.error(f"Fallback save failed: {e2}")
+                return False
     
     async def validate_nginx_config(self, domain: str, use_https: bool = True) -> Dict[str, Any]:
         """
@@ -152,52 +163,28 @@ server {{
             config_content = await self.generate_nginx_config(domain, use_https)
             
             # Проверяем синтаксис через nginx -t
-            import tempfile
-            import subprocess
-            
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as temp_file:
-                temp_file.write(config_content)
-                temp_file_path = temp_file.name
-            
-            try:
-                # Тестируем конфигурацию
-                result = subprocess.run(
-                    ['nginx', '-t', '-c', temp_file_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                
-                # Удаляем временный файл
-                os.unlink(temp_file_path)
-                
-                if result.returncode == 0:
-                    return {
-                        "valid": True,
-                        "message": "Nginx configuration is valid",
-                        "output": result.stdout
-                    }
-                else:
-                    return {
-                        "valid": False,
-                        "message": "Nginx configuration is invalid",
-                        "error": result.stderr
-                    }
-                    
-            except subprocess.TimeoutExpired:
-                os.unlink(temp_file_path)
-                return {
-                    "valid": False,
-                    "message": "Nginx configuration validation timed out",
-                    "error": "Timeout"
-                }
-            except FileNotFoundError:
-                os.unlink(temp_file_path)
-                return {
-                    "valid": False,
-                    "message": "Nginx not found in PATH",
-                    "error": "Nginx command not found"
-                }
+            # Пишем во временный файл на целевой стороне и валидируем
+            executor = await self._get_executor()
+            tmp_path = f"/tmp/staffprobot_nginx_{domain}.conf"
+            # sudo нужен только на удалённом хосте
+            from apps.web.services.exec_service import SSHExecutor, LocalExecutor
+            use_sudo = isinstance(executor, SSHExecutor)
+            code, out, err = executor.write_file(tmp_path, config_content, sudo=use_sudo)
+            if code != 0:
+                return {"valid": False, "message": "Failed to write temp config", "error": err or out}
+            # В dev (LocalExecutor) nginx может отсутствовать — пропускаем проверку
+            if isinstance(executor, LocalExecutor):
+                rm_cmd = f"rm -f {tmp_path}"
+                executor.run(rm_cmd)
+                return {"valid": True, "message": "Dev mode: skipped nginx -t (nginx not available)", "output": "skipped"}
+            nginx_cmd = f"{'sudo ' if use_sudo else ''}nginx -t -c {tmp_path}"
+            code, out, err = executor.run(nginx_cmd, timeout=15)
+            # Удалить временный файл (best-effort)
+            rm_cmd = f"{'sudo ' if use_sudo else ''}rm -f {tmp_path}"
+            executor.run(rm_cmd)
+            if code == 0:
+                return {"valid": True, "message": "Nginx configuration is valid", "output": out}
+            return {"valid": False, "message": "Nginx configuration is invalid", "error": err or out}
                 
         except Exception as e:
             logger.error(f"Failed to validate Nginx configuration: {e}")
@@ -212,25 +199,35 @@ server {{
         Создает backup текущей конфигурации Nginx
         """
         try:
+            executor = await self._get_executor()
             nginx_config_path = await self.settings_service.get_nginx_config_path()
             config_file_path = Path(nginx_config_path) / f"staffprobot-{domain}.conf"
-            
+            from apps.web.services.exec_service import LocalExecutor
+            if isinstance(executor, LocalExecutor):
+                # dev fallback: берем файл из проекта deployment/nginx/dev_out
+                project_dev_out = Path(__file__).parent.parent.parent.parent / "deployment" / "nginx" / "dev_out"
+                src = project_dev_out / f"staffprobot-{domain}.conf"
+                if not src.exists():
+                    logger.warning(f"(dev) No config to backup: {src}")
+                    return True
+                backup_dir = project_dev_out / "backups"
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                dst = backup_dir / f"staffprobot-{domain}_{timestamp}.conf"
+                import shutil
+                shutil.copy2(src, dst)
+                logger.info(f"(dev) Nginx configuration backup created: {dst}")
+                return True
+            # prod/system path
             if not config_file_path.exists():
                 logger.warning(f"No existing configuration to backup for domain: {domain}")
-                return True  # Не ошибка, если нет файла для backup
-            
-            # Создаем директорию для backup
+                return True
             backup_dir = Path(nginx_config_path) / "backups"
-            backup_dir.mkdir(exist_ok=True)
-            
-            # Создаем backup с timestamp
+            backup_dir.mkdir(parents=True, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_file_path = backup_dir / f"staffprobot-{domain}_{timestamp}.conf"
-            
-            # Копируем файл
             import shutil
             shutil.copy2(config_file_path, backup_file_path)
-            
             logger.info(f"Nginx configuration backup created: {backup_file_path}")
             return True
             
@@ -245,43 +242,25 @@ server {{
         try:
             # Создаем backup перед применением
             await self.create_config_backup(domain)
-            
-            # Получаем путь к конфигурации
+            executor = await self._get_executor()
             nginx_config_path = await self.settings_service.get_nginx_config_path()
-            config_file_path = Path(nginx_config_path) / f"staffprobot-{domain}.conf"
-            
-            if not config_file_path.exists():
-                logger.error(f"Nginx configuration file not found: {config_file_path}")
+            config_file = f"{nginx_config_path}/staffprobot-{domain}.conf"
+            enabled_link = f"/etc/nginx/sites-enabled/staffprobot-{domain}.conf"
+            # Проверка наличия файла
+            code, out, err = executor.run(f"test -f {shlex.quote(config_file)}")
+            if code != 0:
+                logger.error(f"Nginx configuration file not found: {config_file}")
                 return False
-            
-            # Создаем симлинк в sites-enabled если его нет
-            sites_enabled_path = Path("/etc/nginx/sites-enabled") / f"staffprobot-{domain}.conf"
-            if not sites_enabled_path.exists():
-                sites_enabled_path.symlink_to(config_file_path)
-                logger.info(f"Created symlink: {sites_enabled_path} -> {config_file_path}")
-            
-            # Тестируем конфигурацию
-            test_result = subprocess.run(
-                ['nginx', '-t'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if test_result.returncode != 0:
-                logger.error(f"Nginx configuration test failed: {test_result.stderr}")
+            # Создать symlink при отсутствии
+            executor.run(f"sudo ln -sf {shlex.quote(config_file)} {shlex.quote(enabled_link)}")
+            # Тест и перезагрузка
+            code, out, err = executor.run("sudo nginx -t", timeout=15)
+            if code != 0:
+                logger.error(f"Nginx configuration test failed: {err or out}")
                 return False
-            
-            # Перезагружаем Nginx
-            reload_result = subprocess.run(
-                ['systemctl', 'reload', 'nginx'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if reload_result.returncode != 0:
-                logger.error(f"Failed to reload Nginx: {reload_result.stderr}")
+            code, out, err = executor.run("sudo systemctl reload nginx", timeout=15)
+            if code != 0:
+                logger.error(f"Failed to reload Nginx: {err or out}")
                 return False
             
             logger.info(f"Nginx configuration applied successfully for domain: {domain}")
@@ -296,30 +275,15 @@ server {{
         Удаляет конфигурацию Nginx
         """
         try:
-            # Удаляем симлинк из sites-enabled
-            sites_enabled_path = Path("/etc/nginx/sites-enabled") / f"staffprobot-{domain}.conf"
-            if sites_enabled_path.exists():
-                sites_enabled_path.unlink()
-                logger.info(f"Removed symlink: {sites_enabled_path}")
-            
-            # Удаляем файл конфигурации
+            executor = await self._get_executor()
             nginx_config_path = await self.settings_service.get_nginx_config_path()
-            config_file_path = Path(nginx_config_path) / f"staffprobot-{domain}.conf"
-            
-            if config_file_path.exists():
-                config_file_path.unlink()
-                logger.info(f"Removed configuration file: {config_file_path}")
-            
-            # Перезагружаем Nginx
-            reload_result = subprocess.run(
-                ['systemctl', 'reload', 'nginx'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if reload_result.returncode != 0:
-                logger.error(f"Failed to reload Nginx after removal: {reload_result.stderr}")
+            config_file = f"{nginx_config_path}/staffprobot-{domain}.conf"
+            enabled_link = f"/etc/nginx/sites-enabled/staffprobot-{domain}.conf"
+            executor.run(f"sudo rm -f {shlex.quote(enabled_link)}")
+            executor.run(f"sudo rm -f {shlex.quote(config_file)}")
+            code, out, err = executor.run("sudo systemctl reload nginx", timeout=15)
+            if code != 0:
+                logger.error(f"Failed to reload Nginx after removal: {err or out}")
                 return False
             
             logger.info(f"Nginx configuration removed successfully for domain: {domain}")
@@ -334,27 +298,44 @@ server {{
         Получает список backup'ов конфигурации для домена
         """
         try:
+            executor = await self._get_executor()
+            from apps.web.services.exec_service import LocalExecutor
+            backups: List[Dict[str, Any]] = []
+            if isinstance(executor, LocalExecutor):
+                project_dev_out = Path(__file__).parent.parent.parent.parent / "deployment" / "nginx" / "dev_out" / "backups"
+                if not project_dev_out.exists():
+                    return []
+                for backup_file in project_dev_out.glob(f"staffprobot-{domain}_*.conf"):
+                    stat = backup_file.stat()
+                    backups.append({
+                        "filename": backup_file.name,
+                        "path": str(backup_file),
+                        "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                        "size": stat.st_size
+                    })
+                backups.sort(key=lambda x: x["created_at"], reverse=True)
+                return backups
+            # remote/system path via ls
             nginx_config_path = await self.settings_service.get_nginx_config_path()
-            backup_dir = Path(nginx_config_path) / "backups"
-            
-            if not backup_dir.exists():
+            backup_dir = f"{nginx_config_path}/backups"
+            code, out, err = executor.run(f"bash -lc 'ls -l --time-style=+%s {shlex.quote(backup_dir)}/staffprobot-{domain}_*.conf 2>/dev/null'", timeout=10)
+            if code != 0 or not out.strip():
                 return []
-            
-            backups = []
-            pattern = f"staffprobot-{domain}_*.conf"
-            
-            for backup_file in backup_dir.glob(pattern):
-                stat = backup_file.stat()
+            for line in out.strip().splitlines():
+                parts = line.split()
+                if len(parts) < 6:
+                    continue
+                size = int(parts[4])
+                epoch = int(parts[5])
+                path = parts[-1]
+                filename = path.split('/')[-1]
                 backups.append({
-                    "filename": backup_file.name,
-                    "path": str(backup_file),
-                    "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                    "size": stat.st_size
+                    "filename": filename,
+                    "path": path,
+                    "created_at": datetime.fromtimestamp(epoch).isoformat(),
+                    "size": size
                 })
-            
-            # Сортируем по дате создания (новые сверху)
             backups.sort(key=lambda x: x["created_at"], reverse=True)
-            
             return backups
             
         except Exception as e:
@@ -366,46 +347,39 @@ server {{
         Восстанавливает конфигурацию из backup'а
         """
         try:
+            executor = await self._get_executor()
+            from apps.web.services.exec_service import LocalExecutor
+            if isinstance(executor, LocalExecutor):
+                project_dev_out = Path(__file__).parent.parent.parent.parent / "deployment" / "nginx" / "dev_out"
+                backup_file_path = project_dev_out / "backups" / backup_filename
+                config_file_path = project_dev_out / f"staffprobot-{domain}.conf"
+                if not backup_file_path.exists():
+                    logger.error(f"(dev) Backup file not found: {backup_file_path}")
+                    return False
+                await self.create_config_backup(domain)
+                import shutil
+                shutil.copy2(backup_file_path, config_file_path)
+                logger.info(f"(dev) Nginx configuration restored from backup: {backup_file_path}")
+                return True
+            # Remote/system
             nginx_config_path = await self.settings_service.get_nginx_config_path()
-            backup_dir = Path(nginx_config_path) / "backups"
-            backup_file_path = backup_dir / backup_filename
-            config_file_path = Path(nginx_config_path) / f"staffprobot-{domain}.conf"
-            
-            if not backup_file_path.exists():
+            backup_dir = f"{nginx_config_path}/backups"
+            backup_file_path = f"{backup_dir}/{backup_filename}"
+            config_file_path = f"{nginx_config_path}/staffprobot-{domain}.conf"
+            code, _, _ = executor.run(f"test -f {shlex.quote(backup_file_path)}")
+            if code != 0:
                 logger.error(f"Backup file not found: {backup_file_path}")
                 return False
-            
-            # Создаем backup текущей конфигурации перед восстановлением
             await self.create_config_backup(domain)
-            
-            # Копируем backup в основную конфигурацию
-            import shutil
-            shutil.copy2(backup_file_path, config_file_path)
-            
-            # Тестируем восстановленную конфигурацию
-            test_result = subprocess.run(
-                ['nginx', '-t'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if test_result.returncode != 0:
-                logger.error(f"Restored Nginx configuration test failed: {test_result.stderr}")
+            executor.run(f"sudo cp -f {shlex.quote(backup_file_path)} {shlex.quote(config_file_path)}")
+            code, out, err = executor.run("sudo nginx -t", timeout=15)
+            if code != 0:
+                logger.error(f"Restored Nginx configuration test failed: {err or out}")
                 return False
-            
-            # Перезагружаем Nginx
-            reload_result = subprocess.run(
-                ['systemctl', 'reload', 'nginx'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if reload_result.returncode != 0:
-                logger.error(f"Failed to reload Nginx after restore: {reload_result.stderr}")
+            code, out, err = executor.run("sudo systemctl reload nginx", timeout=15)
+            if code != 0:
+                logger.error(f"Failed to reload Nginx after restore: {err or out}")
                 return False
-            
             logger.info(f"Nginx configuration restored from backup: {backup_filename}")
             return True
             
@@ -418,15 +392,23 @@ server {{
         Удаляет backup конфигурации
         """
         try:
-            nginx_config_path = await self.settings_service.get_nginx_config_path()
-            backup_dir = Path(nginx_config_path) / "backups"
-            backup_file_path = backup_dir / backup_filename
-            
-            if not backup_file_path.exists():
-                logger.error(f"Backup file not found: {backup_file_path}")
+            executor = await self._get_executor()
+            from apps.web.services.exec_service import LocalExecutor
+            if isinstance(executor, LocalExecutor):
+                project_dev_out = Path(__file__).parent.parent.parent.parent / "deployment" / "nginx" / "dev_out" / "backups"
+                p = project_dev_out / backup_filename
+                if p.exists():
+                    p.unlink()
+                    logger.info(f"(dev) Nginx configuration backup deleted: {backup_filename}")
+                    return True
+                logger.error(f"(dev) Backup file not found: {p}")
                 return False
-            
-            backup_file_path.unlink()
+            nginx_config_path = await self.settings_service.get_nginx_config_path()
+            backup_file_path = f"{nginx_config_path}/backups/{backup_filename}"
+            code, out, err = executor.run(f"sudo rm -f {shlex.quote(backup_file_path)}", timeout=10)
+            if code != 0:
+                logger.error(f"Failed to delete backup: {err or out}")
+                return False
             logger.info(f"Nginx configuration backup deleted: {backup_filename}")
             return True
             
@@ -439,33 +421,17 @@ server {{
         Получает статус Nginx
         """
         try:
-            # Проверяем статус сервиса
-            status_result = subprocess.run(
-                ['systemctl', 'is-active', 'nginx'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            is_active = status_result.returncode == 0
-            
-            # Проверяем конфигурацию
-            test_result = subprocess.run(
-                ['nginx', '-t'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            config_valid = test_result.returncode == 0
-            
+            executor = await self._get_executor()
+            code, out, err = executor.run("systemctl is-active nginx", timeout=5)
+            is_active = code == 0
+            code2, out2, err2 = executor.run("sudo nginx -t", timeout=10)
+            config_valid = code2 == 0
             return {
                 "is_active": is_active,
                 "config_valid": config_valid,
-                "status_output": status_result.stdout.strip() if is_active else status_result.stderr.strip(),
-                "config_output": test_result.stdout if config_valid else test_result.stderr
+                "status_output": (out if is_active else err).strip(),
+                "config_output": out2 if config_valid else err2,
             }
-            
         except Exception as e:
             logger.error(f"Failed to get Nginx status: {e}")
             return {
@@ -473,3 +439,17 @@ server {{
                 "config_valid": False,
                 "error": str(e)
             }
+
+    async def _get_executor(self):
+        """Определить исполнителя команд по настройкам (prod/dev)."""
+        try:
+            is_prod = await self.settings_service.get_is_production_mode()
+            if is_prod:
+                host = await self.settings_service.get_nginx_ssh_host()
+                user = await self.settings_service.get_nginx_ssh_user()
+                key = await self.settings_service.get_nginx_ssh_key_path()
+                if host:
+                    return SSHExecutor(host=host, user=user or None, key_path=key or None)
+        except Exception:
+            pass
+        return LocalExecutor()

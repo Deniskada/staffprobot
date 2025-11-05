@@ -32,6 +32,20 @@ class HTTPSUpdateRequest(BaseModel):
     use_https: bool
 
 
+class NginxGenerateRequest(BaseModel):
+    domain: str
+    use_https: bool = False
+
+
+class NginxValidateRequest(BaseModel):
+    domain: str
+    use_https: bool = False
+
+
+class NginxApplyRequest(BaseModel):
+    domain: str
+
+
 @router.get("/domain")
 async def get_domain(
     request: Request,
@@ -171,15 +185,14 @@ async def preview_nginx_config(
 
 @router.post("/nginx/generate")
 async def generate_nginx_config(
-    request: Request,
+    request: NginxGenerateRequest,
     current_user: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Генерация и сохранение конфигурации Nginx."""
     try:
-        data = await request.json()
-        domain = data.get("domain")
-        use_https = data.get("use_https", False)
+        domain = request.domain
+        use_https = request.use_https
         
         if not domain:
             raise HTTPException(status_code=400, detail="Домен обязателен")
@@ -196,15 +209,14 @@ async def generate_nginx_config(
 
 @router.post("/nginx/validate")
 async def validate_nginx_config(
-    domain: str,
-    use_https: bool,
+    request: NginxValidateRequest,
     current_user: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Валидация конфигурации Nginx."""
     try:
         nginx_service = NginxService(db)
-        validation_result = await nginx_service.validate_nginx_config(domain, use_https)
+        validation_result = await nginx_service.validate_nginx_config(request.domain, request.use_https)
         return validation_result
     except Exception as e:
         logger.error(f"Error validating Nginx config: {e}")
@@ -213,16 +225,16 @@ async def validate_nginx_config(
 
 @router.post("/nginx/apply")
 async def apply_nginx_config(
-    domain: str,
+    request: NginxApplyRequest,
     current_user: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Применение конфигурации Nginx."""
     try:
         nginx_service = NginxService(db)
-        success = await nginx_service.apply_nginx_config(domain)
+        success = await nginx_service.apply_nginx_config(request.domain)
         if success:
-            return {"message": "Конфигурация Nginx применена успешно", "domain": domain}
+            return {"message": "Конфигурация Nginx применена успешно", "domain": request.domain}
         raise HTTPException(status_code=500, detail="Ошибка применения конфигурации Nginx")
     except Exception as e:
         logger.error(f"Error applying Nginx config: {e}")
@@ -242,6 +254,67 @@ async def get_nginx_status(
     except Exception as e:
         logger.error(f"Error getting Nginx status: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка получения статуса: {str(e)}")
+
+
+# === Nginx live config preview ===
+@router.get("/nginx/preview/live")
+async def preview_live_nginx_config(
+    domain: str,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Чтение актуально используемой конфигурации с хоста (read-only)."""
+    try:
+        nginx_service = NginxService(db)
+        settings_service = SystemSettingsService(db)
+        path = await settings_service.get_nginx_config_path()
+        # Конфиг может лежать в sites-available
+        config_file = f"{path}/staffprobot-{domain}.conf"
+        from apps.web.services.exec_service import LocalExecutor, SSHExecutor
+        # Используем executor из сервиса
+        executor = await nginx_service._get_executor()  # noqa
+        code, out, err = executor.run(f"sudo cat {config_file} 2>/dev/null || cat {config_file} 2>/dev/null", timeout=5)
+        if code != 0:
+            # Попробуем из sites-enabled по имени
+            code, out, err = executor.run(f"sudo cat /etc/nginx/sites-enabled/staffprobot-{domain}.conf 2>/dev/null || true", timeout=5)
+        return {"live": out}
+    except Exception as e:
+        logger.error(f"Error reading live Nginx config: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка чтения живой конфигурации: {str(e)}")
+
+
+# === Nginx exec mode & SSH settings ===
+class NginxExecSettingsRequest(BaseModel):
+    is_production: bool
+    ssh_host: str | None = None
+    ssh_user: str | None = None
+    ssh_key_path: str | None = None
+
+
+@router.get("/nginx/exec-settings")
+async def get_nginx_exec_settings(
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    svc = SystemSettingsService(db)
+    return {
+        "is_production": await svc.get_is_production_mode(),
+        "ssh_host": await svc.get_nginx_ssh_host(),
+        "ssh_user": await svc.get_nginx_ssh_user(),
+        "ssh_key_path": await svc.get_nginx_ssh_key_path(),
+    }
+
+
+@router.post("/nginx/exec-settings")
+async def set_nginx_exec_settings(
+    request: NginxExecSettingsRequest,
+    current_user: dict = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    svc = SystemSettingsService(db)
+    ok_mode = await svc.set_is_production_mode(request.is_production, str(current_user.get("id")))
+    ok_ssh = await svc.set_nginx_ssh_settings(request.ssh_host or "", request.ssh_user or "", request.ssh_key_path or "", str(current_user.get("id")))
+    return {"success": ok_mode and ok_ssh}
 
 
 @router.delete("/nginx/remove")
