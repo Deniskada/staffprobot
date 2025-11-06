@@ -100,6 +100,8 @@ async def manager_incident_create(
     object_id = form.get("object_id")
     employee_id = form.get("employee_id")
     custom_number = (form.get("custom_number") or "").strip()
+    custom_date_str = (form.get("custom_date") or "").strip()
+    damage_amount_str = (form.get("damage_amount") or "").strip()
     try:
         object_id_int = int(object_id) if object_id else None
     except ValueError:
@@ -115,18 +117,47 @@ async def manager_incident_create(
         accessible_ids = [o.id for o in accessible_objects]
         if not object_id_int or object_id_int not in accessible_ids:
             raise HTTPException(status_code=400, detail="Некорректный объект")
-        from domain.entities.incident import Incident
-        from sqlalchemy import insert
-        values = {
-            "category": category or None,
-            "severity": severity or "medium",
-            "status": "new",
-            "object_id": object_id_int,
-            "employee_id": employee_id_int,
-            "notes": notes or None,
-            "custom_number": custom_number or None
-        }
-        await db.execute(insert(Incident).values(**values))
+        
+        # Получаем owner_id из объекта
+        from sqlalchemy import select
+        from domain.entities.object import Object
+        obj_res = await db.execute(select(Object).where(Object.id == object_id_int))
+        obj = obj_res.scalar_one_or_none()
+        if not obj or not getattr(obj, 'owner_id', None):
+            raise HTTPException(status_code=400, detail="Объект не найден или не имеет владельца")
+        owner_id = obj.owner_id
+        
+        # Парсим дату и сумму ущерба
+        from datetime import datetime as dt
+        from decimal import Decimal, InvalidOperation
+        parsed_date = None
+        if custom_date_str:
+            try:
+                parsed_date = dt.strptime(custom_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                parsed_date = None
+        parsed_damage = None
+        if damage_amount_str:
+            try:
+                parsed_damage = Decimal(damage_amount_str)
+            except InvalidOperation:
+                parsed_damage = None
+        
+        # Используем IncidentService для создания инцидента с автоматическим созданием корректировки
+        from shared.services.incident_service import IncidentService
+        incident_service = IncidentService(db)
+        await incident_service.create_incident(
+            owner_id=owner_id,
+            category=category,
+            severity=severity,
+            object_id=object_id_int,
+            employee_id=employee_id_int,
+            notes=notes or None,
+            created_by=user_id,
+            custom_number=custom_number or None,
+            custom_date=parsed_date,
+            damage_amount=parsed_damage
+        )
         await db.commit()
     return RedirectResponse(url="/manager/incidents", status_code=303)
 
