@@ -234,6 +234,7 @@ async def manager_incident_categories(
         manager_context = await get_manager_context(user_id, db)
         return templates.TemplateResponse("manager/incidents/categories.html", {
             "request": request,
+            "current_user": current_user,
             "categories_by_owner": categories_by_owner,
             **manager_context
         })
@@ -330,6 +331,7 @@ async def manager_incident_edit_form(
         manager_context = await get_manager_context(user_id, db)
         return templates.TemplateResponse("manager/incidents/edit.html", {
             "request": request,
+            "current_user": current_user,
             "incident": incident,
             "objects": accessible_objects,
             "employees": employees,
