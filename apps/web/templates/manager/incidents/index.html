@@ -34,28 +34,69 @@
   <table class="table table-sm table-hover">
     <thead>
       <tr>
-        <th>#</th>
+        <th>Номер</th>
         <th>Дата</th>
         <th>Объект</th>
         <th>Сотрудник</th>
         <th>Категория</th>
         <th>Статус</th>
-        <th></th>
+        <th>Ущерб</th>
+        <th>Дата удержания</th>
+        <th>Действия</th>
       </tr>
     </thead>
     <tbody>
       {% for i in incidents %}
-      <tr>
-        <td>{{ i.id }}</td>
-        <td>{{ i.created_at.strftime('%d.%m.%Y %H:%M') if i.created_at else '—' }}</td>
+      <tr class="{{ 'table-danger' if i.severity == 'critical' else 'table-warning' if i.severity == 'high' else '' }}">
+        <td>{{ i.custom_number or i.id }}</td>
+        <td>{{ i.custom_date.strftime('%d.%m.%Y') if i.custom_date else (i.created_at.strftime('%d.%m.%Y') if i.created_at else '—') }}</td>
         <td>{{ i.object.name if i.object else '—' }}</td>
         <td>{% if i.employee %}{{ (i.employee.last_name or '') }} {{ (i.employee.first_name or '') }}{% else %}—{% endif %}</td>
         <td>{{ i.category or '—' }}</td>
-        <td>{{ i.status or '—' }}</td>
-        <td><a href="/manager/incidents/{{ i.id }}" class="btn btn-sm btn-outline-primary">Открыть</a></td>
+        <td>
+          {% if i.status == 'new' %}
+            <span class="badge bg-danger">Новый</span>
+          {% elif i.status == 'in_review' %}
+            <span class="badge bg-warning">На рассмотрении</span>
+          {% elif i.status == 'resolved' %}
+            <span class="badge bg-success">Решён</span>
+          {% elif i.status == 'rejected' %}
+            <span class="badge bg-secondary">Отклонён</span>
+          {% else %}
+            {{ i.status or '—' }}
+          {% endif %}
+        </td>
+        <td>{{ '{:,.2f}'.format(i.damage_amount).replace(',', ' ') if i.damage_amount is not none else '—' }}</td>
+        <td>{{ i.custom_date.strftime('%d.%m.%Y') if i.custom_date else '—' }}</td>
+        <td>
+          <a href="/manager/incidents/{{ i.id }}/edit" class="btn btn-sm btn-outline-primary me-1" title="Редактировать">
+            <i class="bi bi-pencil"></i>
+          </a>
+          {% if i.status == 'new' %}
+            <form method="post" action="/manager/incidents/{{ i.id }}/status" class="d-inline">
+              <input type="hidden" name="status" value="in_review">
+              <button type="submit" class="btn btn-sm btn-warning" title="Взять на рассмотрение">
+                <i class="fas fa-eye"></i>
+              </button>
+            </form>
+          {% elif i.status == 'in_review' %}
+            <form method="post" action="/manager/incidents/{{ i.id }}/status" class="d-inline">
+              <input type="hidden" name="status" value="resolved">
+              <button type="submit" class="btn btn-sm btn-success" title="Решить">
+                <i class="fas fa-check"></i>
+              </button>
+            </form>
+            <form method="post" action="/manager/incidents/{{ i.id }}/status" class="d-inline">
+              <input type="hidden" name="status" value="rejected">
+              <button type="submit" class="btn btn-sm btn-secondary" title="Отклонить">
+                <i class="fas fa-times"></i>
+              </button>
+            </form>
+          {% endif %}
+        </td>
       </tr>
       {% else %}
-      <tr><td colspan="7" class="text-center text-muted">Инциденты не найдены</td></tr>
+      <tr><td colspan="9" class="text-center text-muted">Инциденты не найдены</td></tr>
       {% endfor %}
     </tbody>
   </table>
