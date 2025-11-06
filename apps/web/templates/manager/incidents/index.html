@@ -34,14 +34,39 @@
   <table class="table table-sm table-hover">
     <thead>
       <tr>
-        <th>Номер</th>
-        <th>Дата</th>
-        <th>Объект</th>
-        <th>Сотрудник</th>
-        <th>Категория</th>
-        <th>Статус</th>
-        <th>Ущерб</th>
-        <th>Дата удержания</th>
+        {% set toggle = 'desc' if order == 'asc' else 'asc' %}
+        <th>
+          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=number&order={{ 'asc' if sort != 'number' else toggle }}&page=1&per_page={{ pagination.per_page }}">Номер</a>
+          {% if sort == 'number' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
+        </th>
+        <th>
+          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=date&order={{ 'asc' if sort != 'date' else toggle }}&page=1&per_page={{ pagination.per_page }}">Дата</a>
+          {% if sort == 'date' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
+        </th>
+        <th>
+          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=object&order={{ 'asc' if sort != 'object' else toggle }}&page=1&per_page={{ pagination.per_page }}">Объект</a>
+          {% if sort == 'object' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
+        </th>
+        <th>
+          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=employee&order={{ 'asc' if sort != 'employee' else toggle }}&page=1&per_page={{ pagination.per_page }}">Сотрудник</a>
+          {% if sort == 'employee' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
+        </th>
+        <th>
+          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=category&order={{ 'asc' if sort != 'category' else toggle }}&page=1&per_page={{ pagination.per_page }}">Категория</a>
+          {% if sort == 'category' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
+        </th>
+        <th>
+          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=status&order={{ 'asc' if sort != 'status' else toggle }}&page=1&per_page={{ pagination.per_page }}">Статус</a>
+          {% if sort == 'status' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
+        </th>
+        <th>
+          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=damage&order={{ 'asc' if sort != 'damage' else toggle }}&page=1&per_page={{ pagination.per_page }}">Ущерб</a>
+          {% if sort == 'damage' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
+        </th>
+        <th>
+          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=retention_date&order={{ 'asc' if sort != 'retention_date' else toggle }}&page=1&per_page={{ pagination.per_page }}">Дата удержания</a>
+          {% if sort == 'retention_date' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
+        </th>
         <th>Действия</th>
       </tr>
     </thead>
@@ -100,6 +125,32 @@
       {% endfor %}
     </tbody>
   </table>
+  {% if pagination.total > 0 %}
+  <div class="d-flex justify-content-between align-items-center mt-3">
+    <div>
+      На странице:
+      <select class="form-select d-inline-block w-auto" onchange="location.href='?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page=1&per_page='+this.value">
+        <option value="25" {% if pagination.per_page == 25 %}selected{% endif %}>25</option>
+        <option value="50" {% if pagination.per_page == 50 %}selected{% endif %}>50</option>
+        <option value="100" {% if pagination.per_page == 100 %}selected{% endif %}>100</option>
+      </select>
+    </div>
+    <div class="pagination d-flex align-items-center gap-2">
+      <a class="btn btn-outline-secondary btn-sm {% if pagination.page <= 1 %}disabled{% endif %}"
+         href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page=1&per_page={{ pagination.per_page }}">Первая</a>
+      <a class="btn btn-outline-secondary btn-sm {% if pagination.page <= 1 %}disabled{% endif %}"
+         href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page={{ pagination.page - 1 }}&per_page={{ pagination.per_page }}">Назад</a>
+      <span>{{ pagination.page }} / {{ pagination.pages or 1 }}</span>
+      <a class="btn btn-outline-secondary btn-sm {% if pagination.page >= pagination.pages %}disabled{% endif %}"
+         href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page={{ pagination.page + 1 }}&per_page={{ pagination.per_page }}">Вперёд</a>
+      <a class="btn btn-outline-secondary btn-sm {% if pagination.page >= pagination.pages %}disabled{% endif %}"
+         href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page={{ pagination.pages }}&per_page={{ pagination.per_page }}">Последняя</a>
+    </div>
+    <div>
+      {{ pagination.start }}-{{ pagination.end }} из {{ pagination.total }}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
 

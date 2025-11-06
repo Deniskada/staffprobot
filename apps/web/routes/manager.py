@@ -37,6 +37,10 @@ async def manager_incidents_index(
     request: Request,
     status: Optional[str] = Query(None),
     object_id: Optional[str] = Query(None),
+    sort: Optional[str] = Query(None),
+    order: Optional[str] = Query("desc"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=10, le=200),
     current_user: dict = Depends(require_manager_or_owner)
 ):
     if isinstance(current_user, RedirectResponse):
@@ -78,15 +82,71 @@ async def manager_incidents_index(
         ).order_by(Incident.created_at.desc()).limit(200)
         result = await db.execute(query)
         incidents = result.scalars().all()
+
+        # Сортировка (в памяти)
+        def _get_employee_name(inc):
+            if inc.employee:
+                ln = (inc.employee.last_name or "").strip()
+                fn = (inc.employee.first_name or "").strip()
+                return f"{ln} {fn}".strip().lower()
+            return ""
+
+        sort_key = (sort or "date").lower()
+        reverse = (order or "desc").lower() == "desc"
+        def _key(inc):
+            if sort_key in ("number", "id"):
+                # Номер: custom_number (как строка) с фолбэком на id
+                return (inc.custom_number or f"{inc.id}")
+            if sort_key == "date":
+                # Дата: custom_date или created_at
+                return inc.custom_date or inc.created_at
+            if sort_key == "object":
+                return (inc.object.name if inc.object else "").lower()
+            if sort_key == "employee":
+                return _get_employee_name(inc)
+            if sort_key == "category":
+                return (inc.category or "").lower()
+            if sort_key == "status":
+                return (inc.status or "").lower()
+            if sort_key == "damage":
+                return inc.damage_amount or 0
+            if sort_key in ("retention_date", "custom_date"):
+                return inc.custom_date or None
+            # По умолчанию дата
+            return inc.custom_date or inc.created_at
+
+        try:
+            incidents.sort(key=_key, reverse=reverse)
+        except Exception:
+            pass
+
+        # Пагинация
+        total = len(incidents)
+        pages = (total + per_page - 1) // per_page if total > 0 else 0
+        if page > (pages or 1):
+            page = pages or 1
+        start = (page - 1) * per_page
+        end = start + per_page
+        incidents_page = incidents[start:end]
         # Получаем общий контекст для меню
         manager_context = await get_manager_context(user_id, db)
         return templates.TemplateResponse("manager/incidents/index.html", {
             "request": request,
             "current_user": current_user,
-            "incidents": incidents,
+            "incidents": incidents_page,
             "objects": accessible_objects,
             "status_filter": status,
             "selected_object_id": object_id,
+            "sort": sort_key,
+            "order": "desc" if reverse else "asc",
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "pages": pages,
+                "total": total,
+                "start": start + 1 if total else 0,
+                "end": min(end, total)
+            },
             **manager_context
         })
 
