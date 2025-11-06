@@ -2,19 +2,31 @@
 {% block title %}Задачи - Шаблоны{% endblock %}
 {% block manager_content %}
 <div class="container mt-4">
-  <div class="d-flex justify-content-between mb-3">
-    <div>
+  <div class="d-flex justify-content-between mb-3 align-items-end">
+    <div class="me-3">
       <h2>Библиотека шаблонов задач</h2>
       <p class="text-muted">Шаблоны задач на ваших объектах.</p>
       <div class="form-check form-switch mt-2">
         <input class="form-check-input" type="checkbox" id="showInactiveToggle" 
                {{ 'checked' if show_inactive else '' }}
-               onchange="window.location.href='/manager/tasks/templates?show_inactive=' + (this.checked ? '1' : '0')">
+               onchange="window.location.href='/manager/tasks/templates?show_inactive=' + (this.checked ? '1' : '0'){% if selected_object_id %} + '&object_id={{ selected_object_id }}'{% endif %}">
         <label class="form-check-label text-muted" for="showInactiveToggle">
           Показывать неактивные шаблоны
         </label>
       </div>
     </div>
+    <form method="get" class="d-flex gap-2">
+      <div>
+        <label for="object_id" class="form-label">Объект</label>
+        <select name="object_id" id="object_id" class="form-select" onchange="this.form.submit()">
+          <option value="">Все объекты</option>
+          {% for obj in objects %}
+          <option value="{{ obj.id }}" {% if selected_object_id == obj.id %}selected{% endif %}>{{ obj.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <input type="hidden" name="show_inactive" value="{{ show_inactive or 0 }}">
+    </form>
   </div>
   
   <table class="table table-sm table-hover">

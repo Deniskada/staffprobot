@@ -2,9 +2,24 @@
 {% block title %}Задачи - Выполнение{% endblock %}
 {% block manager_content %}
 <div class="container mt-4">
-  <h2>Выполнение задач</h2>
-  <p class="text-muted">Задачи, выполненные сотрудниками на ваших объектах. В разработке.</p>
-  <table class="table table-sm">
+  <div class="d-flex justify-content-between align-items-end mb-3">
+    <div>
+      <h2>Выполнение задач</h2>
+      <p class="text-muted">Отображаются записи по доступным объектам.</p>
+    </div>
+    <form method="get" class="d-flex gap-2">
+      <div>
+        <label for="object_id" class="form-label">Объект</label>
+        <select name="object_id" id="object_id" class="form-select" onchange="this.form.submit()">
+          <option value="">Все объекты</option>
+          {% for obj in objects %}
+          <option value="{{ obj.id }}" {% if selected_object_id == obj.id %}selected{% endif %}>{{ obj.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+  <table class="table table-sm table-hover">
     <thead>
       <tr><th>ID</th><th>План</th><th>Смена</th><th>Сотрудник</th><th>Выполнено</th><th>Дата</th></tr>
     </thead>
@@ -18,6 +33,8 @@
         <td>{{ 'Да' if e.is_completed else 'Нет' }}</td>
         <td>{{ e.created_at.strftime('%d.%m.%Y %H:%M') if e.created_at else '—' }}</td>
       </tr>
+    {% else %}
+      <tr><td colspan="6" class="text-center text-muted">Записей не найдено</td></tr>
     {% endfor %}
     </tbody>
   </table>

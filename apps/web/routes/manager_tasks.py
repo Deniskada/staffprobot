@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.web.jinja import templates
@@ -10,6 +10,7 @@ from apps.web.dependencies import get_current_user_dependency, require_role
 from core.database.session import get_db_session
 from domain.entities.user import User
 from shared.services.task_service import TaskService
+from shared.services.manager_permission_service import ManagerPermissionService
 from sqlalchemy import select
 
 
@@ -34,6 +35,7 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession) -> 
 async def manager_tasks_templates(
     request: Request,
     show_inactive: int = 0,
+    object_id: str | None = Query(None),
     current_user: User = Depends(get_current_user_dependency()),
     _: User = Depends(require_role(["manager", "owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
@@ -54,12 +56,36 @@ async def manager_tasks_templates(
         owner_id=owner_id,
         active_only=active_only
     )
+    # Доступные объекты для менеджера
+    perm_service = ManagerPermissionService(session)
+    accessible_objects = await perm_service.get_user_accessible_objects(user_id)
+    selected_object_id = None
+    if object_id is not None and object_id != "":
+        try:
+            selected_object_id = int(object_id)
+        except ValueError:
+            selected_object_id = None
+    # Серверная фильтрация по объекту (пытаемся определить поле связи)
+    if selected_object_id:
+        filtered = []
+        for t in templates_list:
+            oid = getattr(t, 'object_id', None)
+            if oid == selected_object_id:
+                filtered.append(t)
+                continue
+            # Списки применимости
+            obj_ids = getattr(t, 'object_ids', None) or getattr(t, 'applicable_object_ids', None)
+            if obj_ids and selected_object_id in list(obj_ids):
+                filtered.append(t)
+        templates_list = filtered
     return templates.TemplateResponse(
         "manager/tasks/templates.html",
         {
             "request": request, 
             "templates_list": templates_list,
-            "show_inactive": show_inactive
+            "show_inactive": show_inactive,
+            "objects": accessible_objects,
+            "selected_object_id": selected_object_id
         }
     )
 
@@ -67,6 +93,7 @@ async def manager_tasks_templates(
 @router.get("/manager/tasks/entries")
 async def manager_tasks_entries(
     request: Request,
+    object_id: str | None = Query(None),
     current_user: User = Depends(get_current_user_dependency()),
     _: User = Depends(require_role(["manager", "owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
@@ -83,9 +110,26 @@ async def manager_tasks_entries(
         owner_id=owner_id,
         limit=100
     )
+    # Доступные объекты и фильтр
+    perm_service = ManagerPermissionService(session)
+    accessible_objects = await perm_service.get_user_accessible_objects(user_id)
+    selected_object_id = None
+    if object_id is not None and object_id != "":
+        try:
+            selected_object_id = int(object_id)
+        except ValueError:
+            selected_object_id = None
+    if selected_object_id:
+        def extract_object_id(e):
+            oid = getattr(e, 'object_id', None)
+            if oid:
+                return oid
+            obj = getattr(e, 'object', None)
+            return getattr(obj, 'id', None)
+        entries = [e for e in entries if extract_object_id(e) == selected_object_id]
     return templates.TemplateResponse(
         "manager/tasks/entries.html",
-        {"request": request, "entries": entries}
+        {"request": request, "entries": entries, "objects": accessible_objects, "selected_object_id": selected_object_id}
     )
 
 
