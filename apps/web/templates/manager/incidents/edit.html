@@ -16,32 +16,40 @@
       </div>
       <div class="col-md-4">
         <label class="form-label">Объект</label>
-        <select name="object_id" class="form-select">
+        <select name="object_id" id="incidentObject" class="form-select" required>
+          <option value="">Выберите объект</option>
           {% for obj in objects %}
           <option value="{{ obj.id }}" {% if incident.object and incident.object.id == obj.id %}selected{% endif %}>{{ obj.name }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="col-md-4">
-        <label class="form-label">Сотрудник</label>
-        <select name="employee_id" class="form-select">
-          <option value="">Не указан</option>
-          {% for emp in employees %}
-          <option value="{{ emp.id }}" {% if incident.employee and incident.employee.id == emp.id %}selected{% endif %}>
-            {{ (emp.last_name or '') }} {{ (emp.first_name or '') }} (ID: {{ emp.id }})
-          </option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-4">
         <label class="form-label">Категория</label>
-        <select name="category" class="form-select">
+        <select name="category" id="incidentCategory" class="form-select" {% if not incident.object %}disabled{% endif %}>
+          <option value="">{% if not incident.object %}Сначала выберите объект{% else %}Выберите категорию{% endif %}</option>
           {% if categories %}
             {% for c in categories %}
             <option value="{{ c.name }}" {% if incident.category == c.name %}selected{% endif %}>{{ c.name }}</option>
             {% endfor %}
-          {% else %}
-            <option value="{{ incident.category or '' }}" selected>{{ incident.category or 'Без категории' }}</option>
+          {% elif incident.category %}
+            <option value="{{ incident.category }}" selected>{{ incident.category }}</option>
+          {% endif %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Сотрудник</label>
+        <select name="employee_id" id="incidentEmployee" class="form-select" {% if not incident.object %}disabled{% endif %}>
+          <option value="">{% if not incident.object %}Сначала выберите объект{% else %}Выберите сотрудника{% endif %}</option>
+          {% if employees %}
+            {% for emp in employees %}
+            <option value="{{ emp.id }}" {% if incident.employee and incident.employee.id == emp.id %}selected{% endif %}>
+              {{ (emp.last_name or '') }} {{ (emp.first_name or '') }}
+            </option>
+            {% endfor %}
+          {% elif incident.employee %}
+            <option value="{{ incident.employee.id }}" selected>
+              {{ (incident.employee.last_name or '') }} {{ (incident.employee.first_name or '') }}
+            </option>
           {% endif %}
         </select>
       </div>
@@ -108,6 +116,122 @@
     </table>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const objectSelect = document.getElementById('incidentObject');
+  const categorySelect = document.getElementById('incidentCategory');
+  const employeeSelect = document.getElementById('incidentEmployee');
+
+  if (!objectSelect || !categorySelect || !employeeSelect) {
+    console.error('Не найдены элементы формы');
+    return;
+  }
+
+  // Сохраняем текущие значения для предзаполнения
+  const currentCategory = '{{ incident.category or '' }}';
+  const currentEmployeeId = {{ incident.employee.id if incident.employee else 'null' }};
+  const currentObjectId = {{ incident.object.id if incident.object else 'null' }};
+
+  async function loadCategories(objectId) {
+    categorySelect.innerHTML = '<option value="">Загрузка...</option>';
+    categorySelect.disabled = true;
+    try {
+      const resp = await fetch(`/manager/incidents/api/categories?object_id=${encodeURIComponent(objectId)}`);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      categorySelect.innerHTML = '<option value="">Выберите категорию</option>';
+      if (data.categories && data.categories.length > 0) {
+        data.categories.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.name;
+          opt.textContent = c.name;
+          if (c.name === currentCategory) {
+            opt.selected = true;
+          }
+          categorySelect.appendChild(opt);
+        });
+      } else if (currentCategory) {
+        const opt = document.createElement('option');
+        opt.value = currentCategory;
+        opt.textContent = currentCategory;
+        opt.selected = true;
+        categorySelect.appendChild(opt);
+      }
+      categorySelect.disabled = false;
+    } catch (e) {
+      console.error('Ошибка загрузки категорий:', e);
+      categorySelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+      categorySelect.disabled = true;
+    }
+  }
+
+  async function loadEmployees(objectId) {
+    employeeSelect.innerHTML = '<option value="">Загрузка...</option>';
+    employeeSelect.disabled = true;
+    try {
+      const resp = await fetch(`/manager/api/employees/for-object/${encodeURIComponent(objectId)}`);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const list = await resp.json();
+      employeeSelect.innerHTML = '<option value="">Выберите сотрудника</option>';
+      if (list && list.length > 0) {
+        list.forEach(e => {
+          const fio = `${(e.name||'').trim()}`;
+          const opt = document.createElement('option');
+          opt.value = e.id;
+          opt.textContent = fio;
+          if (e.id === currentEmployeeId) {
+            opt.selected = true;
+          }
+          employeeSelect.appendChild(opt);
+        });
+      } else if (currentEmployeeId) {
+        // Если сотрудник не найден в списке, но был выбран ранее, оставляем его
+        const currentEmployeeName = '{{ (incident.employee.last_name or "") }} {{ (incident.employee.first_name or "") }}'.trim();
+        if (currentEmployeeName) {
+          const opt = document.createElement('option');
+          opt.value = currentEmployeeId;
+          opt.textContent = currentEmployeeName;
+          opt.selected = true;
+          employeeSelect.appendChild(opt);
+        }
+      }
+      employeeSelect.disabled = false;
+    } catch (e) {
+      console.error('Ошибка загрузки сотрудников:', e);
+      employeeSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+      employeeSelect.disabled = true;
+    }
+  }
+
+  // Обработчик изменения объекта
+  objectSelect.addEventListener('change', function() {
+    const oid = this.value;
+    if (!oid) {
+      categorySelect.innerHTML = '<option value="">Сначала выберите объект</option>';
+      categorySelect.disabled = true;
+      employeeSelect.innerHTML = '<option value="">Сначала выберите объект</option>';
+      employeeSelect.disabled = true;
+      return;
+    }
+    loadCategories(oid);
+    loadEmployees(oid);
+  });
+
+  // При загрузке страницы, если объект уже выбран, загружаем категории и сотрудников
+  if (objectSelect.value) {
+    // Небольшая задержка, чтобы убедиться, что элементы готовы
+    setTimeout(() => {
+      loadCategories(objectSelect.value);
+      loadEmployees(objectSelect.value);
+    }, 100);
+  }
+});
+</script>
 {% endblock %}
 
 
