@@ -72,18 +72,6 @@ async def manager_incidents_index(
         return templates.TemplateResponse("manager/incidents/index.html", {"request": request, "current_user": current_user, "incidents": incidents, "objects": accessible_objects, "status_filter": status, "selected_object_id": object_id})
 
 
-@router.get("/incidents/{incident_id}", response_class=HTMLResponse)
-async def manager_incident_detail(
-    request: Request,
-    incident_id: int,
-    current_user: dict = Depends(require_manager_or_owner)
-):
-    # Требование: сразу открывать форму редактирования
-    if isinstance(current_user, RedirectResponse):
-        return current_user
-    return RedirectResponse(url=f"/manager/incidents/{incident_id}/edit", status_code=302)
-
-
 @router.get("/incidents/create", response_class=HTMLResponse)
 async def manager_incident_create_form(
     request: Request,
@@ -141,6 +129,71 @@ async def manager_incident_create(
         await db.execute(insert(Incident).values(**values))
         await db.commit()
     return RedirectResponse(url="/manager/incidents", status_code=303)
+
+
+@router.get("/incidents/categories", response_class=HTMLResponse)
+async def manager_incident_categories(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    async with get_async_session() as db:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        # Получаем доступные объекты и owner_ids
+        perm = ManagerPermissionService(db)
+        accessible_objects = await perm.get_user_accessible_objects(user_id)
+        owner_ids = sorted({getattr(o, 'owner_id', None) for o in accessible_objects if getattr(o, 'owner_id', None) is not None})
+        categories_by_owner = {}
+        cat_service = IncidentCategoryService(db)
+        for oid in owner_ids:
+            categories_by_owner[oid] = await cat_service.list_categories(oid)
+        return templates.TemplateResponse("manager/incidents/categories.html", {"request": request, "categories_by_owner": categories_by_owner})
+
+
+@router.post("/incidents/categories")
+async def manager_incident_categories_save(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    owner_id = form.get("owner_id")
+    category_id = form.get("category_id")
+    action = (form.get("action") or "save").strip()
+    if not name and action == "save":
+        raise HTTPException(status_code=400, detail="Название обязательно")
+    try:
+        owner_id_int = int(owner_id) if owner_id else None
+    except ValueError:
+        owner_id_int = None
+    try:
+        category_id_int = int(category_id) if category_id else None
+    except ValueError:
+        category_id_int = None
+    async with get_async_session() as db:
+        cat_service = IncidentCategoryService(db)
+        if action == "delete" and category_id_int:
+            await cat_service.deactivate(category_id_int)
+        else:
+            if not owner_id_int:
+                raise HTTPException(status_code=400, detail="Не указан владелец для категории")
+            await cat_service.create_or_update(owner_id_int, name, category_id_int)
+    return RedirectResponse(url="/manager/incidents/categories", status_code=303)
+
+
+@router.get("/incidents/{incident_id}", response_class=HTMLResponse)
+async def manager_incident_detail(
+    request: Request,
+    incident_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    # Требование: сразу открывать форму редактирования
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    return RedirectResponse(url=f"/manager/incidents/{incident_id}/edit", status_code=302)
 
 
 @router.get("/incidents/{incident_id}/edit", response_class=HTMLResponse)
@@ -244,59 +297,6 @@ async def manager_incident_edit(
         await db.execute(upd)
         await db.commit()
     return RedirectResponse(url=f"/manager/incidents/{incident_id}", status_code=303)
-
-
-@router.get("/incidents/categories", response_class=HTMLResponse)
-async def manager_incident_categories(
-    request: Request,
-    current_user: dict = Depends(require_manager_or_owner)
-):
-    if isinstance(current_user, RedirectResponse):
-        return current_user
-    async with get_async_session() as db:
-        user_id = await get_user_id_from_current_user(current_user, db)
-        # Получаем доступные объекты и owner_ids
-        perm = ManagerPermissionService(db)
-        accessible_objects = await perm.get_user_accessible_objects(user_id)
-        owner_ids = sorted({getattr(o, 'owner_id', None) for o in accessible_objects if getattr(o, 'owner_id', None) is not None})
-        categories_by_owner = {}
-        cat_service = IncidentCategoryService(db)
-        for oid in owner_ids:
-            categories_by_owner[oid] = await cat_service.list_categories(oid)
-        return templates.TemplateResponse("manager/incidents/categories.html", {"request": request, "categories_by_owner": categories_by_owner})
-
-
-@router.post("/incidents/categories")
-async def manager_incident_categories_save(
-    request: Request,
-    current_user: dict = Depends(require_manager_or_owner)
-):
-    if isinstance(current_user, RedirectResponse):
-        return current_user
-    form = await request.form()
-    name = (form.get("name") or "").strip()
-    owner_id = form.get("owner_id")
-    category_id = form.get("category_id")
-    action = (form.get("action") or "save").strip()
-    if not name and action == "save":
-        raise HTTPException(status_code=400, detail="Название обязательно")
-    try:
-        owner_id_int = int(owner_id) if owner_id else None
-    except ValueError:
-        owner_id_int = None
-    try:
-        category_id_int = int(category_id) if category_id else None
-    except ValueError:
-        category_id_int = None
-    async with get_async_session() as db:
-        cat_service = IncidentCategoryService(db)
-        if action == "delete" and category_id_int:
-            await cat_service.deactivate(category_id_int)
-        else:
-            if not owner_id_int:
-                raise HTTPException(status_code=400, detail="Не указан владелец для категории")
-            await cat_service.create_or_update(owner_id_int, name, category_id_int)
-    return RedirectResponse(url="/manager/incidents/categories", status_code=303)
 
 
 @router.post("/incidents/{incident_id}/status")
