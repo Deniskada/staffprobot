@@ -1,0 +1,41 @@
+{% extends "manager/base_manager.html" %}
+{% block title %}Редактировать инцидент #{{ incident.id }}{% endblock %}
+{% block manager_content %}
+<div class="container mt-4">
+  <h2>Редактировать инцидент #{{ incident.id }}</h2>
+  <form method="post" action="/manager/incidents/{{ incident.id }}/edit" class="mt-3">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Объект</label>
+        <select name="object_id" class="form-select">
+          {% for obj in objects %}
+          <option value="{{ obj.id }}" {% if incident.object and incident.object.id == obj.id %}selected{% endif %}>{{ obj.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Категория</label>
+        <input type="text" name="category" class="form-control" value="{{ incident.category or '' }}" />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Критичность</label>
+        <select name="severity" class="form-select">
+          <option value="low" {% if incident.severity == 'low' %}selected{% endif %}>Низкая</option>
+          <option value="medium" {% if incident.severity == 'medium' %}selected{% endif %}>Средняя</option>
+          <option value="high" {% if incident.severity == 'high' %}selected{% endif %}>Высокая</option>
+        </select>
+      </div>
+      <div class="col-12">
+        <label class="form-label">Описание</label>
+        <textarea name="notes" class="form-control" rows="4">{{ incident.notes or '' }}</textarea>
+      </div>
+    </div>
+    <div class="mt-3 d-flex gap-2">
+      <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Сохранить</button>
+      <a href="/manager/incidents/{{ incident.id }}" class="btn btn-outline-secondary">Отмена</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+

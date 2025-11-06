@@ -1,0 +1,46 @@
+{% extends "manager/base_manager.html" %}
+{% block title %}Создать инцидент{% endblock %}
+{% block manager_content %}
+<div class="container mt-4">
+  <h2>Создать инцидент</h2>
+  <form method="post" action="/manager/incidents/create" class="mt-3">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Объект</label>
+        <select name="object_id" class="form-select" required>
+          <option value="">Выберите объект</option>
+          {% for obj in objects %}
+          <option value="{{ obj.id }}">{{ obj.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Категория</label>
+        <input type="text" name="category" class="form-control" placeholder="Например: Повреждение" />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Критичность</label>
+        <select name="severity" class="form-select">
+          <option value="low">Низкая</option>
+          <option value="medium" selected>Средняя</option>
+          <option value="high">Высокая</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Сотрудник (ID)</label>
+        <input type="number" name="employee_id" class="form-control" placeholder="Необязательно" />
+      </div>
+      <div class="col-12">
+        <label class="form-label">Описание</label>
+        <textarea name="notes" class="form-control" rows="4" placeholder="Краткое описание инцидента..."></textarea>
+      </div>
+    </div>
+    <div class="mt-3 d-flex gap-2">
+      <button type="submit" class="btn btn-danger"><i class="fas fa-exclamation-triangle"></i> Создать</button>
+      <a href="/manager/incidents" class="btn btn-outline-secondary">Отмена</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+

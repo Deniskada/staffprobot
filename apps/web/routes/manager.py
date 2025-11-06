@@ -101,6 +101,158 @@ async def manager_incident_detail(
         return templates.TemplateResponse("manager/incidents/detail.html", {"request": request, "incident": incident, "current_user": current_user})
 
 
+@router.get("/incidents/create", response_class=HTMLResponse)
+async def manager_incident_create_form(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    async with get_async_session() as db:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        perm = ManagerPermissionService(db)
+        accessible_objects = await perm.get_user_accessible_objects(user_id)
+        return templates.TemplateResponse("manager/incidents/create.html", {"request": request, "objects": accessible_objects, "current_user": current_user})
+
+
+@router.post("/incidents/create")
+async def manager_incident_create(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    form = await request.form()
+    category = (form.get("category") or "").strip()
+    severity = (form.get("severity") or "medium").strip()
+    notes = (form.get("notes") or "").strip()
+    object_id = form.get("object_id")
+    employee_id = form.get("employee_id")
+    try:
+        object_id_int = int(object_id) if object_id else None
+    except ValueError:
+        object_id_int = None
+    try:
+        employee_id_int = int(employee_id) if employee_id else None
+    except ValueError:
+        employee_id_int = None
+    async with get_async_session() as db:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        perm = ManagerPermissionService(db)
+        accessible_objects = await perm.get_user_accessible_objects(user_id)
+        accessible_ids = [o.id for o in accessible_objects]
+        if not object_id_int or object_id_int not in accessible_ids:
+            raise HTTPException(status_code=400, detail="Некорректный объект")
+        from domain.entities.incident import Incident
+        from sqlalchemy import insert
+        values = {
+            "category": category or None,
+            "severity": severity or "medium",
+            "status": "new",
+            "object_id": object_id_int,
+            "employee_id": employee_id_int,
+            "notes": notes or None,
+        }
+        await db.execute(insert(Incident).values(**values))
+        await db.commit()
+    return RedirectResponse(url="/manager/incidents", status_code=303)
+
+
+@router.get("/incidents/{incident_id}/edit", response_class=HTMLResponse)
+async def manager_incident_edit_form(
+    request: Request,
+    incident_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    async with get_async_session() as db:
+        from domain.entities.incident import Incident
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        user_id = await get_user_id_from_current_user(current_user, db)
+        perm = ManagerPermissionService(db)
+        accessible_objects = await perm.get_user_accessible_objects(user_id)
+        accessible_ids = [o.id for o in accessible_objects]
+        res = await db.execute(select(Incident).where(Incident.id == incident_id).options(selectinload(Incident.object)))
+        incident = res.scalar_one_or_none()
+        if not incident:
+            raise HTTPException(status_code=404, detail="Not Found")
+        if incident.object_id not in accessible_ids:
+            raise HTTPException(status_code=403, detail="Access denied")
+        return templates.TemplateResponse("manager/incidents/edit.html", {"request": request, "incident": incident, "objects": accessible_objects})
+
+
+@router.post("/incidents/{incident_id}/edit")
+async def manager_incident_edit(
+    request: Request,
+    incident_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    form = await request.form()
+    category = (form.get("category") or "").strip()
+    severity = (form.get("severity") or "medium").strip()
+    notes = (form.get("notes") or "").strip()
+    object_id = form.get("object_id")
+    try:
+        object_id_int = int(object_id) if object_id else None
+    except ValueError:
+        object_id_int = None
+    async with get_async_session() as db:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        perm = ManagerPermissionService(db)
+        accessible_objects = await perm.get_user_accessible_objects(user_id)
+        accessible_ids = [o.id for o in accessible_objects]
+        from domain.entities.incident import Incident
+        from sqlalchemy import select, update
+        res = await db.execute(select(Incident).where(Incident.id == incident_id))
+        incident = res.scalar_one_or_none()
+        if not incident:
+            raise HTTPException(status_code=404, detail="Not Found")
+        if object_id_int and object_id_int not in accessible_ids:
+            raise HTTPException(status_code=403, detail="Access denied")
+        upd = update(Incident).where(Incident.id == incident_id).values(
+            category=category or None,
+            severity=severity or "medium",
+            notes=notes or None,
+            object_id=object_id_int or incident.object_id
+        )
+        await db.execute(upd)
+        await db.commit()
+    return RedirectResponse(url=f"/manager/incidents/{incident_id}", status_code=303)
+
+
+@router.post("/incidents/{incident_id}/status")
+async def manager_incident_change_status(
+    incident_id: int,
+    status: str = Form(...),
+    request: Request = None,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    async with get_async_session() as db:
+        from domain.entities.incident import Incident
+        from sqlalchemy import select, update
+        user_id = await get_user_id_from_current_user(current_user, db)
+        perm = ManagerPermissionService(db)
+        accessible_objects = await perm.get_user_accessible_objects(user_id)
+        accessible_ids = [o.id for o in accessible_objects]
+        res = await db.execute(select(Incident).where(Incident.id == incident_id))
+        inc = res.scalar_one_or_none()
+        if not inc:
+            raise HTTPException(status_code=404, detail="Not Found")
+        if inc.object_id not in accessible_ids:
+            raise HTTPException(status_code=403, detail="Access denied")
+        if status not in ["new", "in_review", "resolved", "rejected"]:
+            raise HTTPException(status_code=400, detail="Некорректный статус")
+        await db.execute(update(Incident).where(Incident.id == incident_id).values(status=status))
+        await db.commit()
+    return RedirectResponse(url=f"/manager/incidents/{incident_id}", status_code=303)
+
+
 async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:
     """Получает внутренний ID пользователя из current_user."""
     logger.info(f"get_user_id_from_current_user: current_user type = {type(current_user)}")
