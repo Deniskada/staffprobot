@@ -419,7 +419,7 @@ async def manager_incident_change_status(
         return current_user
     async with get_async_session() as db:
         from domain.entities.incident import Incident
-        from sqlalchemy import select, update
+        from sqlalchemy import select
         user_id = await get_user_id_from_current_user(current_user, db)
         perm = ManagerPermissionService(db)
         accessible_objects = await perm.get_user_accessible_objects(user_id)
@@ -432,7 +432,14 @@ async def manager_incident_change_status(
             raise HTTPException(status_code=403, detail="Access denied")
         if status not in ["new", "in_review", "resolved", "rejected"]:
             raise HTTPException(status_code=400, detail="Некорректный статус")
-        await db.execute(update(Incident).where(Incident.id == incident_id).values(status=status))
+        # Используем сервис для сохранения истории, как у владельца
+        from shared.services.incident_service import IncidentService
+        incident_service = IncidentService(db)
+        await incident_service.update_incident_status(
+            incident_id=incident_id,
+            new_status=status,
+            notes=None
+        )
         await db.commit()
     return RedirectResponse(url=f"/manager/incidents/{incident_id}", status_code=303)
 
