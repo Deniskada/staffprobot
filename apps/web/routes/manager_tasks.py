@@ -88,3 +88,16 @@ async def manager_tasks_entries(
         {"request": request, "entries": entries}
     )
 
+
+@router.get("/manager/tasks/plan")
+async def manager_tasks_plan(
+    request: Request,
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["manager", "owner", "superadmin"]))
+):
+    """Планирование задач (страница-заглушка для менеджера)."""
+    return templates.TemplateResponse(
+        "manager/tasks/plan.html",
+        {"request": request}
+    )
+

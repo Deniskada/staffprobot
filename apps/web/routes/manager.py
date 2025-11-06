@@ -31,6 +31,25 @@ from urllib.parse import quote
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 from apps.web.jinja import templates
+@router.get("/incidents", response_class=HTMLResponse)
+async def manager_incidents_index(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    return templates.TemplateResponse("manager/incidents/index.html", {"request": request, "current_user": current_user})
+
+
+@router.get("/incidents/{incident_id}", response_class=HTMLResponse)
+async def manager_incident_detail(
+    request: Request,
+    incident_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    return templates.TemplateResponse("manager/incidents/detail.html", {"request": request, "incident_id": incident_id, "current_user": current_user})
 
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:
