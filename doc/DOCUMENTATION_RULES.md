@@ -101,6 +101,13 @@
     - Пагинация как у владельца (Первая/Назад X/Y Вперед/Последняя, 25/50/100)
   - `POST /manager/timeslots/{timeslot_id}/delete` — добавлен (apps/web/routes/manager_timeslots.py, удаление одного тайм-слота)
   - `POST /manager/timeslots/bulk-edit` — обновлен (apps/web/routes/manager_timeslots.py, поддержка `cancel_late_penalties` — принудительно отключает `penalize_late_start`)
+  
+  Меню управляющего (navbar, `apps/web/templates/manager/base_manager.html`):
+  - Убран пункт «Отзывы» (`/manager/reviews`)
+  - Добавлен пункт «Задачи» (dropdown):
+    - «Шаблоны» — `/manager/tasks/templates`
+    - «Аудит» — `/manager/tasks/entries`
+  - Добавлен пункт «Инциденты» — `/manager/incidents` (маршруты будут реализованы в Фазе 3.16)
 - **Шаблоны:**
   - `manager/dashboard.html` — обновлен (кликабельные карточки, удалена секция "Быстрые действия")
   - `manager/objects.html` — обновлен (фильтрация, сортировка, пагинация, кнопки очистки с белым цветом)

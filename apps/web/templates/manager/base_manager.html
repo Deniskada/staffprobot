@@ -76,9 +76,28 @@
                                 </a>
                             </li>
                             {% endif %}
+                            <!-- Задачи (подменю) -->
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle {% if request.url.path.startswith('/manager/tasks') %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-tasks"></i> Задачи
+                                </a>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <a class="dropdown-item" href="/manager/tasks/templates">
+                                            <i class="bi bi-file-earmark-text me-2"></i>Шаблоны
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="/manager/tasks/entries">
+                                            <i class="bi bi-list-check me-2"></i>Аудит
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                            <!-- Инциденты -->
                             <li class="nav-item">
-                                <a class="nav-link {% if request.url.path.startswith('/manager/reviews') %}active{% endif %}" href="/manager/reviews">
-                                    <i class="bi bi-star"></i> Отзывы
+                                <a class="nav-link {% if request.url.path.startswith('/manager/incidents') %}active{% endif %}" href="/manager/incidents">
+                                    <i class="fas fa-exclamation-triangle"></i> Инциденты
                                 </a>
                             </li>
                             <li class="nav-item">
