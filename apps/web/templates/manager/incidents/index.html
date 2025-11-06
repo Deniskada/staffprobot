@@ -99,20 +99,20 @@
           </a>
           {% if i.status == 'new' %}
             <form method="post" action="/manager/incidents/{{ i.id }}/status" class="d-inline">
-              <input type="hidden" name="status" value="in_review">
+              <input type="hidden" name="new_status" value="in_review">
               <button type="submit" class="btn btn-sm btn-warning" title="Взять на рассмотрение">
                 <i class="fas fa-eye"></i>
               </button>
             </form>
           {% elif i.status == 'in_review' %}
             <form method="post" action="/manager/incidents/{{ i.id }}/status" class="d-inline">
-              <input type="hidden" name="status" value="resolved">
+              <input type="hidden" name="new_status" value="resolved">
               <button type="submit" class="btn btn-sm btn-success" title="Решить">
                 <i class="fas fa-check"></i>
               </button>
             </form>
             <form method="post" action="/manager/incidents/{{ i.id }}/status" class="d-inline">
-              <input type="hidden" name="status" value="rejected">
+              <input type="hidden" name="new_status" value="rejected">
               <button type="submit" class="btn btn-sm btn-secondary" title="Отклонить">
                 <i class="fas fa-times"></i>
               </button>

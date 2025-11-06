@@ -477,13 +477,14 @@ async def manager_incident_edit(
         )
         await db.execute(upd)
         await db.commit()
-    return RedirectResponse(url=f"/manager/incidents/{incident_id}", status_code=303)
+    return RedirectResponse(url="/manager/incidents", status_code=303)
 
 
 @router.post("/incidents/{incident_id}/status")
 async def manager_incident_change_status(
     incident_id: int,
-    status: str = Form(...),
+    new_status: str = Form(...),
+    notes: str = Form(None),
     request: Request = None,
     current_user: dict = Depends(require_manager_or_owner)
 ):
@@ -502,18 +503,18 @@ async def manager_incident_change_status(
             raise HTTPException(status_code=404, detail="Not Found")
         if inc.object_id not in accessible_ids:
             raise HTTPException(status_code=403, detail="Access denied")
-        if status not in ["new", "in_review", "resolved", "rejected"]:
+        if new_status not in ["new", "in_review", "resolved", "rejected"]:
             raise HTTPException(status_code=400, detail="Некорректный статус")
         # Используем сервис для сохранения истории, как у владельца
         from shared.services.incident_service import IncidentService
         incident_service = IncidentService(db)
         await incident_service.update_incident_status(
             incident_id=incident_id,
-            new_status=status,
-            notes=None
+            new_status=new_status,
+            notes=notes
         )
         await db.commit()
-    return RedirectResponse(url=f"/manager/incidents/{incident_id}", status_code=303)
+    return RedirectResponse(url="/manager/incidents", status_code=303)
 
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:
