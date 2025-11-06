@@ -61,13 +61,59 @@
     <div class="row g-3">
       <div class="col-md-4"><strong>Создан:</strong> {{ incident.created_at.strftime('%d.%m.%Y %H:%M') if incident.created_at else '—' }}</div>
       <div class="col-md-4"><strong>Обновлён:</strong> {{ incident.updated_at.strftime('%d.%m.%Y %H:%M') if incident.updated_at else '—' }}</div>
-      <div class="col-md-4"><strong>Статус:</strong> {{ incident.status or '—' }}</div>
+      <div class="col-md-4">
+        <form method="post" action="/manager/incidents/{{ incident.id }}/status" class="d-flex align-items-center gap-2">
+          <label class="form-label mb-0 me-2"><strong>Статус:</strong></label>
+          <select name="status" class="form-select form-select-sm" style="max-width: 220px;">
+            <option value="new" {% if incident.status == 'new' %}selected{% endif %}>Новый</option>
+            <option value="in_review" {% if incident.status == 'in_review' %}selected{% endif %}>На рассмотрении</option>
+            <option value="resolved" {% if incident.status == 'resolved' %}selected{% endif %}>Решен</option>
+            <option value="rejected" {% if incident.status == 'rejected' %}selected{% endif %}>Отклонен</option>
+          </select>
+          <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat"></i> Обновить</button>
+        </form>
+      </div>
     </div>
     <div class="mt-3 d-flex gap-2">
       <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Сохранить</button>
       <a href="/manager/incidents/{{ incident.id }}" class="btn btn-outline-secondary">Отмена</a>
     </div>
   </form>
+
+  <hr>
+  <h5 class="mt-4">История изменений</h5>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Дата</th>
+          <th>Пользователь</th>
+          <th>Поле</th>
+          <th>Было</th>
+          <th>Стало</th>
+          <th>Сумма удержания</th>
+          <th>Дата удержания</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if history and history|length > 0 %}
+          {% for h in history %}
+          <tr>
+            <td>{{ h.changed_at.strftime('%d.%m.%Y %H:%M') if h.changed_at else '—' }}</td>
+            <td>{% if h.changer %}{{ (h.changer.last_name or '') }} {{ (h.changer.first_name or '') }}{% else %}—{% endif %}</td>
+            <td>{{ h.field }}</td>
+            <td>{{ h.old_value or '—' }}</td>
+            <td>{{ h.new_value or '—' }}</td>
+            <td>{{ incident.damage_amount if incident.damage_amount is not none else '—' }}</td>
+            <td>{{ incident.custom_date.strftime('%d.%m.%Y') if incident.custom_date else '—' }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="7" class="text-muted">История отсутствует</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
 

@@ -322,6 +322,15 @@ async def manager_incident_edit_form(
         if emp_ids:
             emp_res = await db.execute(select(UserEntity).where(UserEntity.id.in_(list(emp_ids))).order_by(UserEntity.last_name, UserEntity.first_name))
             employees = emp_res.scalars().all()
+        # История изменений
+        from domain.entities.incident_history import IncidentHistory
+        hist_res = await db.execute(
+            select(IncidentHistory)
+            .options(selectinload(IncidentHistory.changer))
+            .where(IncidentHistory.incident_id == incident.id)
+            .order_by(IncidentHistory.changed_at.desc())
+        )
+        history = hist_res.scalars().all()
         # Категории
         cat_service = IncidentCategoryService(db)
         categories = []
@@ -336,6 +345,7 @@ async def manager_incident_edit_form(
             "objects": accessible_objects,
             "employees": employees,
             "categories": categories,
+            "history": history,
             **manager_context
         })
 
