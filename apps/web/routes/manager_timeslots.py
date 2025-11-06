@@ -4,7 +4,7 @@
 
 from typing import List, Optional
 from datetime import date, time, datetime, timedelta
-from fastapi import APIRouter, Request, Form, Depends, HTTPException
+from fastapi import APIRouter, Request, Form, Depends, HTTPException, Query
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,27 +38,147 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession):
 @router.get("/manager/timeslots", response_class=HTMLResponse)
 async def manager_timeslots_index(
     request: Request,
-    current_user: dict = Depends(require_manager_or_owner)
+    current_user: dict = Depends(require_manager_or_owner),
+    object_id: Optional[int] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    sort_by: str = Query("slot_date"),
+    sort_order: str = Query("desc")
 ):
-    """Главная страница управления тайм-слотами для менеджера"""
+    """Главная страница управления тайм-слотами для менеджера - табличное представление всех тайм-слотов"""
     try:
+        telegram_id = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
         
         async with get_async_session() as session:
-            object_service = ObjectService(session)
-            objects = await object_service.get_objects_by_manager(current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id)
+            from shared.services.manager_permission_service import ManagerPermissionService
+            from apps.web.services.object_service import TimeSlotService
+            from sqlalchemy import select
+            from domain.entities.timeslot import TimeSlot
+            
+            permission_service = ManagerPermissionService(session)
+            timeslot_service = TimeSlotService(session)
+            
+            # Получаем доступные объекты для менеджера
+            user_id = await get_user_id_from_current_user(current_user, session)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            
+            if not accessible_objects:
+                return templates.TemplateResponse(
+                    "manager/timeslots/index.html",
+                    {
+                        "request": request,
+                        "timeslots": [],
+                        "objects": [],
+                        "selected_object_id": None,
+                        "selected_object": None,
+                        "first_available_object_id": None,
+                        "current_user": current_user,
+                        "date_from": date_from,
+                        "date_to": date_to,
+                        "sort_by": sort_by,
+                        "sort_order": sort_order
+                    }
+                )
+            
+            # Список объектов для фильтра
+            objects_list = [{"id": obj.id, "name": obj.name} for obj in accessible_objects]
+            first_available_object_id = accessible_objects[0].id if accessible_objects else None
+            
+            # Если указан object_id, фильтруем по нему
+            selected_object = None
+            if object_id:
+                obj = next((o for o in accessible_objects if o.id == object_id), None)
+                if obj:
+                    selected_object = {
+                        "id": obj.id,
+                        "name": obj.name,
+                        "address": obj.address or "",
+                        "hourly_rate": float(obj.hourly_rate) if obj.hourly_rate else 0
+                    }
+            
+            # Получаем тайм-слоты для всех доступных объектов (или одного, если указан фильтр)
+            target_objects = [obj for obj in accessible_objects if not object_id or obj.id == object_id]
+            
+            all_timeslots = []
+            for obj in target_objects:
+                # Получаем тайм-слоты объекта
+                query = select(TimeSlot).where(TimeSlot.object_id == obj.id)
+                
+                # Фильтрация по датам
+                if date_from:
+                    try:
+                        from_date = date.fromisoformat(date_from)
+                        query = query.where(TimeSlot.slot_date >= from_date)
+                    except ValueError:
+                        pass
+                
+                if date_to:
+                    try:
+                        to_date = date.fromisoformat(date_to)
+                        query = query.where(TimeSlot.slot_date <= to_date)
+                    except ValueError:
+                        pass
+                
+                result = await session.execute(query)
+                obj_timeslots = result.scalars().all()
+                all_timeslots.extend(obj_timeslots)
+            
+            # Сортировка в памяти (как у owner)
+            sort_by_norm = (sort_by or "slot_date").strip().lower()
+            sort_order_norm = (sort_order or "desc").strip().lower()
+            
+            if sort_by_norm == "slot_date":
+                all_timeslots.sort(key=lambda ts: (ts.slot_date, ts.start_time), reverse=(sort_order_norm == "desc"))
+            elif sort_by_norm == "start_time":
+                all_timeslots.sort(key=lambda ts: (ts.start_time, ts.slot_date), reverse=(sort_order_norm == "desc"))
+            elif sort_by_norm == "hourly_rate":
+                all_timeslots.sort(key=lambda ts: (ts.hourly_rate or 0, ts.slot_date), reverse=(sort_order_norm == "desc"))
+            else:
+                all_timeslots.sort(key=lambda ts: (ts.slot_date, ts.start_time), reverse=True)
+            
+            # Преобразуем в формат для шаблона
+            timeslots_data = []
+            for slot in all_timeslots:
+                slot_obj = next((o for o in accessible_objects if o.id == slot.object_id), None)
+                timeslots_data.append({
+                    "id": slot.id,
+                    "object_id": slot.object_id,
+                    "object_name": slot_obj.name if slot_obj else "Неизвестный объект",
+                    "slot_date": slot.slot_date.strftime("%Y-%m-%d"),
+                    "start_time": slot.start_time.strftime("%H:%M"),
+                    "end_time": slot.end_time.strftime("%H:%M"),
+                    "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else (float(slot_obj.hourly_rate) if slot_obj and slot_obj.hourly_rate else 0),
+                    "max_employees": slot.max_employees or 1,
+                    "is_active": slot.is_active,
+                    "created_at": slot.created_at.strftime("%Y-%m-%d") if slot.created_at else ""
+                })
             
             return templates.TemplateResponse(
                 "manager/timeslots/index.html",
                 {
                     "request": request,
-                    "objects": objects,
-                    "current_user": current_user
+                    "title": "Тайм-слоты",
+                    "timeslots": timeslots_data,
+                    "objects": objects_list,
+                    "selected_object_id": object_id,
+                    "selected_object": selected_object,
+                    "first_available_object_id": first_available_object_id,
+                    "current_user": current_user,
+                    "date_from": date_from,
+                    "date_to": date_to,
+                    "sort_by": sort_by,
+                    "sort_order": sort_order
                 }
             )
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in manager_timeslots_index: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки объектов")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки тайм-слотов")
 
 
 @router.get("/manager/timeslots/object/{object_id}", response_class=HTMLResponse)
@@ -263,7 +383,7 @@ async def manager_timeslots_create(
                 logger.info(f"Created {created_count} timeslots for object {object_id} by manager {telegram_id}")
             
             return RedirectResponse(
-                url=f"/manager/timeslots/object/{object_id}",
+                url=f"/manager/timeslots?object_id={object_id}",
                 status_code=303
             )
             
@@ -369,6 +489,45 @@ async def manager_timeslots_edit(
         raise HTTPException(status_code=500, detail="Ошибка обновления тайм-слота")
 
 
+@router.post("/manager/timeslots/{timeslot_id}/delete")
+async def manager_timeslots_delete(
+    request: Request,
+    timeslot_id: int,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Удаление тайм-слота для менеджера"""
+    try:
+        telegram_id = current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
+        
+        async with get_async_session() as session:
+            timeslot_service = TimeSlotService(session)
+            
+            # Получаем тайм-слот для получения object_id
+            timeslot = await timeslot_service.get_timeslot_by_id_for_manager(timeslot_id, telegram_id)
+            if not timeslot:
+                raise HTTPException(status_code=404, detail="Тайм-слот не найден или доступ запрещен")
+            
+            object_id = timeslot.object_id
+            
+            # Удаляем тайм-слот
+            success = await timeslot_service.delete_timeslot_for_manager(timeslot_id, telegram_id)
+            if not success:
+                raise HTTPException(status_code=404, detail="Тайм-слот не найден или нет доступа")
+            
+            logger.info(f"Deleted timeslot {timeslot_id} by manager {telegram_id}")
+            
+            return RedirectResponse(
+                url=f"/manager/timeslots?object_id={object_id}",
+                status_code=303
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in manager_timeslots_delete: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка удаления тайм-слота")
+
+
 @router.post("/manager/timeslots/bulk-delete")
 async def manager_timeslots_bulk_delete(
     request: Request,
@@ -404,7 +563,7 @@ async def manager_timeslots_bulk_delete(
                     continue
             
             logger.info(f"Bulk deleted {deleted_count} timeslots by manager {telegram_id}")
-            redirect_url = f"/manager/timeslots/object/{object_id}" if object_id else "/manager/timeslots"
+            redirect_url = f"/manager/timeslots?object_id={object_id}" if object_id else "/manager/timeslots"
             
             return RedirectResponse(
                 url=redirect_url,

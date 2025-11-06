@@ -90,11 +90,14 @@
   - `GET /manager/objects` — обновлен (apps/web/routes/manager.py, добавлены query параметры для фильтрации, сортировки и пагинации)
   - `GET /manager/employees` — обновлен (apps/web/routes/manager.py, добавлены query параметры для фильтрации, сортировки и пагинации)
   - `GET /manager/calendar` — обновлен (apps/web/templates/manager/calendar.html)
+  - `GET /manager/timeslots` — обновлен (apps/web/routes/manager_timeslots.py, табличное представление всех тайм-слотов с фильтрацией и сортировкой)
+  - `POST /manager/timeslots/{timeslot_id}/delete` — добавлен (apps/web/routes/manager_timeslots.py, удаление одного тайм-слота)
 - **Шаблоны:**
   - `manager/dashboard.html` — обновлен (кликабельные карточки, удалена секция "Быстрые действия")
   - `manager/objects.html` — обновлен (фильтрация, сортировка, пагинация, кнопки очистки с белым цветом)
   - `manager/employees.html` — обновлен (фильтрация, сортировка, пагинация, отображение "Фамилия Имя", кнопки очистки с белым цветом)
   - `manager/calendar.html` — обновлен (автоскролл на сегодня)
+  - `manager/timeslots/index.html` — обновлен (табличное представление всех тайм-слотов вместо карточек объектов, фильтрация по объекту и датам, сортировка по дате, времени, ставке)
 - **Сервисы:**
   - `apps/web/services/auth_service.py` — изменена логика проверки PIN (не удаляется при проверке, только после успешного входа)
   - `apps/web/routes/auth.py` — добавлено удаление PIN после успешного входа
