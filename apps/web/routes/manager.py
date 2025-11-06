@@ -362,6 +362,7 @@ async def manager_incident_edit(
     category = (form.get("category") or "").strip()
     severity = (form.get("severity") or "medium").strip()
     notes = (form.get("notes") or "").strip()
+    status_new = (form.get("status") or "").strip()
     damage_amount_str = (form.get("damage_amount") or "").strip()
     object_id = form.get("object_id")
     employee_id = form.get("employee_id")
@@ -394,6 +395,17 @@ async def manager_incident_edit(
             raise HTTPException(status_code=404, detail="Not Found")
         if object_id_int and object_id_int not in accessible_ids:
             raise HTTPException(status_code=403, detail="Access denied")
+        # Если статус изменился — применяем через IncidentService для истории
+        if status_new and status_new != (incident.status or ""):
+            if status_new not in ["new", "in_review", "resolved", "rejected"]:
+                raise HTTPException(status_code=400, detail="Некорректный статус")
+            from shared.services.incident_service import IncidentService
+            incident_service = IncidentService(db)
+            await incident_service.update_incident_status(
+                incident_id=incident_id,
+                new_status=status_new,
+                notes=None
+            )
         upd = update(Incident).where(Incident.id == incident_id).values(
             category=category or None,
             severity=severity or "medium",

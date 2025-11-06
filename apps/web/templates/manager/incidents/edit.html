@@ -6,6 +6,15 @@
   <form method="post" action="/manager/incidents/{{ incident.id }}/edit" class="mt-3">
     <div class="row g-3">
       <div class="col-md-4">
+        <label class="form-label">Статус</label>
+        <select name="status" class="form-select">
+          <option value="new" {% if incident.status == 'new' %}selected{% endif %}>Новый</option>
+          <option value="in_review" {% if incident.status == 'in_review' %}selected{% endif %}>На рассмотрении</option>
+          <option value="resolved" {% if incident.status == 'resolved' %}selected{% endif %}>Решен</option>
+          <option value="rejected" {% if incident.status == 'rejected' %}selected{% endif %}>Отклонен</option>
+        </select>
+      </div>
+      <div class="col-md-4">
         <label class="form-label">Объект</label>
         <select name="object_id" class="form-select">
           {% for obj in objects %}
@@ -58,22 +67,6 @@
       </div>
     </div>
     <hr>
-    <div class="row g-3">
-      <div class="col-md-4"><strong>Создан:</strong> {{ incident.created_at.strftime('%d.%m.%Y %H:%M') if incident.created_at else '—' }}</div>
-      <div class="col-md-4"><strong>Обновлён:</strong> {{ incident.updated_at.strftime('%d.%m.%Y %H:%M') if incident.updated_at else '—' }}</div>
-      <div class="col-md-4">
-        <form method="post" action="/manager/incidents/{{ incident.id }}/status" class="d-flex align-items-center gap-2">
-          <label class="form-label mb-0 me-2"><strong>Статус:</strong></label>
-          <select name="status" class="form-select form-select-sm" style="max-width: 220px;">
-            <option value="new" {% if incident.status == 'new' %}selected{% endif %}>Новый</option>
-            <option value="in_review" {% if incident.status == 'in_review' %}selected{% endif %}>На рассмотрении</option>
-            <option value="resolved" {% if incident.status == 'resolved' %}selected{% endif %}>Решен</option>
-            <option value="rejected" {% if incident.status == 'rejected' %}selected{% endif %}>Отклонен</option>
-          </select>
-          <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat"></i> Обновить</button>
-        </form>
-      </div>
-    </div>
     <div class="mt-3 d-flex gap-2">
       <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Сохранить</button>
       <a href="/manager/incidents/{{ incident.id }}" class="btn btn-outline-secondary">Отмена</a>
