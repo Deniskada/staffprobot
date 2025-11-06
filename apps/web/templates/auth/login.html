@@ -69,7 +69,7 @@
                                     class="btn btn-light btn-lg" 
                                     id="sendPinBtn"
                                     style="border-radius: 0 15px 15px 0; border: 2px solid rgba(255,255,255,0.3); border-left: none;">
-                                <i class="bi bi-send me-1"></i> Получить код
+                                <i class="bi bi-send me-1 d-none d-md-inline"></i><i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline ms-1">Получить код</span>
                             </button>
                         </div>
                         <div id="pinResult" class="form-text text-white-75 mt-2"></div>
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        this.innerHTML = '<i class="bi bi-hourglass-split"></i> Отправка...';
+        this.innerHTML = '<i class="bi bi-hourglass-split"></i><span class="d-none d-md-inline ms-1"> Отправка...</span>';
         this.disabled = true;
         
         // Отправка запроса
@@ -196,7 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.status === 'success') {
                 // Успешная отправка - показываем анимированную галочку
-                this.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i> Отправлено!';
+                this.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i><span class="d-none d-md-inline ms-1"> Отправлено!</span>';
                 this.classList.add('btn-success');
                 this.classList.remove('btn-light');
                 
@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.style.animation = 'pulse 0.6s ease-in-out';
                 
                 setTimeout(() => {
-                    this.innerHTML = '<i class="bi bi-send"></i> Получить код';
+                    this.innerHTML = '<i class="bi bi-send me-1 d-none d-md-inline"></i><i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline ms-1">Получить код</span>';
                     this.classList.remove('btn-success');
                     this.classList.add('btn-light');
                     this.style.animation = '';
@@ -212,13 +212,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }, 3000);
             } else {
                 // Показываем ошибку с анимацией
-                this.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger"></i> Ошибка';
+                this.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger"></i><span class="d-none d-md-inline ms-1"> Ошибка</span>';
                 this.classList.add('btn-danger');
                 this.classList.remove('btn-light');
                 this.style.animation = 'shake 0.5s ease-in-out';
                 
                 setTimeout(() => {
-                    this.innerHTML = '<i class="bi bi-send"></i> Получить код';
+                    this.innerHTML = '<i class="bi bi-send me-1 d-none d-md-inline"></i><i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline ms-1">Получить код</span>';
                     this.classList.remove('btn-danger');
                     this.classList.add('btn-light');
                     this.style.animation = '';
@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             console.error('Error:', error);
             alert('Ошибка отправки PIN-кода');
-            this.innerHTML = '<i class="bi bi-send"></i> Получить код';
+            this.innerHTML = '<i class="bi bi-send me-1 d-none d-md-inline"></i><i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline ms-1">Получить код</span>';
             this.disabled = false;
         });
     });

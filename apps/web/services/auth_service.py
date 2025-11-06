@@ -94,13 +94,19 @@ class AuthService:
         
         # Проверяем PIN-код
         if stored_pin == pin_code:
-            # Удаляем PIN-код после успешного использования (одноразовый)
-            await self.cache.delete(key)
+            # НЕ удаляем PIN здесь - он будет удален после успешного входа
+            # Это позволяет использовать PIN несколько раз до успешного входа
             logger.info(f"PIN verified successfully for user {telegram_id}")
             return True
         
         logger.warning(f"PIN mismatch for user {telegram_id}: stored={stored_pin}, provided={pin_code}")
         return False
+    
+    async def delete_pin(self, telegram_id: int) -> None:
+        """Удаление PIN-кода из кэша (после успешного входа)"""
+        key = f"pin:{telegram_id}"
+        await self.cache.delete(key)
+        logger.info(f"PIN deleted for user {telegram_id} after successful login")
     
     async def refresh_token(self, token: str) -> Optional[str]:
         """Обновление JWT токена"""

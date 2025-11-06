@@ -160,6 +160,9 @@ async def login(
             "role": user.get("role", "employee")  # Роль из базы данных
         })
         
+        # Удаляем PIN-код после успешного входа (одноразовый)
+        await auth_service.delete_pin(telegram_id)
+        
         # Перенаправление на дашборд с токеном
         response = RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
         response.set_cookie(key="access_token", value=token, httponly=True, secure=False)
