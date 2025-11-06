@@ -53,30 +53,39 @@
     </div>
   </form>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const objectSelect = document.getElementById('incidentObject');
   const categorySelect = document.getElementById('incidentCategory');
   const employeeSelect = document.getElementById('incidentEmployee');
 
+  if (!objectSelect || !categorySelect || !employeeSelect) {
+    console.error('Не найдены элементы формы');
+    return;
+  }
+
   async function loadCategories(objectId) {
     categorySelect.innerHTML = '<option value="">Загрузка...</option>';
     categorySelect.disabled = true;
     try {
       const resp = await fetch(`/manager/incidents/api/categories?object_id=${encodeURIComponent(objectId)}`);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
       const data = await resp.json();
       categorySelect.innerHTML = '<option value="">Выберите категорию</option>';
-      (data.categories || []).forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.name;
-        opt.textContent = c.name;
-        categorySelect.appendChild(opt);
-      });
+      if (data.categories && data.categories.length > 0) {
+        data.categories.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.name;
+          opt.textContent = c.name;
+          categorySelect.appendChild(opt);
+        });
+      }
       categorySelect.disabled = false;
     } catch (e) {
+      console.error('Ошибка загрузки категорий:', e);
       categorySelect.innerHTML = '<option value="">Ошибка загрузки</option>';
       categorySelect.disabled = true;
     }
@@ -87,17 +96,23 @@ document.addEventListener('DOMContentLoaded', function() {
     employeeSelect.disabled = true;
     try {
       const resp = await fetch(`/manager/api/employees/for-object/${encodeURIComponent(objectId)}`);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
       const list = await resp.json();
       employeeSelect.innerHTML = '<option value="">Выберите сотрудника</option>';
-      (list || []).forEach(e => {
-        const fio = `${(e.name||'').trim()}`; // API возвращает имя, форматируем при необходимости
-        const opt = document.createElement('option');
-        opt.value = e.id;
-        opt.textContent = fio;
-        employeeSelect.appendChild(opt);
-      });
+      if (list && list.length > 0) {
+        list.forEach(e => {
+          const fio = `${(e.name||'').trim()}`;
+          const opt = document.createElement('option');
+          opt.value = e.id;
+          opt.textContent = fio;
+          employeeSelect.appendChild(opt);
+        });
+      }
       employeeSelect.disabled = false;
     } catch (e) {
+      console.error('Ошибка загрузки сотрудников:', e);
       employeeSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
       employeeSelect.disabled = true;
     }

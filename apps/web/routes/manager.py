@@ -131,7 +131,7 @@ async def manager_incident_create(
     return RedirectResponse(url="/manager/incidents", status_code=303)
 
 
-@router.get("/incidents/api/categories")
+@router.get("/incidents/api/categories", response_class=JSONResponse)
 async def manager_incident_categories_for_object(
     object_id: int = Query(...),
     current_user: dict = Depends(require_manager_or_owner)
@@ -151,10 +151,10 @@ async def manager_incident_categories_for_object(
         obj_res = await db.execute(select(Object).where(Object.id == object_id))
         obj = obj_res.scalar_one_or_none()
         if not obj or not getattr(obj, 'owner_id', None):
-            return {"categories": []}
+            return JSONResponse({"categories": []})
         cat_service = IncidentCategoryService(db)
         cats = await cat_service.list_categories(obj.owner_id)
-        return {"categories": [{"id": c.id, "name": c.name} for c in cats]}
+        return JSONResponse({"categories": [{"id": c.id, "name": c.name} for c in cats]})
 
 @router.get("/incidents/categories", response_class=HTMLResponse)
 async def manager_incident_categories(
@@ -3393,7 +3393,7 @@ async def get_employees_for_object_manager(
                         if object_id in allowed_objects:
                             employee_data = {
                                 "id": int(emp.id),
-                                "name": str(f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username or f"ID {emp.id}"),
+                                "name": str(f"{emp.last_name or ''} {emp.first_name or ''}".strip() or emp.username or f"ID {emp.id}"),
                                 "username": str(emp.username or ""),
                                 "role": str(emp.role),
                                 "is_active": bool(emp.is_active),
