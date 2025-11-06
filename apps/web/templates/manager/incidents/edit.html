@@ -26,7 +26,15 @@
       </div>
       <div class="col-md-4">
         <label class="form-label">Категория</label>
-        <input type="text" name="category" class="form-control" value="{{ incident.category or '' }}" />
+        <select name="category" class="form-select">
+          {% if categories %}
+            {% for c in categories %}
+            <option value="{{ c.name }}" {% if incident.category == c.name %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          {% else %}
+            <option value="{{ incident.category or '' }}" selected>{{ incident.category or 'Без категории' }}</option>
+          {% endif %}
+        </select>
       </div>
       <div class="col-md-4">
         <label class="form-label">Критичность</label>
@@ -39,6 +47,10 @@
       <div class="col-md-4">
         <label class="form-label">Ущерб (₽)</label>
         <input type="number" step="0.01" min="0" name="damage_amount" class="form-control" value="{{ incident.damage_amount or '' }}" />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Номер инцидента</label>
+        <input type="text" name="custom_number" class="form-control" value="{{ incident.custom_number or '' }}" />
       </div>
       <div class="col-12">
         <label class="form-label">Описание</label>

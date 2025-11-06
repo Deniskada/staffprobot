@@ -1,0 +1,50 @@
+{% extends "manager/base_manager.html" %}
+{% block title %}Категории инцидентов{% endblock %}
+{% block manager_content %}
+<div class="container mt-4">
+  <h2>Категории инцидентов</h2>
+  {% if categories_by_owner %}
+  {% for owner_id, cats in categories_by_owner.items() %}
+  <div class="card mt-3">
+    <div class="card-header">Владелец ID: {{ owner_id }}</div>
+    <div class="card-body">
+      <form class="row g-2" method="post" action="/manager/incidents/categories">
+        <input type="hidden" name="owner_id" value="{{ owner_id }}">
+        <div class="col-md-4">
+          <input type="text" class="form-control" name="name" placeholder="Новая категория" required>
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-primary" type="submit"><i class="bi bi-plus"></i> Добавить</button>
+        </div>
+      </form>
+      <table class="table table-sm table-hover mt-3">
+        <thead><tr><th>#</th><th>Название</th><th class="text-end">Действия</th></tr></thead>
+        <tbody>
+          {% for c in cats %}
+          <tr>
+            <td>{{ c.id }}</td>
+            <td>{{ c.name }}</td>
+            <td class="text-end">
+              <form method="post" action="/manager/incidents/categories" class="d-inline">
+                <input type="hidden" name="owner_id" value="{{ owner_id }}">
+                <input type="hidden" name="category_id" value="{{ c.id }}">
+                <input type="hidden" name="action" value="delete">
+                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i> Деактивировать</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="text-muted text-center">Нет категорий</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <p class="text-muted">Доступные владельцы/объекты не найдены.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+

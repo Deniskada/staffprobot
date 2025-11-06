@@ -28,6 +28,7 @@ from apps.web.utils.applications_utils import get_new_applications_count
 from domain.entities.manager_object_permission import ManagerObjectPermission
 from domain.entities.contract import Contract
 from urllib.parse import quote
+from shared.services.incident_category_service import IncidentCategoryService
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 from apps.web.jinja import templates
@@ -110,6 +111,7 @@ async def manager_incident_create(
     notes = (form.get("notes") or "").strip()
     object_id = form.get("object_id")
     employee_id = form.get("employee_id")
+    custom_number = (form.get("custom_number") or "").strip()
     try:
         object_id_int = int(object_id) if object_id else None
     except ValueError:
@@ -134,6 +136,7 @@ async def manager_incident_create(
             "object_id": object_id_int,
             "employee_id": employee_id_int,
             "notes": notes or None,
+            "custom_number": custom_number or None
         }
         await db.execute(insert(Incident).values(**values))
         await db.commit()
@@ -177,7 +180,12 @@ async def manager_incident_edit_form(
         if emp_ids:
             emp_res = await db.execute(select(UserEntity).where(UserEntity.id.in_(list(emp_ids))).order_by(UserEntity.last_name, UserEntity.first_name))
             employees = emp_res.scalars().all()
-        return templates.TemplateResponse("manager/incidents/edit.html", {"request": request, "incident": incident, "objects": accessible_objects, "employees": employees})
+        # Категории
+        cat_service = IncidentCategoryService(db)
+        categories = []
+        for oid in owner_ids:
+            categories.extend(await cat_service.list_categories(oid))
+        return templates.TemplateResponse("manager/incidents/edit.html", {"request": request, "incident": incident, "objects": accessible_objects, "employees": employees, "categories": categories})
 
 
 @router.post("/incidents/{incident_id}/edit")
@@ -203,6 +211,7 @@ async def manager_incident_edit(
         employee_id_int = int(employee_id) if employee_id else None
     except ValueError:
         employee_id_int = None
+    custom_number = (form.get("custom_number") or "").strip()
     from decimal import Decimal, InvalidOperation
     damage_amount = None
     if damage_amount_str:
@@ -229,11 +238,65 @@ async def manager_incident_edit(
             notes=notes or None,
             object_id=object_id_int or incident.object_id,
             employee_id=employee_id_int if employee_id_int is not None else incident.employee_id,
-            damage_amount=damage_amount if damage_amount is not None else incident.damage_amount
+            damage_amount=damage_amount if damage_amount is not None else incident.damage_amount,
+            custom_number=custom_number or incident.custom_number
         )
         await db.execute(upd)
         await db.commit()
     return RedirectResponse(url=f"/manager/incidents/{incident_id}", status_code=303)
+
+
+@router.get("/incidents/categories", response_class=HTMLResponse)
+async def manager_incident_categories(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    async with get_async_session() as db:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        # Получаем доступные объекты и owner_ids
+        perm = ManagerPermissionService(db)
+        accessible_objects = await perm.get_user_accessible_objects(user_id)
+        owner_ids = sorted({getattr(o, 'owner_id', None) for o in accessible_objects if getattr(o, 'owner_id', None) is not None})
+        categories_by_owner = {}
+        cat_service = IncidentCategoryService(db)
+        for oid in owner_ids:
+            categories_by_owner[oid] = await cat_service.list_categories(oid)
+        return templates.TemplateResponse("manager/incidents/categories.html", {"request": request, "categories_by_owner": categories_by_owner})
+
+
+@router.post("/incidents/categories")
+async def manager_incident_categories_save(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    owner_id = form.get("owner_id")
+    category_id = form.get("category_id")
+    action = (form.get("action") or "save").strip()
+    if not name and action == "save":
+        raise HTTPException(status_code=400, detail="Название обязательно")
+    try:
+        owner_id_int = int(owner_id) if owner_id else None
+    except ValueError:
+        owner_id_int = None
+    try:
+        category_id_int = int(category_id) if category_id else None
+    except ValueError:
+        category_id_int = None
+    async with get_async_session() as db:
+        cat_service = IncidentCategoryService(db)
+        if action == "delete" and category_id_int:
+            await cat_service.deactivate(category_id_int)
+        else:
+            if not owner_id_int:
+                raise HTTPException(status_code=400, detail="Не указан владелец для категории")
+            await cat_service.create_or_update(owner_id_int, name, category_id_int)
+    return RedirectResponse(url="/manager/incidents/categories", status_code=303)
 
 
 @router.post("/incidents/{incident_id}/status")

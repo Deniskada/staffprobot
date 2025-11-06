@@ -3,7 +3,11 @@
 {% block manager_content %}
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-end mb-3">
-    <h2 class="mb-0">Инциденты</h2>
+    <div class="d-flex align-items-center gap-2">
+      <h2 class="mb-0">Инциденты</h2>
+      <a href="/manager/incidents/categories" class="btn btn-outline-secondary btn-sm"><i class="bi bi-tags"></i> Категории</a>
+      <a href="/manager/incidents/create" class="btn btn-danger btn-sm"><i class="fas fa-exclamation-triangle"></i> Создать инцидент</a>
+    </div>
     <form method="get" class="d-flex gap-2">
       <div>
         <label for="object_id" class="form-label">Объект</label>
