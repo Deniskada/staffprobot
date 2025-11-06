@@ -58,7 +58,16 @@ async def manager_incidents_index(
                     conditions.append(Incident.object_id == oid)
                 else:
                     # Нет доступа — пустой список
-                    return templates.TemplateResponse("manager/incidents/index.html", {"request": request, "current_user": current_user, "incidents": [], "objects": accessible_objects, "status_filter": status, "selected_object_id": None})
+                    manager_context = await get_manager_context(user_id, db)
+                    return templates.TemplateResponse("manager/incidents/index.html", {
+                        "request": request,
+                        "current_user": current_user,
+                        "incidents": [],
+                        "objects": accessible_objects,
+                        "status_filter": status,
+                        "selected_object_id": None,
+                        **manager_context
+                    })
             except ValueError:
                 pass
         query = select(Incident).where(and_(*conditions)).options(
@@ -69,7 +78,17 @@ async def manager_incidents_index(
         ).order_by(Incident.created_at.desc()).limit(200)
         result = await db.execute(query)
         incidents = result.scalars().all()
-        return templates.TemplateResponse("manager/incidents/index.html", {"request": request, "current_user": current_user, "incidents": incidents, "objects": accessible_objects, "status_filter": status, "selected_object_id": object_id})
+        # Получаем общий контекст для меню
+        manager_context = await get_manager_context(user_id, db)
+        return templates.TemplateResponse("manager/incidents/index.html", {
+            "request": request,
+            "current_user": current_user,
+            "incidents": incidents,
+            "objects": accessible_objects,
+            "status_filter": status,
+            "selected_object_id": object_id,
+            **manager_context
+        })
 
 
 @router.get("/incidents/create", response_class=HTMLResponse)
@@ -83,7 +102,14 @@ async def manager_incident_create_form(
         user_id = await get_user_id_from_current_user(current_user, db)
         perm = ManagerPermissionService(db)
         accessible_objects = await perm.get_user_accessible_objects(user_id)
-        return templates.TemplateResponse("manager/incidents/create.html", {"request": request, "objects": accessible_objects, "current_user": current_user})
+        # Получаем общий контекст для меню
+        manager_context = await get_manager_context(user_id, db)
+        return templates.TemplateResponse("manager/incidents/create.html", {
+            "request": request,
+            "objects": accessible_objects,
+            "current_user": current_user,
+            **manager_context
+        })
 
 
 @router.post("/incidents/create")
@@ -204,7 +230,13 @@ async def manager_incident_categories(
         cat_service = IncidentCategoryService(db)
         for oid in owner_ids:
             categories_by_owner[oid] = await cat_service.list_categories(oid)
-        return templates.TemplateResponse("manager/incidents/categories.html", {"request": request, "categories_by_owner": categories_by_owner})
+        # Получаем общий контекст для меню
+        manager_context = await get_manager_context(user_id, db)
+        return templates.TemplateResponse("manager/incidents/categories.html", {
+            "request": request,
+            "categories_by_owner": categories_by_owner,
+            **manager_context
+        })
 
 
 @router.post("/incidents/categories")
@@ -294,7 +326,16 @@ async def manager_incident_edit_form(
         categories = []
         for oid in owner_ids:
             categories.extend(await cat_service.list_categories(oid))
-        return templates.TemplateResponse("manager/incidents/edit.html", {"request": request, "incident": incident, "objects": accessible_objects, "employees": employees, "categories": categories})
+        # Получаем общий контекст для меню
+        manager_context = await get_manager_context(user_id, db)
+        return templates.TemplateResponse("manager/incidents/edit.html", {
+            "request": request,
+            "incident": incident,
+            "objects": accessible_objects,
+            "employees": employees,
+            "categories": categories,
+            **manager_context
+        })
 
 
 @router.post("/incidents/{incident_id}/edit")
