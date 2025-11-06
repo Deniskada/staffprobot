@@ -91,7 +91,7 @@
                         <div class="row">
                             <div class="col-md-3">
                                 <label for="status" class="form-label">Статус</label>
-                                <select class="form-select" id="status" name="status">
+                                <select class="form-select" id="status" name="status" onchange="applyFiltersImmediate()">
                                     <option value="">Все статусы</option>
                                     <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Активные</option>
                                     <option value="planned" {% if filters.status == 'planned' %}selected{% endif %}>Запланированные</option>
@@ -101,11 +101,11 @@
                             </div>
                             <div class="col-md-3">
                                 <label for="object_id" class="form-label">Объект</label>
-                                <select class="form-select" id="object_id" name="object_id">
+                                <select class="form-select" id="object_id" name="object_id" onchange="applyFiltersImmediate()">
                                     <option value="">Все объекты</option>
                                     {% if objects %}
                                         {% for obj in objects %}
-                                        <option value="{{ obj.id }}" {% if filters.object_id == obj.id %}selected{% endif %}>
+                                        <option value="{{ obj.id }}" {% if (filters.object_id|string) == (obj.id|string) %}selected{% endif %}>
                                             {{ obj.name }}
                                         </option>
                                         {% endfor %}
@@ -185,10 +185,10 @@
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
-                                                {{ shift.user_name[0] }}
+                                                {{ (shift.user_last_name or shift.user_name or ' ')[0] }}
                                             </div>
                                             <div>
-                                                <div class="fw-bold">{{ shift.user_name }}</div>
+                                                <div class="fw-bold">{{ (shift.user_last_name or '') }} {{ (shift.user_first_name or '') }}</div>
                                                 <small class="text-muted">ID: {{ shift.user_id or 'Не указан' }}</small>
                                             </div>
                                         </div>
@@ -532,7 +532,7 @@ function initializeDateRangePicker() {
     });
     
     
-    // Обработчик очистки
+        // Обработчик очистки
     clearBtn.addEventListener('click', function() {
         dateRangeInput.value = '';
         dateFromInput.value = '';
@@ -540,6 +540,7 @@ function initializeDateRangePicker() {
         if (dateRangePicker) {
             dateRangePicker.clear();
         }
+            applyFiltersImmediate();
     });
 }
 
@@ -601,7 +602,20 @@ function createDateRangePicker() {
     // Создаем красивый календарь
     const calendarEl = modal.querySelector('#datePickerCalendar');
     const monthYearEl = modal.querySelector('#calendarMonthYear');
-    const calendar = createBeautifulCalendar(calendarEl, monthYearEl);
+    let visible = new Date();
+    createBeautifulCalendar(calendarEl, monthYearEl, visible);
+
+    // Навигация по месяцам
+    const nav = document.createElement('div');
+    nav.className = 'd-flex justify-content-between align-items-center mb-2';
+    nav.innerHTML = `
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="drPrev"><i class="bi bi-chevron-left"></i></button>
+        <span class="small text-muted">Навигация по месяцам</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="drNext"><i class="bi bi-chevron-right"></i></button>
+    `;
+    modal.querySelector('.modal-body').insertBefore(nav, modal.querySelector('.modal-body').firstChild);
+    modal.querySelector('#drPrev').addEventListener('click', () => { visible.setMonth(visible.getMonth() - 1); createBeautifulCalendar(calendarEl, monthYearEl, visible); });
+    modal.querySelector('#drNext').addEventListener('click', () => { visible.setMonth(visible.getMonth() + 1); createBeautifulCalendar(calendarEl, monthYearEl, visible); });
     
     // Обработчик выбора даты
     calendarEl.addEventListener('click', function(e) {
@@ -637,6 +651,7 @@ function createDateRangePicker() {
             dateToInput.value = formatDateForInput(endDate);
         }
         bootstrapModal.hide();
+        applyFiltersImmediate();
     });
     
     // Обработчик закрытия модального окна
@@ -679,10 +694,10 @@ function createDateRangePicker() {
 }
 
 // Создание красивого календаря
-function createBeautifulCalendar(container, monthYearEl) {
+function createBeautifulCalendar(container, monthYearEl, baseDate) {
     const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
+    const currentMonth = baseDate.getMonth();
+    const currentYear = baseDate.getFullYear();
     
     const monthNames = [
         'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -884,6 +899,23 @@ function initializeFilters() {
     
     // Показываем фильтры если есть активные
     // Карточка фильтров всегда отображается
+}
+
+// Применение серверных фильтров без кнопки "Применить"
+function applyFiltersImmediate() {
+    const url = new URL(window.location);
+    const status = (document.getElementById('status')?.value || '').trim();
+    const objectId = (document.getElementById('object_id')?.value || '').trim();
+    const dateFrom = (document.getElementById('date_from')?.value || '').trim();
+    const dateTo = (document.getElementById('date_to')?.value || '').trim();
+
+    if (status) url.searchParams.set('status', status); else url.searchParams.delete('status');
+    if (objectId) url.searchParams.set('object_id', objectId); else url.searchParams.delete('object_id');
+    if (dateFrom) url.searchParams.set('date_from', dateFrom); else url.searchParams.delete('date_from');
+    if (dateTo) url.searchParams.set('date_to', dateTo); else url.searchParams.delete('date_to');
+
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
 }
 
 // Функции для работы с датами

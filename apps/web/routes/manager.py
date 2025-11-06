@@ -3741,7 +3741,9 @@ async def manager_shifts_list(
                     'object_id': shift.object_id,
                     'object_name': shift.object.name if shift.object else 'Неизвестный объект',
                     'user_id': shift.user_id,
-                    'user_name': f"{shift.user.first_name} {shift.user.last_name or ''}".strip() if shift.user else 'Неизвестный пользователь',
+                    'user_first_name': (shift.user.first_name if shift.user else '') or '',
+                    'user_last_name': (shift.user.last_name if shift.user else '') or '',
+                    'user_name': (f"{(shift.user.last_name or '').strip()} {(shift.user.first_name or '').strip()}".strip() if shift.user else 'Неизвестный пользователь'),
                     'start_time': web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.start_time else '-',
                     'end_time': web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if shift.end_time else '-',
                     'status': shift.status,
@@ -3771,7 +3773,9 @@ async def manager_shifts_list(
                     'object_id': schedule.object_id,
                     'object_name': schedule.object.name if schedule.object else 'Неизвестный объект',
                     'user_id': schedule.user_id,
-                    'user_name': f"{schedule.user.first_name} {schedule.user.last_name or ''}".strip() if schedule.user else 'Неизвестный пользователь',
+                    'user_first_name': (schedule.user.first_name if schedule.user else '') or '',
+                    'user_last_name': (schedule.user.last_name if schedule.user else '') or '',
+                    'user_name': (f"{(schedule.user.last_name or '').strip()} {(schedule.user.first_name or '').strip()}".strip() if schedule.user else 'Неизвестный пользователь'),
                     'start_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_start, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_start else '-',
                     'end_time': web_timezone_helper.format_datetime_with_timezone(schedule.planned_end, schedule.object.timezone if schedule.object else 'Europe/Moscow', '%Y-%m-%d %H:%M') if schedule.planned_end else '-',
                     'status': schedule.status,
@@ -3785,7 +3789,7 @@ async def manager_shifts_list(
             if sort:
                 reverse = order == 'desc'
                 if sort == "user_name":
-                    all_shifts.sort(key=lambda x: x['user_name'].lower(), reverse=reverse)
+                    all_shifts.sort(key=lambda x: ((x.get('user_last_name') or '').lower(), (x.get('user_first_name') or '').lower()), reverse=reverse)
                 elif sort == "object_name":
                     all_shifts.sort(key=lambda x: x['object_name'].lower(), reverse=reverse)
                 elif sort == "start_time":
