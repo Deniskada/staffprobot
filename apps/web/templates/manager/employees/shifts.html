@@ -157,7 +157,11 @@
                                 data-date="{{ shift.start_time.strftime('%Y-%m-%d') if shift.start_time else '' }}">
                                 <td>
                                     <i class="bi bi-calendar3 me-1"></i>
-                                    {{ shift.start_time.strftime('%d.%m.%Y') if shift.start_time else 'Не указана' }}
+                                    {% if shift.start_time %}
+                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object and shift.object.timezone else 'Europe/Moscow', '%d.%m.%Y') }}
+                                    {% else %}
+                                        Не указана
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <i class="bi bi-building me-1"></i>
@@ -165,9 +169,9 @@
                                 </td>
                                 <td>
                                     {% if shift.start_time and shift.end_time %}
-                                        {{ shift.start_time.strftime('%H:%M') }} - {{ shift.end_time.strftime('%H:%M') }}
+                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object and shift.object.timezone else 'Europe/Moscow', '%H:%M') }} - {{ web_timezone_helper.format_datetime_with_timezone(shift.end_time, shift.object.timezone if shift.object and shift.object.timezone else 'Europe/Moscow', '%H:%M') }}
                                     {% elif shift.start_time %}
-                                        {{ shift.start_time.strftime('%H:%M') }} - ...
+                                        {{ web_timezone_helper.format_datetime_with_timezone(shift.start_time, shift.object.timezone if shift.object and shift.object.timezone else 'Europe/Moscow', '%H:%M') }} - ...
                                     {% else %}
                                         Не указано
                                     {% endif %}

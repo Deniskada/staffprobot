@@ -17,4 +17,8 @@ register_filters(templates)
 # Добавляем settings в глобальные переменные Jinja2
 templates.env.globals['settings'] = settings
 
+# Добавляем web_timezone_helper в глобальные переменные Jinja2
+from apps.web.utils.timezone_utils import web_timezone_helper
+templates.env.globals['web_timezone_helper'] = web_timezone_helper
+
 

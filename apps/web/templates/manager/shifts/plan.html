@@ -1,0 +1,617 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}Планирование смен{% endblock %}
+
+{% block manager_content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-calendar-plus"></i> Планирование смен
+                </h1>
+                <a href="{{ return_to }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>Назад
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form id="planShiftForm">
+                        <!-- Выбор объекта и сотрудника -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label for="planObjectSelect" class="form-label">Объект <span class="text-danger">*</span></label>
+                                <select class="form-select" id="planObjectSelect" required>
+                                    <option value="">Выберите объект</option>
+                                    {% for obj in objects %}
+                                    <option value="{{ obj.id }}" {% if selected_object_id == obj.id %}selected{% endif %}>{{ obj.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="planEmployeeSelect" class="form-label">Сотрудник <span class="text-danger">*</span></label>
+                                <select class="form-select" id="planEmployeeSelect" required>
+                                    <option value="">Выберите сотрудника</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Календарь -->
+                        <div class="calendar-container">
+                            <div class="calendar-header d-flex justify-content-between align-items-center mb-3">
+                                <button type="button" class="btn btn-outline-secondary" id="prevMonth">
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+                                <h5 class="mb-0 text-primary" id="calendarMonthYear"></h5>
+                                <button type="button" class="btn btn-outline-secondary" id="nextMonth">
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="calendar-grid" id="planShiftCalendar">
+                                <!-- Календарь будет загружен через JavaScript -->
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <div id="selectedSlotsInfo" style="display: none;">
+                        <div class="text-info">
+                            <i class="bi bi-check-circle"></i>
+                            Выбрано тайм-слотов: <strong><span id="selectedSlotsCount">0</span></strong>
+                        </div>
+                    </div>
+                    <div>
+                        <a href="{{ return_to }}" class="btn btn-secondary">Отмена</a>
+                        <button type="button" class="btn btn-success" id="confirmPlanShift" disabled>
+                            <i class="bi bi-calendar-check"></i> Запланировать смены
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const returnToUrl = "{{ return_to }}";
+const selectedObjectId = {{ selected_object_id or 'null' }};
+let selectedTimeslots = new Set();
+let availableTimeslots = [];
+let currentCalendarDate = new Date();
+
+// Загрузка данных при инициализации
+document.addEventListener('DOMContentLoaded', function() {
+    // Загружаем объекты (они уже есть в шаблоне, но может понадобиться обновление)
+    loadPlanShiftObjects();
+    
+    // Если объект предзаполнен, загружаем сотрудников
+    if (selectedObjectId) {
+        const objectSelect = document.getElementById('planObjectSelect');
+        objectSelect.value = selectedObjectId;
+        loadEmployeesForObject(selectedObjectId);
+    }
+    
+    // Инициализируем календарь
+    initializePlanShiftCalendar();
+    
+    // Обработчик изменения объекта
+    document.getElementById('planObjectSelect')?.addEventListener('change', function() {
+        if (this.value) {
+            loadEmployeesForObject(this.value);
+            clearCalendar();
+        } else {
+            clearCalendar();
+            clearEmployees();
+        }
+    });
+    
+    // Обработчик изменения сотрудника
+    document.getElementById('planEmployeeSelect')?.addEventListener('change', function() {
+        const objectId = document.getElementById('planObjectSelect').value;
+        if (this.value && objectId) {
+            loadTimeslotsForObject(objectId);
+        } else {
+            clearCalendar();
+        }
+    });
+    
+    // Обработчик подтверждения планирования
+    document.getElementById('confirmPlanShift')?.addEventListener('click', confirmPlanShift);
+});
+
+// Загрузка объектов (для обновления списка при необходимости)
+async function loadPlanShiftObjects() {
+    try {
+        const response = await fetch('/manager/calendar/api/objects');
+        const objects = await response.json();
+        
+        const select = document.getElementById('planObjectSelect');
+        const currentValue = select.value;
+        select.innerHTML = '<option value="">Выберите объект</option>';
+        
+        if (Array.isArray(objects)) {
+            objects.forEach(obj => {
+                const option = document.createElement('option');
+                option.value = obj.id;
+                option.textContent = obj.name;
+                if (obj.id == selectedObjectId) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        }
+        
+        if (currentValue) {
+            select.value = currentValue;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки объектов:', error);
+    }
+}
+
+// Загрузка сотрудников для конкретного объекта
+async function loadEmployeesForObject(objectId) {
+    try {
+        const response = await fetch(`/manager/api/employees/for-object/${objectId}`);
+        const employees = await response.json();
+        
+        const select = document.getElementById('planEmployeeSelect');
+        select.innerHTML = '<option value="">Выберите сотрудника</option>';
+        
+        if (Array.isArray(employees)) {
+            employees.forEach(emp => {
+                const option = document.createElement('option');
+                option.value = emp.id;
+                option.textContent = emp.name;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки сотрудников для объекта:', error);
+    }
+}
+
+// Очистка списка сотрудников
+function clearEmployees() {
+    const select = document.getElementById('planEmployeeSelect');
+    select.innerHTML = '<option value="">Выберите сотрудника</option>';
+}
+
+// Очистка календаря
+function clearCalendar() {
+    const calendarEl = document.getElementById('planShiftCalendar');
+    calendarEl.innerHTML = '<div class="text-center text-muted p-4">Выберите объект и сотрудника для отображения календаря</div>';
+    availableTimeslots = [];
+    selectedTimeslots.clear();
+    updateSelectedSlotsInfo();
+}
+
+// Загрузка тайм-слотов для объекта
+async function loadTimeslotsForObject(objectId) {
+    try {
+        const today = new Date();
+        const startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+        
+        const response = await fetch(`/manager/calendar/api/data?start_date=${formatDateForAPI(startDate)}&end_date=${formatDateForAPI(endDate)}&object_ids=${objectId}`);
+        const data = await response.json();
+        
+        availableTimeslots = data.timeslots || [];
+        console.log('Loaded timeslots:', availableTimeslots);
+        updateCalendar();
+        
+    } catch (error) {
+        console.error('Ошибка загрузки тайм-слотов:', error);
+        alert('Ошибка загрузки тайм-слотов: ' + error.message);
+    }
+}
+
+// Инициализация календаря планирования
+function initializePlanShiftCalendar() {
+    const prevBtn = document.getElementById('prevMonth');
+    const nextBtn = document.getElementById('nextMonth');
+    
+    prevBtn?.addEventListener('click', () => {
+        currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
+        updateCalendar();
+    });
+    
+    nextBtn?.addEventListener('click', () => {
+        currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
+        updateCalendar();
+    });
+    
+    updateCalendar();
+}
+
+// Обновление календаря
+function updateCalendar() {
+    const monthYearEl = document.getElementById('calendarMonthYear');
+    const calendarEl = document.getElementById('planShiftCalendar');
+    
+    // Обновляем заголовок
+    const monthNames = [
+        'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+        'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+    ];
+    monthYearEl.textContent = `${monthNames[currentCalendarDate.getMonth()]} ${currentCalendarDate.getFullYear()}`;
+    
+    // Создаем календарь
+    createPlanShiftCalendar(calendarEl);
+}
+
+// Создание календаря планирования
+function createPlanShiftCalendar(container) {
+    const year = currentCalendarDate.getFullYear();
+    const month = currentCalendarDate.getMonth();
+    
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Правильное вычисление первого понедельника недели
+    const firstMonday = new Date(firstDay);
+    firstMonday.setDate(firstDay.getDate() - firstDay.getDay() + 1);
+    
+    const daysOfWeek = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    
+    let html = `
+        <div class="calendar-weekdays">
+            ${daysOfWeek.map(day => `<div class="calendar-weekday">${day}</div>`).join('')}
+        </div>
+        <div class="calendar-days">
+    `;
+    
+    for (let i = 0; i < 42; i++) {
+        const date = new Date(firstMonday);
+        date.setDate(firstMonday.getDate() + i);
+        
+        const isCurrentMonth = date.getMonth() === month;
+        const dateStr = formatDateForAPI(date);
+        const timeslotsForDate = availableTimeslots.filter(ts => {
+            const tsDate = ts.date || ts.slot_date || ts.start_date;
+            return tsDate === dateStr;
+        });
+        
+        let dayClass = 'calendar-day';
+        if (!isCurrentMonth) {
+            dayClass += ' disabled';
+        } else if (timeslotsForDate.length > 0) {
+            dayClass += ' has-timeslots';
+        }
+        
+        html += `<div class="${dayClass}" data-date="${dateStr}">`;
+        html += `<div class="day-number">${date.getDate()}</div>`;
+        
+        if (isCurrentMonth && timeslotsForDate.length > 0) {
+            const availableSlots = timeslotsForDate.filter(ts => (ts.available_slots || 0) > 0);
+            
+            if (availableSlots.length > 0) {
+                availableSlots.forEach(ts => {
+                    const startTime = ts.start_time || ts.start_time_str || '00:00';
+                    const endTime = ts.end_time || ts.end_time_str || '00:00';
+                    const slotKey = `${dateStr}_${ts.id}`;
+                    const isSelected = selectedTimeslots.has(slotKey);
+                    
+                    html += `
+                        <div class="timeslot available ${isSelected ? 'selected' : ''}" data-timeslot-id="${ts.id}">
+                            <div class="timeslot-time">${startTime}-${endTime}</div>
+                        </div>
+                    `;
+                });
+            } else {
+                html += '<div class="no-slots">Нет свободных слотов</div>';
+            }
+        } else if (isCurrentMonth) {
+            html += '<div class="empty-message">Нет тайм-слотов</div>';
+        }
+        
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+    
+    // Добавляем обработчики кликов на тайм-слоты
+    container.removeEventListener('click', handleTimeslotClick);
+    container.addEventListener('click', handleTimeslotClick);
+}
+
+// Обработка клика по тайм-слоту
+async function handleTimeslotClick(e) {
+    const timeslotEl = e.target.closest('.timeslot');
+    if (!timeslotEl || !timeslotEl.classList.contains('available')) return;
+    
+    const timeslotId = timeslotEl.dataset.timeslotId;
+    const day = timeslotEl.closest('.calendar-day');
+    if (!day || day.classList.contains('disabled')) return;
+    
+    const date = day.dataset.date;
+    const employeeId = document.getElementById('planEmployeeSelect').value;
+    
+    if (!employeeId) {
+        alert('Сначала выберите сотрудника');
+        return;
+    }
+    
+    const isAvailable = await checkEmployeeAvailability(employeeId, timeslotId);
+    
+    if (isAvailable) {
+        const slotKey = `${date}_${timeslotId}`;
+        
+        if (selectedTimeslots.has(slotKey)) {
+            selectedTimeslots.delete(slotKey);
+            timeslotEl.classList.remove('selected');
+        } else {
+            selectedTimeslots.add(slotKey);
+            timeslotEl.classList.add('selected');
+        }
+        
+        updateSelectedSlotsInfo();
+    }
+}
+
+// Проверка доступности сотрудника для конкретного тайм-слота
+async function checkEmployeeAvailability(employeeId, timeslotId) {
+    try {
+        const response = await fetch('/manager/api/calendar/check-availability', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                timeslot_id: parseInt(timeslotId),
+                employee_id: parseInt(employeeId)
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.available) {
+            return true;
+        } else {
+            alert(result.message || 'Сотрудник недоступен в это время');
+            return false;
+        }
+        
+    } catch (error) {
+        console.error('Ошибка проверки доступности:', error);
+        alert('Ошибка проверки доступности сотрудника');
+        return false;
+    }
+}
+
+// Обновление информации о выбранных слотах
+function updateSelectedSlotsInfo() {
+    const count = selectedTimeslots.size;
+    const infoEl = document.getElementById('selectedSlotsInfo');
+    const countEl = document.getElementById('selectedSlotsCount');
+    const confirmBtn = document.getElementById('confirmPlanShift');
+    
+    if (count > 0) {
+        infoEl.style.display = 'block';
+        countEl.textContent = count;
+        confirmBtn.disabled = false;
+    } else {
+        infoEl.style.display = 'none';
+        confirmBtn.disabled = true;
+    }
+}
+
+// Подтверждение планирования смен
+async function confirmPlanShift() {
+    const objectId = document.getElementById('planObjectSelect').value;
+    const employeeId = document.getElementById('planEmployeeSelect').value;
+    
+    if (!objectId || !employeeId || selectedTimeslots.size === 0) {
+        alert('Выберите объект, сотрудника и тайм-слоты');
+        return;
+    }
+    
+    const confirmBtn = document.getElementById('confirmPlanShift');
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Планирование...';
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const slotKey of selectedTimeslots) {
+        try {
+            const [date, timeslotId] = slotKey.split('_');
+            const timeslot = availableTimeslots.find(ts => String(ts.id) === String(timeslotId));
+            
+            if (!timeslot) continue;
+            
+            const response = await fetch('/manager/api/calendar/plan-shift', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    timeslot_id: parseInt(timeslotId),
+                    employee_id: parseInt(employeeId)
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                successCount++;
+            } else {
+                errorCount++;
+                console.error('Ошибка планирования:', result.message);
+            }
+        } catch (error) {
+            errorCount++;
+            console.error('Ошибка планирования смены:', error);
+        }
+    }
+    
+    confirmBtn.disabled = false;
+    confirmBtn.innerHTML = '<i class="bi bi-calendar-check"></i> Запланировать смены';
+    
+    if (successCount > 0) {
+        alert(`Успешно запланировано смен: ${successCount}${errorCount > 0 ? `, ошибок: ${errorCount}` : ''}`);
+        // Возвращаемся на предыдущую страницу
+        window.location.href = returnToUrl;
+    } else {
+        alert('Не удалось запланировать ни одной смены');
+    }
+}
+
+// Форматирование даты для API
+function formatDateForAPI(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+</script>
+
+<!-- CSS для календаря планирования -->
+<style>
+.calendar-container {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.calendar-weekday {
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.85em;
+    color: #6c757d;
+    padding: 8px 4px;
+}
+
+.calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.calendar-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+    height: calc((100vh - 400px) / 6);
+    min-height: 100px;
+    padding: 4px;
+    overflow: hidden;
+}
+
+.calendar-day.disabled {
+    color: #dee2e6;
+    cursor: not-allowed;
+    background-color: #f8f9fa;
+}
+
+.calendar-day.has-timeslots {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.calendar-day.selected {
+    background-color: #e3f2fd;
+    color: #1976d2;
+    border-color: #2196f3;
+    font-weight: 600;
+}
+
+.calendar-day.selected:hover {
+    background-color: #bbdefb;
+}
+
+.day-number {
+    font-weight: 600;
+    font-size: 1em;
+    margin-bottom: 4px;
+}
+
+.timeslot {
+    position: relative;
+    margin: 2px 0;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #4caf50;
+    background: #e8f5e8;
+    color: #2e7d32;
+    cursor: pointer;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.timeslot.available:hover {
+    transform: scale(1.03);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.timeslot.selected {
+    background: #2196f3 !important;
+    color: #fff !important;
+    border-color: #1976d2 !important;
+}
+
+.timeslot-time {
+    font-weight: 600;
+}
+
+.empty-message {
+    font-size: 10px;
+    color: #6c757d;
+    text-align: center;
+    margin-top: 4px;
+}
+
+.no-slots {
+    font-size: 10px;
+    color: #dc3545;
+    text-align: center;
+    margin-top: 4px;
+    font-weight: bold;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .calendar-container {
+        padding: 15px;
+    }
+    
+    .calendar-day {
+        height: calc((100vh - 350px) / 6);
+        min-height: 70px;
+        font-size: 0.8em;
+    }
+    
+    .timeslot {
+        font-size: 0.6em;
+        padding: 2px 4px;
+    }
+}
+</style>
+{% endblock %}
+

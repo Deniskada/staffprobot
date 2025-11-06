@@ -216,9 +216,15 @@ async def manager_dashboard(
 @router.get("/objects", response_class=HTMLResponse)
 async def manager_objects(
     request: Request,
-    current_user: dict = Depends(require_manager_or_owner)
+    current_user: dict = Depends(require_manager_or_owner),
+    q_name: Optional[str] = Query(None, description="Поиск по названию"),
+    q_address: Optional[str] = Query(None, description="Поиск по адресу"),
+    sort: Optional[str] = Query(None, description="Поле сортировки: name, address, hourly_rate, opening_time, closing_time, is_active, created_at"),
+    order: Optional[str] = Query("asc", description="Порядок сортировки: asc, desc"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    per_page: int = Query(25, ge=1, le=100, description="Количество на странице")
 ):
-    """Список объектов управляющего."""
+    """Список объектов управляющего с фильтрацией, сортировкой и пагинацией."""
     try:
         # Проверяем, что current_user не является RedirectResponse
         if isinstance(current_user, RedirectResponse):
@@ -254,9 +260,44 @@ async def manager_objects(
                     "shift_tasks": obj.shift_tasks or [],
                     "work_days_mask": obj.work_days_mask,
                     "schedule_repeat_weeks": obj.schedule_repeat_weeks,
-                    "timezone": obj.timezone
+                    "timezone": obj.timezone,
+                    "created_at": obj.created_at
                 }
                 processed_objects.append(processed_obj)
+            
+            # Фильтрация по названию и адресу (contains, case-insensitive)
+            if q_name:
+                qn = q_name.strip().lower()
+                processed_objects = [o for o in processed_objects if qn in (o["name"] or "").lower()]
+            if q_address:
+                qa = q_address.strip().lower()
+                processed_objects = [o for o in processed_objects if qa in (o["address"] or "").lower()]
+            
+            # Сортировка
+            if sort:
+                key_map = {
+                    "name": lambda o: (o["name"] or "").lower(),
+                    "address": lambda o: (o["address"] or "").lower(),
+                    "hourly_rate": lambda o: o["hourly_rate"],
+                    "opening_time": lambda o: o["opening_time"],
+                    "closing_time": lambda o: o["closing_time"],
+                    "is_active": lambda o: o["is_active"],
+                    "created_at": lambda o: o["created_at"] or datetime.min,
+                }
+                key_func = key_map.get(sort)
+                if key_func:
+                    reverse = (order == "desc")
+                    processed_objects = sorted(processed_objects, key=key_func, reverse=reverse)
+            else:
+                # По умолчанию сортировка по названию
+                processed_objects = sorted(processed_objects, key=lambda o: (o["name"] or "").lower())
+            
+            # Пагинация - подсчет ПОСЛЕ всех фильтров
+            total = len(processed_objects)
+            pages = (total + per_page - 1) // per_page if total > 0 else 0
+            start = (page - 1) * per_page
+            end = start + per_page
+            paginated_objects = processed_objects[start:end]
             
             # Получаем права на каждый объект
             object_permissions = {}
@@ -284,9 +325,23 @@ async def manager_objects(
             return templates.TemplateResponse("manager/objects.html", {
                 "request": request,
                 "current_user": current_user,
-                "accessible_objects": processed_objects,
+                "accessible_objects": paginated_objects,
                 "object_permissions": object_permissions,
                 "permission_names": permission_names,
+                "filters": {
+                    "q_name": q_name,
+                    "q_address": q_address
+                },
+                "sort": {
+                    "field": sort,
+                    "order": order
+                },
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": total,
+                    "pages": pages
+                },
                 **manager_context
             })
         
@@ -625,8 +680,13 @@ async def manager_object_edit_post(
 async def manager_employees(
     request: Request,
     current_user: dict = Depends(require_manager_or_owner),
+    q_name: Optional[str] = Query(None, description="Поиск по ФИО"),
+    sort: Optional[str] = Query(None, description="Поле сортировки: name, phone, created_at"),
+    order: Optional[str] = Query("asc", description="Порядок сортировки: asc, desc"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    per_page: int = Query(25, ge=1, le=100, description="Количество на странице")
 ):
-    """Список сотрудников управляющего."""
+    """Список сотрудников управляющего с фильтрацией, сортировкой и пагинацией."""
     try:
         logger.info("Starting manager_employees function")
         
@@ -679,7 +739,6 @@ async def manager_employees(
                 
                 logger.info(f"Executing query: {employees_query}")
                 logger.info(f"Query parameters: object_ids={object_ids}")
-                logger.info(f"SQL: {str(employees_query.compile(compile_kwargs={'literal_binds': True}))}")
                 
                 result = await db.execute(employees_query)
                 employees = result.scalars().all()
@@ -691,6 +750,54 @@ async def manager_employees(
             else:
                 logger.info("No accessible objects, returning empty employee list")
             
+            # Преобразуем в список словарей для фильтрации и сортировки
+            employees_list = []
+            for emp in employees:
+                employees_list.append({
+                    "id": emp.id,
+                    "telegram_id": emp.telegram_id,
+                    "first_name": emp.first_name or "",
+                    "last_name": emp.last_name or "",
+                    "username": emp.username or "",
+                    "phone": emp.phone or "",
+                    "role": emp.role or "",
+                    "roles": emp.roles or [],
+                    "is_active": getattr(emp, 'is_active', True),
+                    "created_at": emp.created_at
+                })
+            
+            # Фильтрация по ФИО (contains, case-insensitive)
+            if q_name:
+                qn = q_name.strip().lower()
+                employees_list = [
+                    e for e in employees_list
+                    if qn in (f"{(e['last_name'] or '')} {(e['first_name'] or '')}".strip().lower())
+                    or qn in (f"{(e['first_name'] or '')} {(e['last_name'] or '')}".strip().lower())
+                    or qn in (e['username'] or '').lower()
+                ]
+            
+            # Сортировка
+            if sort:
+                key_map = {
+                    "name": lambda e: (e.get("last_name") or "", e.get("first_name") or ""),
+                    "phone": lambda e: e.get("phone") or "",
+                    "created_at": lambda e: e.get("created_at") if e.get("created_at") else datetime.min,
+                }
+                key_func = key_map.get(sort)
+                if key_func:
+                    reverse = (order == "desc")
+                    employees_list = sorted(employees_list, key=key_func, reverse=reverse)
+            else:
+                # По умолчанию сортировка по Фамилии, затем Имени
+                employees_list = sorted(employees_list, key=lambda e: ((e.get("last_name") or "").lower(), (e.get("first_name") or "").lower()))
+            
+            # Пагинация - подсчет ПОСЛЕ всех фильтров
+            total = len(employees_list)
+            pages = (total + per_page - 1) // per_page if total > 0 else 0
+            start = (page - 1) * per_page
+            end = start + per_page
+            paginated_employees = employees_list[start:end]
+            
             # Получаем данные для переключения интерфейсов
             logger.info("Getting available interfaces")
             available_interfaces = await login_service.get_available_interfaces(user_id)
@@ -701,7 +808,20 @@ async def manager_employees(
             return templates.TemplateResponse("manager/employees.html", {
                 "request": request,
                 "current_user": current_user,
-                "employees": employees,
+                "employees": paginated_employees,
+                "filters": {
+                    "q_name": q_name
+                },
+                "sort": {
+                    "field": sort,
+                    "order": order
+                },
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": total,
+                    "pages": pages
+                },
                 **manager_context
             })
         
@@ -3385,6 +3505,55 @@ async def check_employee_availability(
         raise HTTPException(status_code=500, detail=f"Ошибка проверки доступности: {str(e)}")
 
 
+@router.get("/shifts/plan", response_class=HTMLResponse)
+async def manager_shifts_plan(
+    request: Request,
+    object_id: Optional[int] = Query(None, description="ID объекта для предзаполнения"),
+    return_to: Optional[str] = Query(None, description="URL для возврата после планирования"),
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница планирования смен для управляющего."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+        
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем доступные объекты управляющего
+        permission_service = ManagerPermissionService(db)
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        
+        objects_list = [{"id": obj.id, "name": obj.name} for obj in accessible_objects]
+        
+        selected_object_id = None
+        if object_id:
+            for obj in accessible_objects:
+                if obj.id == object_id:
+                    selected_object_id = object_id
+                    break
+        
+        login_service = RoleBasedLoginService(db)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+        
+        return templates.TemplateResponse("manager/shifts/plan.html", {
+            "request": request,
+            "current_user": current_user,
+            "objects": objects_list,
+            "selected_object_id": selected_object_id,
+            "return_to": return_to or "/manager/shifts",
+            "available_interfaces": available_interfaces
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading manager shifts plan page: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки страницы планирования")
+
+
 @router.get("/shifts", response_class=HTMLResponse, name="manager_shifts")
 async def manager_shifts_list(
     request: Request,
@@ -4694,11 +4863,43 @@ async def manager_contract_edit(
             raise HTTPException(status_code=403, detail="У вас нет прав на редактирование этого договора")
         
         # Получаем объекты для отображения
-        objects_info = []
-        if contract.allowed_objects:
-            objects_query = select(Object).where(Object.id.in_(contract.allowed_objects))
+        # Нужно показать все объекты, доступные управляющему по договору, в котором есть объект из редактируемого договора сотрудника
+        contract_objects = contract.allowed_objects or []
+        
+        # Получаем владельцев объектов из редактируемого договора
+        owner_ids = set()
+        if contract_objects:
+            objects_query = select(Object).where(Object.id.in_(contract_objects))
             objects_result = await db.execute(objects_query)
-            objects_info = objects_result.scalars().all()
+            contract_objects_list = objects_result.scalars().all()
+            owner_ids = {obj.owner_id for obj in contract_objects_list if obj.owner_id}
+        
+        # Получаем все объекты из договоров управляющего с этими владельцами
+        accessible_objects = []
+        if owner_ids:
+            # Находим договоры управляющего с нужными владельцами
+            manager_contracts_with_owners = [
+                mc for mc in manager_contracts 
+                if mc.owner_id in owner_ids
+            ]
+            
+            # Получаем все объекты из allowed_objects этих договоров
+            accessible_object_ids = set()
+            for mc in manager_contracts_with_owners:
+                if mc.allowed_objects:
+                    accessible_object_ids.update(mc.allowed_objects)
+            
+            # Получаем объекты из БД
+            if accessible_object_ids:
+                objects_query = select(Object).where(Object.id.in_(accessible_object_ids))
+                objects_result = await db.execute(objects_query)
+                accessible_objects = objects_result.scalars().all()
+        
+        # Если нет объектов через owner_id, используем все доступные объекты управляющего
+        if not accessible_objects:
+            from shared.services.manager_permission_service import ManagerPermissionService
+            permission_service = ManagerPermissionService(db)
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
         
         return templates.TemplateResponse(
             "manager/contracts/edit.html",
@@ -4706,7 +4907,8 @@ async def manager_contract_edit(
                 "request": request,
                 "current_user": current_user,
                 "contract": contract,
-                "objects": objects_info
+                "objects": accessible_objects,
+                "accessible_objects": accessible_objects  # Для совместимости с шаблоном
             }
         )
         
