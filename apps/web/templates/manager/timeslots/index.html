@@ -446,6 +446,16 @@ function openBulkEditModal() {
 
 // Инициализация формы фильтров
 document.addEventListener('DOMContentLoaded', function() {
+    // Автоприменение фильтра при смене объекта
+    const objectSelect = document.getElementById('object_id');
+    const filterForm = document.getElementById('filterForm');
+    if (objectSelect && filterForm) {
+        objectSelect.addEventListener('change', function() {
+            // При смене объекта отправляем форму (сброс страницы не требуется)
+            filterForm.submit();
+        });
+    }
+
     // Работа с задачами в bulk edit
     let bulkTaskIndex = 0;
     

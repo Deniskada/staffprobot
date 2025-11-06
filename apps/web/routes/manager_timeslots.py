@@ -39,7 +39,7 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession):
 async def manager_timeslots_index(
     request: Request,
     current_user: dict = Depends(require_manager_or_owner),
-    object_id: Optional[int] = Query(None),
+    object_id: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
     sort_by: str = Query("slot_date"),
@@ -53,7 +53,7 @@ async def manager_timeslots_index(
             from shared.services.manager_permission_service import ManagerPermissionService
             from apps.web.services.object_service import TimeSlotService
             from sqlalchemy import select
-            from domain.entities.timeslot import TimeSlot
+            from domain.entities.time_slot import TimeSlot
             
             permission_service = ManagerPermissionService(session)
             timeslot_service = TimeSlotService(session)
@@ -87,10 +87,19 @@ async def manager_timeslots_index(
             objects_list = [{"id": obj.id, "name": obj.name} for obj in accessible_objects]
             first_available_object_id = accessible_objects[0].id if accessible_objects else None
             
+            # Парсим object_id (может быть пустой строкой из формы)
+            object_id_int = None
+            if object_id and object_id.strip():
+                try:
+                    object_id_int = int(object_id)
+                except (ValueError, TypeError):
+                    object_id_int = None
+            
             # Если указан object_id, фильтруем по нему
             selected_object = None
-            if object_id:
-                obj = next((o for o in accessible_objects if o.id == object_id), None)
+            selected_object_id = object_id_int
+            if object_id_int:
+                obj = next((o for o in accessible_objects if o.id == object_id_int), None)
                 if obj:
                     selected_object = {
                         "id": obj.id,
@@ -100,7 +109,7 @@ async def manager_timeslots_index(
                     }
             
             # Получаем тайм-слоты для всех доступных объектов (или одного, если указан фильтр)
-            target_objects = [obj for obj in accessible_objects if not object_id or obj.id == object_id]
+            target_objects = [obj for obj in accessible_objects if not object_id_int or obj.id == object_id_int]
             
             all_timeslots = []
             for obj in target_objects:
@@ -163,7 +172,7 @@ async def manager_timeslots_index(
                     "title": "Тайм-слоты",
                     "timeslots": timeslots_data,
                     "objects": objects_list,
-                    "selected_object_id": object_id,
+                    "selected_object_id": selected_object_id,
                     "selected_object": selected_object,
                     "first_available_object_id": first_available_object_id,
                     "current_user": current_user,
