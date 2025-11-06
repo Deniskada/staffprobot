@@ -107,26 +107,26 @@
                                     <i class="bi bi-x"></i>
                                 </button>
                             </div>
-                        </div>
-                        <div class="col-md-4">
+                            </div>
+                            <div class="col-md-4">
                             <label for="dateFromFilter" class="form-label">Период с</label>
                             <div class="d-flex gap-1">
                                 <input type="date" class="form-control flex-grow-1" id="dateFromFilter" value="{{ filters.date_from or '' }}" onchange="applyShiftFilters()">
                                 <button type="button" class="btn btn-outline-secondary" onclick="clearShiftFilter('dateFromFilter')" title="Очистить">
                                     <i class="bi bi-x"></i>
-                                </button>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
                         <div class="col-md-4">
                             <label for="dateToFilter" class="form-label">Период по</label>
                             <div class="d-flex gap-1">
                                 <input type="date" class="form-control flex-grow-1" id="dateToFilter" value="{{ filters.date_to or '' }}" onchange="applyShiftFilters()">
                                 <button type="button" class="btn btn-outline-secondary" onclick="clearShiftFilter('dateToFilter')" title="Очистить">
                                     <i class="bi bi-x"></i>
-                                </button>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
                 </div>
             </div>
 
@@ -144,7 +144,7 @@
                                     <th>
                                         <a href="?sort=user_name&order={% if sort.field == 'user_name' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}"
                                            class="text-decoration-none text-dark">
-                                            Сотрудник
+                                        Сотрудник
                                             {% if sort.field == 'user_name' %}
                                                 {% if sort.order == 'asc' %}
                                                     <i class="bi bi-arrow-up"></i>
@@ -163,7 +163,7 @@
                                     <th>
                                         <a href="?sort=object_name&order={% if sort.field == 'object_name' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}"
                                            class="text-decoration-none text-dark">
-                                            Объект
+                                        Объект
                                             {% if sort.field == 'object_name' %}
                                                 {% if sort.order == 'asc' %}
                                                     <i class="bi bi-arrow-up"></i>
@@ -176,7 +176,7 @@
                                     <th>
                                         <a href="?sort=start_time&order={% if sort.field == 'start_time' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}"
                                            class="text-decoration-none text-dark">
-                                            Дата
+                                        Дата
                                             {% if sort.field == 'start_time' %}
                                                 {% if sort.order == 'asc' %}
                                                     <i class="bi bi-arrow-up"></i>
@@ -189,7 +189,7 @@
                                     <th>
                                         <a href="?sort=status&order={% if sort.field == 'status' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}"
                                            class="text-decoration-none text-dark">
-                                            Статус
+                                        Статус
                                             {% if sort.field == 'status' %}
                                                 {% if sort.order == 'asc' %}
                                                     <i class="bi bi-arrow-up"></i>
@@ -214,7 +214,7 @@
                                     <th>
                                         <a href="?sort=created_at&order={% if sort.field == 'created_at' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}"
                                            class="text-decoration-none text-dark">
-                                            Часы/Оплата
+                                        Часы/Оплата
                                             {% if sort.field == 'created_at' %}
                                                 {% if sort.order == 'asc' %}
                                                     <i class="bi bi-arrow-up"></i>
@@ -373,27 +373,27 @@
                     </select>
                 </div>
                 
-                {% if pagination.pages > 1 %}
+            {% if pagination.pages > 1 %}
                 <nav aria-label="Пагинация смен">
                     <ul class="pagination mb-0">
                         <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
                             <a class="page-link" href="?page=1&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Первая</a>
-                        </li>
+                    </li>
                         <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
                             <a class="page-link" href="?page={{ pagination.page - 1 }}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Назад</a>
                         </li>
-                        <li class="page-item active">
+                    <li class="page-item active">
                             <span class="page-link">{{ pagination.page }} / {{ pagination.pages }}</span>
-                        </li>
+                    </li>
                         <li class="page-item {% if pagination.page == pagination.pages %}disabled{% endif %}">
                             <a class="page-link" href="?page={{ pagination.page + 1 }}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Вперед</a>
-                        </li>
+                    </li>
                         <li class="page-item {% if pagination.page == pagination.pages %}disabled{% endif %}">
                             <a class="page-link" href="?page={{ pagination.pages }}&per_page={{ pagination.per_page }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.q_user %}&q_user={{ filters.q_user }}{% endif %}{% if filters.q_object %}&q_object={{ filters.q_object }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Последняя</a>
-                        </li>
-                    </ul>
-                </nav>
-                {% endif %}
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
                 
                 <div>
                     {% set start_item = (pagination.page - 1) * pagination.per_page + 1 %}

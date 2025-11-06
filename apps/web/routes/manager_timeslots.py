@@ -318,7 +318,6 @@ async def manager_timeslots_create(
                     "max_employees": int(form_data.get("max_employees", 1)),
                     "notes": form_data.get("notes", ""),
                     "penalize_late_start": "penalize_late_start" in form_data and form_data.get("penalize_late_start") not in ["false", ""],
-                    "ignore_object_tasks": "ignore_object_tasks" in form_data and form_data.get("ignore_object_tasks") not in ["false", ""],
                     "shift_tasks": shift_tasks if shift_tasks else None
                 }
                 
@@ -375,7 +374,6 @@ async def manager_timeslots_create(
                             "max_employees": max_employees,
                             "notes": notes,
                             "penalize_late_start": "penalize_late_start" in form_data and form_data.get("penalize_late_start") not in ["false", ""],
-                            "ignore_object_tasks": "ignore_object_tasks" in form_data and form_data.get("ignore_object_tasks") not in ["false", ""],
                             "shift_tasks": shift_tasks if shift_tasks else None
                         }
                         
@@ -478,7 +476,6 @@ async def manager_timeslots_edit(
                 "max_employees": int(form_data.get("max_employees", 1)),
                 "notes": form_data.get("notes", ""),
                 "penalize_late_start": "penalize_late_start" in form_data and form_data.get("penalize_late_start") not in ["false", ""],
-                "ignore_object_tasks": "ignore_object_tasks" in form_data and form_data.get("ignore_object_tasks") not in ["false", ""],
                 "shift_tasks": shift_tasks if shift_tasks else None
             }
             
@@ -665,12 +662,12 @@ async def manager_timeslots_bulk_edit(
         elif set_inactive and not set_active:
             update_params["is_active"] = False
         
-        # Обработка новых полей: penalize_late_start, ignore_object_tasks
+        # Обработка новых полей: penalize_late_start / cancel_late_penalties
         if "penalize_late_start" in form_data:
             update_params["penalize_late_start"] = form_data.get("penalize_late_start") not in ["false", ""]
-        
-        if "ignore_object_tasks" in form_data:
-            update_params["ignore_object_tasks"] = form_data.get("ignore_object_tasks") not in ["false", ""]
+        # Отмена штрафов за опоздания имеет приоритет и принудительно отключает penalize_late_start
+        if "cancel_late_penalties" in form_data:
+            update_params["penalize_late_start"] = False
         
         # Обработка задач (shift_tasks) - новый формат с task_description_N
         shift_tasks = []

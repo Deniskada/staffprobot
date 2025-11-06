@@ -92,12 +92,16 @@
   - `GET /manager/calendar` — обновлен (apps/web/templates/manager/calendar.html)
   - `GET /manager/timeslots` — обновлен (apps/web/routes/manager_timeslots.py, табличное представление всех тайм-слотов с фильтрацией и сортировкой)
   - `POST /manager/timeslots/{timeslot_id}/delete` — добавлен (apps/web/routes/manager_timeslots.py, удаление одного тайм-слота)
+  - `POST /manager/timeslots/bulk-edit` — обновлен (apps/web/routes/manager_timeslots.py, поддержка `cancel_late_penalties` — принудительно отключает `penalize_late_start`)
 - **Шаблоны:**
   - `manager/dashboard.html` — обновлен (кликабельные карточки, удалена секция "Быстрые действия")
   - `manager/objects.html` — обновлен (фильтрация, сортировка, пагинация, кнопки очистки с белым цветом)
   - `manager/employees.html` — обновлен (фильтрация, сортировка, пагинация, отображение "Фамилия Имя", кнопки очистки с белым цветом)
   - `manager/calendar.html` — обновлен (автоскролл на сегодня)
   - `manager/timeslots/index.html` — обновлен (табличное представление всех тайм-слотов вместо карточек объектов, фильтрация по объекту и датам, сортировка по дате, времени, ставке)
+  - `manager/timeslots/list.html` — обновлен (в массовом редактировании заменено поле «Игнорировать задачи объекта» на «Отменить штрафы за опоздания»)
+  - `manager/timeslots/create.html` — обновлен (удалено поле «Игнорировать задачи объекта»)
+  - `manager/timeslots/edit.html` — обновлен (удалено поле «Игнорировать задачи объекта»)
 - **Сервисы:**
   - `apps/web/services/auth_service.py` — изменена логика проверки PIN (не удаляется при проверке, только после успешного входа)
   - `apps/web/routes/auth.py` — добавлено удаление PIN после успешного входа
