@@ -181,6 +181,7 @@ class IncidentService:
                 employee_id=incident.employee_id,
                 object_id=incident.object_id,
                 amount=incident.damage_amount,
+                adjustment_date=incident.custom_date or None,
                 description=desc,
                 created_by=incident.created_by or 0,
                 incident_id=incident.id

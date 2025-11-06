@@ -552,11 +552,13 @@ class PayrollAdjustmentService:
         employee_id: int,
         object_id: Optional[int],
         amount: Decimal,
+        adjustment_date: Optional[date],
         description: str,
         created_by: int,
         incident_id: int
     ) -> PayrollAdjustment:
         """Возврат удержания по инциденту (положительная сумма)."""
+        from datetime import timezone, datetime as dt
         adjustment = PayrollAdjustment(
             employee_id=employee_id,
             object_id=object_id,
@@ -567,6 +569,9 @@ class PayrollAdjustmentService:
             created_by=created_by,
             is_applied=False
         )
+        if adjustment_date:
+            naive_dt = dt.combine(adjustment_date, dt.min.time())
+            adjustment.created_at = naive_dt.replace(tzinfo=timezone.utc)
         self.session.add(adjustment)
         logger.info("Создан возврат удержания по инциденту", employee_id=employee_id, incident_id=incident_id, amount=float(abs(Decimal(amount))))
         return adjustment
