@@ -77,28 +77,10 @@ async def manager_incident_detail(
     incident_id: int,
     current_user: dict = Depends(require_manager_or_owner)
 ):
+    # Требование: сразу открывать форму редактирования
     if isinstance(current_user, RedirectResponse):
         return current_user
-    async with get_async_session() as db:
-        from sqlalchemy.orm import selectinload
-        from sqlalchemy import select
-        from domain.entities.incident import Incident
-        inc_q = select(Incident).where(Incident.id == incident_id).options(
-            selectinload(Incident.object),
-            selectinload(Incident.employee),
-            selectinload(Incident.shift_schedule),
-            selectinload(Incident.creator)
-        )
-        res = await db.execute(inc_q)
-        incident = res.scalar_one_or_none()
-        if not incident:
-            raise HTTPException(status_code=404, detail="Not Found")
-        # проверка доступа по объекту
-        perm = ManagerPermissionService(db)
-        accessible_objects = await perm.get_user_accessible_objects(await get_user_id_from_current_user(current_user, db))
-        if incident.object_id not in [o.id for o in accessible_objects]:
-            raise HTTPException(status_code=403, detail="Access denied")
-        return templates.TemplateResponse("manager/incidents/detail.html", {"request": request, "incident": incident, "current_user": current_user})
+    return RedirectResponse(url=f"/manager/incidents/{incident_id}/edit", status_code=302)
 
 
 @router.get("/incidents/create", response_class=HTMLResponse)
@@ -180,7 +162,22 @@ async def manager_incident_edit_form(
             raise HTTPException(status_code=404, detail="Not Found")
         if incident.object_id not in accessible_ids:
             raise HTTPException(status_code=403, detail="Access denied")
-        return templates.TemplateResponse("manager/incidents/edit.html", {"request": request, "incident": incident, "objects": accessible_objects})
+        # Список сотрудников по владельцам доступных объектов (активные контракты)
+        from sqlalchemy import select
+        from domain.entities.contract import Contract
+        from domain.entities.user import User as UserEntity
+        owner_ids = sorted({getattr(o, 'owner_id', None) for o in accessible_objects if getattr(o, 'owner_id', None) is not None})
+        emp_ids = set()
+        if owner_ids:
+            emp_rows = await db.execute(
+                select(Contract.employee_id).where(Contract.owner_id.in_(owner_ids), Contract.is_active == True).distinct()
+            )
+            emp_ids = {row[0] for row in emp_rows.all()}
+        employees = []
+        if emp_ids:
+            emp_res = await db.execute(select(UserEntity).where(UserEntity.id.in_(list(emp_ids))).order_by(UserEntity.last_name, UserEntity.first_name))
+            employees = emp_res.scalars().all()
+        return templates.TemplateResponse("manager/incidents/edit.html", {"request": request, "incident": incident, "objects": accessible_objects, "employees": employees})
 
 
 @router.post("/incidents/{incident_id}/edit")
@@ -195,11 +192,24 @@ async def manager_incident_edit(
     category = (form.get("category") or "").strip()
     severity = (form.get("severity") or "medium").strip()
     notes = (form.get("notes") or "").strip()
+    damage_amount_str = (form.get("damage_amount") or "").strip()
     object_id = form.get("object_id")
+    employee_id = form.get("employee_id")
     try:
         object_id_int = int(object_id) if object_id else None
     except ValueError:
         object_id_int = None
+    try:
+        employee_id_int = int(employee_id) if employee_id else None
+    except ValueError:
+        employee_id_int = None
+    from decimal import Decimal, InvalidOperation
+    damage_amount = None
+    if damage_amount_str:
+        try:
+            damage_amount = Decimal(damage_amount_str)
+        except InvalidOperation:
+            damage_amount = None
     async with get_async_session() as db:
         user_id = await get_user_id_from_current_user(current_user, db)
         perm = ManagerPermissionService(db)
@@ -217,7 +227,9 @@ async def manager_incident_edit(
             category=category or None,
             severity=severity or "medium",
             notes=notes or None,
-            object_id=object_id_int or incident.object_id
+            object_id=object_id_int or incident.object_id,
+            employee_id=employee_id_int if employee_id_int is not None else incident.employee_id,
+            damage_amount=damage_amount if damage_amount is not None else incident.damage_amount
         )
         await db.execute(upd)
         await db.commit()
