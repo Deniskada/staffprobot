@@ -257,6 +257,11 @@ function filterPayrollTable() {
         const show = !filterValue || employeeName.includes(filterValue);
         row.style.display = show ? '' : 'none';
     });
+    
+    // Сохраняем фокус на поле ввода
+    if (filterInput) {
+        filterInput.focus();
+    }
 }
 
 // Применение фильтров через сервер (для объекта и дат)
@@ -267,6 +272,20 @@ function applyPayrollFilters() {
     const periodStart = document.getElementById('period_start');
     const periodEnd = document.getElementById('period_end');
     const employeeFilter = document.getElementById('filterPayrollEmployee');
+    
+    // Сохраняем ID активного элемента для восстановления фокуса после перезагрузки
+    let activeFilterId = null;
+    const activeElement = document.activeElement;
+    if (activeElement === objectFilter) {
+        activeFilterId = 'objectFilter';
+    } else if (activeElement === periodStart) {
+        activeFilterId = 'period_start';
+    } else if (activeElement === periodEnd) {
+        activeFilterId = 'period_end';
+    }
+    if (activeFilterId) {
+        sessionStorage.setItem('ownerPayrollActiveFilter', activeFilterId);
+    }
     
     if (objectFilter) {
         if (objectFilter.value) url.searchParams.set('object_id', objectFilter.value);
@@ -347,6 +366,24 @@ document.addEventListener('DOMContentLoaded', function() {
             filterInput.value = qEmployee;
             filterPayrollTable();
         }
+    }
+    
+    // Восстанавливаем фокус на активном фильтре после перезагрузки
+    const activeFilterId = sessionStorage.getItem('ownerPayrollActiveFilter');
+    if (activeFilterId) {
+        const activeFilter = document.getElementById(activeFilterId);
+        if (activeFilter) {
+            // Восстанавливаем фокус с небольшой задержкой для корректной работы
+            setTimeout(() => {
+                activeFilter.focus();
+                // Для input элементов перемещаем курсор в конец
+                if (activeFilter.tagName === 'INPUT') {
+                    const len = activeFilter.value.length;
+                    activeFilter.setSelectionRange(len, len);
+                }
+            }, 100);
+        }
+        sessionStorage.removeItem('ownerPayrollActiveFilter');
     }
 });
 

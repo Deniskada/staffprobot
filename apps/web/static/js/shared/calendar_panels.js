@@ -63,7 +63,8 @@ class CalendarPanels {
             objects.forEach(object => {
                 const objectItem = document.createElement('div');
                 objectItem.className = 'object-item';
-                objectItem.draggable = true;
+                // Для менеджера отключаем drag&drop (3.7.3)
+                objectItem.draggable = this.role !== 'manager';
                 objectItem.dataset.objectId = object.id;
                 objectItem.dataset.objectName = object.name;
                 objectItem.dataset.hourlyRate = object.hourly_rate || 0;
@@ -189,7 +190,8 @@ class CalendarPanels {
             employees.forEach(employee => {
                 const employeeItem = document.createElement('div');
                 employeeItem.className = `employee-item ${employee.is_owner ? 'owner-item' : ''}`;
-                employeeItem.draggable = true;
+                // Для менеджера отключаем drag&drop (3.7.3)
+                employeeItem.draggable = this.role !== 'manager';
                 employeeItem.dataset.employeeId = employee.id;
                 employeeItem.dataset.employeeName = employee.name || employee.username;
                 employeeItem.dataset.employeeRole = employee.is_owner ? 'owner' : (employee.role || 'employee');
@@ -343,7 +345,9 @@ class CalendarPanels {
             if ((!slots || slots.length === 0) && quickObjectId && quickDate) {
                 try {
                     const params = new URLSearchParams({ start_date: quickDate, end_date: quickDate, object_ids: String(quickObjectId) });
-                    const resp = await fetch(`/owner/calendar/api/data?${params.toString()}`, { credentials: 'same-origin' });
+                    // Используем правильный API endpoint для роли (owner или manager)
+                    const apiEndpoint = `/${this.role}/calendar/api/data`;
+                    const resp = await fetch(`${apiEndpoint}?${params.toString()}`, { credentials: 'same-origin' });
                     if (resp.ok) {
                         const payload = await resp.json();
                         const list = Array.isArray(payload?.timeslots) ? payload.timeslots : [];
@@ -434,6 +438,21 @@ class CalendarPanels {
                 option.textContent = object.name;
                 quickObjectSelect.appendChild(option);
             });
+            
+            // Добавляем обработчик изменения объекта для подстановки ставки (если еще не добавлен)
+            if (!quickObjectSelect.hasAttribute('data-handler-added')) {
+                quickObjectSelect.setAttribute('data-handler-added', 'true');
+                quickObjectSelect.addEventListener('change', function() {
+                    const selectedOption = this.options[this.selectedIndex];
+                    if (selectedOption && selectedOption.value) {
+                        const rate = selectedOption.dataset.rate || '';
+                        const rateInput = document.getElementById('quickRate');
+                        if (rateInput) {
+                            rateInput.value = rate;
+                        }
+                    }
+                });
+            }
         } catch (error) {
             console.error('Error loading objects for quick create:', error);
         }
@@ -544,15 +563,21 @@ class CalendarPanels {
         //     this.loadEmployees();
         // }, 3000);
         
-        // Handle object select change
+        // Handle object select change (обработчик также добавляется в populateQuickCreateObjects)
+        // Проверяем, что обработчик еще не добавлен
         const quickObjectSelect = document.getElementById('quickObject');
-        if (quickObjectSelect) {
+        if (quickObjectSelect && !quickObjectSelect.hasAttribute('data-handler-added')) {
             quickObjectSelect.addEventListener('change', function() {
                 const selectedOption = this.options[this.selectedIndex];
-                if (selectedOption.value) {
-                    document.getElementById('quickRate').value = selectedOption.dataset.rate || '';
+                if (selectedOption && selectedOption.value) {
+                    const rate = selectedOption.dataset.rate || '';
+                    const rateInput = document.getElementById('quickRate');
+                    if (rateInput) {
+                        rateInput.value = rate;
+                    }
                 }
             });
+            quickObjectSelect.setAttribute('data-handler-added', 'true');
         }
         
         // Make methods globally available

@@ -3,7 +3,7 @@
 from typing import List, Dict, Any, Optional
 from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Request, Depends, HTTPException, Query, Form, status
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -3503,6 +3503,51 @@ async def check_employee_availability(
     except Exception as e:
         logger.error(f"Error checking employee availability: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка проверки доступности: {str(e)}")
+
+
+@router.get("/shifts/api/schedule/{schedule_id}/object-id", response_class=JSONResponse)
+async def get_manager_schedule_object_id(
+    schedule_id: int,
+    current_user: dict = Depends(require_manager_or_owner),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Получить object_id из запланированной смены для управляющего."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+        
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            return JSONResponse({"error": "User not found"}, status_code=401)
+        
+        # Получаем запланированную смену
+        from sqlalchemy import select
+        from domain.entities.shift_schedule import ShiftSchedule
+        from sqlalchemy.orm import selectinload
+        
+        schedule_query = select(ShiftSchedule).options(
+            selectinload(ShiftSchedule.object)
+        ).where(ShiftSchedule.id == schedule_id)
+        
+        result = await db.execute(schedule_query)
+        schedule = result.scalar_one_or_none()
+        
+        if not schedule:
+            return JSONResponse({"error": "Schedule not found"}, status_code=404)
+        
+        # Проверяем доступ управляющего к объекту
+        permission_service = ManagerPermissionService(db)
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        accessible_object_ids = [obj.id for obj in accessible_objects]
+        
+        if schedule.object_id not in accessible_object_ids:
+            return JSONResponse({"error": "Access denied"}, status_code=403)
+        
+        return JSONResponse({"object_id": schedule.object_id})
+        
+    except Exception as e:
+        logger.error(f"Error getting manager schedule object_id: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @router.get("/shifts/plan", response_class=HTMLResponse)

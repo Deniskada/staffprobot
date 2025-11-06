@@ -10,8 +10,11 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            {% include 'shared/calendar/objects_panel.html' %}
-            {% include 'shared/calendar/employees_panel.html' %}
+            {# Панели drag&drop скрыты для менеджера (3.7.3) #}
+            <div style="display: none;">
+                {% include 'shared/calendar/objects_panel.html' %}
+                {% include 'shared/calendar/employees_panel.html' %}
+            </div>
             {% include 'shared/calendar/quick_create_form.html' %}
             {% include 'shared/calendar/grid_unified.html' %}
         </div>
@@ -27,10 +30,16 @@
 <script>
     // Инициализация универсального календаря для управляющего
     document.addEventListener('DOMContentLoaded', function() {
-        // Инициализируем панели drag&drop
+        // Инициализируем панели (без drag&drop, только для быстрого создания тайм-слотов) (3.7.3)
         if (typeof CalendarPanels !== 'undefined') {
             window.calendarPanels = new CalendarPanels('manager');
-            window.calendarPanels.init();
+            // Инициализируем только для быстрого создания, drag&drop отключен в loadObjects/loadEmployees
+            window.calendarPanels.loadObjects();
+            window.calendarPanels.loadEmployees();
+            
+            // Делаем методы глобально доступными для быстрого создания
+            window.showQuickCreateForm = (object, date) => window.calendarPanels.showQuickCreateForm(object, date);
+            window.createQuickTimeslot = () => window.calendarPanels.createQuickTimeslot();
         }
         
         // Создаем экземпляр универсального календаря
@@ -45,17 +54,58 @@
                     console.log('Shift clicked:', shiftId);
                     if (shiftId.toString().startsWith('schedule_')) {
                         const scheduleId = shiftId.toString().replace('schedule_', '');
-                        window.location.href = `/manager/shifts/${scheduleId}?shift_type=schedule`;
+                        // Получаем object_id из данных календаря
+                        let objectId = null;
+                        if (window.calendarData && window.calendarData.shifts) {
+                            const shift = window.calendarData.shifts.find(s => s.id === shiftId);
+                            if (shift && shift.object_id) {
+                                objectId = shift.object_id;
+                            }
+                        }
+                        // Если не нашли в данных, делаем запрос к API
+                        if (!objectId) {
+                            fetch(`/manager/shifts/api/schedule/${scheduleId}/object-id`)
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.object_id) {
+                                        window.location.href = `/manager/shifts/plan?object_id=${data.object_id}&return_to=/manager/calendar`;
+                                    } else {
+                                        window.location.href = `/manager/shifts/plan?return_to=/manager/calendar`;
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error fetching object_id:', error);
+                                    window.location.href = `/manager/shifts/plan?return_to=/manager/calendar`;
+                                });
+                        } else {
+                            window.location.href = `/manager/shifts/plan?object_id=${objectId}&return_to=/manager/calendar`;
+                        }
                     } else {
                         window.location.href = `/manager/shifts/${shiftId}?shift_type=shift`;
                     }
                 },
                 onTimeslotClick: function(timeslotId) {
                     console.log('Timeslot clicked:', timeslotId);
-                    window.location.href = `/manager/timeslots/${timeslotId}`;
+                    // При клике на тайм-слот открываем форму планирования смен с предзаполненным объектом
+                    // Получаем object_id из данных календаря
+                    let objectId = null;
+                    if (window.calendarData && window.calendarData.timeslots) {
+                        const timeslot = window.calendarData.timeslots.find(ts => ts.id == timeslotId);
+                        if (timeslot && timeslot.object_id) {
+                            objectId = timeslot.object_id;
+                        }
+                    }
+                    // Если нашли object_id, передаем его в форму планирования
+                    if (objectId) {
+                        window.location.href = `/manager/shifts/plan?object_id=${objectId}&return_to=/manager/calendar`;
+                    } else {
+                        window.location.href = `/manager/shifts/plan?return_to=/manager/calendar`;
+                    }
                 },
                 onDataLoaded: function(calendarData) {
                     console.log('Manager calendar data loaded:', calendarData);
+                    // Сохраняем данные глобально для использования в onShiftClick
+                    window.calendarData = calendarData;
                     // Обновляем отображение с новыми данными
                     if (typeof window.renderCalendarGrid === 'function') {
                         window.renderCalendarGrid(calendarData);
@@ -79,6 +129,22 @@
                 }, 500);
             }
         }
+        
+        // Добавляем обработчик клика на пустой день календаря для быстрого создания тайм-слота (3.7.1)
+        // Клик на пустой день (не на тайм-слот и не на смену) → форма создания тайм-слота
+        document.addEventListener('click', function(e) {
+            const calendarDay = e.target.closest('.calendar-day');
+            // Проверяем, что клик не на тайм-слот и не на смену
+            if (calendarDay && !e.target.closest('.timeslot-item') && !e.target.closest('.shift-item') && !e.target.closest('.calendar-timeslot')) {
+                const dateStr = calendarDay.dataset.date;
+                if (dateStr && !calendarDay.classList.contains('other-month')) {
+                    // Открываем форму быстрого создания тайм-слота
+                    if (window.calendarPanels) {
+                        window.calendarPanels.showQuickCreateForm(null, dateStr);
+                    }
+                }
+            }
+        });
     });
 
 </script>

@@ -301,8 +301,10 @@ window.unifiedCalendar = {
         // Обновляем отображение данных
         this.updateCalendarDisplay(calendarData);
         
-        // Инициализируем drag&drop
-        this.initializeDragAndDrop();
+        // Инициализируем drag&drop только если не менеджер (3.7.3)
+        if (!window.universalCalendar || window.universalCalendar.userRole !== 'manager') {
+            this.initializeDragAndDrop();
+        }
         
         console.log('Unified calendar grid created successfully');
     },
@@ -493,6 +495,12 @@ window.unifiedCalendar = {
     
     // Инициализация drag&drop для календарных дней и тайм-слотов
     initializeDragAndDrop: function() {
+        // Не инициализируем drag&drop для менеджера (3.7.3)
+        if (window.universalCalendar && window.universalCalendar.userRole === 'manager') {
+            console.log('Drag&drop disabled for manager');
+            return;
+        }
+        
         console.log('Initializing drag&drop for calendar days and timeslots');
         
         // Обработчики для календарных дней

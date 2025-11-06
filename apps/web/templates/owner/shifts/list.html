@@ -453,7 +453,8 @@ function debouncedApplyShiftFilters() {
 
 // Клиентский фильтр для таблицы смен (без перезагрузки)
 function filterShiftsTable() {
-    const userFilter = document.getElementById('filterShiftUser')?.value.toLowerCase() || '';
+    const userFilterInput = document.getElementById('filterShiftUser');
+    const userFilter = userFilterInput?.value.toLowerCase() || '';
     const statusFilter = document.getElementById('filterShiftStatus')?.value || '';
     
     const rows = document.querySelectorAll('#shiftsTableBody tr');
@@ -476,6 +477,11 @@ function filterShiftsTable() {
         
         row.style.display = show ? '' : 'none';
     });
+    
+    // Сохраняем фокус на поле ввода сотрудника
+    if (userFilterInput) {
+        userFilterInput.focus();
+    }
 }
 
 // Применение фильтров через сервер (для статуса, дат и объекта)
@@ -490,6 +496,22 @@ function applyShiftFilters() {
     const objectFilter = document.getElementById('objectFilter');
     const dateFromFilter = document.getElementById('dateFromFilter');
     const dateToFilter = document.getElementById('dateToFilter');
+    
+    // Сохраняем ID активного элемента для восстановления фокуса после перезагрузки
+    let activeFilterId = null;
+    const activeElement = document.activeElement;
+    if (activeElement === statusSel) {
+        activeFilterId = 'filterShiftStatus';
+    } else if (activeElement === objectFilter) {
+        activeFilterId = 'objectFilter';
+    } else if (activeElement === dateFromFilter) {
+        activeFilterId = 'dateFromFilter';
+    } else if (activeElement === dateToFilter) {
+        activeFilterId = 'dateToFilter';
+    }
+    if (activeFilterId) {
+        sessionStorage.setItem('ownerShiftsActiveFilter', activeFilterId);
+    }
     
     // Фильтр по сотруднику - клиентский, не добавляем в URL (фильтруется на клиенте)
     // НО если он есть в URL, оставляем
@@ -1092,6 +1114,24 @@ function restoreFiltersFromURL() {
 document.addEventListener('DOMContentLoaded', function() {
     initializeFilters();
     restoreFiltersFromURL();
+    
+    // Восстанавливаем фокус на активном фильтре после перезагрузки
+    const activeFilterId = sessionStorage.getItem('ownerShiftsActiveFilter');
+    if (activeFilterId) {
+        const activeFilter = document.getElementById(activeFilterId);
+        if (activeFilter) {
+            // Восстанавливаем фокус с небольшой задержкой для корректной работы
+            setTimeout(() => {
+                activeFilter.focus();
+                // Для input/select элементов перемещаем курсор/выбор в конец
+                if (activeFilter.tagName === 'INPUT') {
+                    const len = activeFilter.value.length;
+                    activeFilter.setSelectionRange(len, len);
+                }
+            }, 100);
+        }
+        sessionStorage.removeItem('ownerShiftsActiveFilter');
+    }
     
     // Автоматическое открытие модального окна планирования при action=plan
     const urlParams = new URLSearchParams(window.location.search);

@@ -207,8 +207,10 @@
 <script>
 // Клиентский фильтр для таблицы объектов (без перезагрузки)
 function filterObjectsTable() {
-    const nameFilter = document.getElementById('filterName')?.value.toLowerCase() || '';
-    const addressFilter = document.getElementById('filterAddress')?.value.toLowerCase() || '';
+    const nameFilterInput = document.getElementById('filterName');
+    const addressFilterInput = document.getElementById('filterAddress');
+    const nameFilter = nameFilterInput?.value.toLowerCase() || '';
+    const addressFilter = addressFilterInput?.value.toLowerCase() || '';
     
     const rows = document.querySelectorAll('#objectsTableBody tr');
     
@@ -228,6 +230,12 @@ function filterObjectsTable() {
         
         row.style.display = show ? '' : 'none';
     });
+    
+    // Сохраняем фокус на активном поле ввода
+    const activeElement = document.activeElement;
+    if (activeElement === nameFilterInput || activeElement === addressFilterInput) {
+        activeElement.focus();
+    }
 }
 
 function clearObjectFilter(filterId) {

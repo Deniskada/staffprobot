@@ -324,8 +324,10 @@
 
 <script>
 function filterEmployeesTable() {
-    const nameFilter = document.getElementById('filterEmployee')?.value.toLowerCase() || '';
-    const telegramFilter = document.getElementById('filterTelegram')?.value.toLowerCase() || '';
+    const nameFilterInput = document.getElementById('filterEmployee');
+    const telegramFilterInput = document.getElementById('filterTelegram');
+    const nameFilter = nameFilterInput?.value.toLowerCase() || '';
+    const telegramFilter = telegramFilterInput?.value.toLowerCase() || '';
     const statusFilter = document.getElementById('filterStatus')?.value || '';
     
     const rows = document.querySelectorAll('#employeesTableBody tr');
@@ -351,6 +353,12 @@ function filterEmployeesTable() {
         
         row.style.display = show ? '' : 'none';
     });
+    
+    // Сохраняем фокус на активном поле ввода
+    const activeElement = document.activeElement;
+    if (activeElement === nameFilterInput || activeElement === telegramFilterInput) {
+        activeElement.focus();
+    }
 }
 
 function clearFilter(filterId) {

@@ -24,7 +24,7 @@
 - [GET] `/calendar/api/timeslot/{timeslot_id}`  — (apps/web/routes/manager.py)
 - [GET] `/calendar/api/timeslots-status`  — (apps/web/routes/manager.py)
 - [GET] `/dashboard`  — (apps/web/routes/manager.py) — дашборд управляющего с кликабельными карточками статистики (Объекты, Активные смены, Сотрудники, Запланированные на сегодня), счетчик запланированных смен на сегодня из ShiftSchedule, подсчет сотрудников только с активными договорами у владельцев, с которыми есть активный контракт у управляющего
-- [GET] `/employees`  — (apps/web/routes/manager.py)
+- [GET] `/employees`  — (apps/web/routes/manager.py) — список сотрудников с фильтрацией по ФИО, сортировкой (name, phone, created_at) и пагинацией (25, 50, 100), отображение "Фамилия Имя"
 - [GET] `/employees/add`  — (apps/web/routes/manager.py)
 - [POST] `/employees/add`  — (apps/web/routes/manager.py)
 - [GET] `/employees/{employee_id}`  — (apps/web/routes/manager.py) — детали сотрудника с проверкой прав can_manage_employees для каждого договора
@@ -45,7 +45,7 @@
 - [POST] `/manager/timeslots/object/{object_id}/create`  — (apps/web/routes/manager_timeslots.py)
 - [GET] `/manager/timeslots/{timeslot_id}/edit`  — (apps/web/routes/manager_timeslots.py)
 - [POST] `/manager/timeslots/{timeslot_id}/edit`  — (apps/web/routes/manager_timeslots.py)
-- [GET] `/objects`  — (apps/web/routes/manager.py)
+- [GET] `/objects`  — (apps/web/routes/manager.py) — список объектов с фильтрацией по названию и адресу, сортировкой (name, address, hourly_rate, opening_time, closing_time, is_active, created_at) и пагинацией (25, 50, 100)
 - [GET] `/objects/{object_id}`  — (apps/web/routes/manager.py)
 - [GET] `/objects/{object_id}/edit`  — (apps/web/routes/manager.py)
 - [POST] `/objects/{object_id}/edit`  — (apps/web/routes/manager.py)

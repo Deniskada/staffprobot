@@ -1,10 +1,14 @@
 {% extends "manager/base_manager.html" %}
 
 {% block manager_content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2><i class="bi bi-people me-2"></i>Сотрудники</h2>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-people me-2"></i>
+                    Сотрудники
+                </h1>
                 <div class="d-flex gap-2">
                     <a href="/manager/employees/add" class="btn btn-primary">
                         <i class="bi bi-person-plus me-1"></i>
@@ -15,208 +19,250 @@
                         Обновить
                     </button>
                 </div>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- Информационная панель -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="alert alert-info">
-            <h6><i class="bi bi-info-circle me-2"></i>Как добавить сотрудника?</h6>
-            <div class="row">
-                <div class="col-md-6">
-                    <strong>Если сотрудник уже зарегистрирован в системе:</strong>
-                    <ul class="mb-0">
-                        <li>Нажмите "Создать договор"</li>
-                        <li>Введите его Telegram ID</li>
-                        <li>Выберите объекты и условия</li>
-                    </ul>
+    <!-- Статистика -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Всего</h6>
+                            <h3 class="mb-0">{{ pagination.total }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-people fa-2x opacity-75"></i>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    <strong>Если сотрудник новый:</strong>
-                    <ul class="mb-0">
-                        <li>Попросите его написать боту @StaffProBot</li>
-                        <li>После регистрации создайте договор</li>
-                    </ul>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Активные</h6>
+                            <h3 class="mb-0">{{ employees|selectattr('is_active')|list|length }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-person-check fa-2x opacity-75"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">На смене</h6>
+                            <h3 class="mb-0">0</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-clock fa-2x opacity-75"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Новые</h6>
+                            <h3 class="mb-0">0</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-person-plus fa-2x opacity-75"></i>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Статистика -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">Всего</h6>
-                        <h3 class="mb-0">{{ employees|length }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-people fa-2x opacity-75"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">Активные</h6>
-                        <h3 class="mb-0">{{ employees|selectattr('is_active')|list|length }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-person-check fa-2x opacity-75"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">На смене</h6>
-                        <h3 class="mb-0">0</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-clock fa-2x opacity-75"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">Новые</h6>
-                        <h3 class="mb-0">0</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-person-plus fa-2x opacity-75"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Список сотрудников -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Список сотрудников</h5>
-            </div>
-            <div class="card-body">
-                {% if employees %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead class="table-light">
-                            <tr>
-                                <th>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="fw-bold">ФИО</span>
-                                        <div class="d-flex flex-column gap-1">
-                                            <button class="btn btn-sm btn-outline-primary p-1" onclick="sortTable('name', 'asc')" title="Сортировать по возрастанию">
-                                                <i class="bi bi-chevron-up sort-indicator text-muted" style="font-size: 10px;"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-primary p-1" onclick="sortTable('name', 'desc')" title="Сортировать по убыванию">
-                                                <i class="bi bi-chevron-down sort-indicator text-muted" style="font-size: 10px;"></i>
-                                            </button>
-                                        </div>
-                                        <input type="text" class="form-control form-control-sm flex-grow-1" id="nameFilter" placeholder="Фильтр по ФИО..." onkeyup="filterTable()" style="min-width: 150px;">
-                                    </div>
-                                </th>
-                                <th>Телефон</th>
-                                <th>Роль</th>
-                                <th>Статус</th>
-                                <th>Дата регистрации</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="employeesTableBody">
-                            {% for employee in employees %}
-                            <tr data-name="{{ (employee.first_name + ' ' + (employee.last_name or '')).strip() }}" data-username="{{ employee.username or '' }}">
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3">
-                                            {{ employee.first_name[0] if employee.first_name else '?' }}
-                                        </div>
-                                        <div>
-                                            <strong>{{ employee.first_name }} {{ employee.last_name or '' }}</strong>
-                                            {% if employee.username %}
-                                            <br><small class="text-muted">@{{ employee.username }}</small>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    {% if employee.phone %}
-                                        <i class="bi bi-telephone me-1"></i>{{ employee.phone }}
-                                    {% else %}
-                                        <span class="text-muted">Не указан</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if employee.roles %}
-                                        {% for role in employee.roles %}
-                                            <span class="badge bg-secondary me-1">{{ role }}</span>
-                                        {% endfor %}
-                                    {% else %}
-                                        <span class="badge bg-secondary">{{ employee.role }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if employee.is_active %}
-                                        <span class="badge bg-success">Активен</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Неактивен</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <i class="bi bi-calendar3 me-1"></i>
-                                    {{ employee.created_at.strftime('%d.%m.%Y') if employee.created_at else 'Не указана' }}
-                                </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary" onclick="viewEmployee({{ employee.id }})" title="Подробнее">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                        <button class="btn btn-outline-success" onclick="editEmployee({{ employee.id }})" title="Редактировать">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info" onclick="viewShifts({{ employee.id }})" title="Смены">
-                                            <i class="bi bi-clock"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
+    <!-- Список сотрудников -->
+    {% if employees %}
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>
+                        <a href="?sort=name&order={% if sort.field == 'name' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.q_name %}&q_name={{ filters.q_name }}{% endif %}"
+                           class="text-decoration-none text-dark">
+                            Сотрудник
+                            {% if sort.field == 'name' %}
+                                {% if sort.order == 'asc' %}
+                                    <i class="bi bi-arrow-up"></i>
+                                {% else %}
+                                    <i class="bi bi-arrow-down"></i>
+                                {% endif %}
+                            {% endif %}
+                        </a>
+                        <div class="mt-1 d-flex gap-1">
+                            <input type="text" class="form-control form-control-sm flex-grow-1" id="filterEmployeeName" placeholder="Фильтр по ФИО" value="{{ filters.q_name or '' }}" onkeyup="filterEmployeesTable()">
+                            <button type="button" class="btn btn-outline-secondary btn-sm text-white" onclick="clearEmployeeFilter('filterEmployeeName')" title="Очистить">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </th>
+                    <th>
+                        <a href="?sort=phone&order={% if sort.field == 'phone' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.q_name %}&q_name={{ filters.q_name }}{% endif %}"
+                           class="text-decoration-none text-dark">
+                            Телефон
+                            {% if sort.field == 'phone' %}
+                                {% if sort.order == 'asc' %}
+                                    <i class="bi bi-arrow-up"></i>
+                                {% else %}
+                                    <i class="bi bi-arrow-down"></i>
+                                {% endif %}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>Роль</th>
+                    <th>Статус</th>
+                    <th>
+                        <a href="?sort=created_at&order={% if sort.field == 'created_at' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.q_name %}&q_name={{ filters.q_name }}{% endif %}"
+                           class="text-decoration-none text-dark">
+                            Дата регистрации
+                            {% if sort.field == 'created_at' %}
+                                {% if sort.order == 'asc' %}
+                                    <i class="bi bi-arrow-up"></i>
+                                {% else %}
+                                    <i class="bi bi-arrow-down"></i>
+                                {% endif %}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody id="employeesTableBody">
+                {% for employee in employees %}
+                <tr data-name="{{ ((employee.last_name or '') + ' ' + (employee.first_name or '')).strip().lower() }}"
+                    data-username="{{ (employee.username or '').lower() }}">
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3">
+                                {{ (employee.first_name or '?')[0] }}
+                            </div>
+                            <div>
+                                <strong>{{ (employee.last_name or '') }} {{ employee.first_name or '' }}</strong>
+                                {% if employee.username %}
+                                <br><small class="text-muted">@{{ employee.username }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        {% if employee.phone %}
+                            <i class="bi bi-telephone me-1"></i>{{ employee.phone }}
+                        {% else %}
+                            <span class="text-muted">Не указан</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if employee.roles %}
+                            {% for role in employee.roles %}
+                                <span class="badge bg-secondary me-1">{{ role }}</span>
                             {% endfor %}
-                        </tbody>
-                    </table>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ employee.role }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if employee.is_active %}
+                            <span class="badge bg-success">Активен</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Неактивен</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <i class="bi bi-calendar3 me-1"></i>
+                        {% if employee.created_at %}
+                            {{ employee.created_at.strftime('%d.%m.%Y') }}
+                        {% else %}
+                            Не указана
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" onclick="viewEmployee({{ employee.id }})" title="Подробнее">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <button class="btn btn-outline-success" onclick="editEmployee({{ employee.id }})" title="Редактировать">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-outline-info" onclick="viewShifts({{ employee.id }})" title="Смены">
+                                <i class="bi bi-clock"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Пагинация -->
+    {% if pagination.total > 0 and pagination.pages > 1 %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-2">
+                    <label for="perPageSelect" class="mb-0">На странице:</label>
+                    <select class="form-select form-select-sm" id="perPageSelect" style="width: auto;" onchange="changePerPage(this.value)">
+                        <option value="25" {% if pagination.per_page == 25 %}selected{% endif %}>25</option>
+                        <option value="50" {% if pagination.per_page == 50 %}selected{% endif %}>50</option>
+                        <option value="100" {% if pagination.per_page == 100 %}selected{% endif %}>100</option>
+                    </select>
                 </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="bi bi-people text-muted" style="font-size: 3rem;"></i>
-                    <h5 class="mt-3 text-muted">Нет сотрудников</h5>
-                    <p class="text-muted">Сотрудники, назначенные на ваши объекты, появятся здесь</p>
+                <div class="d-flex align-items-center gap-2">
+                    <a href="?page=1&per_page={{ pagination.per_page }}{% if sort.field %}&sort={{ sort.field }}&order={{ sort.order }}{% endif %}{% if filters.q_name %}&q_name={{ filters.q_name }}{% endif %}" 
+                       class="btn btn-sm btn-outline-secondary {% if pagination.page == 1 %}disabled{% endif %}">
+                        Первая
+                    </a>
+                    <a href="?page={{ pagination.page - 1 }}&per_page={{ pagination.per_page }}{% if sort.field %}&sort={{ sort.field }}&order={{ sort.order }}{% endif %}{% if filters.q_name %}&q_name={{ filters.q_name }}{% endif %}" 
+                       class="btn btn-sm btn-outline-secondary {% if pagination.page == 1 %}disabled{% endif %}">
+                        Назад
+                    </a>
+                    <span class="px-3">
+                        {{ pagination.page }} / {{ pagination.pages }}
+                    </span>
+                    <a href="?page={{ pagination.page + 1 }}&per_page={{ pagination.per_page }}{% if sort.field %}&sort={{ sort.field }}&order={{ sort.order }}{% endif %}{% if filters.q_name %}&q_name={{ filters.q_name }}{% endif %}" 
+                       class="btn btn-sm btn-outline-secondary {% if pagination.page >= pagination.pages %}disabled{% endif %}">
+                        Вперед
+                    </a>
+                    <a href="?page={{ pagination.pages }}&per_page={{ pagination.per_page }}{% if sort.field %}&sort={{ sort.field }}&order={{ sort.order }}{% endif %}{% if filters.q_name %}&q_name={{ filters.q_name }}{% endif %}" 
+                       class="btn btn-sm btn-outline-secondary {% if pagination.page >= pagination.pages %}disabled{% endif %}">
+                        Последняя
+                    </a>
                 </div>
-                {% endif %}
+                <div class="text-muted">
+                    {% set start_item = (pagination.page - 1) * pagination.per_page + 1 %}
+                    {% set end_item = [pagination.page * pagination.per_page, pagination.total]|min %}
+                    {{ start_item }}-{{ end_item }} из {{ pagination.total }}
+                </div>
             </div>
         </div>
     </div>
+    {% endif %}
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-people text-muted" style="font-size: 3rem;"></i>
+        <h5 class="mt-3 text-muted">Нет сотрудников</h5>
+        <p class="text-muted">Сотрудники, назначенные на ваши объекты, появятся здесь</p>
+    </div>
+    {% endif %}
 </div>
 
 <style>
@@ -226,52 +272,49 @@
     font-size: 16px;
     font-weight: bold;
 }
-
-.sort-indicator {
-    transition: all 0.2s ease;
-}
-
-.sort-indicator:hover {
-    color: #0d6efd !important;
-    transform: scale(1.1);
-}
-
-.sort-indicator.text-primary {
-    color: #0d6efd !important;
-    font-weight: bold;
-}
-
-/* Стили для кнопок сортировки */
-.btn-outline-primary {
-    border-color: #dee2e6;
-    background-color: #f8f9fa;
-    transition: all 0.2s ease;
-}
-
-.btn-outline-primary:hover {
-    background-color: #e9ecef;
-    border-color: #0d6efd;
-    transform: translateY(-1px);
-}
-
-.btn-outline-primary:active {
-    transform: translateY(0);
-}
-
-#nameFilter {
-    border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
-    transition: all 0.2s ease;
-}
-
-#nameFilter:focus {
-    border-color: #86b7fe;
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-}
 </style>
 
 <script>
-let currentSort = { column: null, direction: 'asc' };
+// Клиентский фильтр для таблицы сотрудников (без перезагрузки)
+function filterEmployeesTable() {
+    const nameFilterInput = document.getElementById('filterEmployeeName');
+    const nameFilter = nameFilterInput?.value.toLowerCase() || '';
+    
+    const rows = document.querySelectorAll('#employeesTableBody tr');
+    
+    rows.forEach(row => {
+        const name = row.dataset.name || '';
+        const username = row.dataset.username || '';
+        
+        let show = true;
+        
+        if (nameFilter && !name.includes(nameFilter) && !username.includes(nameFilter)) {
+            show = false;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+    
+    // Сохраняем фокус на поле ввода
+    if (nameFilterInput) {
+        nameFilterInput.focus();
+    }
+}
+
+function clearEmployeeFilter(filterId) {
+    const filter = document.getElementById(filterId);
+    if (filter) {
+        filter.value = '';
+        filterEmployeesTable();
+    }
+}
+
+function changePerPage(value) {
+    const url = new URL(window.location);
+    url.searchParams.set('per_page', value);
+    url.searchParams.set('page', '1'); // Сбрасываем на первую страницу
+    window.location.href = url.toString();
+}
 
 function refreshEmployees() {
     location.reload();
@@ -289,72 +332,9 @@ function viewShifts(employeeId) {
     window.location.href = '/manager/employees/' + employeeId + '/shifts';
 }
 
-function sortTable(column, direction) {
-    const tbody = document.getElementById('employeesTableBody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-    
-    // Обновляем текущую сортировку
-    currentSort = { column, direction };
-    
-    // Сортируем строки
-    rows.sort((a, b) => {
-        let aValue, bValue;
-        
-        if (column === 'name') {
-            aValue = a.dataset.name.toLowerCase();
-            bValue = b.dataset.name.toLowerCase();
-        }
-        
-        if (direction === 'asc') {
-            return aValue.localeCompare(bValue, 'ru');
-        } else {
-            return bValue.localeCompare(aValue, 'ru');
-        }
-    });
-    
-    // Очищаем tbody и добавляем отсортированные строки
-    tbody.innerHTML = '';
-    rows.forEach(row => tbody.appendChild(row));
-    
-    // Обновляем визуальные индикаторы сортировки
-    updateSortIndicators(column, direction);
-}
-
-function updateSortIndicators(column, direction) {
-    // Убираем все активные индикаторы
-    document.querySelectorAll('.sort-indicator').forEach(indicator => {
-        indicator.classList.remove('text-primary');
-        indicator.classList.add('text-muted');
-    });
-    
-    // Добавляем активный индикатор
-    const activeIndicator = document.querySelector(`[onclick="sortTable('${column}', '${direction}')"] i`);
-    if (activeIndicator) {
-        activeIndicator.classList.add('text-primary');
-        activeIndicator.classList.remove('text-muted');
-    }
-}
-
-function filterTable() {
-    const filterValue = document.getElementById('nameFilter').value.toLowerCase();
-    const rows = document.querySelectorAll('#employeesTableBody tr');
-    
-    rows.forEach(row => {
-        const name = row.dataset.name.toLowerCase();
-        const username = (row.dataset.username || '').toLowerCase();
-        
-        if (name.includes(filterValue) || username.includes(filterValue)) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    });
-}
-
-// Инициализация при загрузке страницы
+// Восстановление фильтров из URL при загрузке
 document.addEventListener('DOMContentLoaded', function() {
-    // Применяем начальную сортировку по имени по возрастанию
-    sortTable('name', 'asc');
+    filterEmployeesTable();
 });
 </script>
 {% endblock %}
