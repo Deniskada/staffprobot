@@ -91,6 +91,11 @@
   - `GET /manager/employees` — обновлен (apps/web/routes/manager.py, добавлены query параметры для фильтрации, сортировки и пагинации)
   - `GET /manager/calendar` — обновлен (apps/web/templates/manager/calendar.html)
   - `GET /manager/timeslots` — обновлен (apps/web/routes/manager_timeslots.py, табличное представление всех тайм-слотов с фильтрацией и сортировкой)
+  - `GET /manager/shifts` — обновлен (apps/web/routes/manager.py)
+    - Постоянная панель фильтров (статус, объект, период)
+    - Клиентский фильтр по ФИО в заголовке таблицы (мгновенно)
+    - Сортировка по клику, индикатор только у активного столбца
+    - Пагинация как у владельца (Первая/Назад X/Y Вперед/Последняя, 25/50/100)
   - `POST /manager/timeslots/{timeslot_id}/delete` — добавлен (apps/web/routes/manager_timeslots.py, удаление одного тайм-слота)
   - `POST /manager/timeslots/bulk-edit` — обновлен (apps/web/routes/manager_timeslots.py, поддержка `cancel_late_penalties` — принудительно отключает `penalize_late_start`)
 - **Шаблоны:**
