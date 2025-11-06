@@ -173,15 +173,22 @@ class IncidentService:
         # Автокорректировки по статусам
         if new_status == "resolved" and incident.damage_amount and incident.employee_id:
             from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+            from datetime import date as date_type
             adj_service = PayrollAdjustmentService(self.session)
             desc = (
                 f"Возврат удержания по инциденту {incident.custom_number}" if incident.custom_number else "Возврат удержания по инциденту"
             )
+            # Логика: если custom_date указана и она больше текущей даты, использовать её, иначе текущую дату/время
+            adjustment_date = None
+            if incident.custom_date:
+                today = date_type.today()
+                if incident.custom_date > today:
+                    adjustment_date = incident.custom_date
             await adj_service.create_incident_refund(
                 employee_id=incident.employee_id,
                 object_id=incident.object_id,
                 amount=incident.damage_amount,
-                adjustment_date=incident.custom_date or None,
+                adjustment_date=adjustment_date,
                 description=desc,
                 created_by=incident.created_by or 0,
                 incident_id=incident.id
