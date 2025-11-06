@@ -131,6 +131,31 @@ async def manager_incident_create(
     return RedirectResponse(url="/manager/incidents", status_code=303)
 
 
+@router.get("/incidents/api/categories")
+async def manager_incident_categories_for_object(
+    object_id: int = Query(...),
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Категории инцидентов по выбранному объекту (по владельцу объекта)."""
+    if isinstance(current_user, RedirectResponse):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    async with get_async_session() as db:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        perm = ManagerPermissionService(db)
+        accessible_objects = await perm.get_user_accessible_objects(user_id)
+        accessible_object_ids = [o.id for o in accessible_objects]
+        if object_id not in accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступа к объекту")
+        from sqlalchemy import select
+        from domain.entities.object import Object
+        obj_res = await db.execute(select(Object).where(Object.id == object_id))
+        obj = obj_res.scalar_one_or_none()
+        if not obj or not getattr(obj, 'owner_id', None):
+            return {"categories": []}
+        cat_service = IncidentCategoryService(db)
+        cats = await cat_service.list_categories(obj.owner_id)
+        return {"categories": [{"id": c.id, "name": c.name} for c in cats]}
+
 @router.get("/incidents/categories", response_class=HTMLResponse)
 async def manager_incident_categories(
     request: Request,

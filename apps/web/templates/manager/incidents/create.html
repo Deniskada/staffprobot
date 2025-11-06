@@ -7,7 +7,7 @@
     <div class="row g-3">
       <div class="col-md-4">
         <label class="form-label">Объект</label>
-        <select name="object_id" class="form-select" required>
+        <select name="object_id" id="incidentObject" class="form-select" required>
           <option value="">Выберите объект</option>
           {% for obj in objects %}
           <option value="{{ obj.id }}">{{ obj.name }}</option>
@@ -16,7 +16,9 @@
       </div>
       <div class="col-md-4">
         <label class="form-label">Категория</label>
-        <input type="text" name="category" class="form-control" placeholder="Например: Повреждение" />
+        <select name="category" id="incidentCategory" class="form-select" disabled>
+          <option value="">Сначала выберите объект</option>
+        </select>
       </div>
       <div class="col-md-4">
         <label class="form-label">Критичность</label>
@@ -31,8 +33,14 @@
         <input type="text" name="custom_number" class="form-control" placeholder="Например: INC-2025-001" />
       </div>
       <div class="col-md-4">
-        <label class="form-label">Сотрудник (ID)</label>
-        <input type="number" name="employee_id" class="form-control" placeholder="Необязательно" />
+        <label class="form-label">Сотрудник</label>
+        <select name="employee_id" id="incidentEmployee" class="form-select" disabled>
+          <option value="">Сначала выберите объект</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Ущерб (₽)</label>
+        <input type="number" step="0.01" min="0" name="damage_amount" class="form-control" placeholder="0.00" />
       </div>
       <div class="col-12">
         <label class="form-label">Описание</label>
@@ -47,4 +55,67 @@
 </div>
 {% endblock %}
 
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const objectSelect = document.getElementById('incidentObject');
+  const categorySelect = document.getElementById('incidentCategory');
+  const employeeSelect = document.getElementById('incidentEmployee');
+
+  async function loadCategories(objectId) {
+    categorySelect.innerHTML = '<option value="">Загрузка...</option>';
+    categorySelect.disabled = true;
+    try {
+      const resp = await fetch(`/manager/incidents/api/categories?object_id=${encodeURIComponent(objectId)}`);
+      const data = await resp.json();
+      categorySelect.innerHTML = '<option value="">Выберите категорию</option>';
+      (data.categories || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name;
+        opt.textContent = c.name;
+        categorySelect.appendChild(opt);
+      });
+      categorySelect.disabled = false;
+    } catch (e) {
+      categorySelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+      categorySelect.disabled = true;
+    }
+  }
+
+  async function loadEmployees(objectId) {
+    employeeSelect.innerHTML = '<option value="">Загрузка...</option>';
+    employeeSelect.disabled = true;
+    try {
+      const resp = await fetch(`/manager/api/employees/for-object/${encodeURIComponent(objectId)}`);
+      const list = await resp.json();
+      employeeSelect.innerHTML = '<option value="">Выберите сотрудника</option>';
+      (list || []).forEach(e => {
+        const fio = `${(e.name||'').trim()}`; // API возвращает имя, форматируем при необходимости
+        const opt = document.createElement('option');
+        opt.value = e.id;
+        opt.textContent = fio;
+        employeeSelect.appendChild(opt);
+      });
+      employeeSelect.disabled = false;
+    } catch (e) {
+      employeeSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+      employeeSelect.disabled = true;
+    }
+  }
+
+  objectSelect.addEventListener('change', function() {
+    const oid = this.value;
+    if (!oid) {
+      categorySelect.innerHTML = '<option value="">Сначала выберите объект</option>';
+      categorySelect.disabled = true;
+      employeeSelect.innerHTML = '<option value="">Сначала выберите объект</option>';
+      employeeSelect.disabled = true;
+      return;
+    }
+    loadCategories(oid);
+    loadEmployees(oid);
+  });
+});
+</script>
+{% endblock %}
 
