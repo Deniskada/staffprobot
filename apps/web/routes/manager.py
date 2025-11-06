@@ -435,26 +435,39 @@ async def manager_incident_edit(
     except ValueError:
         employee_id_int = None
     custom_number = (form.get("custom_number") or "").strip()
+    custom_date_str = (form.get("custom_date") or "").strip()
     from decimal import Decimal, InvalidOperation
+    from datetime import datetime
     damage_amount = None
     if damage_amount_str:
         try:
             damage_amount = Decimal(damage_amount_str)
         except InvalidOperation:
             damage_amount = None
+    custom_date = None
+    if custom_date_str:
+        try:
+            custom_date = datetime.strptime(custom_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            custom_date = None
     async with get_async_session() as db:
         user_id = await get_user_id_from_current_user(current_user, db)
         perm = ManagerPermissionService(db)
         accessible_objects = await perm.get_user_accessible_objects(user_id)
         accessible_ids = [o.id for o in accessible_objects]
         from domain.entities.incident import Incident
-        from sqlalchemy import select, update
+        from sqlalchemy import select
         res = await db.execute(select(Incident).where(Incident.id == incident_id))
         incident = res.scalar_one_or_none()
         if not incident:
             raise HTTPException(status_code=404, detail="Not Found")
         if object_id_int and object_id_int not in accessible_ids:
             raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Проверка статуса: решенные и отклоненные инциденты нельзя редактировать
+        if incident.status in ['resolved', 'rejected']:
+            raise HTTPException(status_code=400, detail=f"Нельзя редактировать инцидент со статусом '{incident.status}'")
+        
         # Если статус изменился — применяем через IncidentService для истории
         if status_new and status_new != (incident.status or ""):
             if status_new not in ["new", "in_review", "resolved", "rejected"]:
@@ -466,17 +479,40 @@ async def manager_incident_edit(
                 new_status=status_new,
                 notes=None
             )
-        upd = update(Incident).where(Incident.id == incident_id).values(
-            category=category or None,
-            severity=severity or "medium",
-            notes=notes or None,
-            object_id=object_id_int or incident.object_id,
-            employee_id=employee_id_int if employee_id_int is not None else incident.employee_id,
-            damage_amount=damage_amount if damage_amount is not None else incident.damage_amount,
-            custom_number=custom_number or incident.custom_number
-        )
-        await db.execute(upd)
-        await db.commit()
+            await db.commit()
+            # После изменения статуса нужно обновить инцидент из БД
+            await db.refresh(incident)
+        
+        # Обновление остальных полей через IncidentService
+        from shared.services.incident_service import IncidentService
+        incident_service = IncidentService(db)
+        update_data = {}
+        if category:
+            update_data['category'] = category
+        if severity:
+            update_data['severity'] = severity
+        if notes is not None:
+            update_data['notes'] = notes
+        if object_id_int is not None:
+            update_data['object_id'] = object_id_int
+        if employee_id_int is not None:
+            update_data['employee_id'] = employee_id_int
+        if damage_amount is not None:
+            update_data['damage_amount'] = damage_amount
+        if custom_number:
+            update_data['custom_number'] = custom_number
+        if custom_date is not None:
+            update_data['custom_date'] = custom_date
+        
+        try:
+            await incident_service.update_incident(
+                incident_id=incident_id,
+                data=update_data,
+                changed_by=user_id
+            )
+        except ValueError as e:
+            # Ошибка при попытке редактировать resolved/rejected инцидент
+            raise HTTPException(status_code=400, detail=str(e))
     return RedirectResponse(url="/manager/incidents", status_code=303)
 
 

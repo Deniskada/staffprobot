@@ -243,7 +243,15 @@ class IncidentService:
         incident = await self.session.get(Incident, incident_id)
         if not incident:
             return None
+        
+        # Проверка статуса: решенные и отклоненные инциденты нельзя редактировать
+        if incident.status in ['resolved', 'rejected']:
+            raise ValueError(f"Нельзя редактировать инцидент со статусом '{incident.status}'")
+        
         from domain.entities.incident_history import IncidentHistory
+        old_employee_id = incident.employee_id
+        old_damage_amount = incident.damage_amount
+        
         changed_fields = [
             'category', 'severity', 'status', 'reason_code', 'notes',
             'object_id', 'shift_schedule_id', 'employee_id',
@@ -262,6 +270,55 @@ class IncidentService:
                         old_value=str(old_value) if old_value is not None else None,
                         new_value=str(new_value) if new_value is not None else None
                     ))
+        
+        # Обработка изменения сотрудника: перераспределение корректировок
+        new_employee_id = incident.employee_id
+        new_damage_amount = incident.damage_amount
+        
+        if old_employee_id != new_employee_id and old_employee_id and new_employee_id:
+            # Старый сотрудник: создаем доплату (возврат удержания)
+            if old_damage_amount:
+                from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+                from datetime import date as date_type
+                adj_service = PayrollAdjustmentService(self.session)
+                desc_refund = (
+                    f"Возврат удержания по инциденту {incident.custom_number}" if incident.custom_number else "Возврат удержания по инциденту"
+                )
+                # Логика даты для доплат: если custom_date указана и она больше текущей даты, использовать её, иначе текущую дату/время
+                adjustment_date_refund = None
+                if incident.custom_date:
+                    today = date_type.today()
+                    if incident.custom_date > today:
+                        adjustment_date_refund = incident.custom_date
+                await adj_service.create_incident_refund(
+                    employee_id=old_employee_id,
+                    object_id=incident.object_id,
+                    amount=old_damage_amount,
+                    adjustment_date=adjustment_date_refund,
+                    description=desc_refund,
+                    created_by=changed_by,
+                    incident_id=incident.id
+                )
+                logger.info(f"Создана доплата старому сотруднику {old_employee_id} при изменении инцидента {incident_id}")
+            
+            # Новый сотрудник: создаем удержание
+            if new_damage_amount:
+                from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+                adj_service = PayrollAdjustmentService(self.session)
+                desc_deduction = (
+                    f"Удержание по инциденту {incident.custom_number}" if incident.custom_number else "Удержание по инциденту"
+                )
+                await adj_service.create_incident_deduction(
+                    employee_id=new_employee_id,
+                    object_id=incident.object_id,
+                    amount=new_damage_amount,
+                    adjustment_date=incident.custom_date or None,
+                    description=desc_deduction,
+                    created_by=changed_by,
+                    incident_id=incident.id
+                )
+                logger.info(f"Создано удержание новому сотруднику {new_employee_id} при изменении инцидента {incident_id}")
+        
         await self.session.commit()
         await self.session.refresh(incident)
         return incident

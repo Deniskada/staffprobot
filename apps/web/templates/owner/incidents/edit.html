@@ -3,6 +3,13 @@
 {% block content %}
 <div class="container mt-4">
   <h3>Инцидент {{ incident.custom_number or ('#' ~ incident.id) }}</h3>
+  
+  {% if incident.status in ['resolved', 'rejected'] %}
+  <div class="alert alert-warning" role="alert">
+    <i class="bi bi-exclamation-triangle"></i> Нельзя редактировать инцидент со статусом "{{ 'Решен' if incident.status == 'resolved' else 'Отклонен' }}".
+    <a href="/owner/incidents" class="alert-link">Вернуться к списку инцидентов</a>
+  </div>
+  {% else %}
   <form method="post" action="/owner/incidents/{{ incident.id }}/edit">
     <div class="row g-3">
       <div class="col-md-4">
@@ -71,6 +78,7 @@
       <button type="submit" class="btn btn-primary">Сохранить</button>
     </div>
   </form>
+  {% endif %}
 
   <hr class="my-4">
   <h5>История изменений</h5>

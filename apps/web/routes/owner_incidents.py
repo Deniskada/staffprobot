@@ -303,7 +303,35 @@ async def owner_incident_edit_save(
 ):
     from decimal import Decimal
     from datetime import datetime
+    from domain.entities.incident import Incident
+    from sqlalchemy import select
+    from fastapi import HTTPException
+    
+    # Проверяем статус инцидента перед редактированием
+    result = await session.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Инцидент не найден")
+    
+    # Проверка статуса: решенные и отклоненные инциденты нельзя редактировать
+    if incident.status in ['resolved', 'rejected']:
+        raise HTTPException(status_code=400, detail=f"Нельзя редактировать инцидент со статусом '{incident.status}'")
+    
     service = IncidentService(session)
+    
+    # Если статус изменился — применяем через IncidentService для истории
+    if status and status != incident.status:
+        if status not in ["new", "in_review", "resolved", "rejected"]:
+            raise HTTPException(status_code=400, detail="Некорректный статус")
+        await service.update_incident_status(
+            incident_id=incident_id,
+            new_status=status,
+            notes=None
+        )
+        await session.commit()
+        # После изменения статуса нужно обновить инцидент из БД
+        await session.refresh(incident)
+    
     data = {
         k: v for k, v in {
             "category": category,
@@ -312,8 +340,7 @@ async def owner_incident_edit_save(
             "shift_schedule_id": shift_schedule_id,
             "employee_id": employee_id,
             "notes": notes,
-            "custom_number": custom_number,
-            "status": status
+            "custom_number": custom_number
         }.items() if v is not None and v != ""
     }
     if custom_date:
@@ -326,7 +353,13 @@ async def owner_incident_edit_save(
             data["damage_amount"] = Decimal(damage_amount)
         except Exception:
             pass
-    await service.update_incident(incident_id, data, current_user.id)
+    
+    try:
+        await service.update_incident(incident_id, data, current_user.id)
+    except ValueError as e:
+        # Ошибка при попытке редактировать resolved/rejected инцидент
+        raise HTTPException(status_code=400, detail=str(e))
+    
     return RedirectResponse(url="/owner/incidents", status_code=303)
 
 
