@@ -34,11 +34,41 @@ from apps.web.jinja import templates
 @router.get("/incidents", response_class=HTMLResponse)
 async def manager_incidents_index(
     request: Request,
+    status: Optional[str] = Query(None),
+    object_id: Optional[str] = Query(None),
     current_user: dict = Depends(require_manager_or_owner)
 ):
     if isinstance(current_user, RedirectResponse):
         return current_user
-    return templates.TemplateResponse("manager/incidents/index.html", {"request": request, "current_user": current_user})
+    async with get_async_session() as db:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        perm = ManagerPermissionService(db)
+        accessible_objects = await perm.get_user_accessible_objects(user_id)
+        accessible_ids = [o.id for o in accessible_objects]
+        from sqlalchemy.orm import selectinload
+        from domain.entities.incident import Incident
+        conditions = [Incident.object_id.in_(accessible_ids)]
+        if status:
+            conditions.append(Incident.status == status)
+        if object_id:
+            try:
+                oid = int(object_id)
+                if oid in accessible_ids:
+                    conditions.append(Incident.object_id == oid)
+                else:
+                    # Нет доступа — пустой список
+                    return templates.TemplateResponse("manager/incidents/index.html", {"request": request, "current_user": current_user, "incidents": [], "objects": accessible_objects, "status_filter": status, "selected_object_id": None})
+            except ValueError:
+                pass
+        query = select(Incident).where(and_(*conditions)).options(
+            selectinload(Incident.object),
+            selectinload(Incident.employee),
+            selectinload(Incident.shift_schedule),
+            selectinload(Incident.creator)
+        ).order_by(Incident.created_at.desc()).limit(200)
+        result = await db.execute(query)
+        incidents = result.scalars().all()
+        return templates.TemplateResponse("manager/incidents/index.html", {"request": request, "current_user": current_user, "incidents": incidents, "objects": accessible_objects, "status_filter": status, "selected_object_id": object_id})
 
 
 @router.get("/incidents/{incident_id}", response_class=HTMLResponse)
@@ -49,7 +79,26 @@ async def manager_incident_detail(
 ):
     if isinstance(current_user, RedirectResponse):
         return current_user
-    return templates.TemplateResponse("manager/incidents/detail.html", {"request": request, "incident_id": incident_id, "current_user": current_user})
+    async with get_async_session() as db:
+        from sqlalchemy.orm import selectinload
+        from sqlalchemy import select
+        from domain.entities.incident import Incident
+        inc_q = select(Incident).where(Incident.id == incident_id).options(
+            selectinload(Incident.object),
+            selectinload(Incident.employee),
+            selectinload(Incident.shift_schedule),
+            selectinload(Incident.creator)
+        )
+        res = await db.execute(inc_q)
+        incident = res.scalar_one_or_none()
+        if not incident:
+            raise HTTPException(status_code=404, detail="Not Found")
+        # проверка доступа по объекту
+        perm = ManagerPermissionService(db)
+        accessible_objects = await perm.get_user_accessible_objects(await get_user_id_from_current_user(current_user, db))
+        if incident.object_id not in [o.id for o in accessible_objects]:
+            raise HTTPException(status_code=403, detail="Access denied")
+        return templates.TemplateResponse("manager/incidents/detail.html", {"request": request, "incident": incident, "current_user": current_user})
 
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:

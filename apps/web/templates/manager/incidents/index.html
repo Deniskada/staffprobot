@@ -2,8 +2,59 @@
 {% block title %}Инциденты{% endblock %}
 {% block manager_content %}
 <div class="container mt-4">
-  <h2>Инциденты</h2>
-  <p class="text-muted">Секция в разработке. Здесь будет список инцидентов по доступным объектам.</p>
+  <div class="d-flex justify-content-between align-items-end mb-3">
+    <h2 class="mb-0">Инциденты</h2>
+    <form method="get" class="d-flex gap-2">
+      <div>
+        <label for="object_id" class="form-label">Объект</label>
+        <select name="object_id" id="object_id" class="form-select" onchange="this.form.submit()">
+          <option value="">Все объекты</option>
+          {% for obj in objects %}
+          <option value="{{ obj.id }}" {% if selected_object_id and (selected_object_id|string) == (obj.id|string) %}selected{% endif %}>{{ obj.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Статус</label>
+        <select name="status" class="form-select" onchange="this.form.submit()">
+          <option value="" {% if not status_filter %}selected{% endif %}>Все</option>
+          <option value="new" {% if status_filter == 'new' %}selected{% endif %}>Новые</option>
+          <option value="in_review" {% if status_filter == 'in_review' %}selected{% endif %}>На рассмотрении</option>
+          <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>Решённые</option>
+          <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Отклонённые</option>
+        </select>
+      </div>
+    </form>
+  </div>
+
+  <table class="table table-sm table-hover">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Дата</th>
+        <th>Объект</th>
+        <th>Сотрудник</th>
+        <th>Категория</th>
+        <th>Статус</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in incidents %}
+      <tr>
+        <td>{{ i.id }}</td>
+        <td>{{ i.created_at.strftime('%d.%m.%Y %H:%M') if i.created_at else '—' }}</td>
+        <td>{{ i.object.name if i.object else '—' }}</td>
+        <td>{% if i.employee %}{{ (i.employee.last_name or '') }} {{ (i.employee.first_name or '') }}{% else %}—{% endif %}</td>
+        <td>{{ i.category or '—' }}</td>
+        <td>{{ i.status or '—' }}</td>
+        <td><a href="/manager/incidents/{{ i.id }}" class="btn btn-sm btn-outline-primary">Открыть</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center text-muted">Инциденты не найдены</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 {% endblock %}
 

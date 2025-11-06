@@ -50,15 +50,46 @@ async def manager_tasks_templates(
     # Явная фильтрация: show_inactive=1 показывает все, иначе только активные
     active_only = not bool(show_inactive)
     
-    templates_list = await task_service.get_templates_for_role(
-        user_id=user_id,
-        role="manager",
-        owner_id=owner_id,
-        active_only=active_only
-    )
-    # Доступные объекты для менеджера
+    # Определяем владельцев по доступным объектам
     perm_service = ManagerPermissionService(session)
     accessible_objects = await perm_service.get_user_accessible_objects(user_id)
+    owner_ids = sorted({getattr(o, 'owner_id', None) for o in accessible_objects if getattr(o, 'owner_id', None) is not None})
+
+    # Сбор шаблонов по всем владельцам, доступным менеджеру
+    templates_list = []
+    seen_ids = set()
+    if selected_object_id:
+        # Фильтр по конкретному объекту
+        # Находим owner объекта
+        obj_owner_id = next((o.owner_id for o in accessible_objects if o.id == selected_object_id), None)
+        if obj_owner_id:
+            tpl = await task_service.get_templates_for_role(
+                user_id=user_id,
+                role="manager",
+                owner_id=obj_owner_id,
+                object_id=selected_object_id,
+                active_only=active_only
+            )
+            for t in tpl:
+                if t.id not in seen_ids:
+                    seen_ids.add(t.id)
+                    templates_list.append(t)
+    else:
+        # Без фильтра объекта — объединяем по всем owner_id
+        for oid in owner_ids:
+            tpl = await task_service.get_templates_for_role(
+                user_id=user_id,
+                role="manager",
+                owner_id=oid,
+                active_only=active_only
+            )
+            for t in tpl:
+                if t.id not in seen_ids:
+                    seen_ids.add(t.id)
+                    templates_list.append(t)
+    # Доступные объекты для менеджера (для фильтра)
+    # perm_service уже инициализирован выше
+    accessible_objects = accessible_objects
     selected_object_id = None
     if object_id is not None and object_id != "":
         try:
@@ -104,15 +135,27 @@ async def manager_tasks_entries(
     
     owner_id = current_user.get("owner_id") if isinstance(current_user, dict) else None
     
-    entries = await task_service.get_entries_for_role(
-        user_id=user_id,
-        role="manager",
-        owner_id=owner_id,
-        limit=100
-    )
-    # Доступные объекты и фильтр
+    # Определяем владельцев по доступным объектам
     perm_service = ManagerPermissionService(session)
     accessible_objects = await perm_service.get_user_accessible_objects(user_id)
+    owner_ids = sorted({getattr(o, 'owner_id', None) for o in accessible_objects if getattr(o, 'owner_id', None) is not None})
+
+    # Собираем записи задач по всем доступным владельцам
+    entries = []
+    seen_ids = set()
+    for oid in owner_ids:
+        part = await task_service.get_entries_for_role(
+            user_id=user_id,
+            role="manager",
+            owner_id=oid,
+            limit=1000
+        )
+        for e in part:
+            if e.id not in seen_ids:
+                seen_ids.add(e.id)
+                entries.append(e)
+    # Доступные объекты и фильтр
+    # accessible_objects уже получены
     selected_object_id = None
     if object_id is not None and object_id != "":
         try:
