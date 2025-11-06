@@ -15,67 +15,75 @@
 <!-- Статистика -->
 <div class="row mb-4">
     <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">Доступные объекты</h6>
-                        <h3 class="mb-0">{{ accessible_objects_count or 0 }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-building fa-2x opacity-75"></i>
+        <a href="/manager/objects" class="text-decoration-none">
+            <div class="card bg-primary text-white" style="cursor: pointer; transition: transform 0.2s;">
+                <div class="card-body" onmouseover="this.parentElement.style.transform='scale(1.02)'" onmouseout="this.parentElement.style.transform='scale(1)'">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Объекты</h6>
+                            <h3 class="mb-0">{{ accessible_objects_count or 0 }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-building fa-2x opacity-75"></i>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
     
     <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">Активные смены</h6>
-                        <h3 class="mb-0">{{ active_shifts_count or 0 }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-clock fa-2x opacity-75"></i>
+        <a href="/manager/shifts?status=active&object_id=&dateRange=&date_from=&date_to=" class="text-decoration-none">
+            <div class="card bg-success text-white" style="cursor: pointer; transition: transform 0.2s;">
+                <div class="card-body" onmouseover="this.parentElement.style.transform='scale(1.02)'" onmouseout="this.parentElement.style.transform='scale(1)'">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Активные смены</h6>
+                            <h3 class="mb-0">{{ active_shifts_count or 0 }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-clock fa-2x opacity-75"></i>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
     
     <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">Сотрудники</h6>
-                        <h3 class="mb-0">{{ employees_count or 0 }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-people fa-2x opacity-75"></i>
+        <a href="/manager/employees" class="text-decoration-none">
+            <div class="card bg-info text-white" style="cursor: pointer; transition: transform 0.2s;">
+                <div class="card-body" onmouseover="this.parentElement.style.transform='scale(1.02)'" onmouseout="this.parentElement.style.transform='scale(1)'">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Сотрудники</h6>
+                            <h3 class="mb-0">{{ employees_count or 0 }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-people fa-2x opacity-75"></i>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
     
     <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">Запланированные смены</h6>
-                        <h3 class="mb-0">{{ scheduled_shifts_count or 0 }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-calendar3 fa-2x opacity-75"></i>
+        <a href="/manager/calendar" class="text-decoration-none" id="scheduledShiftsLink">
+            <div class="card bg-warning text-white" style="cursor: pointer; transition: transform 0.2s;">
+                <div class="card-body" onmouseover="this.parentElement.style.transform='scale(1.02)'" onmouseout="this.parentElement.style.transform='scale(1)'">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Запланированные</h6>
+                            <h3 class="mb-0">{{ scheduled_shifts_count_today or 0 }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-calendar3 fa-2x opacity-75"></i>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
 </div>
 
@@ -214,57 +222,22 @@
     </div>
 </div>
 
-<!-- Быстрые действия -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-lightning me-2"></i>
-                    Быстрые действия
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3 mb-3">
-                        <a href="/manager/objects" class="btn btn-outline-primary w-100">
-                            <i class="bi bi-building me-2"></i>
-                            Управление объектами
-                        </a>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <a href="/manager/employees" class="btn btn-outline-success w-100">
-                            <i class="bi bi-people me-2"></i>
-                            Управление сотрудниками
-                        </a>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <a href="/manager/calendar" class="btn btn-outline-info w-100">
-                            <i class="bi bi-calendar3 me-2"></i>
-                            Планирование смен
-                        </a>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <a href="/manager/reviews" class="btn btn-outline-warning w-100">
-                            <i class="bi bi-star me-2"></i>
-                            Отзывы и рейтинги
-                        </a>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <a href="/manager/reports" class="btn btn-outline-warning w-100">
-                            <i class="bi bi-graph-up me-2"></i>
-                            Отчеты
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    // Обработка клика на "Запланированные" - переход в календарь с скроллом на сегодня
+    document.addEventListener('DOMContentLoaded', function() {
+        const scheduledLink = document.getElementById('scheduledShiftsLink');
+        if (scheduledLink) {
+            scheduledLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                // Переход в календарь с параметром для скролла на сегодня
+                window.location.href = '/manager/calendar?scrollToToday=true';
+            });
+        }
+    });
+    
     // Обновление статистики каждые 30 секунд
     setInterval(function() {
         // Здесь можно добавить AJAX запрос для обновления статистики

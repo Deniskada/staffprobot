@@ -62,6 +62,22 @@
                     }
                 }
             });
+            
+            // Проверяем параметр scrollToToday и скроллим к сегодняшнему дню
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('scrollToToday') === 'true') {
+                // Удаляем параметр из URL
+                urlParams.delete('scrollToToday');
+                const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+                window.history.replaceState({}, '', newUrl);
+                
+                // Вызываем goToToday после небольшой задержки, чтобы календарь успел инициализироваться
+                setTimeout(() => {
+                    if (window.universalCalendar && typeof window.universalCalendar.goToToday === 'function') {
+                        window.universalCalendar.goToToday();
+                    }
+                }, 500);
+            }
         }
     });
 

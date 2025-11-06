@@ -105,11 +105,11 @@ async def manager_dashboard(
             # Получаем смены по доступным объектам
             object_ids = [obj.id for obj in accessible_objects]
             active_shifts = []
-            scheduled_shifts = []
+            scheduled_shifts_today = []
             
             if object_ids:
-                from sqlalchemy import select, and_
-                from datetime import datetime
+                from sqlalchemy import select, and_, func
+                from datetime import datetime, date, timezone
                 
                 # Активные смены
                 active_shifts_query = select(Shift).where(
@@ -124,22 +124,46 @@ async def manager_dashboard(
                 result = await db.execute(active_shifts_query)
                 active_shifts = result.scalars().all()
                 
-                # Запланированные смены
-                scheduled_shifts_query = select(Shift).where(
+                # Запланированные смены на сегодня (из ShiftSchedule)
+                today = date.today()
+                
+                scheduled_shifts_today_query = select(ShiftSchedule).where(
                     and_(
-                        Shift.object_id.in_(object_ids),
-                        Shift.status == "scheduled"
+                        ShiftSchedule.object_id.in_(object_ids),
+                        ShiftSchedule.status.in_(["planned", "confirmed"]),
+                        func.date(ShiftSchedule.planned_start) == today
                     )
-                ).options(
-                    selectinload(Shift.user),
-                    selectinload(Shift.object)
                 )
-                result = await db.execute(scheduled_shifts_query)
-                scheduled_shifts = result.scalars().all()
+                result = await db.execute(scheduled_shifts_today_query)
+                scheduled_shifts_today = result.scalars().all()
+            
+            # Получаем сотрудников с активными договорами у владельцев, с которыми есть активный контракт у управляющего
+            employees_user_ids = set()
+            
+            # Получаем договоры управляющего, чтобы узнать владельцев
+            manager_contracts = await permission_service.get_manager_contracts_for_user(user_id)
+            owner_ids = [contract.owner_id for contract in manager_contracts]
+            
+            if owner_ids:
+                from domain.entities.contract import Contract
+                # Получаем сотрудников, которые работают по активным договорам с этими владельцами
+                employees_query = select(User.id).join(
+                    Contract, User.id == Contract.employee_id
+                ).where(
+                    and_(
+                        Contract.owner_id.in_(owner_ids),  # Договоры с владельцами управляющего
+                        Contract.is_active == True,
+                        Contract.status == "active",
+                        User.id != user_id  # Исключаем самого управляющего
+                    )
+                ).distinct()
+                
+                employees_result = await db.execute(employees_query)
+                employees_user_ids.update([row[0] for row in employees_result.all() if row[0]])
             
             # Получаем последние смены
-            recent_shifts = active_shifts + scheduled_shifts
-            recent_shifts = sorted(recent_shifts, key=lambda x: x.start_time, reverse=True)[:10]
+            recent_shifts = active_shifts
+            recent_shifts = sorted(recent_shifts, key=lambda x: x.start_time if x.start_time else datetime.min, reverse=True)[:10]
             
             # Названия прав
             permission_names = {
@@ -176,8 +200,8 @@ async def manager_dashboard(
                 "accessible_objects_count": accessible_objects_count,
                 "open_objects": open_objects,
                 "active_shifts_count": len(active_shifts),
-                "scheduled_shifts_count": len(scheduled_shifts),
-                "employees_count": len(set(shift.user_id for shift in recent_shifts)),
+                "scheduled_shifts_count_today": len(scheduled_shifts_today),
+                "employees_count": len(employees_user_ids),
                 "recent_shifts": recent_shifts,
                 "object_permissions": object_permissions,
                 "permission_names": permission_names,

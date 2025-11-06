@@ -23,7 +23,7 @@
 - [POST] `/calendar/api/quick-create-timeslot`  — (apps/web/routes/manager.py)
 - [GET] `/calendar/api/timeslot/{timeslot_id}`  — (apps/web/routes/manager.py)
 - [GET] `/calendar/api/timeslots-status`  — (apps/web/routes/manager.py)
-- [GET] `/dashboard`  — (apps/web/routes/manager.py)
+- [GET] `/dashboard`  — (apps/web/routes/manager.py) — дашборд управляющего с кликабельными карточками статистики (Объекты, Активные смены, Сотрудники, Запланированные на сегодня), счетчик запланированных смен на сегодня из ShiftSchedule, подсчет сотрудников только с активными договорами у владельцев, с которыми есть активный контракт у управляющего
 - [GET] `/employees`  — (apps/web/routes/manager.py)
 - [GET] `/employees/add`  — (apps/web/routes/manager.py)
 - [POST] `/employees/add`  — (apps/web/routes/manager.py)
