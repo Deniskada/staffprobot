@@ -104,10 +104,11 @@
   
   Меню управляющего (navbar, `apps/web/templates/manager/base_manager.html`):
   - Убран пункт «Отзывы» (`/manager/reviews`)
-  - Добавлен пункт «Задачи» (dropdown):
+  - Добавлен пункт «Задачи» (dropdown, временно скрыто):
     - «Шаблоны» — `/manager/tasks/templates`
+    - «Планирование» — `/manager/tasks/plan`
     - «Аудит» — `/manager/tasks/entries`
-  - Добавлен пункт «Инциденты» — `/manager/incidents` (маршруты будут реализованы в Фазе 3.16)
+  - Добавлен пункт «Инциденты» — `/manager/incidents` ✅
 - **Шаблоны:**
   - `manager/dashboard.html` — обновлен (кликабельные карточки, удалена секция "Быстрые действия")
   - `manager/objects.html` — обновлен (фильтрация, сортировка, пагинация, кнопки очистки с белым цветом)
@@ -117,9 +118,26 @@
   - `manager/timeslots/list.html` — обновлен (в массовом редактировании заменено поле «Игнорировать задачи объекта» на «Отменить штрафы за опоздания»)
   - `manager/timeslots/create.html` — обновлен (удалено поле «Игнорировать задачи объекта»)
   - `manager/timeslots/edit.html` — обновлен (удалено поле «Игнорировать задачи объекта»)
+  - `manager/incidents/index.html` — новый (список инцидентов с фильтрацией, сортировкой и пагинацией)
+  - `manager/incidents/create.html` — новый (форма создания инцидента с динамической загрузкой категорий и сотрудников)
+  - `manager/incidents/edit.html` — новый (форма редактирования инцидента с историей изменений, запрет редактирования resolved/rejected)
+- **Роуты инцидентов:**
+  - `GET /manager/incidents` — список инцидентов (apps/web/routes/manager.py, фильтрация по объекту и статусу, сортировка, пагинация)
+  - `GET /manager/incidents/create` — форма создания инцидента (apps/web/routes/manager.py)
+  - `POST /manager/incidents/create` — создание инцидента (apps/web/routes/manager.py)
+  - `GET /manager/incidents/{id}` — детали инцидента (apps/web/routes/manager.py, открывает форму редактирования)
+  - `GET /manager/incidents/{id}/edit` — форма редактирования инцидента (apps/web/routes/manager.py)
+  - `POST /manager/incidents/{id}/edit` — сохранение изменений (apps/web/routes/manager.py, перераспределение корректировок при смене сотрудника)
+  - `POST /manager/incidents/{id}/status` — изменение статуса (apps/web/routes/manager.py, использует IncidentService.update_incident_status)
+  - `GET /manager/incidents/api/categories` — API категорий по объекту (apps/web/routes/manager.py, JSONResponse)
 - **Сервисы:**
   - `apps/web/services/auth_service.py` — изменена логика проверки PIN (не удаляется при проверке, только после успешного входа)
   - `apps/web/routes/auth.py` — добавлено удаление PIN после успешного входа
+  - `shared/services/incident_service.py` — обновлен метод `update_incident`:
+    - Проверка статуса: запрет редактирования resolved/rejected инцидентов
+    - Перераспределение корректировок при смене сотрудника:
+      - Старому сотруднику создается доплата (возврат удержания) с датой по логике доплат
+      - Новому сотруднику создается удержание с датой по логике удержаний
 
 ### Улучшения интерфейса (Owner - Iteration 43) ✅
 
