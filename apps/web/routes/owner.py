@@ -6112,28 +6112,66 @@ async def owner_employees_create_contract(
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
         
         # Обновляем профиль сотрудника, если указаны поля
-        if first_name or last_name or phone or email or birth_date:
-            from sqlalchemy import select
-            from domain.entities.user import User
-            
-            employee_query = select(User).where(User.telegram_id == employee_telegram_id)
-            result = await db.execute(employee_query)
-            employee_user = result.scalar_one_or_none()
-            
-            if employee_user:
-                if first_name:
-                    employee_user.first_name = first_name.strip()
-                if last_name:
-                    employee_user.last_name = last_name.strip()
-                if phone:
-                    employee_user.phone = phone.strip()
-                if email:
-                    employee_user.email = email.strip() or None
-                if birth_date:
+        from sqlalchemy import select
+        from domain.entities.user import User, UserRole
+        
+        employee_query = select(User).where(User.telegram_id == employee_telegram_id)
+        result = await db.execute(employee_query)
+        employee_user = result.scalar_one_or_none()
+        
+        first_name_value = (first_name or "").strip()
+        last_name_value = (last_name or "").strip()
+        phone_value = (phone or "").strip()
+        email_value = (email or "").strip()
+        birth_date_value = (birth_date or "").strip() if birth_date is not None else ""
+        
+        if not employee_user:
+            # Создаем нового пользователя, если его нет в базе
+            if not first_name_value:
+                first_name_value = f"Сотрудник {employee_telegram_id}"
+            employee_user = User(
+                telegram_id=employee_telegram_id,
+                username=None,
+                first_name=first_name_value,
+                last_name=last_name_value or None,
+                phone=phone_value or None,
+                email=email_value or None,
+                role=UserRole.EMPLOYEE.value,
+                roles=[UserRole.EMPLOYEE.value],
+                is_active=True
+            )
+            if birth_date_value:
+                try:
+                    employee_user.birth_date = datetime.strptime(birth_date_value, "%Y-%m-%d")
+                except ValueError:
+                    employee_user.birth_date = None
+            db.add(employee_user)
+            await db.commit()
+            await db.refresh(employee_user)
+        else:
+            updated = False
+            if first_name_value:
+                employee_user.first_name = first_name_value
+                updated = True
+            if last_name is not None:
+                employee_user.last_name = last_name_value or None
+                updated = True
+            if phone is not None:
+                employee_user.phone = phone_value or None
+                updated = True
+            if email is not None:
+                employee_user.email = email_value or None
+                updated = True
+            if birth_date is not None:
+                if birth_date_value:
                     try:
-                        employee_user.birth_date = datetime.strptime(birth_date, "%Y-%m-%d")
+                        employee_user.birth_date = datetime.strptime(birth_date_value, "%Y-%m-%d")
                     except ValueError:
-                        pass
+                        employee_user.birth_date = None
+                else:
+                    employee_user.birth_date = None
+                updated = True
+            if updated:
                 await db.commit()
         
         # Получаем данные формы для динамических полей
