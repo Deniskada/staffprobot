@@ -289,7 +289,7 @@ footer {
                 },
                 onTimeslotClick: function(timeslotId) {
                     console.log('Timeslot clicked:', timeslotId);
-                    window.location.href = `/owner/timeslots/${timeslotId}`;
+                    showAddEmployeeModal(timeslotId);
                 },
                 onDataLoaded: function(calendarData) {
                     console.log('Calendar data loaded:', calendarData);
@@ -306,6 +306,295 @@ footer {
 </script>
 
 <script>
+function notifyCalendar(message, type = 'info') {
+    if (window.calendarPanels && typeof window.calendarPanels.showNotification === 'function') {
+        window.calendarPanels.showNotification(message, type);
+    } else {
+        console.log(`[${type}] ${message}`);
+    }
+}
+
+async function fetchTimeslotDetails(timeslotId) {
+    try {
+        const response = await fetch(`/owner/calendar/api/timeslot/${timeslotId}`, {
+            credentials: 'include'
+        });
+        if (!response.ok) {
+            return null;
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Ошибка получения данных тайм-слота:', error);
+        return null;
+    }
+}
+
+async function showAddEmployeeModal(timeslotId) {
+    try {
+        const timeslotElement = document.querySelector(`[data-timeslot-id="${timeslotId}"]`);
+        let timeslotData = await fetchTimeslotDetails(timeslotId);
+        let slotInfo = timeslotData && timeslotData.slot ? timeslotData.slot : {};
+
+        const slotStart = slotInfo.start_time || (timeslotElement ? (timeslotElement.dataset.timeslotStartTime || null) : null);
+        const slotEnd = slotInfo.end_time || (timeslotElement ? (timeslotElement.dataset.timeslotEndTime || null) : null);
+        const maxEmployees = slotInfo.max_employees || (timeslotElement ? (timeslotElement.dataset.timeslotMaxEmployees || null) : null);
+        let objectId = slotInfo.object_id || (timeslotElement ? (timeslotElement.dataset.timeslotObjectId || timeslotElement.dataset.objectId) : null);
+        let objectName = slotInfo.object_name || (timeslotElement ? timeslotElement.dataset.timeslotObjectName : null);
+        let timeRange = (slotStart && slotEnd) ? `${slotStart} - ${slotEnd}` :
+            (timeslotElement ? `${timeslotElement.dataset.timeslotStartTime || ''} - ${timeslotElement.dataset.timeslotEndTime || ''}`.replace(/ - $/, '') : '');
+        const slotDate = slotInfo.date || (timeslotElement ? timeslotElement.dataset.timeslotDate : '');
+
+        if (!objectId) {
+            notifyCalendar('Ошибка: не удалось определить объект тайм-слота', 'error');
+            return;
+        }
+
+        const startValue = slotStart || '';
+        const endValue = slotEnd || '';
+
+        const modalHtml = `
+            <div class="modal fade" id="addEmployeeToTimeslotModal" tabindex="-1" data-timeslot-id="${timeslotId}" data-object-id="${objectId}">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-person-plus"></i> Добавить сотрудника в тайм-слот
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <div class="alert alert-secondary mb-3">
+                                    <div><strong>Дата:</strong> ${slotDate || '—'}</div>
+                                    <div><strong>Время:</strong> ${timeRange || '—'}</div>
+                                    <div><strong>Объект:</strong> ${objectName || '—'}</div>
+                                </div>
+                                <label for="employeeSelectModal" class="form-label">Выберите сотрудника *</label>
+                                <select class="form-select" id="employeeSelectModal" required>
+                                    <option value="">Загрузка сотрудников...</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Время смены в тайм-слоте *</label>
+                                <div class="row g-2 align-items-end">
+                                    <div class="col">
+                                        <label class="form-label form-label-sm text-muted">Начало</label>
+                                        <input type="time" class="form-control" id="plannedShiftStart" value="${startValue}" ${startValue ? `min="${startValue}"` : ''} ${endValue ? `max="${endValue}"` : ''} required>
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label form-label-sm text-muted">Окончание</label>
+                                        <input type="time" class="form-control" id="plannedShiftEnd" value="${endValue}" ${startValue ? `min="${startValue}"` : ''} ${endValue ? `max="${endValue}"` : ''} required>
+                                    </div>
+                                </div>
+                                <div class="form-text">
+                                    Выберите промежуток в пределах тайм-слота. Максимум сотрудников: ${maxEmployees || 1}.
+                                </div>
+                            </div>
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Совет:</strong> Вы также можете перетащить сотрудника из правой панели на тайм-слот.
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="button" class="btn btn-success" id="confirmAddEmployeeBtn">
+                                <i class="bi bi-check-lg"></i> Добавить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const existingModal = document.getElementById('addEmployeeToTimeslotModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        const modalElement = document.getElementById('addEmployeeToTimeslotModal');
+        modalElement.dataset.slotStartTime = startValue;
+        modalElement.dataset.slotEndTime = endValue;
+        if (maxEmployees) {
+            modalElement.dataset.slotMaxEmployees = maxEmployees;
+        }
+        modalElement.addEventListener('hidden.bs.modal', () => {
+            modalElement.remove();
+        });
+
+        const confirmButton = modalElement.querySelector('#confirmAddEmployeeBtn');
+        confirmButton.addEventListener('click', () => addEmployeeToTimeslot(timeslotId));
+
+        await loadEmployeesForModal(objectId);
+
+        const modalInstance = new bootstrap.Modal(modalElement);
+        modalInstance.show();
+    } catch (error) {
+        console.error('Ошибка подготовки модального окна:', error);
+        notifyCalendar('Ошибка открытия окна назначения сотрудника', 'error');
+    }
+}
+
+async function loadEmployeesForModal(objectId) {
+    const select = document.getElementById('employeeSelectModal');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Загрузка сотрудников...</option>';
+
+    try {
+        const response = await fetch(`/owner/api/employees/for-object/${objectId}`, {
+            credentials: 'include'
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const employees = await response.json();
+
+        if (!Array.isArray(employees)) {
+            console.error('Неверный формат данных сотрудников:', employees);
+            select.innerHTML = '<option value="">Ошибка: неверный формат данных</option>';
+            return;
+        }
+
+        if (employees.length === 0) {
+            select.innerHTML = '<option value="">Нет сотрудников с доступом к объекту</option>';
+        } else {
+            select.innerHTML = '<option value="">Выберите сотрудника</option>' +
+                employees.map(emp => `<option value="${emp.id}">${emp.name}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки сотрудников:', error);
+        select.innerHTML = '<option value="">Ошибка загрузки сотрудников</option>';
+    }
+}
+
+async function addEmployeeToTimeslot(timeslotId) {
+    const modalElement = document.getElementById('addEmployeeToTimeslotModal');
+    const select = document.getElementById('employeeSelectModal');
+    const confirmButton = document.getElementById('confirmAddEmployeeBtn');
+    const startInput = document.getElementById('plannedShiftStart');
+    const endInput = document.getElementById('plannedShiftEnd');
+
+    if (!modalElement || !select || !confirmButton) {
+        notifyCalendar('Не удалось найти элементы окна назначения', 'error');
+        return;
+    }
+
+    const employeeId = select.value;
+    if (!employeeId) {
+        notifyCalendar('Выберите сотрудника', 'error');
+        return;
+    }
+
+    const slotStart = modalElement.dataset.slotStartTime || '';
+    const slotEnd = modalElement.dataset.slotEndTime || '';
+    const startTime = startInput ? startInput.value : slotStart;
+    const endTime = endInput ? endInput.value : slotEnd;
+
+    const toMinutes = (value) => {
+        if (!value) return null;
+        const [h, m] = value.split(':').map(Number);
+        if (Number.isNaN(h) || Number.isNaN(m)) return null;
+        return h * 60 + m;
+    };
+
+    const slotStartMinutes = toMinutes(slotStart);
+    const slotEndMinutes = toMinutes(slotEnd);
+    const startMinutes = toMinutes(startTime);
+    const endMinutes = toMinutes(endTime);
+
+    if (startMinutes === null || endMinutes === null) {
+        notifyCalendar('Укажите время начала и окончания смены', 'error');
+        return;
+    }
+
+    if (startMinutes >= endMinutes) {
+        notifyCalendar('Время окончания должно быть позже времени начала', 'error');
+        return;
+    }
+
+    if (slotStartMinutes !== null && startMinutes < slotStartMinutes) {
+        notifyCalendar(`Время начала должно быть не раньше ${slotStart}`, 'error');
+        return;
+    }
+
+    if (slotEndMinutes !== null && endMinutes > slotEndMinutes) {
+        notifyCalendar(`Время окончания должно быть не позже ${slotEnd}`, 'error');
+        return;
+    }
+
+    confirmButton.disabled = true;
+    confirmButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Назначение...';
+
+    try {
+        const response = await fetch('/owner/api/calendar/plan-shift', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                timeslot_id: Number(timeslotId),
+                employee_id: Number(employeeId),
+                start_time: startTime,
+                end_time: endTime
+            })
+        });
+
+        let result = {};
+        try {
+            result = await response.json();
+        } catch (jsonError) {
+            console.warn('Не удалось разобрать ответ планирования', jsonError);
+        }
+
+        if (!response.ok || result.success === false) {
+            const message = result.detail || result.message || 'Ошибка планирования смены';
+            throw new Error(message);
+        }
+
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+
+        notifyCalendar(result.message || 'Смена успешно запланирована', 'success');
+
+        if (window.universalCalendar && typeof window.universalCalendar.refresh === 'function') {
+            window.universalCalendar.refresh();
+        } else {
+            setTimeout(() => window.location.reload(), 800);
+        }
+    } catch (error) {
+        console.error('Ошибка планирования смены:', error);
+        notifyCalendar(error.message || 'Ошибка планирования смены', 'error');
+    } finally {
+        confirmButton.disabled = false;
+        confirmButton.innerHTML = '<i class="bi bi-check-lg"></i> Добавить';
+    }
+}
+
+// Перехватываем клики по тайм-слотам на стадии захвата, чтобы избежать двойного открытия модалок
+document.addEventListener('click', function(e) {
+    const actionButton = e.target.closest('.timeslot-actions button');
+    if (actionButton) {
+        return;
+    }
+    const timeslotElement = e.target.closest('.timeslot-item');
+    if (!timeslotElement) {
+        return;
+    }
+    const timeslotId = timeslotElement.dataset.timeslotId;
+    if (!timeslotId) {
+        return;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+    if (window.universalCalendar && typeof window.universalCalendar.onTimeslotClick === 'function') {
+        window.universalCalendar.onTimeslotClick(timeslotId);
+    }
+}, true);
+
 // Экспорт данных календаря для JS-логики занятости
 window.calendar_weeks = {{ calendar_weeks | tojson }};
 

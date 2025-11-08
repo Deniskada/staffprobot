@@ -411,6 +411,8 @@ window.unifiedCalendar = {
         }
         element.setAttribute('data-timeslot-end-time', timeslot.end_time);
         element.setAttribute('data-timeslot-object-id', timeslot.object_id);
+        element.setAttribute('data-timeslot-object-name', timeslot.object_name || '');
+        element.setAttribute('data-timeslot-max-employees', maxEmployees);
         
         const occupancyBadge = `<div class="timeslot-badge">${currentEmployees}/${maxEmployees}</div>`;
         

@@ -3074,7 +3074,9 @@ async def owner_calendar_quick_create_timeslot(
 async def api_calendar_plan_shift(
     request: Request,
     timeslot_id: int = Body(...),
-    employee_id: int = Body(...)
+    employee_id: int = Body(...),
+    start_time: Optional[str] = Body(None),
+    end_time: Optional[str] = Body(None)
 ):
     """API: планирование смены для сотрудника в тайм-слот."""
     current_user = await get_current_user(request)
@@ -3169,10 +3171,41 @@ async def api_calendar_plan_shift(
             # Получаем временную зону объекта
             object_timezone = timeslot.object.timezone if timeslot.object and timeslot.object.timezone else 'Europe/Moscow'
             tz = pytz.timezone(object_timezone)
+
+            slot_start_time = timeslot.start_time
+            slot_end_time = timeslot.end_time
+
+            if slot_start_time is None or slot_end_time is None:
+                raise HTTPException(status_code=400, detail="У тайм-слота не указано время работы")
+
+            if start_time:
+                try:
+                    custom_start_time = datetime.strptime(start_time, "%H:%M").time()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Неверный формат времени начала (используйте ЧЧ:ММ)")
+            else:
+                custom_start_time = slot_start_time
+
+            if end_time:
+                try:
+                    custom_end_time = datetime.strptime(end_time, "%H:%M").time()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Неверный формат времени окончания (используйте ЧЧ:ММ)")
+            else:
+                custom_end_time = slot_end_time
+
+            if custom_start_time >= custom_end_time:
+                raise HTTPException(status_code=400, detail="Время окончания должно быть позже времени начала")
+
+            if custom_start_time < slot_start_time or custom_end_time > slot_end_time:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Смена должна укладываться в границы тайм-слота: {slot_start_time.strftime('%H:%M')} - {slot_end_time.strftime('%H:%M')}"
+                )
             
             # Создаем naive datetime в локальной временной зоне объекта
-            slot_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.start_time)
-            end_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.end_time)
+            slot_datetime_naive = datetime.combine(timeslot.slot_date, custom_start_time)
+            end_datetime_naive = datetime.combine(timeslot.slot_date, custom_end_time)
             
             # Локализуем в временную зону объекта, затем конвертируем в UTC для сохранения
             slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
@@ -3181,13 +3214,27 @@ async def api_calendar_plan_shift(
             # Проверяем, что сотрудник не занят в это время
             existing_schedule_query = select(ShiftSchedule).where(
                 ShiftSchedule.user_id == employee_id,
-                ShiftSchedule.planned_start == slot_datetime,
-                ShiftSchedule.planned_end == end_datetime,
+                ShiftSchedule.planned_start < end_datetime,
+                ShiftSchedule.planned_end > slot_datetime,
                 ShiftSchedule.status.in_(["planned", "confirmed"])
             )
             existing_schedules = (await session.execute(existing_schedule_query)).scalars().all()
             if existing_schedules:
                 raise HTTPException(status_code=400, detail="Сотрудник уже запланирован на это время")
+
+            # Проверяем лимит по количеству сотрудников в тайм-слоте
+            max_employees = timeslot.max_employees or 1
+            current_slot_schedules_query = select(ShiftSchedule).where(
+                ShiftSchedule.time_slot_id == timeslot_id,
+                ShiftSchedule.status.in_(["planned", "confirmed"])
+            )
+            current_slot_schedules = (await session.execute(current_slot_schedules_query)).scalars().all()
+            overlapping_schedules = [
+                sched for sched in current_slot_schedules
+                if not (sched.planned_end <= slot_datetime or sched.planned_start >= end_datetime)
+            ]
+            if len(overlapping_schedules) >= max_employees:
+                raise HTTPException(status_code=400, detail="На выбранное время нет свободных мест в тайм-слоте")
 
             # Определяем ставку с учетом флага use_contract_rate
             effective_rate = None
