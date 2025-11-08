@@ -3073,8 +3073,8 @@ async def api_calendar_plan_shift(
             end_datetime_naive = datetime.combine(timeslot.slot_date, custom_end_time)
             
             # Локализуем в временную зону объекта, затем конвертируем в UTC для сохранения
-            slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
-            end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
+            slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC)
+            end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC)
             
             # Проверяем, что сотрудник не занят в это время
             existing_schedule_query = select(ShiftSchedule).where(

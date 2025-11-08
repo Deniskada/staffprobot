@@ -59,11 +59,19 @@
                         </div>
                     </form>
                 </div>
-                <div class="card-footer d-flex justify-content-between align-items-center">
-                    <div id="selectedSlotsInfo" style="display: none;">
-                        <div class="text-info">
+                <div class="card-footer d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-center">
+                    <div id="selectedSlotsInfo" class="selected-info">
+                        <div class="info-line">
+                            <i class="bi bi-calendar-plus"></i>
+                            Новые смены: <strong><span id="selectedTimeslotsCount">0</span></strong>
+                        </div>
+                        <div class="info-line">
                             <i class="bi bi-check-circle"></i>
-                            Выбрано тайм-слотов: <strong><span id="selectedSlotsCount">0</span></strong>
+                            Оставить запланированными: <strong><span id="selectedPlannedCount">0</span></strong>
+                        </div>
+                        <div class="info-line text-warning" id="cancelInfoLine">
+                            <i class="bi bi-x-circle"></i>
+                            Отменить смен: <strong><span id="cancelPlannedCount">0</span></strong>
                         </div>
                     </div>
                     <div>
@@ -163,6 +171,85 @@
     border-color: #1976d2 !important;
 }
 
+.planned-shift {
+    position: relative;
+    margin: 2px 0;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: #fff;
+    border: 1px solid rgba(33, 150, 243, 0.2);
+    color: #1565c0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.planned-shift:hover {
+    transform: scale(1.02);
+    border-color: rgba(33, 150, 243, 0.5);
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.12);
+}
+
+.planned-shift.selected {
+    background: #e3f2fd;
+    border-color: #1976d2;
+    color: #0d47a1;
+}
+
+.planned-shift .shift-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 0 10px 0 10px;
+    color: #fff;
+    background: rgba(30, 136, 229, 0.9);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    width: fit-content;
+    z-index: 2;
+}
+
+.planned-shift-time {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.planned-shift-object {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+.selected-info {
+    display: none;
+    background: #f5f9ff;
+    border: 1px solid rgba(33, 150, 243, 0.2);
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: #0d47a1;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.selected-info .info-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.selected-info .info-line:last-child {
+    margin-bottom: 0;
+}
+
+.selected-info .info-line.text-warning {
+    color: #d97706;
+}
+
 .timeslot-time {
     font-weight: bold;
     font-size: 14px;
@@ -200,6 +287,11 @@ const returnToUrl = "{{ return_to }}";
 const selectedObjectId = {{ selected_object_id or 'null' }};
 let selectedTimeslots = new Set();
 let availableTimeslots = [];
+let calendarShifts = [];
+let employeePlannedShifts = [];
+let selectedPlannedShiftIds = new Set();
+let initialPlannedShiftIds = new Set();
+let currentEmployeeId = null;
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 
@@ -238,13 +330,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Обработчик изменения объекта
     document.getElementById('planObjectSelect')?.addEventListener('change', function() {
         if (this.value) {
+            currentEmployeeId = null;
+            selectedTimeslots.clear();
+            employeePlannedShifts = [];
+            selectedPlannedShiftIds.clear();
+            initialPlannedShiftIds.clear();
             loadEmployeesForObject(this.value);
             clearCalendar();
-            setTimeout(() => updateSelectedSlotsInfo(), 100);
+            updateSelectedSlotsInfo();
         } else {
+            currentEmployeeId = null;
+            selectedTimeslots.clear();
+            employeePlannedShifts = [];
+            selectedPlannedShiftIds.clear();
+            initialPlannedShiftIds.clear();
             clearCalendar();
             clearEmployees();
-            setTimeout(() => updateSelectedSlotsInfo(), 100);
+            updateSelectedSlotsInfo();
         }
     });
     
@@ -252,10 +354,21 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('planEmployeeSelect')?.addEventListener('change', function() {
         const objectId = document.getElementById('planObjectSelect').value;
         if (this.value && objectId) {
+            currentEmployeeId = Number(this.value);
+            selectedTimeslots.clear();
+            employeePlannedShifts = [];
+            selectedPlannedShiftIds.clear();
+            initialPlannedShiftIds.clear();
             loadTimeslotsForObject(objectId);
+            updateSelectedSlotsInfo();
         } else {
+            currentEmployeeId = null;
+            selectedTimeslots.clear();
+            employeePlannedShifts = [];
+            selectedPlannedShiftIds.clear();
+            initialPlannedShiftIds.clear();
             clearCalendar();
-            setTimeout(() => updateSelectedSlotsInfo(), 100);
+            updateSelectedSlotsInfo();
         }
     });
     
@@ -329,28 +442,161 @@ function createEmptyCalendar() {
 }
 
 // Очистка календаря
-function clearCalendar() {
+function clearCalendar(resetPlanned = true) {
     createEmptyCalendar();
     availableTimeslots = [];
     selectedTimeslots.clear();
+    if (resetPlanned) {
+        employeePlannedShifts = [];
+        selectedPlannedShiftIds.clear();
+        initialPlannedShiftIds.clear();
+    }
 }
 
 // Загрузка тайм-слотов для объекта
 async function loadTimeslotsForObject(objectId) {
     try {
+        if (!objectId) {
+            availableTimeslots = [];
+            employeePlannedShifts = [];
+            selectedPlannedShiftIds.clear();
+            initialPlannedShiftIds.clear();
+            updateCalendar();
+            updateSelectedSlotsInfo();
+            return;
+        }
+
+        const objectNumericId = Number(objectId);
+        if (Number.isNaN(objectNumericId)) {
+            availableTimeslots = [];
+            employeePlannedShifts = [];
+            selectedPlannedShiftIds.clear();
+            initialPlannedShiftIds.clear();
+            updateCalendar();
+            updateSelectedSlotsInfo();
+            return;
+        }
+
         const today = new Date();
         const startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         const endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+        selectedTimeslots.clear();
         
         const response = await fetch(`/owner/calendar/api/data?start_date=${formatDateForAPI(startDate)}&end_date=${formatDateForAPI(endDate)}&object_ids=${objectId}`);
         const data = await response.json();
         
-        availableTimeslots = data.timeslots || [];
+        const timeslots = Array.isArray(data.timeslots) ? data.timeslots : [];
+        calendarShifts = Array.isArray(data.shifts) ? data.shifts : [];
+
+        const relevantShifts = calendarShifts.filter(shift => Number(shift.object_id) === objectNumericId);
+
+        availableTimeslots = timeslots
+            .filter(ts => Number(ts.object_id) === objectNumericId)
+            .map(ts => {
+                const status = (ts.status || '').toLowerCase();
+                const freeInterval = calculateFirstFreeInterval(ts, relevantShifts);
+                
+                if (!freeInterval) {
+                    return null;
+                }
+                
+                return {
+                    ...ts,
+                    status,
+                    first_free_start: freeInterval.startStr,
+                    first_free_end: freeInterval.endStr,
+                    first_free_duration: freeInterval.durationMinutes
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => {
+                const dateA = new Date((a.date || a.slot_date || a.start_date) + 'T00:00:00');
+                const dateB = new Date((b.date || b.slot_date || b.start_date) + 'T00:00:00');
+                if (dateA.getTime() === dateB.getTime()) {
+                    const timeA = timeStringToMinutes(a.first_free_start || a.start_time || a.start_time_str || '00:00') || 0;
+                    const timeB = timeStringToMinutes(b.first_free_start || b.start_time || b.start_time_str || '00:00') || 0;
+                    return timeA - timeB;
+                }
+                return dateA - dateB;
+            });
+
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        if (currentEmployeeId && !Number.isNaN(Number(currentEmployeeId))) {
+            const employeeIdNumeric = Number(currentEmployeeId);
+            const employeeRelevantShifts = relevantShifts.filter(
+                shift => Number(shift.user_id) === employeeIdNumeric && shift.schedule_id !== undefined && shift.schedule_id !== null
+            );
+
+            employeePlannedShifts = employeeRelevantShifts
+                .filter(shift => {
+                    const shiftType = (shift.shift_type || '').toLowerCase();
+                    if (shiftType !== 'planned') {
+                        return false;
+                    }
+                    const status = (shift.status || '').toLowerCase();
+                    if (!ALLOWED_SHIFT_STATUSES.has(status)) {
+                        return false;
+                    }
+                    const endISO = shift.planned_end || shift.end_time || shift.start_time;
+                    if (!endISO) {
+                        return false;
+                    }
+                    const endDate = new Date(endISO);
+                    if (Number.isNaN(endDate.getTime())) {
+                        return false;
+                    }
+                    return endDate >= todayStart;
+                })
+                .map(shift => {
+                    const scheduleId = Number(shift.schedule_id);
+                    if (Number.isNaN(scheduleId)) {
+                        return null;
+                    }
+                    const shiftDateStr = getISODateString(shift.planned_start || shift.start_time);
+                    if (!shiftDateStr) {
+                        return null;
+                    }
+                    const startLabel = formatISOTimeToLocal(shift.planned_start || shift.start_time);
+                    const endLabel = formatISOTimeToLocal(shift.planned_end || shift.end_time);
+                    return {
+                        schedule_id: scheduleId,
+                        time_slot_id: shift.time_slot_id !== undefined && shift.time_slot_id !== null ? Number(shift.time_slot_id) : null,
+                        date: shiftDateStr,
+                        start_time: startLabel,
+                        end_time: endLabel,
+                        time_range: `${startLabel || '—'} - ${endLabel || '—'}`,
+                        object_name: shift.object_name || '',
+                        status: shift.status || 'planned',
+                        original: shift
+                    };
+                })
+                .filter(Boolean)
+                .sort((a, b) => {
+                    if (a.date === b.date) {
+                        const timeA = timeStringToMinutes(a.start_time) || 0;
+                        const timeB = timeStringToMinutes(b.start_time) || 0;
+                        return timeA - timeB;
+                    }
+                    const dateA = new Date(`${a.date}T00:00:00`);
+                    const dateB = new Date(`${b.date}T00:00:00`);
+                    return dateA - dateB;
+                });
+        } else {
+            employeePlannedShifts = [];
+        }
+
+        initialPlannedShiftIds = new Set(employeePlannedShifts.map(shift => shift.schedule_id));
+        selectedPlannedShiftIds = new Set(initialPlannedShiftIds);
+        
         updateCalendar();
+        updateSelectedSlotsInfo();
         
     } catch (error) {
         console.error('Ошибка загрузки тайм-слотов:', error);
         alert('Ошибка загрузки тайм-слотов: ' + error.message);
+        updateSelectedSlotsInfo();
     }
 }
 
@@ -360,6 +606,201 @@ function formatDateForAPI(date) {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+function timeStringToMinutes(value) {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+    const [hoursStr, minutesStr] = value.split(':');
+    const hours = Number(hoursStr);
+    const minutes = Number(minutesStr);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+        return null;
+    }
+    return hours * 60 + minutes;
+}
+
+function minutesToTime(minutes) {
+    const total = Math.max(0, Math.floor(minutes));
+    const hours = Math.floor(total / 60);
+    const mins = total % 60;
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+}
+
+function formatFreeMinutes(value) {
+    const minutes = Math.max(0, Math.floor(Number(value) || 0));
+    const hours = Math.floor(minutes / 60);
+    const restMinutes = minutes % 60;
+    if (hours && restMinutes) {
+        return `${hours} ч ${restMinutes} м`;
+    }
+    if (hours) {
+        return `${hours} ч`;
+    }
+    return `${restMinutes} м`;
+}
+
+function formatISOTimeToLocal(isoString) {
+    if (!isoString) {
+        return '';
+    }
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+    return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+function escapeHtml(value) {
+    if (typeof value !== 'string') {
+        return '';
+    }
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getISODateString(isoString) {
+    if (!isoString) {
+        return null;
+    }
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+const ALLOWED_SHIFT_STATUSES = new Set(['planned', 'confirmed', 'active', 'completed']);
+
+function extractShiftInterval(shift, slotStartMinutes, slotEndMinutes) {
+    const startISO = shift.planned_start || shift.start_time;
+    const endISO = shift.planned_end || shift.end_time;
+    if (!startISO || !endISO) {
+        return null;
+    }
+    const startDate = new Date(startISO);
+    const endDate = new Date(endISO);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        return null;
+    }
+    const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
+    const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+    if (endMinutes <= startMinutes) {
+        return null;
+    }
+    const overlapStart = Math.max(slotStartMinutes, startMinutes);
+    const overlapEnd = Math.min(slotEndMinutes, endMinutes);
+    if (overlapEnd <= overlapStart) {
+        return null;
+    }
+    return [overlapStart, overlapEnd];
+}
+
+function calculateFirstFreeInterval(timeslot, shifts) {
+    const slotStartStr = timeslot.start_time || timeslot.start_time_str;
+    const slotEndStr = timeslot.end_time || timeslot.end_time_str;
+    const slotDateStr = timeslot.date || timeslot.slot_date || timeslot.start_date;
+    
+    const slotStartMinutes = timeStringToMinutes(slotStartStr);
+    const slotEndMinutes = timeStringToMinutes(slotEndStr);
+    
+    if (
+        !slotDateStr ||
+        slotStartMinutes === null ||
+        slotEndMinutes === null ||
+        slotEndMinutes <= slotStartMinutes
+    ) {
+        return null;
+    }
+    
+    const timeslotId = Number(timeslot.id);
+    const busyIntervals = [];
+    
+    shifts.forEach(shift => {
+        const status = (shift.status || '').toLowerCase();
+        if (!ALLOWED_SHIFT_STATUSES.has(status)) {
+            return;
+        }
+        
+        const shiftTimeslotId = shift.time_slot_id !== undefined && shift.time_slot_id !== null
+            ? Number(shift.time_slot_id)
+            : null;
+        
+        const matchesTimeslot = !Number.isNaN(timeslotId) && shiftTimeslotId === timeslotId;
+        const shiftDateStr = getISODateString(shift.planned_start || shift.start_time);
+        const matchesDate = shiftDateStr === slotDateStr;
+        const shouldApply = matchesTimeslot || (shiftTimeslotId === null && matchesDate);
+        
+        if (!shouldApply) {
+            return;
+        }
+        
+        const interval = extractShiftInterval(shift, slotStartMinutes, slotEndMinutes);
+        if (interval) {
+            busyIntervals.push(interval);
+        }
+    });
+    
+    if (busyIntervals.length === 0) {
+        return {
+            startMinutes: slotStartMinutes,
+            endMinutes: slotEndMinutes,
+            startStr: minutesToTime(slotStartMinutes),
+            endStr: minutesToTime(slotEndMinutes),
+            durationMinutes: slotEndMinutes - slotStartMinutes
+        };
+    }
+    
+    busyIntervals.sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    busyIntervals.forEach(interval => {
+        if (!merged.length) {
+            merged.push(interval.slice());
+            return;
+        }
+        const last = merged[merged.length - 1];
+        if (interval[0] <= last[1]) {
+            last[1] = Math.max(last[1], interval[1]);
+        } else {
+            merged.push(interval.slice());
+        }
+    });
+    
+    let cursor = slotStartMinutes;
+    const freeSegments = [];
+    
+    merged.forEach(([start, end]) => {
+        if (start > cursor) {
+            freeSegments.push([cursor, start]);
+        }
+        cursor = Math.max(cursor, end);
+    });
+    
+    if (cursor < slotEndMinutes) {
+        freeSegments.push([cursor, slotEndMinutes]);
+    }
+    
+    const firstSegment = freeSegments.find(segment => segment[1] - segment[0] > 0);
+    if (!firstSegment) {
+        return null;
+    }
+    
+    const [freeStart, freeEnd] = firstSegment;
+    return {
+        startMinutes: freeStart,
+        endMinutes: freeEnd,
+        startStr: minutesToTime(freeStart),
+        endStr: minutesToTime(freeEnd),
+        durationMinutes: freeEnd - freeStart
+    };
 }
 
 // Обновление календаря
@@ -400,6 +841,7 @@ function createPlanShiftCalendar() {
             const tsDate = ts.date || ts.slot_date || ts.start_date;
             return tsDate === dateStr;
         });
+        const plannedShiftsForDate = employeePlannedShifts.filter(shift => shift.date === dateStr);
         
         let dayClass = 'calendar-day';
         if (!isCurrentMonth) {
@@ -410,27 +852,47 @@ function createPlanShiftCalendar() {
         
         html += `<div class="${dayClass}" data-date="${dateStr}">`;
         html += `<div class="day-number">${date.getDate()}</div>`;
+
+        if (isCurrentMonth && plannedShiftsForDate.length > 0) {
+            plannedShiftsForDate.forEach(shift => {
+                const isSelected = selectedPlannedShiftIds.has(shift.schedule_id);
+                const timeRange = shift.time_range || `${shift.start_time || '—'} - ${shift.end_time || '—'}`;
+                const objectLine = shift.object_name ? `<div class="planned-shift-object">${escapeHtml(shift.object_name)}</div>` : '';
+                
+                html += `<div class="planned-shift ${isSelected ? 'selected' : ''}" data-schedule-id="${shift.schedule_id}">`;
+                html += `<div class="shift-badge shift-badge-default">Запланировано</div>`;
+                html += `<div class="planned-shift-time">${timeRange}</div>`;
+                html += objectLine;
+                html += '</div>';
+            });
+        }
         
         if (isCurrentMonth && timeslotsForDate.length > 0) {
-            const availableSlots = timeslotsForDate.filter(ts => (ts.available_slots || 0) > 0);
+            const displaySlots = timeslotsForDate.filter(ts => (ts.first_free_duration || 0) > 0);
             
-            if (availableSlots.length > 0) {
-                availableSlots.forEach((ts, index) => {
-                    const startTime = ts.start_time || ts.start_time_str || '09:00';
-                    const endTime = ts.end_time || ts.end_time_str || '21:00';
-                    const availableSlotsCount = ts.available_slots || 0;
-                    const maxSlots = ts.max_employees || 1;
-                    
+            if (displaySlots.length > 0) {
+                displaySlots.forEach(ts => {
+                    const fullStart = ts.start_time || ts.start_time_str || '09:00';
+                    const fullEnd = ts.end_time || ts.end_time_str || '21:00';
+                    const freeStart = ts.first_free_start || fullStart;
+                    const freeEnd = ts.first_free_end || fullEnd;
+                    const fallbackDuration = Math.max(
+                        0,
+                        (timeStringToMinutes(fullEnd) || 0) - (timeStringToMinutes(fullStart) || 0)
+                    );
+                    const freeDurationLabel = formatFreeMinutes(ts.first_free_duration ?? fallbackDuration);
                     const slotKey = `${dateStr}_${ts.id}`;
                     const isSelected = selectedTimeslots.has(slotKey);
+                    const statusLabel = ts.status === 'partially_filled' ? 'Частично свободен' : 'Свободен';
                     
-                    html += `<div class="timeslot available ${isSelected ? 'selected' : ''}" data-timeslot-id="${ts.id}">`;
-                    html += `<div class="timeslot-time">${startTime}-${endTime}</div>`;
-                    html += `<div class="timeslot-slots">${availableSlotsCount}/${maxSlots}</div>`;
+                    html += `<div class="timeslot available ${isSelected ? 'selected' : ''}" data-timeslot-id="${ts.id}" data-free-start="${freeStart}" data-free-end="${freeEnd}">`;
+                    html += `<div class="timeslot-time">${fullStart}-${fullEnd}</div>`;
+                    html += `<div class="timeslot-slots">${statusLabel}: <strong>${freeStart}-${freeEnd}</strong></div>`;
+                    html += `<div class="timeslot-slots">Доступно: ${freeDurationLabel}</div>`;
                     html += '</div>';
                 });
             } else {
-                html += '<div class="no-slots">Нет свободных слотов</div>';
+                html += '<div class="no-slots">Нет свободных окон</div>';
             }
         } else if (isCurrentMonth) {
             html += '<div class="empty-message">Нет тайм-слотов</div>';
@@ -445,6 +907,10 @@ function createPlanShiftCalendar() {
     // Добавляем обработчики кликов
     calendarEl.removeEventListener('click', handleTimeslotClick);
     calendarEl.addEventListener('click', handleTimeslotClick);
+    calendarEl.removeEventListener('click', handlePlannedShiftClick);
+    calendarEl.addEventListener('click', handlePlannedShiftClick);
+    
+    updateSelectedSlotsInfo();
 }
 
 // Обработка клика по тайм-слоту
@@ -478,6 +944,30 @@ async function handleTimeslotClick(e) {
         }
         setTimeout(() => updateSelectedSlotsInfo(), 100);
     }
+}
+
+function handlePlannedShiftClick(e) {
+    const plannedShift = e.target.closest('.planned-shift');
+    if (!plannedShift) {
+        return;
+    }
+    
+    e.preventDefault();
+    
+    const scheduleId = Number(plannedShift.dataset.scheduleId);
+    if (Number.isNaN(scheduleId)) {
+        return;
+    }
+    
+    if (selectedPlannedShiftIds.has(scheduleId)) {
+        selectedPlannedShiftIds.delete(scheduleId);
+        plannedShift.classList.remove('selected');
+    } else {
+        selectedPlannedShiftIds.add(scheduleId);
+        plannedShift.classList.add('selected');
+    }
+    
+    updateSelectedSlotsInfo();
 }
 
 // Проверка доступности сотрудника
@@ -518,23 +1008,46 @@ async function checkEmployeeAvailability(employeeId, timeslotId) {
 
 // Обновление информации о выбранных слотах
 function updateSelectedSlotsInfo() {
-    const count = selectedTimeslots.size;
     const infoEl = document.getElementById('selectedSlotsInfo');
-    const countEl = document.getElementById('selectedSlotsCount');
+    const timeslotsCountEl = document.getElementById('selectedTimeslotsCount');
+    const plannedCountEl = document.getElementById('selectedPlannedCount');
+    const cancelCountEl = document.getElementById('cancelPlannedCount');
+    const cancelLineEl = document.getElementById('cancelInfoLine');
     const confirmBtn = document.getElementById('confirmPlanShift');
     
     if (!infoEl || !confirmBtn) {
         return;
     }
     
-    if (count > 0) {
-        infoEl.style.display = 'block';
-        countEl.textContent = count;
-        confirmBtn.disabled = false;
-    } else {
-        infoEl.style.display = 'none';
-        confirmBtn.disabled = true;
+    const newTimeslotCount = selectedTimeslots.size;
+    const selectedPlannedCount = selectedPlannedShiftIds.size;
+    const initialPlannedCount = initialPlannedShiftIds.size;
+    const cancelCount = Math.max(0, initialPlannedCount - selectedPlannedCount);
+    
+    if (timeslotsCountEl) {
+        timeslotsCountEl.textContent = newTimeslotCount;
     }
+    if (plannedCountEl) {
+        plannedCountEl.textContent = selectedPlannedCount;
+    }
+    if (cancelCountEl) {
+        cancelCountEl.textContent = cancelCount;
+    }
+    if (cancelLineEl) {
+        if (cancelCount > 0) {
+            cancelLineEl.classList.remove('text-muted');
+            cancelLineEl.classList.add('text-warning');
+        } else {
+            cancelLineEl.classList.remove('text-warning');
+            cancelLineEl.classList.add('text-muted');
+        }
+    }
+    
+    const shouldShow = newTimeslotCount > 0 || initialPlannedCount > 0 || selectedPlannedCount > 0 || cancelCount > 0;
+    infoEl.style.display = shouldShow ? 'block' : 'none';
+    
+    const hasAction = newTimeslotCount > 0 || cancelCount > 0;
+    confirmBtn.disabled = !hasAction;
 }
 
 // Подтверждение планирования смен
@@ -542,24 +1055,75 @@ async function confirmPlanShift() {
     const objectId = document.getElementById('planObjectSelect').value;
     const employeeId = document.getElementById('planEmployeeSelect').value;
     
-    if (!objectId || !employeeId || selectedTimeslots.size === 0) {
-        alert('Выберите объект, сотрудника и тайм-слоты');
+    if (!objectId || !employeeId) {
+        alert('Выберите объект и сотрудника');
+        return;
+    }
+    
+    const timeslotsToPlan = Array.from(selectedTimeslots);
+    const shiftsToCancel = Array.from(initialPlannedShiftIds).filter(id => !selectedPlannedShiftIds.has(id));
+    
+    if (timeslotsToPlan.length === 0 && shiftsToCancel.length === 0) {
+        alert('Нет изменений для сохранения');
         return;
     }
     
     const confirmBtn = document.getElementById('confirmPlanShift');
     confirmBtn.disabled = true;
-    confirmBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Планирование...';
+    confirmBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Обработка...';
     
-    let successCount = 0;
-    let errorCount = 0;
+    let planSuccess = 0;
+    let planErrors = 0;
+    let cancelSuccess = 0;
+    let cancelErrors = 0;
     
-    for (const slotKey of selectedTimeslots) {
+    for (const scheduleId of shiftsToCancel) {
+        try {
+            const response = await fetch(`/owner/shifts_legacy/schedule_${scheduleId}/cancel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            let result = null;
+            try {
+                result = await response.json();
+            } catch (parseError) {
+                result = null;
+            }
+            
+            if (response.ok && result && result.success) {
+                cancelSuccess++;
+            } else {
+                cancelErrors++;
+                console.error('Ошибка отмены смены:', result?.message || response.statusText);
+            }
+        } catch (error) {
+            cancelErrors++;
+            console.error('Ошибка отмены смены:', error);
+        }
+    }
+    
+    for (const slotKey of timeslotsToPlan) {
         try {
             const [date, timeslotId] = slotKey.split('_');
             const timeslot = availableTimeslots.find(ts => ts.id == timeslotId);
             
-            if (!timeslot) continue;
+            if (!timeslot) {
+                planErrors++;
+                console.error('Не найден тайм-слот для планирования', timeslotId);
+                continue;
+            }
+            
+            const freeStart = timeslot.first_free_start || timeslot.start_time || timeslot.start_time_str;
+            const freeEnd = timeslot.first_free_end || timeslot.end_time || timeslot.end_time_str;
+            
+            if (!freeStart || !freeEnd) {
+                planErrors++;
+                console.error('Не удалось определить свободный интервал для тайм-слота', timeslotId);
+                continue;
+            }
             
             const response = await fetch('/owner/api/calendar/plan-shift', {
                 method: 'POST',
@@ -568,20 +1132,27 @@ async function confirmPlanShift() {
                 },
                 body: JSON.stringify({
                     timeslot_id: parseInt(timeslotId),
-                    employee_id: parseInt(employeeId)
+                    employee_id: parseInt(employeeId),
+                    start_time: freeStart,
+                    end_time: freeEnd
                 })
             });
             
-            const result = await response.json();
+            let result = null;
+            try {
+                result = await response.json();
+            } catch (parseError) {
+                result = null;
+            }
             
-            if (result.success) {
-                successCount++;
+            if (response.ok && result && result.success) {
+                planSuccess++;
             } else {
-                errorCount++;
-                console.error('Ошибка планирования:', result.message);
+                planErrors++;
+                console.error('Ошибка планирования:', result?.message || response.statusText);
             }
         } catch (error) {
-            errorCount++;
+            planErrors++;
             console.error('Ошибка планирования смены:', error);
         }
     }
@@ -589,12 +1160,28 @@ async function confirmPlanShift() {
     confirmBtn.disabled = false;
     confirmBtn.innerHTML = '<i class="bi bi-calendar-check"></i> Запланировать смены';
     
-    if (successCount > 0) {
-        alert(`Успешно запланировано смен: ${successCount}${errorCount > 0 ? `, ошибок: ${errorCount}` : ''}`);
-        // Возвращаемся на предыдущую страницу
-        window.location.href = returnToUrl;
+    const summaryParts = [];
+    if (planSuccess > 0) {
+        summaryParts.push(`Запланировано смен: ${planSuccess}`);
+    }
+    if (cancelSuccess > 0) {
+        summaryParts.push(`Отменено смен: ${cancelSuccess}`);
+    }
+    if (planErrors > 0) {
+        summaryParts.push(`Ошибок планирования: ${planErrors}`);
+    }
+    if (cancelErrors > 0) {
+        summaryParts.push(`Ошибок отмены: ${cancelErrors}`);
+    }
+    
+    if (summaryParts.length > 0) {
+        alert(summaryParts.join('\n'));
     } else {
-        alert('Не удалось запланировать ни одной смены');
+        alert('Изменений не выполнено');
+    }
+    
+    if ((planSuccess > 0 || cancelSuccess > 0) && returnToUrl) {
+        window.location.href = returnToUrl;
     }
 }
 </script>
