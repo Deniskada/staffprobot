@@ -722,7 +722,12 @@ function initializeTimeslotOccupancy() {
                 scheduledShifts.push({
                     id: shift.id,
                     time_slot_id: Number(shift.time_slot_id),
-                    status: shift.status
+                    status: shift.status,
+                    planned_start: shift.planned_start || shift.start_time || null,
+                    planned_end: shift.planned_end || shift.end_time || null,
+                    start_time: shift.start_time || null,
+                    end_time: shift.end_time || null,
+                    date: shift.date || shift.slot_date || null
                 });
             }
         });
@@ -738,7 +743,12 @@ function initializeTimeslotOccupancy() {
                             scheduledShifts.push({
                                 id: shift.id,
                                 time_slot_id: Number(shift.time_slot_id),
-                                status: shift.status
+                                status: shift.status,
+                                planned_start: shift.planned_start || shift.start_time || null,
+                                planned_end: shift.planned_end || shift.end_time || null,
+                                start_time: shift.start_time || null,
+                                end_time: shift.end_time || null,
+                                date: shift.date || shift.slot_date || null
                             });
                         }
                     });
@@ -755,8 +765,97 @@ function initializeTimeslotOccupancy() {
     }
 
     // Если смен нет в данных — подтягиваем с сервера статусы тайм-слотов как fallback
-    const applyOccupancy = (shifts) => {
-        // ПРАВИЛЬНАЯ ЛОГИКА: Группируем тайм-слоты по объектам и считаем смены для каждого
+    const applyOccupancy = (shifts, detailedShifts = []) => {
+        const timeslotInfoMap = {};
+        if (window.calendarData && Array.isArray(window.calendarData.timeslots)) {
+            window.calendarData.timeslots.forEach(ts => {
+                timeslotInfoMap[Number(ts.id)] = ts;
+            });
+        }
+
+        const normalizedShifts = [];
+        const seenShiftKeys = new Set();
+
+        const normalizeShiftEntry = (shift) => {
+            if (!shift) {
+                return null;
+            }
+            const timeSlotId = shift.time_slot_id || shift.timeslot_id;
+            if (!timeSlotId) {
+                return null;
+            }
+            const status = shift.status || shift.shift_status;
+            if (status === 'cancelled') {
+                return null;
+            }
+
+            let startIso = shift.planned_start || shift.start_time || null;
+            let endIso = shift.planned_end || shift.end_time || null;
+            const datePart = shift.date || shift.slot_date || shift.day || null;
+            if ((!startIso || !endIso) && datePart && shift.start_time && shift.end_time) {
+                startIso = `${datePart}T${shift.start_time}`;
+                endIso = `${datePart}T${shift.end_time}`;
+            }
+
+            if (!startIso || !endIso) {
+                return null;
+            }
+
+            const startDate = new Date(startIso);
+            const endDate = new Date(endIso);
+            if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+                return null;
+            }
+
+            const key = `${timeSlotId}_${startDate.getTime()}_${endDate.getTime()}`;
+            if (seenShiftKeys.has(key)) {
+                return null;
+            }
+            seenShiftKeys.add(key);
+
+            return {
+                time_slot_id: Number(timeSlotId),
+                status,
+                startMinutes: startDate.getHours() * 60 + startDate.getMinutes(),
+                endMinutes: endDate.getHours() * 60 + endDate.getMinutes()
+            };
+        };
+
+        if (Array.isArray(detailedShifts)) {
+            detailedShifts.forEach(shift => {
+                const normalized = normalizeShiftEntry(shift);
+                if (normalized) {
+                    normalizedShifts.push(normalized);
+                }
+            });
+        }
+
+        if (Array.isArray(shifts)) {
+            shifts.forEach(shift => {
+                const normalized = normalizeShiftEntry(shift);
+                if (normalized) {
+                    normalizedShifts.push(normalized);
+                }
+            });
+        }
+
+        const shiftsByTimeslot = {};
+        normalizedShifts.forEach(shift => {
+            shiftsByTimeslot[shift.time_slot_id] = shiftsByTimeslot[shift.time_slot_id] || [];
+            shiftsByTimeslot[shift.time_slot_id].push(shift);
+        });
+
+        const toMinutes = (timeStr) => {
+            if (!timeStr || typeof timeStr !== 'string') {
+                return null;
+            }
+            const [h, m] = timeStr.split(':').map(Number);
+            if (Number.isNaN(h) || Number.isNaN(m)) {
+                return null;
+            }
+            return h * 60 + m;
+        };
+
         const timeslotElements = document.querySelectorAll('.timeslot-item[data-timeslot-id]');
         const timeslotsByObject = {};
 
@@ -764,7 +863,7 @@ function initializeTimeslotOccupancy() {
         timeslotElements.forEach(timeslot => {
             const timeslotId = parseInt(timeslot.dataset.timeslotId);
             const objectId = parseInt(timeslot.dataset.objectId);
-            const maxEmployees = parseInt(timeslot.dataset.maxEmployees) || 1;
+            const maxEmployees = parseFloat(timeslot.dataset.timeslotMaxEmployees || timeslot.dataset.maxEmployees) || 1;
 
             if (!timeslotsByObject[objectId]) {
                 timeslotsByObject[objectId] = [];
@@ -785,38 +884,81 @@ function initializeTimeslotOccupancy() {
                 const timeslotId = timeslot.id;
                 const maxEmployees = timeslot.maxEmployees;
 
-                // Считаем смены ПРИВЯЗАННЫЕ к этому конкретному тайм-слоту (исключая cancelled и completed)
-                const shiftsForThisTimeslot = shifts.filter(shift =>
-                    Number(shift.time_slot_id) === Number(timeslotId) && shift.status !== 'cancelled' && shift.status !== 'completed'
-                );
+                const slotInfo = timeslotInfoMap[timeslotId] || {};
+                const slotStartStr = timeslot.element.dataset.timeslotStartTime || slotsafe(slotInfo.start_time);
+                const slotEndStr = timeslot.element.dataset.timeslotEndTime || slotsafe(slotInfo.end_time);
 
-                const currentShifts = shiftsForThisTimeslot.length;
-
-                // Отладка для тайм-слота 181 (17 сентября)
-                if (timeslotId === 181) {
-                    console.log(`DEBUG Timeslot 181:`, {
-                        timeslotId,
-                        maxEmployees,
-                        currentShifts,
-                        shiftsForThisTimeslot,
-                        willHide: currentShifts >= maxEmployees
-                    });
+                function slotsafe(value) {
+                    if (!value || typeof value !== 'string') {
+                        return null;
+                    }
+                    return value.includes(':') ? value.slice(0,5) : value;
                 }
 
-                if (currentShifts >= maxEmployees) {
-                    // Скрываем заполненные тайм-слоты
+                const slotStartMinutes = toMinutes(slotStartStr);
+                const slotEndMinutes = toMinutes(slotEndStr);
+                const slotDurationMinutes = (slotStartMinutes !== null && slotEndMinutes !== null) ? (slotEndMinutes - slotStartMinutes) : null;
+
+                let occupancyFraction = null;
+
+                if (slotDurationMinutes && slotDurationMinutes > 0 && maxEmployees > 0) {
+                    const detailedForTimeslot = shiftsByTimeslot[timeslotId] || [];
+                    let totalMinutes = 0;
+
+                    detailedForTimeslot.forEach(shift => {
+                        const shiftStart = shift.startMinutes;
+                        const shiftEnd = shift.endMinutes;
+                        if (shiftStart === null || shiftEnd === null) {
+                            return;
+                        }
+                        const overlapStart = Math.max(slotStartMinutes, shiftStart);
+                        const overlapEnd = Math.min(slotEndMinutes, shiftEnd);
+                        if (overlapEnd > overlapStart) {
+                            totalMinutes += overlapEnd - overlapStart;
+                        }
+                    });
+
+                    const capacityMinutes = slotDurationMinutes * maxEmployees;
+                    occupancyFraction = capacityMinutes > 0 ? Math.min(1, totalMinutes / capacityMinutes) : 0;
+                }
+
+                if (occupancyFraction === null) {
+                    // Fallback: используем подсчёт смен, если нет данных по длительности
+                    const shiftsForThisTimeslot = shifts.filter(shift =>
+                        Number(shift.time_slot_id) === Number(timeslotId) && shift.status !== 'cancelled' && shift.status !== 'completed'
+                    );
+                    occupancyFraction = Math.min(1, shiftsForThisTimeslot.length / maxEmployees);
+                }
+
+                const availableFraction = Math.max(0, 1 - occupancyFraction);
+                const shouldHide = occupancyFraction >= 0.999;
+
+                if (shouldHide) {
                     timeslot.element.style.display = 'none';
                 } else {
-                    // Показываем незаполненные тайм-слоты
                     timeslot.element.style.display = '';
                     const occupancyIndicator = timeslot.element.querySelector('.timeslot-occupancy');
+                    const occupancyBadge = timeslot.element.querySelector('.timeslot-badge');
+                    const labelText = `${availableFraction.toFixed(2)}/${maxEmployees}`;
+
                     if (occupancyIndicator) {
-                        occupancyIndicator.querySelector('.occupancy-text').textContent = `${currentShifts}/${maxEmployees}`;
-                        if (currentShifts === 0) {
+                        const textNode = occupancyIndicator.querySelector('.occupancy-text');
+                        if (textNode) {
+                            textNode.textContent = labelText;
+                        } else {
+                            occupancyIndicator.textContent = labelText;
+                        }
+                        if (availableFraction >= 0.999) {
                             occupancyIndicator.className = 'timeslot-occupancy available';
+                        } else if (availableFraction <= 0.001) {
+                            occupancyIndicator.className = 'timeslot-occupancy full';
                         } else {
                             occupancyIndicator.className = 'timeslot-occupancy partial';
                         }
+                    }
+
+                    if (occupancyBadge) {
+                        occupancyBadge.textContent = labelText;
                     }
                 }
             });
@@ -824,8 +966,9 @@ function initializeTimeslotOccupancy() {
     };
 
     // Всегда применяем логику к найденным сменам
-    if (scheduledShifts.length > 0) {
-        applyOccupancy(scheduledShifts);
+    const detailedCalendarShifts = Array.isArray(window.calendarData?.shifts) ? window.calendarData.shifts : [];
+    if (scheduledShifts.length > 0 || detailedCalendarShifts.length > 0) {
+        applyOccupancy(scheduledShifts, detailedCalendarShifts);
     } else {
         // Если смен нет в данных — подтягиваем с сервера статусы тайм-слотов как fallback
         const year = {{ year }};
@@ -833,23 +976,38 @@ function initializeTimeslotOccupancy() {
         fetch(`/owner/calendar/api/timeslots-status?year=${year}&month=${month}`)
             .then(r => r.json())
             .then(data => {
-                // Преобразуем в вид со сдвигами на слот
                 const shifts = [];
+                const detailed = [];
                 (data || []).forEach(item => {
+                    const date = item.date || item.slot_date || null;
                     // planned shifts
                     (item.scheduled_shifts || []).forEach(s => {
                         if (s.status !== 'cancelled') {
                             shifts.push({ time_slot_id: item.slot_id, status: s.status });
+                            detailed.push({
+                                time_slot_id: item.slot_id,
+                                status: s.status,
+                                date: date,
+                                start_time: s.start_time,
+                                end_time: s.end_time
+                            });
                         }
                     });
                     // actual shifts
                     (item.actual_shifts || []).forEach(s => {
                         if (s.status !== 'cancelled') {
                             shifts.push({ time_slot_id: item.slot_id, status: s.status });
+                            detailed.push({
+                                time_slot_id: item.slot_id,
+                                status: s.status,
+                                date: date,
+                                start_time: s.start_time,
+                                end_time: s.end_time
+                            });
                         }
                     });
                 });
-                applyOccupancy(shifts);
+                applyOccupancy(shifts, detailed);
             })
             .catch(() => applyOccupancy([]));
     }
