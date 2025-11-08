@@ -167,11 +167,824 @@ async function fetchTimeslotDetails(timeslotId) {
     }
 }
 
+function ensureSchedulerStyles() {
+    if (document.getElementById('timeslotSchedulerStyles')) {
+        return;
+    }
+    const style = document.createElement('style');
+    style.id = 'timeslotSchedulerStyles';
+    style.textContent = `
+    .scheduler-wrapper {
+        background: #f5f9ff;
+        border: 1px solid rgba(25, 118, 210, 0.2);
+        border-radius: 14px;
+        padding: 16px 18px;
+        position: relative;
+    }
+    .scheduler-track-switcher {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+    .scheduler-track-tab {
+        border: 1px solid rgba(25, 118, 210, 0.25);
+        background: #fff;
+        color: #0d47a1;
+        padding: 8px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        min-width: 120px;
+    }
+    .scheduler-track-tab .scheduler-track-tab-info {
+        font-size: 11px;
+        font-weight: 500;
+        color: rgba(13, 71, 161, 0.7);
+    }
+    .scheduler-track-tab.existing {
+        border-color: rgba(30, 136, 229, 0.45);
+        background: rgba(187, 222, 251, 0.35);
+    }
+    .scheduler-track-tab.disabled {
+        cursor: default;
+        opacity: 0.6;
+    }
+    .scheduler-track-tab.active {
+        background: #1976d2;
+        color: #fff;
+        box-shadow: 0 6px 18px rgba(25, 118, 210, 0.25);
+    }
+    .scheduler-track-tab.active .scheduler-track-tab-info {
+        color: rgba(255, 255, 255, 0.85);
+    }
+    .scheduler-track {
+        position: relative;
+        height: 14px;
+        background: rgba(25, 118, 210, 0.18);
+        border-radius: 999px;
+        overflow: hidden;
+        margin: 28px 0 14px;
+    }
+    .scheduler-track .scheduler-segment {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        border-radius: 999px;
+    }
+    .scheduler-segment.occupied {
+        background: rgba(229, 57, 53, 0.45);
+    }
+    .scheduler-segment.selection {
+        background: rgba(76, 175, 80, 0.65);
+        box-shadow: 0 0 12px rgba(76, 175, 80, 0.35);
+    }
+    .scheduler-segment.existing {
+        background: rgba(30, 136, 229, 0.55);
+        box-shadow: 0 0 10px rgba(30, 136, 229, 0.25);
+    }
+    .scheduler-range-input {
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 32px;
+        pointer-events: none;
+        background: transparent;
+        -webkit-appearance: none;
+        appearance: none;
+    }
+    .scheduler-range-input::-webkit-slider-thumb {
+        pointer-events: all;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #1976d2;
+        border: 3px solid #fff;
+        box-shadow: 0 2px 8px rgba(25, 118, 210, 0.35);
+        -webkit-appearance: none;
+        appearance: none;
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .scheduler-range-input::-webkit-slider-thumb:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.45);
+    }
+    .scheduler-range-input::-moz-range-thumb {
+        pointer-events: all;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #1976d2;
+        border: 3px solid #fff;
+        box-shadow: 0 2px 8px rgba(25, 118, 210, 0.35);
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .scheduler-range-input::-moz-range-thumb:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.45);
+    }
+    .scheduler-range-input::-webkit-slider-runnable-track,
+    .scheduler-range-input::-moz-range-track {
+        height: 100%;
+        background: transparent;
+    }
+    .scheduler-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #0d47a1;
+        font-weight: 600;
+    }
+    .scheduler-summary-box {
+        margin-top: 12px;
+        background: rgba(25, 118, 210, 0.08);
+        border-radius: 10px;
+        padding: 10px 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 13px;
+        color: #0d47a1;
+    }
+    .scheduler-summary-box span strong {
+        font-weight: 700;
+        color: #1976d2;
+    }
+    .scheduler-existing ul {
+        max-height: 160px;
+        overflow-y: auto;
+    }
+    .scheduler-static-wrapper {
+        padding: 4px 2px 6px;
+    }
+    .scheduler-static-wrapper .scheduler-track {
+        margin: 12px 0;
+    }
+    .scheduler-static-wrapper .scheduler-summary-box {
+        background: rgba(30, 136, 229, 0.08);
+    }
+    .scheduler-track-info {
+        font-size: 12px;
+        color: rgba(13, 71, 161, 0.7);
+        margin-bottom: 6px;
+    }
+    .scheduler-freechips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 4px;
+    }
+    .scheduler-freechip {
+        border: 1px solid rgba(25, 118, 210, 0.35);
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #1976d2;
+        cursor: pointer;
+        background: rgba(25, 118, 210, 0.1);
+        transition: all 0.15s ease;
+    }
+    .scheduler-freechip:hover {
+        background: rgba(25, 118, 210, 0.16);
+    }
+    .scheduler-freechip.active {
+        background: #1976d2;
+        color: #fff;
+        border-color: #115293;
+        box-shadow: 0 4px 14px rgba(25, 118, 210, 0.28);
+    }
+    `;
+    document.head.appendChild(style);
+}
+
+function timeStringToMinutes(value) {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+    const [hoursStr, minutesStr] = value.split(':');
+    const hours = Number(hoursStr);
+    const minutes = Number(minutesStr);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+        return null;
+    }
+    return hours * 60 + minutes;
+}
+
+function minutesToTimeString(minutesTotal) {
+    if (typeof minutesTotal !== 'number' || Number.isNaN(minutesTotal)) {
+        return '';
+    }
+    const hours = Math.floor(minutesTotal / 60);
+    const minutes = minutesTotal % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function formatDurationText(minutesTotal) {
+    const total = Math.max(0, minutesTotal);
+    const hours = Math.floor(total / 60);
+    const minutes = total % 60;
+    const parts = [];
+    if (hours > 0) {
+        parts.push(`${hours} ч`);
+    }
+    if (minutes > 0 || parts.length === 0) {
+        parts.push(`${minutes} м`);
+    }
+    return parts.join(' ');
+}
+
+function calculateFreeIntervals(slotStart, slotEnd, plannedShifts) {
+    const slotStartMinutes = timeStringToMinutes(slotStart);
+    const slotEndMinutes = timeStringToMinutes(slotEnd);
+    if (
+        slotStartMinutes === null ||
+        slotEndMinutes === null ||
+        slotEndMinutes <= slotStartMinutes
+    ) {
+        return [];
+    }
+
+    const occupied = plannedShifts
+        .map(shift => {
+            const start = timeStringToMinutes(shift.start_time);
+            const end = timeStringToMinutes(shift.end_time);
+            if (start === null || end === null || end <= start) {
+                return null;
+            }
+            return [
+                Math.max(slotStartMinutes, start),
+                Math.min(slotEndMinutes, end)
+            ];
+        })
+        .filter(interval => interval && interval[0] < interval[1])
+        .sort((a, b) => a[0] - b[0]);
+
+    const merged = [];
+    occupied.forEach(interval => {
+        if (!merged.length) {
+            merged.push(interval.slice());
+            return;
+        }
+        const last = merged[merged.length - 1];
+        if (interval[0] <= last[1]) {
+            last[1] = Math.max(last[1], interval[1]);
+        } else {
+            merged.push(interval.slice());
+        }
+    });
+
+    const freeIntervals = [];
+    let cursor = slotStartMinutes;
+    merged.forEach(([start, end]) => {
+        if (start > cursor) {
+            freeIntervals.push({
+                start: minutesToTimeString(cursor),
+                end: minutesToTimeString(start)
+            });
+        }
+        cursor = Math.max(cursor, end);
+    });
+
+    if (cursor < slotEndMinutes) {
+        freeIntervals.push({
+            start: minutesToTimeString(cursor),
+            end: minutesToTimeString(slotEndMinutes)
+        });
+    }
+
+    if (freeIntervals.length === 0 && merged.length === 0) {
+        return [{
+            start: minutesToTimeString(slotStartMinutes),
+            end: minutesToTimeString(slotEndMinutes)
+        }];
+    }
+
+    return freeIntervals;
+}
+
+function selectDefaultInterval(slotStart, slotEnd, freeIntervals) {
+    if (freeIntervals && freeIntervals.length) {
+        return freeIntervals[0];
+    }
+    return {
+        start: slotStart || '',
+        end: slotEnd || ''
+    };
+}
+
+function formatTimeFromISO(isoString) {
+    if (!isoString) {
+        return null;
+    }
+    try {
+        const date = new Date(isoString);
+        if (Number.isNaN(date.getTime())) {
+            return null;
+        }
+        return date.toTimeString().slice(0, 5);
+    } catch (error) {
+        console.warn('formatTimeFromISO error', error, isoString);
+        return null;
+    }
+}
+
+function initializeTimeslotScheduler(config) {
+    const container = document.getElementById('timeslotScheduler');
+    const modalElement = document.getElementById('addEmployeeToTimeslotModal');
+    const confirmButton = document.getElementById('confirmAddEmployeeBtn');
+    if (!container || !modalElement) {
+        return;
+    }
+
+    const slotStartMinutes = timeStringToMinutes(config.slotStart);
+    const slotEndMinutes = timeStringToMinutes(config.slotEnd);
+    if (
+        slotStartMinutes === null ||
+        slotEndMinutes === null ||
+        slotEndMinutes <= slotStartMinutes
+    ) {
+        container.innerHTML = '<div class="alert alert-danger">Не удалось определить границы тайм-слота.</div>';
+        if (confirmButton) {
+            confirmButton.disabled = true;
+        }
+        return;
+    }
+
+    const plannedShifts = Array.isArray(config.plannedShifts) ? config.plannedShifts : [];
+    const plannedIntervals = plannedShifts
+        .map((shift, index) => {
+            const start = timeStringToMinutes(shift.start_time);
+            const end = timeStringToMinutes(shift.end_time);
+            if (start === null || end === null || end <= start) {
+                return null;
+            }
+            return {
+                startMinutes: Math.max(slotStartMinutes, Math.min(start, slotEndMinutes)),
+                endMinutes: Math.max(slotStartMinutes, Math.min(end, slotEndMinutes)),
+                userId: shift.user_id ?? `unknown_${index}`,
+                userName: shift.user_name || 'Сотрудник',
+                original: shift
+            };
+        })
+        .filter(interval => interval && interval.endMinutes > interval.startMinutes)
+        .sort((a, b) => a.startMinutes - b.startMinutes);
+
+    const occupiedRanges = plannedIntervals.map(interval => [interval.startMinutes, interval.endMinutes]);
+
+    const groupedEmployees = new Map();
+    plannedIntervals.forEach(interval => {
+        const key = String(interval.userId);
+        if (!groupedEmployees.has(key)) {
+            groupedEmployees.set(key, {
+                id: `employee-${key}`,
+                label: interval.userName,
+                intervals: []
+            });
+        }
+        groupedEmployees.get(key).intervals.push(interval);
+    });
+
+    const freeRanges = (Array.isArray(config.freeIntervals) ? config.freeIntervals : [])
+        .map(range => {
+            const start = timeStringToMinutes(range.start);
+            const end = timeStringToMinutes(range.end);
+            if (start === null || end === null || end <= start) {
+                return null;
+            }
+            return {
+                start: Math.max(slotStartMinutes, Math.min(start, slotEndMinutes)),
+                end: Math.max(slotStartMinutes, Math.min(end, slotEndMinutes))
+            };
+        })
+        .filter(range => range && range.end > range.start)
+        .sort((a, b) => a.start - b.start);
+
+    if (!freeRanges.length) {
+        freeRanges.push({
+            start: slotStartMinutes,
+            end: slotEndMinutes
+        });
+    }
+
+    const anchors = Array.from(new Set([
+        slotStartMinutes,
+        slotEndMinutes,
+        ...plannedIntervals.flatMap(interval => [interval.startMinutes, interval.endMinutes]),
+        ...freeRanges.flatMap(range => [range.start, range.end])
+    ])).sort((a, b) => a - b);
+
+    const parseOrDefault = (value, fallback) => {
+        const parsed = timeStringToMinutes(value);
+        if (parsed === null) {
+            return fallback;
+        }
+        return parsed;
+    };
+
+    const defaultStartRaw = parseOrDefault(config.startValue, freeRanges[0].start);
+    const defaultEndRaw = parseOrDefault(config.endValue, freeRanges[0].end);
+
+    const findContainingRange = (startMinutes, endMinutes) => {
+        return freeRanges.find(range => startMinutes >= range.start && endMinutes <= range.end);
+    };
+
+    const clampStartToRange = (value, range, endLimit) => {
+        const maxAllowed = Math.min(range.end - 1, endLimit - 1);
+        return Math.max(range.start, Math.min(value, maxAllowed));
+    };
+
+    const clampEndToRange = (value, range, startLimit) => {
+        const minAllowed = Math.max(range.start + 1, startLimit + 1);
+        return Math.max(minAllowed, Math.min(value, range.end));
+    };
+
+    const initialRange = findContainingRange(defaultStartRaw, defaultEndRaw) || freeRanges[0];
+    let initialStart = clampStartToRange(defaultStartRaw, initialRange, defaultEndRaw);
+    let initialEnd = clampEndToRange(defaultEndRaw, initialRange, initialStart);
+    if (initialEnd <= initialStart) {
+        initialStart = initialRange.start;
+        initialEnd = Math.max(initialStart + 1, initialRange.end);
+    }
+
+    const tracks = [{
+        id: 'new',
+        label: 'Новая смена',
+        type: 'new',
+        info: `${minutesToTimeString(initialRange.start)}–${minutesToTimeString(initialRange.end)}`
+    }];
+    groupedEmployees.forEach(track => {
+        const intervalsLabel = track.intervals
+            .map(interval => `${minutesToTimeString(interval.startMinutes)}–${minutesToTimeString(interval.endMinutes)}`)
+            .join(', ');
+        tracks.push({
+            id: track.id,
+            label: track.label,
+            type: 'existing',
+            intervals: track.intervals,
+            info: intervalsLabel
+        });
+    });
+
+    const state = {
+        slotStartMinutes,
+        slotEndMinutes,
+        startMinutes: initialStart,
+        endMinutes: initialEnd,
+        anchors,
+        occupiedRanges,
+        freeRanges,
+        activeFreeRange: initialRange,
+        activeTrackId: 'new',
+        lastMoved: null
+    };
+
+    const escapeHtmlLocal = (text) => {
+        if (typeof text !== 'string') {
+            return '';
+        }
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
+
+    container.innerHTML = `
+        <div class="scheduler-wrapper">
+            <div class="scheduler-track-switcher" id="schedulerTrackSwitcher">
+                ${tracks.map(track => `
+                    <button type="button"
+                        class="scheduler-track-tab ${track.type === 'existing' ? 'existing' : ''}"
+                        data-track-id="${escapeHtmlLocal(track.id)}">
+                        <span>${escapeHtmlLocal(track.label)}</span>
+                        ${track.info ? `<span class="scheduler-track-tab-info">${escapeHtmlLocal(track.info)}</span>` : ''}
+                    </button>
+                `).join('')}
+            </div>
+            <div id="schedulerContent"></div>
+        </div>
+        <input type="hidden" id="plannedShiftStart" value="${minutesToTimeString(state.startMinutes)}">
+        <input type="hidden" id="plannedShiftEnd" value="${minutesToTimeString(state.endMinutes)}">
+    `;
+
+    const schedulerContent = container.querySelector('#schedulerContent');
+    const trackButtons = Array.from(container.querySelectorAll('.scheduler-track-tab'));
+    const startHidden = container.querySelector('#plannedShiftStart');
+    const endHidden = container.querySelector('#plannedShiftEnd');
+
+    modalElement.dataset.originalSlotStart = config.slotStart || '';
+    modalElement.dataset.originalSlotEnd = config.slotEnd || '';
+
+    const SNAP_THRESHOLD_MINUTES = 5;
+
+    const findAnchorWithinThreshold = (value) => {
+        let selected = value;
+        let minDiff = SNAP_THRESHOLD_MINUTES + 1;
+        state.anchors.forEach(anchor => {
+            const diff = Math.abs(value - anchor);
+            if (diff <= SNAP_THRESHOLD_MINUTES && diff < minDiff) {
+                minDiff = diff;
+                selected = anchor;
+            }
+        });
+        return selected;
+    };
+
+    const enforceSingleGap = () => {
+        const leadingGap = state.startMinutes - state.slotStartMinutes;
+        const trailingGap = state.slotEndMinutes - state.endMinutes;
+        if (leadingGap > 0 && trailingGap > 0) {
+            if (leadingGap <= trailingGap) {
+                state.startMinutes = state.slotStartMinutes;
+            } else {
+                state.endMinutes = state.slotEndMinutes;
+            }
+        }
+    };
+
+    const updateModalDataset = () => {
+        modalElement.dataset.slotStartTime = minutesToTimeString(state.startMinutes);
+        modalElement.dataset.slotEndTime = minutesToTimeString(state.endMinutes);
+        modalElement.dataset.activeTrack = state.activeTrackId;
+        if (state.activeFreeRange) {
+            modalElement.dataset.activeFreeStart = minutesToTimeString(state.activeFreeRange.start);
+            modalElement.dataset.activeFreeEnd = minutesToTimeString(state.activeFreeRange.end);
+        }
+    };
+
+    const renderOccupiedSegments = (trackElement) => {
+        state.occupiedRanges.forEach(([start, end]) => {
+            if (end <= start) {
+                return;
+            }
+            const occupiedElement = document.createElement('div');
+            occupiedElement.className = 'scheduler-segment occupied';
+            occupiedElement.style.left = `${calculatePositionPercent(start, slotStartMinutes, slotEndMinutes)}%`;
+            occupiedElement.style.width = `${calculateWidthPercent(start, end, slotStartMinutes, slotEndMinutes)}%`;
+            trackElement.appendChild(occupiedElement);
+        });
+    };
+
+    const syncHiddenFields = () => {
+        if (startHidden) {
+            startHidden.value = minutesToTimeString(state.startMinutes);
+        }
+        if (endHidden) {
+            endHidden.value = minutesToTimeString(state.endMinutes);
+        }
+        updateModalDataset();
+    };
+
+    const updateTrackTabs = () => {
+        trackButtons.forEach(button => {
+            const isActive = button.dataset.trackId === state.activeTrackId;
+            const trackMeta = tracks.find(item => item.id === button.dataset.trackId);
+            const shouldDisable = state.activeTrackId !== 'new'
+                && button.dataset.trackId !== state.activeTrackId
+                && trackMeta
+                && trackMeta.type === 'existing';
+            button.classList.toggle('active', isActive);
+            button.classList.toggle('disabled', Boolean(shouldDisable));
+            button.disabled = Boolean(shouldDisable);
+        });
+    };
+
+    const renderStaticTrack = (track) => {
+        if (!schedulerContent) {
+            return;
+        }
+        const intervals = track.intervals || [];
+        const intervalsText = intervals
+            .map(interval => `${minutesToTimeString(interval.startMinutes)}–${minutesToTimeString(interval.endMinutes)}`)
+            .join(', ');
+
+        schedulerContent.innerHTML = `
+            <div class="scheduler-static-wrapper">
+                <div class="scheduler-track-info">Запланированная смена: ${escapeHtmlLocal(intervalsText || '—')}</div>
+                <div class="scheduler-track" id="schedulerStaticTrack"></div>
+                <div class="scheduler-summary-box">
+                    <span>Сотрудник: <strong>${escapeHtmlLocal(track.label)}</strong></span>
+                    ${intervals.length ? `<span>Интервал: <strong>${escapeHtmlLocal(intervalsText)}</strong></span>` : ''}
+                    <span>Назначение доступно только для новой смены</span>
+                </div>
+            </div>
+        `;
+
+        const staticTrack = schedulerContent.querySelector('#schedulerStaticTrack');
+        if (!staticTrack) {
+            return;
+        }
+        renderOccupiedSegments(staticTrack);
+
+        intervals.forEach(interval => {
+            const selection = document.createElement('div');
+            selection.className = 'scheduler-segment existing';
+            selection.style.left = `${calculatePositionPercent(interval.startMinutes, slotStartMinutes, slotEndMinutes)}%`;
+            selection.style.width = `${calculateWidthPercent(interval.startMinutes, interval.endMinutes, slotStartMinutes, slotEndMinutes)}%`;
+            staticTrack.appendChild(selection);
+        });
+
+        syncHiddenFields();
+        if (confirmButton) {
+            confirmButton.disabled = true;
+        }
+    };
+
+    const renderInteractiveTrack = () => {
+        if (!schedulerContent) {
+            return;
+        }
+
+        const activeRange = state.activeFreeRange || state.freeRanges[0];
+        const freeChipsHtml = state.freeRanges.length > 1
+            ? `<div class="scheduler-freechips">
+                ${state.freeRanges.map(range => `
+                    <button type="button"
+                        class="scheduler-freechip ${range.start === activeRange.start && range.end === activeRange.end ? 'active' : ''}"
+                        data-range-start="${range.start}"
+                        data-range-end="${range.end}">
+                        ${minutesToTimeString(range.start)}–${minutesToTimeString(range.end)}
+                    </button>
+                `).join('')}
+            </div>`
+            : '';
+
+        schedulerContent.innerHTML = `
+            <div class="scheduler-labels">
+                <span>${config.slotStart || ''}</span>
+                <span>${config.slotEnd || ''}</span>
+            </div>
+            <div class="scheduler-track" id="schedulerTrack"></div>
+            <input type="range" id="schedulerStartRange" class="scheduler-range-input"
+                min="${activeRange.start}" max="${activeRange.end}" step="1" value="${state.startMinutes}">
+            <input type="range" id="schedulerEndRange" class="scheduler-range-input"
+                min="${activeRange.start}" max="${activeRange.end}" step="1" value="${state.endMinutes}">
+            ${freeChipsHtml}
+            <div class="scheduler-summary-box">
+                <span>Начало: <strong id="schedulerStartLabel">${minutesToTimeString(state.startMinutes)}</strong></span>
+                <span>Окончание: <strong id="schedulerEndLabel">${minutesToTimeString(state.endMinutes)}</strong></span>
+                <span>Длительность: <strong id="schedulerDurationLabel">${formatDurationText(state.endMinutes - state.startMinutes)}</strong></span>
+            </div>
+        `;
+
+        const trackElement = schedulerContent.querySelector('#schedulerTrack');
+        const startRange = schedulerContent.querySelector('#schedulerStartRange');
+        const endRange = schedulerContent.querySelector('#schedulerEndRange');
+        const startLabel = schedulerContent.querySelector('#schedulerStartLabel');
+        const endLabel = schedulerContent.querySelector('#schedulerEndLabel');
+        const durationLabel = schedulerContent.querySelector('#schedulerDurationLabel');
+        const freeChips = Array.from(schedulerContent.querySelectorAll('.scheduler-freechip'));
+
+        if (!trackElement || !startRange || !endRange || !startLabel || !endLabel || !durationLabel) {
+            return;
+        }
+
+        renderOccupiedSegments(trackElement);
+        const selectionElement = document.createElement('div');
+        selectionElement.className = 'scheduler-segment selection';
+        trackElement.appendChild(selectionElement);
+
+        const updateSelectionVisuals = () => {
+            const left = calculatePositionPercent(state.startMinutes, slotStartMinutes, slotEndMinutes);
+            const width = calculateWidthPercent(state.startMinutes, state.endMinutes, slotStartMinutes, slotEndMinutes);
+            selectionElement.style.left = `${left}%`;
+            selectionElement.style.width = `${width}%`;
+        };
+
+        const syncUI = () => {
+            startRange.value = state.startMinutes;
+            endRange.value = state.endMinutes;
+            startLabel.textContent = minutesToTimeString(state.startMinutes);
+            endLabel.textContent = minutesToTimeString(state.endMinutes);
+            durationLabel.textContent = formatDurationText(state.endMinutes - state.startMinutes);
+            startRange.min = activeRange.start;
+            startRange.max = activeRange.end;
+            endRange.min = activeRange.start;
+            endRange.max = activeRange.end;
+            syncHiddenFields();
+            updateSelectionVisuals();
+        };
+
+        const clampToActiveRange = (value, isEnd) => {
+            if (!state.activeFreeRange) {
+                return value;
+            }
+            if (isEnd) {
+                const minAllowed = Math.max(state.activeFreeRange.start + 1, state.startMinutes + 1);
+                return Math.max(minAllowed, Math.min(value, state.activeFreeRange.end));
+            }
+            const maxAllowed = Math.min(state.activeFreeRange.end - 1, state.endMinutes - 1);
+            return Math.max(state.activeFreeRange.start, Math.min(value, maxAllowed));
+        };
+
+        const handleStartInput = (event) => {
+            state.lastMoved = 'start';
+            let value = Number(event.target.value);
+            if (Number.isNaN(value)) {
+                value = state.startMinutes;
+            }
+            value = clampToActiveRange(value, false);
+            value = findAnchorWithinThreshold(value);
+            if (value >= state.endMinutes) {
+                value = Math.min(state.endMinutes - 1, value);
+            }
+            state.startMinutes = clampToActiveRange(value, false);
+            enforceSingleGap();
+            syncUI();
+        };
+
+        const handleEndInput = (event) => {
+            state.lastMoved = 'end';
+            let value = Number(event.target.value);
+            if (Number.isNaN(value)) {
+                value = state.endMinutes;
+            }
+            value = clampToActiveRange(value, true);
+            value = findAnchorWithinThreshold(value);
+            if (value <= state.startMinutes) {
+                value = Math.max(state.startMinutes + 1, value);
+            }
+            state.endMinutes = clampToActiveRange(value, true);
+            enforceSingleGap();
+            syncUI();
+        };
+
+        startRange.addEventListener('input', handleStartInput);
+        endRange.addEventListener('input', handleEndInput);
+        startRange.addEventListener('change', handleStartInput);
+        endRange.addEventListener('change', handleEndInput);
+
+        freeChips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                const rangeStart = Number(chip.dataset.rangeStart);
+                const rangeEnd = Number(chip.dataset.rangeEnd);
+                const range = state.freeRanges.find(item => item.start === rangeStart && item.end === rangeEnd);
+                if (range) {
+                    state.activeFreeRange = range;
+                    state.startMinutes = range.start;
+                    state.endMinutes = Math.max(range.start + 1, range.end);
+                    syncUI();
+                    freeChips.forEach(btn => {
+                        btn.classList.toggle('active', btn === chip);
+                    });
+                }
+            });
+        });
+
+        if (confirmButton) {
+            confirmButton.disabled = false;
+        }
+
+        syncUI();
+    };
+
+    const setActiveTrack = (trackId) => {
+        state.activeTrackId = trackId;
+        updateTrackTabs();
+        if (trackId === 'new') {
+            renderInteractiveTrack();
+        } else {
+            const track = tracks.find(item => item.id === trackId);
+            renderStaticTrack(track || tracks[0]);
+        }
+    };
+
+    trackButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const trackId = button.dataset.trackId;
+            if (!trackId || trackId === state.activeTrackId) {
+                return;
+            }
+            setActiveTrack(trackId);
+        });
+    });
+
+    setActiveTrack('new');
+}
+
+function calculatePositionPercent(valueMinutes, slotStartMinutes, slotEndMinutes) {
+    return ((valueMinutes - slotStartMinutes) / (slotEndMinutes - slotStartMinutes)) * 100;
+}
+
+function calculateWidthPercent(startMinutes, endMinutes, slotStartMinutes, slotEndMinutes) {
+    return ((endMinutes - startMinutes) / (slotEndMinutes - slotStartMinutes)) * 100;
+}
+
+
 async function showAddEmployeeModal(timeslotId) {
     try {
         const timeslotElement = document.querySelector(`[data-timeslot-id="${timeslotId}"]`);
-        let timeslotData = await fetchTimeslotDetails(timeslotId);
-        let slotInfo = timeslotData && timeslotData.slot ? timeslotData.slot : {};
+        const timeslotData = await fetchTimeslotDetails(timeslotId);
+        const slotInfo = timeslotData && timeslotData.slot ? timeslotData.slot : {};
+        const scheduledShiftsRaw = timeslotData && Array.isArray(timeslotData.scheduled) ? timeslotData.scheduled : [];
 
         const slotStart = slotInfo.start_time || (timeslotElement ? (timeslotElement.dataset.timeslotStartTime || null) : null);
         const slotEnd = slotInfo.end_time || (timeslotElement ? (timeslotElement.dataset.timeslotEndTime || null) : null);
@@ -187,8 +1000,23 @@ async function showAddEmployeeModal(timeslotId) {
             return;
         }
 
-        const startValue = slotStart || '';
-        const endValue = slotEnd || '';
+        const plannedShifts = scheduledShiftsRaw
+            .map(shift => ({
+                id: shift.id,
+                user_id: shift.user_id,
+                user_name: shift.user_name || 'Без имени',
+                start_iso: shift.planned_start,
+                end_iso: shift.planned_end,
+                start_time: shift.planned_start ? formatTimeFromISO(shift.planned_start) : null,
+                end_time: shift.planned_end ? formatTimeFromISO(shift.planned_end) : null
+            }))
+            .filter(shift => shift.start_time && shift.end_time)
+            .sort((a, b) => timeStringToMinutes(a.start_time) - timeStringToMinutes(b.start_time));
+
+        const freeIntervals = calculateFreeIntervals(slotStart, slotEnd, plannedShifts);
+        const defaultInterval = selectDefaultInterval(slotStart, slotEnd, freeIntervals);
+        const startValue = defaultInterval.start || slotStart || '';
+        const endValue = defaultInterval.end || slotEnd || '';
 
         const modalHtml = `
             <div class="modal fade" id="addEmployeeToTimeslotModal" tabindex="-1" data-timeslot-id="${timeslotId}" data-object-id="${objectId}">
@@ -214,20 +1042,27 @@ async function showAddEmployeeModal(timeslotId) {
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Время смены в тайм-слоте *</label>
-                                <div class="row g-2 align-items-end">
-                                    <div class="col">
-                                        <label class="form-label form-label-sm text-muted">Начало</label>
-                                        <input type="time" class="form-control" id="plannedShiftStart" value="${startValue}" ${startValue ? `min="${startValue}"` : ''} ${endValue ? `max="${endValue}"` : ''} required>
-                                    </div>
-                                    <div class="col">
-                                        <label class="form-label form-label-sm text-muted">Окончание</label>
-                                        <input type="time" class="form-control" id="plannedShiftEnd" value="${endValue}" ${startValue ? `min="${startValue}"` : ''} ${endValue ? `max="${endValue}"` : ''} required>
-                                    </div>
-                                </div>
-                                <div class="form-text">
-                                    Выберите промежуток в пределах тайм-слота. Максимум сотрудников: ${maxEmployees || 1}.
+                                <div id="timeslotScheduler"></div>
+                                <div class="scheduler-info mt-2 text-muted">
+                                    Бегунки прилипают к границам тайм-слота и существующих смен, чтобы избежать лишних разрывов.
                                 </div>
                             </div>
+                            ${plannedShifts.length ? `
+                            <div class="mb-3">
+                                <div class="scheduler-existing border rounded-3 p-3 bg-light">
+                                    <div class="fw-semibold text-primary mb-2">
+                                        Запланированные смены (${plannedShifts.length})
+                                    </div>
+                                    <ul class="list-unstyled mb-0">
+                                        ${plannedShifts.map(shift => `
+                                        <li class="d-flex justify-content-between align-items-center py-1 px-2 rounded bg-white border mb-1">
+                                            <span class="text-primary fw-semibold">${shift.start_time} – ${shift.end_time}</span>
+                                            <span class="text-muted small">${shift.user_name}</span>
+                                        </li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                            </div>` : ''}
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
@@ -261,6 +1096,18 @@ async function showAddEmployeeModal(timeslotId) {
         confirmButton.addEventListener('click', () => addEmployeeToTimeslot(timeslotId));
 
         await loadEmployeesForModal(objectId);
+
+        ensureSchedulerStyles();
+        initializeTimeslotScheduler({
+            slotStart: slotStart || '',
+            slotEnd: slotEnd || '',
+            startValue,
+            endValue,
+            plannedShifts,
+            freeIntervals,
+            maxEmployees: maxEmployees || 1,
+            slotDate
+        });
 
         const modalInstance = new bootstrap.Modal(modalElement);
         modalInstance.show();
@@ -321,22 +1168,15 @@ async function addEmployeeToTimeslot(timeslotId) {
         return;
     }
 
-    const slotStart = modalElement.dataset.slotStartTime || '';
-    const slotEnd = modalElement.dataset.slotEndTime || '';
-    const startTime = startInput ? startInput.value : slotStart;
-    const endTime = endInput ? endInput.value : slotEnd;
+    const slotStart = modalElement.dataset.originalSlotStart || modalElement.dataset.slotStartTime || '';
+    const slotEnd = modalElement.dataset.originalSlotEnd || modalElement.dataset.slotEndTime || '';
+    const startTime = startInput ? startInput.value : (modalElement.dataset.slotStartTime || slotStart);
+    const endTime = endInput ? endInput.value : (modalElement.dataset.slotEndTime || slotEnd);
 
-    const toMinutes = (value) => {
-        if (!value) return null;
-        const [h, m] = value.split(':').map(Number);
-        if (Number.isNaN(h) || Number.isNaN(m)) return null;
-        return h * 60 + m;
-    };
-
-    const slotStartMinutes = toMinutes(slotStart);
-    const slotEndMinutes = toMinutes(slotEnd);
-    const startMinutes = toMinutes(startTime);
-    const endMinutes = toMinutes(endTime);
+    const slotStartMinutes = timeStringToMinutes(slotStart);
+    const slotEndMinutes = timeStringToMinutes(slotEnd);
+    const startMinutes = timeStringToMinutes(startTime);
+    const endMinutes = timeStringToMinutes(endTime);
 
     if (startMinutes === null || endMinutes === null) {
         notifyCalendar('Укажите время начала и окончания смены', 'error');
