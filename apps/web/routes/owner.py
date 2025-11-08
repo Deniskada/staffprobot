@@ -6093,6 +6093,11 @@ async def owner_employees_create_contract(
     allowed_objects: List[int] = Form(default=[]),
     is_manager: bool = Form(False),
     manager_permissions: List[str] = Form(default=[]),
+    first_name: Optional[str] = Form(None),
+    last_name: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    birth_date: Optional[str] = Form(None),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
