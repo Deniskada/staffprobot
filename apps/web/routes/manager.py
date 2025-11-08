@@ -29,6 +29,7 @@ from domain.entities.manager_object_permission import ManagerObjectPermission
 from domain.entities.contract import Contract
 from urllib.parse import quote
 from shared.services.incident_category_service import IncidentCategoryService
+from shared.models.calendar_data import TimeslotStatus
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 from apps.web.jinja import templates
@@ -2350,7 +2351,9 @@ async def manager_calendar_api_data(
         logger.info("Converting timeslots to API format")
         timeslots_data = []
         for ts in calendar_data.timeslots:
-                        timeslots_data.append({
+            if ts.status == TimeslotStatus.HIDDEN:
+                continue
+            timeslots_data.append({
                 "id": ts.id,
                 "object_id": ts.object_id,
                 "object_name": ts.object_name,
@@ -2361,7 +2364,11 @@ async def manager_calendar_api_data(
                 "max_employees": ts.max_employees,
                 "current_employees": ts.current_employees,
                 "available_slots": ts.available_slots,
+                "occupied_minutes": ts.occupied_minutes,
+                "free_minutes": ts.free_minutes,
+                "occupancy_ratio": ts.occupancy_ratio,
                 "status": ts.status.value,
+                "status_label": ts.status_label,
                 "is_active": ts.is_active,
                 "notes": ts.notes,
                 "work_conditions": ts.work_conditions,
@@ -2416,7 +2423,8 @@ async def manager_calendar_api_data(
                 "end_coordinates": s.end_coordinates,
                 "can_edit": s.can_edit,
                 "can_cancel": s.can_cancel,
-                "can_view": s.can_view
+                "can_view": s.can_view,
+                "status_label": s.status_label
             })
         
         logger.info("Preparing response")

@@ -511,11 +511,21 @@ class UniversalCalendarManager {
     updateOccupancyIndicators() {
         if (!this.calendarData) return;
         
-        // Update timeslot occupancy based on shifts
         this.calendarData.timeslots.forEach(timeslot => {
-            const shifts = this.calendarData.shiftsByTimeslot[timeslot.id] || [];
-            timeslot.current_employees = shifts.length;
-            timeslot.available_slots = Math.max(0, timeslot.max_employees - shifts.length);
+            if (typeof timeslot.current_employees !== 'number') {
+                const shifts = this.calendarData.shiftsByTimeslot[timeslot.id] || [];
+                timeslot.current_employees = shifts.length;
+            }
+            const maxEmployees = timeslot.max_employees || 1;
+            if (typeof timeslot.available_slots !== 'number') {
+                timeslot.available_slots = Math.max(0, maxEmployees - (timeslot.current_employees || 0));
+            }
+            if (typeof timeslot.free_minutes !== 'number') {
+                timeslot.free_minutes = 0;
+            }
+            if (typeof timeslot.occupancy_ratio !== 'number') {
+                timeslot.occupancy_ratio = 0;
+            }
         });
     }
     

@@ -30,6 +30,7 @@ from apps.web.services.object_service import ObjectService, TimeSlotService
 from apps.web.utils.timezone_utils import web_timezone_helper
 from shared.services.system_features_service import SystemFeaturesService
 from shared.services.calendar_filter_service import CalendarFilterService
+from shared.models.calendar_data import TimeslotStatus
 from domain.entities.user import User, UserRole
 from domain.entities.object import Object
 from domain.entities.contract import Contract
@@ -1456,7 +1457,8 @@ async def owner_calendar(
                             "employee_name": f"{shift.user.first_name} {shift.user.last_name}".strip() if shift.user else "Неизвестно",
                             "status": shift.status,
                             "total_hours": float(shift.total_hours) if shift.total_hours else 0,
-                            "total_payment": float(shift.total_payment) if shift.total_payment else 0
+                            "total_payment": float(shift.total_payment) if shift.total_payment else 0,
+                            "status_label": shift.status_label
                         })
                     
                     # Загружаем запланированные смены (исключаем отмененные)
@@ -1487,7 +1489,8 @@ async def owner_calendar(
                             "employee_name": f"{schedule.user.first_name} {schedule.user.last_name}".strip() if schedule.user else "Неизвестно",
                             "status": schedule.status or "planned",
                             "total_hours": 0,
-                            "total_payment": 0
+                            "total_payment": 0,
+                            "status_label": schedule.status_label
                         })
                     
                     
@@ -1538,7 +1541,8 @@ async def owner_calendar(
                             "end_time": shift.get("end_time", ""),
                             "employee_name": shift.get("employee_name", "Неизвестно"),
                             "object_name": shift.get("object_name", ""),
-                            "status": shift.get("status", "pending")
+                            "status": shift.get("status", "pending"),
+                            "status_label": shift.get("status_label", "")
                         })
                     
                     # Обрабатываем тайм-слоты
@@ -2070,8 +2074,21 @@ async def owner_analysis_chart_data(
     try:
         # Получаем текущего пользователя
         current_user = await get_current_user(request)
-        if not current_user or current_user.get("role") not in ["owner", "superadmin"]:
-            raise HTTPException(status_code=403, detail="Доступ запрещен")
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
+
+        if isinstance(current_user, dict):
+            user_roles = current_user.get("roles", [])
+            if isinstance(user_roles, str):
+                user_roles = [user_roles]
+            if "owner" not in user_roles and "superadmin" not in user_roles:
+                raise HTTPException(status_code=403, detail="Доступ запрещен")
+        else:
+            user_roles = getattr(current_user, "roles", [])
+            if isinstance(user_roles, str):
+                user_roles = [user_roles]
+            if "owner" not in user_roles and "superadmin" not in user_roles:
+                raise HTTPException(status_code=403, detail="Доступ запрещен")
         
         from apps.web.services.object_service import ObjectService, TimeSlotService
         
@@ -2264,7 +2281,7 @@ async def owner_calendar_api_timeslots_status(
         if not owner:
             return []
         
-        # Получаем объекты владельца (используем ВНУТРЕННИЙ owner.id)
+        # Получаем объекты владельца (используем ВНУТРЕНИЙ owner.id)
         objects_query = select(Object).where(Object.owner_id == owner.id)
         if object_id:
             objects_query = objects_query.where(Object.id == object_id)
@@ -2276,237 +2293,68 @@ async def owner_calendar_api_timeslots_status(
         if not object_ids:
             return []
         
-        # Получаем тайм-слоты за месяц
         start_date = date(year, month, 1)
-        if month == 12:
-            end_date = date(year + 1, 1, 1)
-        else:
-            end_date = date(year, month + 1, 1)
+        last_day = calendar.monthrange(year, month)[1]
+        end_date = date(year, month, last_day)
         
-        timeslots_query = select(TimeSlot).options(
-            selectinload(TimeSlot.object)
-        ).where(
-            and_(
-                TimeSlot.object_id.in_(object_ids),
-                TimeSlot.slot_date >= start_date,
-                TimeSlot.slot_date < end_date,
-                TimeSlot.is_active == True
-            )
-        ).order_by(TimeSlot.slot_date, TimeSlot.start_time)
+        calendar_service = CalendarFilterService(db)
+        calendar_data = await calendar_service.get_calendar_data(
+            user_telegram_id=owner.telegram_id,
+            user_role='owner',
+            date_range_start=start_date,
+            date_range_end=end_date,
+            object_filter=[object_id] if object_id else None
+        )
         
-        timeslots_result = await db.execute(timeslots_query)
-        timeslots = timeslots_result.scalars().all()
-        
-        logger.info(f"Found {len(timeslots)} real timeslots")
-        
-        # Получаем запланированные смены за месяц
-        from domain.entities.shift_schedule import ShiftSchedule
-        
-        scheduled_shifts_query = select(ShiftSchedule).where(
-            and_(
-                ShiftSchedule.object_id.in_(object_ids),
-                ShiftSchedule.planned_start >= start_date,
-                ShiftSchedule.planned_start < end_date
-            )
-        ).order_by(ShiftSchedule.planned_start)
-        
-        scheduled_shifts_result = await db.execute(scheduled_shifts_query)
-        scheduled_shifts = scheduled_shifts_result.scalars().all()
-        
-        logger.info(f"Found {len(scheduled_shifts)} scheduled shifts")
-        
-        # Получаем отработанные смены за месяц
-        from domain.entities.shift import Shift
-        
-        actual_shifts_query = select(Shift).options(
-            selectinload(Shift.user)
-        ).where(
-            and_(
-                Shift.object_id.in_(object_ids),
-                Shift.start_time >= start_date,
-                Shift.start_time < end_date
-            )
-        ).order_by(Shift.start_time)
-        
-        actual_shifts_result = await db.execute(actual_shifts_query)
-        actual_shifts = actual_shifts_result.scalars().all()
-        
-        logger.info(f"Found {len(actual_shifts)} actual shifts")
-        
-        # Получаем информацию о пользователях для запланированных смен
-        user_ids = list(set(shift.user_id for shift in scheduled_shifts))
-        users_query = select(User).where(User.id.in_(user_ids))
-        users_result = await db.execute(users_query)
-        users = {user.id: user for user in users_result.scalars().all()}
-        
-        # Создаем карту запланированных смен по time_slot_id
-        scheduled_shifts_map = {}
-        # Индекс для запланированных смен по объекту и дате (на случай отсутствия привязки к time_slot)
-        scheduled_by_object_date = {}
-        for shift in scheduled_shifts:
-            user = users.get(shift.user_id)
-            user_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {shift.user_id}"
-            if shift.time_slot_id:
-                scheduled_shifts_map.setdefault(shift.time_slot_id, [])
-                scheduled_shifts_map[shift.time_slot_id].append({
-                    "id": shift.id,
-                    "user_id": shift.user_id,
-                    "user_name": user_name,
-                    "status": shift.status,
-                    "start_time": web_timezone_helper.format_time_with_timezone(shift.planned_start, shift.object.timezone if shift.object else 'Europe/Moscow'),
-                    "end_time": web_timezone_helper.format_time_with_timezone(shift.planned_end, shift.object.timezone if shift.object else 'Europe/Moscow'),
-                    "notes": shift.notes
-                })
-            # Индекс по объекту и дате
-            key = (shift.object_id, shift.planned_start.date())
-            scheduled_by_object_date.setdefault(key, []).append(shift)
-        
-        # Создаем карту отработанных смен по time_slot_id
-        actual_shifts_map = {}
-        # Дополнительно индексируем смены по объекту и дате для поиска пересечений со слотами без time_slot_id
-        actual_by_object_date = {}
-        for shift in actual_shifts:
-            if shift.time_slot_id:
-                actual_shifts_map.setdefault(shift.time_slot_id, [])
-                actual_shifts_map[shift.time_slot_id].append({
-                    "id": shift.id,
-                    "user_id": shift.user_id,
-                    "user_name": f"{shift.user.first_name} {shift.user.last_name or ''}".strip(),
-                    "status": shift.status,
-                    "start_time": web_timezone_helper.format_time_with_timezone(shift.start_time, shift.object.timezone if shift.object else 'Europe/Moscow'),
-                    "end_time": web_timezone_helper.format_time_with_timezone(shift.end_time, shift.object.timezone if shift.object else 'Europe/Moscow') if shift.end_time else None,
-                    "total_hours": float(shift.total_hours) if shift.total_hours else None,
-                    "total_payment": float(shift.total_payment) if shift.total_payment else None,
-                    "is_planned": shift.is_planned,
-                    "notes": shift.notes
-                })
-            # Индекс по объекту и дате
-            key = (shift.object_id, shift.start_time.date())
-            actual_by_object_date.setdefault(key, []).append(shift)
-        
-        # Создаем данные для каждого тайм-слота
-        test_data = []
-        for slot in timeslots:
-            # Определяем статус на основе запланированных и отработанных смен
-            status = "empty"
-            scheduled_shifts = []
-            actual_shifts = []
-            
-            # Ищем запланированные смены для этого конкретного тайм-слота
-            if slot.id in scheduled_shifts_map:
-                scheduled_shifts = scheduled_shifts_map[slot.id]
+        shifts_by_timeslot: Dict[int, Dict[str, list]] = {}
+        for shift in calendar_data.shifts:
+            if not shift.time_slot_id:
+                continue
+            entry = shifts_by_timeslot.setdefault(int(shift.time_slot_id), {"planned": [], "actual": []})
+            shift_data = {
+                "id": shift.id,
+                "user_id": shift.user_id,
+                "user_name": shift.user_name,
+                "status": shift.status.value,
+                "start_time": shift.start_time.isoformat() if shift.start_time else None,
+                "end_time": shift.end_time.isoformat() if shift.end_time else None,
+                "planned_start": shift.planned_start.isoformat() if shift.planned_start else None,
+                "planned_end": shift.planned_end.isoformat() if shift.planned_end else None,
+                "notes": shift.notes
+            }
+            if shift.shift_type == ShiftType.PLANNED:
+                entry["planned"].append(shift_data)
             else:
-                # Дополнительно ищем пересечения по объекту и дате для запланированных (если были без time_slot_id)
-                key_sched = (slot.object_id, slot.slot_date)
-                overlaps_sched = []
-                for sh in scheduled_by_object_date.get(key_sched, []):
-                    sh_start = sh.planned_start.time()
-                    sh_end = sh.planned_end.time()
-                    if (sh_start < slot.end_time) and (slot.start_time < sh_end):
-                        overlaps_sched.append(sh)
-                if overlaps_sched:
-                    for sh in overlaps_sched:
-                        user = users.get(sh.user_id)
-                        user_name = f"{user.first_name} {user.last_name or ''}".strip() if user else f"ID {sh.user_id}"
-                        scheduled_shifts.append({
-                            "id": sh.id,
-                            "user_id": sh.user_id,
-                            "user_name": user_name,
-                            "status": sh.status,
-                            "start_time": sh.planned_start.time().strftime("%H:%M"),
-                            "end_time": sh.planned_end.time().strftime("%H:%M"),
-                            "notes": sh.notes
-                        })
-            
-            # Ищем отработанные смены для этого конкретного тайм-слота
-            if slot.id in actual_shifts_map:
-                actual_shifts = actual_shifts_map[slot.id]
-            else:
-                # Дополнительно ищем пересечения по объекту и дате (для спонтанных/без привязки к слоту)
-                key = (slot.object_id, slot.slot_date)
-                overlaps = []
-                for sh in actual_by_object_date.get(key, []):
-                    # Пересечение по времени: (sh.start < slot.end) and (slot.start < sh.end)
-                    sh_start = sh.start_time.time()
-                    sh_end = sh.end_time.time() if sh.end_time else None
-                    if sh_end is None:
-                        # Активная смена без конца – считаем пересекающейся, если начата до конца слота
-                        if sh_start < slot.end_time:
-                            overlaps.append(sh)
-                    else:
-                        if (sh_start < slot.end_time) and (slot.start_time < sh_end):
-                            overlaps.append(sh)
-                if overlaps:
-                    for sh in overlaps:
-                        actual_shifts.append({
-                            "id": sh.id,
-                            "user_id": sh.user_id,
-                            "user_name": f"{sh.user.first_name} {sh.user.last_name or ''}".strip(),
-                            "status": sh.status,
-                            "start_time": sh.start_time.time().strftime("%H:%M"),
-                            "end_time": sh.end_time.time().strftime("%H:%M") if sh.end_time else None,
-                            "total_hours": float(sh.total_hours) if sh.total_hours else None,
-                            "total_payment": float(sh.total_payment) if sh.total_payment else None,
-                            "is_planned": sh.is_planned,
-                            "notes": sh.notes
-                        })
-            
-            # Определяем статус с приоритетом:
-            # active > completed > confirmed(scheduled) > planned(scheduled) > cancelled (если нет планов) > empty
-            has_actual_active = any(shift["status"] == "active" for shift in actual_shifts)
-            has_actual_completed = any(shift["status"] == "completed" for shift in actual_shifts)
-            has_actual_only_cancelled = bool(actual_shifts) and all(shift["status"] == "cancelled" for shift in actual_shifts)
-            has_sched_confirmed = any(shift["status"] == "confirmed" for shift in scheduled_shifts)
-            has_sched_planned = any(shift["status"] == "planned" for shift in scheduled_shifts)
-            has_sched_cancelled = any(shift["status"] == "cancelled" for shift in scheduled_shifts)
-
-            if has_actual_active:
-                status = "active"
-            elif has_actual_completed:
-                status = "completed"
-            elif has_sched_confirmed:
-                status = "confirmed"
-            elif has_sched_planned:
-                status = "planned"
-            elif has_actual_only_cancelled or has_sched_cancelled:
-                status = "cancelled"
-            
-            # Подсчитываем занятость с учётом правил
-            max_slots = slot.max_employees if slot.max_employees is not None else 1
-            # Плановые для счётчика: только planned/confirmed, ограничиваем лимитом
-            scheduled_effective = [s for s in scheduled_shifts if s.get("status") in ("planned", "confirmed")]
-            planned_count = min(len(scheduled_effective), max_slots)
-
-            # Фактические для счётчика: исключаем отменённые
-            actual_non_cancelled = [a for a in actual_shifts if a.get("status") != "cancelled"]
-            actual_planned_nc = [a for a in actual_non_cancelled if a.get("is_planned")]
-            actual_spont_nc = [a for a in actual_non_cancelled if not a.get("is_planned")]
-
-            # Базовая нагрузка: плановые + фактические запланированные, не превышает лимит
-            base_total = min(max_slots, planned_count + len(actual_planned_nc))
-            # Спонтанные (не отменённые) могут превышать лимит
-            total_shifts = base_total + len(actual_spont_nc)
-            availability = f"{total_shifts}/{max_slots}"
-            
-            test_data.append({
-                "slot_id": slot.id,
-                "object_id": slot.object_id,
-                "object_name": slot.object.name,
-                "date": slot.slot_date.isoformat(),
-                "start_time": slot.start_time.strftime("%H:%M"),
-                "end_time": slot.end_time.strftime("%H:%M"),
-                "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else 0,
-                "status": status,
-                "scheduled_shifts": scheduled_shifts,
-                "actual_shifts": actual_shifts,
+                entry["actual"].append(shift_data)
+        
+        response_data = []
+        for ts in calendar_data.timeslots:
+            slot_capacity_minutes = (ts.occupied_minutes + ts.free_minutes)
+            availability = f"{ts.current_employees}/{ts.max_employees}"
+            slot_shifts = shifts_by_timeslot.get(ts.id, {"planned": [], "actual": []})
+            response_data.append({
+                "slot_id": ts.id,
+                "object_id": ts.object_id,
+                "object_name": ts.object_name,
+                "date": ts.date.isoformat(),
+                "start_time": ts.start_time.strftime("%H:%M"),
+                "end_time": ts.end_time.strftime("%H:%M"),
+                "hourly_rate": ts.hourly_rate,
+                "status": ts.status.value,
+                "status_label": ts.status_label,
+                "current_employees": ts.current_employees,
+                "available_slots": ts.available_slots,
+                "occupancy_ratio": ts.occupancy_ratio,
+                "occupied_minutes": ts.occupied_minutes,
+                "free_minutes": ts.free_minutes,
+                "capacity_minutes": slot_capacity_minutes,
                 "availability": availability,
-                "occupied_slots": total_shifts,
-                "max_slots": max_slots,
-                "max_employees": max_slots
+                "scheduled_shifts": slot_shifts["planned"],
+                "actual_shifts": slot_shifts["actual"]
             })
         
-        logger.info(f"Returning {len(test_data)} test timeslots")
-        return test_data
+        logger.info(f"Returning {len(response_data)} timeslots for calendar status")
+        return response_data
         
     except Exception as e:
         logger.error(f"Error getting timeslots status: {e}")
@@ -2529,7 +2377,17 @@ async def owner_calendar_api_data(
     try:
         # Генерируем ключ кэша
         import hashlib
-        user_id = current_user.get("telegram_id") or current_user.get("id") if isinstance(current_user, dict) else current_user.telegram_id
+
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
+
+        if isinstance(current_user, dict):
+            user_id = current_user.get("telegram_id") or current_user.get("id")
+        else:
+            user_id = getattr(current_user, "telegram_id", None)
+
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
         cache_key_data = f"calendar_api_owner:{user_id}:{start_date}:{end_date}:{object_ids or 'all'}:{org_unit_id or 'all'}"
         cache_key = hashlib.md5(cache_key_data.encode()).hexdigest()
         
@@ -2596,6 +2454,8 @@ async def owner_calendar_api_data(
         # Преобразуем в формат, совместимый с существующим JavaScript
         timeslots_data = []
         for ts in calendar_data.timeslots:
+            if ts.status == TimeslotStatus.HIDDEN:
+                continue
             timeslots_data.append({
                 "id": ts.id,
                 "object_id": ts.object_id,
@@ -2607,7 +2467,11 @@ async def owner_calendar_api_data(
                 "max_employees": ts.max_employees,
                 "current_employees": ts.current_employees,
                 "available_slots": ts.available_slots,
+                "occupied_minutes": ts.occupied_minutes,
+                "free_minutes": ts.free_minutes,
+                "occupancy_ratio": ts.occupancy_ratio,
                 "status": ts.status.value,
+                "status_label": ts.status_label,
                 "is_active": ts.is_active,
                 "notes": ts.notes,
                 "work_conditions": ts.work_conditions,
@@ -2661,7 +2525,8 @@ async def owner_calendar_api_data(
                 "end_coordinates": s.end_coordinates,
                 "can_edit": s.can_edit,
                 "can_cancel": s.can_cancel,
-                "can_view": s.can_view
+                "can_view": s.can_view,
+                "status_label": s.status_label
             })
         
         response_data = {
@@ -3755,8 +3620,6 @@ async def owner_contract_templates_create_form(request: Request):
             "all_tags": all_tags  # Справочник всех тегов для подсказок
         }
     )
-
-
 @router.post("/templates/contracts/create")
 async def owner_create_contract_template(request: Request):
     """Создание шаблона договора владельцем."""
@@ -4457,8 +4320,8 @@ async def owner_shifts_list_legacy(
     """Список смен владельца."""
     try:
         # Проверяем, что current_user - это словарь, а не RedirectResponse
-        if isinstance(current_user, RedirectResponse):
-            return current_user
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
             
         # Получаем telegram_id из current_user
         telegram_id = current_user.get("telegram_id") or current_user.get("id")
@@ -4657,8 +4520,8 @@ async def owner_shift_detail_legacy(
     """Детали смены владельца"""
     try:
         # Проверяем, что current_user - это словарь, а не RedirectResponse
-        if isinstance(current_user, RedirectResponse):
-            return current_user
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
         
         # Определяем тип смены по ID
         if shift_id.startswith('schedule_'):
@@ -5247,8 +5110,8 @@ async def owner_profile(
     """Страница профиля владельца (как в оригинале)"""
     try:
         # Проверка типа current_user
-        if isinstance(current_user, RedirectResponse):
-            return current_user
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
         
         # Получаем внутренний user_id (как в оригинале)
         user_id = await get_user_id_from_current_user(current_user, db)
@@ -5769,8 +5632,8 @@ async def owner_employees_list(
         from apps.web.services.contract_service import ContractService
         
         # Проверяем, что current_user - это словарь, а не RedirectResponse
-        if not isinstance(current_user, dict):
-            return current_user
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
         
         # Получаем реальных сотрудников из базы данных
         contract_service = ContractService()
@@ -6020,8 +5883,8 @@ async def owner_employee_edit_form(
 ):
     """Форма редактирования сотрудника."""
     try:
-        if isinstance(current_user, RedirectResponse):
-            return current_user
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
         
         # Получаем внутренний user_id владельца
         user_id = await get_user_id_from_current_user(current_user, db)
@@ -6072,8 +5935,8 @@ async def owner_employee_edit(
 ):
     """Обработка формы редактирования сотрудника."""
     try:
-        if isinstance(current_user, RedirectResponse):
-            return current_user
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
         
         async with get_async_session() as db:
             user_id = await get_user_id_from_current_user(current_user, db)
@@ -6601,8 +6464,8 @@ async def owner_applications(
 ):
     """Страница заявок владельца"""
     try:
-        if isinstance(current_user, RedirectResponse):
-            return current_user
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
             
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
@@ -6643,8 +6506,8 @@ async def approve_application(
 ):
     """Одобрение заявки с назначением собеседования"""
     try:
-        if isinstance(current_user, RedirectResponse):
-            return current_user
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
             
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
@@ -6760,13 +6623,18 @@ async def reject_application(
     try:
         logger.info(f"=== REJECT APPLICATION STARTED ===")
         
-        if isinstance(current_user, RedirectResponse):
-            return current_user
-            
-        user_id = await get_user_id_from_current_user(current_user, db)
-        logger.info(f"User ID resolved: {user_id}")
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
+
+        if isinstance(current_user, dict):
+            user_id = current_user.get("telegram_id") or current_user.get("id")
+        else:
+            user_id = getattr(current_user, "telegram_id", None)
+
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        logger.info(f"User ID resolved: {user_id}")
         
         logger.info(f"Form data received: application_id={application_id}, reject_reason={reject_reason}")
         
@@ -6870,8 +6738,9 @@ async def owner_applications_count(
     db: AsyncSession = Depends(get_db_session)
 ) -> dict[str, int]:
     """Количество новых заявок для владельца."""
-    if isinstance(current_user, RedirectResponse):
-        return current_user
+    if current_user is None or isinstance(current_user, RedirectResponse):
+        raise HTTPException(status_code=401, detail="Пользователь не авторизован")
+
     user_id = await get_user_id_from_current_user(current_user, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Пользователь не найден")
@@ -6885,7 +6754,7 @@ async def owner_application_details_api(
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
-    if isinstance(current_user, RedirectResponse):
+    if current_user is None or isinstance(current_user, RedirectResponse):
         raise HTTPException(status_code=401, detail="Необходима авторизация")
 
     user_id = await get_user_id_from_current_user(current_user, db)
@@ -6937,8 +6806,8 @@ async def owner_finalize_contract(
     db: AsyncSession = Depends(get_db_session)
 ):
     try:
-        if isinstance(current_user, RedirectResponse):
-            return current_user
+        if current_user is None or isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
 
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:

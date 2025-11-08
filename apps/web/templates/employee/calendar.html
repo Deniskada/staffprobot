@@ -39,15 +39,9 @@
 <script>
     // Инициализация универсального календаря для сотрудника
     document.addEventListener('DOMContentLoaded', function() {
-        // Инициализируем панели drag&drop
-        if (typeof CalendarPanels !== 'undefined') {
-            window.calendarPanels = new CalendarPanels('employee');
-            window.calendarPanels.init();
-        }
-        
-        // Создаем экземпляр универсального календаря
-        if (typeof UniversalCalendarManager !== 'undefined') {
-            window.universalCalendar = new UniversalCalendarManager({
+         // Создаем экземпляр универсального календаря
+         if (typeof UniversalCalendarManager !== 'undefined') {
+             window.universalCalendar = new UniversalCalendarManager({
                 currentDate: new Date({{ year }}, {{ month - 1 }}, 1),
                 viewType: 'month',
                 baseUrl: '/employee',
@@ -55,16 +49,41 @@
                 apiEndpoint: '/employee/api/calendar/data',
                 onShiftClick: function(shiftId) {
                     console.log('Shift clicked:', shiftId);
-                    if (shiftId.toString().startsWith('schedule_')) {
-                        const scheduleId = shiftId.toString().replace('schedule_', '');
-                        window.location.href = `/employee/shifts/${scheduleId}?shift_type=schedule`;
-                    } else {
-                        window.location.href = `/employee/shifts/${shiftId}?shift_type=shift`;
+                    let objectId = null;
+                    if (window.calendarData && Array.isArray(window.calendarData.shifts)) {
+                        const shift = window.calendarData.shifts.find(s => s.id === shiftId);
+                        if (shift && shift.object_id) {
+                            objectId = shift.object_id;
+                        }
                     }
+                    const scheduleId = shiftId.toString().startsWith('schedule_')
+                        ? shiftId.toString().replace('schedule_', '')
+                        : null;
+                    const params = new URLSearchParams({ return_to: '/employee/calendar' });
+                    if (objectId) {
+                        params.set('object_id', objectId);
+                    }
+                    if (scheduleId) {
+                        params.set('schedule_id', scheduleId);
+                    } else {
+                        params.set('shift_id', shiftId);
+                    }
+                    window.location.href = `/employee/shifts/plan?${params.toString()}`;
                 },
                 onTimeslotClick: function(timeslotId) {
                     console.log('Timeslot clicked:', timeslotId);
-                    window.location.href = `/employee/timeslots/${timeslotId}`;
+                    let objectId = null;
+                    if (window.calendarData && Array.isArray(window.calendarData.timeslots)) {
+                        const timeslot = window.calendarData.timeslots.find(ts => Number(ts.id) === Number(timeslotId));
+                        if (timeslot && timeslot.object_id) {
+                            objectId = timeslot.object_id;
+                        }
+                    }
+                    const params = new URLSearchParams({ return_to: '/employee/calendar', timeslot_id: timeslotId });
+                    if (objectId) {
+                        params.set('object_id', objectId);
+                    }
+                    window.location.href = `/employee/shifts/plan?${params.toString()}`;
                 },
                 onDataLoaded: function(calendarData) {
                     console.log('Calendar data loaded:', calendarData);

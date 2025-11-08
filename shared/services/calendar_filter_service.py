@@ -3,8 +3,10 @@
 import logging
 import hashlib
 import json
+import math
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date, time, timedelta
+import pytz
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
@@ -176,7 +178,7 @@ class CalendarFilterService:
             shifts = await self._get_shifts(filtered_object_ids, date_range_start, date_range_end, accessible_objects)
             
             # Обновляем статусы тайм-слотов на основе смен
-            timeslots = self._update_timeslot_statuses(timeslots, shifts)
+            timeslots = self._update_timeslot_statuses(timeslots, shifts, accessible_objects)
             
             logger.info(f"Found {len(timeslots)} timeslots and {len(shifts)} shifts for user {user_telegram_id}")
             
@@ -475,10 +477,23 @@ class CalendarFilterService:
             logger.error(f"Error getting actual shifts: {e}", exc_info=True)
             return []
     
+    @staticmethod
+    def _format_minutes(value: float) -> str:
+        """Форматирует минуты в строку вида '8 ч 24 м'."""
+        minutes = max(0, int(round(value)))
+        hours, minutes = divmod(minutes, 60)
+        parts = []
+        if hours:
+            parts.append(f"{hours} ч")
+        if minutes or not parts:
+            parts.append(f"{minutes} м")
+        return " ".join(parts)
+
     def _update_timeslot_statuses(
         self,
         timeslots: List[CalendarTimeslot],
-        shifts: List[CalendarShift]
+        shifts: List[CalendarShift],
+        accessible_objects: List[Dict[str, Any]]
     ) -> List[CalendarTimeslot]:
         """Обновить статусы тайм-слотов на основе смен."""
         try:
@@ -490,23 +505,151 @@ class CalendarFilterService:
                         shifts_by_timeslot[shift.time_slot_id] = []
                     shifts_by_timeslot[shift.time_slot_id].append(shift)
             
+            objects_map = {obj['id']: obj for obj in accessible_objects}
+            timezone_cache: Dict[int, pytz.timezone] = {}
+            now_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
+            
             # Обновляем статусы тайм-слотов
             for timeslot in timeslots:
                 timeslot_shifts = shifts_by_timeslot.get(timeslot.id, [])
-                
-                # Считаем только активные смены (не отмененные)
-                active_shifts = [s for s in timeslot_shifts if s.status != ShiftStatus.CANCELLED]
-                timeslot.current_employees = len(active_shifts)
-                timeslot.available_slots = max(0, timeslot.max_employees - timeslot.current_employees)
-                
-                # Определяем статус
-                if timeslot.current_employees == 0:
-                    timeslot.status = TimeslotStatus.AVAILABLE
-                elif timeslot.current_employees < timeslot.max_employees:
-                    timeslot.status = TimeslotStatus.PARTIALLY_FILLED
+                obj_info = objects_map.get(timeslot.object_id, {})
+                timezone_name = obj_info.get('timezone', 'Europe/Moscow')
+                if timeslot.object_id in timezone_cache:
+                    tz = timezone_cache[timeslot.object_id]
                 else:
+                    try:
+                        tz = pytz.timezone(timezone_name)
+                    except pytz.UnknownTimeZoneError:
+                        tz = pytz.timezone('Europe/Moscow')
+                    timezone_cache[timeslot.object_id] = tz
+
+                slot_start_local = tz.localize(datetime.combine(timeslot.date, timeslot.start_time))
+                slot_end_local = tz.localize(datetime.combine(timeslot.date, timeslot.end_time))
+                slot_duration_minutes = max(0, (slot_end_local - slot_start_local).total_seconds() / 60)
+                max_employees = timeslot.max_employees if timeslot.max_employees else 1
+                now_local = now_utc.astimezone(tz)
+                capacity_minutes = slot_duration_minutes * max_employees
+
+                occupied_minutes = 0.0
+                has_future_planned = False
+                has_current_or_future_actual = False
+                shift_details = []
+                actual_intervals = []
+
+                for shift in timeslot_shifts:
+                    if shift.status == ShiftStatus.CANCELLED:
+                        continue
+
+                    shift_timezone = shift.timezone or timezone_name
+                    try:
+                        shift_tz = pytz.timezone(shift_timezone)
+                    except pytz.UnknownTimeZoneError:
+                        shift_tz = tz
+
+                    if shift.shift_type == ShiftType.PLANNED:
+                        start_dt = shift.planned_start or shift.start_time
+                        end_dt = shift.planned_end or shift.end_time
+                    else:
+                        start_dt = shift.start_time or shift.planned_start
+                        end_dt = shift.end_time or shift.planned_end
+
+                    if not start_dt:
+                        continue
+                    if start_dt.tzinfo is None:
+                        start_dt = pytz.UTC.localize(start_dt)
+                    if end_dt:
+                        if end_dt.tzinfo is None:
+                            end_dt = pytz.UTC.localize(end_dt)
+                    else:
+                        end_dt = slot_end_local.astimezone(pytz.UTC)
+
+                    start_local = start_dt.astimezone(tz)
+                    end_local = end_dt.astimezone(tz)
+
+                    overlap_start = max(start_local, slot_start_local)
+                    overlap_end = min(end_local, slot_end_local)
+                    if overlap_end > overlap_start:
+                        occupied_minutes += max(0, (overlap_end - overlap_start).total_seconds() / 60)
+
+                    shift_details.append({
+                        "shift": shift,
+                        "start_local": start_local,
+                        "end_local": end_local
+                    })
+
+                    if shift.shift_type in (ShiftType.ACTIVE, ShiftType.COMPLETED):
+                        actual_intervals.append((start_local, end_local))
+                        if shift.shift_type == ShiftType.ACTIVE or end_local >= now_local:
+                            has_current_or_future_actual = True
+                    elif shift.shift_type == ShiftType.PLANNED:
+                        if start_local <= now_local <= end_local or start_local > now_local:
+                            has_future_planned = True
+
+                if capacity_minutes > 0:
+                    occupied_minutes = min(capacity_minutes, occupied_minutes)
+                    free_minutes = max(0, capacity_minutes - occupied_minutes)
+                    occupancy_ratio = occupied_minutes / capacity_minutes
+                else:
+                    free_minutes = 0
+                    occupancy_ratio = 0
+
+                if slot_duration_minutes > 0:
+                    approx_current = math.ceil(occupied_minutes / slot_duration_minutes - 1e-6)
+                else:
+                    approx_current = 0
+                approx_current = max(0, min(max_employees, approx_current))
+                timeslot.current_employees = approx_current
+                timeslot.available_slots = max(0, max_employees - approx_current)
+                timeslot.occupied_minutes = round(occupied_minutes, 2)
+                timeslot.free_minutes = round(free_minutes, 2)
+                timeslot.occupancy_ratio = round(occupancy_ratio, 4)
+
+                slot_in_past = slot_end_local <= now_local
+
+                if occupancy_ratio >= 0.999:
                     timeslot.status = TimeslotStatus.FULLY_FILLED
-            
+                    timeslot.status_label = "Заполнено"
+                elif occupancy_ratio > 0:
+                    timeslot.status = TimeslotStatus.PARTIALLY_FILLED
+                    timeslot.status_label = "Свободно"
+                else:
+                    timeslot.status = TimeslotStatus.AVAILABLE
+                    timeslot.status_label = "Свободно"
+
+                if slot_in_past and occupancy_ratio < 0.999:
+                    timeslot.status = TimeslotStatus.HIDDEN
+
+                if timeslot.free_minutes > 0:
+                    formatted_free = self._format_minutes(timeslot.free_minutes)
+                else:
+                    formatted_free = "0 м"
+
+                delay_label = None
+                if slot_in_past and timeslot.free_minutes > 0:
+                    delay_label = f"Опоздание {formatted_free}"
+
+                for detail in shift_details:
+                    shift = detail["shift"]
+                    if shift.shift_type != ShiftType.PLANNED:
+                        continue
+
+                    start_local = detail["start_local"]
+                    end_local = detail["end_local"]
+                    overlaps_actual = any(
+                        actual_start < end_local and start_local < actual_end
+                        for actual_start, actual_end in actual_intervals
+                    )
+
+                    has_past_planned_without_actual = end_local < now_local and not overlaps_actual
+                    if has_past_planned_without_actual:
+                        shift.status_label = "Не состоялась"
+
+                if delay_label:
+                    for detail in shift_details:
+                        shift = detail["shift"]
+                        if shift.shift_type in (ShiftType.ACTIVE, ShiftType.COMPLETED):
+                            shift.status_label = delay_label
+
             return timeslots
             
         except Exception as e:

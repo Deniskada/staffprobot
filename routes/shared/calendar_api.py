@@ -84,7 +84,11 @@ async def get_calendar_data(
                     "max_employees": ts.max_employees,
                     "current_employees": ts.current_employees,
                     "available_slots": ts.available_slots,
+                    "occupied_minutes": ts.occupied_minutes,
+                    "free_minutes": ts.free_minutes,
+                    "occupancy_ratio": ts.occupancy_ratio,
                     "status": ts.status.value,
+                    "status_label": ts.status_label,
                     "is_active": ts.is_active,
                     "notes": ts.notes,
                     "work_conditions": ts.work_conditions,
@@ -121,7 +125,8 @@ async def get_calendar_data(
                     "end_coordinates": s.end_coordinates,
                     "can_edit": s.can_edit,
                     "can_cancel": s.can_cancel,
-                    "can_view": s.can_view
+                    "can_view": s.can_view,
+                    "status_label": s.status_label
                 }
                 for s in calendar_data.shifts
             ],
@@ -353,7 +358,8 @@ async def get_shifts(
                     "end_coordinates": s.end_coordinates,
                     "can_edit": s.can_edit,
                     "can_cancel": s.can_cancel,
-                    "can_view": s.can_view
+                    "can_view": s.can_view,
+                    "status_label": s.status_label
                 }
                 for s in shifts
             ],

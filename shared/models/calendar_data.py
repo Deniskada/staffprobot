@@ -51,6 +51,10 @@ class CalendarTimeslot:
     status: TimeslotStatus = TimeslotStatus.AVAILABLE
     current_employees: int = 0
     available_slots: int = 0
+    occupied_minutes: float = 0
+    free_minutes: float = 0
+    occupancy_ratio: float = 0
+    status_label: str = "Свободно"
     
     # Дополнительная информация
     work_conditions: Optional[str] = None
@@ -69,10 +73,13 @@ class CalendarTimeslot:
         # Определяем статус
         if self.current_employees == 0:
             self.status = TimeslotStatus.AVAILABLE
+            self.status_label = "Свободно"
         elif self.current_employees < self.max_employees:
             self.status = TimeslotStatus.PARTIALLY_FILLED
+            self.status_label = "Запланирована"
         else:
             self.status = TimeslotStatus.FULLY_FILLED
+            self.status_label = "Запланирована"
 
 
 @dataclass
@@ -113,6 +120,7 @@ class CalendarShift:
     can_cancel: bool = False
     can_view: bool = True
     timezone: str = "Europe/Moscow"
+    status_label: Optional[str] = None
     
     @property
     def duration_hours(self) -> Optional[float]:

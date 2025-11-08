@@ -9,20 +9,20 @@
                 <div class="legend-left">
                     <div class="calendar-legend" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size: 0.875rem;">
                         <div style="display:flex; align-items:center; gap:4px;">
-                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#e3f2fd; border:1px solid #2196f3;"></span>
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#e8f5e9; border:1px solid #43a047;"></span>
+                            <small style="color: #6c757d;">Свободно</small>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#e3f2fd; border:1px solid #1e88e5;"></span>
                             <small style="color: #6c757d;">Запланирована</small>
                         </div>
                         <div style="display:flex; align-items:center; gap:4px;">
-                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#fff3e0; border:1px solid #ff9800;"></span>
-                            <small style="color: #6c757d;">Активная</small>
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#bbdefb; border:1px solid #0d47a1;"></span>
+                            <small style="color: #6c757d;">Заполнено</small>
                         </div>
                         <div style="display:flex; align-items:center; gap:4px;">
-                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#c8e6c9; border:1px solid #2e7d32;"></span>
-                            <small style="color: #6c757d;">Завершена</small>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:4px;">
-                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#f3e5f5; border:1px solid #9c27b0;"></span>
-                            <small style="color: #6c757d;">Тайм-слот</small>
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#ffebee; border:1px solid #e53935;"></span>
+                            <small style="color: #6c757d;">Не состоялась</small>
                         </div>
                     </div>
                 </div>
@@ -302,7 +302,7 @@ window.unifiedCalendar = {
         this.updateCalendarDisplay(calendarData);
         
         // Инициализируем drag&drop только если не менеджер (3.7.3)
-        if (!window.universalCalendar || window.universalCalendar.userRole !== 'manager') {
+        if (window.universalCalendar && window.universalCalendar.userRole === 'owner') {
             this.initializeDragAndDrop();
         }
         
@@ -380,50 +380,78 @@ window.unifiedCalendar = {
     
     // Функция для создания элемента тайм-слота
     createTimeslotElement: function(timeslot) {
-        const currentEmployees = timeslot.current_employees || 0;
         const maxEmployees = timeslot.max_employees || 1;
-        
-        // Не отображаем полностью занятые тайм-слоты
-        if (currentEmployees >= maxEmployees) {
+        const freeMinutes = typeof timeslot.free_minutes === 'number' ? timeslot.free_minutes : 0;
+        const statusLabel = timeslot.status_label || 'Свободно';
+        const occupancyRatio = typeof timeslot.occupancy_ratio === 'number' ? timeslot.occupancy_ratio : 0;
+
+        if (timeslot.status === 'hidden') {
             return null;
         }
-        
+
+        if (occupancyRatio >= 0.999) {
+            return null;
+        }
+        if (statusLabel === 'Не состоялась') {
+            return null;
+        }
+ 
         const element = document.createElement('div');
-        element.className = 'timeslot-item timeslot-free';
+        let statusClass = 'timeslot-item timeslot-status-free';
+        if (statusLabel === 'Не состоялась') {
+            statusClass = 'timeslot-item timeslot-status-missed';
+        } else if (statusLabel === 'Запланирована') {
+            statusClass = occupancyRatio >= 0.999 ? 'timeslot-item timeslot-status-full' : 'timeslot-item timeslot-status-planned';
+        }
+        element.className = statusClass;
         element.setAttribute('data-timeslot-id', timeslot.id);
         element.setAttribute('data-timeslot-date', timeslot.date);
         element.setAttribute('data-timeslot-start-time', timeslot.start_time);
-        // Клики отключены для сотрудников
-        if (!window.universalCalendar || window.universalCalendar.userRole !== 'employee') {
-            element.onclick = () => {
-                if (window.universalCalendar && window.universalCalendar.onTimeslotClick) {
-                    window.universalCalendar.onTimeslotClick(timeslot.id);
-                }
-            };
-        } else {
-            // Для сотрудников блокируем только клики, но разрешаем drag&drop
-            element.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            };
-            element.style.cursor = 'default';
-        }
+        element.setAttribute('data-status-label', statusLabel);
+        element.setAttribute('data-free-minutes', freeMinutes);
+        element.onclick = () => {
+            if (window.universalCalendar && window.universalCalendar.onTimeslotClick) {
+                window.universalCalendar.onTimeslotClick(timeslot.id);
+            }
+        };
         element.setAttribute('data-timeslot-end-time', timeslot.end_time);
         element.setAttribute('data-timeslot-object-id', timeslot.object_id);
         element.setAttribute('data-timeslot-object-name', timeslot.object_name || '');
         element.setAttribute('data-timeslot-max-employees', maxEmployees);
         
-        const occupancyBadge = `<div class="timeslot-badge">${currentEmployees}/${maxEmployees}</div>`;
+        const freeLabel = freeMinutes > 0 ? this.formatDuration(freeMinutes) : '';
+        const badgeClass = statusLabel === 'Заполнено'
+            ? 'timeslot-badge badge-full'
+            : 'timeslot-badge badge-free';
+        const badgeText = freeLabel ? `${statusLabel} ${freeLabel}` : statusLabel;
         
         element.innerHTML = `
+            <div class="${badgeClass}">
+                <span class="status-text">${badgeText}</span>
+            </div>
             <div class="timeslot-time">${timeslot.start_time} - ${timeslot.end_time}</div>
             <div class="timeslot-object">${timeslot.object_name}</div>
             <div class="timeslot-rate">${timeslot.hourly_rate}₽/ч</div>
-            ${occupancyBadge}
         `;
         
         return element;
+    },
+    
+    formatDuration: function(minutes) {
+        if (!minutes || minutes <= 0) {
+            return '0 м';
+        }
+        const total = Math.max(0, Math.round(minutes));
+        const hrs = Math.floor(total / 60);
+        const mins = total % 60;
+        const parts = [];
+        if (hrs > 0) {
+            parts.push(`${hrs} ч`);
+        }
+        if (mins > 0) {
+            parts.push(`${mins} м`);
+        }
+        return parts.join(' ');
     },
     
     // Функция для создания элемента смены
@@ -469,13 +497,22 @@ window.unifiedCalendar = {
         }
         
         // Добавляем стикер для запланированных смен
-        const sticker = shift.shift_type === 'planned' ? '<div class="shift-sticker">1/1</div>' : '';
-        
+        let badge = '';
+        if (shift.status_label) {
+            let badgeClass = 'shift-badge shift-badge-default';
+            if (shift.status_label === 'Не состоялась') {
+                badgeClass = 'shift-badge shift-badge-missed';
+            } else if (shift.status_label.startsWith('Опоздание')) {
+                badgeClass = 'shift-badge shift-badge-delay';
+            }
+            badge = `<div class="${badgeClass}">${shift.status_label}</div>`;
+        }
+ 
         element.innerHTML = `
+            ${badge}
             <div class="shift-time">${startTime} - ${endTime}</div>
             <div class="shift-employee">${shift.user_name}</div>
             <div class="shift-object">${shift.object_name}</div>
-            ${sticker}
         `;
         
         return element;
