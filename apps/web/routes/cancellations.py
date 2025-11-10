@@ -82,6 +82,9 @@ async def owner_cancel_shift(
         )
         
         if result['success']:
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
             # TODO: Отправить уведомление сотруднику
             return JSONResponse({
                 "success": True,
@@ -176,6 +179,9 @@ async def manager_cancel_shift(
         )
         
         if result['success']:
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
             # TODO: Отправить уведомление сотруднику
             return JSONResponse({
                 "success": True,

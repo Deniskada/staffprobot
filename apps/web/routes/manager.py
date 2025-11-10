@@ -2648,16 +2648,25 @@ async def get_timeslot_details_manager(
                 raise HTTPException(status_code=403, detail="Нет доступа к тайм-слоту")
 
             # Запланированные смены по тайм-слоту
-            sched_q = select(ShiftSchedule).options(selectinload(ShiftSchedule.user)).where(ShiftSchedule.time_slot_id == timeslot_id).order_by(ShiftSchedule.planned_start)
+            sched_q = select(ShiftSchedule).options(selectinload(ShiftSchedule.user)).where(
+                and_(
+                    ShiftSchedule.time_slot_id == timeslot_id,
+                    ShiftSchedule.status.in_(["planned", "confirmed"])
+                )
+            ).order_by(ShiftSchedule.planned_start)
             sched = (await db.execute(sched_q)).scalars().all()
+            tz_name = slot.object.timezone if slot.object and slot.object.timezone else 'Europe/Moscow'
             scheduled = [
                 {
                     "id": s.id,
                     "user_id": s.user_id,
                     "user_name": f"{s.user.first_name} {s.user.last_name or ''}".strip() if s.user else None,
                     "status": s.status,
-                    "start_time": s.planned_start.time().strftime("%H:%M"),
-                    "end_time": s.planned_end.time().strftime("%H:%M"),
+                    "start_time": web_timezone_helper.format_datetime_with_timezone(s.planned_start, tz_name, '%H:%M') if s.planned_start else None,
+                    "end_time": web_timezone_helper.format_datetime_with_timezone(s.planned_end, tz_name, '%H:%M') if s.planned_end else None,
+                    "planned_start": s.planned_start.isoformat() if s.planned_start else None,
+                    "planned_end": s.planned_end.isoformat() if s.planned_end else None,
+                    "planned_hours": s.planned_duration_hours,
                     "notes": s.notes,
                 }
                 for s in sched
@@ -3637,6 +3646,8 @@ async def plan_shift_manager(
         
         timeslot_id = data.get('timeslot_id')
         employee_id = data.get('employee_id')
+        raw_start_time = data.get('start_time')
+        raw_end_time = data.get('end_time')
         
         logger.info(f"Processing: timeslot_id={timeslot_id}, employee_id={employee_id}")
         
@@ -3711,13 +3722,46 @@ async def plan_shift_manager(
             from domain.entities.shift_schedule import ShiftSchedule
             import pytz
             
+            # Подготавливаем индивидуальные границы смены в рамках тайм-слота
+            slot_start_time = timeslot.start_time
+            slot_end_time = timeslot.end_time
+            if slot_start_time is None or slot_end_time is None:
+                raise HTTPException(status_code=400, detail="У тайм-слота не указано время работы")
+
+            from datetime import datetime as _dt
+
+            if raw_start_time:
+                try:
+                    custom_start_time = _dt.strptime(raw_start_time, "%H:%M").time()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Неверный формат времени начала (используйте ЧЧ:ММ)")
+            else:
+                custom_start_time = slot_start_time
+
+            if raw_end_time:
+                try:
+                    custom_end_time = _dt.strptime(raw_end_time, "%H:%M").time()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Неверный формат времени окончания (используйте ЧЧ:ММ)")
+            else:
+                custom_end_time = slot_end_time
+
+            if custom_start_time >= custom_end_time:
+                raise HTTPException(status_code=400, detail="Время окончания должно быть позже времени начала")
+
+            if custom_start_time < slot_start_time or custom_end_time > slot_end_time:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Смена должна укладываться в границы тайм-слота: {slot_start_time.strftime('%H:%M')} - {slot_end_time.strftime('%H:%M')}"
+                )
+
             # Получаем временную зону объекта для корректного сравнения времени
             object_timezone = timeslot.object.timezone if timeslot.object and timeslot.object.timezone else 'Europe/Moscow'
             tz = pytz.timezone(object_timezone)
             
             # Создаем naive datetime в локальной временной зоне объекта
-            slot_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.start_time)
-            end_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.end_time)
+            slot_datetime_naive = datetime.combine(timeslot.slot_date, custom_start_time)
+            end_datetime_naive = datetime.combine(timeslot.slot_date, custom_end_time)
             
             # Локализуем в временную зону объекта, затем конвертируем в UTC для сравнения
             slot_datetime_utc = tz.localize(slot_datetime_naive).astimezone(pytz.UTC)
@@ -5263,6 +5307,8 @@ async def manager_cancel_shift(
                 shift.status = "cancelled"
                 shift.updated_at = datetime.utcnow()
                 await db.commit()
+                await cache.clear_pattern("calendar_shifts:*")
+                await cache.clear_pattern("api_response:*")
                 
                 return JSONResponse(
                     status_code=200,
@@ -5293,6 +5339,8 @@ async def manager_cancel_shift(
                 shift.status = "cancelled"
                 shift.updated_at = datetime.utcnow()
                 await db.commit()
+                await cache.clear_pattern("calendar_shifts:*")
+                await cache.clear_pattern("api_response:*")
                 
                 return JSONResponse(
                     status_code=200,

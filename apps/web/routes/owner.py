@@ -3384,15 +3384,40 @@ async def owner_calendar_api_timeslot_detail(
             actual_result = await session.execute(actual_query)
             actual_shifts = actual_result.scalars().all()
             
+            tz_name = slot.object.timezone if slot.object and slot.object.timezone else 'Europe/Moscow'
+
             # Формируем данные для запланированных смен
             scheduled_data = []
             for shift in scheduled_shifts:
+                user_name = "Неизвестно"
+                if shift.user:
+                    first_name = shift.user.first_name or ""
+                    last_name = shift.user.last_name or ""
+                    user_name = f"{last_name} {first_name}".strip() or shift.user.username or f"ID {shift.user.id}"
+
+                start_formatted = (
+                    web_timezone_helper.format_datetime_with_timezone(shift.planned_start, tz_name, '%H:%M')
+                    if shift.planned_start
+                    else None
+                )
+                end_formatted = (
+                    web_timezone_helper.format_datetime_with_timezone(shift.planned_end, tz_name, '%H:%M')
+                    if shift.planned_end
+                    else None
+                )
+
                 scheduled_data.append({
                     "id": shift.id,
-                    "user_name": f"{shift.user.first_name} {shift.user.last_name}".strip() if shift.user else "Неизвестно",
+                    "user_id": shift.user_id,
+                    "user_name": user_name,
                     "status": shift.status,
                     "planned_hours": shift.planned_duration_hours,
-                    "notes": shift.notes or ""
+                    "notes": shift.notes or "",
+                    "planned_start": shift.planned_start.isoformat() if shift.planned_start else None,
+                    "planned_end": shift.planned_end.isoformat() if shift.planned_end else None,
+                    "start_time": start_formatted,
+                    "end_time": end_formatted,
+                    "hourly_rate": float(shift.hourly_rate) if shift.hourly_rate else None
                 })
             
             # Формируем данные для фактических смен

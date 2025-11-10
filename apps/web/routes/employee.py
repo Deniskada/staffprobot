@@ -2386,6 +2386,9 @@ async def employee_cancel_planned_shift(
 
             schedule.status = 'cancelled'
             await db.commit()
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
             return {"success": True}
     except HTTPException:
         raise
