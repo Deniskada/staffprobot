@@ -27,7 +27,36 @@
 <script src="{{ 'js/shared/calendar_panels.js' | static_version }}"></script>
 <!-- Universal Calendar Integration -->
 <script src="{{ 'js/shared/universal_calendar.js' | static_version }}"></script>
+<script src="{{ 'js/shared/plan_shift_modal.js' | static_version }}"></script>
 <script>
+    function notifyCalendar(message, type = 'info') {
+        if (window.calendarPanels && typeof window.calendarPanels.showNotification === 'function') {
+            window.calendarPanels.showNotification(message, type);
+        } else if (type === 'error') {
+            alert(message);
+        } else {
+            console.log(`[${type}] ${message}`);
+        }
+    }
+
+    if (window.PlanShiftModal) {
+        window.PlanShiftModal.configure({
+            role: 'manager',
+            timeslotDetailEndpoint: (timeslotId) => `/manager/calendar/api/timeslot/${timeslotId}`,
+            employeesForObjectEndpoint: (objectId) => `/manager/api/employees/for-object/${objectId}`,
+            planShiftEndpoint: '/manager/api/calendar/plan-shift',
+            notify: notifyCalendar,
+            preparePlannedShifts: true,
+            refreshCalendar: () => {
+                if (window.universalCalendar && typeof window.universalCalendar.refresh === 'function') {
+                    window.universalCalendar.refresh();
+                } else {
+                    setTimeout(() => window.location.reload(), 800);
+                }
+            }
+        });
+    }
+
     // Инициализация универсального календаря для управляющего
     document.addEventListener('DOMContentLoaded', function() {
         // Инициализируем панели (без drag&drop, только для быстрого создания тайм-слотов) (3.7.3)
@@ -86,8 +115,11 @@
                 },
                 onTimeslotClick: function(timeslotId) {
                     console.log('Timeslot clicked:', timeslotId);
-                    // При клике на тайм-слот открываем форму планирования смен с предзаполненным объектом
-                    // Получаем object_id из данных календаря
+                    if (window.PlanShiftModal && typeof window.PlanShiftModal.open === 'function') {
+                        window.PlanShiftModal.open(timeslotId);
+                        return;
+                    }
+
                     let objectId = null;
                     if (window.calendarData && window.calendarData.timeslots) {
                         const timeslot = window.calendarData.timeslots.find(ts => ts.id == timeslotId);
@@ -95,7 +127,6 @@
                             objectId = timeslot.object_id;
                         }
                     }
-                    // Если нашли object_id, передаем его в форму планирования
                     if (objectId) {
                         window.location.href = `/manager/shifts/plan?object_id=${objectId}&return_to=/manager/calendar`;
                     } else {

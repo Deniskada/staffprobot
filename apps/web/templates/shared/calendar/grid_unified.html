@@ -409,11 +409,6 @@ window.unifiedCalendar = {
         element.setAttribute('data-timeslot-start-time', timeslot.start_time);
         element.setAttribute('data-status-label', statusLabel);
         element.setAttribute('data-free-minutes', freeMinutes);
-        element.onclick = () => {
-            if (window.universalCalendar && window.universalCalendar.onTimeslotClick) {
-                window.universalCalendar.onTimeslotClick(timeslot.id);
-            }
-        };
         element.setAttribute('data-timeslot-end-time', timeslot.end_time);
         element.setAttribute('data-timeslot-object-id', timeslot.object_id);
         element.setAttribute('data-timeslot-object-name', timeslot.object_name || '');
