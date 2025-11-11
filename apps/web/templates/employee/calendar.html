@@ -36,11 +36,45 @@
 {% block extra_js %}
 <!-- Universal Calendar Integration -->
 <script src="{{ url_for('static', path='js/shared/universal_calendar.js') }}"></script>
+<script src="{{ 'js/shared/plan_shift_modal.js' | static_version }}"></script>
 <script>
     // Инициализация универсального календаря для сотрудника
     document.addEventListener('DOMContentLoaded', function() {
+         const CURRENT_EMPLOYEE_ID = {{ current_employee_id }};
+         const CURRENT_EMPLOYEE_NAME = {{ current_employee_name | tojson }};
+
+         function notifyCalendar(message, type = 'info') {
+            if (type === 'error') {
+                alert(message);
+            } else {
+                console.log(`[${type}] ${message}`);
+            }
+         }
+
          // Создаем экземпляр универсального календаря
          if (typeof UniversalCalendarManager !== 'undefined') {
+             if (window.PlanShiftModal) {
+                 window.PlanShiftModal.configure({
+                     role: 'employee',
+                     timeslotDetailEndpoint: (timeslotId) => `/employee/calendar/api/timeslot/${timeslotId}`,
+                     employeesForObjectEndpoint: (objectId) => `/employee/api/calendar/employees-for-object/${objectId}`,
+                     planShiftEndpoint: '/employee/api/calendar/plan-shift',
+                     preselectedEmployeeId: CURRENT_EMPLOYEE_ID,
+                     lockedEmployeeId: CURRENT_EMPLOYEE_ID,
+                     lockedEmployeeName: CURRENT_EMPLOYEE_NAME,
+                     lockEmployeeSelection: true,
+                     notify: notifyCalendar,
+                     preparePlannedShifts: true,
+                     refreshCalendar: () => {
+                         if (window.universalCalendar && typeof window.universalCalendar.refresh === 'function') {
+                             window.universalCalendar.refresh();
+                         } else {
+                             setTimeout(() => window.location.reload(), 800);
+                         }
+                     }
+                 });
+             }
+
              window.universalCalendar = new UniversalCalendarManager({
                 currentDate: new Date({{ year }}, {{ month - 1 }}, 1),
                 viewType: 'month',
@@ -49,6 +83,7 @@
                 apiEndpoint: '/employee/api/calendar/data',
                 onShiftClick: function(shiftId) {
                     console.log('Shift clicked:', shiftId);
+                    const params = new URLSearchParams({ return_to: '/employee/calendar' });
                     let objectId = null;
                     if (window.calendarData && Array.isArray(window.calendarData.shifts)) {
                         const shift = window.calendarData.shifts.find(s => s.id === shiftId);
@@ -56,13 +91,14 @@
                             objectId = shift.object_id;
                         }
                     }
-                    const scheduleId = shiftId.toString().startsWith('schedule_')
-                        ? shiftId.toString().replace('schedule_', '')
-                        : null;
-                    const params = new URLSearchParams({ return_to: '/employee/calendar' });
                     if (objectId) {
                         params.set('object_id', objectId);
                     }
+                    params.set('employee_id', CURRENT_EMPLOYEE_ID);
+
+                    const scheduleId = shiftId.toString().startsWith('schedule_')
+                        ? shiftId.toString().replace('schedule_', '')
+                        : null;
                     if (scheduleId) {
                         params.set('schedule_id', scheduleId);
                     } else {
@@ -72,17 +108,11 @@
                 },
                 onTimeslotClick: function(timeslotId) {
                     console.log('Timeslot clicked:', timeslotId);
-                    let objectId = null;
-                    if (window.calendarData && Array.isArray(window.calendarData.timeslots)) {
-                        const timeslot = window.calendarData.timeslots.find(ts => Number(ts.id) === Number(timeslotId));
-                        if (timeslot && timeslot.object_id) {
-                            objectId = timeslot.object_id;
-                        }
+                    if (window.PlanShiftModal && typeof window.PlanShiftModal.open === 'function') {
+                        window.PlanShiftModal.open(timeslotId);
+                        return;
                     }
-                    const params = new URLSearchParams({ return_to: '/employee/calendar', timeslot_id: timeslotId });
-                    if (objectId) {
-                        params.set('object_id', objectId);
-                    }
+                    const params = new URLSearchParams({ return_to: '/employee/calendar', timeslot_id: timeslotId, employee_id: CURRENT_EMPLOYEE_ID });
                     window.location.href = `/employee/shifts/plan?${params.toString()}`;
                 },
                 onDataLoaded: function(calendarData) {

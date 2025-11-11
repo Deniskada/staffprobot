@@ -6,6 +6,10 @@
     timeslotDetailEndpoint: (timeslotId) => `/owner/calendar/api/timeslot/${timeslotId}`,
     employeesForObjectEndpoint: (objectId) => `/owner/api/employees/for-object/${objectId}`,
     planShiftEndpoint: '/owner/api/calendar/plan-shift',
+    preselectedEmployeeId: null,
+    lockedEmployeeId: null,
+    lockedEmployeeName: null,
+    lockEmployeeSelection: false,
     notify: (message, type = 'info') => {
       if (type === 'error') {
         window.alert(message);
@@ -32,6 +36,18 @@
     const hours = Math.floor(minutesTotal / 60);
     const minutes = minutesTotal % 60;
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+
+  function escapeHtml(value) {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   function timeStringToMinutes(value) {
@@ -981,12 +997,52 @@
       const employees = await fetchJson(activeConfig.employeesForObjectEndpoint(objectId));
       const select = document.getElementById('employeeSelectModal');
       if (select) {
-        if (Array.isArray(employees) && employees.length) {
-          select.innerHTML = '<option value="">Выберите сотрудника</option>' +
-            employees.map((emp) => `<option value="${emp.id}">${emp.name}</option>`).join('');
+        const preselectedId = activeConfig.preselectedEmployeeId;
+        const lockedId = activeConfig.lockEmployeeSelection
+          ? (activeConfig.lockedEmployeeId ?? preselectedId)
+          : null;
+        const lockedNameFromConfig = activeConfig.lockedEmployeeName;
+
+        if (activeConfig.lockEmployeeSelection && lockedId !== null) {
+          let displayName = lockedNameFromConfig;
+          if (!displayName && Array.isArray(employees)) {
+            const match = employees.find((emp) => Number(emp.id) === Number(lockedId));
+            if (match && match.name) {
+              displayName = match.name;
+            }
+          }
+          if (!displayName) {
+            displayName = 'Выбранный сотрудник';
+          }
+          select.innerHTML = `<option value="${lockedId}">${escapeHtml(displayName)}</option>`;
+          select.value = String(lockedId);
+          select.setAttribute('disabled', 'true');
+        } else if (Array.isArray(employees) && employees.length) {
+          const options = ['<option value="">Выберите сотрудника</option>']
+            .concat(
+              employees.map(
+                (emp) =>
+                  `<option value="${emp.id}">${escapeHtml(emp.name)}</option>`
+              )
+            )
+            .join('');
+          select.innerHTML = options;
+          if (preselectedId !== null) {
+            select.value = String(preselectedId);
+          }
         } else {
-          select.innerHTML = '<option value="">Нет сотрудников с доступом к объекту</option>';
+          if (preselectedId !== null) {
+            const fallbackName = lockedNameFromConfig || 'Выбранный сотрудник';
+            select.innerHTML = `<option value="${preselectedId}">${escapeHtml(fallbackName)}</option>`;
+            select.value = String(preselectedId);
+            if (activeConfig.lockEmployeeSelection) {
+              select.setAttribute('disabled', 'true');
+            }
+          } else {
+            select.innerHTML = '<option value="">Нет сотрудников с доступом к объекту</option>';
+          }
         }
+
         select.addEventListener('change', () => {
           modalElement.dispatchEvent(new CustomEvent('planshift:employee-changed'));
         });

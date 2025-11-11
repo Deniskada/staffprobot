@@ -17,12 +17,14 @@ from apps.web.dependencies import get_current_user_dependency
 from core.database.session import get_db_session, get_async_session
 from apps.web.middleware.role_middleware import require_employee_or_applicant
 from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift, TimeSlot
+from domain.entities.contract import Contract
 from domain.entities.application import ApplicationStatus
 from domain.entities.payroll_entry import PayrollEntry
 from domain.entities.payroll_adjustment import PayrollAdjustment
 from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from shared.services.calendar_filter_service import CalendarFilterService
+from shared.services.object_access_service import ObjectAccessService
 from apps.web.utils.calendar_utils import create_calendar_grid
 from openpyxl import Workbook
 
@@ -906,6 +908,13 @@ async def employee_calendar(
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
 
+        user_obj = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        if not user_obj:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        employee_display_name = (f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip()
+                                 or user_obj.username
+                                 or f"ID {user_obj.id}")
+
         available_interfaces = await get_available_interfaces_for_user(current_user, db)
 
         # Текущая дата по умолчанию
@@ -1100,6 +1109,8 @@ async def employee_calendar(
             "available_interfaces": available_interfaces,
             "applications_count": applications_count,
             "show_today_button": True,
+            "current_employee_id": user_id,
+            "current_employee_name": employee_display_name,
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки календаря: {e}")
@@ -1167,6 +1178,185 @@ async def employee_calendar_api_objects(
     except Exception as e:
         logger.error(f"Error getting employee calendar objects: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения объектов календаря")
+
+
+@router.get("/api/calendar/employees-for-object/{object_id}")
+async def employee_calendar_employees_for_object(
+    object_id: int,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Возвращает текущего сотрудника, если у него есть доступ к объекту."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        else:
+            telegram_id = getattr(current_user, "telegram_id", None)
+
+        if not telegram_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        access_service = ObjectAccessService(db)
+        accessible_objects = await access_service.get_accessible_objects(telegram_id, "employee")
+        accessible_object_ids = {obj["id"] for obj in accessible_objects}
+
+        if object_id not in accessible_object_ids:
+            return []
+
+        user_obj = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        if not user_obj:
+            return []
+
+        display_name = (f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip()
+                        or user_obj.username
+                        or f"ID {user_obj.id}")
+
+        return [{
+            "id": int(user_obj.id),
+            "name": display_name
+        }]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting employee list for object {object_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения сотрудников для объекта")
+
+
+@router.get("/calendar/api/timeslot/{timeslot_id}")
+async def employee_calendar_timeslot_detail(
+    timeslot_id: int,
+    current_user: dict = Depends(require_employee_or_applicant)
+):
+    """Детали тайм-слота для модалки быстрого планирования сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+            if isinstance(current_user, dict):
+                telegram_id = current_user.get("telegram_id") or current_user.get("id")
+            else:
+                telegram_id = getattr(current_user, "telegram_id", None)
+
+            if not telegram_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+            access_service = ObjectAccessService(db)
+            accessible_objects = await access_service.get_accessible_objects(telegram_id, "employee")
+            accessible_object_ids = {obj["id"] for obj in accessible_objects}
+
+            if not accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступных объектов")
+
+            slot = (await db.execute(
+                select(TimeSlot).options(selectinload(TimeSlot.object)).where(TimeSlot.id == timeslot_id)
+            )).scalar_one_or_none()
+
+            if not slot:
+                raise HTTPException(status_code=404, detail="Тайм-слот не найден")
+
+            if slot.object_id not in accessible_object_ids:
+                raise HTTPException(status_code=403, detail="Нет доступа к тайм-слоту")
+
+            tz_name = slot.object.timezone if slot.object and slot.object.timezone else 'Europe/Moscow'
+
+            scheduled_query = select(ShiftSchedule).options(selectinload(ShiftSchedule.user)).where(
+                and_(
+                    ShiftSchedule.time_slot_id == timeslot_id,
+                    ShiftSchedule.status.in_(["planned", "confirmed"])
+                )
+            ).order_by(ShiftSchedule.planned_start)
+            scheduled_rows = (await db.execute(scheduled_query)).scalars().all()
+
+            scheduled = [
+                {
+                    "id": sched.id,
+                    "user_id": sched.user_id,
+                    "user_name": f"{sched.user.first_name or ''} {sched.user.last_name or ''}".strip() if sched.user else None,
+                    "status": sched.status,
+                    "start_time": web_timezone_helper.format_datetime_with_timezone(sched.planned_start, tz_name, "%H:%M") if sched.planned_start else None,
+                    "end_time": web_timezone_helper.format_datetime_with_timezone(sched.planned_end, tz_name, "%H:%M") if sched.planned_end else None,
+                    "planned_start": sched.planned_start.isoformat() if sched.planned_start else None,
+                    "planned_end": sched.planned_end.isoformat() if sched.planned_end else None,
+                }
+                for sched in scheduled_rows
+            ]
+
+            linked_shifts_query = select(Shift).options(selectinload(Shift.user)).where(
+                Shift.time_slot_id == timeslot_id
+            ).order_by(Shift.start_time)
+            linked_shifts = (await db.execute(linked_shifts_query)).scalars().all()
+
+            day_start = datetime.combine(slot.slot_date, time.min)
+            day_end = datetime.combine(slot.slot_date, time.max)
+            overlap_query = select(Shift).options(selectinload(Shift.user)).where(
+                and_(
+                    Shift.object_id == slot.object_id,
+                    Shift.start_time >= day_start,
+                    Shift.start_time <= day_end
+                )
+            ).order_by(Shift.start_time)
+            potential_overlaps = (await db.execute(overlap_query)).scalars().all()
+
+            linked_ids = {shift.id for shift in linked_shifts}
+
+            def overlaps_timeslot(shift: Shift) -> bool:
+                shift_start = shift.start_time.time()
+                shift_end = shift.end_time.time() if shift.end_time else None
+                if not shift_end:
+                    return shift_start < slot.end_time
+                return shift_start < slot.end_time and slot.start_time < shift_end
+
+            combined_shifts = linked_shifts + [
+                shift for shift in potential_overlaps
+                if shift.id not in linked_ids and overlaps_timeslot(shift)
+            ]
+
+            actual = [
+                {
+                    "id": shift.id,
+                    "user_id": shift.user_id,
+                    "user_name": f"{shift.user.first_name or ''} {shift.user.last_name or ''}".strip() if shift.user else None,
+                    "status": shift.status,
+                    "start_time": web_timezone_helper.format_datetime_with_timezone(shift.start_time, tz_name, "%H:%M") if shift.start_time else None,
+                    "end_time": web_timezone_helper.format_datetime_with_timezone(shift.end_time, tz_name, "%H:%M") if shift.end_time else None,
+                }
+                for shift in combined_shifts
+            ]
+
+            return {
+                "slot": {
+                    "id": slot.id,
+                    "object_id": slot.object_id,
+                    "object_name": slot.object.name if slot.object else None,
+                    "date": slot.slot_date.strftime("%Y-%m-%d"),
+                    "start_time": slot.start_time.strftime("%H:%M") if slot.start_time else None,
+                    "end_time": slot.end_time.strftime("%H:%M") if slot.end_time else None,
+                    "hourly_rate": float(slot.hourly_rate) if slot.hourly_rate else None,
+                    "max_employees": slot.max_employees or 1,
+                    "is_active": slot.is_active,
+                    "notes": slot.notes or "",
+                },
+                "scheduled": scheduled,
+                "actual": actual
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting employee timeslot detail: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
+
 
 @router.get("/api/employees")
 async def employee_api_employees(
@@ -1960,6 +2150,69 @@ async def employee_calendar_api_data(
         raise HTTPException(status_code=500, detail="Ошибка получения данных календаря")
 
 
+@router.get("/shifts/plan", response_class=HTMLResponse)
+async def employee_shifts_plan(
+    request: Request,
+    object_id: Optional[int] = Query(None, description="ID объекта для предзаполнения"),
+    return_to: Optional[str] = Query(None, description="URL возврата после планирования"),
+    employee_id: Optional[int] = Query(None, description="ID сотрудника (игнорируется, используется текущий пользователь)"),
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Страница планирования смен для сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            return current_user
+
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        else:
+            telegram_id = getattr(current_user, "telegram_id", None)
+
+        if not telegram_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        access_service = ObjectAccessService(db)
+        accessible_objects = await access_service.get_accessible_objects(telegram_id, "employee")
+        objects_list = [{"id": obj["id"], "name": obj.get("name", f"Объект {obj['id']}")} for obj in accessible_objects]
+
+        selected_object_id = None
+        if object_id:
+            if any(obj["id"] == object_id for obj in objects_list):
+                selected_object_id = object_id
+
+        user_obj = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        if not user_obj:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        employee_display_name = (f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip()
+                                 or user_obj.username
+                                 or f"ID {user_obj.id}")
+
+        login_service = RoleBasedLoginService(db)
+        available_interfaces = await login_service.get_available_interfaces(user_id)
+
+        return templates.TemplateResponse("employee/shifts/plan.html", {
+            "request": request,
+            "current_user": current_user,
+            "objects": objects_list,
+            "selected_object_id": selected_object_id,
+            "return_to": return_to or "/employee/calendar",
+            "preselected_employee_id": user_id,
+            "current_employee_name": employee_display_name,
+            "available_interfaces": available_interfaces
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading employee shifts plan page: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки страницы планирования")
+
+
 @router.get("/shifts/{shift_id}", response_class=HTMLResponse)
 async def employee_shift_detail(
     request: Request, 
@@ -2215,8 +2468,6 @@ async def employee_plan_shift(
             raise HTTPException(status_code=403, detail="Можно планировать смену только для себя")
         
         # Получаем тайм-слот
-        from domain.entities.time_slot import TimeSlot
-        from domain.entities.contract import Contract
         timeslot = (await db.execute(select(TimeSlot).options(selectinload(TimeSlot.object)).where(TimeSlot.id == timeslot_id))).scalar_one_or_none()
         
         if not timeslot:
@@ -2284,30 +2535,83 @@ async def employee_plan_shift(
         if not has_access:
             raise HTTPException(status_code=403, detail="Нет доступа к объекту")
         
-        # Проверяем что тайм-слот еще не занят
-        existing_schedules = (await db.execute(
-            select(ShiftSchedule).where(
-                and_(
-                    ShiftSchedule.time_slot_id == timeslot_id,
-                    ShiftSchedule.status.in_(['planned', 'confirmed'])
-                )
+        slot_start_time = timeslot.start_time
+        slot_end_time = timeslot.end_time
+        if slot_start_time is None or slot_end_time is None:
+            raise HTTPException(status_code=400, detail="У тайм-слота не указано время работы")
+
+        start_time_str = data.get('start_time')
+        end_time_str = data.get('end_time')
+
+        if start_time_str:
+            try:
+                custom_start_time = datetime.strptime(start_time_str, "%H:%M").time()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат времени начала (используйте ЧЧ:ММ)")
+        else:
+            custom_start_time = slot_start_time
+
+        if end_time_str:
+            try:
+                custom_end_time = datetime.strptime(end_time_str, "%H:%M").time()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат времени окончания (используйте ЧЧ:ММ)")
+        else:
+            custom_end_time = slot_end_time
+
+        if custom_start_time >= custom_end_time:
+            raise HTTPException(status_code=400, detail="Время окончания должно быть позже времени начала")
+
+        if custom_start_time < slot_start_time or custom_end_time > slot_end_time:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Смена должна укладываться в границы тайм-слота: {slot_start_time.strftime('%H:%M')} - {slot_end_time.strftime('%H:%M')}"
             )
-        )).scalars().all()
-        
-        if len(existing_schedules) >= (timeslot.max_employees or 1):
-            raise HTTPException(status_code=400, detail="Тайм-слот уже занят")
-        
-        # Создаем запланированную смену
+
         import pytz
         object_timezone = timeslot.object.timezone if timeslot.object and timeslot.object.timezone else 'Europe/Moscow'
         tz = pytz.timezone(object_timezone)
         
-        slot_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.start_time)
-        end_datetime_naive = datetime.combine(timeslot.slot_date, timeslot.end_time)
-        
-        slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
-        end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC).replace(tzinfo=None)
-        
+        slot_datetime_naive = datetime.combine(timeslot.slot_date, custom_start_time)
+        end_datetime_naive = datetime.combine(timeslot.slot_date, custom_end_time)
+
+        slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC)
+        end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC)
+
+        # Проверяем, что сотрудник не занят в это время на других сменах
+        overlapping_query = select(ShiftSchedule).where(
+            ShiftSchedule.user_id == user_id,
+            ShiftSchedule.status.in_(["planned", "confirmed"]),
+            ShiftSchedule.planned_start < end_datetime,
+            ShiftSchedule.planned_end > slot_datetime
+        )
+        overlapping_existing = (await db.execute(overlapping_query)).scalars().all()
+        if overlapping_existing:
+            raise HTTPException(status_code=400, detail="У вас уже запланирована смена в это время")
+
+        # Проверяем лимит по количеству сотрудников в тайм-слоте для выбранного интервала
+        timeslot_schedules_query = select(ShiftSchedule).where(
+            ShiftSchedule.time_slot_id == timeslot_id,
+            ShiftSchedule.status.in_(["planned", "confirmed"])
+        )
+        current_slot_schedules = (await db.execute(timeslot_schedules_query)).scalars().all()
+
+        def to_utc(value: datetime) -> datetime:
+            if value is None:
+                return None
+            if value.tzinfo is None:
+                return pytz.UTC.localize(value)
+            return value.astimezone(pytz.UTC)
+
+        overlapping_slot_schedules = [
+            sched for sched in current_slot_schedules
+            if not (to_utc(sched.planned_end) <= slot_datetime or to_utc(sched.planned_start) >= end_datetime)
+        ]
+
+        max_employees = timeslot.max_employees or 1
+        if len(overlapping_slot_schedules) >= max_employees:
+            raise HTTPException(status_code=400, detail="На выбранное время нет свободных мест в тайм-слоте")
+
         # Определяем ставку с учетом флага use_contract_rate
         effective_rate = None
         if employee_contract:
@@ -2355,6 +2659,64 @@ async def employee_plan_shift(
     except Exception as e:
         logger.error(f"Error planning shift for employee: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
+
+
+@router.post("/api/calendar/check-availability")
+async def employee_check_availability(
+    request: Request,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Проверка доступности сотрудника при планировании через страницу сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+
+        payload = await request.json()
+        timeslot_id = payload.get('timeslot_id')
+        employee_id = payload.get('employee_id')
+
+        if not timeslot_id or employee_id is None:
+            raise HTTPException(status_code=400, detail="Не указан тайм-слот или сотрудник")
+
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        # Проверяем, что сотрудник планирует только для себя
+        if int(employee_id) != int(user_id):
+            return {"available": False, "message": "Нельзя планировать смены для другого сотрудника"}
+
+        # Проверяем существование тайм-слота и доступ к объекту
+        timeslot = (await db.execute(select(TimeSlot).options(selectinload(TimeSlot.object)).where(TimeSlot.id == timeslot_id))).scalar_one_or_none()
+        if not timeslot:
+            return {"available": False, "message": "Тайм-слот не найден"}
+
+        if timeslot.object is None:
+            return {"available": False, "message": "Объект тайм-слота не найден"}
+
+        # Проверяем доступ к объекту через ObjectAccessService
+        if isinstance(current_user, dict):
+            telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        else:
+            telegram_id = getattr(current_user, "telegram_id", None)
+
+        if not telegram_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+        access_service = ObjectAccessService(db)
+        accessible_objects = await access_service.get_accessible_objects(telegram_id, "employee")
+        accessible_object_ids = {obj["id"] for obj in accessible_objects}
+
+        if timeslot.object_id not in accessible_object_ids:
+            return {"available": False, "message": "У вас нет доступа к объекту тайм-слота"}
+
+        return {"available": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking employee availability: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка проверки доступности сотрудника")
 
 
 @router.post("/api/shifts/cancel")

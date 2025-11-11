@@ -157,6 +157,9 @@
   });
 
   function buildCancelScheduleUrl(scheduleId) {
+    if (settings.role === 'employee') {
+      return settings.cancelScheduledShiftBase || null;
+    }
     if (!settings.cancelScheduledShiftBase) {
       return null;
     }
@@ -283,16 +286,19 @@
         .filter((ts) => Number(ts.object_id) === objectNumericId)
         .map((ts) => {
           const status = (ts.status || '').toLowerCase();
-          const freeInterval = calculateFirstFreeInterval(ts, relevantShifts);
-          if (!freeInterval) {
+          const availability = calculateTimeslotAvailability(ts, relevantShifts);
+          if (!availability || !availability.hasFreeCapacity) {
             return null;
           }
+          const firstFree = availability.firstFree;
           return {
             ...ts,
             status,
-            first_free_start: freeInterval.startStr,
-            first_free_end: freeInterval.endStr,
-            first_free_duration: freeInterval.durationMinutes
+            positions: availability.positions,
+            first_free_start: firstFree ? firstFree.startStr : null,
+            first_free_end: firstFree ? firstFree.endStr : null,
+            first_free_duration: firstFree ? firstFree.durationMinutes : 0,
+            first_free_position: firstFree ? firstFree.positionIndex : null
           };
         })
         .filter(Boolean)
@@ -452,7 +458,12 @@
       }
 
       if (isCurrentMonth && timeslotsForDate.length > 0) {
-        const displaySlots = timeslotsForDate.filter((ts) => (ts.first_free_duration || 0) > 0);
+        const displaySlots = timeslotsForDate.filter((ts) => {
+          if (Array.isArray(ts.positions)) {
+            return ts.positions.some((pos) => Array.isArray(pos.freeIntervals) && pos.freeIntervals.length > 0);
+          }
+          return (ts.first_free_duration || 0) > 0;
+        });
 
         if (displaySlots.length > 0) {
           displaySlots.forEach((ts) => {
@@ -467,12 +478,36 @@
             const freeDurationLabel = formatFreeMinutes(ts.first_free_duration ?? fallbackDuration);
             const slotKey = `${dateStr}_${ts.id}`;
             const isSelected = state.selectedTimeslots.has(slotKey);
-            const statusLabel = ts.status === 'partially_filled' ? 'Частично свободен' : 'Свободен';
+            const positions = Array.isArray(ts.positions) ? ts.positions : [];
+            const allPositionsFullyFree = positions.length > 0
+              ? positions.every((pos) => {
+                  if (!Array.isArray(pos.freeIntervals) || pos.freeIntervals.length !== 1) {
+                    return false;
+                  }
+                  const interval = pos.freeIntervals[0];
+                  return interval.startStr === fullStart && interval.endStr === fullEnd;
+                })
+              : ts.status !== 'partially_filled';
+            const statusLabel = allPositionsFullyFree ? 'Свободен' : 'Частично свободен';
+            const positionsInfo = positions.length > 0
+              ? positions.map((pos) => {
+                  if (!Array.isArray(pos.freeIntervals) || pos.freeIntervals.length === 0) {
+                    return `<div class="timeslot-slots">Позиция ${pos.index}: <span class="text-danger">Занято</span></div>`;
+                  }
+                  const intervals = pos.freeIntervals
+                    .map((interval) => `<strong>${interval.startStr}-${interval.endStr}</strong>`)
+                    .join(', ');
+                  return `<div class="timeslot-slots">Позиция ${pos.index}: ${intervals}</div>`;
+                }).join('')
+              : '';
 
             html += `<div class="timeslot available ${isSelected ? 'selected' : ''}" data-timeslot-id="${ts.id}" data-free-start="${freeStart}" data-free-end="${freeEnd}">`;
             html += `<div class="timeslot-time">${fullStart}-${fullEnd}</div>`;
             html += `<div class="timeslot-slots">${statusLabel}: <strong>${freeStart}-${freeEnd}</strong></div>`;
             html += `<div class="timeslot-slots">Доступно: ${freeDurationLabel}</div>`;
+            if (positionsInfo) {
+              html += positionsInfo;
+            }
             html += '</div>';
           });
         } else {
@@ -667,6 +702,8 @@
       return normalized.includes('не найдена') && normalized.includes('уже отменена');
     };
 
+    const isEmployeeRole = settings.role === 'employee';
+
     if (settings.allowCancelPlannedShifts) {
       for (const scheduleId of shiftsToCancel) {
         const cancelUrl = buildCancelScheduleUrl(scheduleId);
@@ -675,9 +712,15 @@
           continue;
         }
         try {
-          const response = await fetch(cancelUrl, {
+          const requestInit = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
+          };
+          if (isEmployeeRole) {
+            requestInit.body = JSON.stringify({ schedule_id: Number(scheduleId) });
+          }
+          const response = await fetch(cancelUrl, {
+            ...requestInit
           });
           let result = null;
           try {
@@ -685,7 +728,7 @@
           } catch (parseError) {
             result = null;
           }
-          if (response.ok && result && result.success) {
+          if (response.ok && result && (result.success || result.status === 'ok')) {
             cancelSuccess++;
           } else {
             const message = result?.detail || result?.message || response.statusText;
@@ -892,7 +935,58 @@
     return [overlapStart, overlapEnd];
   }
 
-  function calculateFirstFreeInterval(timeslot, shifts) {
+  function mergeIntervals(intervals) {
+    if (!Array.isArray(intervals) || intervals.length === 0) {
+      return [];
+    }
+    const sorted = intervals
+      .filter((interval) => Array.isArray(interval) && interval.length === 2)
+      .map((interval) => interval.slice())
+      .sort((a, b) => a[0] - b[0]);
+
+    if (sorted.length === 0) {
+      return [];
+    }
+
+    const merged = [sorted[0]];
+    for (let i = 1; i < sorted.length; i += 1) {
+      const current = sorted[i];
+      const last = merged[merged.length - 1];
+      if (current[0] <= last[1]) {
+        last[1] = Math.max(last[1], current[1]);
+      } else {
+        merged.push(current);
+      }
+    }
+    return merged;
+  }
+
+  function calculateFreeRanges(slotStartMinutes, slotEndMinutes, busyIntervals) {
+    if (slotStartMinutes === null || slotEndMinutes === null || slotEndMinutes <= slotStartMinutes) {
+      return [];
+    }
+    if (!busyIntervals || busyIntervals.length === 0) {
+      return [[slotStartMinutes, slotEndMinutes]];
+    }
+    const merged = mergeIntervals(busyIntervals);
+    const freeRanges = [];
+    let cursor = slotStartMinutes;
+
+    merged.forEach(([start, end]) => {
+      if (start > cursor) {
+        freeRanges.push([cursor, Math.min(start, slotEndMinutes)]);
+      }
+      cursor = Math.max(cursor, end);
+    });
+
+    if (cursor < slotEndMinutes) {
+      freeRanges.push([cursor, slotEndMinutes]);
+    }
+
+    return freeRanges.filter(([start, end]) => end > start);
+  }
+
+  function calculateTimeslotAvailability(timeslot, shifts) {
     const slotStartStr = timeslot.start_time || timeslot.start_time_str;
     const slotEndStr = timeslot.end_time || timeslot.end_time_str;
     const slotDateStr = timeslot.date || timeslot.slot_date || timeslot.start_date;
@@ -905,8 +999,9 @@
     }
 
     const timeslotId = Number(timeslot.id);
-    const busyIntervals = [];
+    const maxEmployees = Math.max(1, Number(timeslot.max_employees) || 1);
 
+    const plannedIntervals = [];
     shifts.forEach((shift) => {
       const status = (shift.status || '').toLowerCase();
       if (!ALLOWED_SHIFT_STATUSES.has(status)) {
@@ -922,58 +1017,67 @@
       }
       const interval = extractShiftInterval(shift, slotStartMinutes, slotEndMinutes);
       if (interval) {
-        busyIntervals.push(interval);
+        plannedIntervals.push({
+          startMinutes: interval[0],
+          endMinutes: interval[1]
+        });
       }
     });
 
-    if (busyIntervals.length === 0) {
+    plannedIntervals.sort((a, b) => a.startMinutes - b.startMinutes);
+
+    const positions = Array.from({ length: maxEmployees }, (_value, index) => ({
+      index: index + 1,
+      busy: []
+    }));
+
+    plannedIntervals.forEach((interval) => {
+      let assigned = false;
+      for (const position of positions) {
+        const lastBusy = position.busy[position.busy.length - 1];
+        if (!lastBusy || lastBusy[1] <= interval.startMinutes) {
+          position.busy.push([interval.startMinutes, interval.endMinutes]);
+          assigned = true;
+          break;
+        }
+      }
+      if (!assigned) {
+        positions[0].busy.push([interval.startMinutes, interval.endMinutes]);
+      }
+    });
+
+    const positionOutputs = positions.map((position) => {
+      const mergedBusy = mergeIntervals(position.busy);
+      const freeRanges = calculateFreeRanges(slotStartMinutes, slotEndMinutes, mergedBusy);
       return {
-        startMinutes: slotStartMinutes,
-        endMinutes: slotEndMinutes,
-        startStr: minutesToTime(slotStartMinutes),
-        endStr: minutesToTime(slotEndMinutes),
-        durationMinutes: slotEndMinutes - slotStartMinutes
+        index: position.index,
+        freeIntervals: freeRanges.map(([start, end]) => ({
+          startMinutes: start,
+          endMinutes: end,
+          startStr: minutesToTime(start),
+          endStr: minutesToTime(end),
+          durationMinutes: end - start
+        }))
       };
-    }
-
-    busyIntervals.sort((a, b) => a[0] - b[0]);
-    const merged = [];
-    busyIntervals.forEach((interval) => {
-      if (!merged.length) {
-        merged.push(interval.slice());
-        return;
-      }
-      const last = merged[merged.length - 1];
-      if (interval[0] <= last[1]) {
-        last[1] = Math.max(last[1], interval[1]);
-      } else {
-        merged.push(interval.slice());
-      }
     });
 
-    let cursor = slotStartMinutes;
-    const freeSegments = [];
-    merged.forEach(([start, end]) => {
-      if (start > cursor) {
-        freeSegments.push([cursor, start]);
-      }
-      cursor = Math.max(cursor, end);
-    });
-    if (cursor < slotEndMinutes) {
-      freeSegments.push([cursor, slotEndMinutes]);
-    }
+    const freeCandidates = positionOutputs
+      .map((pos) => (pos.freeIntervals.length > 0 ? { positionIndex: pos.index, ...pos.freeIntervals[0] } : null))
+      .filter(Boolean)
+      .map((candidate) => ({
+        positionIndex: candidate.positionIndex,
+        startMinutes: candidate.startMinutes,
+        endMinutes: candidate.endMinutes,
+        startStr: candidate.startStr,
+        endStr: candidate.endStr,
+        durationMinutes: candidate.durationMinutes
+      }))
+      .sort((a, b) => a.startMinutes - b.startMinutes);
 
-    const firstSegment = freeSegments.find((segment) => segment[1] - segment[0] > 0);
-    if (!firstSegment) {
-      return null;
-    }
-    const [freeStart, freeEnd] = firstSegment;
     return {
-      startMinutes: freeStart,
-      endMinutes: freeEnd,
-      startStr: minutesToTime(freeStart),
-      endStr: minutesToTime(freeEnd),
-      durationMinutes: freeEnd - freeStart
+      positions: positionOutputs,
+      firstFree: freeCandidates.length > 0 ? freeCandidates[0] : null,
+      hasFreeCapacity: freeCandidates.length > 0
     };
   }
 })();
