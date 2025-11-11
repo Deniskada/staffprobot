@@ -659,6 +659,14 @@
     let cancelSuccess = 0;
     let cancelErrors = 0;
 
+    const alreadyCancelledMessageMatcher = (message) => {
+      if (!message || typeof message !== 'string') {
+        return false;
+      }
+      const normalized = message.toLowerCase();
+      return normalized.includes('не найдена') && normalized.includes('уже отменена');
+    };
+
     if (settings.allowCancelPlannedShifts) {
       for (const scheduleId of shiftsToCancel) {
         const cancelUrl = buildCancelScheduleUrl(scheduleId);
@@ -680,8 +688,14 @@
           if (response.ok && result && result.success) {
             cancelSuccess++;
           } else {
-            cancelErrors++;
-            console.error('Ошибка отмены смены:', result?.message || response.statusText);
+            const message = result?.detail || result?.message || response.statusText;
+            if (alreadyCancelledMessageMatcher(message || '')) {
+              cancelSuccess++;
+              console.warn('Смена уже была отменена ранее, считаем операцию успешной.');
+            } else {
+              cancelErrors++;
+              console.error('Ошибка отмены смены:', message);
+            }
           }
         } catch (error) {
           cancelErrors++;
@@ -735,9 +749,17 @@
       }
     }
 
-    if (DOM.confirmBtn) {
-      DOM.confirmBtn.disabled = false;
-      DOM.confirmBtn.innerHTML = '<i class="bi bi-calendar-check"></i> Запланировать смены';
+    try {
+      if (objectId) {
+        await loadTimeslotsForObject(objectId);
+      } else {
+        updateSelectedSlotsInfo();
+      }
+    } finally {
+      if (DOM.confirmBtn) {
+        DOM.confirmBtn.disabled = false;
+        DOM.confirmBtn.innerHTML = '<i class="bi bi-calendar-check"></i> Запланировать смены';
+      }
     }
 
     const summaryParts = [];

@@ -5258,6 +5258,7 @@ async def manager_cancel_shift(
     """Отмена смены управляющим"""
     from fastapi.responses import JSONResponse
     from datetime import datetime
+    from core.cache.redis_cache import cache
     
     try:
         # Определяем тип смены по ID
