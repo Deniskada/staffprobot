@@ -524,10 +524,7 @@
       if (resetSelection || !targetRange) {
         targetRange = state.freeRanges[0];
         state.startMinutes = targetRange.start;
-        state.endMinutes = Math.max(
-          Math.min(targetRange.end, targetRange.start + SNAP_INTERVAL_MINUTES),
-          targetRange.start
-        );
+        state.endMinutes = targetRange.end;
         if (state.endMinutes <= state.startMinutes) {
           state.endMinutes = targetRange.end;
         }
