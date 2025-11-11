@@ -5,8 +5,11 @@
 - [POST] `/employee/api/applications`  — (apps/web/routes/employee.py)
 - [GET] `/employee/api/applications/{application_id}`  — (apps/web/routes/employee.py)
 - [GET] `/employee/api/applications/{application_id}/interview`  — (apps/web/routes/employee.py)
-- [GET] `/employee/api/calendar/data`  — (apps/web/routes/employee.py)
-- [POST] `/employee/api/calendar/plan-shift`  — (apps/web/routes/employee.py) — планирование смены для себя
+- [GET] `/employee/api/calendar/data`  — (apps/web/routes/employee.py) — универсальные данные календаря (тайм-слоты + смены) с расчётом свободных интервалов
+- [GET] `/employee/calendar/api/timeslot/{timeslot_id}` — (apps/web/routes/employee.py) — детали тайм-слота для модалки быстрого планирования (занятость по трекам, свободные интервалы)
+- [GET] `/employee/api/calendar/employees-for-object/{object_id}`  — (apps/web/routes/employee.py) — возвращает текущего сотрудника, если у него есть доступ к объекту (используется общим планировщиком)
+- [POST] `/employee/api/calendar/check-availability` — (apps/web/routes/employee.py) — проверка доступности сотрудника при выборе тайм-слота/интервала
+- [POST] `/employee/api/calendar/plan-shift`  — (apps/web/routes/employee.py) — планирование смены для себя через общий планировщик (поддержка частичных интервалов)
   - Использует `Contract.get_effective_hourly_rate()` для определения ставки
   - Если `contract.use_contract_rate = True`: приоритет ставки договора
   - Если `contract.use_contract_rate = False`: тайм-слот > объект
@@ -25,6 +28,7 @@
 - [GET] `/employee/reviews`  — (apps/web/routes/employee_reviews.py)
 - [GET] `/employee/shifts`  — (apps/web/routes/employee.py)
 - [GET] `/employee/shifts/{shift_id}`  — (apps/web/routes/employee.py)
+- [GET] `/employee/shifts/plan` — (apps/web/routes/employee.py) — страница планирования смен (аналог owner/manager) с предзаполнением текущего сотрудника и объекта
 - [GET] `/support`  — (apps/web/routes/support.py) — центр поддержки (хаб поддержки)
 - [GET] `/support/bug`  — (apps/web/routes/support.py) — форма подачи бага
 - [GET] `/support/faq`  — (apps/web/routes/support.py) — FAQ база знаний
@@ -45,7 +49,13 @@
 - `employee/reviews.html`
 - `employee/shifts/detail.html`
 - `employee/shifts/list.html`
+- `employee/shifts/plan.html` — страница планирования смен сотрудника (использует общий `plan_shift.js`, выпадающий список сотрудников заблокирован и показывает текущего пользователя)
 - `employee/timeslots/detail.html`
+
+### Особенности календаря/планировщика
+- `employee/calendar.html` использует общий модуль `plan_shift_modal.js`: по клику на тайм-слот открывается единая модалка быстрого планирования с уже выбранным текущим сотрудником (селект заблокирован).
+- По клику на запланированную смену вызывается страница `/employee/shifts/plan` с сохранением параметра `return_to` для возврата в календарь.
+- Общий `plan_shift.js` работает в режиме `role: 'employee'`: список сотрудников скрыт, динамически подставляется текущий пользователь, отмена собственных смен доступна из одной формы.
 
 ## Общий календарь (Shared API)
 - [GET] `/api/calendar/data`

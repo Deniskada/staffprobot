@@ -6,6 +6,10 @@
 - [GET] `/owner/calendar/api/data` — (apps/web/routes/owner.py) данные календаря владельца с кэшированием (TTL 2 мин)
 - [GET] `/manager/calendar/api/data` — (apps/web/routes/manager.py) данные календаря управляющего с кэшированием (TTL 2 мин)
 - [GET] `/employee/api/calendar/data` — (apps/web/routes/employee.py) данные календаря сотрудника с кэшированием (TTL 2 мин)
+- [GET] `/owner/calendar/api/timeslot/{timeslot_id}` / `/manager/calendar/api/timeslot/{timeslot_id}` / `/employee/calendar/api/timeslot/{timeslot_id}` — детальные данные тайм-слота для модалки быстрого планирования (распределение по трекам, занятые интервалы, локализованные времена)
+- [POST] `/owner/api/calendar/check-availability`, `/manager/api/calendar/check-availability`, `/employee/api/calendar/check-availability` — проверка доступности сотрудника перед планированием частичного интервала
+- [POST] `/owner/api/calendar/plan-shift`, `/manager/api/calendar/plan-shift`, `/employee/api/calendar/plan-shift` — планирование смены для выбранного сотрудника (поддержка частичных интервалов и очистка кэша `calendar_shifts:*`, `api_response:*`)
+- [GET] `/owner/api/calendar/employees-for-object/{object_id}`, `/manager/api/employees/for-object/{object_id}`, `/employee/api/calendar/employees-for-object/{object_id}` — выдача списка сотрудников для общего планировщика (у сотрудника возвращается только текущий пользователь, если объект доступен)
 
 ### Панели объектов
 - [GET] `/owner/calendar/api/objects` — (apps/web/routes/owner.py) список объектов для drag&drop с кэшированием (TTL 2 мин)
@@ -41,8 +45,15 @@
 
 ## Shared шаблоны
 - `templates/shared/calendar/*` (grid, timeslot, navigation, shift)
+- Модалка быстрого планирования формируется полностью в `plan_shift_modal.js` и подключается на страницах календаря всех ролей
 
 ## Shared JS/CSS
 - `static/js/shared/universal_calendar.js` — универсальный менеджер календаря
 - `static/js/shared/calendar.js` — вспомогательные функции
 - `static/js/shared/calendar_panels.js` — панели drag&drop с кэшем в памяти (objectsData, employeesData)
+- `static/js/shared/plan_shift_modal.js` — общий модуль модального быстрого планирования (рендер шкалы с треками, автоматический выбор свободного интервала, блокировка выбора сотрудника у роли employee)
+- `static/js/shared/plan_shift.js` — общий полноэкранный планировщик (страницы `/owner/manager/employee/shifts/plan`), конфигурируется через `window.planShiftConfig`:
+  - `role` ∈ {owner, manager, employee}
+  - `hideEmployeeSelect=true` — для сотрудника (селект скрыт и заблокирован)
+  - `preselectedEmployeeId` — предзаполненный сотрудник при переходе с календаря
+  - Автоматический пересчёт свободных интервалов по всем трекам, единая логика отмены/планирования (очистка кэша календаря)
