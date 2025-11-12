@@ -215,23 +215,52 @@
     }
     try {
       const response = await fetch(`${settings.employeesEndpointBase.replace(/\/$/, '')}/${objectId}`);
-      const employees = await response.json();
-      DOM.employeeSelect.innerHTML = '<option value="">Выберите сотрудника</option>';
-      if (Array.isArray(employees)) {
-        employees.forEach((emp) => {
-          const option = document.createElement('option');
-          option.value = emp.id;
-          option.textContent = emp.name;
-          DOM.employeeSelect.appendChild(option);
-        });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
+      const rawEmployees = await response.json();
+      const normalizedEmployees = normalizeEmployeesResponse(rawEmployees);
+      const activeEmployees = normalizedEmployees.filter((emp) => !emp.isFormer);
+      const formerEmployees = normalizedEmployees.filter((emp) => emp.isFormer);
+
+      let options = [];
+      if (normalizedEmployees.length) {
+        options.push('<option value="">Выберите сотрудника</option>');
+        activeEmployees.forEach((emp) => {
+          options.push(`<option value="${emp.id}">${escapeHtml(emp.name)}</option>`);
+        });
+        if (formerEmployees.length) {
+          options.push('<option value="" disabled>— Бывшие —</option>');
+          formerEmployees.forEach((emp) => {
+            options.push(`<option value="${emp.id}">${escapeHtml(emp.name)} (бывший)</option>`);
+          });
+        }
+      } else {
+        options = ['<option value="">Нет доступных сотрудников</option>'];
+      }
+
+      DOM.employeeSelect.innerHTML = options.join('');
+
       if (settings.preselectedEmployeeId !== null) {
-        DOM.employeeSelect.value = String(settings.preselectedEmployeeId);
+        const preselectedValue = String(settings.preselectedEmployeeId);
+        DOM.employeeSelect.value = preselectedValue;
+        if (DOM.employeeSelect.value !== preselectedValue) {
+          const fallbackEmployee = normalizedEmployees.find((emp) => emp.id === preselectedValue);
+          let fallbackName = fallbackEmployee?.name || 'Выбранный сотрудник';
+          if (fallbackEmployee?.isFormer && !fallbackName.toLowerCase().includes('бывш')) {
+            fallbackName = `${fallbackName} (бывший)`;
+          }
+          DOM.employeeSelect.innerHTML += `<option value="${preselectedValue}">${escapeHtml(fallbackName)}</option>`;
+          DOM.employeeSelect.value = preselectedValue;
+        }
         state.currentEmployeeId = settings.preselectedEmployeeId;
         loadTimeslotsForObject(objectId);
+      } else {
+        state.currentEmployeeId = null;
       }
     } catch (error) {
       console.error('Ошибка загрузки сотрудников для объекта:', error);
+      DOM.employeeSelect.innerHTML = '<option value="">Ошибка загрузки сотрудников</option>';
     }
   }
 
@@ -876,6 +905,95 @@
       return '';
     }
     return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function buildEmployeeDisplayName(employee) {
+    if (!employee || typeof employee !== 'object') {
+      return 'Сотрудник';
+    }
+    if (employee.name) {
+      return String(employee.name);
+    }
+    const lastName = employee.last_name ?? employee.lastName ?? '';
+    const firstName = employee.first_name ?? employee.firstName ?? '';
+    const middleName = employee.middle_name ?? employee.middleName ?? '';
+    const parts = [lastName, firstName, middleName].map((part) => String(part || '').trim()).filter(Boolean);
+    if (parts.length) {
+      return parts.join(' ');
+    }
+    if (employee.username) {
+      return String(employee.username);
+    }
+    if (employee.telegram_id || employee.telegramId) {
+      return `ID ${employee.telegram_id || employee.telegramId}`;
+    }
+    if (employee.id !== undefined) {
+      return `ID ${employee.id}`;
+    }
+    return 'Сотрудник';
+  }
+
+  function normalizeEmployeesResponse(raw) {
+    const map = new Map();
+
+    const pushEmployee = (emp, forceFormer = null) => {
+      if (!emp || typeof emp !== 'object') {
+        return;
+      }
+      const numericId = Number(emp.id);
+      if (!Number.isFinite(numericId)) {
+        return;
+      }
+
+      let isFormer = forceFormer;
+      if (isFormer === null) {
+        if (typeof emp.is_former === 'boolean') {
+          isFormer = emp.is_former;
+        } else if (typeof emp.isFormer === 'boolean') {
+          isFormer = emp.isFormer;
+        } else if (typeof emp.is_active === 'boolean') {
+          isFormer = !emp.is_active;
+        } else {
+          isFormer = false;
+        }
+      }
+
+      const displayName = buildEmployeeDisplayName(emp);
+      const existing = map.get(numericId);
+
+      if (existing) {
+        if (!isFormer) {
+          existing.isFormer = false;
+        }
+        if (displayName && displayName !== existing.name) {
+          existing.name = displayName;
+        }
+      } else {
+        map.set(numericId, {
+          id: String(numericId),
+          name: displayName,
+          isFormer: Boolean(isFormer),
+        });
+      }
+    };
+
+    if (Array.isArray(raw)) {
+      raw.forEach((emp) => pushEmployee(emp));
+    } else if (raw && typeof raw === 'object') {
+      const collections = [
+        { list: raw.active, flag: false },
+        { list: raw.current, flag: false },
+        { list: raw.employees, flag: null },
+        { list: raw.former, flag: true },
+      ];
+      collections.forEach(({ list, flag }) => {
+        if (Array.isArray(list)) {
+          list.forEach((emp) => pushEmployee(emp, flag));
+        }
+      });
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }));
   }
 
   function escapeHtml(unsafe) {

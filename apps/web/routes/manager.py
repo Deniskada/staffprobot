@@ -2955,6 +2955,9 @@ async def manager_reports(
             permission_service = ManagerPermissionService(db)
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
             accessible_object_ids = [obj.id for obj in accessible_objects]
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(
+                user_id, include_inactive=True
+            )
             
             if not accessible_object_ids:
                 return templates.TemplateResponse("manager/reports/index.html", {

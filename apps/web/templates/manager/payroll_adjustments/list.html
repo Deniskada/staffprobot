@@ -44,7 +44,7 @@
                             <option value="">Все сотрудники</option>
                             {% for employee in employees %}
                             <option value="{{ employee.id }}" {% if filter_employee_id|string == employee.id|string %}selected{% endif %}>
-                                {{ employee.last_name }} {{ employee.first_name }}
+                                {{ employee.last_name }} {{ employee.first_name }}{% if employee.is_active is defined and not employee.is_active %} (бывший){% endif %}
                             </option>
                             {% endfor %}
                         </select>
@@ -123,7 +123,7 @@
                             <td>{{ adj.created_at.strftime('%d.%m.%Y %H:%M') if adj.created_at else '—' }}</td>
                             <td>
                                 {% if adj.employee %}
-                                    {{ adj.employee.last_name }} {{ adj.employee.first_name }}
+                                    {{ adj.employee.last_name }} {{ adj.employee.first_name }}{% if adj.employee.is_active is defined and not adj.employee.is_active %} (бывший){% endif %}
                                 {% else %}
                                     <span class="text-muted">—</span>
                                 {% endif %}
@@ -245,7 +245,7 @@
                             <option value="">Выберите сотрудника</option>
                             {% for employee in employees %}
                             <option value="{{ employee.id }}">
-                                {{ employee.last_name }} {{ employee.first_name }}
+                                {{ employee.last_name }} {{ employee.first_name }}{% if employee.is_active is defined and not employee.is_active %} (бывший){% endif %}
                             </option>
                             {% endfor %}
                         </select>

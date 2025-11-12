@@ -49,7 +49,9 @@ async def manager_payroll_adjustments_list(
 
         if is_manager_only:
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(
+                user_id, include_inactive=True
+            )
         else:
             objects_query = select(Object).where(Object.owner_id == user_id, Object.is_active == True)
             objects_result = await session.execute(objects_query)
@@ -293,7 +295,9 @@ async def manager_create_manual_adjustment(
 
         if is_manager_only:
             accessible_object_ids = await permission_service.get_user_accessible_object_ids(user_id)
-            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(
+                user_id, include_inactive=True
+            )
 
             if object_id and object_id not in accessible_object_ids:
                 return JSONResponse(
@@ -384,7 +388,9 @@ async def manager_edit_adjustment(
 
         if is_manager_only:
             accessible_object_ids = await permission_service.get_user_accessible_object_ids(user_id)
-            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(
+                user_id, include_inactive=True
+            )
         else:
             accessible_employee_ids = None
         user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
@@ -396,7 +402,9 @@ async def manager_edit_adjustment(
 
         if is_manager_only:
             accessible_object_ids = await permission_service.get_user_accessible_object_ids(user_id)
-            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(
+                user_id, include_inactive=True
+            )
         else:
             accessible_employee_ids = None
 

@@ -76,6 +76,95 @@
     return `${minutes} м`;
   }
 
+  function buildEmployeeDisplayName(employee) {
+    if (!employee || typeof employee !== 'object') {
+      return 'Сотрудник';
+    }
+    if (employee.name) {
+      return String(employee.name);
+    }
+    const lastName = employee.last_name ?? employee.lastName ?? '';
+    const firstName = employee.first_name ?? employee.firstName ?? '';
+    const middleName = employee.middle_name ?? employee.middleName ?? '';
+    const parts = [lastName, firstName, middleName].map((part) => String(part || '').trim()).filter(Boolean);
+    if (parts.length) {
+      return parts.join(' ');
+    }
+    if (employee.username) {
+      return String(employee.username);
+    }
+    if (employee.telegram_id || employee.telegramId) {
+      return `ID ${employee.telegram_id || employee.telegramId}`;
+    }
+    if (employee.id !== undefined) {
+      return `ID ${employee.id}`;
+    }
+    return 'Сотрудник';
+  }
+
+  function normalizeEmployeesData(raw) {
+    const map = new Map();
+
+    const pushEmployee = (emp, forceFormer = null) => {
+      if (!emp || typeof emp !== 'object') {
+        return;
+      }
+      const numericId = Number(emp.id);
+      if (!Number.isFinite(numericId)) {
+        return;
+      }
+
+      let isFormer = forceFormer;
+      if (isFormer === null) {
+        if (typeof emp.is_former === 'boolean') {
+          isFormer = emp.is_former;
+        } else if (typeof emp.isFormer === 'boolean') {
+          isFormer = emp.isFormer;
+        } else if (typeof emp.is_active === 'boolean') {
+          isFormer = !emp.is_active;
+        } else {
+          isFormer = false;
+        }
+      }
+
+      const displayName = buildEmployeeDisplayName(emp);
+      const existing = map.get(numericId);
+
+      if (existing) {
+        if (!isFormer) {
+          existing.isFormer = false;
+        }
+        if (displayName && displayName !== existing.name) {
+          existing.name = displayName;
+        }
+      } else {
+        map.set(numericId, {
+          id: numericId,
+          name: displayName,
+          isFormer: Boolean(isFormer),
+        });
+      }
+    };
+
+    if (Array.isArray(raw)) {
+      raw.forEach((emp) => pushEmployee(emp));
+    } else if (raw && typeof raw === 'object') {
+      const collections = [
+        { list: raw.active, flag: false },
+        { list: raw.current, flag: false },
+        { list: raw.employees, flag: null },
+        { list: raw.former, flag: true },
+      ];
+      collections.forEach(({ list, flag }) => {
+        if (Array.isArray(list)) {
+          list.forEach((emp) => pushEmployee(emp, flag));
+        }
+      });
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }));
+  }
+
   function formatTimeFromISO(isoString) {
     if (!isoString) {
       return null;
@@ -994,7 +1083,10 @@
         maxEmployees
       });
 
-      const employees = await fetchJson(activeConfig.employeesForObjectEndpoint(objectId));
+      const employeesResponse = await fetchJson(activeConfig.employeesForObjectEndpoint(objectId));
+      const normalizedEmployees = normalizeEmployeesData(employeesResponse);
+      const activeEmployees = normalizedEmployees.filter((emp) => !emp.isFormer);
+      const formerEmployees = normalizedEmployees.filter((emp) => emp.isFormer);
       const select = document.getElementById('employeeSelectModal');
       if (select) {
         const preselectedId = activeConfig.preselectedEmployeeId;
@@ -1005,10 +1097,13 @@
 
         if (activeConfig.lockEmployeeSelection && lockedId !== null) {
           let displayName = lockedNameFromConfig;
-          if (!displayName && Array.isArray(employees)) {
-            const match = employees.find((emp) => Number(emp.id) === Number(lockedId));
-            if (match && match.name) {
+          if (!displayName) {
+            const match = normalizedEmployees.find((emp) => Number(emp.id) === Number(lockedId));
+            if (match) {
               displayName = match.name;
+              if (match.isFormer) {
+                displayName = `${displayName} (бывший)`;
+              }
             }
           }
           if (!displayName) {
@@ -1017,22 +1112,48 @@
           select.innerHTML = `<option value="${lockedId}">${escapeHtml(displayName)}</option>`;
           select.value = String(lockedId);
           select.setAttribute('disabled', 'true');
-        } else if (Array.isArray(employees) && employees.length) {
-          const options = ['<option value="">Выберите сотрудника</option>']
-            .concat(
-              employees.map(
-                (emp) =>
-                  `<option value="${emp.id}">${escapeHtml(emp.name)}</option>`
-              )
-            )
-            .join('');
-          select.innerHTML = options;
+        } else if (normalizedEmployees.length) {
+          const options = ['<option value="">Выберите сотрудника</option>'];
+
+          activeEmployees.forEach((emp) => {
+            options.push(`<option value="${emp.id}">${escapeHtml(emp.name)}</option>`);
+          });
+
+          if (formerEmployees.length) {
+            options.push('<option value="" disabled>— Бывшие —</option>');
+            formerEmployees.forEach((emp) => {
+              options.push(`<option value="${emp.id}">${escapeHtml(emp.name)} (бывший)</option>`);
+            });
+          }
+
+          select.innerHTML = options.join('');
           if (preselectedId !== null) {
             select.value = String(preselectedId);
+            if (select.value !== String(preselectedId)) {
+              const fallbackEmployee = normalizedEmployees.find((emp) => Number(emp.id) === Number(preselectedId));
+              let fallbackName =
+                lockedNameFromConfig
+                || fallbackEmployee?.name
+                || 'Выбранный сотрудник';
+              if (!lockedNameFromConfig && fallbackEmployee?.isFormer && !fallbackName.toLowerCase().includes('бывш')) {
+                fallbackName = `${fallbackName} (бывший)`;
+              }
+              select.innerHTML += `<option value="${preselectedId}">${escapeHtml(fallbackName)}</option>`;
+              select.value = String(preselectedId);
+            }
           }
         } else {
+          const fallbackId = preselectedId;
+          const fallbackEmployee = normalizedEmployees.find((emp) => Number(emp.id) === Number(preselectedId));
+          let fallbackName =
+            lockedNameFromConfig
+            || fallbackEmployee?.name
+            || (fallbackId !== null ? 'Выбранный сотрудник' : null);
+          if (!lockedNameFromConfig && fallbackEmployee?.isFormer && fallbackName && !fallbackName.toLowerCase().includes('бывш')) {
+            fallbackName = `${fallbackName} (бывший)`;
+          }
+
           if (preselectedId !== null) {
-            const fallbackName = lockedNameFromConfig || 'Выбранный сотрудник';
             select.innerHTML = `<option value="${preselectedId}">${escapeHtml(fallbackName)}</option>`;
             select.value = String(preselectedId);
             if (activeConfig.lockEmployeeSelection) {
