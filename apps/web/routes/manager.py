@@ -30,6 +30,7 @@ from domain.entities.manager_object_permission import ManagerObjectPermission
 from domain.entities.contract import Contract
 from urllib.parse import quote
 from shared.services.incident_category_service import IncidentCategoryService
+from shared.services.employee_selector_service import EmployeeSelectorService
 from shared.models.calendar_data import TimeslotStatus
 
 router = APIRouter(prefix="/manager", tags=["manager"])
@@ -232,7 +233,6 @@ async def manager_incident_create(
                 parsed_damage = None
         
         # Используем IncidentService для создания инцидента с автоматическим созданием корректировки
-        from shared.services.incident_service import IncidentService
         incident_service = IncidentService(db)
         await incident_service.create_incident(
             owner_id=owner_id,
@@ -369,21 +369,12 @@ async def manager_incident_edit_form(
             raise HTTPException(status_code=404, detail="Not Found")
         if incident.object_id not in accessible_ids:
             raise HTTPException(status_code=403, detail="Access denied")
-        # Список сотрудников по владельцам доступных объектов (активные контракты)
-        from sqlalchemy import select
-        from domain.entities.contract import Contract
-        from domain.entities.user import User as UserEntity
-        owner_ids = sorted({getattr(o, 'owner_id', None) for o in accessible_objects if getattr(o, 'owner_id', None) is not None})
-        emp_ids = set()
-        if owner_ids:
-            emp_rows = await db.execute(
-                select(Contract.employee_id).where(Contract.owner_id.in_(owner_ids), Contract.is_active == True).distinct()
-            )
-            emp_ids = {row[0] for row in emp_rows.all()}
-        employees = []
-        if emp_ids:
-            emp_res = await db.execute(select(UserEntity).where(UserEntity.id.in_(list(emp_ids))).order_by(UserEntity.last_name, UserEntity.first_name))
-            employees = emp_res.scalars().all()
+        # Список сотрудников по выбранному объекту
+        employee_groups = {"active": [], "former": []}
+        if incident.object_id:
+            selector = EmployeeSelectorService(db)
+            _, employee_groups = await selector.get_employees_for_object(incident.object_id)
+        owner_ids = sorted({getattr(o, "owner_id", None) for o in accessible_objects if getattr(o, "owner_id", None) is not None})
         # История изменений
         from domain.entities.incident_history import IncidentHistory
         hist_res = await db.execute(
@@ -405,7 +396,7 @@ async def manager_incident_edit_form(
             "current_user": current_user,
             "incident": incident,
             "objects": accessible_objects,
-            "employees": employees,
+            "employee_groups": employee_groups,
             "categories": categories,
             "history": history,
             **manager_context
@@ -3629,58 +3620,8 @@ async def get_employees_for_object_manager(
             if object_id not in accessible_object_ids:
                 raise HTTPException(status_code=403, detail="Нет доступа к объекту")
             
-            # Получаем сотрудников для объекта (копируем логику из календаря владельца)
-            from sqlalchemy import select
-            from domain.entities.contract import Contract
-            from domain.entities.user import User
-            import json
-            
-            # Получаем всех сотрудников с активными договорами
-            employees_query = select(User).join(Contract, User.id == Contract.employee_id).where(
-                Contract.is_active == True
-            )
-            employees_result = await db.execute(employees_query)
-            employees = employees_result.scalars().all()
-            
-            employees_with_access = []
-            added_employee_ids = set()  # Для отслеживания уже добавленных сотрудников
-            
-            for emp in employees:
-                # Пропускаем, если сотрудник уже добавлен
-                if emp.id in added_employee_ids:
-                    continue
-                
-                # Проверяем, что пользователь имеет роль employee
-                if "employee" not in (emp.roles if isinstance(emp.roles, list) else [emp.role]):
-                    continue
-                    
-                # Получаем договоры сотрудника
-                contract_query = select(Contract).where(
-                    Contract.employee_id == emp.id,
-                    Contract.is_active == True
-                )
-                contract_result = await db.execute(contract_query)
-                contracts = contract_result.scalars().all()
-                
-                # Проверяем все договоры сотрудника
-                for contract in contracts:
-                    if contract and contract.allowed_objects:
-                        allowed_objects = contract.allowed_objects if isinstance(contract.allowed_objects, list) else json.loads(contract.allowed_objects)
-                        if object_id in allowed_objects:
-                            employee_data = {
-                                "id": int(emp.id),
-                                "name": str(f"{emp.last_name or ''} {emp.first_name or ''}".strip() or emp.username or f"ID {emp.id}"),
-                                "username": str(emp.username or ""),
-                                "role": str(emp.role),
-                                "is_active": bool(emp.is_active),
-                                "telegram_id": int(emp.telegram_id) if emp.telegram_id else None
-                            }
-                            employees_with_access.append(employee_data)
-                            added_employee_ids.add(emp.id)  # Помечаем сотрудника как добавленного
-                            break  # Если нашли доступ, выходим из цикла по договорам
-            
-            employees_data = employees_with_access
-            
+            selector = EmployeeSelectorService(db)
+            _, employees_data = await selector.get_employees_for_object(object_id)
             return employees_data
             
     except Exception as e:

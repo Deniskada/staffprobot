@@ -19,6 +19,7 @@ from domain.entities.object import Object
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+from shared.services.employee_selector_service import EmployeeSelectorService
 from shared.services.payroll_verification_service import PayrollVerificationService
 
 router = APIRouter(tags=["owner-payroll-adjustments"])
@@ -170,15 +171,8 @@ async def payroll_adjustments_list(
         adjustments = result.scalars().all()
         
         # Получить список сотрудников владельца для фильтра
-        employees_query = select(User).join(
-            Contract, Contract.employee_id == User.id
-        ).where(
-            Contract.owner_id == owner_id,
-            Contract.is_active == True,
-            Contract.status == 'active'
-        ).distinct().order_by(User.last_name, User.first_name)
-        employees_result = await session.execute(employees_query)
-        employees = employees_result.scalars().all()
+        selector = EmployeeSelectorService(session)
+        employee_groups = await selector.get_employees_for_owner(owner_id)
         
         # Получить список объектов владельца для фильтра
         objects_query = select(Object).where(
@@ -206,7 +200,7 @@ async def payroll_adjustments_list(
                 "request": request,
                 "current_user": current_user,
                 "adjustments": adjustments,
-                "employees": employees,
+                "employee_groups": employee_groups,
                 "objects": objects,
                 "adjustment_types": adjustment_types,
                 # Фильтры

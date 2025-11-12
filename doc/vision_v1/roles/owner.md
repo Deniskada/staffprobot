@@ -22,7 +22,7 @@
 - [GET] `/owner/api/check/object`  — (apps/web/routes/limits.py)
 - [GET] `/owner/api/contracts/my-contracts`  — (apps/web/routes/owner.py)
 - [GET] `/owner/api/employees`  — (apps/web/routes/owner.py)
-- [GET] `/owner/api/employees/for-object/{object_id}`  — (apps/web/routes/owner.py) — список сотрудников с доступом к объекту
+- [GET] `/owner/incidents/api/employees?object_id={id}` — (apps/web/routes/owner_incidents.py) — возвращает сгруппированный список сотрудников объекта (`active`, затем `former`), используется в формах инцидентов
   
 ### Инциденты
 - [GET] `/owner/incidents` — список инцидентов (apps/web/routes/owner_incidents.py)
@@ -35,7 +35,7 @@
 - [GET] `/owner/incidents/reports` — отчеты по инцидентам
   - Фильтрация: Contract.owner_id == user_id AND allowed_objects @> [object_id]
   - Используется в модальном окне планирования смен на /owner/shifts
-  - **Важно:** Возвращает только сотрудников владельца с активными договорами, имеющими доступ к указанному объекту
+  - **UI:** выбор сотрудника блокируется до выбора объекта; после загрузки показываются активные сотрудники (алфавитно), затем разделитель «Бывшие» (жирный курсив) и архивные сотрудники (курсив). Данные предоставляет `EmployeeSelectorService.get_employees_for_owner`.
 - [GET] `/owner/api/summary`  — (apps/web/routes/limits.py)
 - [GET] `/owner/applications`  — (apps/web/routes/owner.py)
 - [POST] `/owner/bulk-delete`  — (apps/web/routes/owner_timeslots.py)
@@ -265,6 +265,7 @@
   - Query: `is_applied` — статус применения (all/applied/unapplied)
   - Query: `date_from`, `date_to` — период (YYYY-MM-DD)
   - Query: `page`, `per_page` — пагинация
+  - Выпадающие списки сотрудников (фильтр, модалка «Добавить начисление») получают данные из `EmployeeSelectorService`: активные сотрудники идут первыми, затем разделитель «Бывшие» (жирный курсив) и архивные сотрудники (курсив).
 - [POST] `/owner/payroll-adjustments/create` — (apps/web/routes/owner_payroll_adjustments.py) — создать ручную корректировку
   - Form: `employee_id`, `adjustment_type`, `amount`, `description`, `adjustment_date` (дата начисления), `object_id` (опц), `shift_id` (опц)
   - **Важно:** `adjustment_date` устанавливает `created_at` корректировки на указанную дату

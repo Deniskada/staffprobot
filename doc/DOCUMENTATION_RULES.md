@@ -78,7 +78,7 @@
   - Полноэкранная страница планирования смен (общий `plan_shift.js`)
   - Показывает свободные интервалы по всем трекам тайм-слота, первый свободный диапазон выделен жирным
   - Раздел «Запланированные смены» (с бейджем «Запланировано») позволяет отметить смены для отмены прямо в форме
-  - Использует API: `/manager/calendar/api/objects`, `/manager/api/employees/for-object/{objectId}`, `/manager/calendar/api/data`, `/manager/api/calendar/check-availability`, `/manager/api/calendar/plan-shift`, `/manager/shifts/api/schedule/{schedule_id}/cancel`
+  - Использует API: `/manager/calendar/api/objects`, `/manager/api/employees/for-object/{objectId}` (возвращает `{"active": [...], "former": [...]}`; UI добавляет разделитель «Бывшие»), `/manager/calendar/api/data`, `/manager/api/calendar/check-availability`, `/manager/api/calendar/plan-shift`, `/manager/shifts/api/schedule/{schedule_id}/cancel`
   - `preselectedEmployeeId` подставляется при переходе с календаря (клик по смене/тайм-слоту)
   - Параметр `return_to` сохраняет фильтры (`object_id`) и возвращает на календарь/список смен
 - **Календарь (`/manager/calendar`):**

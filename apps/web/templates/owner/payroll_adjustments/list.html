@@ -42,11 +42,19 @@
                         <label for="employee_id" class="form-label">Сотрудник</label>
                         <select class="form-select" id="employee_id" name="employee_id">
                             <option value="">Все сотрудники</option>
-                            {% for employee in employees %}
+                            {% for employee in employee_groups.active %}
                             <option value="{{ employee.id }}" {% if filter_employee_id == employee.id %}selected{% endif %}>
-                                {{ employee.last_name }} {{ employee.first_name }}
+                                {{ employee.last_name }} {{ employee.first_name }}{% if employee.middle_name %} {{ employee.middle_name }}{% endif %}
                             </option>
                             {% endfor %}
+                            {% if employee_groups.former and employee_groups.former|length > 0 %}
+                            <option value="" disabled class="fw-bold fst-italic text-muted">Бывшие</option>
+                            {% for employee in employee_groups.former %}
+                            <option value="{{ employee.id }}" class="fst-italic text-muted" {% if filter_employee_id == employee.id %}selected{% endif %}>
+                                {{ employee.last_name }} {{ employee.first_name }}{% if employee.middle_name %} {{ employee.middle_name }}{% endif %}
+                            </option>
+                            {% endfor %}
+                            {% endif %}
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -252,11 +260,19 @@
                         <label for="create_employee_id" class="form-label">Сотрудник *</label>
                         <select class="form-select" id="create_employee_id" name="employee_id" required>
                             <option value="">Выберите сотрудника</option>
-                            {% for employee in employees %}
+                            {% for employee in employee_groups.active %}
                             <option value="{{ employee.id }}">
-                                {{ employee.last_name }} {{ employee.first_name }}
+                                {{ employee.last_name }} {{ employee.first_name }}{% if employee.middle_name %} {{ employee.middle_name }}{% endif %}
                             </option>
                             {% endfor %}
+                            {% if employee_groups.former and employee_groups.former|length > 0 %}
+                            <option value="" disabled class="fw-bold fst-italic text-muted">Бывшие</option>
+                            {% for employee in employee_groups.former %}
+                            <option value="{{ employee.id }}" class="fst-italic text-muted">
+                                {{ employee.last_name }} {{ employee.first_name }}{% if employee.middle_name %} {{ employee.middle_name }}{% endif %}
+                            </option>
+                            {% endfor %}
+                            {% endif %}
                         </select>
                     </div>
                     <div class="mb-3">

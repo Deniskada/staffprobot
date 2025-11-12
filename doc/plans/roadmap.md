@@ -1408,3 +1408,4 @@
 - [ ] Обновление документации по календарям и планировщикам (owner/manager/employee), синхронизация `vision_v1/*`, `DOCUMENTATION_RULES.md`
 - [ ] Обновление документации (owner/manager/employee, календарные правила) и синхронизация с `DOCUMENTATION_RULES.md`, `vision_v1/*`
 - [x] Экспорт Excel для `/owner/payroll/report` (две вкладки начислений/выплат, кнопка «Экспорт»)
+- [x] Инциденты и корректировки: единый `EmployeeSelectorService`, группировка сотрудников (активные → «Бывшие» → архив), обновлённые формы владельца/управляющего и фильтры `/owner/payroll/adjustments`

@@ -31,21 +31,18 @@
         <input type="date" name="custom_date" class="form-control">
       </div>
       <div class="col-md-4">
-        <label class="form-label">Сотрудник</label>
-        <select class="form-select" name="employee_id">
-          <option value="">— не выбран —</option>
-          {% for e in employees %}
-            <option value="{{ e.id }}">{{ e.last_name }} {{ e.first_name }} (ID {{ e.id }})</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-4">
         <label class="form-label">Объект</label>
-        <select class="form-select" name="object_id">
+        <select class="form-select" name="object_id" id="incidentObject">
           <option value="">— не выбран —</option>
           {% for o in objects %}
             <option value="{{ o.id }}">{{ o.name }} (ID {{ o.id }})</option>
           {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Сотрудник</label>
+        <select class="form-select" name="employee_id" id="incidentEmployee" disabled>
+          <option value="">Сначала выберите объект</option>
         </select>
       </div>
       <div class="col-md-4">
@@ -63,6 +60,88 @@
     </div>
   </form>
 </div>
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const objectSelect = document.getElementById('incidentObject');
+  const employeeSelect = document.getElementById('incidentEmployee');
+
+  if (!objectSelect || !employeeSelect) {
+    console.error('Не удалось инициализировать форму инцидента (создание)');
+    return;
+  }
+
+  function resetEmployeeSelect(message) {
+    employeeSelect.innerHTML = `<option value="">${message}</option>`;
+    employeeSelect.disabled = true;
+  }
+
+  function renderEmployeeGroups(groups) {
+    employeeSelect.innerHTML = '<option value="">Выберите сотрудника</option>';
+
+    if (groups.active && groups.active.length > 0) {
+      groups.active.forEach(emp => {
+        const opt = document.createElement('option');
+        opt.value = emp.id;
+        opt.textContent = formatEmployeeName(emp);
+        employeeSelect.appendChild(opt);
+      });
+    }
+
+    if (groups.former && groups.former.length > 0) {
+      const divider = document.createElement('option');
+      divider.value = '';
+      divider.disabled = true;
+      divider.textContent = 'Бывшие';
+      divider.classList.add('fw-bold', 'fst-italic', 'text-muted');
+      employeeSelect.appendChild(divider);
+
+      groups.former.forEach(emp => {
+        const opt = document.createElement('option');
+        opt.value = emp.id;
+        opt.textContent = formatEmployeeName(emp);
+        opt.classList.add('fst-italic', 'text-muted');
+        employeeSelect.appendChild(opt);
+      });
+    }
+
+    employeeSelect.disabled = false;
+  }
+
+  function formatEmployeeName(emp) {
+    const parts = [];
+    if (emp.last_name) parts.push(emp.last_name);
+    if (emp.first_name) parts.push(emp.first_name);
+    if (emp.middle_name) parts.push(emp.middle_name);
+    return parts.join(' ').trim() || `ID ${emp.id}`;
+  }
+
+  async function loadEmployees(objectId) {
+    resetEmployeeSelect('Загрузка сотрудников...');
+    try {
+      const response = await fetch(`/owner/incidents/api/employees?object_id=${encodeURIComponent(objectId)}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      renderEmployeeGroups(data || { active: [], former: [] });
+    } catch (error) {
+      console.error('Ошибка загрузки сотрудников:', error);
+      resetEmployeeSelect('Не удалось загрузить сотрудников');
+    }
+  }
+
+  objectSelect.addEventListener('change', function () {
+    const objectId = this.value;
+    if (!objectId) {
+      resetEmployeeSelect('Сначала выберите объект');
+      return;
+    }
+    loadEmployees(objectId);
+  });
+});
+</script>
+{% endblock %}
 {% endblock %}
 
 

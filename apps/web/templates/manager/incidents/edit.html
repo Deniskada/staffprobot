@@ -176,7 +176,53 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  async function loadEmployees(objectId) {
+  function formatEmployee(emp) {
+    const parts = [];
+    if (emp.last_name) parts.push(emp.last_name);
+    if (emp.first_name) parts.push(emp.first_name);
+    if (emp.middle_name) parts.push(emp.middle_name);
+    return parts.join(' ').trim() || `ID ${emp.id}`;
+  }
+
+  function renderEmployeeGroups(groups, selectedId) {
+    employeeSelect.innerHTML = '<option value="">Выберите сотрудника</option>';
+
+    if (groups.active && groups.active.length > 0) {
+      groups.active.forEach(emp => {
+        const opt = document.createElement('option');
+        opt.value = emp.id;
+        opt.textContent = formatEmployee(emp);
+        if (selectedId && emp.id === selectedId) {
+          opt.selected = true;
+        }
+        employeeSelect.appendChild(opt);
+      });
+    }
+
+    if (groups.former && groups.former.length > 0) {
+      const divider = document.createElement('option');
+      divider.value = '';
+      divider.disabled = true;
+      divider.textContent = 'Бывшие';
+      divider.classList.add('fw-bold', 'fst-italic', 'text-muted');
+      employeeSelect.appendChild(divider);
+
+      groups.former.forEach(emp => {
+        const opt = document.createElement('option');
+        opt.value = emp.id;
+        opt.textContent = formatEmployee(emp);
+        opt.classList.add('fst-italic', 'text-muted');
+        if (selectedId && emp.id === selectedId) {
+          opt.selected = true;
+        }
+        employeeSelect.appendChild(opt);
+      });
+    }
+
+    employeeSelect.disabled = false;
+  }
+
+  async function loadEmployees(objectId, selectedId = null) {
     employeeSelect.innerHTML = '<option value="">Загрузка...</option>';
     employeeSelect.disabled = true;
     try {
@@ -184,31 +230,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!resp.ok) {
         throw new Error(`HTTP ${resp.status}`);
       }
-      const list = await resp.json();
-      employeeSelect.innerHTML = '<option value="">Выберите сотрудника</option>';
-      if (list && list.length > 0) {
-        list.forEach(e => {
-          const fio = `${(e.name||'').trim()}`;
-          const opt = document.createElement('option');
-          opt.value = e.id;
-          opt.textContent = fio;
-          if (e.id === currentEmployeeId) {
-            opt.selected = true;
-          }
-          employeeSelect.appendChild(opt);
-        });
-      } else if (currentEmployeeId) {
-        // Если сотрудник не найден в списке, но был выбран ранее, оставляем его
-        const currentEmployeeName = '{{ (incident.employee.last_name or "") }} {{ (incident.employee.first_name or "") }}'.trim();
-        if (currentEmployeeName) {
-          const opt = document.createElement('option');
-          opt.value = currentEmployeeId;
-          opt.textContent = currentEmployeeName;
-          opt.selected = true;
-          employeeSelect.appendChild(opt);
-        }
-      }
-      employeeSelect.disabled = false;
+      const data = await resp.json();
+      renderEmployeeGroups(data || { active: [], former: [] }, selectedId);
     } catch (e) {
       console.error('Ошибка загрузки сотрудников:', e);
       employeeSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
@@ -235,8 +258,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Небольшая задержка, чтобы убедиться, что элементы готовы
     setTimeout(() => {
       loadCategories(objectSelect.value);
-      loadEmployees(objectSelect.value);
+      loadEmployees(objectSelect.value, currentEmployeeId);
     }, 100);
+  } else {
+    employeeSelect.innerHTML = '<option value="">Сначала выберите объект</option>';
+    employeeSelect.disabled = true;
   }
 });
 </script>

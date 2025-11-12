@@ -13,9 +13,12 @@ from apps.web.dependencies import get_current_user_dependency, require_role
 from core.database.session import get_db_session
 from core.config.settings import settings
 from domain.entities.user import User
+from domain.entities.object import Object
 from shared.services.incident_service import IncidentService
 from shared.services.incident_category_service import IncidentCategoryService
-from fastapi import HTTPException
+from shared.services.employee_selector_service import EmployeeSelectorService
+from fastapi import HTTPException, Query
+from fastapi.responses import JSONResponse
 
 
 router = APIRouter()
@@ -118,28 +121,9 @@ async def owner_incident_create_page(
     from domain.entities.object import Object
     obj_res = await session.execute(select(Object).where(Object.owner_id == owner_id, Object.is_active == True).order_by(Object.name))
     objects = obj_res.scalars().all()
-    from domain.entities.contract import Contract
-    emp_ids_res = await session.execute(
-        select(Contract.employee_id)
-        .where(
-            Contract.owner_id == owner_id,
-            Contract.is_active == True
-        )
-        .distinct()
-    )
-    employee_ids = [row[0] for row in emp_ids_res.all()]
-    from domain.entities.user import User as UserEntity
-    employees = []
-    if employee_ids:
-        emp_res = await session.execute(
-            select(UserEntity)
-            .where(UserEntity.id.in_(employee_ids))
-            .order_by(UserEntity.last_name, UserEntity.first_name)
-        )
-        employees = emp_res.scalars().all()
     return templates.TemplateResponse(
         "owner/incidents/create.html",
-        {"request": request, "categories": categories, "objects": objects, "employees": employees}
+        {"request": request, "categories": categories, "objects": objects}
     )
 
 
@@ -258,29 +242,42 @@ async def owner_incident_edit_page(
     from domain.entities.object import Object
     obj_res = await session.execute(select(Object).where(Object.owner_id == owner_db_id, Object.is_active == True).order_by(Object.name))
     objects = obj_res.scalars().all()
-    from domain.entities.contract import Contract
-    emp_ids_res = await session.execute(
-        select(Contract.employee_id)
-        .where(
-            Contract.owner_id == owner_db_id,
-            Contract.is_active == True
-        )
-        .distinct()
-    )
-    employee_ids = [row[0] for row in emp_ids_res.all()]
-    from domain.entities.user import User as UserEntity
-    employees = []
-    if employee_ids:
-        emp_res = await session.execute(
-            select(UserEntity)
-            .where(UserEntity.id.in_(employee_ids))
-            .order_by(UserEntity.last_name, UserEntity.first_name)
-        )
-        employees = emp_res.scalars().all()
+    employee_groups = {"active": [], "former": []}
+    if incident.object_id:
+        selector = EmployeeSelectorService(session)
+        employee_groups = await selector.get_employees_for_owner(owner_db_id, object_id=incident.object_id)
     return templates.TemplateResponse(
         "owner/incidents/edit.html",
-        {"request": request, "incident": incident, "categories": categories, "history": history, "objects": objects, "employees": employees}
+        {
+            "request": request,
+            "incident": incident,
+            "categories": categories,
+            "history": history,
+            "objects": objects,
+            "employee_groups": employee_groups,
+        }
     )
+
+
+@router.get("/owner/incidents/api/employees", response_class=JSONResponse)
+async def owner_incident_employees(
+    object_id: int = Query(..., ge=1),
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Вернуть сотрудников (активных и уволенных) для выбранного объекта."""
+    owner_id = await _get_db_user_id(current_user, session)
+    if not owner_id:
+        raise HTTPException(status_code=403, detail="Пользователь не найден")
+
+    selector = EmployeeSelectorService(session)
+    obj = await session.get(Object, object_id)
+    if not obj or obj.owner_id != owner_id:
+        raise HTTPException(status_code=404, detail="Объект не найден")
+
+    grouped = await selector.get_employees_for_owner(owner_id, object_id=object_id)
+    return JSONResponse(grouped)
 
 
 @router.post("/owner/incidents/{incident_id}/edit")

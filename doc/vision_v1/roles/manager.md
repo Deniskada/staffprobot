@@ -14,7 +14,7 @@
   - Если `contract.use_contract_rate = True`: приоритет ставки договора
   - Если `contract.use_contract_rate = False`: тайм-слот > объект
 - [GET] `/api/employees`  — (apps/web/routes/manager.py)
-- [GET] `/api/employees/for-object/{object_id}`  — (apps/web/routes/manager.py)
+- [GET] `/api/employees/for-object/{object_id}`  — (apps/web/routes/manager.py) — возвращает сгруппированный список сотрудников (`{"active": [...], "former": [...]}`) для выпадающих списков (инциденты, планировщик)
 - [GET] `/applications`  — (apps/web/routes/manager.py)
 - [GET] `/calendar`  — (apps/web/routes/manager.py)
 - [GET] `/calendar/api/data`  — (apps/web/routes/manager.py)
@@ -64,6 +64,16 @@
 - [GET] `/support/my-bugs`  — (apps/web/routes/support.py) — список моих багов
 - [GET] `/timeslots/{timeslot_id}`  — (apps/web/routes/manager.py)
 - [POST] `/timeslots/{timeslot_id}/edit`  — (apps/web/routes/manager.py) — форма: form-data; ответ: 303 Redirect на `/manager/timeslots/object/{object_id}` — причина изменения: ранее ожидался JSON, теперь корректно обрабатывается форма.
+
+### Инциденты
+- [GET] `/manager/incidents` — список инцидентов (фильтры по объекту/статусу, сортировка, пагинация)
+- [GET] `/manager/incidents/create` — форма создания инцидента
+- [POST] `/manager/incidents/create` — создание инцидента (автоудержание по ущербу)
+- [GET] `/manager/incidents/{id}/edit` — редактирование инцидента и история изменений
+- [POST] `/manager/incidents/{id}/edit` — сохранение изменений, перераспределение удержаний/доплат
+- [POST] `/manager/incidents/{id}/status` — смена статуса (через `IncidentService`)
+- [GET] `/manager/incidents/api/categories` — категории владельца для выбранного объекта
+- **UI:** выбор сотрудника заблокирован до выбора объекта; выпадающий список строится из `EmployeeSelectorService.get_employees_for_object` — активные сотрудники идут первыми (алфавитно), затем разделитель «Бывшие» (жирный курсив) и архивные сотрудники (курсив).
 
 ## Шаблоны (Jinja2)
 - `manager/applications.html`
