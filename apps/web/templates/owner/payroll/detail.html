@@ -13,6 +13,64 @@
                 </a>
             </div>
             
+            <!-- Сводка по начислениям сотрудника -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i> Начисления сотрудника</h5>
+                    {% if employee_entries %}
+                        <small class="text-muted">Всего: {{ employee_entries|length }}</small>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if employee_entries %}
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">ID</th>
+                                        <th scope="col">Период</th>
+                                        <th scope="col">Сумма</th>
+                                        <th scope="col">Статус</th>
+                                        <th scope="col" class="text-end">Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for e in employee_entries %}
+                                        <tr {% if e.id == active_entry_id %}class="table-active"{% endif %}>
+                                            <td>#{{ e.id }}</td>
+                                            <td class="text-nowrap">{{ e.period_start.strftime('%d.%m.%Y') }} — {{ e.period_end.strftime('%d.%m.%Y') }}</td>
+                                            <td><strong class="text-success">{{ "%.2f"|format(e.net_amount) }} ₽</strong></td>
+                                            <td>
+                                                {% if e.status == 'draft' %}
+                                                    <span class="badge bg-secondary">Черновик</span>
+                                                {% elif e.status == 'approved' %}
+                                                    <span class="badge bg-success">Одобрено</span>
+                                                {% elif e.status == 'paid' %}
+                                                    <span class="badge bg-primary">Выплачено</span>
+                                                {% else %}
+                                                    <span class="badge bg-warning text-dark">{{ e.status }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end">
+                                                {% if e.id == entry.id %}
+                                                    <span class="badge bg-primary">Текущее</span>
+                                                {% else %}
+                                                    <a href="/owner/payroll/{{ e.id }}?origin=entries&selected_entry_id={{ e.id }}" class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-arrow-right-circle"></i> Открыть
+                                                    </a>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">Для сотрудника начислений не найдено.</p>
+                    {% endif %}
+                </div>
+            </div>
+
             <!-- Основная информация -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
@@ -77,9 +135,15 @@
             <div class="card mb-4">
                 <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-minus-circle"></i> Удержания</h5>
-                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addDeductionModal">
-                        <i class="fas fa-plus"></i> Добавить
-                    </button>
+                    {% if not has_payments %}
+                        <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addDeductionModal">
+                            <i class="fas fa-plus"></i> Добавить
+                        </button>
+                    {% else %}
+                        <button class="btn btn-light btn-sm" disabled data-bs-toggle="tooltip" title="Добавление недоступно после выплат">
+                            <i class="fas fa-plus"></i> Добавить
+                        </button>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     {% if deductions %}
@@ -134,9 +198,15 @@
             <div class="card mb-4">
                 <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-plus-circle"></i> Доплаты</h5>
-                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addBonusModal">
-                        <i class="fas fa-plus"></i> Добавить
-                    </button>
+                    {% if not has_payments %}
+                        <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addBonusModal">
+                            <i class="fas fa-plus"></i> Добавить
+                        </button>
+                    {% else %}
+                        <button class="btn btn-light btn-sm" disabled data-bs-toggle="tooltip" title="Добавление недоступно после выплат">
+                            <i class="fas fa-plus"></i> Добавить
+                        </button>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     {% if bonuses %}

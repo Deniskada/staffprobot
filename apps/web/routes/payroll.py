@@ -684,6 +684,30 @@ async def owner_payroll_detail(
         ).order_by(EmployeePayment.payment_date)
         payments_result = await db.execute(payments_query)
         payments = payments_result.scalars().all()
+        has_payments = len(payments) > 0
+
+        # Список начислений сотрудника (для навигации, аналог менеджера)
+        employee_entries = await payroll_service.get_payroll_entries_by_employee(
+            employee_id=entry.employee_id,
+            limit=500,
+            owner_id=owner_id
+        )
+        employee_entries.sort(key=lambda e: (e.period_end, e.id), reverse=True)
+
+        # Определить активную запись (подсветка)
+        origin = request.query_params.get("origin")
+        selected_entry_id = request.query_params.get("selected_entry_id")
+        try:
+            selected_entry_id_int = int(selected_entry_id) if selected_entry_id else None
+        except ValueError:
+            selected_entry_id_int = None
+
+        if origin == "entries" and selected_entry_id_int:
+            active_entry_id = selected_entry_id_int
+        elif origin == "summary" and employee_entries:
+            active_entry_id = employee_entries[0].id
+        else:
+            active_entry_id = entry.id
         
         return templates.TemplateResponse(
             "owner/payroll/detail.html",
@@ -694,6 +718,10 @@ async def owner_payroll_detail(
                 "deductions": deductions,
                 "bonuses": bonuses,
                 "payments": payments,
+                "employee_entries": employee_entries,
+                "active_entry_id": active_entry_id,
+                "has_payments": has_payments,
+                "origin": origin,
                 "today": date.today()
             }
         )
