@@ -70,11 +70,14 @@
 | `payment_method` | String(50) | cash / card / bank_transfer |
 | `status` | String(20) | pending / completed / cancelled |
 | `confirmation_code` | String(100) | Код подтверждения (номер транзакции, чек и т.д.) |
+| `payment_details` | JSONB | Дополнительные данные (реквизиты, история изменений) |
 | `notes` | Text | Примечания |
 | `created_at` | DateTime | Дата создания записи |
 | `created_by_id` | Integer | FK → users.id |
 | `completed_at` | DateTime | Дата подтверждения выплаты |
 | `completed_by_id` | Integer | FK → users.id (кто подтвердил) |
+
+> `payment_details.history` — массив протокола изменений выплаты (`[{timestamp, action, status, actor_id, amount, payment_date, confirmation_code}]`), формируется сервисом `PayrollService` при создании и подтверждении выплат.
 
 **Статусы выплаты:**
 - `pending` - выплата запланирована, ожидает подтверждения

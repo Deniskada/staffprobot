@@ -10,6 +10,8 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from datetime import datetime, date, timedelta, time
 from typing import List, Dict, Any, Optional
+from collections import defaultdict
+from calendar import monthrange
 import logging
 from io import BytesIO
 
@@ -21,6 +23,8 @@ from domain.entities.contract import Contract
 from domain.entities.application import ApplicationStatus
 from domain.entities.payroll_entry import PayrollEntry
 from domain.entities.payroll_adjustment import PayrollAdjustment
+from domain.entities.employee_payment import EmployeePayment
+from domain.entities.payment_schedule import PaymentSchedule
 from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from shared.services.calendar_filter_service import CalendarFilterService
@@ -36,40 +40,16 @@ from apps.web.jinja import templates
 web_timezone_helper = WebTimezoneHelper()
 
 
-def parse_date_or_default(value: Optional[str], default: date) -> date:
-    """Преобразует строку даты в объект date, возвращает default при ошибке."""
-    if not value:
-        return default
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        return default
-
-
 async def load_employee_earnings(
     db: AsyncSession,
     user_id: int,
     start_date: date,
     end_date: date,
-    page: int = 1,
-    per_page: int = 50
-) -> tuple[List[Dict[str, Any]], float, float, List[Dict[str, Any]], int]:
-    """Загружает завершенные смены сотрудника и агрегирует данные."""
+) -> Dict[str, Any]:
+    """Загружает завершенные смены, корректировки и данные по выплатам сотрудника."""
 
-    # Подсчет общего количества для пагинации
-    count_query = (
-        select(func.count(Shift.id))
-        .where(
-            Shift.user_id == user_id,
-            Shift.status == "completed",
-            func.date(Shift.start_time) >= start_date,
-            func.date(Shift.start_time) <= end_date,
-        )
-    )
-    count_result = await db.execute(count_query)
-    total_count = count_result.scalar() or 0
-
-    query = (
+    # --- Смены -------------------------------------------------------------
+    shift_query = (
         select(Shift, Object)
         .join(Object, Shift.object_id == Object.id)
         .where(
@@ -79,20 +59,18 @@ async def load_employee_earnings(
             func.date(Shift.start_time) <= end_date,
         )
         .order_by(Shift.start_time.desc())
-        .limit(per_page)
-        .offset((page - 1) * per_page)
     )
 
-    result = await db.execute(query)
-    rows = result.all()
+    shift_result = await db.execute(shift_query)
+    shift_rows = shift_result.all()
 
     earnings: List[Dict[str, Any]] = []
     total_hours = 0.0
     total_amount = 0.0
     summary_by_object: Dict[int, Dict[str, Any]] = {}
+    earliest_shift_date: Optional[date] = None
 
-    # 1. Добавить смены
-    for shift, obj in rows:
+    for shift, obj in shift_rows:
         timezone_str = getattr(obj, "timezone", None) or "Europe/Moscow"
         date_label = web_timezone_helper.format_datetime_with_timezone(
             shift.start_time, timezone_str, "%d.%m.%Y"
@@ -124,13 +102,16 @@ async def load_employee_earnings(
                 "type": "shift",
                 "shift_id": shift.id,
                 "object_name": obj.name,
+                "object_id": obj.id,
                 "date_label": date_label,
                 "start_label": start_label,
                 "end_label": end_label,
                 "duration_hours": duration_hours,
                 "hourly_rate": hourly_rate,
                 "amount": amount,
-                "description": ""
+                "description": "",
+                "payment_date": None,
+                "payment_date_label": None,
             }
         )
 
@@ -141,51 +122,307 @@ async def load_employee_earnings(
                 "hours": 0.0,
                 "amount": 0.0,
                 "shifts": 0,
+                "object_id": obj.id,
             },
         )
         summary_entry["hours"] += duration_hours
         summary_entry["amount"] += amount
         summary_entry["shifts"] += 1
 
-    # 2. Добавить корректировки начислений (Phase 4A: новая архитектура)
-    adjustments_query = select(PayrollAdjustment).where(
-        PayrollAdjustment.employee_id == user_id,
-        func.date(PayrollAdjustment.created_at) >= start_date,
-        func.date(PayrollAdjustment.created_at) <= end_date
-    ).order_by(PayrollAdjustment.created_at)
-    
+        if shift.start_time:
+            shift_date = shift.start_time.date()
+            if earliest_shift_date is None or shift_date < earliest_shift_date:
+                earliest_shift_date = shift_date
+
+    # --- Корректировки -----------------------------------------------------
+    adjustments_query = (
+        select(PayrollAdjustment)
+        .where(
+            PayrollAdjustment.employee_id == user_id,
+            func.date(PayrollAdjustment.created_at) >= start_date,
+            func.date(PayrollAdjustment.created_at) <= end_date,
+        )
+        .order_by(PayrollAdjustment.created_at)
+    )
+
     adjustments_result = await db.execute(adjustments_query)
     adjustments = adjustments_result.scalars().all()
-    
-    # Добавляем корректировки к списку заработка
+
     for adj in adjustments:
-        # Пропускаем базовую оплату за смену (она уже учтена выше)
-        if adj.adjustment_type == 'shift_base':
+        if adj.adjustment_type == "shift_base":
+            # Базовая оплата уже учтена в сменах
             continue
-        
-        earnings.append({
-            "type": "adjustment",
-            "adjustment_type": adj.adjustment_type,
-            "object_name": "-",
-            "date_label": adj.created_at.strftime('%d.%m.%Y'),
-            "start_label": "-",
-            "end_label": "-",
-            "duration_hours": 0.0,
-            "hourly_rate": 0.0,
-            "amount": float(adj.amount),
-            "description": adj.get_type_label() + (f": {adj.description}" if adj.description else ""),
-            "is_automatic": adj.adjustment_type in ['late_start', 'task_bonus', 'task_penalty']
-        })
+
+        earnings.append(
+            {
+                "type": "adjustment",
+                "adjustment_id": adj.id,
+                "adjustment_type": adj.adjustment_type,
+                "object_name": "-",
+                "object_id": adj.object_id,
+                "date_label": adj.created_at.strftime("%d.%m.%Y"),
+                "start_label": "-",
+                "end_label": "-",
+                "duration_hours": 0.0,
+                "hourly_rate": 0.0,
+                "amount": float(adj.amount),
+                "description": adj.get_type_label()
+                + (f": {adj.description}" if adj.description else ""),
+                "is_automatic": adj.adjustment_type
+                in ["late_start", "task_bonus", "task_penalty"],
+                "payment_date": None,
+                "payment_date_label": None,
+            }
+        )
         total_amount += float(adj.amount)
-    
-    # Сортируем earnings по дате
-    earnings.sort(key=lambda x: x["date_label"], reverse=True)
+
+    # --- Начисления и выплаты ----------------------------------------------
+    payroll_entries_query = (
+        select(PayrollEntry)
+        .options(
+            selectinload(PayrollEntry.payments),
+            selectinload(PayrollEntry.object_).selectinload(Object.org_unit).selectinload("parent"),
+        )
+        .where(
+            PayrollEntry.employee_id == user_id,
+            PayrollEntry.period_end >= start_date,
+            PayrollEntry.period_end <= end_date,
+        )
+        .order_by(PayrollEntry.period_end)
+    )
+
+    payroll_entries_result = await db.execute(payroll_entries_query)
+    payroll_entries = payroll_entries_result.scalars().all()
+
+    earliest_entry_date: Optional[date] = None
+    if payroll_entries:
+        earliest_entry_date = min(entry.period_end for entry in payroll_entries if entry.period_end)
+
+    payments_query = (
+        select(EmployeePayment)
+        .where(
+            EmployeePayment.employee_id == user_id,
+            EmployeePayment.payment_date >= start_date,
+            EmployeePayment.payment_date <= end_date,
+        )
+        .order_by(EmployeePayment.payment_date)
+    )
+    payments_result = await db.execute(payments_query)
+    payments = payments_result.scalars().all()
+
+    payments_by_date: Dict[date, List[EmployeePayment]] = defaultdict(list)
+    entry_payment_date_map: Dict[int, date] = {}
+    payment_date_entries: Dict[date, set] = defaultdict(set)
+
+    for payment in payments:
+        if not payment.payment_date:
+            continue
+        payments_by_date[payment.payment_date].append(payment)
+        payment_date_entries[payment.payment_date].add(payment.payroll_entry_id)
+        entry_payment_date_map.setdefault(payment.payroll_entry_id, payment.payment_date)
+
+    # Построение связей "смена/корректировка -> начисление"
+    shift_to_entry: Dict[int, int] = {}
+    adjustment_to_entry: Dict[int, int] = {}
+    schedule_dates: set[date] = set()
+    schedule_cache: Dict[int, PaymentSchedule] = {}
+
+    async def get_schedule_for_object(object_entity: Optional[Object]) -> Optional[PaymentSchedule]:
+        if object_entity is None:
+            return None
+        schedule_id = object_entity.get_effective_payment_schedule_id()
+        if not schedule_id:
+            return None
+        if schedule_id not in schedule_cache:
+            schedule_query = select(PaymentSchedule).where(PaymentSchedule.id == schedule_id)
+            schedule_result = await db.execute(schedule_query)
+            schedule_cache[schedule_id] = schedule_result.scalar_one_or_none()
+        return schedule_cache.get(schedule_id)
+
+    for entry in payroll_entries:
+        details = entry.calculation_details or {}
+        for shift_info in details.get("shifts", []):
+            shift_id = shift_info.get("shift_id")
+            if shift_id:
+                shift_to_entry[shift_id] = entry.id
+        for adj_info in details.get("adjustments", []):
+            adj_id = adj_info.get("adjustment_id")
+            if adj_id:
+                adjustment_to_entry[adj_id] = entry.id
+
+        schedule = await get_schedule_for_object(entry.object_)
+        if schedule:
+            schedule_dates.update(
+                generate_payment_schedule_dates(schedule, start_date, end_date)
+            )
+
+    # Проставляем даты выплат в записях заработка
+    for row in earnings:
+        payment_date: Optional[date] = None
+        if row["type"] == "shift":
+            entry_id = shift_to_entry.get(row["shift_id"])
+            if entry_id:
+                payment_date = entry_payment_date_map.get(entry_id)
+        elif row["type"] == "adjustment":
+            entry_id = adjustment_to_entry.get(row.get("adjustment_id"))
+            if entry_id:
+                payment_date = entry_payment_date_map.get(entry_id)
+
+        if payment_date:
+            row["payment_date"] = payment_date.isoformat()
+            row["payment_date_label"] = payment_date.strftime("%d.%m.%Y")
+
+    # Сортировка записей по дате (в формате dd.mm.YYYY нужно преобразовать назад)
+    def parse_date_label(label: str) -> datetime:
+        return datetime.strptime(label, "%d.%m.%Y")
+
+    earnings.sort(key=lambda item: parse_date_label(item["date_label"]), reverse=True)
 
     summary_list = sorted(
         summary_by_object.values(), key=lambda item: item["amount"], reverse=True
     )
 
-    return earnings, total_hours, total_amount, summary_list, total_count
+    # Календарь выплат (объединяем даты из графиков и фактические выплаты)
+    all_payment_dates = set(payments_by_date.keys()) | schedule_dates
+    payment_rows = build_employee_payment_rows(
+        all_payment_dates,
+        payments_by_date,
+        payment_date_entries,
+    )
+
+    return {
+        "earnings": earnings,
+        "total_hours": total_hours,
+        "total_amount": total_amount,
+        "summary_by_object": summary_list,
+        "payment_rows": payment_rows,
+        "earliest_shift_date": earliest_shift_date,
+        "earliest_payroll_entry_date": earliest_entry_date,
+    }
+
+
+def generate_payment_schedule_dates(
+    schedule: PaymentSchedule, start_date: date, end_date: date
+) -> List[date]:
+    """Возвращает даты выплат по графику в интервале [start_date; end_date]."""
+    if start_date > end_date:
+        return []
+
+    dates: List[date] = []
+    frequency = (schedule.frequency or "").lower()
+
+    if frequency == "daily":
+        current = start_date
+        while current <= end_date:
+            dates.append(current)
+            current += timedelta(days=1)
+
+    elif frequency in {"weekly", "biweekly"}:
+        step = 7 if frequency == "weekly" else 14
+        payment_day = schedule.payment_day or 1
+        target_weekday = (payment_day - 1) % 7
+        current = start_date
+        offset = (target_weekday - current.weekday()) % 7
+        current = current + timedelta(days=offset)
+        while current <= end_date:
+            dates.append(current)
+            current += timedelta(days=step)
+
+    elif frequency == "monthly":
+        period = schedule.payment_period or {}
+        payments_cfg = period.get("payments", [])
+
+        if payments_cfg:
+            for cfg in payments_cfg:
+                next_payment_str = cfg.get("next_payment_date")
+                if not next_payment_str:
+                    continue
+                try:
+                    base_date = date.fromisoformat(next_payment_str)
+                except ValueError:
+                    continue
+
+                current = base_date
+                while current < start_date:
+                    current = add_months(current, 1)
+                while current <= end_date:
+                    dates.append(current)
+                    current = add_months(current, 1)
+        else:
+            payment_day = schedule.payment_day or 1
+            current = date(start_date.year, start_date.month, 1)
+            while current <= end_date:
+                day = min(payment_day, monthrange(current.year, current.month)[1])
+                payment_date = date(current.year, current.month, day)
+                if start_date <= payment_date <= end_date:
+                    dates.append(payment_date)
+                if current.month == 12:
+                    current = date(current.year + 1, 1, 1)
+                else:
+                    current = date(current.year, current.month + 1, 1)
+
+    return sorted(set(dates))
+
+
+def add_months(base_date: date, months: int) -> date:
+    """Возвращает дату, смещённую на указанное количество месяцев."""
+    month = base_date.month - 1 + months
+    year = base_date.year + month // 12
+    month = month % 12 + 1
+    day = min(base_date.day, monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def build_employee_payment_rows(
+    all_dates: set,
+    payments_by_date: Dict[date, List[EmployeePayment]],
+    payment_date_entries: Dict[date, set],
+) -> List[Dict[str, Any]]:
+    """Формирует строки таблицы «Даты выплат»."""
+    rows: List[Dict[str, Any]] = []
+
+    for payment_date in sorted(all_dates):
+        date_payments = payments_by_date.get(payment_date, [])
+        amount = sum(float(payment.amount or 0) for payment in date_payments) if date_payments else None
+
+        completed_at_values: List[date] = []
+        for payment in date_payments:
+            if payment.status == "completed" and payment.completed_at:
+                if isinstance(payment.completed_at, datetime):
+                    completed_at_values.append(payment.completed_at.date())
+                else:
+                    completed_at_values.append(payment.completed_at)
+
+        completed_at_label = (
+            max(completed_at_values).strftime("%d.%m.%Y") if completed_at_values else None
+        )
+
+        if not date_payments:
+            status = "scheduled"
+        else:
+            statuses = {payment.status for payment in date_payments if payment.status}
+            if statuses == {"completed"}:
+                status = "completed"
+            elif "pending" in statuses:
+                status = "pending"
+            elif "failed" in statuses:
+                status = "failed"
+            else:
+                status = statuses.pop()
+
+        rows.append(
+            {
+                "date": payment_date,
+                "date_iso": payment_date.isoformat(),
+                "date_label": payment_date.strftime("%d.%m.%Y"),
+                "amount": amount,
+                "completed_at": completed_at_label,
+                "status": status,
+                "has_related_entries": bool(payment_date_entries.get(payment_date)),
+            }
+        )
+
+    return rows
 
 
 async def get_user_id_from_current_user(current_user, session):
@@ -211,10 +448,7 @@ async def get_available_interfaces_for_user(current_user, db):
 @router.get("/earnings", response_class=HTMLResponse)
 async def employee_earnings(
     request: Request,
-    date_from: Optional[str] = Query(None, description="Дата начала периода (YYYY-MM-DD)"),
-    date_to: Optional[str] = Query(None, description="Дата окончания периода (YYYY-MM-DD)"),
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    per_page: int = Query(50, ge=10, le=100, description="Записей на странице"),
+    year: Optional[int] = Query(None, description="Год для отображения начислений"),
     current_user: dict = Depends(require_employee_or_applicant),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -227,23 +461,30 @@ async def employee_earnings(
     if not user_id:
         raise HTTPException(status_code=401, detail="Пользователь не найден")
 
-    end_default = datetime.utcnow().date()
-    start_default = end_default - timedelta(days=30)
+    today = datetime.utcnow().date()
+    selected_year = year or today.year
+    try:
+        selected_year = int(selected_year)
+    except (TypeError, ValueError):
+        selected_year = today.year
 
-    start_date = parse_date_or_default(date_from, start_default)
-    end_date = parse_date_or_default(date_to, end_default)
+    year_start = date(selected_year, 1, 1)
+    year_end = date(selected_year, 12, 31)
 
-    if start_date > end_date:
-        start_date, end_date = end_date, start_date
+    earnings_payload = await load_employee_earnings(db, user_id, year_start, year_end)
 
-    earnings, total_hours, total_amount, summary_by_object, total_count = await load_employee_earnings(
-        db, user_id, start_date, end_date, page, per_page
-    )
-
-    # Вычисляем параметры пагинации
-    total_pages = (total_count + per_page - 1) // per_page
-    has_prev = page > 1
-    has_next = page < total_pages
+    earliest_candidates = [
+        candidate
+        for candidate in (
+            earnings_payload.get("earliest_shift_date"),
+            earnings_payload.get("earliest_payroll_entry_date"),
+        )
+        if candidate is not None
+    ]
+    first_year = min(candidate.year for candidate in earliest_candidates) if earliest_candidates else selected_year
+    if first_year > selected_year:
+        first_year = selected_year
+    available_years = list(range(first_year, today.year + 1))
 
     available_interfaces = await get_available_interfaces_for_user(current_user, db)
     applications_count_result = await db.execute(
@@ -258,26 +499,22 @@ async def employee_earnings(
             "current_user": current_user,
             "available_interfaces": available_interfaces,
             "applications_count": applications_count,
-            "start_date": start_date,
-            "end_date": end_date,
-            "earnings": earnings,
-            "total_hours": total_hours,
-            "total_amount": total_amount,
-            "summary_by_object": summary_by_object,
-            "page": page,
-            "per_page": per_page,
-            "total_count": total_count,
-            "total_pages": total_pages,
-            "has_prev": has_prev,
-            "has_next": has_next,
+            "selected_year": selected_year,
+            "year_start": year_start,
+            "year_end": year_end,
+            "available_years": available_years,
+            "earnings": earnings_payload["earnings"],
+            "total_hours": earnings_payload["total_hours"],
+            "total_amount": earnings_payload["total_amount"],
+            "summary_by_object": earnings_payload["summary_by_object"],
+            "payment_rows": earnings_payload["payment_rows"],
         },
     )
 
 
 @router.get("/earnings/export")
 async def employee_earnings_export(
-    date_from: Optional[str] = Query(None, description="Дата начала периода (YYYY-MM-DD)"),
-    date_to: Optional[str] = Query(None, description="Дата окончания периода (YYYY-MM-DD)"),
+    year: Optional[int] = Query(None, description="Год для экспорта"),
     current_user: dict = Depends(require_employee_or_applicant),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -290,30 +527,29 @@ async def employee_earnings_export(
     if not user_id:
         raise HTTPException(status_code=401, detail="Пользователь не найден")
 
-    end_default = datetime.utcnow().date()
-    start_default = end_default - timedelta(days=30)
+    today = datetime.utcnow().date()
+    selected_year = year or today.year
+    try:
+        selected_year = int(selected_year)
+    except (TypeError, ValueError):
+        selected_year = today.year
 
-    start_date = parse_date_or_default(date_from, start_default)
-    end_date = parse_date_or_default(date_to, end_default)
+    year_start = date(selected_year, 1, 1)
+    year_end = date(selected_year, 12, 31)
 
-    if start_date > end_date:
-        start_date, end_date = end_date, start_date
-
-    earnings, total_hours, total_amount, summary_by_object = await load_employee_earnings(
-        db, user_id, start_date, end_date
-    )
+    earnings_payload = await load_employee_earnings(db, user_id, year_start, year_end)
 
     workbook = Workbook()
     summary_sheet = workbook.active
     summary_sheet.title = "Сводка"
-    summary_sheet.append(["Период", f"{start_date.strftime('%d.%m.%Y')} — {end_date.strftime('%d.%m.%Y')}"])
-    summary_sheet.append(["Всего смен", len(earnings)])
-    summary_sheet.append(["Общее число часов", total_hours])
-    summary_sheet.append(["Заработано, ₽", total_amount])
+    summary_sheet.append(["Год", f"{selected_year}"])
+    summary_sheet.append(["Всего записей", len(earnings_payload["earnings"])])
+    summary_sheet.append(["Общее число часов", earnings_payload["total_hours"]])
+    summary_sheet.append(["Заработано, ₽", earnings_payload["total_amount"]])
     summary_sheet.append([])
     summary_sheet.append(["Объект", "Смен", "Часы", "Сумма, ₽"])
 
-    for item in summary_by_object:
+    for item in earnings_payload["summary_by_object"]:
         summary_sheet.append([
             item["object_name"],
             item["shifts"],
@@ -330,10 +566,16 @@ async def employee_earnings_export(
         "Часы",
         "Ставка, ₽",
         "Сумма, ₽",
+        "Дата выплаты",
     ])
 
-    for row in earnings:
-        row_type = "Смена" if row["type"] == "shift" else ("Штраф" if row["type"] == "deduction" else "Премия")
+    for row in earnings_payload["earnings"]:
+        if row["type"] == "shift":
+            row_type = "Смена"
+        elif row["type"] == "adjustment":
+            row_type = "Корректировка"
+        else:
+            row_type = row.get("type", "Запись")
         detail_sheet.append([
             row["date_label"],
             row_type,
@@ -342,13 +584,14 @@ async def employee_earnings_export(
             round(row["duration_hours"], 2) if row["type"] == "shift" else "-",
             round(row["hourly_rate"], 2) if row["type"] == "shift" else "-",
             round(row["amount"], 2),
+            row.get("payment_date_label") or "-",
         ])
 
     buffer = BytesIO()
     workbook.save(buffer)
     buffer.seek(0)
 
-    filename = f"earnings_{start_date.isoformat()}_{end_date.isoformat()}.xlsx"
+    filename = f"earnings_{selected_year}.xlsx"
     headers = {
         "Content-Disposition": f"attachment; filename={filename}",
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

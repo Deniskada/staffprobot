@@ -19,8 +19,8 @@
 - [GET] `/employee/applications`  — (apps/web/routes/employee.py)
 - [GET] `/employee/calendar`  — (apps/web/routes/employee.py)
 - [GET] `/employee/calendar/api/objects`  — (apps/web/routes/employee.py)
-- [GET] `/employee/earnings`  — (apps/web/routes/employee.py)
-- [GET] `/employee/earnings/export`  — (apps/web/routes/employee.py)
+- [GET] `/employee/earnings`  — (apps/web/routes/employee.py) — страница «Мой заработок»; годовая выборка, карточки сводных показателей, блок «Даты выплат» с фильтрацией начислений и таблица «Начисления» (столбец «Выплата» показывает дату фактической/запланированной выплаты)
+- [GET] `/employee/earnings/export`  — (apps/web/routes/employee.py) — экспорт годовой выборки заработка в XLSX (сводка + детальная таблица с колонкой «Выплата»)
 - [GET] `/employee/history`  — (apps/web/routes/employee.py)
 - [GET] `/employee/objects`  — (apps/web/routes/employee.py)
 - [GET] `/employee/profile`  — (apps/web/routes/employee.py)
@@ -46,6 +46,11 @@
   - Тайм-слоты → модалка `plan_shift_modal.js` (селект сотрудника заблокирован, всегда текущий пользователь)
   - Запланированные смены → `/employee/shifts/plan` c `return_to`, фильтры (`object_id`) восстанавливаются
   - Курсор на пустых днях — `default`, кликабельны только тайм-слоты и смены
+- `employee/earnings.html`
+  - Переключатель года (фиксированный список доступных лет)
+  - Карточка «Разбивка по объектам» (прокручиваемая, до 5 объектов)
+  - Карточка «Даты выплат» (таблица с липким заголовком, автоматический скролл на текущий месяц, кнопка «Посмотреть» фильтрует таблицу «Начисления»)
+  - Таблица «Начисления» с колонкой «Выплата» (дата выплаты или «—»), фильтрация синхронизирована с блоком «Даты выплат», итоговая строка показывает общие часы и сумму за год
 - `employee/history.html`
 - `employee/index.html`
 - `employee/objects.html`

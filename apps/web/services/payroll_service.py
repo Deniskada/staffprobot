@@ -242,6 +242,22 @@ class PayrollService:
             entry = await self.get_payroll_entry_by_id(payroll_entry_id)
             if not entry:
                 raise ValueError(f"Payroll entry {payroll_entry_id} not found")
+
+            details_payload: Dict[str, Any] = {}
+            if payment_details:
+                details_payload.update(payment_details)
+            history = list(details_payload.get("history", []))
+            history.append(
+                {
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "action": "created",
+                    "status": "pending",
+                    "actor_id": created_by_id,
+                    "amount": float(amount),
+                    "payment_date": payment_date.isoformat(),
+                }
+            )
+            details_payload["history"] = history
             
             payment = EmployeePayment(
                 payroll_entry_id=payroll_entry_id,
@@ -250,7 +266,7 @@ class PayrollService:
                 payment_date=payment_date,
                 payment_method=payment_method,
                 status='pending',
-                payment_details=payment_details,
+                payment_details=details_payload,
                 notes=notes,
                 created_by_id=created_by_id
             )
@@ -300,6 +316,22 @@ class PayrollService:
             payment.mark_completed()
             if confirmation_code:
                 payment.confirmation_code = confirmation_code
+
+            details_payload: Dict[str, Any] = {}
+            if payment.payment_details:
+                details_payload.update(payment.payment_details)
+            history = list(details_payload.get("history", []))
+            history.append(
+                {
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "action": "completed",
+                    "status": "completed",
+                    "actor_id": None,
+                    "confirmation_code": confirmation_code,
+                }
+            )
+            details_payload["history"] = history
+            payment.payment_details = details_payload
             
             await self.db.commit()
             await self.db.refresh(payment)

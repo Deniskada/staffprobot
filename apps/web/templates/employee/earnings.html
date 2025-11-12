@@ -24,6 +24,37 @@
 .badge-hours {
     font-size: 0.85rem;
 }
+.objects-scroll {
+    max-height: 18rem;
+    overflow-y: auto;
+}
+.payment-table-scroll {
+    max-height: 24rem;
+    overflow-y: auto;
+    position: relative;
+}
+.payment-table-scroll .table thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa;
+    z-index: 1;
+}
+.payment-table-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+.payment-table-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(13, 110, 253, 0.4);
+    border-radius: 3px;
+}
+.column-rate,
+.column-amount {
+    width: 110px;
+    white-space: nowrap;
+}
+.column-payment {
+    width: 140px;
+    white-space: nowrap;
+}
 </style>
 {% endblock %}
 
@@ -40,29 +71,14 @@
             </nav>
         </div>
 
-        <form class="d-flex align-items-end gap-3" method="get" action="/employee/earnings">
-            <div>
-                <label class="form-label">Дата начала</label>
-                <input type="date" class="form-control" name="date_from" value="{{ start_date.isoformat() }}">
-            </div>
-            <div>
-                <label class="form-label">Дата окончания</label>
-                <input type="date" class="form-control" name="date_to" value="{{ end_date.isoformat() }}">
-            </div>
-            <div class="d-flex gap-2 align-items-end">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-search"></i>
-                    Показать
-                </button>
-                <a
-                    class="btn btn-outline-primary btn-export"
-                    href="/employee/earnings/export?date_from={{ start_date.isoformat() }}&date_to={{ end_date.isoformat() }}"
-                >
-                    <i class="bi bi-file-earmark-excel"></i>
-                    Экспорт
-                </a>
-            </div>
-        </form>
+        <div class="d-flex align-items-center gap-3">
+            <label for="earningsYearSelect" class="form-label mb-0">Год</label>
+            <select id="earningsYearSelect" class="form-select" style="min-width: 140px;">
+                {% for y in available_years %}
+                <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
     </div>
 
     <div class="row g-3 mb-4">
@@ -71,7 +87,7 @@
                 <div class="card-body">
                     <div class="text-muted mb-2">Заработано за период</div>
                     <div class="fs-3 fw-bold">{{ '%.2f'|format(total_amount) }} ₽</div>
-                    <div class="text-muted">c {{ start_date.strftime('%d.%m.%Y') }} по {{ end_date.strftime('%d.%m.%Y') }}</div>
+                    <div class="text-muted">c {{ year_start.strftime('%d.%m.%Y') }} по {{ year_end.strftime('%d.%m.%Y') }}</div>
                 </div>
             </div>
         </div>
@@ -97,8 +113,8 @@
 
     {% if earnings %}
     <div class="row g-4">
-        <div class="col-lg-4">
-            <div class="card h-100">
+        <div class="col-lg-4 d-flex flex-column gap-4 h-100">
+            <div class="card">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-bar-chart"></i>
@@ -106,7 +122,7 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="list-group list-group-flush">
+                    <div class="list-group list-group-flush objects-scroll">
                         {% for item in summary_by_object %}
                         <div class="list-group-item d-flex justify-content-between">
                             <div>
@@ -119,16 +135,87 @@
                     </div>
                 </div>
             </div>
+            <div class="card flex-grow-1 d-flex flex-column">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-calendar-check"></i>
+                        Даты выплат
+                    </h5>
+                </div>
+                <div class="card-body p-0 d-flex flex-column">
+                    {% if payment_rows %}
+                    <div class="table-responsive payment-table-scroll flex-grow-1" data-payment-scroll>
+                        <table class="table table-sm mb-0" data-payment-table>
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Дата выплаты</th>
+                                    <th class="text-end">Начислено, ₽</th>
+                                    <th>Выплачено</th>
+                                    <th class="text-end">Действие</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in payment_rows %}
+                                <tr>
+                                    <td>{{ payment.date_label }}</td>
+                                    <td class="text-end">
+                                        {% if payment.amount is not none %}
+                                        {{ '%.2f'|format(payment.amount) }}
+                                        {% else %}
+                                        <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if payment.completed_at %}
+                                        <span class="badge bg-success">Выплачено {{ payment.completed_at }}</span>
+                                        {% else %}
+                                        {% if payment.status == 'pending' %}
+                                        <span class="badge bg-warning text-dark">Ожидание</span>
+                                        {% elif payment.status == 'failed' %}
+                                        <span class="badge bg-danger">Ошибка</span>
+                                        {% else %}
+                                        <span class="text-muted">—</span>
+                                        {% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-primary payment-filter-btn"
+                                            data-payment-filter="{{ payment.date_iso }}"
+                                            {% if not payment.has_related_entries %}disabled{% endif %}
+                                        >
+                                            Посмотреть
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="p-3">
+                        <p class="text-muted mb-0">Пока нет запланированных выплат в выбранном году.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
 
         <div class="col-lg-8">
             <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-table"></i>
                         Начисления
                     </h5>
-                    <span class="badge bg-primary badge-hours">{{ earnings|length }} записей</span>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" id="earningsShowAll" checked>
+                            <label class="form-check-label" for="earningsShowAll">Показать все</label>
+                        </div>
+                        <span class="badge bg-primary badge-hours" data-earnings-count>{{ earnings|length }} записей</span>
+                    </div>
                 </div>
                 <div class="card-body table-responsive">
                     <table class="table table-striped table-hover earnings-table align-middle">
@@ -139,24 +226,29 @@
                                 <th>Описание</th>
                                 <th>Объект</th>
                                 <th class="text-center">Часы</th>
-                                <th class="text-end">Ставка, ₽</th>
-                                <th class="text-end">Сумма, ₽</th>
+                                <th class="text-end column-rate">Ставка, ₽</th>
+                                <th class="column-payment">Выплата</th>
+                                <th class="text-end column-amount">Сумма, ₽</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in earnings %}
-                            <tr>
+                            <tr data-earnings-row="true" data-payment-date="{{ row.payment_date or '' }}">
                                 <td>{{ row.date_label }}</td>
                                 <td>
                                     {% if row.type == 'shift' %}
                                     <span class="badge bg-primary">Смена</span>
-                                    {% elif row.type == 'deduction' %}
-                                    <span class="badge bg-danger">Штраф</span>
-                                    {% if row.is_automatic %}
-                                    <i class="fas fa-robot text-muted" title="Автоматическое"></i>
-                                    {% endif %}
-                                    {% elif row.type == 'bonus' %}
-                                    <span class="badge bg-success">Премия</span>
+                                    {% elif row.type == 'adjustment' %}
+                                        {% if row.amount < 0 %}
+                                        <span class="badge bg-danger">Удержание</span>
+                                        {% else %}
+                                        <span class="badge bg-success">Доплата</span>
+                                        {% endif %}
+                                        {% if row.is_automatic %}
+                                        <i class="fas fa-robot text-muted" title="Автоматическое"></i>
+                                        {% endif %}
+                                    {% else %}
+                                    <span class="badge bg-secondary">Запись</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -183,6 +275,13 @@
                                     -
                                     {% endif %}
                                 </td>
+                                <td>
+                                    {% if row.payment_date_label %}
+                                    {{ row.payment_date_label }}
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
                                 <td class="text-end fw-semibold">
                                     {% if row.amount < 0 %}
                                     <span class="text-danger">{{ '%.2f'|format(row.amount) }}</span>
@@ -197,8 +296,7 @@
                             <tr>
                                 <td colspan="4" class="text-end fw-bold">Итого за период:</td>
                                 <td class="text-center fw-bold">{{ '%.2f'|format(total_hours) }} ч</td>
-                                <td></td>
-                                <td class="text-end fw-bold">
+                                <td class="text-end fw-bold" colspan="3">
                                     {% if total_amount < 0 %}
                                     <span class="text-danger">{{ '%.2f'|format(total_amount) }} ₽</span>
                                     {% else %}
@@ -209,46 +307,6 @@
                         </tfoot>
                     </table>
                 </div>
-                
-                <!-- Пагинация -->
-                {% if total_pages > 1 %}
-                <div class="card-footer">
-                    <nav aria-label="Пагинация по заработкам">
-                        <ul class="pagination pagination-sm mb-0 justify-content-center">
-                            <li class="page-item {% if not has_prev %}disabled{% endif %}">
-                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page=1&per_page={{ per_page }}" aria-label="Первая">
-                                    <span aria-hidden="true">&laquo;&laquo;</span>
-                                </a>
-                            </li>
-                            <li class="page-item {% if not has_prev %}disabled{% endif %}">
-                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ page - 1 }}&per_page={{ per_page }}" aria-label="Предыдущая">
-                                    <span aria-hidden="true">&laquo;</span>
-                                </a>
-                            </li>
-                            
-                            {% for p in range([1, page - 2]|max, [total_pages, page + 2]|min + 1) %}
-                            <li class="page-item {% if p == page %}active{% endif %}">
-                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
-                            </li>
-                            {% endfor %}
-                            
-                            <li class="page-item {% if not has_next %}disabled{% endif %}">
-                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ page + 1 }}&per_page={{ per_page }}" aria-label="Следующая">
-                                    <span aria-hidden="true">&raquo;</span>
-                                </a>
-                            </li>
-                            <li class="page-item {% if not has_next %}disabled{% endif %}">
-                                <a class="page-link" href="?date_from={{ start_date }}&date_to={{ end_date }}&page={{ total_pages }}&per_page={{ per_page }}" aria-label="Последняя">
-                                    <span aria-hidden="true">&raquo;&raquo;</span>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="text-center mt-2">
-                            <small class="text-muted">Страница {{ page }} из {{ total_pages }} (всего {{ total_count }} записей)</small>
-                        </div>
-                    </nav>
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -262,4 +320,138 @@
     </div>
     {% endif %}
 </div>
+
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const yearSelect = document.getElementById('earningsYearSelect');
+    if (yearSelect) {
+        yearSelect.addEventListener('change', function () {
+            const url = new URL(window.location.href);
+            url.searchParams.set('year', this.value);
+            url.searchParams.delete('page');
+            window.location.href = url.toString();
+        });
+    }
+
+    const showAllCheckbox = document.getElementById('earningsShowAll');
+    const paymentButtons = document.querySelectorAll('.payment-filter-btn');
+    const earningsRows = document.querySelectorAll('[data-earnings-row]');
+    const earningsCounter = document.querySelector('[data-earnings-count]');
+
+    const updateCounter = () => {
+        if (!earningsCounter) {
+            return;
+        }
+        const visible = Array.from(earningsRows).filter((row) => row.style.display !== 'none').length;
+        earningsCounter.textContent = `${visible} записей`;
+    };
+
+    const setButtonState = (button, active) => {
+        if (active) {
+            button.classList.add('active', 'btn-primary');
+            button.classList.remove('btn-outline-primary');
+        } else {
+            button.classList.remove('active', 'btn-primary');
+            button.classList.add('btn-outline-primary');
+        }
+    };
+
+    const applyFilter = (paymentDate) => {
+        earningsRows.forEach((row) => {
+            const rowDate = row.dataset.paymentDate || '';
+            const match = !paymentDate || rowDate === paymentDate;
+            row.style.display = match ? '' : 'none';
+        });
+        updateCounter();
+    };
+
+    applyFilter(null);
+
+    paymentButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            if (button.disabled) {
+                return;
+            }
+            const isActive = button.classList.contains('active');
+            paymentButtons.forEach((btn) => setButtonState(btn, false));
+
+            if (isActive) {
+                if (showAllCheckbox) {
+                    showAllCheckbox.checked = true;
+                }
+                applyFilter(null);
+            } else {
+                setButtonState(button, true);
+                if (showAllCheckbox) {
+                    showAllCheckbox.checked = false;
+                }
+                applyFilter(button.dataset.paymentFilter || null);
+            }
+        });
+    });
+
+    if (showAllCheckbox) {
+        showAllCheckbox.addEventListener('change', () => {
+            if (showAllCheckbox.checked) {
+                paymentButtons.forEach((btn) => setButtonState(btn, false));
+                applyFilter(null);
+            } else {
+                const activeButton = document.querySelector('.payment-filter-btn.active');
+                if (!activeButton) {
+                    showAllCheckbox.checked = true;
+                }
+            }
+        });
+    }
+
+    const paymentScroll = document.querySelector('[data-payment-scroll]');
+    const paymentTable = document.querySelector('[data-payment-table]');
+    if (paymentScroll && paymentTable) {
+        const today = new Date();
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        const rows = Array.from(paymentTable.querySelectorAll('tbody tr'));
+
+        let fallbackRow = null;
+        let targetRow = null;
+
+        for (const row of rows) {
+            const cell = row.querySelector('td');
+            if (!cell) {
+                continue;
+            }
+            const parts = cell.textContent.trim().split('.');
+            if (parts.length !== 3) {
+                continue;
+            }
+            const [day, month, year] = parts.map(Number);
+            const rowDate = new Date(year, month - 1, day);
+
+            if (!fallbackRow) {
+                fallbackRow = row;
+            }
+
+            if (!targetRow && rowDate >= monthStart) {
+                targetRow = row;
+            }
+
+            if (rowDate >= monthStart && rowDate <= monthEnd) {
+                targetRow = row;
+                break;
+            }
+        }
+
+        const scrollTarget = targetRow || fallbackRow;
+        if (scrollTarget) {
+            const headerHeight = paymentTable.querySelector('thead')?.offsetHeight || 0;
+            const offsetTop = scrollTarget.offsetTop - headerHeight;
+            paymentScroll.scrollTo({ top: Math.max(offsetTop - 8, 0), behavior: 'auto' });
+        }
+    }
+});
+</script>
 {% endblock %}
