@@ -1,14 +1,17 @@
 """Роуты для работы с начислениями и выплатами."""
 
 from datetime import date, timedelta, datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from decimal import Decimal
 from urllib.parse import urlencode
+import io
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, status, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill
 
 from apps.web.jinja import templates
 from apps.web.middleware.auth_middleware import get_current_user
@@ -43,6 +46,160 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession) -> 
         return current_user.id
     else:
         return None
+
+
+async def _fetch_owner_payroll_report_data(
+    owner_id: int,
+    period_start_date: date,
+    period_end_date: date,
+    db: AsyncSession
+) -> Tuple[list, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """Возвращает данные для HTML и Excel отчётов владельца."""
+    from sqlalchemy.orm import selectinload
+
+    entries_query = select(PayrollEntry).options(
+        selectinload(PayrollEntry.employee),
+        selectinload(PayrollEntry.object_),
+        selectinload(PayrollEntry.contract)
+    ).join(
+        Contract, Contract.id == PayrollEntry.contract_id
+    ).where(
+        Contract.owner_id == owner_id,
+        PayrollEntry.period_start >= period_start_date,
+        PayrollEntry.period_end <= period_end_date
+    ).order_by(PayrollEntry.object_id, PayrollEntry.employee_id)
+
+    entries_result = await db.execute(entries_query)
+    entries = list(entries_result.scalars().all())
+
+    if not entries:
+        return [], None, None
+
+    # Группировка по сотрудникам: считаем на скольких объектах работал каждый
+    employee_objects_count = {}
+    for entry in entries:
+        employee_objects_count.setdefault(entry.employee_id, set()).add(entry.object_id)
+
+    single_object_employees = {emp_id for emp_id, objs in employee_objects_count.items() if len(objs) == 1}
+    multi_object_employees = {emp_id for emp_id, objs in employee_objects_count.items() if len(objs) > 1}
+
+    objects_data: Dict[int, Dict[str, Any]] = {}
+    multi_object_rows = []
+
+    for entry in entries:
+        shifts_count = len(entry.calculation_details.get("shifts", [])) if entry.calculation_details else 0
+
+        contract = entry.contract
+        if contract.status == 'active':
+            status = "Работает"
+        elif contract.status == 'terminated':
+            status = "Уволен"
+        else:
+            status = contract.status.capitalize()
+
+        row_data = {
+            "employee_id": entry.employee_id,
+            "last_name": entry.employee.last_name or "",
+            "first_name": entry.employee.first_name or "",
+            "status": status,
+            "shifts_count": shifts_count,
+            "hours": float(entry.hours_worked or 0),
+            "rate": float(entry.hourly_rate or 0),
+            "bonus": float(entry.total_bonuses or 0),
+            "penalty": float(entry.total_deductions or 0),
+            "total": float(entry.net_amount or 0)
+        }
+
+        if entry.employee_id in multi_object_employees:
+            row_data["object_name"] = entry.object_.name if entry.object_ else "—"
+            multi_object_rows.append(row_data)
+        else:
+            object_id = entry.object_id
+            if object_id not in objects_data:
+                objects_data[object_id] = {
+                    "object_name": entry.object_.name if entry.object_ else f"Объект #{object_id}",
+                    "rows": [],
+                    "subtotal": 0.0
+                }
+
+            objects_data[object_id]["rows"].append(row_data)
+            objects_data[object_id]["subtotal"] += row_data["total"]
+
+    objects_list = sorted(objects_data.values(), key=lambda x: x["object_name"])
+    grand_total = sum(obj["subtotal"] for obj in objects_list) + sum(row["total"] for row in multi_object_rows)
+
+    report_data = {
+        "objects": objects_list,
+        "multi_object_employees": sorted(multi_object_rows, key=lambda x: (x["last_name"], x["first_name"])),
+        "grand_total": grand_total
+    }
+
+    from domain.entities.employee_payment import EmployeePayment
+
+    employee_payment_data: Dict[int, Dict[str, Any]] = {}
+    for entry in entries:
+        emp_id = entry.employee_id
+        emp_data = employee_payment_data.setdefault(emp_id, {
+            "employee_id": emp_id,
+            "last_name": entry.employee.last_name or "",
+            "first_name": entry.employee.first_name or "",
+            "gross_total": 0.0,
+            "net_total": 0.0,
+            "paid": 0.0,
+            "payment_methods": set()
+        })
+
+        emp_data["gross_total"] += float(entry.gross_amount or 0)
+        emp_data["net_total"] += float(entry.net_amount or 0)
+
+    payments_query = select(EmployeePayment).join(
+        PayrollEntry, EmployeePayment.payroll_entry_id == PayrollEntry.id
+    ).join(
+        Contract, Contract.id == PayrollEntry.contract_id
+    ).where(
+        Contract.owner_id == owner_id,
+        PayrollEntry.period_start >= period_start_date,
+        PayrollEntry.period_end <= period_end_date
+    )
+
+    payments_result = await db.execute(payments_query)
+    payments = list(payments_result.scalars().all())
+
+    for payment in payments:
+        emp_id = payment.employee_id
+        if emp_id in employee_payment_data:
+            employee_payment_data[emp_id]["paid"] += float(payment.amount or 0)
+            if payment.payment_method:
+                employee_payment_data[emp_id]["payment_methods"].add(payment.payment_method)
+
+    employees_list = []
+    total_gross = 0.0
+    total_net = 0.0
+    total_paid = 0.0
+    total_remainder = 0.0
+
+    for emp_data in employee_payment_data.values():
+        remainder = emp_data["net_total"] - emp_data["paid"]
+        emp_data["remainder"] = remainder
+        emp_data["payment_methods"] = ", ".join(sorted(emp_data["payment_methods"])) if emp_data["payment_methods"] else ""
+
+        employees_list.append(emp_data)
+        total_gross += emp_data["gross_total"]
+        total_net += emp_data["net_total"]
+        total_paid += emp_data["paid"]
+        total_remainder += remainder
+
+    employees_list.sort(key=lambda x: (x["last_name"], x["first_name"]))
+
+    payments_data = {
+        "employees": employees_list,
+        "total_gross": total_gross,
+        "total_net": total_net,
+        "total_paid": total_paid,
+        "total_remainder": total_remainder
+    }
+
+    return entries, report_data, payments_data
 
 
 @router.get("/payroll", response_class=HTMLResponse, name="owner_payroll_list")
@@ -402,22 +559,12 @@ async def owner_payroll_report(
         period_end_date = date.fromisoformat(period_end)
         
         # Получить все начисления за период
-        from sqlalchemy.orm import selectinload
-        
-        entries_query = select(PayrollEntry).options(
-            selectinload(PayrollEntry.employee),
-            selectinload(PayrollEntry.object_),
-            selectinload(PayrollEntry.contract)
-        ).join(
-            Contract, Contract.id == PayrollEntry.contract_id
-        ).where(
-            Contract.owner_id == owner_id,
-            PayrollEntry.period_start >= period_start_date,
-            PayrollEntry.period_end <= period_end_date
-        ).order_by(PayrollEntry.object_id, PayrollEntry.employee_id)
-        
-        entries_result = await db.execute(entries_query)
-        entries = list(entries_result.scalars().all())
+        entries, report_data, payments_data = await _fetch_owner_payroll_report_data(
+            owner_id=owner_id,
+            period_start_date=period_start_date,
+            period_end_date=period_end_date,
+            db=db
+        )
         
         if not entries:
             return templates.TemplateResponse(
@@ -431,149 +578,6 @@ async def owner_payroll_report(
                     "error": "Нет начислений за выбранный период"
                 }
             )
-        
-        # Группировка по сотрудникам: считаем на скольких объектах работал каждый
-        employee_objects_count = {}
-        for entry in entries:
-            if entry.employee_id not in employee_objects_count:
-                employee_objects_count[entry.employee_id] = set()
-            employee_objects_count[entry.employee_id].add(entry.object_id)
-        
-        # Разделяем сотрудников: один объект vs несколько
-        single_object_employees = {emp_id for emp_id, objs in employee_objects_count.items() if len(objs) == 1}
-        multi_object_employees = {emp_id for emp_id, objs in employee_objects_count.items() if len(objs) > 1}
-        
-        # Группировка по объектам
-        objects_data = {}
-        multi_object_rows = []
-        
-        for entry in entries:
-            # Получить данные о смене для подсчёта
-            shifts_count = len(entry.calculation_details.get("shifts", [])) if entry.calculation_details else 0
-            
-            # Статус сотрудника на дату выплаты
-            contract = entry.contract
-            if contract.status == 'active':
-                status = "Работает"
-            elif contract.status == 'terminated':
-                status = "Уволен"
-            else:
-                status = contract.status.capitalize()
-            
-            row_data = {
-                "employee_id": entry.employee_id,
-                "last_name": entry.employee.last_name or "",
-                "first_name": entry.employee.first_name or "",
-                "status": status,
-                "shifts_count": shifts_count,
-                "hours": float(entry.hours_worked or 0),
-                "rate": float(entry.hourly_rate or 0),
-                "bonus": float(entry.total_bonuses or 0),
-                "penalty": float(entry.total_deductions or 0),
-                "total": float(entry.net_amount or 0)
-            }
-            
-            if entry.employee_id in multi_object_employees:
-                # Сотрудник работал на нескольких объектах
-                row_data["object_name"] = entry.object_.name if entry.object_ else "—"
-                multi_object_rows.append(row_data)
-            else:
-                # Сотрудник работал на одном объекте
-                object_id = entry.object_id
-                if object_id not in objects_data:
-                    objects_data[object_id] = {
-                        "object_name": entry.object_.name if entry.object_ else f"Объект #{object_id}",
-                        "rows": [],
-                        "subtotal": 0
-                    }
-                
-                objects_data[object_id]["rows"].append(row_data)
-                objects_data[object_id]["subtotal"] += row_data["total"]
-        
-        # Сортировка объектов по имени
-        objects_list = sorted(objects_data.values(), key=lambda x: x["object_name"])
-        
-        # Общий итог
-        grand_total = sum(obj["subtotal"] for obj in objects_list) + sum(row["total"] for row in multi_object_rows)
-        
-        report_data = {
-            "objects": objects_list,
-            "multi_object_employees": sorted(multi_object_rows, key=lambda x: (x["last_name"], x["first_name"])),
-            "grand_total": grand_total
-        }
-        
-        # Формируем данные для отчёта по выплатам
-        from domain.entities.employee_payment import EmployeePayment
-        
-        # Группируем начисления и выплаты по сотрудникам
-        employee_payment_data = {}
-        
-        for entry in entries:
-            emp_id = entry.employee_id
-            if emp_id not in employee_payment_data:
-                employee_payment_data[emp_id] = {
-                    "employee_id": emp_id,
-                    "last_name": entry.employee.last_name or "",
-                    "first_name": entry.employee.first_name or "",
-                    "gross_total": 0.0,
-                    "net_total": 0.0,
-                    "paid": 0.0,
-                    "payment_methods": set()
-                }
-            
-            employee_payment_data[emp_id]["gross_total"] += float(entry.gross_amount or 0)
-            employee_payment_data[emp_id]["net_total"] += float(entry.net_amount or 0)
-        
-        # Получаем выплаты за период
-        payments_query = select(EmployeePayment).join(
-            PayrollEntry, EmployeePayment.payroll_entry_id == PayrollEntry.id
-        ).join(
-            Contract, Contract.id == PayrollEntry.contract_id
-        ).where(
-            Contract.owner_id == owner_id,
-            PayrollEntry.period_start >= period_start_date,
-            PayrollEntry.period_end <= period_end_date
-        )
-        
-        payments_result = await db.execute(payments_query)
-        payments = list(payments_result.scalars().all())
-        
-        for payment in payments:
-            emp_id = payment.employee_id
-            if emp_id in employee_payment_data:
-                employee_payment_data[emp_id]["paid"] += float(payment.amount or 0)
-                if payment.payment_method:
-                    employee_payment_data[emp_id]["payment_methods"].add(payment.payment_method)
-        
-        # Рассчитываем остатки и форматируем способы оплаты
-        employees_list = []
-        total_gross = 0.0
-        total_net = 0.0
-        total_paid = 0.0
-        total_remainder = 0.0
-        
-        for emp_data in employee_payment_data.values():
-            remainder = emp_data["net_total"] - emp_data["paid"]
-            emp_data["remainder"] = remainder
-            emp_data["payment_methods"] = ", ".join(sorted(emp_data["payment_methods"])) if emp_data["payment_methods"] else ""
-            
-            employees_list.append(emp_data)
-            total_gross += emp_data["gross_total"]
-            total_net += emp_data["net_total"]
-            total_paid += emp_data["paid"]
-            total_remainder += remainder
-        
-        # Сортируем по фамилии
-        employees_list.sort(key=lambda x: (x["last_name"], x["first_name"]))
-        
-        payments_data = {
-            "employees": employees_list,
-            "total_gross": total_gross,
-            "total_net": total_net,
-            "total_paid": total_paid,
-            "total_remainder": total_remainder
-        }
-        
         return templates.TemplateResponse(
             "owner/payroll/report.html",
             {
@@ -591,6 +595,163 @@ async def owner_payroll_report(
     except Exception as e:
         logger.error(f"Error generating payroll report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка формирования отчёта: {str(e)}")
+
+
+@router.get("/payroll/report/export", name="owner_payroll_report_export")
+async def owner_payroll_report_export(
+    request: Request,
+    _: None = Depends(require_role(["owner", "superadmin"])),
+    db: AsyncSession = Depends(get_db_session),
+    period_start: str = None,
+    period_end: str = None
+):
+    """Экспорт отчёта по начислениям и выплатам в Excel."""
+    try:
+        current_user = await get_current_user(request)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Требуется авторизация")
+
+        owner_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="Пользователь не найден")
+
+        if not period_start or not period_end:
+            raise HTTPException(status_code=400, detail="Укажите период")
+
+        period_start_date = date.fromisoformat(period_start)
+        period_end_date = date.fromisoformat(period_end)
+
+        entries, report_data, payments_data = await _fetch_owner_payroll_report_data(
+            owner_id=owner_id,
+            period_start_date=period_start_date,
+            period_end_date=period_end_date,
+            db=db
+        )
+
+        if not entries or not report_data:
+            raise HTTPException(status_code=404, detail="Нет данных за выбранный период")
+
+        wb = Workbook()
+        ws_accruals = wb.active
+        ws_accruals.title = "Отчет по начислениям"
+
+        accruals_headers = [
+            "Объект",
+            "Сотрудник",
+            "Статус",
+            "Смен",
+            "Часов",
+            "Ставка",
+            "Доплачено",
+            "Удержано",
+            "Сумма"
+        ]
+        ws_accruals.append(accruals_headers)
+
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color="E5E5E5", end_color="E5E5E5", fill_type="solid")
+
+        for cell in ws_accruals[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+
+        for obj in report_data["objects"]:
+            ws_accruals.append([obj["object_name"], "", "", "", "", "", "", "", ""])
+            for row in obj["rows"]:
+                ws_accruals.append([
+                    "",
+                    f"{row['last_name']} {row['first_name']}".strip(),
+                    row["status"],
+                    row["shifts_count"],
+                    row["hours"],
+                    row["rate"],
+                    row["bonus"],
+                    row["penalty"],
+                    row["total"],
+                ])
+            ws_accruals.append(["", "", "", "", "", "", "", "Итого по объекту", obj["subtotal"]])
+            ws_accruals.append([])
+
+        if report_data["multi_object_employees"]:
+            ws_accruals.append(["Сотрудники на нескольких объектах", "", "", "", "", "", "", "", ""])
+            for row in report_data["multi_object_employees"]:
+                ws_accruals.append([
+                    row["object_name"],
+                    f"{row['last_name']} {row['first_name']}".strip(),
+                    row["status"],
+                    row["shifts_count"],
+                    row["hours"],
+                    row["rate"],
+                    row["bonus"],
+                    row["penalty"],
+                    row["total"],
+                ])
+            ws_accruals.append([])
+
+        ws_accruals.append(["", "", "", "", "", "", "", "ОБЩИЙ ИТОГ", report_data["grand_total"]])
+
+        for column in ws_accruals.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                if cell.value is not None:
+                    max_length = max(max_length, len(str(cell.value)))
+            ws_accruals.column_dimensions[column_letter].width = min(max_length + 2, 60)
+
+        ws_payments = wb.create_sheet(title="Отчет по выплатам")
+        payments_headers = ["Сотрудник", "К выплате", "Выплачено", "Способы оплаты", "Остаток"]
+        ws_payments.append(payments_headers)
+
+        for cell in ws_payments[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+
+        if payments_data and payments_data["employees"]:
+            for row in payments_data["employees"]:
+                ws_payments.append([
+                    f"{row['last_name']} {row['first_name']}".strip(),
+                    row["net_total"],
+                    row["paid"],
+                    row["payment_methods"],
+                    row["remainder"]
+                ])
+
+            ws_payments.append([
+                "ИТОГО:",
+                payments_data["total_net"],
+                payments_data["total_paid"],
+                "",
+                payments_data["total_remainder"]
+            ])
+        else:
+            ws_payments.append(["Нет данных", "", "", "", ""])
+
+        for column in ws_payments.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                if cell.value is not None:
+                    max_length = max(max_length, len(str(cell.value)))
+            ws_payments.column_dimensions[column_letter].width = min(max_length + 2, 60)
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"payroll_report_{period_start}_{period_end}.xlsx"
+        return Response(
+            content=output.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting payroll report: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка экспорта отчёта: {str(e)}")
 
 
 @router.get("/payroll/{entry_id}", response_class=HTMLResponse, name="owner_payroll_detail")
