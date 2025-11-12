@@ -482,12 +482,10 @@ window.unifiedCalendar = {
         
         // Добавляем стикер для запланированных смен
         let badge = '';
-        if (shift.status_label) {
+        if (shift.status_label && !shift.status_label.startsWith('Опоздание')) {
             let badgeClass = 'shift-badge shift-badge-default';
             if (shift.status_label === 'Не состоялась') {
                 badgeClass = 'shift-badge shift-badge-missed';
-            } else if (shift.status_label.startsWith('Опоздание')) {
-                badgeClass = 'shift-badge shift-badge-delay';
             }
             badge = `<div class="${badgeClass}">${shift.status_label}</div>`;
         }
