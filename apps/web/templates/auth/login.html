@@ -154,84 +154,96 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const loginForm = document.getElementById('loginForm');
     const telegramIdInput = document.getElementById('telegram_id');
     const sendPinBtn = document.getElementById('sendPinBtn');
     const pinCodeInput = document.getElementById('pin_code');
-    
-    // Обновление кнопки отправки PIN при изменении Telegram ID
+    const submitBtn = loginForm.querySelector('button[type="submit"]');
+
+    let isSubmitting = false;
+    let submitInitialContent = submitBtn.innerHTML;
+
+    const setSubmittingState = (state) => {
+        isSubmitting = state;
+        if (state) {
+            submitInitialContent = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Входим...';
+            submitBtn.disabled = true;
+            telegramIdInput.readOnly = true;
+            pinCodeInput.readOnly = true;
+        }
+    };
+
+    loginForm.addEventListener('submit', (event) => {
+        if (isSubmitting) {
+            event.preventDefault();
+            return;
+        }
+        setSubmittingState(true);
+    });
+
     telegramIdInput.addEventListener('input', function() {
-        if (this.value) {
-            sendPinBtn.disabled = false;
-        } else {
-            sendPinBtn.disabled = true;
-        }
+        sendPinBtn.disabled = !this.value;
     });
-    
-    // Автоматическая отправка формы при вводе 6-значного PIN
+
     pinCodeInput.addEventListener('input', function() {
-        if (this.value.length === 6) {
-            document.getElementById('loginForm').requestSubmit();
+        if (this.value.length === 6 && !isSubmitting) {
+            loginForm.requestSubmit();
         }
     });
-    
-    // Обработка отправки PIN
+
     sendPinBtn.addEventListener('click', function() {
         if (!telegramIdInput.value) {
             alert('Сначала введите Telegram ID');
             return;
         }
-        
+
         this.innerHTML = '<i class="bi bi-hourglass-split"></i><span class="d-none d-md-inline ms-1"> Отправка...</span>';
         this.disabled = true;
-        
-        // Отправка запроса
+
         fetch('/api/send-pin', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/x-www-form-urlencoded'
             },
             body: `telegram_id=${telegramIdInput.value}`
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                // Успешная отправка - показываем анимированную галочку
-                this.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i><span class="d-none d-md-inline ms-1"> Отправлено!</span>';
-                this.classList.add('btn-success');
-                this.classList.remove('btn-light');
-                
-                // Добавляем анимацию успеха
-                this.style.animation = 'pulse 0.6s ease-in-out';
-                
-                setTimeout(() => {
-                    this.innerHTML = '<i class="bi bi-send me-1 d-none d-md-inline"></i><i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline ms-1">Получить код</span>';
-                    this.classList.remove('btn-success');
-                    this.classList.add('btn-light');
-                    this.style.animation = '';
-                    this.disabled = false;
-                }, 3000);
-            } else {
-                // Показываем ошибку с анимацией
-                this.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger"></i><span class="d-none d-md-inline ms-1"> Ошибка</span>';
-                this.classList.add('btn-danger');
-                this.classList.remove('btn-light');
-                this.style.animation = 'shake 0.5s ease-in-out';
-                
-                setTimeout(() => {
-                    this.innerHTML = '<i class="bi bi-send me-1 d-none d-md-inline"></i><i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline ms-1">Получить код</span>';
-                    this.classList.remove('btn-danger');
-                    this.classList.add('btn-light');
-                    this.style.animation = '';
-                    this.disabled = false;
-                }, 2000);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Ошибка отправки PIN-кода');
-            this.innerHTML = '<i class="bi bi-send me-1 d-none d-md-inline"></i><i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline ms-1">Получить код</span>';
-            this.disabled = false;
-        });
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.status === 'success') {
+                    this.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i><span class="d-none d-md-inline ms-1"> Отправлено!</span>';
+                    this.classList.add('btn-success');
+                    this.classList.remove('btn-light');
+                    this.style.animation = 'pulse 0.6s ease-in-out';
+
+                    setTimeout(() => {
+                        this.innerHTML = '<i class="bi bi-send me-1 d-none d-md-inline"></i><i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline ms-1">Получить код</span>';
+                        this.classList.remove('btn-success');
+                        this.classList.add('btn-light');
+                        this.style.animation = '';
+                        this.disabled = false;
+                    }, 3000);
+                } else {
+                    this.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger"></i><span class="d-none d-md-inline ms-1"> Ошибка</span>';
+                    this.classList.add('btn-danger');
+                    this.classList.remove('btn-light');
+                    this.style.animation = 'shake 0.5s ease-in-out';
+
+                    setTimeout(() => {
+                        this.innerHTML = '<i class="bi bi-send me-1 d-none d-md-inline"></i><i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline ms-1">Получить код</span>';
+                        this.classList.remove('btn-danger');
+                        this.classList.add('btn-light');
+                        this.style.animation = '';
+                        this.disabled = false;
+                    }, 2000);
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Ошибка отправки PIN-кода');
+                this.innerHTML = '<i class="bi bi-send me-1 d-none d-md-inline"></i><i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline ms-1">Получить код</span>';
+                this.disabled = false;
+            });
     });
 });
 </script>
