@@ -27,7 +27,7 @@ async def contract_templates_list(request: Request):
     templates_list = await contract_service.get_contract_templates()
     
     return templates.TemplateResponse(
-        "contract_templates/list.html",
+        "owner/templates/contracts/list.html",
         {
             "request": request,
             "templates": templates_list,
@@ -46,7 +46,7 @@ async def create_contract_template_form(request: Request):
         return current_user
     
     return templates.TemplateResponse(
-        "contract_templates/create.html",
+        "owner/templates/contracts/create.html",
         {
             "request": request,
             "title": "Создание шаблона договора",
@@ -119,7 +119,7 @@ async def contract_template_detail(request: Request, template_id: int):
         raise HTTPException(status_code=404, detail="Шаблон не найден")
     
     return templates.TemplateResponse(
-        "contract_templates/detail.html",
+        "owner/templates/contracts/detail.html",
         {
             "request": request,
             "template": template,
@@ -144,7 +144,7 @@ async def edit_contract_template_form(request: Request, template_id: int):
         raise HTTPException(status_code=404, detail="Шаблон не найден")
     
     return templates.TemplateResponse(
-        "contract_templates/edit.html",
+        "owner/templates/contracts/edit.html",
         {
             "request": request,
             "template": template,
