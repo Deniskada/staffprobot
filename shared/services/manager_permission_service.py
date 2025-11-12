@@ -1,6 +1,7 @@
 """Сервис для управления правами управляющих на объекты."""
 
-from typing import List, Optional, Dict, Any
+import json
+from typing import List, Optional, Dict, Any, Iterable, Set
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
@@ -206,6 +207,30 @@ class ManagerPermissionService:
         """Проверка права редактирования расписания объекта."""
         return await self.has_permission(contract_id, object_id, "can_edit_schedule")
     
+    def _normalize_allowed_objects(self, allowed_objects: Any) -> List[int]:
+        """Приводит allowed_objects из договора к списку целых ID объектов."""
+        if not allowed_objects:
+            return []
+
+        raw_values: Iterable[Any]
+        if isinstance(allowed_objects, list):
+            raw_values = allowed_objects
+        else:
+            try:
+                parsed = json.loads(allowed_objects)
+                raw_values = parsed if isinstance(parsed, list) else []
+            except (TypeError, ValueError, json.JSONDecodeError):
+                raw_values = []
+
+        normalized: List[int] = []
+        for value in raw_values:
+            try:
+                normalized.append(int(value))
+            except (TypeError, ValueError):
+                continue
+
+        return normalized
+
     async def get_accessible_objects(self, contract_id: int) -> List[Object]:
         """Получение объектов, доступных управляющему."""
         try:
@@ -345,6 +370,47 @@ class ManagerPermissionService:
         except Exception as e:
             logger.error(f"Failed to get accessible objects for user {user_id}: {e}", exc_info=True)
             return []
+
+    async def get_user_accessible_object_ids(self, user_id: int) -> List[int]:
+        """Возвращает список ID объектов, доступных управляющему."""
+        objects = await self.get_user_accessible_objects(user_id)
+        return [obj.id for obj in objects]
+
+    async def get_user_accessible_employee_ids(self, user_id: int, include_inactive: bool = False) -> List[int]:
+        """Возвращает сотрудников, доступных управляющему по договорным объектам.
+
+        Args:
+            user_id: внутренний ID управляющего.
+            include_inactive: если True — включая сотрудников по неактивным/расторгнутым договорам.
+        """
+        accessible_object_ids = await self.get_user_accessible_object_ids(user_id)
+        if not accessible_object_ids:
+            return []
+
+        conditions = [
+            Contract.is_manager == False,
+            Contract.allowed_objects.isnot(None),
+        ]
+        if not include_inactive:
+            conditions.append(Contract.is_active == True)
+
+        contracts_query = select(Contract).where(*conditions)
+
+        result = await self.session.execute(contracts_query)
+        contracts = result.scalars().all()
+
+        accessible_employee_ids: Set[int] = set()
+        for contract in contracts:
+            allowed_ids = self._normalize_allowed_objects(contract.allowed_objects)
+            if any(obj_id in accessible_object_ids for obj_id in allowed_ids):
+                accessible_employee_ids.add(int(contract.employee_id))
+
+        return list(accessible_employee_ids)
+
+    async def is_employee_accessible(self, user_id: int, employee_id: int) -> bool:
+        """Проверяет, доступен ли сотрудник управляющему по его объектам."""
+        accessible_employee_ids = await self.get_user_accessible_employee_ids(user_id)
+        return int(employee_id) in accessible_employee_ids
     
     async def bulk_create_permissions(
         self, 

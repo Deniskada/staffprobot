@@ -1,8 +1,9 @@
 """Роуты для работы с начислениями и выплатами."""
 
 from datetime import date, timedelta, datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, status, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -56,7 +57,9 @@ async def owner_payroll_list(
     sort: Optional[str] = Query(None),
     order: Optional[str] = Query("asc"),
     page: int = Query(1, ge=1),
-    per_page: int = Query(25, ge=1, le=100)
+    per_page: int = Query(25, ge=1, le=100),
+    view: str = Query("summary"),
+    show_inactive: bool = Query(False)
 ):
     """Список всех начислений."""
     try:
@@ -178,17 +181,171 @@ async def owner_payroll_list(
             "q_employee": q_employee or ""
         }
         
-        # Подготовка сортировки для шаблона
+        # Подготовка сортировки для шаблона (список начислений)
         sort_info = {
-            "field": sort or "period",
+            "field": sort if view == "entries" and sort else "period",
             "order": order or "desc"
         }
-        
+
+        # Подготовка данных для вкладки "Сводка"
+        employee_objs_map: Dict[int, User] = {emp.id: emp for emp in employees_all}
+        summary_map: Dict[int, Dict[str, Any]] = {}
+
+        for emp in employees_all:
+            summary_map[emp.id] = {
+                "employee_id": emp.id,
+                "employee": emp,
+                "entries_count": 0,
+                "total_amount": 0.0,
+                "latest_entry": None,
+                "latest_entry_id": None,
+                "is_active": False,
+            }
+
+        contracts_status_query = select(Contract.employee_id, Contract.is_active).where(Contract.owner_id == owner_id)
+        contracts_status_result = await db.execute(contracts_status_query)
+        active_employee_ids: set[int] = set()
+        for emp_id, is_active in contracts_status_result.all():
+            emp_id = int(emp_id)
+            if emp_id not in summary_map:
+                summary_map[emp_id] = {
+                    "employee_id": emp_id,
+                    "employee": None,
+                    "entries_count": 0,
+                    "total_amount": 0.0,
+                    "latest_entry": None,
+                    "latest_entry_id": None,
+                    "is_active": False,
+                }
+            if is_active:
+                active_employee_ids.add(emp_id)
+
+        for entry_obj in entries:
+            emp_id = entry_obj.employee_id
+            if emp_id is None:
+                continue
+            emp_id = int(emp_id)
+            if emp_id not in summary_map:
+                summary_map[emp_id] = {
+                    "employee_id": emp_id,
+                    "employee": entry_obj.employee if entry_obj.employee else None,
+                    "entries_count": 0,
+                    "total_amount": 0.0,
+                    "latest_entry": None,
+                    "latest_entry_id": None,
+                    "is_active": False,
+                }
+            row = summary_map[emp_id]
+            row["entries_count"] += 1
+            row["total_amount"] += float(entry_obj.net_amount or 0)
+            if row["latest_entry"] is None or (entry_obj.id and entry_obj.id > (row["latest_entry_id"] or 0)):
+                row["latest_entry"] = entry_obj
+                row["latest_entry_id"] = entry_obj.id
+                if entry_obj.employee:
+                    row["employee"] = entry_obj.employee
+
+        missing_employee_ids = [emp_id for emp_id, row in summary_map.items() if row["employee"] is None]
+        if missing_employee_ids:
+            users_query = select(User).where(User.id.in_(missing_employee_ids))
+            users_result = await db.execute(users_query)
+            for user in users_result.scalars().all():
+                if user.id in summary_map:
+                    summary_map[user.id]["employee"] = user
+
+        for emp_id, row in summary_map.items():
+            row["is_active"] = emp_id in active_employee_ids
+            row["total_amount"] = float(row["total_amount"])
+
+        summary_rows = list(summary_map.values())
+        if not show_inactive:
+            summary_rows = [row for row in summary_rows if row["is_active"]]
+
+        # Сортировка сводки
+        allowed_summary_fields = {"latest_period", "employee", "entries_count", "total_amount"}
+        summary_sort_field = (sort or "latest_period").lower() if view == "summary" else "latest_period"
+        if summary_sort_field not in allowed_summary_fields:
+            summary_sort_field = "latest_period"
+        summary_sort_order = order.lower() if (view == "summary" and sort) else "desc"
+        if summary_sort_order not in {"asc", "desc"}:
+            summary_sort_order = "desc"
+
+        def summary_sort_key(row: Dict[str, Any]):
+            if summary_sort_field == "employee":
+                employee = row.get("employee")
+                last_name = (employee.last_name if employee else "") or ""
+                first_name = (employee.first_name if employee else "") or ""
+                return (last_name.lower(), first_name.lower(), row["employee_id"])
+            if summary_sort_field == "entries_count":
+                return (row["entries_count"], row["employee_id"])
+            if summary_sort_field == "total_amount":
+                return (row["total_amount"], row["employee_id"])
+            latest_entry = row.get("latest_entry")
+            if latest_entry:
+                return (latest_entry.period_end or date.min, latest_entry.id or 0)
+            return (date.min, row["employee_id"])
+
+        summary_rows.sort(key=summary_sort_key, reverse=(summary_sort_order == "desc"))
+
+        summary_total = len(summary_rows)
+        summary_pages = (summary_total + per_page - 1) // per_page if summary_total else 0
+        summary_page = page if view == "summary" else 1
+        if summary_pages and summary_page > summary_pages:
+            summary_page = summary_pages
+        if summary_page < 1:
+            summary_page = 1 if summary_pages else 0
+        summary_start_idx = (summary_page - 1) * per_page if summary_page else 0
+        summary_end_idx = summary_start_idx + per_page if summary_page else 0
+        summary_paginated_rows = summary_rows[summary_start_idx:summary_end_idx] if summary_rows else []
+
+        summary_filters = {
+            "object_id": object_id_int,
+            "period_start": period_start,
+            "period_end": period_end,
+            "show_inactive": show_inactive,
+        }
+        summary_sort_info = {"field": summary_sort_field, "order": summary_sort_order}
+        summary_pagination = {
+            "page": summary_page,
+            "per_page": per_page,
+            "total": summary_total,
+            "pages": summary_pages,
+        }
+
+        base_nav_params = {}
+        if object_id_int is not None:
+            base_nav_params["object_id"] = object_id_int
+        if period_start:
+            base_nav_params["period_start"] = period_start
+        if period_end:
+            base_nav_params["period_end"] = period_end
+
+        summary_nav_params = dict(base_nav_params)
+        summary_nav_params["view"] = "summary"
+        summary_nav_params["per_page"] = per_page
+        summary_nav_params["page"] = 1
+        if show_inactive:
+            summary_nav_params["show_inactive"] = "1"
+        summary_nav_params["sort"] = summary_sort_field
+        summary_nav_params["order"] = summary_sort_order
+        summary_nav_query = urlencode(summary_nav_params)
+
+        entries_nav_params = dict(base_nav_params)
+        entries_nav_params["view"] = "entries"
+        entries_nav_params["per_page"] = per_page
+        entries_nav_params["page"] = page
+        if q_employee:
+            entries_nav_params["q_employee"] = q_employee
+        if view == "entries" and sort:
+            entries_nav_params["sort"] = sort
+            entries_nav_params["order"] = order
+        entries_nav_query = urlencode(entries_nav_params)
+
         return templates.TemplateResponse(
             "owner/payroll/list.html",
             {
                 "request": request,
                 "current_user": current_user,
+                "view": view,
                 "entries": paginated_entries,
                 "employees": employees,
                 "objects": objects,
@@ -201,7 +358,14 @@ async def owner_payroll_list(
                     "pages": pages
                 },
                 "period_start": period_start,
-                "period_end": period_end
+                "period_end": period_end,
+                "summary_rows": summary_paginated_rows,
+                "summary_filters": summary_filters,
+                "summary_sort": summary_sort_info,
+                "summary_pagination": summary_pagination,
+                "summary_nav_query": summary_nav_query,
+                "entries_nav_query": entries_nav_query,
+                "summary_show_inactive": show_inactive
             }
         )
         

@@ -75,16 +75,18 @@
   - Время начала и окончания смены отображается в локальном времени объекта (через `web_timezone_helper.format_datetime_with_timezone`)
   - Исправлена ссылка на редактирование сотрудника: используется внутренний `user_id` вместо `telegram_id`
 - **Страница планирования смен (`/manager/shifts/plan`):**
-  - Полноэкранная страница планирования смен на основе модальной формы из `/manager/shifts`
-  - Использует API для менеджера: `/manager/calendar/api/objects`, `/manager/api/employees/for-object/{objectId}`, `/manager/calendar/api/data`, `/manager/api/calendar/check-availability`, `/manager/api/calendar/plan-shift`
-  - Поддержка предзаполнения объекта через параметр `object_id`
-  - Возврат на предыдущую страницу после планирования через параметр `return_to`
-  - Настроена высота ячеек календаря для размещения без прокрутки (`calc((100vh - 400px) / 6)`)
+  - Полноэкранная страница планирования смен (общий `plan_shift.js`)
+  - Показывает свободные интервалы по всем трекам тайм-слота, первый свободный диапазон выделен жирным
+  - Раздел «Запланированные смены» (с бейджем «Запланировано») позволяет отметить смены для отмены прямо в форме
+  - Использует API: `/manager/calendar/api/objects`, `/manager/api/employees/for-object/{objectId}`, `/manager/calendar/api/data`, `/manager/api/calendar/check-availability`, `/manager/api/calendar/plan-shift`, `/manager/shifts/api/schedule/{schedule_id}/cancel`
+  - `preselectedEmployeeId` подставляется при переходе с календаря (клик по смене/тайм-слоту)
+  - Параметр `return_to` сохраняет фильтры (`object_id`) и возвращает на календарь/список смен
 - **Календарь (`/manager/calendar`):**
-  - **3.7.1:** При клике на пустой день (не на тайм-слот и не на смену) открывается форма быстрого планирования тайм-слота с подставлением объекта (если он выбран в фильтре) и расчетом свободных окон в работе объекта. При клике на пустой тайм-слот открывается страница планирования смен (`/manager/shifts/plan`) с предзаполненным объектом из тайм-слота
-  - **3.7.2:** При клике на запланированную смену открывается страница планирования смен (`/manager/shifts/plan`) с предзаполненным объектом и возвратом в календарь. При клике на тайм-слот открывается страница планирования смен с предзаполненным объектом из тайм-слота
-  - **3.7.3:** Отключен drag&drop для объектов и сотрудников в календаре (установлен `draggable = false` для менеджера в `calendar_panels.js`, отключена инициализация drag&drop в `grid_unified.html`, панели drag&drop скрыты через `display: none`)
-  - Добавлен API endpoint `/manager/shifts/api/schedule/{schedule_id}/object-id` для получения `object_id` из запланированной смены
+  - Стартовая загрузка ограничена текущим месяцем; при прокрутке вызывается `loadMonthRange()` (текущий + следующий месяц)
+  - Тайм-слоты → общая модалка `plan_shift_modal.js` (tabs по `max_employees`, автоматическое расширение свободного интервала)
+  - Запланированные смены → `/manager/shifts/plan` с параметрами `employee_id`, `object_id`, `return_to`
+  - Drag&drop панелей отключён; поддерживаются только клики
+  - Endpoints: `/manager/calendar/api/timeslot/{timeslot_id}` возвращает занятость по трекам, `.../plan-shift` принимает частичные интервалы, очищает кэш (`calendar_shifts:*`, `api_response:*`)
 - **Роуты:**
   - `GET /manager/dashboard` — обновлен (apps/web/routes/manager.py)
   - `GET /manager/objects` — обновлен (apps/web/routes/manager.py, добавлены query параметры для фильтрации, сортировки и пагинации)

@@ -183,6 +183,21 @@ class UniversalCalendarManager {
             
             // Объединяем данные с существующими
             this.mergeMonthData(monthData);
+            this.processCalendarData();
+            
+            // Повторно отрисовываем сетку без сброса позиции
+            const scrollableContainer = document.querySelector('.calendar-scrollable');
+            const previousScrollTop = scrollableContainer ? scrollableContainer.scrollTop : null;
+            
+            if (this.onDataLoaded) {
+                this.onDataLoaded(this.calendarData);
+            } else if (typeof window.renderCalendarGrid === 'function') {
+                window.renderCalendarGrid(this.calendarData);
+            }
+            
+            if (scrollableContainer && previousScrollTop !== null) {
+                scrollableContainer.scrollTop = previousScrollTop;
+            }
             
             // Помечаем месяц как загруженный
             this.loadedMonths.add(monthKey);
@@ -702,6 +717,21 @@ class UniversalCalendarManager {
             
             // Объединяем данные
             this.mergeMonthData(newData);
+            this.processCalendarData();
+            
+            // Повторно отрисовываем сетку без сброса позиции
+            const scrollableContainer = document.querySelector('.calendar-scrollable');
+            const previousScrollTop = scrollableContainer ? scrollableContainer.scrollTop : null;
+            
+            if (this.onDataLoaded) {
+                this.onDataLoaded(this.calendarData);
+            } else if (typeof window.renderCalendarGrid === 'function') {
+                window.renderCalendarGrid(this.calendarData);
+            }
+            
+            if (scrollableContainer && previousScrollTop !== null) {
+                scrollableContainer.scrollTop = previousScrollTop;
+            }
             
             // Помечаем загруженные месяцы в указанном диапазоне
             for (let i = -prevRange; i <= nextRange; i++) {

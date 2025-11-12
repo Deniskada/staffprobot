@@ -6,109 +6,225 @@
 <div class="container-fluid mt-4">
     <div class="row">
         <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">
-                    <h3 class="card-title mb-0">
-                        <i class="fas fa-money-bill-wave"></i> {{ title }}
-                    </h3>
-                </div>
-                <div class="card-body">
-                    {% if error %}
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        {{ error }}
-                    </div>
-                    {% else %}
-                    
-                    <!-- Фильтры -->
-                    <form method="GET" action="/manager/payroll" class="row g-3 mb-4">
-                        <div class="col-md-3">
-                            <label for="period_start" class="form-label">Период с</label>
-                            <input type="date" class="form-control" id="period_start" name="period_start" 
-                                   value="{{ period_start }}">
-                        </div>
-                        <div class="col-md-3">
-                            <label for="period_end" class="form-label">по</label>
-                            <input type="date" class="form-control" id="period_end" name="period_end" 
-                                   value="{{ period_end }}">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="object_id" class="form-label">Объект</label>
-                            <select class="form-select" id="object_id" name="object_id">
-                                <option value="">Все доступные объекты</option>
-                                {% for obj in accessible_objects %}
-                                <option value="{{ obj.id }}" {% if selected_object_id == obj.id %}selected{% endif %}>
-                                    {{ obj.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">&nbsp;</label>
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="fas fa-filter"></i> Применить
-                            </button>
-                        </div>
-                    </form>
-                    
-                    <!-- Список сотрудников -->
-                    {% if employees %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Сотрудник</th>
-                                    <th>Количество начислений</th>
-                                    <th>Общая сумма</th>
-                                    <th>Последнее начисление</th>
-                                    <th>Действия</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for emp_data in employees %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ emp_data.employee.first_name }} {{ emp_data.employee.last_name or '' }}</strong>
-                                        {% if emp_data.employee.phone %}
-                                        <br><small class="text-muted">{{ emp_data.employee.phone }}</small>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-info">{{ emp_data.entries_count }}</span>
-                                    </td>
-                                    <td>
-                                        <strong class="text-success">{{ "%.2f"|format(emp_data.total_amount) }} ₽</strong>
-                                    </td>
-                                    <td>
-                                        {% if emp_data.latest_entry %}
-                                        <small class="text-muted">
-                                            {{ emp_data.latest_entry.period_start.strftime('%d.%m.%Y') }} - 
-                                            {{ emp_data.latest_entry.period_end.strftime('%d.%m.%Y') }}
-                                        </small>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if emp_data.latest_entry %}
-                                        <a href="/manager/payroll/{{ emp_data.latest_entry.id }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-eye"></i> Детали
-                                        </a>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i>
-                        За выбранный период начислений не найдено.
-                    </div>
-                    {% endif %}
-                    
-                    {% endif %}
-                </div>
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="h4 mb-0">
+                    <i class="fas fa-money-bill-wave me-2 text-primary"></i> {{ title }}
+                </h2>
             </div>
+
+            {% if error %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
+                </div>
+            {% else %}
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <form method="get" class="row g-3 align-items-end mb-4">
+                            <div class="col-md-3">
+                                <label for="period_start" class="form-label">Период с</label>
+                                <input
+                                    type="date"
+                                    class="form-control"
+                                    id="period_start"
+                                    name="period_start"
+                                    value="{{ filters.period_start }}"
+                                >
+                            </div>
+                            <div class="col-md-3">
+                                <label for="period_end" class="form-label">по</label>
+                                <input
+                                    type="date"
+                                    class="form-control"
+                                    id="period_end"
+                                    name="period_end"
+                                    value="{{ filters.period_end }}"
+                                >
+                            </div>
+                            <div class="col-md-3">
+                                <label for="object_id" class="form-label">Объект</label>
+                                <select class="form-select" id="object_id" name="object_id">
+                                    <option value="">Все доступные объекты</option>
+                                    {% for obj in accessible_objects %}
+                                        <option value="{{ obj.id }}" {% if filters.object_id == obj.id %}selected{% endif %}>
+                                            {{ obj.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-check">
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        value="1"
+                                        id="show_inactive"
+                                        name="show_inactive"
+                                        {% if show_inactive %}checked{% endif %}
+                                    >
+                                    <label class="form-check-label" for="show_inactive">
+                                        Показать уволенных
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-1">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-filter me-1"></i>OK
+                                </button>
+                            </div>
+                            <input type="hidden" name="sort" value="{{ sort.field }}">
+                            <input type="hidden" name="order" value="{{ sort.order }}">
+                            <input type="hidden" name="page" value="{{ pagination.page }}">
+                            <input type="hidden" name="per_page" value="{{ pagination.per_page }}">
+                        </form>
+
+                        {% if summary_rows %}
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th scope="col">
+                                                <a class="text-decoration-none text-dark" href="?sort=employee&order={% if sort.field == 'employee' and sort.order == 'asc' %}desc{% else %}asc{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}&period_start={{ filters.period_start }}&period_end={{ filters.period_end }}{% if show_inactive %}&show_inactive=1{% endif %}&per_page={{ pagination.per_page }}&page=1">
+                                                    Сотрудник
+                                                    {% if sort.field == 'employee' %}
+                                                        <i class="bi bi-arrow-{% if sort.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                                                    {% endif %}
+                                                </a>
+                                            </th>
+                                            <th scope="col" class="text-center">
+                                                <a class="text-decoration-none text-dark" href="?sort=entries_count&order={% if sort.field == 'entries_count' and sort.order == 'asc' %}desc{% else %}asc{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}&period_start={{ filters.period_start }}&period_end={{ filters.period_end }}{% if show_inactive %}&show_inactive=1{% endif %}&per_page={{ pagination.per_page }}&page=1">
+                                                    Начислений
+                                                    {% if sort.field == 'entries_count' %}
+                                                        <i class="bi bi-arrow-{% if sort.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                                                    {% endif %}
+                                                </a>
+                                            </th>
+                                            <th scope="col" class="text-end">
+                                                <a class="text-decoration-none text-dark" href="?sort=total_amount&order={% if sort.field == 'total_amount' and sort.order == 'asc' %}desc{% else %}asc{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}&period_start={{ filters.period_start }}&period_end={{ filters.period_end }}{% if show_inactive %}&show_inactive=1{% endif %}&per_page={{ pagination.per_page }}&page=1">
+                                                    Общая сумма
+                                                    {% if sort.field == 'total_amount' %}
+                                                        <i class="bi bi-arrow-{% if sort.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                                                    {% endif %}
+                                                </a>
+                                            </th>
+                                            <th scope="col">
+                                                <a class="text-decoration-none text-dark" href="?sort=latest_period&order={% if sort.field == 'latest_period' and sort.order == 'asc' %}desc{% else %}asc{% endif %}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}&period_start={{ filters.period_start }}&period_end={{ filters.period_end }}{% if show_inactive %}&show_inactive=1{% endif %}&per_page={{ pagination.per_page }}&page=1">
+                                                    Последнее начисление
+                                                    {% if sort.field == 'latest_period' %}
+                                                        <i class="bi bi-arrow-{% if sort.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                                                    {% endif %}
+                                                </a>
+                                            </th>
+                                            <th scope="col" class="text-end">Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in summary_rows %}
+                                            <tr>
+                                                <td>
+                                                    {% if row.employee %}
+                                                        <strong>{{ row.employee.last_name or '' }}{% if row.employee.last_name and row.employee.first_name %} {% endif %}{{ row.employee.first_name or '' }}</strong>
+                                                        {% if not row.is_active %}
+                                                            <span class="badge bg-secondary ms-2">Уволен</span>
+                                                        {% endif %}
+                                                        {% if row.employee.phone %}
+                                                            <br><small class="text-muted">{{ row.employee.phone }}</small>
+                                                        {% endif %}
+                                                    {% else %}
+                                                        <span class="text-muted">ID {{ row.employee_id }}</span>
+                                                        {% if not row.is_active %}
+                                                            <span class="badge bg-secondary ms-2">Уволен</span>
+                                                        {% endif %}
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-info">{{ row.entries_count }}</span>
+                                                </td>
+                                                <td class="text-end">
+                                                    <strong class="text-success">{{ "%.2f"|format(row.total_amount) }} ₽</strong>
+                                                </td>
+                                                <td>
+                                                    {% if row.latest_entry %}
+                                                        <small class="text-muted">
+                                                            {{ row.latest_entry.period_start.strftime('%d.%m.%Y') }} —
+                                                            {{ row.latest_entry.period_end.strftime('%d.%m.%Y') }}
+                                                        </small>
+                                                    {% else %}
+                                                        <span class="text-muted">—</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-end">
+                                                    {% if row.latest_entry %}
+                                                        <a href="/manager/payroll/{{ row.latest_entry.id }}" class="btn btn-sm btn-outline-primary">
+                                                            <i class="fas fa-eye"></i> Детали
+                                                        </a>
+                                                    {% else %}
+                                                        <button class="btn btn-sm btn-outline-secondary" disabled>
+                                                            <i class="fas fa-eye-slash"></i>
+                                                        </button>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-3">
+                                <form method="get" class="d-flex align-items-center gap-2">
+                                    <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                                    <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                                    {% if filters.object_id %}
+                                        <input type="hidden" name="object_id" value="{{ filters.object_id }}">
+                                    {% endif %}
+                                    {% if show_inactive %}
+                                        <input type="hidden" name="show_inactive" value="1">
+                                    {% endif %}
+                                    <input type="hidden" name="sort" value="{{ sort.field }}">
+                                    <input type="hidden" name="order" value="{{ sort.order }}">
+                                    <label for="perPageSelect" class="form-label mb-0">На странице:</label>
+                                    <select
+                                        class="form-select form-select-sm"
+                                        id="perPageSelect"
+                                        name="per_page"
+                                        onchange="this.form.submit()"
+                                    >
+                                        <option value="25" {% if pagination.per_page == 25 %}selected{% endif %}>25</option>
+                                        <option value="50" {% if pagination.per_page == 50 %}selected{% endif %}>50</option>
+                                        <option value="100" {% if pagination.per_page == 100 %}selected{% endif %}>100</option>
+                                    </select>
+                                    <input type="hidden" name="page" value="{{ pagination.page }}">
+                                </form>
+
+                                {% if pagination.pages > 1 %}
+                                    <nav aria-label="Пагинация">
+                                        <ul class="pagination mb-0">
+                                            <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
+                                                <a class="page-link" href="?page=1&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}&period_start={{ filters.period_start }}&period_end={{ filters.period_end }}{% if show_inactive %}&show_inactive=1{% endif %}&sort={{ sort.field }}&order={{ sort.order }}">Первая</a>
+                                            </li>
+                                            <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
+                                                <a class="page-link" href="?page={{ pagination.page - 1 }}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}&period_start={{ filters.period_start }}&period_end={{ filters.period_end }}{% if show_inactive %}&show_inactive=1{% endif %}&sort={{ sort.field }}&order={{ sort.order }}">Назад</a>
+                                            </li>
+                                            <li class="page-item active">
+                                                <span class="page-link">{{ pagination.page }} / {{ pagination.pages }}</span>
+                                            </li>
+                                            <li class="page-item {% if pagination.page == pagination.pages %}disabled{% endif %}">
+                                                <a class="page-link" href="?page={{ pagination.page + 1 }}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}&period_start={{ filters.period_start }}&period_end={{ filters.period_end }}{% if show_inactive %}&show_inactive=1{% endif %}&sort={{ sort.field }}&order={{ sort.order }}">Вперед</a>
+                                            </li>
+                                            <li class="page-item {% if pagination.page == pagination.pages %}disabled{% endif %}">
+                                                <a class="page-link" href="?page={{ pagination.pages }}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}&period_start={{ filters.period_start }}&period_end={{ filters.period_end }}{% if show_inactive %}&show_inactive=1{% endif %}&sort={{ sort.field }}&order={{ sort.order }}">Последняя</a>
+                                            </li>
+                                        </ul>
+                                    </nav>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info mb-0">
+                                <i class="fas fa-info-circle me-2"></i>За выбранный период начислений не найдено.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
         </div>
     </div>
 </div>

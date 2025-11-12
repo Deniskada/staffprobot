@@ -42,10 +42,20 @@ async def manager_payroll_adjustments_list(
     """Список корректировок начислений с фильтрами (только по доступным объектам)."""
     try:
         user_id = current_user.id
-        
-        # Получаем доступные объекты управляющего
+        user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
+        is_manager_only = "manager" in user_roles and "owner" not in user_roles
+
         permission_service = ManagerPermissionService(session)
-        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+
+        if is_manager_only:
+            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+        else:
+            objects_query = select(Object).where(Object.owner_id == user_id, Object.is_active == True)
+            objects_result = await session.execute(objects_query)
+            accessible_objects = objects_result.scalars().all()
+            accessible_employee_ids = None
+
         accessible_object_ids = [obj.id for obj in accessible_objects]
         
         if not accessible_object_ids:
@@ -80,6 +90,9 @@ async def manager_payroll_adjustments_list(
                 object_id_int = int(object_id)
             except ValueError:
                 pass
+
+        if object_id_int and object_id_int not in accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступа к указанному объекту")
         
         # Парсинг дат
         if date_from:
@@ -98,6 +111,9 @@ async def manager_payroll_adjustments_list(
         else:
             end_date = date.today()
         
+        if is_manager_only and employee_id_int and employee_id_int not in accessible_employee_ids:
+            raise HTTPException(status_code=403, detail="Нет доступа к указанному сотруднику")
+
         # Базовый запрос с фильтром по доступным объектам
         # Показываем корректировки либо с доступными объектами, либо без объекта (NULL)
         # ИЛИ по корректировкам без object_id, но с shift_schedule_id, где объект смены доступен управляющему
@@ -126,6 +142,16 @@ async def manager_payroll_adjustments_list(
             selectinload(PayrollAdjustment.updater)
         )
         
+        if is_manager_only and accessible_employee_ids:
+            query = query.where(
+                or_(
+                    PayrollAdjustment.employee_id.is_(None),
+                    PayrollAdjustment.employee_id.in_(accessible_employee_ids)
+                )
+            )
+        elif is_manager_only:
+            query = query.where(PayrollAdjustment.employee_id.is_(None))
+
         # Фильтры
         if adjustment_type:
             query = query.where(PayrollAdjustment.adjustment_type == adjustment_type)
@@ -153,33 +179,27 @@ async def manager_payroll_adjustments_list(
         result = await session.execute(query)
         adjustments = result.scalars().all()
         
-        # Получить список сотрудников управляющего для выпадающего списка
-        # Получаем всех сотрудников, работающих на доступных объектах
-        employees_query = select(User).join(
-            Contract, Contract.employee_id == User.id
-        ).where(
-            Contract.is_active == True,
-            Contract.status == 'active'
-        )
-        
-        # Добавляем фильтр по allowed_objects
-        from sqlalchemy import text, cast
-        from sqlalchemy.dialects.postgresql import JSONB
-        
-        # Проверяем пересечение allowed_objects с accessible_object_ids
-        employee_conditions = []
-        for obj_id in accessible_object_ids:
-            employee_conditions.append(
-                cast(Contract.allowed_objects, JSONB).op('@>')(cast([obj_id], JSONB))
+        # Получить список сотрудников для выпадающего списка
+        if is_manager_only and accessible_employee_ids:
+            employees_query = (
+                select(User)
+                .where(User.id.in_(accessible_employee_ids))
+                .order_by(User.last_name, User.first_name)
             )
-        
-        if employee_conditions:
-            query_condition = or_(*employee_conditions)
-            employees_query = employees_query.where(query_condition)
-        
-        employees_query = employees_query.distinct().order_by(User.last_name, User.first_name)
-        employees_result = await session.execute(employees_query)
-        employees = employees_result.scalars().all()
+            employees_result = await session.execute(employees_query)
+            employees = employees_result.scalars().all()
+        elif not is_manager_only:
+            employees_query = (
+                select(User)
+                .join(Contract, Contract.employee_id == User.id)
+                .where(Contract.owner_id == user_id, Contract.is_active == True)
+                .distinct()
+                .order_by(User.last_name, User.first_name)
+            )
+            employees_result = await session.execute(employees_query)
+            employees = employees_result.scalars().all()
+        else:
+            employees = []
         
         # Получить список доступных объектов для фильтра
         objects = accessible_objects
@@ -264,19 +284,46 @@ async def manager_create_manual_adjustment(
                 )
         
         user_id = current_user.id
-        
-        # Проверяем доступ к объекту (если указан)
-        if object_id:
-            permission_service = ManagerPermissionService(session)
-            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            accessible_object_ids = [obj.id for obj in accessible_objects]
-            
-            if object_id not in accessible_object_ids:
+        user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
+        is_manager_only = "manager" in user_roles and "owner" not in user_roles
+
+        permission_service = ManagerPermissionService(session)
+        accessible_object_ids: List[int] = []
+        accessible_employee_ids: List[int] = []
+
+        if is_manager_only:
+            accessible_object_ids = await permission_service.get_user_accessible_object_ids(user_id)
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+
+            if object_id and object_id not in accessible_object_ids:
                 return JSONResponse(
                     status_code=403,
                     content={"success": False, "error": "У вас нет доступа к этому объекту"}
                 )
+
+            if employee_id not in accessible_employee_ids:
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "У вас нет доступа к этому сотруднику"}
+                )
+        else:
+            accessible_object_ids = []
         
+        if shift_id:
+            shift_query = select(Shift).where(Shift.id == shift_id)
+            shift_result = await session.execute(shift_query)
+            shift = shift_result.scalar_one_or_none()
+            if not shift:
+                return JSONResponse(
+                    status_code=404,
+                    content={"success": False, "error": "Смена не найдена"}
+                )
+            if is_manager_only and shift.object_id not in accessible_object_ids:
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "У вас нет доступа к этой смене"}
+                )
+
         adjustment_service = PayrollAdjustmentService(session)
         
         adjustment = await adjustment_service.create_manual_adjustment(
@@ -328,7 +375,31 @@ async def manager_edit_adjustment(
     try:
         adjustment_service = PayrollAdjustmentService(session)
         user_id = current_user.id
-        
+        user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
+        is_manager_only = "manager" in user_roles and "owner" not in user_roles
+
+        permission_service = ManagerPermissionService(session)
+        accessible_object_ids: List[int] = []
+        accessible_employee_ids: List[int] = []
+
+        if is_manager_only:
+            accessible_object_ids = await permission_service.get_user_accessible_object_ids(user_id)
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+        else:
+            accessible_employee_ids = None
+        user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
+        is_manager_only = "manager" in user_roles and "owner" not in user_roles
+
+        permission_service = ManagerPermissionService(session)
+        accessible_object_ids: List[int] = []
+        accessible_employee_ids: List[int] = []
+
+        if is_manager_only:
+            accessible_object_ids = await permission_service.get_user_accessible_object_ids(user_id)
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+        else:
+            accessible_employee_ids = None
+
         # Получить корректировку
         from sqlalchemy import select
         from domain.entities.payroll_adjustment import PayrollAdjustment
@@ -349,16 +420,17 @@ async def manager_edit_adjustment(
                 content={"success": False, "error": "Можно редактировать только ручные корректировки"}
             )
         
-        # Проверить доступ к объекту (если указан)
-        if adjustment.object_id:
-            permission_service = ManagerPermissionService(session)
-            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            accessible_object_ids = [obj.id for obj in accessible_objects]
-            
-            if adjustment.object_id not in accessible_object_ids:
+        # Проверить доступ к объекту и сотруднику
+        if is_manager_only:
+            if adjustment.object_id and adjustment.object_id not in accessible_object_ids:
                 return JSONResponse(
                     status_code=403,
                     content={"success": False, "error": "У вас нет доступа к этой корректировке"}
+                )
+            if adjustment.employee_id and adjustment.employee_id not in accessible_employee_ids:
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "У вас нет доступа к этому сотруднику"}
                 )
         
         # Подготовка обновлений
@@ -392,6 +464,11 @@ async def manager_edit_adjustment(
             entry = entry_result.scalar_one_or_none()
             
             if entry:
+                if is_manager_only and entry.object_id and entry.object_id not in accessible_object_ids:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"success": False, "error": "У вас нет доступа к начислению этой корректировки"}
+                    )
                 # Получить все корректировки этого начисления
                 all_adjustments_query = select(PayrollAdjustment).where(
                     PayrollAdjustment.payroll_entry_id == adjustment.payroll_entry_id
@@ -477,16 +554,17 @@ async def manager_delete_adjustment(
                 content={"success": False, "error": "Можно удалять только ручные корректировки"}
             )
         
-        # Проверить доступ к объекту (если указан)
-        if adjustment.object_id:
-            permission_service = ManagerPermissionService(session)
-            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            accessible_object_ids = [obj.id for obj in accessible_objects]
-            
-            if adjustment.object_id not in accessible_object_ids:
+        # Проверить доступ к объекту и сотруднику
+        if is_manager_only:
+            if adjustment.object_id and adjustment.object_id not in accessible_object_ids:
                 return JSONResponse(
                     status_code=403,
                     content={"success": False, "error": "У вас нет доступа к этой корректировке"}
+                )
+            if adjustment.employee_id and adjustment.employee_id not in accessible_employee_ids:
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "У вас нет доступа к этому сотруднику"}
                 )
         
         # Если корректировка применена к начислению, нужно пересчитать суммы
@@ -503,6 +581,11 @@ async def manager_delete_adjustment(
             entry = entry_result.scalar_one_or_none()
             
             if entry:
+                if is_manager_only and entry.object_id and entry.object_id not in accessible_object_ids:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"success": False, "error": "У вас нет доступа к начислению этой корректировки"}
+                    )
                 # Получить все оставшиеся корректировки
                 remaining_adjustments_query = select(PayrollAdjustment).where(
                     PayrollAdjustment.payroll_entry_id == payroll_entry_id,

@@ -1,5 +1,6 @@
 """Роуты для интерфейса управляющего."""
 
+import json
 from typing import List, Dict, Any, Optional
 from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Request, Depends, HTTPException, Query, Form, status
@@ -2631,8 +2632,31 @@ async def get_timeslot_details_manager(
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
             # Получаем доступные объекты управляющего
+            raw_roles = current_user.get("roles") or []
+            if isinstance(raw_roles, str):
+                raw_roles = [raw_roles]
+            if not raw_roles:
+                primary_role = current_user.get("role")
+                raw_roles = [primary_role] if primary_role else []
+            is_manager_only = "manager" in raw_roles and "owner" not in raw_roles
+
             permission_service = ManagerPermissionService(db)
-            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+
+            if is_manager_only:
+                accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+                accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+            else:
+                objects_query = select(Object).where(Object.owner_id == user_id, Object.is_active == True)
+                objects_result = await db.execute(objects_query)
+                accessible_objects = objects_result.scalars().all()
+
+                contracts_query = select(Contract.employee_id).where(
+                    Contract.owner_id == user_id,
+                    Contract.is_active == True
+                )
+                contracts_result = await db.execute(contracts_query)
+                accessible_employee_ids = list({row[0] for row in contracts_result.all()})
+
             accessible_object_ids = [obj.id for obj in accessible_objects]
             
             if not accessible_object_ids:
@@ -2963,11 +2987,12 @@ async def manager_reports(
             employees_result = await db.execute(employees_query)
             employees = employees_result.all()
             
-            # Если нет сотрудников из смен, показываем всех пользователей с ролью employee
-            if not employees:
-                all_employees_query = select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.phone, User.role, User.is_active, User.created_at, User.updated_at).where(User.role == "employee")
-                all_employees_result = await db.execute(all_employees_query)
-                employees = all_employees_result.all()
+            if not employees and accessible_employee_ids:
+                fallback_query = select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.phone, User.role, User.is_active, User.created_at, User.updated_at).where(
+                    User.id.in_(accessible_employee_ids)
+                )
+                fallback_result = await db.execute(fallback_query)
+                employees = fallback_result.all()
             
             # Статистика за последний месяц
             month_ago = datetime.now() - timedelta(days=30)
@@ -2989,7 +3014,7 @@ async def manager_reports(
                 "total_hours": sum(s.total_hours or 0 for s in recent_shifts if s.total_hours),
                 "total_payment": sum(s.total_payment or 0 for s in recent_shifts if s.total_payment),
                 "active_objects": len(accessible_objects),
-                "employees": len(employees)
+                "employees": len(accessible_employee_ids) if accessible_employee_ids else len(employees)
             }
             
             # Получаем данные для переключения интерфейсов
@@ -3032,16 +3057,50 @@ async def manager_generate_report(
                 raise HTTPException(status_code=401, detail="Пользователь не найден")
             
             # Получаем доступные объекты управляющего
+            raw_roles = current_user.get("roles") or []
+            if isinstance(raw_roles, str):
+                raw_roles = [raw_roles]
+            if not raw_roles:
+                primary_role = current_user.get("role")
+                raw_roles = [primary_role] if primary_role else []
+            is_manager_only = "manager" in raw_roles and "owner" not in raw_roles
+
             permission_service = ManagerPermissionService(db)
-            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            accessible_object_ids = [obj.id for obj in accessible_objects]
-            
-            if not accessible_object_ids:
-                raise HTTPException(status_code=403, detail="Нет доступа к объектам")
-            
-            # Проверяем доступ к конкретному объекту, если указан
-            if object_id and object_id not in accessible_object_ids:
-                raise HTTPException(status_code=403, detail="Нет доступа к указанному объекту")
+
+            if is_manager_only:
+                accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+                accessible_object_ids = [obj.id for obj in accessible_objects]
+                accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+
+                if not accessible_object_ids:
+                    raise HTTPException(status_code=403, detail="Нет доступа к объектам")
+
+                if object_id and object_id not in accessible_object_ids:
+                    raise HTTPException(status_code=403, detail="Нет доступа к указанному объекту")
+
+                if employee_id and employee_id not in accessible_employee_ids:
+                    raise HTTPException(status_code=403, detail="Нет доступа к указанному сотруднику")
+            else:
+                objects_query = select(Object).where(Object.owner_id == user_id, Object.is_active == True)
+                objects_result = await db.execute(objects_query)
+                accessible_objects = objects_result.scalars().all()
+                accessible_object_ids = [obj.id for obj in accessible_objects]
+
+                if not accessible_object_ids:
+                    raise HTTPException(status_code=403, detail="Нет доступа к объектам")
+
+                if object_id and object_id not in accessible_object_ids:
+                    raise HTTPException(status_code=403, detail="Нет доступа к указанному объекту")
+
+                if employee_id:
+                    contract_query = select(Contract).where(
+                        Contract.employee_id == employee_id,
+                        Contract.owner_id == user_id,
+                        Contract.is_active == True
+                    )
+                    contract_result = await db.execute(contract_query)
+                    if contract_result.scalar_one_or_none() is None:
+                        raise HTTPException(status_code=403, detail="Нет доступа к указанному сотруднику")
             
             # Парсим даты
             from datetime import datetime
@@ -4768,20 +4827,35 @@ async def manager_profile(
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
-        # Получаем доступные объекты для статистики
+        # Получаем доступные объекты и договоры управляющего
         permission_service = ManagerPermissionService(db)
         accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-        
+        accessible_object_ids = [obj.id for obj in accessible_objects]
+        manager_contracts = await permission_service.get_manager_contracts_for_user(user_id)
+        accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+
+        # Подсчитываем активные смены на доступных объектах
+        active_shifts_count = 0
+        if accessible_object_ids:
+            active_shifts_query = select(func.count(Shift.id)).where(
+                Shift.object_id.in_(accessible_object_ids),
+                Shift.status == "active"
+            )
+            active_shifts_result = await db.execute(active_shifts_query)
+            active_shifts_count = active_shifts_result.scalar_one() or 0
+
+        total_employees_count = len(accessible_employee_ids)
+
         # Получаем данные для переключения интерфейсов
         login_service = RoleBasedLoginService(db)
         available_interfaces = await login_service.get_available_interfaces(user_id)
         
         # Статистика профиля
         profile_stats = {
-            'accessible_objects_count': len(accessible_objects),
-            'total_contracts': 0,  # TODO: Добавить подсчет договоров
-            'active_shifts_count': 0,  # TODO: Добавить подсчет активных смен
-            'total_employees_count': 0  # TODO: Добавить подсчет сотрудников
+            "accessible_objects_count": len(accessible_object_ids),
+            "total_contracts": len(manager_contracts),
+            "active_shifts_count": active_shifts_count,
+            "total_employees_count": total_employees_count,
         }
         
         return templates.TemplateResponse("manager/profile.html", {
@@ -4789,7 +4863,6 @@ async def manager_profile(
             "current_user": current_user,
             "user": user,
             "profile_stats": profile_stats,
-            "accessible_objects": accessible_objects,
             "available_interfaces": available_interfaces,
             "success_message": request.query_params.get("success"),
             "error_message": request.query_params.get("error"),

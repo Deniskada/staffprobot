@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -19,7 +19,9 @@ from shared.services.manager_permission_service import ManagerPermissionService
 from domain.entities.object import Object
 from domain.entities.user import User
 from domain.entities.contract import Contract
+from domain.entities.payroll_entry import PayrollEntry
 from core.logging.logger import logger
+from apps.web.routes.manager import get_manager_context
 
 router = APIRouter()
 
@@ -31,127 +33,245 @@ async def manager_payroll_list(
     db: AsyncSession = Depends(get_db_session),
     period_start: Optional[str] = Query(None),
     period_end: Optional[str] = Query(None),
-    object_id: Optional[str] = Query(None)  # Изменено на str для обработки пустых значений
+    object_id: Optional[str] = Query(None),
+    sort: Optional[str] = Query(None),
+    order: str = Query("desc"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=1, le=100),
+    show_inactive: bool = Query(False),
 ):
-    """Список начислений (только по доступным объектам)."""
+    """Сводка начислений по сотрудникам с фильтрами и пагинацией."""
     try:
-        # Конвертация object_id в int, игнорируя пустые строки
-        object_id_int = None
+        # Парсинг фильтров
+        object_id_int: Optional[int] = None
         if object_id and object_id.strip():
             try:
                 object_id_int = int(object_id)
             except ValueError:
-                pass
-        
-        # current_user - это объект User с множественными ролями
+                raise HTTPException(status_code=400, detail="object_id должен быть числом")
+
+        try:
+            if period_end:
+                period_end_date = date.fromisoformat(period_end)
+            else:
+                period_end_date = date.today()
+
+            if period_start:
+                period_start_date = date.fromisoformat(period_start)
+            else:
+                period_start_date = period_end_date - timedelta(days=60)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат дат. Используйте YYYY-MM-DD")
+
+        if period_start_date > period_end_date:
+            raise HTTPException(status_code=400, detail="Дата начала периода не может быть позже даты окончания")
+
+        sort_field = (sort or "latest_period").lower()
+        if sort_field not in {"latest_period", "employee", "entries_count", "total_amount"}:
+            sort_field = "latest_period"
+        sort_order = order.lower() if order else "desc"
+        if sort_order not in {"asc", "desc"}:
+            sort_order = "desc"
+
         user_id = current_user.id
-        user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
-        
-        # Получить доступные объекты управляющего
+        user_roles = current_user.get_roles() if hasattr(current_user, "get_roles") else current_user.roles
+        if isinstance(user_roles, str):
+            user_roles = [user_roles]
+        user_roles = user_roles or []
+        is_manager_only = "manager" in user_roles and "owner" not in user_roles
+
         permission_service = ManagerPermissionService(db)
-        
-        if "manager" in user_roles and "owner" not in user_roles:
+
+        if is_manager_only:
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
             if not accessible_objects:
+                manager_context = await get_manager_context(user_id, db)
                 return templates.TemplateResponse(
                     "manager/payroll/list.html",
                     {
                         "request": request,
                         "current_user": current_user,
                         "title": "Начисления и выплаты",
-                        "employees": [],
+                        "summary_rows": [],
                         "accessible_objects": [],
-                        "error": "У вас нет доступных объектов"
-                    }
+                        "filters": {
+                            "object_id": None,
+                            "period_start": period_start_date.isoformat(),
+                            "period_end": period_end_date.isoformat(),
+                            "show_inactive": show_inactive,
+                        },
+                        "sort": {"field": sort_field, "order": sort_order},
+                        "pagination": {"page": page, "per_page": per_page, "total": 0, "pages": 0},
+                        "show_inactive": show_inactive,
+                        "error": "У вас нет доступных объектов",
+                        **manager_context,
+                    },
                 )
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+            active_employee_ids = set(await permission_service.get_user_accessible_employee_ids(user_id))
         else:
-            # Владелец видит все свои объекты
-            objects_query = select(Object).where(Object.owner_id == user_id, Object.is_active == True)
+            objects_query = (
+                select(Object)
+                .where(Object.owner_id == user_id, Object.is_active == True)
+                .order_by(Object.name)
+            )
             objects_result = await db.execute(objects_query)
             accessible_objects = objects_result.scalars().all()
-        
-        accessible_object_ids = [obj.id for obj in accessible_objects]
-        
-        # Получить начисления
-        payroll_service = PayrollService(db)
-        
-        # Фильтрация по периоду
-        if period_start and period_end:
-            start_date = datetime.strptime(period_start, "%Y-%m-%d").date()
-            end_date = datetime.strptime(period_end, "%Y-%m-%d").date()
-        else:
-            # По умолчанию - последние 60 дней (чтобы показать хоть какие-то начисления)
-            today = date.today()
-            start_date = today - timedelta(days=60)
-            end_date = today
-        
-        # Получить сотрудников с начислениями
-        employees_data = []
-        
-        # Получить уникальных сотрудников из начислений за период
-        from domain.entities.payroll_entry import PayrollEntry
-        
-        # Фильтр по объекту (если указан)
-        if object_id_int and object_id_int in accessible_object_ids:
-            object_filter = PayrollEntry.object_id == object_id_int
-        else:
-            object_filter = PayrollEntry.object_id.in_(accessible_object_ids)
-        
-        payroll_query = select(PayrollEntry).where(
-            and_(
-                PayrollEntry.period_start >= start_date,
-                PayrollEntry.period_end <= end_date,
-                object_filter  # Фильтр по доступным объектам
+            accessible_object_ids = [obj.id for obj in accessible_objects]
+
+            active_contracts_query = select(Contract.employee_id).where(
+                Contract.owner_id == user_id,
+                Contract.is_active == True,
             )
-        ).options(selectinload(PayrollEntry.employee))
-        
-        payroll_result = await db.execute(payroll_query)
-        all_entries = payroll_result.scalars().all()
-        
-        # Группировать по сотрудникам
-        employees_entries = {}
-        for entry in all_entries:
-            emp_id = entry.employee_id
-            if emp_id not in employees_entries:
-                employees_entries[emp_id] = []
-            employees_entries[emp_id].append(entry)
-        
-        # Для каждого сотрудника создать запись
-        for emp_id, entries in employees_entries.items():
-            user_query = select(User).where(User.id == emp_id)
-            user_result = await db.execute(user_query)
-            employee = user_result.scalar_one_or_none()
-            
-            if employee:
-                total_amount = sum(entry.net_amount for entry in entries)
-                employees_data.append({
-                    "employee": employee,
-                    "entries_count": len(entries),
-                    "total_amount": total_amount,
-                    "latest_entry": entries[0] if entries else None
-                })
-        
-        logger.info(f"Manager payroll: found {len(employees_data)} employees, {len(accessible_objects)} accessible objects")
-        
-        # Получаем контекст управляющего
-        from apps.web.routes.manager import get_manager_context
+            active_contracts_result = await db.execute(active_contracts_query)
+            active_employee_ids = set(active_contracts_result.scalars().all())
+
+        if object_id_int and object_id_int not in accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступа к указанному объекту")
+
+        filters_dict = {
+            "object_id": object_id_int,
+            "period_start": period_start_date.isoformat(),
+            "period_end": period_end_date.isoformat(),
+            "show_inactive": show_inactive,
+        }
+
+        # Загрузка начислений
+        entries_query = (
+            select(PayrollEntry)
+            .where(
+                PayrollEntry.period_start >= period_start_date,
+                PayrollEntry.period_end <= period_end_date,
+            )
+            .options(selectinload(PayrollEntry.employee))
+        )
+
+        if accessible_object_ids:
+            entries_query = entries_query.where(PayrollEntry.object_id.in_(accessible_object_ids))
+
+        if object_id_int:
+            entries_query = entries_query.where(PayrollEntry.object_id == object_id_int)
+
+        entries_result = await db.execute(entries_query)
+        entries = entries_result.scalars().all()
+
+        summary_map: Dict[int, Dict[str, Any]] = {}
+        employee_objs_map: Dict[int, User] = {}
+
+        for entry in entries:
+            if entry.employee_id is None:
+                continue
+
+            emp_id = int(entry.employee_id)
+            if emp_id not in summary_map:
+                summary_map[emp_id] = {
+                    "employee_id": emp_id,
+                    "employee": None,
+                    "entries_count": 0,
+                    "total_amount": 0.0,
+                    "latest_entry": None,
+                    "latest_entry_id": None,
+                    "is_active": False,
+                }
+
+            row = summary_map[emp_id]
+            row["entries_count"] += 1
+            row["total_amount"] += float(entry.net_amount or 0)
+
+            if row["latest_entry"] is None or (entry.id and entry.id > (row["latest_entry_id"] or 0)):
+                row["latest_entry"] = entry
+                row["latest_entry_id"] = entry.id
+
+            if entry.employee:
+                employee_objs_map[emp_id] = entry.employee
+
+        # Добавляем сотрудников с активными договорами (даже без начислений)
+        for emp_id in active_employee_ids:
+            if emp_id not in summary_map:
+                summary_map[emp_id] = {
+                    "employee_id": emp_id,
+                    "employee": None,
+                    "entries_count": 0,
+                    "total_amount": 0.0,
+                    "latest_entry": None,
+                    "latest_entry_id": None,
+                    "is_active": True,
+                }
+
+        missing_employee_ids = [emp_id for emp_id in summary_map.keys() if emp_id not in employee_objs_map]
+        if missing_employee_ids:
+            users_query = select(User).where(User.id.in_(missing_employee_ids))
+            users_result = await db.execute(users_query)
+            for user in users_result.scalars().all():
+                employee_objs_map[user.id] = user
+
+        summary_rows: List[Dict[str, Any]] = []
+        for emp_id, row in summary_map.items():
+            employee = employee_objs_map.get(emp_id)
+            row["employee"] = employee
+            row["is_active"] = emp_id in active_employee_ids
+            row["total_amount"] = float(row["total_amount"])
+            summary_rows.append(row)
+
+        if not show_inactive:
+            summary_rows = [row for row in summary_rows if row["is_active"]]
+
+        # Сортировка
+        def sort_key(row: Dict[str, Any]):
+            if sort_field == "employee":
+                employee = row.get("employee")
+                last_name = (employee.last_name if employee else "") or ""
+                first_name = (employee.first_name if employee else "") or ""
+                return (last_name.lower(), first_name.lower(), row["employee_id"])
+            if sort_field == "entries_count":
+                return (row["entries_count"], row["employee_id"])
+            if sort_field == "total_amount":
+                return (row["total_amount"], row["employee_id"])
+
+            latest_entry = row.get("latest_entry")
+            if latest_entry:
+                return (latest_entry.period_end or date.min, latest_entry.id or 0)
+            return (date.min, row["employee_id"])
+
+        summary_rows.sort(key=sort_key, reverse=(sort_order == "desc"))
+
+        total_rows = len(summary_rows)
+        total_pages = (total_rows + per_page - 1) // per_page if total_rows else 0
+        if total_pages and page > total_pages:
+            page = total_pages
+        if page < 1:
+            page = 1
+
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_rows = summary_rows[start_idx:end_idx]
+
+        pagination_info = {
+            "page": page,
+            "per_page": per_page,
+            "total": total_rows,
+            "pages": total_pages,
+        }
+
         manager_context = await get_manager_context(user_id, db)
-        
+
         return templates.TemplateResponse(
             "manager/payroll/list.html",
             {
                 "request": request,
                 "current_user": current_user,
-                "title": "Выплаты",
-                "employees": employees_data,
+                "title": "Начисления и выплаты",
+                "summary_rows": paginated_rows,
                 "accessible_objects": accessible_objects,
-                "period_start": period_start or start_date.strftime("%Y-%m-%d"),
-                "period_end": period_end or end_date.strftime("%Y-%m-%d"),
-                "selected_object_id": object_id_int,
-                **manager_context
-            }
+                "filters": filters_dict,
+                "sort": {"field": sort_field, "order": sort_order},
+                "pagination": pagination_info,
+                "show_inactive": show_inactive,
+                "has_rows": total_rows > 0,
+                **manager_context,
+            },
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -178,16 +298,28 @@ async def manager_payroll_detail(
         if not entry:
             raise HTTPException(status_code=404, detail="Начисление не найдено")
         
-        # Проверить доступ (управляющий должен иметь доступ к объектам смен сотрудника)
-        if "manager" in user_roles and "owner" not in user_roles:
-            permission_service = ManagerPermissionService(db)
+        permission_service = ManagerPermissionService(db)
+        is_manager_only = "manager" in user_roles and "owner" not in user_roles
+
+        if is_manager_only:
             accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            accessible_object_ids = [obj.id for obj in accessible_objects]
-            
-            # Проверить, что все смены сотрудника в доступных объектах
-            # (упрощенная проверка - просто даем доступ, если есть хоть один доступный объект)
-            if not accessible_object_ids:
+        else:
+            objects_query = select(Object).where(Object.owner_id == user_id, Object.is_active == True)
+            objects_result = await db.execute(objects_query)
+            accessible_objects = objects_result.scalars().all()
+
+        accessible_object_ids = [obj.id for obj in accessible_objects]
+
+        if is_manager_only:
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(
+                user_id, include_inactive=True
+            )
+            if entry.object_id and entry.object_id not in accessible_object_ids:
                 raise HTTPException(status_code=403, detail="У вас нет доступа к этому начислению")
+            if entry.employee_id not in accessible_employee_ids:
+                raise HTTPException(status_code=403, detail="У вас нет доступа к этому сотруднику")
+        else:
+            accessible_employee_ids = None
         
         # Получить связанные adjustments
         from domain.entities.payroll_adjustment import PayrollAdjustment
@@ -241,31 +373,51 @@ async def manager_payroll_detail(
         deductions = [adj for adj in all_adjustments if adj.amount < 0]
         bonuses = [adj for adj in all_adjustments if adj.amount > 0]
         
-        # Получить список сотрудников с доступом к объектам управляющего
-        permission_service = ManagerPermissionService(db)
-        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-        accessible_object_ids = [obj.id for obj in accessible_objects]
-        
-        # Сотрудники с договорами на доступные объекты
-        from domain.entities.contract import Contract
-        from sqlalchemy.dialects.postgresql import JSONB
-        from sqlalchemy import cast, or_
-        
-        employees_query = (
-            select(User)
-            .join(Contract, Contract.employee_id == User.id)
-            .where(
-                Contract.allowed_objects.isnot(None),
-                or_(*[
-                    cast(Contract.allowed_objects, JSONB).op('@>')(cast([obj_id], JSONB))
-                    for obj_id in accessible_object_ids
-                ] if accessible_object_ids else [False])
-            )
-            .distinct()
+        # Выплаты по начислению
+        from domain.entities.employee_payment import EmployeePayment
+
+        payments_query = select(EmployeePayment).where(
+            EmployeePayment.payroll_entry_id == entry_id
+        ).order_by(EmployeePayment.payment_date)
+        payments_result = await db.execute(payments_query)
+        payments = payments_result.scalars().all()
+        has_payments = len(payments) > 0
+
+        # Список начислений сотрудника
+        employee_entries = await payroll_service.get_payroll_entries_by_employee(
+            employee_id=entry.employee_id,
+            limit=500
         )
-        employees_result = await db.execute(employees_query)
-        employees = employees_result.scalars().all()
-        
+        if is_manager_only and accessible_object_ids:
+            employee_entries = [
+                e for e in employee_entries
+                if e.object_id in accessible_object_ids
+            ]
+        employee_entries.sort(key=lambda e: (e.period_end, e.id), reverse=True)
+
+        # Сотрудники для выпадающего списка (для модалок)
+        if is_manager_only:
+            if accessible_employee_ids:
+                employees_query = (
+                    select(User)
+                    .where(User.id.in_(accessible_employee_ids))
+                    .order_by(User.last_name, User.first_name)
+                )
+                employees_result = await db.execute(employees_query)
+                employees = employees_result.scalars().all()
+            else:
+                employees = []
+        else:
+            employees_query = (
+                select(User)
+                .join(Contract, Contract.employee_id == User.id)
+                .where(Contract.owner_id == user_id, Contract.is_active == True)
+                .distinct()
+                .order_by(User.last_name, User.first_name)
+            )
+            employees_result = await db.execute(employees_query)
+            employees = employees_result.scalars().all()
+
         # Получаем контекст управляющего
         from apps.web.routes.manager import get_manager_context
         manager_context = await get_manager_context(user_id, db)
@@ -282,6 +434,9 @@ async def manager_payroll_detail(
                 "is_manager": "manager" in user_roles and "owner" not in user_roles,
                 "accessible_objects": accessible_objects,
                 "employees": employees,
+                "employee_entries": employee_entries,
+                "payments": payments,
+                "has_payments": has_payments,
                 **manager_context
             }
         )
@@ -328,18 +483,58 @@ async def manager_add_adjustment_to_entry(
                 )
         
         user_id = current_user.id
-        
-        # Проверить доступ к объекту (если указан)
-        if object_id:
-            permission_service = ManagerPermissionService(db)
-            accessible_objects = await permission_service.get_user_accessible_objects(user_id)
-            accessible_object_ids = [obj.id for obj in accessible_objects]
-            
-            if object_id not in accessible_object_ids:
+        user_roles = current_user.get_roles() if hasattr(current_user, 'get_roles') else current_user.roles
+        is_manager_only = "manager" in user_roles and "owner" not in user_roles
+
+        permission_service = ManagerPermissionService(db)
+        accessible_object_ids: List[int] = []
+        accessible_employee_ids: List[int] = []
+
+        if is_manager_only:
+            accessible_object_ids = await permission_service.get_user_accessible_object_ids(user_id)
+            accessible_employee_ids = await permission_service.get_user_accessible_employee_ids(user_id)
+            if not accessible_object_ids:
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "У вас нет доступа к объектам"}
+                )
+        else:
+            accessible_employee_ids = None
+
+        payroll_service = PayrollService(db)
+        entry = await payroll_service.get_payroll_entry_by_id(entry_id)
+        if not entry:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "error": "Начисление не найдено"}
+            )
+
+        if employee_id != entry.employee_id:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Сотрудник не соответствует начислению"}
+            )
+
+        if is_manager_only:
+            if entry.object_id and entry.object_id not in accessible_object_ids:
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "У вас нет доступа к этому начислению"}
+                )
+            if employee_id not in accessible_employee_ids:
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "У вас нет доступа к этому сотруднику"}
+                )
+            if object_id and object_id not in accessible_object_ids:
                 return JSONResponse(
                     status_code=403,
                     content={"success": False, "error": "У вас нет доступа к этому объекту"}
                 )
+
+        # Если объект не указан, подставляем из начисления
+        if not object_id and entry.object_id:
+            object_id = entry.object_id
         
         adjustment_service = PayrollAdjustmentService(db)
         
