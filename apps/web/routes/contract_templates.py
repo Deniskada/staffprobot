@@ -95,7 +95,7 @@ async def create_contract_template(
         template = await contract_service.create_contract_template(template_data)
         
         if template:
-            return RedirectResponse(url="/contract-templates", status_code=303)
+            return RedirectResponse(url="/owner/contract-templates", status_code=303)
         else:
             raise HTTPException(status_code=400, detail="Ошибка создания шаблона")
             
@@ -226,7 +226,7 @@ async def update_contract_template(
         success = await contract_service.update_contract_template(template_id, template_data)
         
         if success:
-            return RedirectResponse(url=f"/contract-templates/{template_id}", status_code=303)
+            return RedirectResponse(url=f"/owner/contract-templates/{template_id}", status_code=303)
         else:
             raise HTTPException(status_code=400, detail="Ошибка обновления шаблона")
             
@@ -249,7 +249,7 @@ async def delete_contract_template(request: Request, template_id: int):
         success = await contract_service.delete_contract_template(template_id)
         
         if success:
-            return RedirectResponse(url="/contract-templates", status_code=303)
+            return RedirectResponse(url="/owner/contract-templates", status_code=303)
         else:
             raise HTTPException(status_code=400, detail="Ошибка удаления шаблона")
             

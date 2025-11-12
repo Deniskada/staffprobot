@@ -247,7 +247,7 @@ app.include_router(dashboard.router, prefix="/dashboard", tags=["Дашборд"
 app.include_router(users.router, prefix="/users", tags=["Пользователи"])
 # app.include_router(employees.router, prefix="/employees", tags=["Сотрудники"])  # Перенесено в owner.py
 # app.include_router(templates_routes.router, prefix="/templates", tags=["Шаблоны планирования"])  # Перенесено в owner.py
-app.include_router(contract_templates.router, prefix="/contract-templates", tags=["Шаблоны договоров"])
+app.include_router(contract_templates.router, prefix="/owner/contract-templates", tags=["Шаблоны договоров"])
 # app.include_router(profile.router, tags=["Профиль владельца"])  # Перенесено в owner.py
 app.include_router(admin.router, prefix="/admin", tags=["Администрирование"])
 app.include_router(admin_notifications.router, prefix="/admin/notifications", tags=["Управление уведомлениями"])
