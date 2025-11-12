@@ -259,34 +259,28 @@ class UniversalCalendarManager {
     initializeLoadedMonthsCache() {
         if (!this.calendarData) return;
         
-        // Помечаем все месяцы в диапазоне 4 месяцев как загруженные (1 назад + текущий + 2 вперед)
-        const currentDate = new Date();
-        const currentMonth = currentDate.getMonth() + 1; // 1-based
-        const currentYear = currentDate.getFullYear();
+        const metadata = this.calendarData.metadata || {};
+        const dateRangeStart = metadata.date_range_start || this.calendarData.date_range?.start;
+        const dateRangeEnd = metadata.date_range_end || this.calendarData.date_range?.end;
         
-        console.log(`[UniversalCalendar] Initializing cache for 4 months around ${currentYear}-${currentMonth}`);
+        let start = dateRangeStart ? this.parseDateLocal(dateRangeStart) : new Date(this.currentDate);
+        let end = dateRangeEnd ? this.parseDateLocal(dateRangeEnd) : new Date(this.currentDate);
         
-        for (let i = -1; i <= 2; i++) {
-            const targetMonth = currentMonth + i;
-            let targetYear = currentYear;
-            let monthNumber = targetMonth;
-            
-            // Корректируем год и месяц
-            if (targetMonth <= 0) {
-                monthNumber = 12 + targetMonth;
-                targetYear = currentYear - 1;
-            } else if (targetMonth > 12) {
-                monthNumber = targetMonth - 12;
-                targetYear = currentYear + 1;
-            }
-            
-            const monthKey = `${targetYear}-${monthNumber}`;
+        // Нормализуем к первому числу месяца
+        start = new Date(start.getFullYear(), start.getMonth(), 1);
+        end = new Date(end.getFullYear(), end.getMonth(), 1);
+        
+        console.log(`[UniversalCalendar] Initializing cache for range ${start.getFullYear()}-${start.getMonth() + 1} to ${end.getFullYear()}-${end.getMonth() + 1}`);
+        
+        const iter = new Date(start);
+        while (iter <= end) {
+            const monthKey = `${iter.getFullYear()}-${iter.getMonth() + 1}`;
             this.loadedMonths.add(monthKey);
-            console.log(`[UniversalCalendar] Cached month: ${monthKey}`);
+            iter.setMonth(iter.getMonth() + 1);
         }
         
         // Устанавливаем текущий видимый месяц
-        this.currentVisibleMonth = `${currentYear}-${currentMonth}`;
+        this.currentVisibleMonth = `${this.currentDate.getFullYear()}-${this.currentDate.getMonth() + 1}`;
     }
     
     bindEvents() {
@@ -399,24 +393,17 @@ class UniversalCalendarManager {
     }
     
     calculateDateRange(startDate = null, endDate = null) {
-        const start = startDate || new Date(this.currentDate);
-        const end = endDate || new Date(this.currentDate);
+        const start = startDate ? new Date(startDate) : new Date(this.currentDate);
+        const end = endDate ? new Date(endDate) : new Date(this.currentDate);
         
         if (this.viewType === 'month') {
-            // Загружаем 4 месяца: 1 до текущего + текущий + 2 после
-            const currentDate = new Date(start);
-            const currentMonth = currentDate.getMonth();
-            const currentYear = currentDate.getFullYear();
-            
-            // 1 месяц назад
-            start.setMonth(currentMonth - 1);
+            // Загружаем только текущий месяц
             start.setDate(1);
+            end.setDate(1);
+            end.setMonth(end.getMonth() + 1);
+            end.setDate(0); // последний день текущего месяца
             
-            // 2 месяца вперед - последний день второго месяца вперед
-            end.setMonth(currentMonth + 3);  // Переходим к +3 месяцу
-            end.setDate(0);  // setDate(0) = последний день предыдущего месяца = последний день +2 месяца
-            
-            console.log(`[UniversalCalendar] Loading data for 4 months: ${this.formatDateLocal(start)} to ${this.formatDateLocal(end)}`);
+            console.log(`[UniversalCalendar] Loading data for month: ${this.formatDateLocal(start)} to ${this.formatDateLocal(end)}`);
         } else if (this.viewType === 'week') {
             // Start from Monday of current week
             const dayOfWeek = start.getDay();
@@ -679,30 +666,26 @@ class UniversalCalendarManager {
         this.loadingMonths.add(monthKey);
         console.log(`Loading month range for ${monthKey}`);
         
-        // Загружаем 4 месяца: 1 до + текущий + 2 после
-        const prevRange = 1;  // 1 месяц назад
-        const nextRange = 2;  // 2 месяца вперед
+        // Загружаем диапазон вокруг выбранного месяца (по умолчанию: текущий и соседние)
+        const prevRange = 0;
+        const nextRange = 1;
         
         // Загружаем диапазон месяцев вокруг выбранного месяца
-        const prevMonth = month - prevRange <= 0 ? 
-            { year: year - 1, month: 12 + (month - prevRange) } : 
-            { year, month: month - prevRange };
-        const nextMonth = month + nextRange > 12 ? 
-            { year: year + 1, month: (month + nextRange) - 12 } : 
-            { year, month: month + nextRange };
+        const rangeStart = new Date(year, month - 1, 1);
+        rangeStart.setMonth(rangeStart.getMonth() - prevRange);
+        const rangeEnd = new Date(year, month - 1, 1);
+        rangeEnd.setMonth(rangeEnd.getMonth() + nextRange + 1);
+        rangeEnd.setDate(0);
         
-        const startDate = new Date(prevMonth.year, prevMonth.month - 1, 1);
-        const endDate = new Date(nextMonth.year, nextMonth.month, 0);
-        
-        console.log(`[UniversalCalendar] Dynamic loading: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
+        console.log(`[UniversalCalendar] Dynamic loading: ${rangeStart.toISOString().split('T')[0]} to ${rangeEnd.toISOString().split('T')[0]}`);
         
         // Получаем object_id из URL
         const urlParams = new URLSearchParams(window.location.search);
         const objectIdFromUrl = urlParams.get('object_id');
         
         const params = new URLSearchParams({
-            start_date: startDate.toISOString().split('T')[0],
-            end_date: endDate.toISOString().split('T')[0]
+            start_date: rangeStart.toISOString().split('T')[0],
+            end_date: rangeEnd.toISOString().split('T')[0]
         });
         
         if (objectIdFromUrl) {
@@ -720,8 +703,8 @@ class UniversalCalendarManager {
             // Объединяем данные
             this.mergeMonthData(newData);
             
-            // Помечаем загруженные месяцы (4 месяца: 1 до + текущий + 2 после)
-            for (let i = -1; i <= 2; i++) {
+            // Помечаем загруженные месяцы в указанном диапазоне
+            for (let i = -prevRange; i <= nextRange; i++) {
                 let targetMonth = month + i;
                 let targetYear = year;
                 
