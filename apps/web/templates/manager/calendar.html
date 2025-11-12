@@ -72,6 +72,23 @@
         }
         
         // Создаем экземпляр универсального календаря
+        const buildManagerReturnTo = () => {
+            const search = window.location.search || '';
+            return `/manager/calendar${search}`;
+        };
+
+        const navigateToManagerPlan = (objectId, employeeId) => {
+            const params = new URLSearchParams();
+            if (objectId) {
+                params.set('object_id', objectId);
+            }
+            if (employeeId) {
+                params.set('employee_id', employeeId);
+            }
+            params.set('return_to', buildManagerReturnTo());
+            window.location.href = `/manager/shifts/plan?${params.toString()}`;
+        };
+
         if (typeof UniversalCalendarManager !== 'undefined') {
             window.universalCalendar = new UniversalCalendarManager({
                 currentDate: new Date({{ year }}, {{ month - 1 }}, 1),
@@ -97,17 +114,23 @@
                                 .then(response => response.json())
                                 .then(data => {
                                     if (data.object_id) {
-                                        window.location.href = `/manager/shifts/plan?object_id=${data.object_id}&return_to=/manager/calendar`;
+                                        const employeeId = data.employee_id || (window.calendarData?.shifts?.find(s => s.id === shiftId)?.user_id) || null;
+                                        navigateToManagerPlan(data.object_id, employeeId);
                                     } else {
-                                        window.location.href = `/manager/shifts/plan?return_to=/manager/calendar`;
+                                        const employeeId = data.employee_id || (window.calendarData?.shifts?.find(s => s.id === shiftId)?.user_id) || null;
+                                        navigateToManagerPlan(null, employeeId);
                                     }
                                 })
                                 .catch(error => {
                                     console.error('Error fetching object_id:', error);
-                                    window.location.href = `/manager/shifts/plan?return_to=/manager/calendar`;
+                                    const cached = window.calendarData?.shifts?.find(s => s.id === shiftId);
+                                    const employeeId = cached?.user_id || null;
+                                    navigateToManagerPlan(null, employeeId);
                                 });
                         } else {
-                            window.location.href = `/manager/shifts/plan?object_id=${objectId}&return_to=/manager/calendar`;
+                            const cached = window.calendarData?.shifts?.find(s => s.id === shiftId);
+                            const employeeId = cached?.user_id || null;
+                            navigateToManagerPlan(objectId, employeeId);
                         }
                     } else {
                         window.location.href = `/manager/shifts/${shiftId}?shift_type=shift`;
@@ -121,17 +144,22 @@
                     }
 
                     let objectId = null;
-                    if (window.calendarData && window.calendarData.timeslots) {
-                        const timeslot = window.calendarData.timeslots.find(ts => ts.id == timeslotId);
-                        if (timeslot && timeslot.object_id) {
-                            objectId = timeslot.object_id;
+                    let employeeId = null;
+                    if (window.calendarData) {
+                        if (window.calendarData.timeslots) {
+                            const timeslot = window.calendarData.timeslots.find(ts => ts.id == timeslotId);
+                            if (timeslot && timeslot.object_id) {
+                                objectId = timeslot.object_id;
+                            }
+                        }
+                        if (window.calendarData.shifts) {
+                            const plannedShift = window.calendarData.shifts.find(shift => String(shift.time_slot_id) === String(timeslotId) && (shift.status === 'planned' || shift.status === 'confirmed'));
+                            if (plannedShift && plannedShift.user_id) {
+                                employeeId = plannedShift.user_id;
+                            }
                         }
                     }
-                    if (objectId) {
-                        window.location.href = `/manager/shifts/plan?object_id=${objectId}&return_to=/manager/calendar`;
-                    } else {
-                        window.location.href = `/manager/shifts/plan?return_to=/manager/calendar`;
-                    }
+                    navigateToManagerPlan(objectId, employeeId);
                 },
                 onDataLoaded: function(calendarData) {
                     console.log('Manager calendar data loaded:', calendarData);

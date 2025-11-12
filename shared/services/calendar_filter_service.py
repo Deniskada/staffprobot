@@ -4,6 +4,7 @@ import logging
 import hashlib
 import json
 import math
+from collections import defaultdict
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date, time, timedelta
 import pytz
@@ -497,119 +498,143 @@ class CalendarFilterService:
     ) -> List[CalendarTimeslot]:
         """Обновить статусы тайм-слотов на основе смен."""
         try:
-            # Группируем смены по тайм-слотам
-            shifts_by_timeslot = {}
+            shifts_by_timeslot: Dict[int, List[CalendarShift]] = defaultdict(list)
             for shift in shifts:
                 if shift.time_slot_id:
-                    if shift.time_slot_id not in shifts_by_timeslot:
-                        shifts_by_timeslot[shift.time_slot_id] = []
                     shifts_by_timeslot[shift.time_slot_id].append(shift)
-            
+
             objects_map = {obj['id']: obj for obj in accessible_objects}
             timezone_cache: Dict[int, pytz.timezone] = {}
+
+            def get_object_timezone(object_id: int) -> pytz.timezone:
+                if object_id in timezone_cache:
+                    return timezone_cache[object_id]
+                timezone_name = objects_map.get(object_id, {}).get('timezone', 'Europe/Moscow')
+                try:
+                    tz = pytz.timezone(timezone_name)
+                except pytz.UnknownTimeZoneError:
+                    tz = pytz.timezone('Europe/Moscow')
+                timezone_cache[object_id] = tz
+                return tz
+
+            # Шифты без привязки к тайм-слоту (fallback)
+            fallback_shifts_by_object: Dict[int, List[CalendarShift]] = defaultdict(list)
+            for shift in shifts:
+                if not shift.time_slot_id and shift.object_id:
+                    fallback_shifts_by_object[shift.object_id].append(shift)
+
             now_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
-            
-            # Обновляем статусы тайм-слотов
+
             for timeslot in timeslots:
-                timeslot_shifts = shifts_by_timeslot.get(timeslot.id, [])
-                obj_info = objects_map.get(timeslot.object_id, {})
-                timezone_name = obj_info.get('timezone', 'Europe/Moscow')
-                if timeslot.object_id in timezone_cache:
-                    tz = timezone_cache[timeslot.object_id]
-                else:
-                    try:
-                        tz = pytz.timezone(timezone_name)
-                    except pytz.UnknownTimeZoneError:
-                        tz = pytz.timezone('Europe/Moscow')
-                    timezone_cache[timeslot.object_id] = tz
+                tz = get_object_timezone(timeslot.object_id)
 
                 slot_start_local = tz.localize(datetime.combine(timeslot.date, timeslot.start_time))
                 slot_end_local = tz.localize(datetime.combine(timeslot.date, timeslot.end_time))
                 slot_duration_minutes = max(0, (slot_end_local - slot_start_local).total_seconds() / 60)
                 max_employees = timeslot.max_employees if timeslot.max_employees else 1
-                now_local = now_utc.astimezone(tz)
                 capacity_minutes = slot_duration_minutes * max_employees
+                now_local = now_utc.astimezone(tz)
 
-                occupied_minutes = 0.0
-                has_future_planned = False
-                has_current_or_future_actual = False
+                direct_shifts = shifts_by_timeslot.get(timeslot.id, [])
+                fallback_candidates = fallback_shifts_by_object.get(timeslot.object_id, [])
+
+                overlap_intervals: List[tuple[datetime, datetime]] = []
+                concurrency_events: List[tuple[datetime, int]] = []
                 shift_details = []
                 actual_intervals = []
 
-                for shift in timeslot_shifts:
+                def register_interval(
+                    shift: CalendarShift,
+                    start_dt: Optional[datetime],
+                    end_dt: Optional[datetime],
+                    include_in_details: bool
+                ) -> None:
+                    if not start_dt:
+                        return
+                    if start_dt.tzinfo is None:
+                        start_dt_aware = pytz.UTC.localize(start_dt)
+                    else:
+                        start_dt_aware = start_dt
+
+                    if end_dt:
+                        end_dt_aware = end_dt if end_dt.tzinfo else pytz.UTC.localize(end_dt)
+                    else:
+                        end_dt_aware = slot_end_local.astimezone(pytz.UTC)
+
+                    start_local = start_dt_aware.astimezone(tz)
+                    end_local = end_dt_aware.astimezone(tz)
+                    overlap_start = max(start_local, slot_start_local)
+                    overlap_end = min(end_local, slot_end_local)
+                    if overlap_end <= overlap_start:
+                        return
+
+                    overlap_intervals.append((overlap_start, overlap_end))
+                    concurrency_events.append((overlap_start, 1))
+                    concurrency_events.append((overlap_end, -1))
+
+                    if include_in_details:
+                        shift_details.append({
+                            "shift": shift,
+                            "start_local": overlap_start,
+                            "end_local": overlap_end
+                        })
+                        if shift.shift_type in (ShiftType.ACTIVE, ShiftType.COMPLETED):
+                            actual_intervals.append((overlap_start, overlap_end))
+
+                for shift in direct_shifts:
                     if shift.status == ShiftStatus.CANCELLED:
                         continue
-
-                    shift_timezone = shift.timezone or timezone_name
-                    try:
-                        shift_tz = pytz.timezone(shift_timezone)
-                    except pytz.UnknownTimeZoneError:
-                        shift_tz = tz
-
                     if shift.shift_type == ShiftType.PLANNED:
                         start_dt = shift.planned_start or shift.start_time
                         end_dt = shift.planned_end or shift.end_time
                     else:
                         start_dt = shift.start_time or shift.planned_start
                         end_dt = shift.end_time or shift.planned_end
+                    register_interval(shift, start_dt, end_dt, include_in_details=True)
 
-                    if not start_dt:
-                        continue
-                    if start_dt.tzinfo is None:
-                        start_dt = pytz.UTC.localize(start_dt)
-                    if end_dt:
-                        if end_dt.tzinfo is None:
-                            end_dt = pytz.UTC.localize(end_dt)
+                for shift in fallback_candidates:
+                    if shift.shift_type == ShiftType.PLANNED:
+                        start_dt = shift.planned_start or shift.start_time
+                        end_dt = shift.planned_end or shift.end_time
                     else:
-                        end_dt = slot_end_local.astimezone(pytz.UTC)
+                        start_dt = shift.start_time or shift.planned_start
+                        end_dt = shift.end_time or shift.planned_end
+                    register_interval(shift, start_dt, end_dt, include_in_details=False)
 
-                    start_local = start_dt.astimezone(tz)
-                    end_local = end_dt.astimezone(tz)
-
-                    overlap_start = max(start_local, slot_start_local)
-                    overlap_end = min(end_local, slot_end_local)
-                    if overlap_end > overlap_start:
-                        occupied_minutes += max(0, (overlap_end - overlap_start).total_seconds() / 60)
-
-                    shift_details.append({
-                        "shift": shift,
-                        "start_local": start_local,
-                        "end_local": end_local
-                    })
-
-                    if shift.shift_type in (ShiftType.ACTIVE, ShiftType.COMPLETED):
-                        actual_intervals.append((start_local, end_local))
-                        if shift.shift_type == ShiftType.ACTIVE or end_local >= now_local:
-                            has_current_or_future_actual = True
-                    elif shift.shift_type == ShiftType.PLANNED:
-                        if start_local <= now_local <= end_local or start_local > now_local:
-                            has_future_planned = True
+                occupied_minutes = 0.0
+                for interval_start, interval_end in overlap_intervals:
+                    occupied_minutes += max(0, (interval_end - interval_start).total_seconds() / 60)
 
                 if capacity_minutes > 0:
                     occupied_minutes = min(capacity_minutes, occupied_minutes)
                     free_minutes = max(0, capacity_minutes - occupied_minutes)
                     occupancy_ratio = occupied_minutes / capacity_minutes
                 else:
-                    free_minutes = 0
-                    occupancy_ratio = 0
+                    free_minutes = 0.0
+                    occupancy_ratio = 0.0
 
-                if slot_duration_minutes > 0:
-                    approx_current = math.ceil(occupied_minutes / slot_duration_minutes - 1e-6)
-                else:
-                    approx_current = 0
-                approx_current = max(0, min(max_employees, approx_current))
-                timeslot.current_employees = approx_current
-                timeslot.available_slots = max(0, max_employees - approx_current)
+                occupancy_ratio = round(occupancy_ratio, 4)
                 timeslot.occupied_minutes = round(occupied_minutes, 2)
                 timeslot.free_minutes = round(free_minutes, 2)
-                timeslot.occupancy_ratio = round(occupancy_ratio, 4)
+                timeslot.occupancy_ratio = occupancy_ratio
+
+                concurrency_events.sort(key=lambda item: (item[0], -item[1]))
+                current_concurrency = 0
+                max_concurrency = 0
+                for _, delta in concurrency_events:
+                    current_concurrency += delta
+                    max_concurrency = max(max_concurrency, current_concurrency)
+
+                max_concurrency = min(max_employees, max_concurrency)
+                timeslot.current_employees = max_concurrency
+                timeslot.available_slots = max(0, max_employees - max_concurrency)
 
                 slot_in_past = slot_end_local <= now_local
 
-                if occupancy_ratio >= 0.999:
+                if capacity_minutes > 0 and free_minutes <= 0.5:
                     timeslot.status = TimeslotStatus.FULLY_FILLED
                     timeslot.status_label = "Заполнено"
-                elif occupancy_ratio > 0:
+                elif occupied_minutes > 0:
                     timeslot.status = TimeslotStatus.PARTIALLY_FILLED
                     timeslot.status_label = "Свободно"
                 else:
@@ -619,10 +644,7 @@ class CalendarFilterService:
                 if slot_in_past and occupancy_ratio < 0.999:
                     timeslot.status = TimeslotStatus.HIDDEN
 
-                if timeslot.free_minutes > 0:
-                    formatted_free = self._format_minutes(timeslot.free_minutes)
-                else:
-                    formatted_free = "0 м"
+                formatted_free = self._format_minutes(timeslot.free_minutes) if timeslot.free_minutes > 0 else "0 м"
 
                 delay_label = None
                 if slot_in_past and timeslot.free_minutes > 0:

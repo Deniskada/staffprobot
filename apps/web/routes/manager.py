@@ -4115,7 +4115,10 @@ async def get_manager_schedule_object_id(
         if schedule.object_id not in accessible_object_ids:
             return JSONResponse({"error": "Access denied"}, status_code=403)
         
-        return JSONResponse({"object_id": schedule.object_id})
+        return JSONResponse({
+            "object_id": schedule.object_id,
+            "employee_id": schedule.user_id
+        })
         
     except Exception as e:
         logger.error(f"Error getting manager schedule object_id: {e}")
@@ -4126,6 +4129,7 @@ async def get_manager_schedule_object_id(
 async def manager_shifts_plan(
     request: Request,
     object_id: Optional[int] = Query(None, description="ID объекта для предзаполнения"),
+    employee_id: Optional[int] = Query(None, description="ID сотрудника для предзаполнения"),
     return_to: Optional[str] = Query(None, description="URL для возврата после планирования"),
     current_user: dict = Depends(require_manager_or_owner),
     db: AsyncSession = Depends(get_db_session)
@@ -4151,6 +4155,17 @@ async def manager_shifts_plan(
                 if obj.id == object_id:
                     selected_object_id = object_id
                     break
+
+        preselected_employee_id = None
+        if employee_id is not None:
+            try:
+                preselected_employee_id = int(employee_id)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid employee_id provided for manager shifts plan",
+                    employee_id=employee_id
+                )
+                preselected_employee_id = None
         
         login_service = RoleBasedLoginService(db)
         available_interfaces = await login_service.get_available_interfaces(user_id)
@@ -4160,6 +4175,7 @@ async def manager_shifts_plan(
             "current_user": current_user,
             "objects": objects_list,
             "selected_object_id": selected_object_id,
+            "preselected_employee_id": preselected_employee_id,
             "return_to": return_to or "/manager/shifts",
             "available_interfaces": available_interfaces
         })

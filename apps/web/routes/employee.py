@@ -925,7 +925,6 @@ async def employee_calendar(
             month = today.month
 
         # Получаем объекты, доступные сотруднику по активным договорам
-        from sqlalchemy import select, and_
         from sqlalchemy.orm import selectinload
         from domain.entities.contract import Contract
         from domain.entities.object import Object
@@ -2193,6 +2192,11 @@ async def employee_shifts_plan(
                                  or user_obj.username
                                  or f"ID {user_obj.id}")
 
+        applications_count_result = await db.execute(
+            select(func.count(Application.id)).where(Application.applicant_id == user_id)
+        )
+        applications_count = applications_count_result.scalar() or 0
+
         login_service = RoleBasedLoginService(db)
         available_interfaces = await login_service.get_available_interfaces(user_id)
 
@@ -2204,7 +2208,8 @@ async def employee_shifts_plan(
             "return_to": return_to or "/employee/calendar",
             "preselected_employee_id": user_id,
             "current_employee_name": employee_display_name,
-            "available_interfaces": available_interfaces
+            "available_interfaces": available_interfaces,
+            "applications_count": applications_count
         })
     except HTTPException:
         raise

@@ -2,6 +2,19 @@
 
 {% block title %}Календарь{% endblock %}
 
+{% block extra_css %}
+<style>
+.calendar-day {
+    cursor: default;
+}
+.calendar-day .timeslot-item,
+.calendar-day .calendar-timeslot,
+.calendar-day .shift-item {
+    cursor: pointer;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-12">

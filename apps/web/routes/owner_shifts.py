@@ -39,6 +39,7 @@ async def get_user_id_from_current_user(current_user, session):
 async def shifts_plan(
     request: Request,
     object_id: Optional[int] = Query(None, description="ID объекта для предзаполнения"),
+    employee_id: Optional[int] = Query(None, description="ID сотрудника для предзаполнения"),
     return_to: Optional[str] = Query(None, description="URL для возврата после планирования"),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
@@ -70,6 +71,17 @@ async def shifts_plan(
                 if obj.id == object_id:
                     selected_object_id = object_id
                     break
+
+        preselected_employee_id = None
+        if employee_id is not None:
+            try:
+                preselected_employee_id = int(employee_id)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid employee_id provided for owner shifts plan",
+                    employee_id=employee_id
+                )
+                preselected_employee_id = None
         
         # Получаем данные для переключения интерфейсов
         from shared.services.role_based_login_service import RoleBasedLoginService
@@ -81,6 +93,7 @@ async def shifts_plan(
             "current_user": current_user,
             "objects": objects_list,
             "selected_object_id": selected_object_id,
+            "preselected_employee_id": preselected_employee_id,
             "return_to": return_to or "/owner/shifts",
             "available_interfaces": available_interfaces
         })
@@ -128,7 +141,10 @@ async def get_schedule_object_id(
         if schedule.object_id not in object_ids:
             return JSONResponse({"error": "Access denied"}, status_code=403)
         
-        return JSONResponse({"object_id": schedule.object_id})
+        return JSONResponse({
+            "object_id": schedule.object_id,
+            "employee_id": schedule.user_id
+        })
         
     except Exception as e:
         logger.error(f"Error getting schedule object_id: {e}")

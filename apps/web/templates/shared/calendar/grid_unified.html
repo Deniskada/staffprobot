@@ -458,24 +458,13 @@ window.unifiedCalendar = {
         const element = document.createElement('div');
         element.className = `shift-item shift-${shift.shift_type}`;
         element.setAttribute('data-shift-id', shift.id);
-        // Клики отключены для сотрудников
-        if (!window.universalCalendar || window.universalCalendar.userRole !== 'employee') {
-            element.onclick = () => {
-                if (window.universalCalendar && window.universalCalendar.onShiftClick) {
-                    window.universalCalendar.onShiftClick(shift.id);
-                } else {
-                    showShiftDetails(shift.id);
-                }
-            };
-        } else {
-            // Для сотрудников блокируем только клики, но разрешаем drag&drop
-            element.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            };
-            element.style.cursor = 'default';
-        }
+        element.onclick = () => {
+            if (window.universalCalendar && window.universalCalendar.onShiftClick) {
+                window.universalCalendar.onShiftClick(shift.id);
+            } else {
+                showShiftDetails(shift.id);
+            }
+        };
         
         // Определяем время начала и окончания
         let startTime = '';

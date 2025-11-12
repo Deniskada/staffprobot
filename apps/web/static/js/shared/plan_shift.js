@@ -66,12 +66,7 @@
         DOM.employeeSelect.value = String(settings.preselectedEmployeeId);
         state.currentEmployeeId = settings.preselectedEmployeeId;
       }
-      DOM.employeeSelect.disabled = true;
-      const employeeGroup = DOM.employeeSelect.closest('.col-md-6') || DOM.employeeSelect.parentElement;
-      if (employeeGroup) {
-        employeeGroup.style.opacity = '0.6';
-        employeeGroup.style.pointerEvents = 'none';
-      }
+      DOM.employeeSelect.setAttribute('disabled', 'true');
     }
 
     createEmptyCalendar();

@@ -291,7 +291,7 @@ window.planShiftConfig = {
     cancelScheduledShiftBase: '/owner/shifts_legacy',
     returnToUrl: '{{ return_to }}',
     selectedObjectId: {{ selected_object_id or 'null' }},
-    preselectedEmployeeId: null,
+    preselectedEmployeeId: {{ preselected_employee_id or 'null' }},
     hideEmployeeSelect: false,
     allowCancelPlannedShifts: true,
     role: 'owner'

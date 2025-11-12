@@ -83,6 +83,23 @@ footer {
             console.error('CalendarPanels not available!');
         }
         
+        const buildOwnerReturnTo = () => {
+            const search = window.location.search || '';
+            return `/owner/calendar${search}`;
+        };
+
+        const navigateToOwnerPlan = (objectId, employeeId) => {
+            const params = new URLSearchParams();
+            if (objectId) {
+                params.set('object_id', objectId);
+            }
+            if (employeeId) {
+                params.set('employee_id', employeeId);
+            }
+            params.set('return_to', buildOwnerReturnTo());
+            window.location.href = `/owner/shifts/plan?${params.toString()}`;
+        };
+
         // Создаем экземпляр универсального календаря
         if (typeof UniversalCalendarManager !== 'undefined') {
             window.universalCalendar = new UniversalCalendarManager({
@@ -109,17 +126,23 @@ footer {
                                 .then(response => response.json())
                                 .then(data => {
                                     if (data.object_id) {
-                                        window.location.href = `/owner/shifts/plan?object_id=${data.object_id}&return_to=/owner/calendar`;
+                                        const employeeId = data.employee_id || (window.calendarData?.shifts?.find(s => s.id === shiftId)?.user_id) || null;
+                                        navigateToOwnerPlan(data.object_id, employeeId);
                                     } else {
-                                        window.location.href = `/owner/shifts/plan?return_to=/owner/calendar`;
+                                        const employeeId = data.employee_id || (window.calendarData?.shifts?.find(s => s.id === shiftId)?.user_id) || null;
+                                        navigateToOwnerPlan(null, employeeId);
                                     }
                                 })
                                 .catch(error => {
                                     console.error('Error fetching object_id:', error);
-                                    window.location.href = `/owner/shifts/plan?return_to=/owner/calendar`;
+                                    const cached = window.calendarData?.shifts?.find(s => s.id === shiftId);
+                                    const employeeId = cached?.user_id || null;
+                                    navigateToOwnerPlan(null, employeeId);
                                 });
                         } else {
-                            window.location.href = `/owner/shifts/plan?object_id=${objectId}&return_to=/owner/calendar`;
+                            const cached = window.calendarData?.shifts?.find(s => s.id === shiftId);
+                            const employeeId = cached?.user_id || null;
+                            navigateToOwnerPlan(objectId, employeeId);
                         }
                     } else {
                         window.location.href = `/owner/shifts/${shiftId}?shift_type=shift`;
@@ -127,11 +150,35 @@ footer {
                 },
                 onTimeslotClick: function(timeslotId) {
                     console.log('Timeslot clicked:', timeslotId);
+                    let objectId = null;
+                    let employeeId = null;
+                    if (window.calendarData) {
+                        if (window.calendarData.timeslots) {
+                            const timeslot = window.calendarData.timeslots.find(ts => ts.id == timeslotId);
+                            if (timeslot && timeslot.object_id) {
+                                objectId = timeslot.object_id;
+                            }
+                        }
+                        if (window.calendarData.shifts) {
+                            const plannedShift = window.calendarData.shifts.find(shift => String(shift.time_slot_id) === String(timeslotId) && (shift.status === 'planned' || shift.status === 'confirmed'));
+                            if (plannedShift && plannedShift.user_id) {
+                                employeeId = plannedShift.user_id;
+                            }
+                        }
+                    }
                     if (window.PlanShiftModal && typeof window.PlanShiftModal.open === 'function') {
                         window.PlanShiftModal.open(timeslotId);
                         return;
                     }
-                    console.error('PlanShiftModal недоступен');
+                    const fallbackParams = new URLSearchParams();
+                    if (objectId) {
+                        fallbackParams.set('object_id', objectId);
+                    }
+                    if (employeeId) {
+                        fallbackParams.set('employee_id', employeeId);
+                    }
+                    fallbackParams.set('return_to', buildOwnerReturnTo());
+                    window.location.href = `/owner/shifts/plan?${fallbackParams.toString()}`;
                 },
                 onDataLoaded: function(calendarData) {
                     console.log('Calendar data loaded:', calendarData);
