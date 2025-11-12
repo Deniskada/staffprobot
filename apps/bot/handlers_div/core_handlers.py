@@ -973,11 +973,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         from .schedule_handlers import handle_schedule_object_selection
         await handle_schedule_object_selection(update, context)
         return
-    elif query.data in ["schedule_date_today", "schedule_date_tomorrow", "schedule_date_custom"]:
+    elif query.data.startswith("schedule_date_"):
         from .schedule_handlers import handle_schedule_date_selection
         await handle_schedule_date_selection(update, context)
         return
-    elif query.data.startswith("schedule_select_slot_"):
+    elif query.data.startswith("schedule_interval_") or query.data.startswith("schedule_select_slot_"):
         from .schedule_handlers import handle_schedule_confirmation
         await handle_schedule_confirmation(update, context)
         return

@@ -26,6 +26,7 @@
 
   const state = {
     selectedTimeslots: new Set(),
+    timeslotSelectionDetails: new Map(),
     availableTimeslots: [],
     calendarShifts: [],
     employeePlannedShifts: [],
@@ -94,6 +95,7 @@
       const value = DOM.objectSelect.value;
       if (value) {
         state.selectedTimeslots.clear();
+        state.timeslotSelectionDetails.clear();
         state.employeePlannedShifts = [];
         state.selectedPlannedShiftIds.clear();
         state.initialPlannedShiftIds.clear();
@@ -106,6 +108,7 @@
         }
       } else {
         state.selectedTimeslots.clear();
+        state.timeslotSelectionDetails.clear();
         state.employeePlannedShifts = [];
         state.selectedPlannedShiftIds.clear();
         state.initialPlannedShiftIds.clear();
@@ -122,6 +125,7 @@
       if (DOM.employeeSelect.value && objectId) {
         state.currentEmployeeId = Number(DOM.employeeSelect.value);
         state.selectedTimeslots.clear();
+        state.timeslotSelectionDetails.clear();
         state.employeePlannedShifts = [];
         state.selectedPlannedShiftIds.clear();
         state.initialPlannedShiftIds.clear();
@@ -129,6 +133,7 @@
       } else {
         state.currentEmployeeId = null;
         state.selectedTimeslots.clear();
+        state.timeslotSelectionDetails.clear();
         state.employeePlannedShifts = [];
         state.selectedPlannedShiftIds.clear();
         state.initialPlannedShiftIds.clear();
@@ -196,6 +201,7 @@
     createEmptyCalendar();
     state.availableTimeslots = [];
     state.selectedTimeslots.clear();
+    state.timeslotSelectionDetails.clear();
     if (resetPlanned) {
       state.employeePlannedShifts = [];
       state.selectedPlannedShiftIds.clear();
@@ -291,6 +297,7 @@
       const startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
       const endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0);
       state.selectedTimeslots.clear();
+      state.timeslotSelectionDetails.clear();
 
       const query = new URLSearchParams({
         start_date: formatDateForAPI(startDate),
@@ -445,6 +452,8 @@
             <div class="calendar-days">
         `;
 
+    const renderedSlotKeys = new Set();
+
     for (let i = 0; i < 35; i++) {
       const date = new Date(firstMonday);
       date.setDate(firstMonday.getDate() + i);
@@ -493,46 +502,86 @@
           displaySlots.forEach((ts) => {
             const fullStart = ts.start_time || ts.start_time_str || '09:00';
             const fullEnd = ts.end_time || ts.end_time_str || '21:00';
-            const freeStart = ts.first_free_start || fullStart;
-            const freeEnd = ts.first_free_end || fullEnd;
             const fallbackDuration = Math.max(
               0,
               (timeStringToMinutes(fullEnd) || 0) - (timeStringToMinutes(fullStart) || 0)
             );
-            const freeDurationLabel = formatFreeMinutes(ts.first_free_duration ?? fallbackDuration);
-            const slotKey = `${dateStr}_${ts.id}`;
-            const isSelected = state.selectedTimeslots.has(slotKey);
             const positions = Array.isArray(ts.positions) ? ts.positions : [];
-            const allPositionsFullyFree = positions.length > 0
-              ? positions.every((pos) => {
-                  if (!Array.isArray(pos.freeIntervals) || pos.freeIntervals.length !== 1) {
-                    return false;
-                  }
-                  const interval = pos.freeIntervals[0];
-                  return interval.startStr === fullStart && interval.endStr === fullEnd;
-                })
-              : ts.status !== 'partially_filled';
-            const statusLabel = allPositionsFullyFree ? 'Свободен' : 'Частично свободен';
-            const positionsInfo = positions.length > 0
-              ? positions.map((pos) => {
-                  if (!Array.isArray(pos.freeIntervals) || pos.freeIntervals.length === 0) {
-                    return `<div class="timeslot-slots">Позиция ${pos.index}: <span class="text-danger">Занято</span></div>`;
-                  }
-                  const intervals = pos.freeIntervals
-                    .map((interval) => `<strong>${interval.startStr}-${interval.endStr}</strong>`)
-                    .join(', ');
-                  return `<div class="timeslot-slots">Позиция ${pos.index}: ${intervals}</div>`;
-                }).join('')
-              : '';
 
-            html += `<div class="timeslot available ${isSelected ? 'selected' : ''}" data-timeslot-id="${ts.id}" data-free-start="${freeStart}" data-free-end="${freeEnd}">`;
-            html += `<div class="timeslot-time">${fullStart}-${fullEnd}</div>`;
-            html += `<div class="timeslot-slots">${statusLabel}: <strong>${freeStart}-${freeEnd}</strong></div>`;
-            html += `<div class="timeslot-slots">Доступно: ${freeDurationLabel}</div>`;
-            if (positionsInfo) {
-              html += positionsInfo;
+            const intervalsForRender = [];
+
+            if (positions.length > 0) {
+              positions.forEach((pos) => {
+                if (!Array.isArray(pos.freeIntervals) || pos.freeIntervals.length === 0) {
+                  return;
+                }
+                pos.freeIntervals.forEach((interval, idx) => {
+                  if (!interval?.startStr || !interval?.endStr) {
+                    return;
+                  }
+                  intervalsForRender.push({
+                    positionIndex: pos.index,
+                    intervalIndex: idx,
+                    interval
+                  });
+                });
+              });
             }
-            html += '</div>';
+
+            if (intervalsForRender.length === 0 && ts.first_free_start && ts.first_free_end) {
+              intervalsForRender.push({
+                positionIndex: ts.first_free_position ?? null,
+                intervalIndex: 0,
+                interval: {
+                  startStr: ts.first_free_start,
+                  endStr: ts.first_free_end,
+                  durationMinutes: ts.first_free_duration ?? fallbackDuration,
+                  startMinutes: timeStringToMinutes(ts.first_free_start),
+                  endMinutes: timeStringToMinutes(ts.first_free_end)
+                }
+              });
+            }
+
+            intervalsForRender
+              .sort((a, b) => {
+                const startA = a.interval.startMinutes ?? timeStringToMinutes(a.interval.startStr) ?? 0;
+                const startB = b.interval.startMinutes ?? timeStringToMinutes(b.interval.startStr) ?? 0;
+                return startA - startB;
+              })
+              .forEach((entry) => {
+                const interval = entry.interval;
+                const startStr = interval.startStr;
+                const endStr = interval.endStr;
+                if (!startStr || !endStr) {
+                  return;
+                }
+
+                const durationMinutes = interval.durationMinutes ?? Math.max(
+                  0,
+                  (interval.endMinutes ?? timeStringToMinutes(endStr) ?? 0)
+                    - (interval.startMinutes ?? timeStringToMinutes(startStr) ?? 0)
+                );
+                const positionPart = entry.positionIndex !== null && entry.positionIndex !== undefined
+                  ? entry.positionIndex
+                  : 0;
+                const slotKey = `${dateStr}_${ts.id}_${positionPart}_${startStr}_${endStr}`;
+                renderedSlotKeys.add(slotKey);
+                const isSelected = state.selectedTimeslots.has(slotKey);
+                const statusLabel = (startStr === fullStart && endStr === fullEnd) ? 'Свободен' : 'Частично свободен';
+                const positionLabel = entry.positionIndex
+                  ? `Время смены ${entry.positionIndex}`
+                  : 'Свободное время';
+                const durationLabel = formatFreeMinutes(durationMinutes || fallbackDuration);
+
+                html += `<div class="timeslot available ${isSelected ? 'selected' : ''}" data-slot-key="${slotKey}" data-timeslot-id="${ts.id}" data-position-index="${entry.positionIndex ?? ''}" data-interval-index="${entry.intervalIndex}" data-start-time="${startStr}" data-end-time="${endStr}" data-free-start="${startStr}" data-free-end="${endStr}">`;
+                html += `<div class="timeslot-time">${fullStart}-${fullEnd}</div>`;
+                html += `<div class="timeslot-slots">${positionLabel}: <strong>${startStr}-${endStr}</strong></div>`;
+                html += `<div class="timeslot-slots">${statusLabel}. Доступно: ${durationLabel}</div>`;
+                if (positions.length > 1) {
+                  html += `<div class="timeslot-slots text-muted">Всего позиций: ${positions.length}</div>`;
+                }
+                html += '</div>';
+              });
           });
         } else {
           html += '<div class="no-slots">Нет свободных окон</div>';
@@ -546,6 +595,13 @@
 
     html += '</div>';
     DOM.calendarContainer.innerHTML = html;
+
+    Array.from(state.selectedTimeslots).forEach((key) => {
+      if (!renderedSlotKeys.has(key)) {
+        state.selectedTimeslots.delete(key);
+        state.timeslotSelectionDetails.delete(key);
+      }
+    });
 
     DOM.calendarContainer.removeEventListener('click', handleCalendarClick);
     DOM.calendarContainer.addEventListener('click', handleCalendarClick);
@@ -591,12 +647,32 @@
       return;
     }
 
-    const slotKey = `${date}_${timeslotId}`;
+    const slotKey = element.dataset.slotKey || `${date}_${timeslotId}`;
+    const positionIndexAttr = element.dataset.positionIndex;
+    const intervalIndexAttr = element.dataset.intervalIndex;
+    const startTime = element.dataset.startTime || element.dataset.freeStart || null;
+    const endTime = element.dataset.endTime || element.dataset.freeEnd || null;
+    const positionIndex = positionIndexAttr !== undefined && positionIndexAttr !== ''
+      ? Number(positionIndexAttr)
+      : null;
+    const intervalIndex = intervalIndexAttr !== undefined && intervalIndexAttr !== ''
+      ? Number(intervalIndexAttr)
+      : null;
+
     if (state.selectedTimeslots.has(slotKey)) {
       state.selectedTimeslots.delete(slotKey);
+      state.timeslotSelectionDetails.delete(slotKey);
       element.classList.remove('selected');
     } else {
       state.selectedTimeslots.add(slotKey);
+      state.timeslotSelectionDetails.set(slotKey, {
+        timeslotId,
+        startTime,
+        endTime,
+        positionIndex,
+        intervalIndex,
+        date
+      });
       element.classList.add('selected');
     }
     setTimeout(() => updateSelectedSlotsInfo(), 100);
@@ -773,16 +849,31 @@
 
     for (const slotKey of timeslotsToPlan) {
       try {
-        const [date] = slotKey.split('_');
-        const timeslotId = slotKey.split('_')[1];
+        const parts = slotKey.split('_');
+        if (parts.length < 2) {
+          planErrors++;
+          console.error('Некорректный ключ тайм-слота', slotKey);
+          continue;
+        }
+        const rawTimeslotId = parts[1];
+        const detail = state.timeslotSelectionDetails.get(slotKey);
+        const timeslotId = detail?.timeslotId ?? rawTimeslotId;
         const timeslot = state.availableTimeslots.find((ts) => String(ts.id) === String(timeslotId));
         if (!timeslot) {
           planErrors++;
           console.error('Не найден тайм-слот для планирования', timeslotId);
           continue;
         }
-        const freeStart = timeslot.first_free_start || timeslot.start_time || timeslot.start_time_str;
-        const freeEnd = timeslot.first_free_end || timeslot.end_time || timeslot.end_time_str;
+        const freeStart =
+          detail?.startTime
+          || timeslot.first_free_start
+          || timeslot.start_time
+          || timeslot.start_time_str;
+        const freeEnd =
+          detail?.endTime
+          || timeslot.first_free_end
+          || timeslot.end_time
+          || timeslot.end_time_str;
         if (!freeStart || !freeEnd) {
           planErrors++;
           console.error('Не удалось определить свободный интервал для тайм-слота', timeslotId);

@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta, time, timezone, date
 from core.logging.logger import logger
 from core.database.session import get_async_session
-from core.utils.timezone_helper import timezone_helper
+from core.utils.timezone_helper import timezone_helper, convert_utc_to_local
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.shift import Shift
 from domain.entities.object import Object
@@ -13,6 +13,51 @@ from domain.entities.time_slot import TimeSlot
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import joinedload
 from .base_service import BaseService
+
+
+def _time_to_minutes(time_obj: time) -> int:
+    return time_obj.hour * 60 + time_obj.minute if time_obj else 0
+
+
+def _minutes_to_time_str(minutes: int) -> str:
+    hours = minutes // 60
+    mins = minutes % 60
+    return f"{hours:02d}:{mins:02d}"
+
+
+def _merge_intervals(intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    if not intervals:
+        return []
+    sorted_intervals = sorted(intervals, key=lambda x: x[0])
+    merged: List[Tuple[int, int]] = []
+    current_start, current_end = sorted_intervals[0]
+    for start, end in sorted_intervals[1:]:
+        if start <= current_end:
+            current_end = max(current_end, end)
+        else:
+            merged.append((current_start, current_end))
+            current_start, current_end = start, end
+    merged.append((current_start, current_end))
+    return merged
+
+
+def _calculate_free_ranges(slot_start_minutes: int, slot_end_minutes: int, busy_intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    if slot_end_minutes <= slot_start_minutes:
+        return []
+    if not busy_intervals:
+        return [(slot_start_minutes, slot_end_minutes)]
+    merged = _merge_intervals(busy_intervals)
+    free_ranges: List[Tuple[int, int]] = []
+    cursor = slot_start_minutes
+    for start, end in merged:
+        if start > cursor:
+            free_ranges.append((cursor, min(start, slot_end_minutes)))
+        cursor = max(cursor, end)
+        if cursor >= slot_end_minutes:
+            break
+    if cursor < slot_end_minutes:
+        free_ranges.append((cursor, slot_end_minutes))
+    return [(start, end) for start, end in free_ranges if end > start]
 
 
 class ScheduleService(BaseService):
@@ -39,17 +84,19 @@ class ScheduleService(BaseService):
         """
         try:
             async with get_async_session() as session:
-                # Получаем объект
                 object_query = select(Object).where(Object.id == object_id)
                 object_result = await session.execute(object_query)
                 obj = object_result.scalar_one_or_none()
-                
+
                 if not obj:
                     return {
                         'success': False,
                         'error': 'Объект не найден'
                     }
-                
+
+                object_timezone = obj.timezone or timezone_helper.default_timezone_str
+
+                # Получаем объект
                 # Получаем тайм-слоты для даты
                 time_slots_query = select(TimeSlot).where(
                     and_(
@@ -77,29 +124,27 @@ class ScheduleService(BaseService):
                 # Формируем список доступных тайм-слотов
                 available_slots = []
                 for slot in time_slots:
-                    # Считаем количество запланированных смен в этом тайм-слоте
-                    scheduled_count = sum(
-                        1 for shift in shifts 
-                        if shift.time_slot_id == slot.id
-                    )
-                    
-                    # Проверяем доступность: текущая занятость < максимального количества
-                    is_available = scheduled_count < slot.max_employees
-                    
-                    if is_available:
-                        # Формируем информацию о занятости
-                        availability = f"{scheduled_count}/{slot.max_employees}"
-                        
-                        available_slots.append({
-                            'id': slot.id,
-                            'start_time': slot.start_time.strftime('%H:%M'),
-                            'end_time': slot.end_time.strftime('%H:%M'),
-                            'hourly_rate': float(slot.hourly_rate) if slot.hourly_rate else None,
-                            'description': slot.notes or '',
-                            'max_employees': slot.max_employees,
-                            'availability': availability,
-                            'scheduled_count': scheduled_count
-                        })
+                    slot_availability = self._build_slot_availability(slot, shifts, object_timezone)
+                    if not slot_availability['has_free_capacity']:
+                        continue
+
+                    scheduled_count = slot_availability['scheduled_count']
+                    availability = f"{scheduled_count}/{slot.max_employees}"
+
+                    available_slots.append({
+                        'id': slot.id,
+                        'start_time': slot.start_time.strftime('%H:%M'),
+                        'end_time': slot.end_time.strftime('%H:%M'),
+                        'hourly_rate': float(slot.hourly_rate) if slot.hourly_rate else None,
+                        'description': slot.notes or '',
+                        'max_employees': slot.max_employees,
+                        'availability': availability,
+                        'scheduled_count': scheduled_count,
+                        'positions': slot_availability['positions'],
+                        'first_free_interval': slot_availability['first_free_interval'],
+                        'free_intervals': slot_availability['flattened_free_intervals'],
+                        'has_free_capacity': slot_availability['has_free_capacity']
+                    })
                 
                 return {
                     'success': True,
@@ -115,6 +160,144 @@ class ScheduleService(BaseService):
                 'success': False,
                 'error': f'Ошибка получения тайм-слотов: {str(e)}'
             }
+    
+    def _build_slot_availability(
+        self,
+        slot: TimeSlot,
+        all_shifts: List[ShiftSchedule],
+        object_timezone: str
+    ) -> Dict[str, Any]:
+        slot_start_minutes = _time_to_minutes(slot.start_time)
+        slot_end_minutes = _time_to_minutes(slot.end_time)
+
+        if slot_end_minutes <= slot_start_minutes:
+            return {
+                'positions': [],
+                'first_free_interval': None,
+                'flattened_free_intervals': [],
+                'scheduled_count': 0,
+                'has_free_capacity': False
+            }
+
+        max_employees = max(1, slot.max_employees or 1)
+
+        relevant_shifts: List[Tuple[int, int]] = []
+        scheduled_entities: List[ShiftSchedule] = []
+
+        for shift in all_shifts:
+            if shift.object_id != slot.object_id:
+                continue
+
+            local_start = convert_utc_to_local(shift.planned_start, object_timezone)
+            local_end = convert_utc_to_local(shift.planned_end, object_timezone)
+
+            if not local_start or not local_end:
+                continue
+
+            if local_start.date() != slot.slot_date:
+                continue
+
+            shift_slot_id = getattr(shift, "time_slot_id", None)
+            matches_slot = shift_slot_id == slot.id
+
+            if not matches_slot and shift_slot_id is not None:
+                continue
+
+            shift_start_minutes = _time_to_minutes(local_start.time())
+            shift_end_minutes = _time_to_minutes(local_end.time())
+
+            overlap_start = max(slot_start_minutes, shift_start_minutes)
+            overlap_end = min(slot_end_minutes, shift_end_minutes)
+
+            if overlap_end <= overlap_start:
+                continue
+
+            relevant_shifts.append((overlap_start, overlap_end))
+            scheduled_entities.append(shift)
+
+        relevant_shifts.sort(key=lambda interval: interval[0])
+
+        positions: List[Dict[str, Any]] = [
+            {'index': idx + 1, 'busy': []} for idx in range(max_employees)
+        ]
+
+        for interval in relevant_shifts:
+            assigned = False
+            for position in positions:
+                busy_intervals = position['busy']
+                if not busy_intervals or busy_intervals[-1][1] <= interval[0]:
+                    busy_intervals.append(interval)
+                    assigned = True
+                    break
+            if not assigned:
+                # Все позиции заняты в этот момент — добавляем в позицию с самым ранним освобождением
+                target_position = min(
+                    positions,
+                    key=lambda pos: pos['busy'][-1][1] if pos['busy'] else -1
+                )
+                target_position['busy'].append(interval)
+
+        position_outputs: List[Dict[str, Any]] = []
+        flattened_free_intervals: List[Dict[str, Any]] = []
+        first_free_interval: Optional[Dict[str, Any]] = None
+
+        for position in positions:
+            merged_busy = _merge_intervals(position['busy'])
+            free_ranges = _calculate_free_ranges(slot_start_minutes, slot_end_minutes, merged_busy)
+
+            busy_intervals_output = [
+                {
+                    'start': _minutes_to_time_str(start),
+                    'end': _minutes_to_time_str(end),
+                    'start_minutes': start,
+                    'end_minutes': end
+                }
+                for start, end in merged_busy
+            ]
+
+            free_intervals_output = []
+            for start, end in free_ranges:
+                interval_info = {
+                    'start': _minutes_to_time_str(start),
+                    'end': _minutes_to_time_str(end),
+                    'start_minutes': start,
+                    'end_minutes': end,
+                    'duration_minutes': end - start
+                }
+                free_intervals_output.append({
+                    'start': interval_info['start'],
+                    'end': interval_info['end'],
+                    'duration_minutes': interval_info['duration_minutes']
+                })
+
+                flattened_free_intervals.append({
+                    'position_index': position['index'],
+                    **interval_info
+                })
+
+                if first_free_interval is None:
+                    first_free_interval = {
+                        'position_index': position['index'],
+                        'start': interval_info['start'],
+                        'end': interval_info['end'],
+                        'duration_minutes': interval_info['duration_minutes']
+                    }
+
+            position_outputs.append({
+                'index': position['index'],
+                'busy_intervals': busy_intervals_output,
+                'free_intervals': free_intervals_output
+            })
+
+        flattened_free_intervals.sort(key=lambda item: item['start_minutes'])
+
+        return {
+            'positions': position_outputs,
+            'first_free_interval': first_free_interval,
+            'flattened_free_intervals': flattened_free_intervals,
+            'scheduled_count': len(scheduled_entities),
+            'has_free_capacity': first_free_interval is not None
+        }
     
     async def create_scheduled_shift_from_timeslot(
         self,
@@ -168,26 +351,6 @@ class ScheduleService(BaseService):
                         'error': 'Тайм-слот недоступен'
                     }
                 
-                # Проверяем доступность тайм-слота (учитываем max_employees)
-                existing_shifts_query = select(ShiftSchedule).where(
-                    and_(
-                        ShiftSchedule.time_slot_id == time_slot_id,
-                        ShiftSchedule.status.in_(["planned", "confirmed"])
-                    )
-                )
-                existing_shifts_result = await session.execute(existing_shifts_query)
-                existing_shifts = existing_shifts_result.scalars().all()
-                
-                # Считаем количество запланированных смен
-                scheduled_count = len(existing_shifts)
-                
-                # Проверяем, есть ли свободные места
-                if scheduled_count >= time_slot.max_employees:
-                    return {
-                        'success': False,
-                        'error': f'Тайм-слот полностью занят ({scheduled_count}/{time_slot.max_employees})'
-                    }
-                
                 # Получаем объект для timezone
                 object_query = select(Object).where(Object.id == time_slot.object_id)
                 object_result = await session.execute(object_query)
@@ -198,10 +361,62 @@ class ScheduleService(BaseService):
                         'success': False,
                         'error': 'Объект не найден'
                     }
+
+                object_timezone = obj.timezone or timezone_helper.default_timezone_str
+
+                # Проверяем, что время находится в пределах тайм-слота
+                if start_time < time_slot.start_time or end_time > time_slot.end_time:
+                    return {
+                        'success': False,
+                        'error': f'Время работы должно быть в пределах тайм-слота: {time_slot.formatted_time_range}'
+                    }
+
+                booked_schedules_query = select(ShiftSchedule).where(
+                    and_(
+                        ShiftSchedule.object_id == time_slot.object_id,
+                        func.date(ShiftSchedule.planned_start) == time_slot.slot_date,
+                        ShiftSchedule.status.in_(["planned", "confirmed"])
+                    )
+                )
+                booked_result = await session.execute(booked_schedules_query)
+                booked_schedules = booked_result.scalars().all()
+
+                slot_availability = self._build_slot_availability(
+                    time_slot,
+                    booked_schedules,
+                    object_timezone
+                )
+
+                if not slot_availability['has_free_capacity']:
+                    return {
+                        'success': False,
+                        'error': 'Тайм-слот полностью занят'
+                    }
+
+                requested_start_minutes = _time_to_minutes(start_time)
+                requested_end_minutes = _time_to_minutes(end_time)
+
+                matching_interval = next(
+                    (
+                        interval for interval in slot_availability['flattened_free_intervals']
+                        if interval['start_minutes'] <= requested_start_minutes
+                        and interval['end_minutes'] >= requested_end_minutes
+                    ),
+                    None
+                )
+
+                if not matching_interval:
+                    available_intervals_text = ", ".join(
+                        f"{interval['start']}-{interval['end']}"
+                        for interval in slot_availability['flattened_free_intervals']
+                    ) or 'Нет свободных интервалов'
+                    return {
+                        'success': False,
+                        'error': 'Выбранное время не соответствует доступным интервалам. Доступные интервалы: ' + available_intervals_text
+                    }
                 
                 # Конвертируем локальное время объекта в UTC для корректного хранения
                 import pytz
-                object_timezone = obj.timezone if obj.timezone else 'Europe/Moscow'
                 tz = pytz.timezone(object_timezone)
                 
                 # Создаём naive datetime в локальном времени объекта

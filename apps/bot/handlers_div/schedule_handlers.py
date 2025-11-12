@@ -12,11 +12,63 @@ from domain.entities.shift import Shift
 from domain.entities.user import User
 from sqlalchemy import select
 from datetime import datetime, timedelta, date, time, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 # Создаем экземпляры сервисов
 schedule_service = ScheduleServiceAdapter()
 object_service = ObjectService()
+
+
+def _build_interval_keyboard(available_slots: List[Dict[str, Any]]) -> Tuple[List[List[InlineKeyboardButton]], int]:
+    keyboard: List[List[InlineKeyboardButton]] = []
+    intervals_added = 0
+
+    for slot in available_slots:
+        free_intervals = slot.get('free_intervals') or []
+        first_free = slot.get('first_free_interval')
+        if not free_intervals and first_free:
+            free_intervals = [{
+                'start': first_free.get('start'),
+                'end': first_free.get('end'),
+                'duration_minutes': first_free.get('duration_minutes'),
+                'position_index': first_free.get('position_index')
+            }]
+
+        for interval in free_intervals:
+            start_label = interval.get('start')
+            end_label = interval.get('end')
+            if not start_label or not end_label:
+                continue
+            position_index = interval.get('position_index')
+
+            button_text = f"🕐 {start_label}–{end_label}"
+            availability = slot.get('availability')
+            if slot.get('max_employees', 1) > 1 and position_index:
+                button_text += f" • место {position_index}"
+            if availability:
+                button_text += f" • {availability}"
+            if slot.get('hourly_rate'):
+                button_text += f" • {slot['hourly_rate']}₽/ч"
+
+            start_code = start_label.replace(":", "")
+            end_code = end_label.replace(":", "")
+            callback_parts = [
+                "schedule_interval",
+                str(slot['id']),
+                start_code,
+                end_code
+            ]
+            if position_index:
+                callback_parts.append(str(position_index))
+
+            callback_data = "_".join(callback_parts)
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+            intervals_added += 1
+
+    if intervals_added > 0:
+        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel_schedule")])
+
+    return keyboard, intervals_added
 
 
 async def handle_schedule_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -85,21 +137,23 @@ async def handle_schedule_object_selection(update: Update, context: ContextTypes
         selected_object_id=object_id
     )
     
-    # Создаем клавиатуру с датами
     today = date.today()
-    tomorrow = today + timedelta(days=1)
-    
-    keyboard = [
-        [InlineKeyboardButton(f"📅 Сегодня ({today.strftime('%d.%m')})", callback_data="schedule_date_today")],
-        [InlineKeyboardButton(f"📅 Завтра ({tomorrow.strftime('%d.%m')})", callback_data="schedule_date_tomorrow")],
-        [InlineKeyboardButton("📅 Другая дата", callback_data="schedule_date_custom")],
-        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_schedule")]
-    ]
+    date_buttons: List[InlineKeyboardButton] = []
+    for offset in range(14):
+        target_date = today + timedelta(days=offset)
+        weekdays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+        label = f"{target_date.strftime('%d.%m')} ({weekdays[target_date.weekday()]})"
+        callback = f"schedule_date_{target_date.strftime('%Y%m%d')}"
+        date_buttons.append(InlineKeyboardButton(f"📅 {label}", callback_data=callback))
+
+    keyboard = []
+    for i in range(0, len(date_buttons), 2):
+        keyboard.append(date_buttons[i:i + 2])
+    keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel_schedule")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
-        "📅 **Выберите дату для смены**\n\n"
-        "Выберите дату планирования:",
+        "📅 **Выберите дату планирования на ближайшие 14 дней**",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -109,26 +163,25 @@ async def handle_schedule_date_selection(update: Update, context: ContextTypes.D
     """Обработка выбора даты для планирования."""
     query = update.callback_query
     user_id = update.effective_user.id
+    await query.answer()
     
-    if query.data == "schedule_date_today":
+    data = query.data or ""
+    selected_date: Optional[date] = None
+    if data.startswith("schedule_date_"):
+        raw = data.split("_")[-1]
+        try:
+            year = int(raw[:4])
+            month = int(raw[4:6])
+            day = int(raw[6:])
+            selected_date = date(year, month, day)
+        except (ValueError, IndexError):
+            selected_date = None
+    elif data == "schedule_date_today":
         selected_date = date.today()
-    elif query.data == "schedule_date_tomorrow":
+    elif data == "schedule_date_tomorrow":
         selected_date = date.today() + timedelta(days=1)
-    elif query.data == "schedule_date_custom":
-        # Запрашиваем ввод даты
-        user_state_manager.set_state(
-            user_id=user_id,
-            action=UserAction.SCHEDULE_SHIFT,
-            step=UserStep.INPUT_DATE,
-            selected_object_id=context.user_data.get('selected_object_id')
-        )
-        await query.edit_message_text(
-            "📅 **Введите дату в формате ДД.ММ.ГГГГ**\n\n"
-            "Например: `15.09.2025`",
-            parse_mode='Markdown'
-        )
-        return
-    else:
+
+    if not selected_date:
         await query.edit_message_text("❌ Неверный выбор даты.")
         return
     
@@ -157,26 +210,27 @@ async def handle_schedule_date_selection(update: Update, context: ContextTypes.D
             )
             return
         
-        # Создаем клавиатуру с доступными тайм-слотами
-        keyboard = []
-        for slot in available_slots:
-            slot_text = f"🕐 {slot['start_time']}-{slot['end_time']}"
-            if slot['hourly_rate']:
-                slot_text += f" ({slot['hourly_rate']}₽/ч)"
-            # Добавляем информацию о занятости
-            if slot.get('max_employees', 1) > 1:
-                slot_text += f" [{slot.get('availability', '0/1')}]"
-            keyboard.append([InlineKeyboardButton(
-                slot_text,
-                callback_data=f"schedule_select_slot_{slot['id']}"
-            )])
-        
-        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel_schedule")])
+        logger.info(
+            "Bot scheduling: free intervals prepared",
+            user_id=user_id,
+            object_id=object_id,
+            selected_date=selected_date.isoformat(),
+            slots=len(available_slots)
+        )
+
+        keyboard, intervals_added = _build_interval_keyboard(available_slots)
+        if intervals_added == 0:
+            await query.edit_message_text(
+                f"❌ На {selected_date.strftime('%d.%m.%Y')} нет свободных интервалов для планирования.\n\n"
+                "Попробуйте выбрать другую дату или создайте дополнительные тайм-слоты.",
+                parse_mode='Markdown'
+            )
+            return
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(
-            f"🕐 **Доступные тайм-слоты на {selected_date.strftime('%d.%m.%Y')}**\n\n"
-            "Выберите подходящий тайм-слот:",
+            f"🕐 **Свободные интервалы на {selected_date.strftime('%d.%m.%Y')}**\n\n"
+            "Выберите свободный интервал для планирования смены:",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
@@ -190,9 +244,31 @@ async def handle_schedule_confirmation(update: Update, context: ContextTypes.DEF
     """Подтверждение планирования смены."""
     query = update.callback_query
     user_id = update.effective_user.id
+    await query.answer()
     
-    # Извлекаем ID тайм-слота
-    slot_id = int(query.data.split("_")[-1])
+    data = query.data or ""
+    interval_payload = None
+
+    if data.startswith("schedule_interval_"):
+        parts = data.split("_")
+        if len(parts) < 5:
+            await query.edit_message_text("❌ Ошибка: не удалось определить интервал.")
+            return
+        try:
+            slot_id = int(parts[2])
+            start_code = parts[3]
+            end_code = parts[4]
+            start_time = time(hour=int(start_code[:2]), minute=int(start_code[2:]))
+            end_time = time(hour=int(end_code[:2]), minute=int(end_code[2:]))
+            interval_payload = (start_time, end_time)
+        except (ValueError, IndexError):
+            await query.edit_message_text("❌ Ошибка: некорректные данные интервала.")
+            return
+    elif data.startswith("schedule_select_slot_"):
+        slot_id = int(data.split("_")[-1])
+    else:
+        await query.edit_message_text("❌ Некорректный запрос.")
+        return
     
     # Получаем данные из контекста
     object_id = context.user_data.get('selected_object_id')
@@ -205,7 +281,6 @@ async def handle_schedule_confirmation(update: Update, context: ContextTypes.DEF
     try:
         # Получаем информацию о тайм-слоте
         from apps.bot.services.time_slot_service import TimeSlotService
-        from datetime import time
         time_slot_service = TimeSlotService()
         timeslot_data = time_slot_service.get_timeslot_by_id(slot_id)
         
@@ -213,12 +288,13 @@ async def handle_schedule_confirmation(update: Update, context: ContextTypes.DEF
             await query.edit_message_text("❌ Ошибка: тайм-слот не найден.")
             return
         
-        # Парсим время из строк
-        start_time_str = timeslot_data['start_time']
-        end_time_str = timeslot_data['end_time']
-        
-        start_time = time.fromisoformat(start_time_str)
-        end_time = time.fromisoformat(end_time_str)
+        if interval_payload:
+            start_time, end_time = interval_payload
+        else:
+            start_time_str = timeslot_data['start_time']
+            end_time_str = timeslot_data['end_time']
+            start_time = time.fromisoformat(start_time_str)
+            end_time = time.fromisoformat(end_time_str)
         
         # Создаем запланированную смену
         result = await schedule_service.create_scheduled_shift_from_timeslot(
@@ -227,6 +303,16 @@ async def handle_schedule_confirmation(update: Update, context: ContextTypes.DEF
             start_time=start_time,
             end_time=end_time,
             notes="Запланировано через бота"
+        )
+
+        logger.info(
+            "Bot scheduling result",
+            user_id=user_id,
+            slot_id=slot_id,
+            start_time=start_time.strftime('%H:%M'),
+            end_time=end_time.strftime('%H:%M'),
+            success=result.get('success'),
+            error=result.get('error')
         )
         
         if result['success']:
@@ -963,32 +1049,11 @@ async def handle_custom_date_input(update: Update, context: ContextTypes.DEFAULT
     user_id = update.effective_user.id
     text = update.message.text
     
-    try:
-        # Парсим дату в формате ДД.ММ.ГГГГ
-        day, month, year = text.split('.')
-        selected_date = date(int(year), int(month), int(day))
-        
-        # Проверяем, что дата не в прошлом
-        if selected_date < date.today():
-            await update.message.reply_text("❌ Нельзя планировать смены в прошлом.")
-            return
-        
-        # Сохраняем дату и переходим к выбору тайм-слотов
-        
-        # Устанавливаем дату в контекст
-        context.user_data['selected_date'] = selected_date
-        
-        # Вызываем обработку выбора даты напрямую
-        await _handle_schedule_date_selection_direct(update, context, selected_date)
-        
-    except ValueError:
-        await update.message.reply_text(
-            "❌ Неверный формат даты. Используйте ДД.ММ.ГГГГ (например: `15.09.2025`)",
-            parse_mode='Markdown'
-        )
-    except Exception as e:
-        logger.error(f"Error parsing custom date: {e}")
-        await update.message.reply_text("❌ Ошибка обработки даты. Попробуйте еще раз.")
+    await update.message.reply_text(
+        "❌ Для планирования используйте кнопки с датами на экране.",
+        parse_mode='Markdown'
+    )
+    await user_state_manager.clear_state(user_id)
 
 
 async def _handle_schedule_date_selection_direct(update: Update, context: ContextTypes.DEFAULT_TYPE, selected_date: date) -> None:
@@ -1020,26 +1085,19 @@ async def _handle_schedule_date_selection_direct(update: Update, context: Contex
             )
             return
         
-        # Создаем клавиатуру с доступными тайм-слотами
-        keyboard = []
-        for slot in available_slots:
-            slot_text = f"🕐 {slot['start_time']}-{slot['end_time']}"
-            if slot['hourly_rate']:
-                slot_text += f" ({slot['hourly_rate']}₽/ч)"
-            # Добавляем информацию о занятости
-            if slot.get('max_employees', 1) > 1:
-                slot_text += f" [{slot.get('availability', '0/1')}]"
-            keyboard.append([InlineKeyboardButton(
-                slot_text,
-                callback_data=f"schedule_select_slot_{slot['id']}"
-            )])
-        
-        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel_schedule")])
+        keyboard, intervals_added = _build_interval_keyboard(available_slots)
+        if intervals_added == 0:
+            await update.message.reply_text(
+                f"❌ На {selected_date.strftime('%d.%m.%Y')} нет свободных интервалов для планирования.\n\n"
+                "Попробуйте выбрать другую дату или создайте дополнительные тайм-слоты.",
+                parse_mode='Markdown'
+            )
+            return
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
-            f"🕐 **Доступные тайм-слоты на {selected_date.strftime('%d.%m.%Y')}**\n\n"
-            "Выберите подходящий тайм-слот:",
+            f"🕐 **Свободные интервалы на {selected_date.strftime('%d.%m.%Y')}**\n\n"
+            "Выберите свободный интервал для планирования смены:",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
