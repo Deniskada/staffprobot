@@ -82,7 +82,19 @@
                             <table class="table table-borderless">
                                 <tr>
                                     <td><strong>Сотрудник:</strong></td>
-                                    <td>{{ entry.employee.name if entry.employee else 'ID: ' ~ entry.employee_id }}</td>
+                                    <td>
+                                        {% if entry.employee %}
+                                            {% set last = entry.employee.last_name or '' %}
+                                            {% set first = entry.employee.first_name or '' %}
+                                            {% if last or first %}
+                                                {{ last }}{% if last and first %} {% endif %}{{ first }}
+                                            {% else %}
+                                                ID: {{ entry.employee_id }}
+                                            {% endif %}
+                                        {% else %}
+                                            ID: {{ entry.employee_id }}
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 <tr>
                                     <td><strong>Период:</strong></td>
