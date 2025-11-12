@@ -233,7 +233,12 @@
                         </thead>
                         <tbody>
                             {% for row in earnings %}
-                            <tr data-earnings-row="true" data-payment-date="{{ row.payment_date or '' }}">
+                            <tr
+                                data-earnings-row="true"
+                                data-payment-date="{{ row.payment_date or '' }}"
+                                data-hours="{{ row.duration_hours if row.type == 'shift' else 0 }}"
+                                data-amount="{{ row.amount }}"
+                            >
                                 <td>{{ row.date_label }}</td>
                                 <td>
                                     {% if row.type == 'shift' %}
@@ -294,14 +299,17 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="4" class="text-end fw-bold">Итого за период:</td>
-                                <td class="text-center fw-bold">{{ '%.2f'|format(total_hours) }} ч</td>
+                            <td colspan="4" class="text-end fw-bold">Итого (фильтр):</td>
+                                <td class="text-center fw-bold">
+                                    <span id="earningsFilteredHours">{{ '%.2f'|format(total_hours) }}</span> ч
+                                </td>
                                 <td class="text-end fw-bold" colspan="3">
-                                    {% if total_amount < 0 %}
-                                    <span class="text-danger">{{ '%.2f'|format(total_amount) }} ₽</span>
-                                    {% else %}
-                                    <span class="text-success">{{ '%.2f'|format(total_amount) }} ₽</span>
-                                    {% endif %}
+                                    <span
+                                        id="earningsFilteredAmount"
+                                        class="{% if total_amount < 0 %}text-danger{% else %}text-success{% endif %}"
+                                    >
+                                        {{ '%.2f'|format(total_amount) }} ₽
+                                    </span>
                                 </td>
                             </tr>
                         </tfoot>
@@ -341,13 +349,39 @@ document.addEventListener('DOMContentLoaded', function () {
     const paymentButtons = document.querySelectorAll('.payment-filter-btn');
     const earningsRows = document.querySelectorAll('[data-earnings-row]');
     const earningsCounter = document.querySelector('[data-earnings-count]');
+    const totalHoursElement = document.getElementById('earningsFilteredHours');
+    const totalAmountElement = document.getElementById('earningsFilteredAmount');
 
-    const updateCounter = () => {
-        if (!earningsCounter) {
-            return;
+    const formatNumber = (value, fractionDigits = 2) => value.toLocaleString('ru-RU', {
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits
+    });
+
+    const updateVisibleSummary = () => {
+        let visibleCount = 0;
+        let totalHours = 0;
+        let totalAmount = 0;
+
+        earningsRows.forEach((row) => {
+            if (row.style.display === 'none') {
+                return;
+            }
+            visibleCount += 1;
+            totalHours += Number(row.dataset.hours || 0);
+            totalAmount += Number(row.dataset.amount || 0);
+        });
+
+        if (earningsCounter) {
+            earningsCounter.textContent = `${visibleCount} записей`;
         }
-        const visible = Array.from(earningsRows).filter((row) => row.style.display !== 'none').length;
-        earningsCounter.textContent = `${visible} записей`;
+        if (totalHoursElement) {
+            totalHoursElement.textContent = formatNumber(totalHours);
+        }
+        if (totalAmountElement) {
+            totalAmountElement.textContent = `${formatNumber(totalAmount)} ₽`;
+            totalAmountElement.classList.remove('text-success', 'text-danger');
+            totalAmountElement.classList.add(totalAmount < 0 ? 'text-danger' : 'text-success');
+        }
     };
 
     const setButtonState = (button, active) => {
@@ -366,7 +400,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const match = !paymentDate || rowDate === paymentDate;
             row.style.display = match ? '' : 'none';
         });
-        updateCounter();
+        updateVisibleSummary();
     };
 
     applyFilter(null);
