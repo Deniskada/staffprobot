@@ -108,10 +108,14 @@ footer {
                 baseUrl: '/owner/calendar',
                 userRole: 'owner',
                 apiEndpoint: '/owner/calendar/api/data',
-                onShiftClick: function(shiftId) {
+                onShiftClick: function(shiftId, event) {
                     console.log('Shift clicked:', shiftId);
                     if (shiftId.toString().startsWith('schedule_')) {
                         const scheduleId = shiftId.toString().replace('schedule_', '');
+                        if (event && event.shiftKey) {
+                            window.location.href = `/owner/shifts/${scheduleId}?shift_type=schedule`;
+                            return;
+                        }
                         // Получаем object_id из данных календаря
                         let objectId = null;
                         if (window.calendarData && window.calendarData.shifts) {

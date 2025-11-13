@@ -96,7 +96,7 @@
                 baseUrl: '/manager/calendar',
                 userRole: 'manager',
                 apiEndpoint: '/manager/calendar/api/data',
-                onShiftClick: function(shiftId) {
+                onShiftClick: function(shiftId, event) {
                     console.log('Shift clicked:', shiftId);
                     if (shiftId.toString().startsWith('schedule_')) {
                         const scheduleId = shiftId.toString().replace('schedule_', '');

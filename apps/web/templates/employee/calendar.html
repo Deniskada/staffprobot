@@ -91,7 +91,7 @@
                 baseUrl: '/employee',
                 userRole: 'employee',
                 apiEndpoint: '/employee/api/calendar/data',
-                onShiftClick: function(shiftId) {
+                onShiftClick: function(shiftId, event) {
                     console.log('Shift clicked:', shiftId);
                     const params = new URLSearchParams({ return_to: '/employee/calendar' });
                     let objectId = null;

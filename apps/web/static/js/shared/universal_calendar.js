@@ -325,8 +325,12 @@ class UniversalCalendarManager {
             if (e.target.closest('.shift-item')) {
                 const shiftElement = e.target.closest('.shift-item');
                 const shiftId = shiftElement.dataset.shiftId;
-                if (shiftId && this.onShiftClick) {
-                    this.onShiftClick(shiftId);
+                if (shiftId) {
+                    if (typeof this.handleShiftClick === 'function') {
+                        this.handleShiftClick(shiftId, e);
+                    } else if (this.onShiftClick) {
+                        this.onShiftClick(shiftId, e);
+                    }
                 }
             }
             
@@ -607,9 +611,9 @@ class UniversalCalendarManager {
         window.location.search = params.toString();
     }
     
-    handleShiftClick(shiftId) {
+    handleShiftClick(shiftId, event) {
         if (this.onShiftClick) {
-            this.onShiftClick(shiftId);
+            this.onShiftClick(shiftId, event);
         }
     }
     
