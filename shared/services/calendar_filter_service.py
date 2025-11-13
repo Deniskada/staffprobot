@@ -525,6 +525,13 @@ class CalendarFilterService:
 
             now_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
 
+            allowed_shift_statuses = {
+                ShiftStatus.PLANNED,
+                ShiftStatus.CONFIRMED,
+                ShiftStatus.ACTIVE,
+                ShiftStatus.COMPLETED
+            }
+
             for timeslot in timeslots:
                 tz = get_object_timezone(timeslot.object_id)
 
@@ -582,7 +589,7 @@ class CalendarFilterService:
                             actual_intervals.append((overlap_start, overlap_end))
 
                 for shift in direct_shifts:
-                    if shift.status == ShiftStatus.CANCELLED:
+                    if shift.status not in allowed_shift_statuses:
                         continue
                     if shift.shift_type == ShiftType.PLANNED:
                         start_dt = shift.planned_start or shift.start_time
@@ -593,6 +600,8 @@ class CalendarFilterService:
                     register_interval(shift, start_dt, end_dt, include_in_details=True)
 
                 for shift in fallback_candidates:
+                    if shift.status not in allowed_shift_statuses:
+                        continue
                     if shift.shift_type == ShiftType.PLANNED:
                         start_dt = shift.planned_start or shift.start_time
                         end_dt = shift.planned_end or shift.end_time
