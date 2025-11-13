@@ -656,15 +656,24 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                 )
                 
                 # Отправляем клавиатуру для геопозиции
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text="👇 Используйте кнопку для отправки геопозиции:",
-                    reply_markup=ReplyKeyboardMarkup(
-                        [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
-                        resize_keyboard=True,
-                        one_time_keyboard=True
-                    )
+            send_message = await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="👇 Используйте кнопку для отправки геопозиции:",
+                reply_markup=ReplyKeyboardMarkup(
+                    [[KeyboardButton("📍 Отправить геопозицию", request_location=True)]],
+                    resize_keyboard=True,
+                    one_time_keyboard=True
                 )
+            )
+            latest_state = await user_state_manager.get_state(user_id)
+            latest_data = getattr(latest_state, 'data', {}) if latest_state else {}
+            await user_state_manager.update_state(
+                user_id=user_id,
+                data={
+                    **latest_data,
+                    'last_prompt_message_id': send_message.message_id,
+                }
+            )
         
         else:
             # Несколько активных смен - предлагаем выбрать (устаревший случай, но на всякий случай)
@@ -964,16 +973,40 @@ async def _handle_retry_location_open(update: Update, context: ContextTypes.DEFA
     query = update.callback_query
     user_id = query.from_user.id
     
-    # Создаем состояние для открытия смены
-    await user_state_manager.create_state(
-        user_id=user_id,
-        action=UserAction.OPEN_SHIFT,
-        step=UserStep.LOCATION_REQUEST,
-        selected_object_id=object_id
-    )
+    # Сохраняем исходное состояние — повторная отправка гео не должна терять параметры плановой смены
+    current_state = await user_state_manager.get_state(user_id)
+
+    target_object_id = object_id
+
+    if current_state and current_state.action == UserAction.OPEN_SHIFT:
+        updates = {
+            "step": UserStep.LOCATION_REQUEST,
+        }
+        if current_state.selected_object_id:
+            target_object_id = current_state.selected_object_id
+        else:
+            updates["selected_object_id"] = object_id
+        if current_state.shift_type:
+            updates["shift_type"] = current_state.shift_type
+        if current_state.selected_schedule_id:
+            updates["selected_schedule_id"] = current_state.selected_schedule_id
+        if current_state.selected_timeslot_id:
+            updates["selected_timeslot_id"] = current_state.selected_timeslot_id
+
+        await user_state_manager.update_state(user_id, **updates)
+    else:
+        # Состояние потеряно — начинаем заново как спонтанную смену
+        await user_state_manager.create_state(
+            user_id=user_id,
+            action=UserAction.OPEN_SHIFT,
+            step=UserStep.LOCATION_REQUEST,
+            selected_object_id=object_id,
+            shift_type="spontaneous"
+        )
+        target_object_id = object_id
     
     # Получаем информацию об объекте
-    obj_data = object_service.get_object_by_id(object_id)
+    obj_data = object_service.get_object_by_id(target_object_id)
     if not obj_data:
         await query.edit_message_text(
             text="❌ Объект не найден.",

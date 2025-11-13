@@ -527,9 +527,7 @@ class CalendarFilterService:
 
             allowed_shift_statuses = {
                 ShiftStatus.PLANNED,
-                ShiftStatus.CONFIRMED,
-                ShiftStatus.ACTIVE,
-                ShiftStatus.COMPLETED
+                ShiftStatus.CONFIRMED
             }
 
             for timeslot in timeslots:
@@ -541,6 +539,14 @@ class CalendarFilterService:
                 max_employees = timeslot.max_employees if timeslot.max_employees else 1
                 capacity_minutes = slot_duration_minutes * max_employees
                 now_local = now_utc.astimezone(tz)
+
+                if slot_start_local <= now_local:
+                    timeslot.status = TimeslotStatus.HIDDEN
+                    timeslot.status_label = ""
+                    timeslot.free_minutes = 0.0
+                    timeslot.occupied_minutes = 0.0
+                    timeslot.occupancy_ratio = 0.0
+                    continue
 
                 direct_shifts = shifts_by_timeslot.get(timeslot.id, [])
                 fallback_candidates = fallback_shifts_by_object.get(timeslot.object_id, [])
@@ -608,6 +614,13 @@ class CalendarFilterService:
                     else:
                         start_dt = shift.start_time or shift.planned_start
                         end_dt = shift.end_time or shift.planned_end
+
+                    if not start_dt:
+                        continue
+                    start_aware = start_dt if start_dt.tzinfo else pytz.UTC.localize(start_dt)
+                    if start_aware.astimezone(tz).date() != timeslot.date:
+                        continue
+
                     register_interval(shift, start_dt, end_dt, include_in_details=False)
 
                 occupied_minutes = 0.0
@@ -640,7 +653,7 @@ class CalendarFilterService:
 
                 slot_in_past = slot_end_local <= now_local
 
-                if capacity_minutes > 0 and free_minutes <= 0.5:
+                if capacity_minutes > 0 and free_minutes <= 29:
                     timeslot.status = TimeslotStatus.FULLY_FILLED
                     timeslot.status_label = "Заполнено"
                 elif occupied_minutes > 0:

@@ -184,6 +184,11 @@ footer {
                     fallbackParams.set('return_to', buildOwnerReturnTo());
                     window.location.href = `/owner/shifts/plan?${fallbackParams.toString()}`;
                 },
+                onDateClick: function(dateStr) {
+                    if (window.calendarPanels && typeof window.calendarPanels.showQuickCreateForm === 'function') {
+                        window.calendarPanels.showQuickCreateForm(null, dateStr);
+                    }
+                },
                 onDataLoaded: function(calendarData) {
                     console.log('Calendar data loaded:', calendarData);
                     // Сохраняем данные глобально для использования в onShiftClick

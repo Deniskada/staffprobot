@@ -321,9 +321,8 @@ class UniversalCalendarManager {
         
         // Shift and timeslot clicks
         document.addEventListener('click', (e) => {
-            
-            if (e.target.closest('.shift-item')) {
-                const shiftElement = e.target.closest('.shift-item');
+            const shiftElement = e.target.closest('.shift-item');
+            if (shiftElement) {
                 const shiftId = shiftElement.dataset.shiftId;
                 if (shiftId) {
                     if (typeof this.handleShiftClick === 'function') {
@@ -332,14 +331,22 @@ class UniversalCalendarManager {
                         this.onShiftClick(shiftId, e);
                     }
                 }
+                return;
             }
             
-            if (e.target.closest('.timeslot-item')) {
-                const timeslotElement = e.target.closest('.timeslot-item');
+            const timeslotElement = e.target.closest('.timeslot-item');
+            if (timeslotElement) {
                 const timeslotId = timeslotElement.dataset.timeslotId;
                 if (timeslotId && this.onTimeslotClick) {
                     this.onTimeslotClick(timeslotId);
                 }
+                return;
+            }
+            
+            const dayElement = e.target.closest('.calendar-day');
+            if (dayElement && this.onDateClick) {
+                const dateStr = dayElement.dataset.date;
+                this.onDateClick(dateStr, dayElement);
             }
         });
     }
